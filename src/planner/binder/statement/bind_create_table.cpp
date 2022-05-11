@@ -208,7 +208,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 		}
 	}
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
 	return result;
 }
 

@@ -25,8 +25,8 @@ class StreamQueryResult : public QueryResult {
 public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).
-	DUCKDB_API StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
-	                             vector<LogicalType> types, vector<string> names);
+	DUCKDB_API StreamQueryResult(StatementType statement_type, StatementProperties properties,
+	                             shared_ptr<ClientContext> context, vector<LogicalType> types, vector<string> names);
 	DUCKDB_API ~StreamQueryResult() override;
 
 public:

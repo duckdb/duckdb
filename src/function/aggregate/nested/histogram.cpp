@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-struct HistogramUpdateFunctor {
+struct HistogramFunctor {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
 	static void HistogramUpdate(VectorData &sdata, VectorData &input_data, idx_t count) {
 
@@ -23,9 +23,14 @@ struct HistogramUpdateFunctor {
 			}
 		}
 	}
+
+	template <class T>
+	static Value HistogramFinalize(T first) {
+		return Value::CreateValue(first);
+	}
 };
 
-struct HistogramStringUpdateFunctor {
+struct HistogramStringFunctor {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
 	static void HistogramUpdate(VectorData &sdata, VectorData &input_data, idx_t count) {
 
@@ -40,6 +45,12 @@ struct HistogramStringUpdateFunctor {
 				(*state->hist)[value[input_data.sel->get_index(i)].GetString()]++;
 			}
 		}
+	}
+
+	template <class T>
+	static Value HistogramFinalize(T first) {
+		string_t value = first;
+		return Value::CreateValue(value);
 	}
 };
 
@@ -101,8 +112,8 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, FunctionDa
 	}
 }
 
-template <class T, class MAP_TYPE>
-static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
+template <class OP, class T, class MAP_TYPE>
+static void HistogramFinalizeFunction(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
 
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
@@ -118,7 +129,9 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 
 	auto &bucket_validity = FlatVector::Validity(*bucket_list);
 	auto &count_validity = FlatVector::Validity(*count_list);
+
 	for (idx_t i = 0; i < count; i++) {
+
 		const auto rid = i + offset;
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->hist) {
@@ -127,12 +140,14 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 			count_validity.SetInvalid(rid);
 			continue;
 		}
+
 		for (auto &entry : *state->hist) {
-			auto bucket_value = Value::CreateValue(entry.first);
+			Value bucket_value = OP::template HistogramFinalize<T>(entry.first);
 			ListVector::PushBack(*bucket_list, bucket_value);
 			auto count_value = Value::CreateValue(entry.second);
 			ListVector::PushBack(*count_list, count_value);
 		}
+
 		auto list_struct_data = FlatVector::GetData<list_entry_t>(*bucket_list);
 		list_struct_data[rid].length = ListVector::GetListSize(*bucket_list) - old_len;
 		list_struct_data[rid].offset = old_len;
@@ -165,7 +180,7 @@ static AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	return AggregateFunction("histogram", {type}, LogicalTypeId::MAP, AggregateFunction::StateSize<STATE_TYPE>,
 	                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
 	                         HistogramUpdateFunction<OP, T, MAP_TYPE>, HistogramCombineFunction<T, MAP_TYPE>,
-	                         HistogramFinalize<T, MAP_TYPE>, nullptr, HistogramBindFunction,
+	                         HistogramFinalizeFunction<OP, T, MAP_TYPE>, nullptr, HistogramBindFunction,
 	                         AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
 }
 
@@ -183,45 +198,45 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 
 	switch (type.id()) {
 	case LogicalType::BOOLEAN:
-		return GetMapType<HistogramUpdateFunctor, bool, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, bool, IS_ORDERED>(type);
 	case LogicalType::UTINYINT:
-		return GetMapType<HistogramUpdateFunctor, uint8_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, uint8_t, IS_ORDERED>(type);
 	case LogicalType::USMALLINT:
-		return GetMapType<HistogramUpdateFunctor, uint16_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, uint16_t, IS_ORDERED>(type);
 	case LogicalType::UINTEGER:
-		return GetMapType<HistogramUpdateFunctor, uint32_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, uint32_t, IS_ORDERED>(type);
 	case LogicalType::UBIGINT:
-		return GetMapType<HistogramUpdateFunctor, uint64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, uint64_t, IS_ORDERED>(type);
 	case LogicalType::TINYINT:
-		return GetMapType<HistogramUpdateFunctor, int8_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int8_t, IS_ORDERED>(type);
 	case LogicalType::SMALLINT:
-		return GetMapType<HistogramUpdateFunctor, int16_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int16_t, IS_ORDERED>(type);
 	case LogicalType::INTEGER:
-		return GetMapType<HistogramUpdateFunctor, int32_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int32_t, IS_ORDERED>(type);
 	case LogicalType::BIGINT:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::FLOAT:
-		return GetMapType<HistogramUpdateFunctor, float, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, float, IS_ORDERED>(type);
 	case LogicalType::DOUBLE:
-		return GetMapType<HistogramUpdateFunctor, double, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, double, IS_ORDERED>(type);
 	case LogicalType::VARCHAR:
-		return GetMapType<HistogramStringUpdateFunctor, string, IS_ORDERED>(type);
+		return GetMapType<HistogramStringFunctor, string, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_TZ:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_S:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_MS:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::TIMESTAMP_NS:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::TIME:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::TIME_TZ:
-		return GetMapType<HistogramUpdateFunctor, int64_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int64_t, IS_ORDERED>(type);
 	case LogicalType::DATE:
-		return GetMapType<HistogramUpdateFunctor, int32_t, IS_ORDERED>(type);
+		return GetMapType<HistogramFunctor, int32_t, IS_ORDERED>(type);
 	default:
 		throw InternalException("Unimplemented histogram aggregate");
 	}

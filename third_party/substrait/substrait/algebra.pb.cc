@@ -372,6 +372,97 @@ struct ExtensionMultiRelDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExtensionMultiRelDefaultTypeInternal _ExtensionMultiRel_default_instance_;
+constexpr ExchangeRel_ScatterFields::ExchangeRel_ScatterFields(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : fields_(){}
+struct ExchangeRel_ScatterFieldsDefaultTypeInternal {
+  constexpr ExchangeRel_ScatterFieldsDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRel_ScatterFieldsDefaultTypeInternal() {}
+  union {
+    ExchangeRel_ScatterFields _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRel_ScatterFieldsDefaultTypeInternal _ExchangeRel_ScatterFields_default_instance_;
+constexpr ExchangeRel_SingleBucketExpression::ExchangeRel_SingleBucketExpression(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : expression_(nullptr){}
+struct ExchangeRel_SingleBucketExpressionDefaultTypeInternal {
+  constexpr ExchangeRel_SingleBucketExpressionDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRel_SingleBucketExpressionDefaultTypeInternal() {}
+  union {
+    ExchangeRel_SingleBucketExpression _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRel_SingleBucketExpressionDefaultTypeInternal _ExchangeRel_SingleBucketExpression_default_instance_;
+constexpr ExchangeRel_MultiBucketExpression::ExchangeRel_MultiBucketExpression(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : expression_(nullptr)
+  , constrained_to_count_(false){}
+struct ExchangeRel_MultiBucketExpressionDefaultTypeInternal {
+  constexpr ExchangeRel_MultiBucketExpressionDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRel_MultiBucketExpressionDefaultTypeInternal() {}
+  union {
+    ExchangeRel_MultiBucketExpression _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRel_MultiBucketExpressionDefaultTypeInternal _ExchangeRel_MultiBucketExpression_default_instance_;
+constexpr ExchangeRel_Broadcast::ExchangeRel_Broadcast(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized){}
+struct ExchangeRel_BroadcastDefaultTypeInternal {
+  constexpr ExchangeRel_BroadcastDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRel_BroadcastDefaultTypeInternal() {}
+  union {
+    ExchangeRel_Broadcast _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRel_BroadcastDefaultTypeInternal _ExchangeRel_Broadcast_default_instance_;
+constexpr ExchangeRel_RoundRobin::ExchangeRel_RoundRobin(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : exact_(false){}
+struct ExchangeRel_RoundRobinDefaultTypeInternal {
+  constexpr ExchangeRel_RoundRobinDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRel_RoundRobinDefaultTypeInternal() {}
+  union {
+    ExchangeRel_RoundRobin _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRel_RoundRobinDefaultTypeInternal _ExchangeRel_RoundRobin_default_instance_;
+constexpr ExchangeRel_ExchangeTarget::ExchangeRel_ExchangeTarget(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : partition_id_()
+  , _partition_id_cached_byte_size_(0)
+  , _oneof_case_{}{}
+struct ExchangeRel_ExchangeTargetDefaultTypeInternal {
+  constexpr ExchangeRel_ExchangeTargetDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRel_ExchangeTargetDefaultTypeInternal() {}
+  union {
+    ExchangeRel_ExchangeTarget _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRel_ExchangeTargetDefaultTypeInternal _ExchangeRel_ExchangeTarget_default_instance_;
+constexpr ExchangeRel::ExchangeRel(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : targets_()
+  , common_(nullptr)
+  , input_(nullptr)
+  , advanced_extension_(nullptr)
+  , partition_count_(0)
+  , _oneof_case_{}{}
+struct ExchangeRelDefaultTypeInternal {
+  constexpr ExchangeRelDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ExchangeRelDefaultTypeInternal() {}
+  union {
+    ExchangeRel _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ExchangeRelDefaultTypeInternal _ExchangeRel_default_instance_;
 constexpr RelRoot::RelRoot(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : names_()
@@ -682,7 +773,8 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Expression_SwitchExpression_IfV
 constexpr Expression_SwitchExpression::Expression_SwitchExpression(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : ifs_()
-  , else__(nullptr){}
+  , else__(nullptr)
+  , match_(nullptr){}
 struct Expression_SwitchExpressionDefaultTypeInternal {
   constexpr Expression_SwitchExpressionDefaultTypeInternal()
     : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
@@ -1104,7 +1196,7 @@ struct AggregateFunctionDefaultTypeInternal {
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT AggregateFunctionDefaultTypeInternal _AggregateFunction_default_instance_;
 }  // namespace substrait
-static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2falgebra_2eproto[82];
+static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2falgebra_2eproto[89];
 static const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* file_level_enum_descriptors_substrait_2falgebra_2eproto[8];
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_substrait_2falgebra_2eproto = nullptr;
 
@@ -1346,6 +1438,68 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   PROTOBUF_FIELD_OFFSET(::substrait::ExtensionMultiRel, inputs_),
   PROTOBUF_FIELD_OFFSET(::substrait::ExtensionMultiRel, detail_),
   ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_ScatterFields, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_ScatterFields, fields_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_SingleBucketExpression, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_SingleBucketExpression, expression_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_MultiBucketExpression, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_MultiBucketExpression, expression_),
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_MultiBucketExpression, constrained_to_count_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_Broadcast, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_RoundRobin, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_RoundRobin, exact_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_ExchangeTarget, _internal_metadata_),
+  ~0u,  // no _extensions_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_ExchangeTarget, _oneof_case_[0]),
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_ExchangeTarget, partition_id_),
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel_ExchangeTarget, target_type_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, _internal_metadata_),
+  ~0u,  // no _extensions_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, _oneof_case_[0]),
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, common_),
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, input_),
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, partition_count_),
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, targets_),
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, advanced_extension_),
+  PROTOBUF_FIELD_OFFSET(::substrait::ExchangeRel, exchange_kind_),
+  ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::RelRoot, _internal_metadata_),
   ~0u,  // no _extensions_
   ~0u,  // no _oneof_case_
@@ -1581,6 +1735,7 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _oneof_case_
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_SwitchExpression, match_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_SwitchExpression, ifs_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_SwitchExpression, else__),
   ~0u,  // no _has_bits_
@@ -1892,63 +2047,70 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOB
   { 210, -1, -1, sizeof(::substrait::ExtensionSingleRel)},
   { 219, -1, -1, sizeof(::substrait::ExtensionLeafRel)},
   { 227, -1, -1, sizeof(::substrait::ExtensionMultiRel)},
-  { 236, -1, -1, sizeof(::substrait::RelRoot)},
-  { 244, -1, -1, sizeof(::substrait::Rel)},
-  { 263, -1, -1, sizeof(::substrait::Expression_Enum_Empty)},
-  { 269, -1, -1, sizeof(::substrait::Expression_Enum)},
-  { 278, -1, -1, sizeof(::substrait::Expression_Literal_VarChar)},
-  { 286, -1, -1, sizeof(::substrait::Expression_Literal_Decimal)},
-  { 295, -1, -1, sizeof(::substrait::Expression_Literal_Map_KeyValue)},
-  { 303, -1, -1, sizeof(::substrait::Expression_Literal_Map)},
-  { 310, -1, -1, sizeof(::substrait::Expression_Literal_IntervalYearToMonth)},
-  { 318, -1, -1, sizeof(::substrait::Expression_Literal_IntervalDayToSecond)},
-  { 326, -1, -1, sizeof(::substrait::Expression_Literal_Struct)},
-  { 333, -1, -1, sizeof(::substrait::Expression_Literal_List)},
-  { 340, -1, -1, sizeof(::substrait::Expression_Literal)},
-  { 374, -1, -1, sizeof(::substrait::Expression_ScalarFunction)},
-  { 383, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Preceding)},
-  { 390, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Following)},
-  { 397, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_CurrentRow)},
-  { 403, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Unbounded)},
-  { 409, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound)},
-  { 420, -1, -1, sizeof(::substrait::Expression_WindowFunction)},
-  { 434, -1, -1, sizeof(::substrait::Expression_IfThen_IfClause)},
-  { 442, -1, -1, sizeof(::substrait::Expression_IfThen)},
-  { 450, -1, -1, sizeof(::substrait::Expression_Cast)},
-  { 458, -1, -1, sizeof(::substrait::Expression_SwitchExpression_IfValue)},
-  { 466, -1, -1, sizeof(::substrait::Expression_SwitchExpression)},
-  { 474, -1, -1, sizeof(::substrait::Expression_SingularOrList)},
-  { 482, -1, -1, sizeof(::substrait::Expression_MultiOrList_Record)},
-  { 489, -1, -1, sizeof(::substrait::Expression_MultiOrList)},
-  { 497, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_PythonPickleFunction)},
-  { 505, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_WebAssemblyFunction)},
-  { 513, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction)},
-  { 524, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_MapKey)},
-  { 532, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_StructField)},
-  { 540, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_ListElement)},
-  { 548, -1, -1, sizeof(::substrait::Expression_ReferenceSegment)},
-  { 558, -1, -1, sizeof(::substrait::Expression_MaskExpression_Select)},
-  { 568, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructSelect)},
-  { 575, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructItem)},
-  { 583, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListElement)},
-  { 590, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice)},
-  { 598, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem)},
-  { 607, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect)},
-  { 615, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKey)},
-  { 622, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKeyExpression)},
-  { 629, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect)},
-  { 639, -1, -1, sizeof(::substrait::Expression_MaskExpression)},
-  { 647, -1, -1, sizeof(::substrait::Expression_FieldReference_RootReference)},
-  { 653, -1, -1, sizeof(::substrait::Expression_FieldReference_OuterReference)},
-  { 660, -1, -1, sizeof(::substrait::Expression_FieldReference)},
-  { 673, -1, -1, sizeof(::substrait::Expression_Subquery_Scalar)},
-  { 680, -1, -1, sizeof(::substrait::Expression_Subquery_InPredicate)},
-  { 688, -1, -1, sizeof(::substrait::Expression_Subquery_SetPredicate)},
-  { 696, -1, -1, sizeof(::substrait::Expression_Subquery_SetComparison)},
-  { 706, -1, -1, sizeof(::substrait::Expression_Subquery)},
-  { 717, -1, -1, sizeof(::substrait::Expression)},
-  { 735, -1, -1, sizeof(::substrait::SortField)},
-  { 745, -1, -1, sizeof(::substrait::AggregateFunction)},
+  { 236, -1, -1, sizeof(::substrait::ExchangeRel_ScatterFields)},
+  { 243, -1, -1, sizeof(::substrait::ExchangeRel_SingleBucketExpression)},
+  { 250, -1, -1, sizeof(::substrait::ExchangeRel_MultiBucketExpression)},
+  { 258, -1, -1, sizeof(::substrait::ExchangeRel_Broadcast)},
+  { 264, -1, -1, sizeof(::substrait::ExchangeRel_RoundRobin)},
+  { 271, -1, -1, sizeof(::substrait::ExchangeRel_ExchangeTarget)},
+  { 281, -1, -1, sizeof(::substrait::ExchangeRel)},
+  { 298, -1, -1, sizeof(::substrait::RelRoot)},
+  { 306, -1, -1, sizeof(::substrait::Rel)},
+  { 325, -1, -1, sizeof(::substrait::Expression_Enum_Empty)},
+  { 331, -1, -1, sizeof(::substrait::Expression_Enum)},
+  { 340, -1, -1, sizeof(::substrait::Expression_Literal_VarChar)},
+  { 348, -1, -1, sizeof(::substrait::Expression_Literal_Decimal)},
+  { 357, -1, -1, sizeof(::substrait::Expression_Literal_Map_KeyValue)},
+  { 365, -1, -1, sizeof(::substrait::Expression_Literal_Map)},
+  { 372, -1, -1, sizeof(::substrait::Expression_Literal_IntervalYearToMonth)},
+  { 380, -1, -1, sizeof(::substrait::Expression_Literal_IntervalDayToSecond)},
+  { 388, -1, -1, sizeof(::substrait::Expression_Literal_Struct)},
+  { 395, -1, -1, sizeof(::substrait::Expression_Literal_List)},
+  { 402, -1, -1, sizeof(::substrait::Expression_Literal)},
+  { 436, -1, -1, sizeof(::substrait::Expression_ScalarFunction)},
+  { 445, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Preceding)},
+  { 452, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Following)},
+  { 459, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_CurrentRow)},
+  { 465, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Unbounded)},
+  { 471, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound)},
+  { 482, -1, -1, sizeof(::substrait::Expression_WindowFunction)},
+  { 496, -1, -1, sizeof(::substrait::Expression_IfThen_IfClause)},
+  { 504, -1, -1, sizeof(::substrait::Expression_IfThen)},
+  { 512, -1, -1, sizeof(::substrait::Expression_Cast)},
+  { 520, -1, -1, sizeof(::substrait::Expression_SwitchExpression_IfValue)},
+  { 528, -1, -1, sizeof(::substrait::Expression_SwitchExpression)},
+  { 537, -1, -1, sizeof(::substrait::Expression_SingularOrList)},
+  { 545, -1, -1, sizeof(::substrait::Expression_MultiOrList_Record)},
+  { 552, -1, -1, sizeof(::substrait::Expression_MultiOrList)},
+  { 560, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_PythonPickleFunction)},
+  { 568, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_WebAssemblyFunction)},
+  { 576, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction)},
+  { 587, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_MapKey)},
+  { 595, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_StructField)},
+  { 603, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_ListElement)},
+  { 611, -1, -1, sizeof(::substrait::Expression_ReferenceSegment)},
+  { 621, -1, -1, sizeof(::substrait::Expression_MaskExpression_Select)},
+  { 631, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructSelect)},
+  { 638, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructItem)},
+  { 646, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListElement)},
+  { 653, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice)},
+  { 661, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem)},
+  { 670, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect)},
+  { 678, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKey)},
+  { 685, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKeyExpression)},
+  { 692, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect)},
+  { 702, -1, -1, sizeof(::substrait::Expression_MaskExpression)},
+  { 710, -1, -1, sizeof(::substrait::Expression_FieldReference_RootReference)},
+  { 716, -1, -1, sizeof(::substrait::Expression_FieldReference_OuterReference)},
+  { 723, -1, -1, sizeof(::substrait::Expression_FieldReference)},
+  { 736, -1, -1, sizeof(::substrait::Expression_Subquery_Scalar)},
+  { 743, -1, -1, sizeof(::substrait::Expression_Subquery_InPredicate)},
+  { 751, -1, -1, sizeof(::substrait::Expression_Subquery_SetPredicate)},
+  { 759, -1, -1, sizeof(::substrait::Expression_Subquery_SetComparison)},
+  { 769, -1, -1, sizeof(::substrait::Expression_Subquery)},
+  { 780, -1, -1, sizeof(::substrait::Expression)},
+  { 798, -1, -1, sizeof(::substrait::SortField)},
+  { 808, -1, -1, sizeof(::substrait::AggregateFunction)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -1977,6 +2139,13 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExtensionSingleRel_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExtensionLeafRel_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExtensionMultiRel_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_ScatterFields_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_SingleBucketExpression_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_MultiBucketExpression_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_Broadcast_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_RoundRobin_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_ExchangeTarget_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_RelRoot_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Rel_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Enum_Empty_default_instance_),
@@ -2037,411 +2206,375 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 };
 
 const char descriptor_table_protodef_substrait_2falgebra_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\027substrait/algebra.proto\022\tsubstrait\032\024su"
-  "bstrait/type.proto\032%substrait/extensions"
-  "/extensions.proto\032\031google/protobuf/any.p"
-  "roto\"\262\006\n\tRelCommon\0225\n\006direct\030\001 \001(\0132\033.sub"
-  "strait.RelCommon.DirectH\000R\006direct\022/\n\004emi"
-  "t\030\002 \001(\0132\031.substrait.RelCommon.EmitH\000R\004em"
-  "it\022-\n\004hint\030\003 \001(\0132\031.substrait.RelCommon.H"
-  "intR\004hint\022V\n\022advanced_extension\030\004 \001(\0132\'."
-  "substrait.extensions.AdvancedExtensionR\021"
-  "advancedExtension\032\010\n\006Direct\032-\n\004Emit\022%\n\016o"
-  "utput_mapping\030\001 \003(\005R\routputMapping\032\357\003\n\004H"
-  "int\0225\n\005stats\030\001 \001(\0132\037.substrait.RelCommon"
-  ".Hint.StatsR\005stats\022K\n\nconstraint\030\002 \001(\0132+"
-  ".substrait.RelCommon.Hint.RuntimeConstra"
-  "intR\nconstraint\022V\n\022advanced_extension\030\n "
-  "\001(\0132\'.substrait.extensions.AdvancedExten"
-  "sionR\021advancedExtension\032\235\001\n\005Stats\022\033\n\trow"
-  "_count\030\001 \001(\001R\010rowCount\022\037\n\013record_size\030\002 "
-  "\001(\001R\nrecordSize\022V\n\022advanced_extension\030\n "
-  "\001(\0132\'.substrait.extensions.AdvancedExten"
-  "sionR\021advancedExtension\032k\n\021RuntimeConstr"
-  "aint\022V\n\022advanced_extension\030\n \001(\0132\'.subst"
-  "rait.extensions.AdvancedExtensionR\021advan"
-  "cedExtensionB\013\n\temit_kind\"\235\013\n\007ReadRel\022,\n"
-  "\006common\030\001 \001(\0132\024.substrait.RelCommonR\006com"
-  "mon\0227\n\013base_schema\030\002 \001(\0132\026.substrait.Nam"
-  "edStructR\nbaseSchema\022-\n\006filter\030\003 \001(\0132\025.s"
-  "ubstrait.ExpressionR\006filter\022D\n\nprojectio"
-  "n\030\004 \001(\0132$.substrait.Expression.MaskExpre"
-  "ssionR\nprojection\022V\n\022advanced_extension\030"
-  "\n \001(\0132\'.substrait.extensions.AdvancedExt"
-  "ensionR\021advancedExtension\022F\n\rvirtual_tab"
-  "le\030\005 \001(\0132\037.substrait.ReadRel.VirtualTabl"
-  "eH\000R\014virtualTable\022@\n\013local_files\030\006 \001(\0132\035"
-  ".substrait.ReadRel.LocalFilesH\000R\nlocalFi"
-  "les\022@\n\013named_table\030\007 \001(\0132\035.substrait.Rea"
-  "dRel.NamedTableH\000R\nnamedTable\022L\n\017extensi"
-  "on_table\030\010 \001(\0132!.substrait.ReadRel.Exten"
-  "sionTableH\000R\016extensionTable\032z\n\nNamedTabl"
-  "e\022\024\n\005names\030\001 \003(\tR\005names\022V\n\022advanced_exte"
-  "nsion\030\n \001(\0132\'.substrait.extensions.Advan"
-  "cedExtensionR\021advancedExtension\032L\n\014Virtu"
-  "alTable\022<\n\006values\030\001 \003(\0132$.substrait.Expr"
-  "ession.Literal.StructR\006values\032>\n\016Extensi"
-  "onTable\022,\n\006detail\030\001 \001(\0132\024.google.protobu"
-  "f.AnyR\006detail\032\254\004\n\nLocalFiles\022\?\n\005items\030\001 "
-  "\003(\0132).substrait.ReadRel.LocalFiles.FileO"
-  "rFilesR\005items\022V\n\022advanced_extension\030\n \001("
+  "\n\027substrait/algebra.proto\022\tsubstrait\032\031go"
+  "ogle/protobuf/any.proto\032%substrait/exten"
+  "sions/extensions.proto\032\024substrait/type.p"
+  "roto\"\231\005\n\tRelCommon\022-\n\006direct\030\001 \001(\0132\033.sub"
+  "strait.RelCommon.DirectH\000\022)\n\004emit\030\002 \001(\0132"
+  "\031.substrait.RelCommon.EmitH\000\022\'\n\004hint\030\003 \001"
+  "(\0132\031.substrait.RelCommon.Hint\022C\n\022advance"
+  "d_extension\030\004 \001(\0132\'.substrait.extensions"
+  ".AdvancedExtension\032\010\n\006Direct\032\036\n\004Emit\022\026\n\016"
+  "output_mapping\030\001 \003(\005\032\214\003\n\004Hint\022.\n\005stats\030\001"
+  " \001(\0132\037.substrait.RelCommon.Hint.Stats\022\?\n"
+  "\nconstraint\030\002 \001(\0132+.substrait.RelCommon."
+  "Hint.RuntimeConstraint\022C\n\022advanced_exten"
+  "sion\030\n \001(\0132\'.substrait.extensions.Advanc"
+  "edExtension\032t\n\005Stats\022\021\n\trow_count\030\001 \001(\001\022"
+  "\023\n\013record_size\030\002 \001(\001\022C\n\022advanced_extensi"
+  "on\030\n \001(\0132\'.substrait.extensions.Advanced"
+  "Extension\032X\n\021RuntimeConstraint\022C\n\022advanc"
+  "ed_extension\030\n \001(\0132\'.substrait.extension"
+  "s.AdvancedExtensionB\013\n\temit_kind\"\227\t\n\007Rea"
+  "dRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelComm"
+  "on\022+\n\013base_schema\030\002 \001(\0132\026.substrait.Name"
+  "dStruct\022%\n\006filter\030\003 \001(\0132\025.substrait.Expr"
+  "ession\0228\n\nprojection\030\004 \001(\0132$.substrait.E"
+  "xpression.MaskExpression\022C\n\022advanced_ext"
+  "ension\030\n \001(\0132\'.substrait.extensions.Adva"
+  "ncedExtension\0228\n\rvirtual_table\030\005 \001(\0132\037.s"
+  "ubstrait.ReadRel.VirtualTableH\000\0224\n\013local"
+  "_files\030\006 \001(\0132\035.substrait.ReadRel.LocalFi"
+  "lesH\000\0224\n\013named_table\030\007 \001(\0132\035.substrait.R"
+  "eadRel.NamedTableH\000\022<\n\017extension_table\030\010"
+  " \001(\0132!.substrait.ReadRel.ExtensionTableH"
+  "\000\032`\n\nNamedTable\022\r\n\005names\030\001 \003(\t\022C\n\022advanc"
+  "ed_extension\030\n \001(\0132\'.substrait.extension"
+  "s.AdvancedExtension\032D\n\014VirtualTable\0224\n\006v"
+  "alues\030\001 \003(\0132$.substrait.Expression.Liter"
+  "al.Struct\0326\n\016ExtensionTable\022$\n\006detail\030\001 "
+  "\001(\0132\024.google.protobuf.Any\032\301\003\n\nLocalFiles"
+  "\0228\n\005items\030\001 \003(\0132).substrait.ReadRel.Loca"
+  "lFiles.FileOrFiles\022C\n\022advanced_extension"
+  "\030\n \001(\0132\'.substrait.extensions.AdvancedEx"
+  "tension\032\263\002\n\013FileOrFiles\022\022\n\010uri_path\030\001 \001("
+  "\tH\000\022\027\n\ruri_path_glob\030\002 \001(\tH\000\022\022\n\010uri_file"
+  "\030\003 \001(\tH\000\022\024\n\nuri_folder\030\004 \001(\tH\000\022D\n\006format"
+  "\030\005 \001(\01624.substrait.ReadRel.LocalFiles.Fi"
+  "leOrFiles.FileFormat\022\027\n\017partition_index\030"
+  "\006 \001(\004\022\r\n\005start\030\007 \001(\004\022\016\n\006length\030\010 \001(\004\"B\n\n"
+  "FileFormat\022\033\n\027FILE_FORMAT_UNSPECIFIED\020\000\022"
+  "\027\n\023FILE_FORMAT_PARQUET\020\001B\013\n\tpath_typeB\013\n"
+  "\tread_type\"\302\001\n\nProjectRel\022$\n\006common\030\001 \001("
+  "\0132\024.substrait.RelCommon\022\035\n\005input\030\002 \001(\0132\016"
+  ".substrait.Rel\022*\n\013expressions\030\003 \003(\0132\025.su"
+  "bstrait.Expression\022C\n\022advanced_extension"
+  "\030\n \001(\0132\'.substrait.extensions.AdvancedEx"
+  "tension\"\361\003\n\007JoinRel\022$\n\006common\030\001 \001(\0132\024.su"
+  "bstrait.RelCommon\022\034\n\004left\030\002 \001(\0132\016.substr"
+  "ait.Rel\022\035\n\005right\030\003 \001(\0132\016.substrait.Rel\022)"
+  "\n\nexpression\030\004 \001(\0132\025.substrait.Expressio"
+  "n\022/\n\020post_join_filter\030\005 \001(\0132\025.substrait."
+  "Expression\022)\n\004type\030\006 \001(\0162\033.substrait.Joi"
+  "nRel.JoinType\022C\n\022advanced_extension\030\n \001("
   "\0132\'.substrait.extensions.AdvancedExtensi"
-  "onR\021advancedExtension\032\204\003\n\013FileOrFiles\022\033\n"
-  "\010uri_path\030\001 \001(\tH\000R\007uriPath\022$\n\ruri_path_g"
-  "lob\030\002 \001(\tH\000R\013uriPathGlob\022\033\n\010uri_file\030\003 \001"
-  "(\tH\000R\007uriFile\022\037\n\nuri_folder\030\004 \001(\tH\000R\turi"
-  "Folder\022L\n\006format\030\005 \001(\01624.substrait.ReadR"
-  "el.LocalFiles.FileOrFiles.FileFormatR\006fo"
-  "rmat\022\'\n\017partition_index\030\006 \001(\004R\016partition"
-  "Index\022\024\n\005start\030\007 \001(\004R\005start\022\026\n\006length\030\010 "
-  "\001(\004R\006length\"B\n\nFileFormat\022\033\n\027FILE_FORMAT"
-  "_UNSPECIFIED\020\000\022\027\n\023FILE_FORMAT_PARQUET\020\001B"
-  "\013\n\tpath_typeB\013\n\tread_type\"\361\001\n\nProjectRel"
-  "\022,\n\006common\030\001 \001(\0132\024.substrait.RelCommonR\006"
-  "common\022$\n\005input\030\002 \001(\0132\016.substrait.RelR\005i"
-  "nput\0227\n\013expressions\030\003 \003(\0132\025.substrait.Ex"
-  "pressionR\013expressions\022V\n\022advanced_extens"
-  "ion\030\n \001(\0132\'.substrait.extensions.Advance"
-  "dExtensionR\021advancedExtension\"\273\004\n\007JoinRe"
-  "l\022,\n\006common\030\001 \001(\0132\024.substrait.RelCommonR"
-  "\006common\022\"\n\004left\030\002 \001(\0132\016.substrait.RelR\004l"
-  "eft\022$\n\005right\030\003 \001(\0132\016.substrait.RelR\005righ"
-  "t\0225\n\nexpression\030\004 \001(\0132\025.substrait.Expres"
-  "sionR\nexpression\022\?\n\020post_join_filter\030\005 \001"
-  "(\0132\025.substrait.ExpressionR\016postJoinFilte"
-  "r\022/\n\004type\030\006 \001(\0162\033.substrait.JoinRel.Join"
-  "TypeR\004type\022V\n\022advanced_extension\030\n \001(\0132\'"
-  ".substrait.extensions.AdvancedExtensionR"
-  "\021advancedExtension\"\266\001\n\010JoinType\022\031\n\025JOIN_"
-  "TYPE_UNSPECIFIED\020\000\022\023\n\017JOIN_TYPE_INNER\020\001\022"
-  "\023\n\017JOIN_TYPE_OUTER\020\002\022\022\n\016JOIN_TYPE_LEFT\020\003"
-  "\022\023\n\017JOIN_TYPE_RIGHT\020\004\022\022\n\016JOIN_TYPE_SEMI\020"
-  "\005\022\022\n\016JOIN_TYPE_ANTI\020\006\022\024\n\020JOIN_TYPE_SINGL"
-  "E\020\007\"\332\001\n\010CrossRel\022,\n\006common\030\001 \001(\0132\024.subst"
-  "rait.RelCommonR\006common\022\"\n\004left\030\002 \001(\0132\016.s"
-  "ubstrait.RelR\004left\022$\n\005right\030\003 \001(\0132\016.subs"
-  "trait.RelR\005right\022V\n\022advanced_extension\030\n"
-  " \001(\0132\'.substrait.extensions.AdvancedExte"
-  "nsionR\021advancedExtension\"\344\001\n\010FetchRel\022,\n"
-  "\006common\030\001 \001(\0132\024.substrait.RelCommonR\006com"
-  "mon\022$\n\005input\030\002 \001(\0132\016.substrait.RelR\005inpu"
-  "t\022\026\n\006offset\030\003 \001(\003R\006offset\022\024\n\005count\030\004 \001(\003"
-  "R\005count\022V\n\022advanced_extension\030\n \001(\0132\'.su"
-  "bstrait.extensions.AdvancedExtensionR\021ad"
-  "vancedExtension\"\377\003\n\014AggregateRel\022,\n\006comm"
-  "on\030\001 \001(\0132\024.substrait.RelCommonR\006common\022$"
-  "\n\005input\030\002 \001(\0132\016.substrait.RelR\005input\022>\n\t"
+  "on\"\266\001\n\010JoinType\022\031\n\025JOIN_TYPE_UNSPECIFIED"
+  "\020\000\022\023\n\017JOIN_TYPE_INNER\020\001\022\023\n\017JOIN_TYPE_OUT"
+  "ER\020\002\022\022\n\016JOIN_TYPE_LEFT\020\003\022\023\n\017JOIN_TYPE_RI"
+  "GHT\020\004\022\022\n\016JOIN_TYPE_SEMI\020\005\022\022\n\016JOIN_TYPE_A"
+  "NTI\020\006\022\024\n\020JOIN_TYPE_SINGLE\020\007\"\262\001\n\010CrossRel"
+  "\022$\n\006common\030\001 \001(\0132\024.substrait.RelCommon\022\034"
+  "\n\004left\030\002 \001(\0132\016.substrait.Rel\022\035\n\005right\030\003 "
+  "\001(\0132\016.substrait.Rel\022C\n\022advanced_extensio"
+  "n\030\n \001(\0132\'.substrait.extensions.AdvancedE"
+  "xtension\"\263\001\n\010FetchRel\022$\n\006common\030\001 \001(\0132\024."
+  "substrait.RelCommon\022\035\n\005input\030\002 \001(\0132\016.sub"
+  "strait.Rel\022\016\n\006offset\030\003 \001(\003\022\r\n\005count\030\004 \001("
+  "\003\022C\n\022advanced_extension\030\n \001(\0132\'.substrai"
+  "t.extensions.AdvancedExtension\"\242\003\n\014Aggre"
+  "gateRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelC"
+  "ommon\022\035\n\005input\030\002 \001(\0132\016.substrait.Rel\0223\n\t"
   "groupings\030\003 \003(\0132 .substrait.AggregateRel"
-  ".GroupingR\tgroupings\022;\n\010measures\030\004 \003(\0132\037"
-  ".substrait.AggregateRel.MeasureR\010measure"
-  "s\022V\n\022advanced_extension\030\n \001(\0132\'.substrai"
-  "t.extensions.AdvancedExtensionR\021advanced"
-  "Extension\032T\n\010Grouping\022H\n\024grouping_expres"
-  "sions\030\001 \003(\0132\025.substrait.ExpressionR\023grou"
-  "pingExpressions\032p\n\007Measure\0226\n\007measure\030\001 "
-  "\001(\0132\034.substrait.AggregateFunctionR\007measu"
-  "re\022-\n\006filter\030\002 \001(\0132\025.substrait.Expressio"
-  "nR\006filter\"\341\001\n\007SortRel\022,\n\006common\030\001 \001(\0132\024."
-  "substrait.RelCommonR\006common\022$\n\005input\030\002 \001"
-  "(\0132\016.substrait.RelR\005input\022*\n\005sorts\030\003 \003(\013"
-  "2\024.substrait.SortFieldR\005sorts\022V\n\022advance"
-  "d_extension\030\n \001(\0132\'.substrait.extensions"
-  ".AdvancedExtensionR\021advancedExtension\"\354\001"
-  "\n\tFilterRel\022,\n\006common\030\001 \001(\0132\024.substrait."
-  "RelCommonR\006common\022$\n\005input\030\002 \001(\0132\016.subst"
-  "rait.RelR\005input\0223\n\tcondition\030\003 \001(\0132\025.sub"
-  "strait.ExpressionR\tcondition\022V\n\022advanced"
-  "_extension\030\n \001(\0132\'.substrait.extensions."
-  "AdvancedExtensionR\021advancedExtension\"\252\003\n"
-  "\006SetRel\022,\n\006common\030\001 \001(\0132\024.substrait.RelC"
-  "ommonR\006common\022&\n\006inputs\030\002 \003(\0132\016.substrai"
-  "t.RelR\006inputs\022\'\n\002op\030\003 \001(\0162\027.substrait.Se"
-  "tRel.SetOpR\002op\022V\n\022advanced_extension\030\n \001"
-  "(\0132\'.substrait.extensions.AdvancedExtens"
-  "ionR\021advancedExtension\"\310\001\n\005SetOp\022\026\n\022SET_"
-  "OP_UNSPECIFIED\020\000\022\030\n\024SET_OP_MINUS_PRIMARY"
-  "\020\001\022\031\n\025SET_OP_MINUS_MULTISET\020\002\022\037\n\033SET_OP_"
-  "INTERSECTION_PRIMARY\020\003\022 \n\034SET_OP_INTERSE"
-  "CTION_MULTISET\020\004\022\031\n\025SET_OP_UNION_DISTINC"
-  "T\020\005\022\024\n\020SET_OP_UNION_ALL\020\006\"\226\001\n\022ExtensionS"
-  "ingleRel\022,\n\006common\030\001 \001(\0132\024.substrait.Rel"
-  "CommonR\006common\022$\n\005input\030\002 \001(\0132\016.substrai"
-  "t.RelR\005input\022,\n\006detail\030\003 \001(\0132\024.google.pr"
-  "otobuf.AnyR\006detail\"n\n\020ExtensionLeafRel\022,"
-  "\n\006common\030\001 \001(\0132\024.substrait.RelCommonR\006co"
-  "mmon\022,\n\006detail\030\002 \001(\0132\024.google.protobuf.A"
-  "nyR\006detail\"\227\001\n\021ExtensionMultiRel\022,\n\006comm"
-  "on\030\001 \001(\0132\024.substrait.RelCommonR\006common\022&"
-  "\n\006inputs\030\002 \003(\0132\016.substrait.RelR\006inputs\022,"
-  "\n\006detail\030\003 \001(\0132\024.google.protobuf.AnyR\006de"
-  "tail\"E\n\007RelRoot\022$\n\005input\030\001 \001(\0132\016.substra"
-  "it.RelR\005input\022\024\n\005names\030\002 \003(\tR\005names\"\207\005\n\003"
-  "Rel\022(\n\004read\030\001 \001(\0132\022.substrait.ReadRelH\000R"
-  "\004read\022.\n\006filter\030\002 \001(\0132\024.substrait.Filter"
-  "RelH\000R\006filter\022+\n\005fetch\030\003 \001(\0132\023.substrait"
-  ".FetchRelH\000R\005fetch\0227\n\taggregate\030\004 \001(\0132\027."
-  "substrait.AggregateRelH\000R\taggregate\022(\n\004s"
-  "ort\030\005 \001(\0132\022.substrait.SortRelH\000R\004sort\022(\n"
-  "\004join\030\006 \001(\0132\022.substrait.JoinRelH\000R\004join\022"
-  "1\n\007project\030\007 \001(\0132\025.substrait.ProjectRelH"
-  "\000R\007project\022%\n\003set\030\010 \001(\0132\021.substrait.SetR"
-  "elH\000R\003set\022J\n\020extension_single\030\t \001(\0132\035.su"
-  "bstrait.ExtensionSingleRelH\000R\017extensionS"
-  "ingle\022G\n\017extension_multi\030\n \001(\0132\034.substra"
-  "it.ExtensionMultiRelH\000R\016extensionMulti\022D"
-  "\n\016extension_leaf\030\013 \001(\0132\033.substrait.Exten"
-  "sionLeafRelH\000R\rextensionLeaf\022+\n\005cross\030\014 "
-  "\001(\0132\023.substrait.CrossRelH\000R\005crossB\n\n\010rel"
-  "_type\"\236F\n\nExpression\0229\n\007literal\030\001 \001(\0132\035."
-  "substrait.Expression.LiteralH\000R\007literal\022"
-  "D\n\tselection\030\002 \001(\0132$.substrait.Expressio"
-  "n.FieldReferenceH\000R\tselection\022O\n\017scalar_"
-  "function\030\003 \001(\0132$.substrait.Expression.Sc"
-  "alarFunctionH\000R\016scalarFunction\022O\n\017window"
-  "_function\030\005 \001(\0132$.substrait.Expression.W"
-  "indowFunctionH\000R\016windowFunction\0227\n\007if_th"
-  "en\030\006 \001(\0132\034.substrait.Expression.IfThenH\000"
-  "R\006ifThen\022U\n\021switch_expression\030\007 \001(\0132&.su"
-  "bstrait.Expression.SwitchExpressionH\000R\020s"
-  "witchExpression\022P\n\020singular_or_list\030\010 \001("
-  "\0132$.substrait.Expression.SingularOrListH"
-  "\000R\016singularOrList\022G\n\rmulti_or_list\030\t \001(\013"
-  "2!.substrait.Expression.MultiOrListH\000R\013m"
-  "ultiOrList\0220\n\004enum\030\n \001(\0132\032.substrait.Exp"
-  "ression.EnumH\000R\004enum\0220\n\004cast\030\013 \001(\0132\032.sub"
-  "strait.Expression.CastH\000R\004cast\022<\n\010subque"
-  "ry\030\014 \001(\0132\036.substrait.Expression.Subquery"
-  "H\000R\010subquery\032\202\001\n\004Enum\022\036\n\tspecified\030\001 \001(\t"
-  "H\000R\tspecified\022D\n\013unspecified\030\002 \001(\0132 .sub"
-  "strait.Expression.Enum.EmptyH\000R\013unspecif"
-  "ied\032\007\n\005EmptyB\013\n\tenum_kind\032\307\r\n\007Literal\022\032\n"
-  "\007boolean\030\001 \001(\010H\000R\007boolean\022\020\n\002i8\030\002 \001(\005H\000R"
-  "\002i8\022\022\n\003i16\030\003 \001(\005H\000R\003i16\022\022\n\003i32\030\005 \001(\005H\000R\003"
-  "i32\022\022\n\003i64\030\007 \001(\003H\000R\003i64\022\024\n\004fp32\030\n \001(\002H\000R"
-  "\004fp32\022\024\n\004fp64\030\013 \001(\001H\000R\004fp64\022\030\n\006string\030\014 "
-  "\001(\tH\000R\006string\022\030\n\006binary\030\r \001(\014H\000R\006binary\022"
-  "\036\n\ttimestamp\030\016 \001(\003H\000R\ttimestamp\022\024\n\004date\030"
-  "\020 \001(\005H\000R\004date\022\024\n\004time\030\021 \001(\003H\000R\004time\022h\n\026i"
-  "nterval_year_to_month\030\023 \001(\01321.substrait."
-  "Expression.Literal.IntervalYearToMonthH\000"
-  "R\023intervalYearToMonth\022h\n\026interval_day_to"
-  "_second\030\024 \001(\01321.substrait.Expression.Lit"
-  "eral.IntervalDayToSecondH\000R\023intervalDayT"
-  "oSecond\022\037\n\nfixed_char\030\025 \001(\tH\000R\tfixedChar"
-  "\022B\n\010var_char\030\026 \001(\0132%.substrait.Expressio"
-  "n.Literal.VarCharH\000R\007varChar\022#\n\014fixed_bi"
-  "nary\030\027 \001(\014H\000R\013fixedBinary\022A\n\007decimal\030\030 \001"
-  "(\0132%.substrait.Expression.Literal.Decima"
-  "lH\000R\007decimal\022>\n\006struct\030\031 \001(\0132$.substrait"
-  ".Expression.Literal.StructH\000R\006struct\0225\n\003"
-  "map\030\032 \001(\0132!.substrait.Expression.Literal"
-  ".MapH\000R\003map\022#\n\014timestamp_tz\030\033 \001(\003H\000R\013tim"
-  "estampTz\022\024\n\004uuid\030\034 \001(\014H\000R\004uuid\022%\n\004null\030\035"
-  " \001(\0132\017.substrait.TypeH\000R\004null\0228\n\004list\030\036 "
-  "\001(\0132\".substrait.Expression.Literal.ListH"
-  "\000R\004list\0225\n\nempty_list\030\037 \001(\0132\024.substrait."
-  "Type.ListH\000R\temptyList\0222\n\tempty_map\030  \001("
-  "\0132\023.substrait.Type.MapH\000R\010emptyMap\022\032\n\010nu"
-  "llable\0302 \001(\010R\010nullable\0327\n\007VarChar\022\024\n\005val"
-  "ue\030\001 \001(\tR\005value\022\026\n\006length\030\002 \001(\rR\006length\032"
-  "S\n\007Decimal\022\024\n\005value\030\001 \001(\014R\005value\022\034\n\tprec"
-  "ision\030\002 \001(\005R\tprecision\022\024\n\005scale\030\003 \001(\005R\005s"
-  "cale\032\302\001\n\003Map\022I\n\nkey_values\030\001 \003(\0132*.subst"
-  "rait.Expression.Literal.Map.KeyValueR\tke"
-  "yValues\032p\n\010KeyValue\022/\n\003key\030\001 \001(\0132\035.subst"
-  "rait.Expression.LiteralR\003key\0223\n\005value\030\002 "
-  "\001(\0132\035.substrait.Expression.LiteralR\005valu"
-  "e\032C\n\023IntervalYearToMonth\022\024\n\005years\030\001 \001(\005R"
-  "\005years\022\026\n\006months\030\002 \001(\005R\006months\032C\n\023Interv"
-  "alDayToSecond\022\022\n\004days\030\001 \001(\005R\004days\022\030\n\007sec"
-  "onds\030\002 \001(\005R\007seconds\032\?\n\006Struct\0225\n\006fields\030"
-  "\001 \003(\0132\035.substrait.Expression.LiteralR\006fi"
-  "elds\032=\n\004List\0225\n\006values\030\001 \003(\0132\035.substrait"
-  ".Expression.LiteralR\006valuesB\016\n\014literal_t"
-  "ype\032\234\001\n\016ScalarFunction\022-\n\022function_refer"
-  "ence\030\001 \001(\rR\021functionReference\022)\n\004args\030\002 "
-  "\003(\0132\025.substrait.ExpressionR\004args\0220\n\013outp"
-  "ut_type\030\003 \001(\0132\017.substrait.TypeR\noutputTy"
-  "pe\032\237\007\n\016WindowFunction\022-\n\022function_refere"
-  "nce\030\001 \001(\rR\021functionReference\0225\n\npartitio"
-  "ns\030\002 \003(\0132\025.substrait.ExpressionR\npartiti"
-  "ons\022*\n\005sorts\030\003 \003(\0132\024.substrait.SortField"
-  "R\005sorts\022K\n\013upper_bound\030\004 \001(\0132*.substrait"
-  ".Expression.WindowFunction.BoundR\nupperB"
-  "ound\022K\n\013lower_bound\030\005 \001(\0132*.substrait.Ex"
-  "pression.WindowFunction.BoundR\nlowerBoun"
-  "d\0221\n\005phase\030\006 \001(\0162\033.substrait.Aggregation"
-  "PhaseR\005phase\0220\n\013output_type\030\007 \001(\0132\017.subs"
-  "trait.TypeR\noutputType\022)\n\004args\030\010 \003(\0132\025.s"
-  "ubstrait.ExpressionR\004args\032\320\003\n\005Bound\022T\n\tp"
-  "receding\030\001 \001(\01324.substrait.Expression.Wi"
-  "ndowFunction.Bound.PrecedingH\000R\tprecedin"
-  "g\022T\n\tfollowing\030\002 \001(\01324.substrait.Express"
-  "ion.WindowFunction.Bound.FollowingH\000R\tfo"
-  "llowing\022X\n\013current_row\030\003 \001(\01325.substrait"
-  ".Expression.WindowFunction.Bound.Current"
-  "RowH\000R\ncurrentRow\022T\n\tunbounded\030\004 \001(\01324.s"
-  "ubstrait.Expression.WindowFunction.Bound"
-  ".UnboundedH\000R\tunbounded\032#\n\tPreceding\022\026\n\006"
-  "offset\030\001 \001(\003R\006offset\032#\n\tFollowing\022\026\n\006off"
-  "set\030\001 \001(\003R\006offset\032\014\n\nCurrentRow\032\013\n\tUnbou"
-  "ndedB\006\n\004kind\032\312\001\n\006IfThen\0227\n\003ifs\030\001 \003(\0132%.s"
-  "ubstrait.Expression.IfThen.IfClauseR\003ifs"
-  "\022)\n\004else\030\002 \001(\0132\025.substrait.ExpressionR\004e"
-  "lse\032\\\n\010IfClause\022%\n\002if\030\001 \001(\0132\025.substrait."
-  "ExpressionR\002if\022)\n\004then\030\002 \001(\0132\025.substrait"
-  ".ExpressionR\004then\032X\n\004Cast\022#\n\004type\030\001 \001(\0132"
-  "\017.substrait.TypeR\004type\022+\n\005input\030\002 \001(\0132\025."
-  "substrait.ExpressionR\005input\032\344\001\n\020SwitchEx"
-  "pression\022@\n\003ifs\030\001 \003(\0132..substrait.Expres"
-  "sion.SwitchExpression.IfValueR\003ifs\022)\n\004el"
-  "se\030\002 \001(\0132\025.substrait.ExpressionR\004else\032c\n"
-  "\007IfValue\022-\n\002if\030\001 \001(\0132\035.substrait.Express"
-  "ion.LiteralR\002if\022)\n\004then\030\002 \001(\0132\025.substrai"
-  "t.ExpressionR\004then\032n\n\016SingularOrList\022+\n\005"
-  "value\030\001 \001(\0132\025.substrait.ExpressionR\005valu"
-  "e\022/\n\007options\030\002 \003(\0132\025.substrait.Expressio"
-  "nR\007options\032\267\001\n\013MultiOrList\022+\n\005value\030\001 \003("
-  "\0132\025.substrait.ExpressionR\005value\022B\n\007optio"
-  "ns\030\002 \003(\0132(.substrait.Expression.MultiOrL"
-  "ist.RecordR\007options\0327\n\006Record\022-\n\006fields\030"
-  "\001 \003(\0132\025.substrait.ExpressionR\006fields\032\223\004\n"
-  "\020EmbeddedFunction\0223\n\targuments\030\001 \003(\0132\025.s"
-  "ubstrait.ExpressionR\targuments\0220\n\013output"
-  "_type\030\002 \001(\0132\017.substrait.TypeR\noutputType"
-  "\022s\n\026python_pickle_function\030\003 \001(\0132;.subst"
-  "rait.Expression.EmbeddedFunction.PythonP"
-  "ickleFunctionH\000R\024pythonPickleFunction\022p\n"
-  "\025web_assembly_function\030\004 \001(\0132:.substrait"
-  ".Expression.EmbeddedFunction.WebAssembly"
-  "FunctionH\000R\023webAssemblyFunction\032V\n\024Pytho"
-  "nPickleFunction\022\032\n\010function\030\001 \001(\014R\010funct"
-  "ion\022\"\n\014prerequisite\030\002 \003(\tR\014prerequisite\032"
-  "Q\n\023WebAssemblyFunction\022\026\n\006script\030\001 \001(\014R\006"
-  "script\022\"\n\014prerequisite\030\002 \003(\tR\014prerequisi"
-  "teB\006\n\004kind\032\350\004\n\020ReferenceSegment\022H\n\007map_k"
-  "ey\030\001 \001(\0132-.substrait.Expression.Referenc"
-  "eSegment.MapKeyH\000R\006mapKey\022W\n\014struct_fiel"
-  "d\030\002 \001(\01322.substrait.Expression.Reference"
-  "Segment.StructFieldH\000R\013structField\022W\n\014li"
-  "st_element\030\003 \001(\01322.substrait.Expression."
-  "ReferenceSegment.ListElementH\000R\013listElem"
-  "ent\032~\n\006MapKey\0226\n\007map_key\030\001 \001(\0132\035.substra"
-  "it.Expression.LiteralR\006mapKey\022<\n\005child\030\002"
-  " \001(\0132&.substrait.Expression.ReferenceSeg"
-  "mentR\005child\032a\n\013StructField\022\024\n\005field\030\001 \001("
-  "\005R\005field\022<\n\005child\030\002 \001(\0132&.substrait.Expr"
-  "ession.ReferenceSegmentR\005child\032c\n\013ListEl"
-  "ement\022\026\n\006offset\030\001 \001(\005R\006offset\022<\n\005child\030\002"
-  " \001(\0132&.substrait.Expression.ReferenceSeg"
-  "mentR\005childB\020\n\016reference_type\032\242\013\n\016MaskEx"
-  "pression\022I\n\006select\030\001 \001(\01321.substrait.Exp"
-  "ression.MaskExpression.StructSelectR\006sel"
-  "ect\0228\n\030maintain_singular_struct\030\002 \001(\010R\026m"
-  "aintainSingularStruct\032\350\001\n\006Select\022K\n\006stru"
-  "ct\030\001 \001(\01321.substrait.Expression.MaskExpr"
-  "ession.StructSelectH\000R\006struct\022E\n\004list\030\002 "
-  "\001(\0132/.substrait.Expression.MaskExpressio"
-  "n.ListSelectH\000R\004list\022B\n\003map\030\003 \001(\0132..subs"
-  "trait.Expression.MaskExpression.MapSelec"
-  "tH\000R\003mapB\006\n\004type\032b\n\014StructSelect\022R\n\014stru"
-  "ct_items\030\001 \003(\0132/.substrait.Expression.Ma"
-  "skExpression.StructItemR\013structItems\032e\n\n"
-  "StructItem\022\024\n\005field\030\001 \001(\005R\005field\022A\n\005chil"
-  "d\030\002 \001(\0132+.substrait.Expression.MaskExpre"
-  "ssion.SelectR\005child\032\346\003\n\nListSelect\022\\\n\tse"
-  "lection\030\001 \003(\0132>.substrait.Expression.Mas"
-  "kExpression.ListSelect.ListSelectItemR\ts"
-  "election\022A\n\005child\030\002 \001(\0132+.substrait.Expr"
-  "ession.MaskExpression.SelectR\005child\032\266\002\n\016"
-  "ListSelectItem\022`\n\004item\030\001 \001(\0132J.substrait"
-  ".Expression.MaskExpression.ListSelect.Li"
-  "stSelectItem.ListElementH\000R\004item\022`\n\005slic"
-  "e\030\002 \001(\0132H.substrait.Expression.MaskExpre"
-  "ssion.ListSelect.ListSelectItem.ListSlic"
-  "eH\000R\005slice\032#\n\013ListElement\022\024\n\005field\030\001 \001(\005"
-  "R\005field\0323\n\tListSlice\022\024\n\005start\030\001 \001(\005R\005sta"
-  "rt\022\020\n\003end\030\002 \001(\005R\003endB\006\n\004type\032\353\002\n\tMapSele"
-  "ct\022I\n\003key\030\001 \001(\01325.substrait.Expression.M"
-  "askExpression.MapSelect.MapKeyH\000R\003key\022a\n"
-  "\nexpression\030\002 \001(\0132\?.substrait.Expression"
-  ".MaskExpression.MapSelect.MapKeyExpressi"
-  "onH\000R\nexpression\022A\n\005child\030\003 \001(\0132+.substr"
-  "ait.Expression.MaskExpression.SelectR\005ch"
-  "ild\032!\n\006MapKey\022\027\n\007map_key\030\001 \001(\tR\006mapKey\032@"
-  "\n\020MapKeyExpression\022,\n\022map_key_expression"
-  "\030\001 \001(\tR\020mapKeyExpressionB\010\n\006select\032\215\004\n\016F"
-  "ieldReference\022S\n\020direct_reference\030\001 \001(\0132"
-  "&.substrait.Expression.ReferenceSegmentH"
-  "\000R\017directReference\022Q\n\020masked_reference\030\002"
-  " \001(\0132$.substrait.Expression.MaskExpressi"
-  "onH\000R\017maskedReference\0227\n\nexpression\030\003 \001("
-  "\0132\025.substrait.ExpressionH\001R\nexpression\022["
-  "\n\016root_reference\030\004 \001(\01322.substrait.Expre"
-  "ssion.FieldReference.RootReferenceH\001R\rro"
-  "otReference\022^\n\017outer_reference\030\005 \001(\01323.s"
-  "ubstrait.Expression.FieldReference.Outer"
-  "ReferenceH\001R\016outerReference\032\017\n\rRootRefer"
-  "ence\032-\n\016OuterReference\022\033\n\tsteps_out\030\001 \001("
-  "\rR\010stepsOutB\020\n\016reference_typeB\013\n\troot_ty"
-  "pe\032\225\n\n\010Subquery\022\?\n\006scalar\030\001 \001(\0132%.substr"
-  "ait.Expression.Subquery.ScalarH\000R\006scalar"
-  "\022O\n\014in_predicate\030\002 \001(\0132*.substrait.Expre"
-  "ssion.Subquery.InPredicateH\000R\013inPredicat"
-  "e\022R\n\rset_predicate\030\003 \001(\0132+.substrait.Exp"
-  "ression.Subquery.SetPredicateH\000R\014setPred"
-  "icate\022U\n\016set_comparison\030\004 \001(\0132,.substrai"
-  "t.Expression.Subquery.SetComparisonH\000R\rs"
-  "etComparison\032.\n\006Scalar\022$\n\005input\030\001 \001(\0132\016."
-  "substrait.RelR\005input\032j\n\013InPredicate\022/\n\007n"
-  "eedles\030\001 \003(\0132\025.substrait.ExpressionR\007nee"
-  "dles\022*\n\010haystack\030\002 \001(\0132\016.substrait.RelR\010"
-  "haystack\032\361\001\n\014SetPredicate\022Z\n\014predicate_o"
-  "p\030\001 \001(\01627.substrait.Expression.Subquery."
-  "SetPredicate.PredicateOpR\013predicateOp\022&\n"
-  "\006tuples\030\002 \001(\0132\016.substrait.RelR\006tuples\"]\n"
-  "\013PredicateOp\022\034\n\030PREDICATE_OP_UNSPECIFIED"
-  "\020\000\022\027\n\023PREDICATE_OP_EXISTS\020\001\022\027\n\023PREDICATE"
-  "_OP_UNIQUE\020\002\032\252\004\n\rSetComparison\022[\n\014reduct"
-  "ion_op\030\001 \001(\01628.substrait.Expression.Subq"
-  "uery.SetComparison.ReductionOpR\013reductio"
-  "nOp\022^\n\rcomparison_op\030\002 \001(\01629.substrait.E"
-  "xpression.Subquery.SetComparison.Compari"
-  "sonOpR\014comparisonOp\022)\n\004left\030\003 \001(\0132\025.subs"
-  "trait.ExpressionR\004left\022$\n\005right\030\004 \001(\0132\016."
-  "substrait.RelR\005right\"\261\001\n\014ComparisonOp\022\035\n"
-  "\031COMPARISON_OP_UNSPECIFIED\020\000\022\024\n\020COMPARIS"
-  "ON_OP_EQ\020\001\022\024\n\020COMPARISON_OP_NE\020\002\022\024\n\020COMP"
-  "ARISON_OP_LT\020\003\022\024\n\020COMPARISON_OP_GT\020\004\022\024\n\020"
-  "COMPARISON_OP_LE\020\005\022\024\n\020COMPARISON_OP_GE\020\006"
-  "\"W\n\013ReductionOp\022\034\n\030REDUCTION_OP_UNSPECIF"
-  "IED\020\000\022\024\n\020REDUCTION_OP_ANY\020\001\022\024\n\020REDUCTION"
-  "_OP_ALL\020\002B\017\n\rsubquery_typeB\n\n\010rex_type\"\255"
-  "\003\n\tSortField\022)\n\004expr\030\001 \001(\0132\025.substrait.E"
-  "xpressionR\004expr\022B\n\tdirection\030\002 \001(\0162\".sub"
-  "strait.SortField.SortDirectionH\000R\tdirect"
-  "ion\022D\n\035comparison_function_reference\030\003 \001"
-  "(\rH\000R\033comparisonFunctionReference\"\335\001\n\rSo"
-  "rtDirection\022\036\n\032SORT_DIRECTION_UNSPECIFIE"
-  "D\020\000\022\"\n\036SORT_DIRECTION_ASC_NULLS_FIRST\020\001\022"
-  "!\n\035SORT_DIRECTION_ASC_NULLS_LAST\020\002\022#\n\037SO"
-  "RT_DIRECTION_DESC_NULLS_FIRST\020\003\022\"\n\036SORT_"
-  "DIRECTION_DESC_NULLS_LAST\020\004\022\034\n\030SORT_DIRE"
-  "CTION_CLUSTERED\020\005B\013\n\tsort_kind\"\376\001\n\021Aggre"
-  "gateFunction\022-\n\022function_reference\030\001 \001(\r"
-  "R\021functionReference\022)\n\004args\030\002 \003(\0132\025.subs"
-  "trait.ExpressionR\004args\022*\n\005sorts\030\003 \003(\0132\024."
-  "substrait.SortFieldR\005sorts\0221\n\005phase\030\004 \001("
-  "\0162\033.substrait.AggregationPhaseR\005phase\0220\n"
-  "\013output_type\030\005 \001(\0132\017.substrait.TypeR\nout"
-  "putType*\357\001\n\020AggregationPhase\022!\n\035AGGREGAT"
-  "ION_PHASE_UNSPECIFIED\020\000\022-\n)AGGREGATION_P"
-  "HASE_INITIAL_TO_INTERMEDIATE\020\001\0222\n.AGGREG"
-  "ATION_PHASE_INTERMEDIATE_TO_INTERMEDIATE"
-  "\020\002\022\'\n#AGGREGATION_PHASE_INITIAL_TO_RESUL"
-  "T\020\003\022,\n(AGGREGATION_PHASE_INTERMEDIATE_TO"
-  "_RESULT\020\004B+\n\022io.substrait.protoP\001\252\002\022Subs"
-  "trait.Protobufb\006proto3"
+  ".Grouping\0221\n\010measures\030\004 \003(\0132\037.substrait."
+  "AggregateRel.Measure\022C\n\022advanced_extensi"
+  "on\030\n \001(\0132\'.substrait.extensions.Advanced"
+  "Extension\032\?\n\010Grouping\0223\n\024grouping_expres"
+  "sions\030\001 \003(\0132\025.substrait.Expression\032_\n\007Me"
+  "asure\022-\n\007measure\030\001 \001(\0132\034.substrait.Aggre"
+  "gateFunction\022%\n\006filter\030\002 \001(\0132\025.substrait"
+  ".Expression\"\270\001\n\007SortRel\022$\n\006common\030\001 \001(\0132"
+  "\024.substrait.RelCommon\022\035\n\005input\030\002 \001(\0132\016.s"
+  "ubstrait.Rel\022#\n\005sorts\030\003 \003(\0132\024.substrait."
+  "SortField\022C\n\022advanced_extension\030\n \001(\0132\'."
+  "substrait.extensions.AdvancedExtension\"\277"
+  "\001\n\tFilterRel\022$\n\006common\030\001 \001(\0132\024.substrait"
+  ".RelCommon\022\035\n\005input\030\002 \001(\0132\016.substrait.Re"
+  "l\022(\n\tcondition\030\003 \001(\0132\025.substrait.Express"
+  "ion\022C\n\022advanced_extension\030\n \001(\0132\'.substr"
+  "ait.extensions.AdvancedExtension\"\203\003\n\006Set"
+  "Rel\022$\n\006common\030\001 \001(\0132\024.substrait.RelCommo"
+  "n\022\036\n\006inputs\030\002 \003(\0132\016.substrait.Rel\022#\n\002op\030"
+  "\003 \001(\0162\027.substrait.SetRel.SetOp\022C\n\022advanc"
+  "ed_extension\030\n \001(\0132\'.substrait.extension"
+  "s.AdvancedExtension\"\310\001\n\005SetOp\022\026\n\022SET_OP_"
+  "UNSPECIFIED\020\000\022\030\n\024SET_OP_MINUS_PRIMARY\020\001\022"
+  "\031\n\025SET_OP_MINUS_MULTISET\020\002\022\037\n\033SET_OP_INT"
+  "ERSECTION_PRIMARY\020\003\022 \n\034SET_OP_INTERSECTI"
+  "ON_MULTISET\020\004\022\031\n\025SET_OP_UNION_DISTINCT\020\005"
+  "\022\024\n\020SET_OP_UNION_ALL\020\006\"\177\n\022ExtensionSingl"
+  "eRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelComm"
+  "on\022\035\n\005input\030\002 \001(\0132\016.substrait.Rel\022$\n\006det"
+  "ail\030\003 \001(\0132\024.google.protobuf.Any\"^\n\020Exten"
+  "sionLeafRel\022$\n\006common\030\001 \001(\0132\024.substrait."
+  "RelCommon\022$\n\006detail\030\002 \001(\0132\024.google.proto"
+  "buf.Any\"\177\n\021ExtensionMultiRel\022$\n\006common\030\001"
+  " \001(\0132\024.substrait.RelCommon\022\036\n\006inputs\030\002 \003"
+  "(\0132\016.substrait.Rel\022$\n\006detail\030\003 \001(\0132\024.goo"
+  "gle.protobuf.Any\"\303\007\n\013ExchangeRel\022$\n\006comm"
+  "on\030\001 \001(\0132\024.substrait.RelCommon\022\035\n\005input\030"
+  "\002 \001(\0132\016.substrait.Rel\022\027\n\017partition_count"
+  "\030\003 \001(\005\0226\n\007targets\030\004 \003(\0132%.substrait.Exch"
+  "angeRel.ExchangeTarget\022A\n\021scatter_by_fie"
+  "lds\030\005 \001(\0132$.substrait.ExchangeRel.Scatte"
+  "rFieldsH\000\022F\n\rsingle_target\030\006 \001(\0132-.subst"
+  "rait.ExchangeRel.SingleBucketExpressionH"
+  "\000\022D\n\014multi_target\030\007 \001(\0132,.substrait.Exch"
+  "angeRel.MultiBucketExpressionH\000\0228\n\013round"
+  "_robin\030\010 \001(\0132!.substrait.ExchangeRel.Rou"
+  "ndRobinH\000\0225\n\tbroadcast\030\t \001(\0132 .substrait"
+  ".ExchangeRel.BroadcastH\000\022C\n\022advanced_ext"
+  "ension\030\n \001(\0132\'.substrait.extensions.Adva"
+  "ncedExtension\032E\n\rScatterFields\0224\n\006fields"
+  "\030\001 \003(\0132$.substrait.Expression.FieldRefer"
+  "ence\032C\n\026SingleBucketExpression\022)\n\nexpres"
+  "sion\030\001 \001(\0132\025.substrait.Expression\032`\n\025Mul"
+  "tiBucketExpression\022)\n\nexpression\030\001 \001(\0132\025"
+  ".substrait.Expression\022\034\n\024constrained_to_"
+  "count\030\002 \001(\010\032\013\n\tBroadcast\032\033\n\nRoundRobin\022\r"
+  "\n\005exact\030\001 \001(\010\032n\n\016ExchangeTarget\022\024\n\014parti"
+  "tion_id\030\001 \003(\005\022\r\n\003uri\030\002 \001(\tH\000\022(\n\010extended"
+  "\030\003 \001(\0132\024.google.protobuf.AnyH\000B\r\n\013target"
+  "_typeB\017\n\rexchange_kind\"7\n\007RelRoot\022\035\n\005inp"
+  "ut\030\001 \001(\0132\016.substrait.Rel\022\r\n\005names\030\002 \003(\t\""
+  "\226\004\n\003Rel\022\"\n\004read\030\001 \001(\0132\022.substrait.ReadRe"
+  "lH\000\022&\n\006filter\030\002 \001(\0132\024.substrait.FilterRe"
+  "lH\000\022$\n\005fetch\030\003 \001(\0132\023.substrait.FetchRelH"
+  "\000\022,\n\taggregate\030\004 \001(\0132\027.substrait.Aggrega"
+  "teRelH\000\022\"\n\004sort\030\005 \001(\0132\022.substrait.SortRe"
+  "lH\000\022\"\n\004join\030\006 \001(\0132\022.substrait.JoinRelH\000\022"
+  "(\n\007project\030\007 \001(\0132\025.substrait.ProjectRelH"
+  "\000\022 \n\003set\030\010 \001(\0132\021.substrait.SetRelH\000\0229\n\020e"
+  "xtension_single\030\t \001(\0132\035.substrait.Extens"
+  "ionSingleRelH\000\0227\n\017extension_multi\030\n \001(\0132"
+  "\034.substrait.ExtensionMultiRelH\000\0225\n\016exten"
+  "sion_leaf\030\013 \001(\0132\033.substrait.ExtensionLea"
+  "fRelH\000\022$\n\005cross\030\014 \001(\0132\023.substrait.CrossR"
+  "elH\000B\n\n\010rel_type\"\346;\n\nExpression\0220\n\007liter"
+  "al\030\001 \001(\0132\035.substrait.Expression.LiteralH"
+  "\000\0229\n\tselection\030\002 \001(\0132$.substrait.Express"
+  "ion.FieldReferenceH\000\022\?\n\017scalar_function\030"
+  "\003 \001(\0132$.substrait.Expression.ScalarFunct"
+  "ionH\000\022\?\n\017window_function\030\005 \001(\0132$.substra"
+  "it.Expression.WindowFunctionH\000\022/\n\007if_the"
+  "n\030\006 \001(\0132\034.substrait.Expression.IfThenH\000\022"
+  "C\n\021switch_expression\030\007 \001(\0132&.substrait.E"
+  "xpression.SwitchExpressionH\000\022@\n\020singular"
+  "_or_list\030\010 \001(\0132$.substrait.Expression.Si"
+  "ngularOrListH\000\022:\n\rmulti_or_list\030\t \001(\0132!."
+  "substrait.Expression.MultiOrListH\000\022*\n\004en"
+  "um\030\n \001(\0132\032.substrait.Expression.EnumH\000\022*"
+  "\n\004cast\030\013 \001(\0132\032.substrait.Expression.Cast"
+  "H\000\0222\n\010subquery\030\014 \001(\0132\036.substrait.Express"
+  "ion.SubqueryH\000\032j\n\004Enum\022\023\n\tspecified\030\001 \001("
+  "\tH\000\0227\n\013unspecified\030\002 \001(\0132 .substrait.Exp"
+  "ression.Enum.EmptyH\000\032\007\n\005EmptyB\013\n\tenum_ki"
+  "nd\032\354\n\n\007Literal\022\021\n\007boolean\030\001 \001(\010H\000\022\014\n\002i8\030"
+  "\002 \001(\005H\000\022\r\n\003i16\030\003 \001(\005H\000\022\r\n\003i32\030\005 \001(\005H\000\022\r\n"
+  "\003i64\030\007 \001(\003H\000\022\016\n\004fp32\030\n \001(\002H\000\022\016\n\004fp64\030\013 \001"
+  "(\001H\000\022\020\n\006string\030\014 \001(\tH\000\022\020\n\006binary\030\r \001(\014H\000"
+  "\022\023\n\ttimestamp\030\016 \001(\003H\000\022\016\n\004date\030\020 \001(\005H\000\022\016\n"
+  "\004time\030\021 \001(\003H\000\022S\n\026interval_year_to_month\030"
+  "\023 \001(\01321.substrait.Expression.Literal.Int"
+  "ervalYearToMonthH\000\022S\n\026interval_day_to_se"
+  "cond\030\024 \001(\01321.substrait.Expression.Litera"
+  "l.IntervalDayToSecondH\000\022\024\n\nfixed_char\030\025 "
+  "\001(\tH\000\0229\n\010var_char\030\026 \001(\0132%.substrait.Expr"
+  "ession.Literal.VarCharH\000\022\026\n\014fixed_binary"
+  "\030\027 \001(\014H\000\0228\n\007decimal\030\030 \001(\0132%.substrait.Ex"
+  "pression.Literal.DecimalH\000\0226\n\006struct\030\031 \001"
+  "(\0132$.substrait.Expression.Literal.Struct"
+  "H\000\0220\n\003map\030\032 \001(\0132!.substrait.Expression.L"
+  "iteral.MapH\000\022\026\n\014timestamp_tz\030\033 \001(\003H\000\022\016\n\004"
+  "uuid\030\034 \001(\014H\000\022\037\n\004null\030\035 \001(\0132\017.substrait.T"
+  "ypeH\000\0222\n\004list\030\036 \001(\0132\".substrait.Expressi"
+  "on.Literal.ListH\000\022*\n\nempty_list\030\037 \001(\0132\024."
+  "substrait.Type.ListH\000\022(\n\tempty_map\030  \001(\013"
+  "2\023.substrait.Type.MapH\000\022\020\n\010nullable\0302 \001("
+  "\010\032(\n\007VarChar\022\r\n\005value\030\001 \001(\t\022\016\n\006length\030\002 "
+  "\001(\r\032:\n\007Decimal\022\r\n\005value\030\001 \001(\014\022\021\n\tprecisi"
+  "on\030\002 \001(\005\022\r\n\005scale\030\003 \001(\005\032\253\001\n\003Map\022>\n\nkey_v"
+  "alues\030\001 \003(\0132*.substrait.Expression.Liter"
+  "al.Map.KeyValue\032d\n\010KeyValue\022*\n\003key\030\001 \001(\013"
+  "2\035.substrait.Expression.Literal\022,\n\005value"
+  "\030\002 \001(\0132\035.substrait.Expression.Literal\0324\n"
+  "\023IntervalYearToMonth\022\r\n\005years\030\001 \001(\005\022\016\n\006m"
+  "onths\030\002 \001(\005\0324\n\023IntervalDayToSecond\022\014\n\004da"
+  "ys\030\001 \001(\005\022\017\n\007seconds\030\002 \001(\005\0327\n\006Struct\022-\n\006f"
+  "ields\030\001 \003(\0132\035.substrait.Expression.Liter"
+  "al\0325\n\004List\022-\n\006values\030\001 \003(\0132\035.substrait.E"
+  "xpression.LiteralB\016\n\014literal_type\032w\n\016Sca"
+  "larFunction\022\032\n\022function_reference\030\001 \001(\r\022"
+  "#\n\004args\030\002 \003(\0132\025.substrait.Expression\022$\n\013"
+  "output_type\030\003 \001(\0132\017.substrait.Type\032\213\006\n\016W"
+  "indowFunction\022\032\n\022function_reference\030\001 \001("
+  "\r\022)\n\npartitions\030\002 \003(\0132\025.substrait.Expres"
+  "sion\022#\n\005sorts\030\003 \003(\0132\024.substrait.SortFiel"
+  "d\022\?\n\013upper_bound\030\004 \001(\0132*.substrait.Expre"
+  "ssion.WindowFunction.Bound\022\?\n\013lower_boun"
+  "d\030\005 \001(\0132*.substrait.Expression.WindowFun"
+  "ction.Bound\022*\n\005phase\030\006 \001(\0162\033.substrait.A"
+  "ggregationPhase\022$\n\013output_type\030\007 \001(\0132\017.s"
+  "ubstrait.Type\022#\n\004args\030\010 \003(\0132\025.substrait."
+  "Expression\032\223\003\n\005Bound\022I\n\tpreceding\030\001 \001(\0132"
+  "4.substrait.Expression.WindowFunction.Bo"
+  "und.PrecedingH\000\022I\n\tfollowing\030\002 \001(\01324.sub"
+  "strait.Expression.WindowFunction.Bound.F"
+  "ollowingH\000\022L\n\013current_row\030\003 \001(\01325.substr"
+  "ait.Expression.WindowFunction.Bound.Curr"
+  "entRowH\000\022I\n\tunbounded\030\004 \001(\01324.substrait."
+  "Expression.WindowFunction.Bound.Unbounde"
+  "dH\000\032\033\n\tPreceding\022\016\n\006offset\030\001 \001(\003\032\033\n\tFoll"
+  "owing\022\016\n\006offset\030\001 \001(\003\032\014\n\nCurrentRow\032\013\n\tU"
+  "nboundedB\006\n\004kind\032\265\001\n\006IfThen\0222\n\003ifs\030\001 \003(\013"
+  "2%.substrait.Expression.IfThen.IfClause\022"
+  "#\n\004else\030\002 \001(\0132\025.substrait.Expression\032R\n\010"
+  "IfClause\022!\n\002if\030\001 \001(\0132\025.substrait.Express"
+  "ion\022#\n\004then\030\002 \001(\0132\025.substrait.Expression"
+  "\032K\n\004Cast\022\035\n\004type\030\001 \001(\0132\017.substrait.Type\022"
+  "$\n\005input\030\002 \001(\0132\025.substrait.Expression\032\365\001"
+  "\n\020SwitchExpression\022$\n\005match\030\003 \001(\0132\025.subs"
+  "trait.Expression\022;\n\003ifs\030\001 \003(\0132..substrai"
+  "t.Expression.SwitchExpression.IfValue\022#\n"
+  "\004else\030\002 \001(\0132\025.substrait.Expression\032Y\n\007If"
+  "Value\022)\n\002if\030\001 \001(\0132\035.substrait.Expression"
+  ".Literal\022#\n\004then\030\002 \001(\0132\025.substrait.Expre"
+  "ssion\032^\n\016SingularOrList\022$\n\005value\030\001 \001(\0132\025"
+  ".substrait.Expression\022&\n\007options\030\002 \003(\0132\025"
+  ".substrait.Expression\032\237\001\n\013MultiOrList\022$\n"
+  "\005value\030\001 \003(\0132\025.substrait.Expression\0229\n\007o"
+  "ptions\030\002 \003(\0132(.substrait.Expression.Mult"
+  "iOrList.Record\032/\n\006Record\022%\n\006fields\030\001 \003(\013"
+  "2\025.substrait.Expression\032\243\003\n\020EmbeddedFunc"
+  "tion\022(\n\targuments\030\001 \003(\0132\025.substrait.Expr"
+  "ession\022$\n\013output_type\030\002 \001(\0132\017.substrait."
+  "Type\022]\n\026python_pickle_function\030\003 \001(\0132;.s"
+  "ubstrait.Expression.EmbeddedFunction.Pyt"
+  "honPickleFunctionH\000\022[\n\025web_assembly_func"
+  "tion\030\004 \001(\0132:.substrait.Expression.Embedd"
+  "edFunction.WebAssemblyFunctionH\000\032>\n\024Pyth"
+  "onPickleFunction\022\020\n\010function\030\001 \001(\014\022\024\n\014pr"
+  "erequisite\030\002 \003(\t\032;\n\023WebAssemblyFunction\022"
+  "\016\n\006script\030\001 \001(\014\022\024\n\014prerequisite\030\002 \003(\tB\006\n"
+  "\004kind\032\232\004\n\020ReferenceSegment\022@\n\007map_key\030\001 "
+  "\001(\0132-.substrait.Expression.ReferenceSegm"
+  "ent.MapKeyH\000\022J\n\014struct_field\030\002 \001(\01322.sub"
+  "strait.Expression.ReferenceSegment.Struc"
+  "tFieldH\000\022J\n\014list_element\030\003 \001(\01322.substra"
+  "it.Expression.ReferenceSegment.ListEleme"
+  "ntH\000\032o\n\006MapKey\022.\n\007map_key\030\001 \001(\0132\035.substr"
+  "ait.Expression.Literal\0225\n\005child\030\002 \001(\0132&."
+  "substrait.Expression.ReferenceSegment\032S\n"
+  "\013StructField\022\r\n\005field\030\001 \001(\005\0225\n\005child\030\002 \001"
+  "(\0132&.substrait.Expression.ReferenceSegme"
+  "nt\032T\n\013ListElement\022\016\n\006offset\030\001 \001(\005\0225\n\005chi"
+  "ld\030\002 \001(\0132&.substrait.Expression.Referenc"
+  "eSegmentB\020\n\016reference_type\032\360\t\n\016MaskExpre"
+  "ssion\022A\n\006select\030\001 \001(\01321.substrait.Expres"
+  "sion.MaskExpression.StructSelect\022 \n\030main"
+  "tain_singular_struct\030\002 \001(\010\032\325\001\n\006Select\022C\n"
+  "\006struct\030\001 \001(\01321.substrait.Expression.Mas"
+  "kExpression.StructSelectH\000\022\?\n\004list\030\002 \001(\013"
+  "2/.substrait.Expression.MaskExpression.L"
+  "istSelectH\000\022=\n\003map\030\003 \001(\0132..substrait.Exp"
+  "ression.MaskExpression.MapSelectH\000B\006\n\004ty"
+  "pe\032U\n\014StructSelect\022E\n\014struct_items\030\001 \003(\013"
+  "2/.substrait.Expression.MaskExpression.S"
+  "tructItem\032W\n\nStructItem\022\r\n\005field\030\001 \001(\005\022:"
+  "\n\005child\030\002 \001(\0132+.substrait.Expression.Mas"
+  "kExpression.Select\032\264\003\n\nListSelect\022Q\n\tsel"
+  "ection\030\001 \003(\0132>.substrait.Expression.Mask"
+  "Expression.ListSelect.ListSelectItem\022:\n\005"
+  "child\030\002 \001(\0132+.substrait.Expression.MaskE"
+  "xpression.Select\032\226\002\n\016ListSelectItem\022Z\n\004i"
+  "tem\030\001 \001(\0132J.substrait.Expression.MaskExp"
+  "ression.ListSelect.ListSelectItem.ListEl"
+  "ementH\000\022Y\n\005slice\030\002 \001(\0132H.substrait.Expre"
+  "ssion.MaskExpression.ListSelect.ListSele"
+  "ctItem.ListSliceH\000\032\034\n\013ListElement\022\r\n\005fie"
+  "ld\030\001 \001(\005\032\'\n\tListSlice\022\r\n\005start\030\001 \001(\005\022\013\n\003"
+  "end\030\002 \001(\005B\006\n\004type\032\271\002\n\tMapSelect\022D\n\003key\030\001"
+  " \001(\01325.substrait.Expression.MaskExpressi"
+  "on.MapSelect.MapKeyH\000\022U\n\nexpression\030\002 \001("
+  "\0132\?.substrait.Expression.MaskExpression."
+  "MapSelect.MapKeyExpressionH\000\022:\n\005child\030\003 "
+  "\001(\0132+.substrait.Expression.MaskExpressio"
+  "n.Select\032\031\n\006MapKey\022\017\n\007map_key\030\001 \001(\t\032.\n\020M"
+  "apKeyExpression\022\032\n\022map_key_expression\030\001 "
+  "\001(\tB\010\n\006select\032\266\003\n\016FieldReference\022B\n\020dire"
+  "ct_reference\030\001 \001(\0132&.substrait.Expressio"
+  "n.ReferenceSegmentH\000\022@\n\020masked_reference"
+  "\030\002 \001(\0132$.substrait.Expression.MaskExpres"
+  "sionH\000\022+\n\nexpression\030\003 \001(\0132\025.substrait.E"
+  "xpressionH\001\022L\n\016root_reference\030\004 \001(\01322.su"
+  "bstrait.Expression.FieldReference.RootRe"
+  "ferenceH\001\022N\n\017outer_reference\030\005 \001(\01323.sub"
+  "strait.Expression.FieldReference.OuterRe"
+  "ferenceH\001\032\017\n\rRootReference\032#\n\016OuterRefer"
+  "ence\022\021\n\tsteps_out\030\001 \001(\rB\020\n\016reference_typ"
+  "eB\013\n\troot_type\032\214\t\n\010Subquery\0227\n\006scalar\030\001 "
+  "\001(\0132%.substrait.Expression.Subquery.Scal"
+  "arH\000\022B\n\014in_predicate\030\002 \001(\0132*.substrait.E"
+  "xpression.Subquery.InPredicateH\000\022D\n\rset_"
+  "predicate\030\003 \001(\0132+.substrait.Expression.S"
+  "ubquery.SetPredicateH\000\022F\n\016set_comparison"
+  "\030\004 \001(\0132,.substrait.Expression.Subquery.S"
+  "etComparisonH\000\032\'\n\006Scalar\022\035\n\005input\030\001 \001(\0132"
+  "\016.substrait.Rel\032W\n\013InPredicate\022&\n\007needle"
+  "s\030\001 \003(\0132\025.substrait.Expression\022 \n\010haysta"
+  "ck\030\002 \001(\0132\016.substrait.Rel\032\334\001\n\014SetPredicat"
+  "e\022M\n\014predicate_op\030\001 \001(\01627.substrait.Expr"
+  "ession.Subquery.SetPredicate.PredicateOp"
+  "\022\036\n\006tuples\030\002 \001(\0132\016.substrait.Rel\"]\n\013Pred"
+  "icateOp\022\034\n\030PREDICATE_OP_UNSPECIFIED\020\000\022\027\n"
+  "\023PREDICATE_OP_EXISTS\020\001\022\027\n\023PREDICATE_OP_U"
+  "NIQUE\020\002\032\202\004\n\rSetComparison\022N\n\014reduction_o"
+  "p\030\001 \001(\01628.substrait.Expression.Subquery."
+  "SetComparison.ReductionOp\022P\n\rcomparison_"
+  "op\030\002 \001(\01629.substrait.Expression.Subquery"
+  ".SetComparison.ComparisonOp\022#\n\004left\030\003 \001("
+  "\0132\025.substrait.Expression\022\035\n\005right\030\004 \001(\0132"
+  "\016.substrait.Rel\"\261\001\n\014ComparisonOp\022\035\n\031COMP"
+  "ARISON_OP_UNSPECIFIED\020\000\022\024\n\020COMPARISON_OP"
+  "_EQ\020\001\022\024\n\020COMPARISON_OP_NE\020\002\022\024\n\020COMPARISO"
+  "N_OP_LT\020\003\022\024\n\020COMPARISON_OP_GT\020\004\022\024\n\020COMPA"
+  "RISON_OP_LE\020\005\022\024\n\020COMPARISON_OP_GE\020\006\"W\n\013R"
+  "eductionOp\022\034\n\030REDUCTION_OP_UNSPECIFIED\020\000"
+  "\022\024\n\020REDUCTION_OP_ANY\020\001\022\024\n\020REDUCTION_OP_A"
+  "LL\020\002B\017\n\rsubquery_typeB\n\n\010rex_type\"\377\002\n\tSo"
+  "rtField\022#\n\004expr\030\001 \001(\0132\025.substrait.Expres"
+  "sion\0227\n\tdirection\030\002 \001(\0162\".substrait.Sort"
+  "Field.SortDirectionH\000\022\'\n\035comparison_func"
+  "tion_reference\030\003 \001(\rH\000\"\335\001\n\rSortDirection"
+  "\022\036\n\032SORT_DIRECTION_UNSPECIFIED\020\000\022\"\n\036SORT"
+  "_DIRECTION_ASC_NULLS_FIRST\020\001\022!\n\035SORT_DIR"
+  "ECTION_ASC_NULLS_LAST\020\002\022#\n\037SORT_DIRECTIO"
+  "N_DESC_NULLS_FIRST\020\003\022\"\n\036SORT_DIRECTION_D"
+  "ESC_NULLS_LAST\020\004\022\034\n\030SORT_DIRECTION_CLUST"
+  "ERED\020\005B\013\n\tsort_kind\"\313\001\n\021AggregateFunctio"
+  "n\022\032\n\022function_reference\030\001 \001(\r\022#\n\004args\030\002 "
+  "\003(\0132\025.substrait.Expression\022#\n\005sorts\030\003 \003("
+  "\0132\024.substrait.SortField\022*\n\005phase\030\004 \001(\0162\033"
+  ".substrait.AggregationPhase\022$\n\013output_ty"
+  "pe\030\005 \001(\0132\017.substrait.Type*\357\001\n\020Aggregatio"
+  "nPhase\022!\n\035AGGREGATION_PHASE_UNSPECIFIED\020"
+  "\000\022-\n)AGGREGATION_PHASE_INITIAL_TO_INTERM"
+  "EDIATE\020\001\0222\n.AGGREGATION_PHASE_INTERMEDIA"
+  "TE_TO_INTERMEDIATE\020\002\022\'\n#AGGREGATION_PHAS"
+  "E_INITIAL_TO_RESULT\020\003\022,\n(AGGREGATION_PHA"
+  "SE_INTERMEDIATE_TO_RESULT\020\004BW\n\022io.substr"
+  "ait.protoP\001Z*github.com/substrait-io/sub"
+  "strait-go/proto\252\002\022Substrait.Protobufb\006pr"
+  "oto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2falgebra_2eproto_deps[3] = {
   &::descriptor_table_google_2fprotobuf_2fany_2eproto,
@@ -2450,8 +2583,8 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2falgebra_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2falgebra_2eproto = {
-  false, false, 16182, descriptor_table_protodef_substrait_2falgebra_2eproto, "substrait/algebra.proto", 
-  &descriptor_table_substrait_2falgebra_2eproto_once, descriptor_table_substrait_2falgebra_2eproto_deps, 3, 82,
+  false, false, 14724, descriptor_table_protodef_substrait_2falgebra_2eproto, "substrait/algebra.proto", 
+  &descriptor_table_substrait_2falgebra_2eproto_once, descriptor_table_substrait_2falgebra_2eproto_deps, 3, 89,
   schemas, file_default_instances, TableStruct_substrait_2falgebra_2eproto::offsets,
   file_level_metadata_substrait_2falgebra_2eproto, file_level_enum_descriptors_substrait_2falgebra_2eproto, file_level_service_descriptors_substrait_2falgebra_2eproto,
 };
@@ -2773,7 +2906,7 @@ const char* RelCommon_Emit::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated int32 output_mapping = 1 [json_name = "outputMapping"];
+      // repeated int32 output_mapping = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedInt32Parser(_internal_mutable_output_mapping(), ptr, ctx);
@@ -2813,7 +2946,7 @@ uint8_t* RelCommon_Emit::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated int32 output_mapping = 1 [json_name = "outputMapping"];
+  // repeated int32 output_mapping = 1;
   {
     int byte_size = _output_mapping_cached_byte_size_.load(std::memory_order_relaxed);
     if (byte_size > 0) {
@@ -2838,7 +2971,7 @@ size_t RelCommon_Emit::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated int32 output_mapping = 1 [json_name = "outputMapping"];
+  // repeated int32 output_mapping = 1;
   {
     size_t data_size = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       Int32Size(this->output_mapping_);
@@ -2993,7 +3126,7 @@ const char* RelCommon_Hint_Stats::_InternalParse(const char* ptr, ::PROTOBUF_NAM
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // double row_count = 1 [json_name = "rowCount"];
+      // double row_count = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 9)) {
           row_count_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
@@ -3001,7 +3134,7 @@ const char* RelCommon_Hint_Stats::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // double record_size = 2 [json_name = "recordSize"];
+      // double record_size = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 17)) {
           record_size_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
@@ -3009,7 +3142,7 @@ const char* RelCommon_Hint_Stats::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -3046,7 +3179,7 @@ uint8_t* RelCommon_Hint_Stats::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // double row_count = 1 [json_name = "rowCount"];
+  // double row_count = 1;
   static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
   double tmp_row_count = this->_internal_row_count();
   uint64_t raw_row_count;
@@ -3056,7 +3189,7 @@ uint8_t* RelCommon_Hint_Stats::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteDoubleToArray(1, this->_internal_row_count(), target);
   }
 
-  // double record_size = 2 [json_name = "recordSize"];
+  // double record_size = 2;
   static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
   double tmp_record_size = this->_internal_record_size();
   uint64_t raw_record_size;
@@ -3066,7 +3199,7 @@ uint8_t* RelCommon_Hint_Stats::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteDoubleToArray(2, this->_internal_record_size(), target);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3090,14 +3223,14 @@ size_t RelCommon_Hint_Stats::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *advanced_extension_);
   }
 
-  // double row_count = 1 [json_name = "rowCount"];
+  // double row_count = 1;
   static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
   double tmp_row_count = this->_internal_row_count();
   uint64_t raw_row_count;
@@ -3106,7 +3239,7 @@ size_t RelCommon_Hint_Stats::ByteSizeLong() const {
     total_size += 1 + 8;
   }
 
-  // double record_size = 2 [json_name = "recordSize"];
+  // double record_size = 2;
   static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
   double tmp_record_size = this->_internal_record_size();
   uint64_t raw_record_size;
@@ -3267,7 +3400,7 @@ const char* RelCommon_Hint_RuntimeConstraint::_InternalParse(const char* ptr, ::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -3304,7 +3437,7 @@ uint8_t* RelCommon_Hint_RuntimeConstraint::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3328,7 +3461,7 @@ size_t RelCommon_Hint_RuntimeConstraint::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -3501,7 +3634,7 @@ const char* RelCommon_Hint::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon.Hint.Stats stats = 1 [json_name = "stats"];
+      // .substrait.RelCommon.Hint.Stats stats = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_stats(), ptr);
@@ -3509,7 +3642,7 @@ const char* RelCommon_Hint::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
         } else
           goto handle_unusual;
         continue;
-      // .substrait.RelCommon.Hint.RuntimeConstraint constraint = 2 [json_name = "constraint"];
+      // .substrait.RelCommon.Hint.RuntimeConstraint constraint = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_constraint(), ptr);
@@ -3517,7 +3650,7 @@ const char* RelCommon_Hint::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -3554,7 +3687,7 @@ uint8_t* RelCommon_Hint::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon.Hint.Stats stats = 1 [json_name = "stats"];
+  // .substrait.RelCommon.Hint.Stats stats = 1;
   if (this->_internal_has_stats()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3562,7 +3695,7 @@ uint8_t* RelCommon_Hint::_InternalSerialize(
         1, _Internal::stats(this), target, stream);
   }
 
-  // .substrait.RelCommon.Hint.RuntimeConstraint constraint = 2 [json_name = "constraint"];
+  // .substrait.RelCommon.Hint.RuntimeConstraint constraint = 2;
   if (this->_internal_has_constraint()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3570,7 +3703,7 @@ uint8_t* RelCommon_Hint::_InternalSerialize(
         2, _Internal::constraint(this), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3594,21 +3727,21 @@ size_t RelCommon_Hint::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon.Hint.Stats stats = 1 [json_name = "stats"];
+  // .substrait.RelCommon.Hint.Stats stats = 1;
   if (this->_internal_has_stats()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *stats_);
   }
 
-  // .substrait.RelCommon.Hint.RuntimeConstraint constraint = 2 [json_name = "constraint"];
+  // .substrait.RelCommon.Hint.RuntimeConstraint constraint = 2;
   if (this->_internal_has_constraint()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *constraint_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -3859,7 +3992,7 @@ const char* RelCommon::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon.Direct direct = 1 [json_name = "direct"];
+      // .substrait.RelCommon.Direct direct = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_direct(), ptr);
@@ -3867,7 +4000,7 @@ const char* RelCommon::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.RelCommon.Emit emit = 2 [json_name = "emit"];
+      // .substrait.RelCommon.Emit emit = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_emit(), ptr);
@@ -3875,7 +4008,7 @@ const char* RelCommon::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.RelCommon.Hint hint = 3 [json_name = "hint"];
+      // .substrait.RelCommon.Hint hint = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_hint(), ptr);
@@ -3883,7 +4016,7 @@ const char* RelCommon::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 4 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -3920,7 +4053,7 @@ uint8_t* RelCommon::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon.Direct direct = 1 [json_name = "direct"];
+  // .substrait.RelCommon.Direct direct = 1;
   if (_internal_has_direct()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3928,7 +4061,7 @@ uint8_t* RelCommon::_InternalSerialize(
         1, _Internal::direct(this), target, stream);
   }
 
-  // .substrait.RelCommon.Emit emit = 2 [json_name = "emit"];
+  // .substrait.RelCommon.Emit emit = 2;
   if (_internal_has_emit()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3936,7 +4069,7 @@ uint8_t* RelCommon::_InternalSerialize(
         2, _Internal::emit(this), target, stream);
   }
 
-  // .substrait.RelCommon.Hint hint = 3 [json_name = "hint"];
+  // .substrait.RelCommon.Hint hint = 3;
   if (this->_internal_has_hint()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3944,7 +4077,7 @@ uint8_t* RelCommon::_InternalSerialize(
         3, _Internal::hint(this), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 4 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 4;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3968,14 +4101,14 @@ size_t RelCommon::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon.Hint hint = 3 [json_name = "hint"];
+  // .substrait.RelCommon.Hint hint = 3;
   if (this->_internal_has_hint()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *hint_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 4 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 4;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -3983,14 +4116,14 @@ size_t RelCommon::ByteSizeLong() const {
   }
 
   switch (emit_kind_case()) {
-    // .substrait.RelCommon.Direct direct = 1 [json_name = "direct"];
+    // .substrait.RelCommon.Direct direct = 1;
     case kDirect: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *emit_kind_.direct_);
       break;
     }
-    // .substrait.RelCommon.Emit emit = 2 [json_name = "emit"];
+    // .substrait.RelCommon.Emit emit = 2;
     case kEmit: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -4160,7 +4293,7 @@ const char* ReadRel_NamedTable::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated string names = 1 [json_name = "names"];
+      // repeated string names = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -4175,7 +4308,7 @@ const char* ReadRel_NamedTable::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -4212,7 +4345,7 @@ uint8_t* ReadRel_NamedTable::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated string names = 1 [json_name = "names"];
+  // repeated string names = 1;
   for (int i = 0, n = this->_internal_names_size(); i < n; i++) {
     const auto& s = this->_internal_names(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -4222,7 +4355,7 @@ uint8_t* ReadRel_NamedTable::_InternalSerialize(
     target = stream->WriteString(1, s, target);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4246,7 +4379,7 @@ size_t ReadRel_NamedTable::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string names = 1 [json_name = "names"];
+  // repeated string names = 1;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(names_.size());
   for (int i = 0, n = names_.size(); i < n; i++) {
@@ -4254,7 +4387,7 @@ size_t ReadRel_NamedTable::ByteSizeLong() const {
       names_.Get(i));
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -4377,7 +4510,7 @@ const char* ReadRel_VirtualTable::_InternalParse(const char* ptr, ::PROTOBUF_NAM
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.Literal.Struct values = 1 [json_name = "values"];
+      // repeated .substrait.Expression.Literal.Struct values = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -4419,7 +4552,7 @@ uint8_t* ReadRel_VirtualTable::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal.Struct values = 1 [json_name = "values"];
+  // repeated .substrait.Expression.Literal.Struct values = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_values_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -4443,7 +4576,7 @@ size_t ReadRel_VirtualTable::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal.Struct values = 1 [json_name = "values"];
+  // repeated .substrait.Expression.Literal.Struct values = 1;
   total_size += 1UL * this->_internal_values_size();
   for (const auto& msg : this->values_) {
     total_size +=
@@ -4581,7 +4714,7 @@ const char* ReadRel_ExtensionTable::_InternalParse(const char* ptr, ::PROTOBUF_N
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .google.protobuf.Any detail = 1 [json_name = "detail"];
+      // .google.protobuf.Any detail = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_detail(), ptr);
@@ -4618,7 +4751,7 @@ uint8_t* ReadRel_ExtensionTable::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .google.protobuf.Any detail = 1 [json_name = "detail"];
+  // .google.protobuf.Any detail = 1;
   if (this->_internal_has_detail()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4642,7 +4775,7 @@ size_t ReadRel_ExtensionTable::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .google.protobuf.Any detail = 1 [json_name = "detail"];
+  // .google.protobuf.Any detail = 1;
   if (this->_internal_has_detail()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -4824,7 +4957,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string uri_path = 1 [json_name = "uriPath"];
+      // string uri_path = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_uri_path();
@@ -4834,7 +4967,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // string uri_path_glob = 2 [json_name = "uriPathGlob"];
+      // string uri_path_glob = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           auto str = _internal_mutable_uri_path_glob();
@@ -4844,7 +4977,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // string uri_file = 3 [json_name = "uriFile"];
+      // string uri_file = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_uri_file();
@@ -4854,7 +4987,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // string uri_folder = 4 [json_name = "uriFolder"];
+      // string uri_folder = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           auto str = _internal_mutable_uri_folder();
@@ -4864,7 +4997,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5 [json_name = "format"];
+      // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -4873,7 +5006,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // uint64 partition_index = 6 [json_name = "partitionIndex"];
+      // uint64 partition_index = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
           partition_index_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -4881,7 +5014,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // uint64 start = 7 [json_name = "start"];
+      // uint64 start = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
           start_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -4889,7 +5022,7 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // uint64 length = 8 [json_name = "length"];
+      // uint64 length = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
           length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -4926,7 +5059,7 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string uri_path = 1 [json_name = "uriPath"];
+  // string uri_path = 1;
   if (_internal_has_uri_path()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri_path().data(), static_cast<int>(this->_internal_uri_path().length()),
@@ -4936,7 +5069,7 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
         1, this->_internal_uri_path(), target);
   }
 
-  // string uri_path_glob = 2 [json_name = "uriPathGlob"];
+  // string uri_path_glob = 2;
   if (_internal_has_uri_path_glob()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri_path_glob().data(), static_cast<int>(this->_internal_uri_path_glob().length()),
@@ -4946,7 +5079,7 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
         2, this->_internal_uri_path_glob(), target);
   }
 
-  // string uri_file = 3 [json_name = "uriFile"];
+  // string uri_file = 3;
   if (_internal_has_uri_file()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri_file().data(), static_cast<int>(this->_internal_uri_file().length()),
@@ -4956,7 +5089,7 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
         3, this->_internal_uri_file(), target);
   }
 
-  // string uri_folder = 4 [json_name = "uriFolder"];
+  // string uri_folder = 4;
   if (_internal_has_uri_folder()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri_folder().data(), static_cast<int>(this->_internal_uri_folder().length()),
@@ -4966,26 +5099,26 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
         4, this->_internal_uri_folder(), target);
   }
 
-  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5 [json_name = "format"];
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
   if (this->_internal_format() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       5, this->_internal_format(), target);
   }
 
-  // uint64 partition_index = 6 [json_name = "partitionIndex"];
+  // uint64 partition_index = 6;
   if (this->_internal_partition_index() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(6, this->_internal_partition_index(), target);
   }
 
-  // uint64 start = 7 [json_name = "start"];
+  // uint64 start = 7;
   if (this->_internal_start() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(7, this->_internal_start(), target);
   }
 
-  // uint64 length = 8 [json_name = "length"];
+  // uint64 length = 8;
   if (this->_internal_length() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(8, this->_internal_length(), target);
@@ -5007,50 +5140,50 @@ size_t ReadRel_LocalFiles_FileOrFiles::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5 [json_name = "format"];
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
   if (this->_internal_format() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_format());
   }
 
-  // uint64 partition_index = 6 [json_name = "partitionIndex"];
+  // uint64 partition_index = 6;
   if (this->_internal_partition_index() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_partition_index());
   }
 
-  // uint64 start = 7 [json_name = "start"];
+  // uint64 start = 7;
   if (this->_internal_start() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_start());
   }
 
-  // uint64 length = 8 [json_name = "length"];
+  // uint64 length = 8;
   if (this->_internal_length() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_length());
   }
 
   switch (path_type_case()) {
-    // string uri_path = 1 [json_name = "uriPath"];
+    // string uri_path = 1;
     case kUriPath: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_uri_path());
       break;
     }
-    // string uri_path_glob = 2 [json_name = "uriPathGlob"];
+    // string uri_path_glob = 2;
     case kUriPathGlob: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_uri_path_glob());
       break;
     }
-    // string uri_file = 3 [json_name = "uriFile"];
+    // string uri_file = 3;
     case kUriFile: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_uri_file());
       break;
     }
-    // string uri_folder = 4 [json_name = "uriFolder"];
+    // string uri_folder = 4;
     case kUriFolder: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -5234,7 +5367,7 @@ const char* ReadRel_LocalFiles::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.ReadRel.LocalFiles.FileOrFiles items = 1 [json_name = "items"];
+      // repeated .substrait.ReadRel.LocalFiles.FileOrFiles items = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -5247,7 +5380,7 @@ const char* ReadRel_LocalFiles::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -5284,7 +5417,7 @@ uint8_t* ReadRel_LocalFiles::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.ReadRel.LocalFiles.FileOrFiles items = 1 [json_name = "items"];
+  // repeated .substrait.ReadRel.LocalFiles.FileOrFiles items = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_items_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -5292,7 +5425,7 @@ uint8_t* ReadRel_LocalFiles::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_items(i), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5316,14 +5449,14 @@ size_t ReadRel_LocalFiles::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.ReadRel.LocalFiles.FileOrFiles items = 1 [json_name = "items"];
+  // repeated .substrait.ReadRel.LocalFiles.FileOrFiles items = 1;
   total_size += 1UL * this->_internal_items_size();
   for (const auto& msg : this->items_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -5676,7 +5809,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -5684,7 +5817,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.NamedStruct base_schema = 2 [json_name = "baseSchema"];
+      // .substrait.NamedStruct base_schema = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_base_schema(), ptr);
@@ -5692,7 +5825,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression filter = 3 [json_name = "filter"];
+      // .substrait.Expression filter = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_filter(), ptr);
@@ -5700,7 +5833,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression projection = 4 [json_name = "projection"];
+      // .substrait.Expression.MaskExpression projection = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_projection(), ptr);
@@ -5708,7 +5841,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ReadRel.VirtualTable virtual_table = 5 [json_name = "virtualTable"];
+      // .substrait.ReadRel.VirtualTable virtual_table = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_virtual_table(), ptr);
@@ -5716,7 +5849,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ReadRel.LocalFiles local_files = 6 [json_name = "localFiles"];
+      // .substrait.ReadRel.LocalFiles local_files = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
           ptr = ctx->ParseMessage(_internal_mutable_local_files(), ptr);
@@ -5724,7 +5857,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ReadRel.NamedTable named_table = 7 [json_name = "namedTable"];
+      // .substrait.ReadRel.NamedTable named_table = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_named_table(), ptr);
@@ -5732,7 +5865,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ReadRel.ExtensionTable extension_table = 8 [json_name = "extensionTable"];
+      // .substrait.ReadRel.ExtensionTable extension_table = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_table(), ptr);
@@ -5740,7 +5873,7 @@ const char* ReadRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -5777,7 +5910,7 @@ uint8_t* ReadRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5785,7 +5918,7 @@ uint8_t* ReadRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.NamedStruct base_schema = 2 [json_name = "baseSchema"];
+  // .substrait.NamedStruct base_schema = 2;
   if (this->_internal_has_base_schema()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5793,7 +5926,7 @@ uint8_t* ReadRel::_InternalSerialize(
         2, _Internal::base_schema(this), target, stream);
   }
 
-  // .substrait.Expression filter = 3 [json_name = "filter"];
+  // .substrait.Expression filter = 3;
   if (this->_internal_has_filter()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5801,7 +5934,7 @@ uint8_t* ReadRel::_InternalSerialize(
         3, _Internal::filter(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression projection = 4 [json_name = "projection"];
+  // .substrait.Expression.MaskExpression projection = 4;
   if (this->_internal_has_projection()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5809,7 +5942,7 @@ uint8_t* ReadRel::_InternalSerialize(
         4, _Internal::projection(this), target, stream);
   }
 
-  // .substrait.ReadRel.VirtualTable virtual_table = 5 [json_name = "virtualTable"];
+  // .substrait.ReadRel.VirtualTable virtual_table = 5;
   if (_internal_has_virtual_table()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5817,7 +5950,7 @@ uint8_t* ReadRel::_InternalSerialize(
         5, _Internal::virtual_table(this), target, stream);
   }
 
-  // .substrait.ReadRel.LocalFiles local_files = 6 [json_name = "localFiles"];
+  // .substrait.ReadRel.LocalFiles local_files = 6;
   if (_internal_has_local_files()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5825,7 +5958,7 @@ uint8_t* ReadRel::_InternalSerialize(
         6, _Internal::local_files(this), target, stream);
   }
 
-  // .substrait.ReadRel.NamedTable named_table = 7 [json_name = "namedTable"];
+  // .substrait.ReadRel.NamedTable named_table = 7;
   if (_internal_has_named_table()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5833,7 +5966,7 @@ uint8_t* ReadRel::_InternalSerialize(
         7, _Internal::named_table(this), target, stream);
   }
 
-  // .substrait.ReadRel.ExtensionTable extension_table = 8 [json_name = "extensionTable"];
+  // .substrait.ReadRel.ExtensionTable extension_table = 8;
   if (_internal_has_extension_table()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5841,7 +5974,7 @@ uint8_t* ReadRel::_InternalSerialize(
         8, _Internal::extension_table(this), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5865,35 +5998,35 @@ size_t ReadRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.NamedStruct base_schema = 2 [json_name = "baseSchema"];
+  // .substrait.NamedStruct base_schema = 2;
   if (this->_internal_has_base_schema()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *base_schema_);
   }
 
-  // .substrait.Expression filter = 3 [json_name = "filter"];
+  // .substrait.Expression filter = 3;
   if (this->_internal_has_filter()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *filter_);
   }
 
-  // .substrait.Expression.MaskExpression projection = 4 [json_name = "projection"];
+  // .substrait.Expression.MaskExpression projection = 4;
   if (this->_internal_has_projection()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *projection_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -5901,28 +6034,28 @@ size_t ReadRel::ByteSizeLong() const {
   }
 
   switch (read_type_case()) {
-    // .substrait.ReadRel.VirtualTable virtual_table = 5 [json_name = "virtualTable"];
+    // .substrait.ReadRel.VirtualTable virtual_table = 5;
     case kVirtualTable: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *read_type_.virtual_table_);
       break;
     }
-    // .substrait.ReadRel.LocalFiles local_files = 6 [json_name = "localFiles"];
+    // .substrait.ReadRel.LocalFiles local_files = 6;
     case kLocalFiles: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *read_type_.local_files_);
       break;
     }
-    // .substrait.ReadRel.NamedTable named_table = 7 [json_name = "namedTable"];
+    // .substrait.ReadRel.NamedTable named_table = 7;
     case kNamedTable: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *read_type_.named_table_);
       break;
     }
-    // .substrait.ReadRel.ExtensionTable extension_table = 8 [json_name = "extensionTable"];
+    // .substrait.ReadRel.ExtensionTable extension_table = 8;
     case kExtensionTable: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -6142,7 +6275,7 @@ const char* ProjectRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -6150,7 +6283,7 @@ const char* ProjectRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel input = 2 [json_name = "input"];
+      // .substrait.Rel input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -6158,7 +6291,7 @@ const char* ProjectRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression expressions = 3 [json_name = "expressions"];
+      // repeated .substrait.Expression expressions = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -6171,7 +6304,7 @@ const char* ProjectRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -6208,7 +6341,7 @@ uint8_t* ProjectRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6216,7 +6349,7 @@ uint8_t* ProjectRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6224,7 +6357,7 @@ uint8_t* ProjectRel::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
-  // repeated .substrait.Expression expressions = 3 [json_name = "expressions"];
+  // repeated .substrait.Expression expressions = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_expressions_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -6232,7 +6365,7 @@ uint8_t* ProjectRel::_InternalSerialize(
       InternalWriteMessage(3, this->_internal_expressions(i), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6256,28 +6389,28 @@ size_t ProjectRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression expressions = 3 [json_name = "expressions"];
+  // repeated .substrait.Expression expressions = 3;
   total_size += 1UL * this->_internal_expressions_size();
   for (const auto& msg : this->expressions_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *input_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -6510,7 +6643,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -6518,7 +6651,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel left = 2 [json_name = "left"];
+      // .substrait.Rel left = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_left(), ptr);
@@ -6526,7 +6659,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel right = 3 [json_name = "right"];
+      // .substrait.Rel right = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_right(), ptr);
@@ -6534,7 +6667,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression expression = 4 [json_name = "expression"];
+      // .substrait.Expression expression = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_expression(), ptr);
@@ -6542,7 +6675,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression post_join_filter = 5 [json_name = "postJoinFilter"];
+      // .substrait.Expression post_join_filter = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_post_join_filter(), ptr);
@@ -6550,7 +6683,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.JoinRel.JoinType type = 6 [json_name = "type"];
+      // .substrait.JoinRel.JoinType type = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -6559,7 +6692,7 @@ const char* JoinRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -6596,7 +6729,7 @@ uint8_t* JoinRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6604,7 +6737,7 @@ uint8_t* JoinRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel left = 2 [json_name = "left"];
+  // .substrait.Rel left = 2;
   if (this->_internal_has_left()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6612,7 +6745,7 @@ uint8_t* JoinRel::_InternalSerialize(
         2, _Internal::left(this), target, stream);
   }
 
-  // .substrait.Rel right = 3 [json_name = "right"];
+  // .substrait.Rel right = 3;
   if (this->_internal_has_right()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6620,7 +6753,7 @@ uint8_t* JoinRel::_InternalSerialize(
         3, _Internal::right(this), target, stream);
   }
 
-  // .substrait.Expression expression = 4 [json_name = "expression"];
+  // .substrait.Expression expression = 4;
   if (this->_internal_has_expression()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6628,7 +6761,7 @@ uint8_t* JoinRel::_InternalSerialize(
         4, _Internal::expression(this), target, stream);
   }
 
-  // .substrait.Expression post_join_filter = 5 [json_name = "postJoinFilter"];
+  // .substrait.Expression post_join_filter = 5;
   if (this->_internal_has_post_join_filter()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6636,14 +6769,14 @@ uint8_t* JoinRel::_InternalSerialize(
         5, _Internal::post_join_filter(this), target, stream);
   }
 
-  // .substrait.JoinRel.JoinType type = 6 [json_name = "type"];
+  // .substrait.JoinRel.JoinType type = 6;
   if (this->_internal_type() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       6, this->_internal_type(), target);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6667,49 +6800,49 @@ size_t JoinRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel left = 2 [json_name = "left"];
+  // .substrait.Rel left = 2;
   if (this->_internal_has_left()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *left_);
   }
 
-  // .substrait.Rel right = 3 [json_name = "right"];
+  // .substrait.Rel right = 3;
   if (this->_internal_has_right()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *right_);
   }
 
-  // .substrait.Expression expression = 4 [json_name = "expression"];
+  // .substrait.Expression expression = 4;
   if (this->_internal_has_expression()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *expression_);
   }
 
-  // .substrait.Expression post_join_filter = 5 [json_name = "postJoinFilter"];
+  // .substrait.Expression post_join_filter = 5;
   if (this->_internal_has_post_join_filter()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *post_join_filter_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *advanced_extension_);
   }
 
-  // .substrait.JoinRel.JoinType type = 6 [json_name = "type"];
+  // .substrait.JoinRel.JoinType type = 6;
   if (this->_internal_type() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_type());
@@ -6919,7 +7052,7 @@ const char* CrossRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -6927,7 +7060,7 @@ const char* CrossRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel left = 2 [json_name = "left"];
+      // .substrait.Rel left = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_left(), ptr);
@@ -6935,7 +7068,7 @@ const char* CrossRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel right = 3 [json_name = "right"];
+      // .substrait.Rel right = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_right(), ptr);
@@ -6943,7 +7076,7 @@ const char* CrossRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -6980,7 +7113,7 @@ uint8_t* CrossRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6988,7 +7121,7 @@ uint8_t* CrossRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel left = 2 [json_name = "left"];
+  // .substrait.Rel left = 2;
   if (this->_internal_has_left()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -6996,7 +7129,7 @@ uint8_t* CrossRel::_InternalSerialize(
         2, _Internal::left(this), target, stream);
   }
 
-  // .substrait.Rel right = 3 [json_name = "right"];
+  // .substrait.Rel right = 3;
   if (this->_internal_has_right()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7004,7 +7137,7 @@ uint8_t* CrossRel::_InternalSerialize(
         3, _Internal::right(this), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7028,28 +7161,28 @@ size_t CrossRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel left = 2 [json_name = "left"];
+  // .substrait.Rel left = 2;
   if (this->_internal_has_left()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *left_);
   }
 
-  // .substrait.Rel right = 3 [json_name = "right"];
+  // .substrait.Rel right = 3;
   if (this->_internal_has_right()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *right_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -7242,7 +7375,7 @@ const char* FetchRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -7250,7 +7383,7 @@ const char* FetchRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel input = 2 [json_name = "input"];
+      // .substrait.Rel input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -7258,7 +7391,7 @@ const char* FetchRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // int64 offset = 3 [json_name = "offset"];
+      // int64 offset = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -7266,7 +7399,7 @@ const char* FetchRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // int64 count = 4 [json_name = "count"];
+      // int64 count = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           count_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -7274,7 +7407,7 @@ const char* FetchRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::i
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -7311,7 +7444,7 @@ uint8_t* FetchRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7319,7 +7452,7 @@ uint8_t* FetchRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7327,19 +7460,19 @@ uint8_t* FetchRel::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
-  // int64 offset = 3 [json_name = "offset"];
+  // int64 offset = 3;
   if (this->_internal_offset() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(3, this->_internal_offset(), target);
   }
 
-  // int64 count = 4 [json_name = "count"];
+  // int64 count = 4;
   if (this->_internal_count() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(4, this->_internal_count(), target);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7363,33 +7496,33 @@ size_t FetchRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *input_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *advanced_extension_);
   }
 
-  // int64 offset = 3 [json_name = "offset"];
+  // int64 offset = 3;
   if (this->_internal_offset() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_offset());
   }
 
-  // int64 count = 4 [json_name = "count"];
+  // int64 count = 4;
   if (this->_internal_count() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_count());
   }
@@ -7525,7 +7658,7 @@ const char* AggregateRel_Grouping::_InternalParse(const char* ptr, ::PROTOBUF_NA
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression grouping_expressions = 1 [json_name = "groupingExpressions"];
+      // repeated .substrait.Expression grouping_expressions = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -7567,7 +7700,7 @@ uint8_t* AggregateRel_Grouping::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression grouping_expressions = 1 [json_name = "groupingExpressions"];
+  // repeated .substrait.Expression grouping_expressions = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_grouping_expressions_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -7591,7 +7724,7 @@ size_t AggregateRel_Grouping::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression grouping_expressions = 1 [json_name = "groupingExpressions"];
+  // repeated .substrait.Expression grouping_expressions = 1;
   total_size += 1UL * this->_internal_grouping_expressions_size();
   for (const auto& msg : this->grouping_expressions_) {
     total_size +=
@@ -7741,7 +7874,7 @@ const char* AggregateRel_Measure::_InternalParse(const char* ptr, ::PROTOBUF_NAM
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.AggregateFunction measure = 1 [json_name = "measure"];
+      // .substrait.AggregateFunction measure = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_measure(), ptr);
@@ -7749,7 +7882,7 @@ const char* AggregateRel_Measure::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression filter = 2 [json_name = "filter"];
+      // .substrait.Expression filter = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_filter(), ptr);
@@ -7786,7 +7919,7 @@ uint8_t* AggregateRel_Measure::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.AggregateFunction measure = 1 [json_name = "measure"];
+  // .substrait.AggregateFunction measure = 1;
   if (this->_internal_has_measure()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7794,7 +7927,7 @@ uint8_t* AggregateRel_Measure::_InternalSerialize(
         1, _Internal::measure(this), target, stream);
   }
 
-  // .substrait.Expression filter = 2 [json_name = "filter"];
+  // .substrait.Expression filter = 2;
   if (this->_internal_has_filter()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -7818,14 +7951,14 @@ size_t AggregateRel_Measure::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.AggregateFunction measure = 1 [json_name = "measure"];
+  // .substrait.AggregateFunction measure = 1;
   if (this->_internal_has_measure()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *measure_);
   }
 
-  // .substrait.Expression filter = 2 [json_name = "filter"];
+  // .substrait.Expression filter = 2;
   if (this->_internal_has_filter()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -8012,7 +8145,7 @@ const char* AggregateRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -8020,7 +8153,7 @@ const char* AggregateRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel input = 2 [json_name = "input"];
+      // .substrait.Rel input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -8028,7 +8161,7 @@ const char* AggregateRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.AggregateRel.Grouping groupings = 3 [json_name = "groupings"];
+      // repeated .substrait.AggregateRel.Grouping groupings = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -8041,7 +8174,7 @@ const char* AggregateRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.AggregateRel.Measure measures = 4 [json_name = "measures"];
+      // repeated .substrait.AggregateRel.Measure measures = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr -= 1;
@@ -8054,7 +8187,7 @@ const char* AggregateRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -8091,7 +8224,7 @@ uint8_t* AggregateRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8099,7 +8232,7 @@ uint8_t* AggregateRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8107,7 +8240,7 @@ uint8_t* AggregateRel::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
-  // repeated .substrait.AggregateRel.Grouping groupings = 3 [json_name = "groupings"];
+  // repeated .substrait.AggregateRel.Grouping groupings = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_groupings_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -8115,7 +8248,7 @@ uint8_t* AggregateRel::_InternalSerialize(
       InternalWriteMessage(3, this->_internal_groupings(i), target, stream);
   }
 
-  // repeated .substrait.AggregateRel.Measure measures = 4 [json_name = "measures"];
+  // repeated .substrait.AggregateRel.Measure measures = 4;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_measures_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -8123,7 +8256,7 @@ uint8_t* AggregateRel::_InternalSerialize(
       InternalWriteMessage(4, this->_internal_measures(i), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8147,35 +8280,35 @@ size_t AggregateRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.AggregateRel.Grouping groupings = 3 [json_name = "groupings"];
+  // repeated .substrait.AggregateRel.Grouping groupings = 3;
   total_size += 1UL * this->_internal_groupings_size();
   for (const auto& msg : this->groupings_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.AggregateRel.Measure measures = 4 [json_name = "measures"];
+  // repeated .substrait.AggregateRel.Measure measures = 4;
   total_size += 1UL * this->_internal_measures_size();
   for (const auto& msg : this->measures_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *input_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -8366,7 +8499,7 @@ const char* SortRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -8374,7 +8507,7 @@ const char* SortRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel input = 2 [json_name = "input"];
+      // .substrait.Rel input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -8382,7 +8515,7 @@ const char* SortRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+      // repeated .substrait.SortField sorts = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -8395,7 +8528,7 @@ const char* SortRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -8432,7 +8565,7 @@ uint8_t* SortRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8440,7 +8573,7 @@ uint8_t* SortRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8448,7 +8581,7 @@ uint8_t* SortRel::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
-  // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+  // repeated .substrait.SortField sorts = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_sorts_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -8456,7 +8589,7 @@ uint8_t* SortRel::_InternalSerialize(
       InternalWriteMessage(3, this->_internal_sorts(i), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8480,28 +8613,28 @@ size_t SortRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+  // repeated .substrait.SortField sorts = 3;
   total_size += 1UL * this->_internal_sorts_size();
   for (const auto& msg : this->sorts_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *input_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -8702,7 +8835,7 @@ const char* FilterRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -8710,7 +8843,7 @@ const char* FilterRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel input = 2 [json_name = "input"];
+      // .substrait.Rel input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -8718,7 +8851,7 @@ const char* FilterRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression condition = 3 [json_name = "condition"];
+      // .substrait.Expression condition = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_condition(), ptr);
@@ -8726,7 +8859,7 @@ const char* FilterRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -8763,7 +8896,7 @@ uint8_t* FilterRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8771,7 +8904,7 @@ uint8_t* FilterRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8779,7 +8912,7 @@ uint8_t* FilterRel::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
-  // .substrait.Expression condition = 3 [json_name = "condition"];
+  // .substrait.Expression condition = 3;
   if (this->_internal_has_condition()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8787,7 +8920,7 @@ uint8_t* FilterRel::_InternalSerialize(
         3, _Internal::condition(this), target, stream);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -8811,28 +8944,28 @@ size_t FilterRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *input_);
   }
 
-  // .substrait.Expression condition = 3 [json_name = "condition"];
+  // .substrait.Expression condition = 3;
   if (this->_internal_has_condition()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *condition_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -9009,7 +9142,7 @@ const char* SetRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::int
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -9017,7 +9150,7 @@ const char* SetRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::int
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Rel inputs = 2 [json_name = "inputs"];
+      // repeated .substrait.Rel inputs = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -9030,7 +9163,7 @@ const char* SetRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::int
         } else
           goto handle_unusual;
         continue;
-      // .substrait.SetRel.SetOp op = 3 [json_name = "op"];
+      // .substrait.SetRel.SetOp op = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -9039,7 +9172,7 @@ const char* SetRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::int
         } else
           goto handle_unusual;
         continue;
-      // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
@@ -9076,7 +9209,7 @@ uint8_t* SetRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9084,7 +9217,7 @@ uint8_t* SetRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // repeated .substrait.Rel inputs = 2 [json_name = "inputs"];
+  // repeated .substrait.Rel inputs = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_inputs_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -9092,14 +9225,14 @@ uint8_t* SetRel::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_inputs(i), target, stream);
   }
 
-  // .substrait.SetRel.SetOp op = 3 [json_name = "op"];
+  // .substrait.SetRel.SetOp op = 3;
   if (this->_internal_op() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       3, this->_internal_op(), target);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9123,28 +9256,28 @@ size_t SetRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Rel inputs = 2 [json_name = "inputs"];
+  // repeated .substrait.Rel inputs = 2;
   total_size += 1UL * this->_internal_inputs_size();
   for (const auto& msg : this->inputs_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.extensions.AdvancedExtension advanced_extension = 10 [json_name = "advancedExtension"];
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
   if (this->_internal_has_advanced_extension()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *advanced_extension_);
   }
 
-  // .substrait.SetRel.SetOp op = 3 [json_name = "op"];
+  // .substrait.SetRel.SetOp op = 3;
   if (this->_internal_op() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_op());
@@ -9329,7 +9462,7 @@ const char* ExtensionSingleRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -9337,7 +9470,7 @@ const char* ExtensionSingleRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel input = 2 [json_name = "input"];
+      // .substrait.Rel input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -9345,7 +9478,7 @@ const char* ExtensionSingleRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .google.protobuf.Any detail = 3 [json_name = "detail"];
+      // .google.protobuf.Any detail = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_detail(), ptr);
@@ -9382,7 +9515,7 @@ uint8_t* ExtensionSingleRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9390,7 +9523,7 @@ uint8_t* ExtensionSingleRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9398,7 +9531,7 @@ uint8_t* ExtensionSingleRel::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
-  // .google.protobuf.Any detail = 3 [json_name = "detail"];
+  // .google.protobuf.Any detail = 3;
   if (this->_internal_has_detail()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9422,21 +9555,21 @@ size_t ExtensionSingleRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .substrait.Rel input = 2 [json_name = "input"];
+  // .substrait.Rel input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *input_);
   }
 
-  // .google.protobuf.Any detail = 3 [json_name = "detail"];
+  // .google.protobuf.Any detail = 3;
   if (this->_internal_has_detail()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -9605,7 +9738,7 @@ const char* ExtensionLeafRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPA
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -9613,7 +9746,7 @@ const char* ExtensionLeafRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPA
         } else
           goto handle_unusual;
         continue;
-      // .google.protobuf.Any detail = 2 [json_name = "detail"];
+      // .google.protobuf.Any detail = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_detail(), ptr);
@@ -9650,7 +9783,7 @@ uint8_t* ExtensionLeafRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9658,7 +9791,7 @@ uint8_t* ExtensionLeafRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // .google.protobuf.Any detail = 2 [json_name = "detail"];
+  // .google.protobuf.Any detail = 2;
   if (this->_internal_has_detail()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9682,14 +9815,14 @@ size_t ExtensionLeafRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .google.protobuf.Any detail = 2 [json_name = "detail"];
+  // .google.protobuf.Any detail = 2;
   if (this->_internal_has_detail()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -9858,7 +9991,7 @@ const char* ExtensionMultiRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.RelCommon common = 1 [json_name = "common"];
+      // .substrait.RelCommon common = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
@@ -9866,7 +9999,7 @@ const char* ExtensionMultiRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Rel inputs = 2 [json_name = "inputs"];
+      // repeated .substrait.Rel inputs = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -9879,7 +10012,7 @@ const char* ExtensionMultiRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .google.protobuf.Any detail = 3 [json_name = "detail"];
+      // .google.protobuf.Any detail = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_detail(), ptr);
@@ -9916,7 +10049,7 @@ uint8_t* ExtensionMultiRel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9924,7 +10057,7 @@ uint8_t* ExtensionMultiRel::_InternalSerialize(
         1, _Internal::common(this), target, stream);
   }
 
-  // repeated .substrait.Rel inputs = 2 [json_name = "inputs"];
+  // repeated .substrait.Rel inputs = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_inputs_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -9932,7 +10065,7 @@ uint8_t* ExtensionMultiRel::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_inputs(i), target, stream);
   }
 
-  // .google.protobuf.Any detail = 3 [json_name = "detail"];
+  // .google.protobuf.Any detail = 3;
   if (this->_internal_has_detail()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -9956,21 +10089,21 @@ size_t ExtensionMultiRel::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Rel inputs = 2 [json_name = "inputs"];
+  // repeated .substrait.Rel inputs = 2;
   total_size += 1UL * this->_internal_inputs_size();
   for (const auto& msg : this->inputs_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.RelCommon common = 1 [json_name = "common"];
+  // .substrait.RelCommon common = 1;
   if (this->_internal_has_common()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *common_);
   }
 
-  // .google.protobuf.Any detail = 3 [json_name = "detail"];
+  // .google.protobuf.Any detail = 3;
   if (this->_internal_has_detail()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -10036,6 +10169,1829 @@ void ExtensionMultiRel::InternalSwap(ExtensionMultiRel* other) {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
       file_level_metadata_substrait_2falgebra_2eproto[24]);
+}
+
+// ===================================================================
+
+class ExchangeRel_ScatterFields::_Internal {
+ public:
+};
+
+ExchangeRel_ScatterFields::ExchangeRel_ScatterFields(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  fields_(arena) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel.ScatterFields)
+}
+ExchangeRel_ScatterFields::ExchangeRel_ScatterFields(const ExchangeRel_ScatterFields& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message(),
+      fields_(from.fields_) {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel.ScatterFields)
+}
+
+inline void ExchangeRel_ScatterFields::SharedCtor() {
+}
+
+ExchangeRel_ScatterFields::~ExchangeRel_ScatterFields() {
+  // @@protoc_insertion_point(destructor:substrait.ExchangeRel.ScatterFields)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void ExchangeRel_ScatterFields::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void ExchangeRel_ScatterFields::ArenaDtor(void* object) {
+  ExchangeRel_ScatterFields* _this = reinterpret_cast< ExchangeRel_ScatterFields* >(object);
+  (void)_this;
+}
+void ExchangeRel_ScatterFields::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ExchangeRel_ScatterFields::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ExchangeRel_ScatterFields::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.ExchangeRel.ScatterFields)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  fields_.Clear();
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* ExchangeRel_ScatterFields::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // repeated .substrait.Expression.FieldReference fields = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_fields(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<10>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ExchangeRel_ScatterFields::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.ExchangeRel.ScatterFields)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // repeated .substrait.Expression.FieldReference fields = 1;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_fields_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(1, this->_internal_fields(i), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.ExchangeRel.ScatterFields)
+  return target;
+}
+
+size_t ExchangeRel_ScatterFields::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.ExchangeRel.ScatterFields)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .substrait.Expression.FieldReference fields = 1;
+  total_size += 1UL * this->_internal_fields_size();
+  for (const auto& msg : this->fields_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel_ScatterFields::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    ExchangeRel_ScatterFields::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_ScatterFields::GetClassData() const { return &_class_data_; }
+
+void ExchangeRel_ScatterFields::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<ExchangeRel_ScatterFields *>(to)->MergeFrom(
+      static_cast<const ExchangeRel_ScatterFields &>(from));
+}
+
+
+void ExchangeRel_ScatterFields::MergeFrom(const ExchangeRel_ScatterFields& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.ExchangeRel.ScatterFields)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  fields_.MergeFrom(from.fields_);
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ExchangeRel_ScatterFields::CopyFrom(const ExchangeRel_ScatterFields& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.ExchangeRel.ScatterFields)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ExchangeRel_ScatterFields::IsInitialized() const {
+  return true;
+}
+
+void ExchangeRel_ScatterFields::InternalSwap(ExchangeRel_ScatterFields* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  fields_.InternalSwap(&other->fields_);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_ScatterFields::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[25]);
+}
+
+// ===================================================================
+
+class ExchangeRel_SingleBucketExpression::_Internal {
+ public:
+  static const ::substrait::Expression& expression(const ExchangeRel_SingleBucketExpression* msg);
+};
+
+const ::substrait::Expression&
+ExchangeRel_SingleBucketExpression::_Internal::expression(const ExchangeRel_SingleBucketExpression* msg) {
+  return *msg->expression_;
+}
+ExchangeRel_SingleBucketExpression::ExchangeRel_SingleBucketExpression(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel.SingleBucketExpression)
+}
+ExchangeRel_SingleBucketExpression::ExchangeRel_SingleBucketExpression(const ExchangeRel_SingleBucketExpression& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  if (from._internal_has_expression()) {
+    expression_ = new ::substrait::Expression(*from.expression_);
+  } else {
+    expression_ = nullptr;
+  }
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel.SingleBucketExpression)
+}
+
+inline void ExchangeRel_SingleBucketExpression::SharedCtor() {
+expression_ = nullptr;
+}
+
+ExchangeRel_SingleBucketExpression::~ExchangeRel_SingleBucketExpression() {
+  // @@protoc_insertion_point(destructor:substrait.ExchangeRel.SingleBucketExpression)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void ExchangeRel_SingleBucketExpression::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (this != internal_default_instance()) delete expression_;
+}
+
+void ExchangeRel_SingleBucketExpression::ArenaDtor(void* object) {
+  ExchangeRel_SingleBucketExpression* _this = reinterpret_cast< ExchangeRel_SingleBucketExpression* >(object);
+  (void)_this;
+}
+void ExchangeRel_SingleBucketExpression::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ExchangeRel_SingleBucketExpression::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ExchangeRel_SingleBucketExpression::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.ExchangeRel.SingleBucketExpression)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  if (GetArenaForAllocation() == nullptr && expression_ != nullptr) {
+    delete expression_;
+  }
+  expression_ = nullptr;
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* ExchangeRel_SingleBucketExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .substrait.Expression expression = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_expression(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ExchangeRel_SingleBucketExpression::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.ExchangeRel.SingleBucketExpression)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .substrait.Expression expression = 1;
+  if (this->_internal_has_expression()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        1, _Internal::expression(this), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.ExchangeRel.SingleBucketExpression)
+  return target;
+}
+
+size_t ExchangeRel_SingleBucketExpression::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.ExchangeRel.SingleBucketExpression)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // .substrait.Expression expression = 1;
+  if (this->_internal_has_expression()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *expression_);
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel_SingleBucketExpression::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    ExchangeRel_SingleBucketExpression::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_SingleBucketExpression::GetClassData() const { return &_class_data_; }
+
+void ExchangeRel_SingleBucketExpression::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<ExchangeRel_SingleBucketExpression *>(to)->MergeFrom(
+      static_cast<const ExchangeRel_SingleBucketExpression &>(from));
+}
+
+
+void ExchangeRel_SingleBucketExpression::MergeFrom(const ExchangeRel_SingleBucketExpression& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.ExchangeRel.SingleBucketExpression)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_has_expression()) {
+    _internal_mutable_expression()->::substrait::Expression::MergeFrom(from._internal_expression());
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ExchangeRel_SingleBucketExpression::CopyFrom(const ExchangeRel_SingleBucketExpression& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.ExchangeRel.SingleBucketExpression)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ExchangeRel_SingleBucketExpression::IsInitialized() const {
+  return true;
+}
+
+void ExchangeRel_SingleBucketExpression::InternalSwap(ExchangeRel_SingleBucketExpression* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(expression_, other->expression_);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_SingleBucketExpression::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[26]);
+}
+
+// ===================================================================
+
+class ExchangeRel_MultiBucketExpression::_Internal {
+ public:
+  static const ::substrait::Expression& expression(const ExchangeRel_MultiBucketExpression* msg);
+};
+
+const ::substrait::Expression&
+ExchangeRel_MultiBucketExpression::_Internal::expression(const ExchangeRel_MultiBucketExpression* msg) {
+  return *msg->expression_;
+}
+ExchangeRel_MultiBucketExpression::ExchangeRel_MultiBucketExpression(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel.MultiBucketExpression)
+}
+ExchangeRel_MultiBucketExpression::ExchangeRel_MultiBucketExpression(const ExchangeRel_MultiBucketExpression& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  if (from._internal_has_expression()) {
+    expression_ = new ::substrait::Expression(*from.expression_);
+  } else {
+    expression_ = nullptr;
+  }
+  constrained_to_count_ = from.constrained_to_count_;
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel.MultiBucketExpression)
+}
+
+inline void ExchangeRel_MultiBucketExpression::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&expression_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&constrained_to_count_) -
+    reinterpret_cast<char*>(&expression_)) + sizeof(constrained_to_count_));
+}
+
+ExchangeRel_MultiBucketExpression::~ExchangeRel_MultiBucketExpression() {
+  // @@protoc_insertion_point(destructor:substrait.ExchangeRel.MultiBucketExpression)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void ExchangeRel_MultiBucketExpression::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (this != internal_default_instance()) delete expression_;
+}
+
+void ExchangeRel_MultiBucketExpression::ArenaDtor(void* object) {
+  ExchangeRel_MultiBucketExpression* _this = reinterpret_cast< ExchangeRel_MultiBucketExpression* >(object);
+  (void)_this;
+}
+void ExchangeRel_MultiBucketExpression::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ExchangeRel_MultiBucketExpression::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ExchangeRel_MultiBucketExpression::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.ExchangeRel.MultiBucketExpression)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  if (GetArenaForAllocation() == nullptr && expression_ != nullptr) {
+    delete expression_;
+  }
+  expression_ = nullptr;
+  constrained_to_count_ = false;
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* ExchangeRel_MultiBucketExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .substrait.Expression expression = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_expression(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool constrained_to_count = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          constrained_to_count_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ExchangeRel_MultiBucketExpression::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.ExchangeRel.MultiBucketExpression)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .substrait.Expression expression = 1;
+  if (this->_internal_has_expression()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        1, _Internal::expression(this), target, stream);
+  }
+
+  // bool constrained_to_count = 2;
+  if (this->_internal_constrained_to_count() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(2, this->_internal_constrained_to_count(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.ExchangeRel.MultiBucketExpression)
+  return target;
+}
+
+size_t ExchangeRel_MultiBucketExpression::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.ExchangeRel.MultiBucketExpression)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // .substrait.Expression expression = 1;
+  if (this->_internal_has_expression()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *expression_);
+  }
+
+  // bool constrained_to_count = 2;
+  if (this->_internal_constrained_to_count() != 0) {
+    total_size += 1 + 1;
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel_MultiBucketExpression::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    ExchangeRel_MultiBucketExpression::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_MultiBucketExpression::GetClassData() const { return &_class_data_; }
+
+void ExchangeRel_MultiBucketExpression::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<ExchangeRel_MultiBucketExpression *>(to)->MergeFrom(
+      static_cast<const ExchangeRel_MultiBucketExpression &>(from));
+}
+
+
+void ExchangeRel_MultiBucketExpression::MergeFrom(const ExchangeRel_MultiBucketExpression& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.ExchangeRel.MultiBucketExpression)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_has_expression()) {
+    _internal_mutable_expression()->::substrait::Expression::MergeFrom(from._internal_expression());
+  }
+  if (from._internal_constrained_to_count() != 0) {
+    _internal_set_constrained_to_count(from._internal_constrained_to_count());
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ExchangeRel_MultiBucketExpression::CopyFrom(const ExchangeRel_MultiBucketExpression& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.ExchangeRel.MultiBucketExpression)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ExchangeRel_MultiBucketExpression::IsInitialized() const {
+  return true;
+}
+
+void ExchangeRel_MultiBucketExpression::InternalSwap(ExchangeRel_MultiBucketExpression* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ExchangeRel_MultiBucketExpression, constrained_to_count_)
+      + sizeof(ExchangeRel_MultiBucketExpression::constrained_to_count_)
+      - PROTOBUF_FIELD_OFFSET(ExchangeRel_MultiBucketExpression, expression_)>(
+          reinterpret_cast<char*>(&expression_),
+          reinterpret_cast<char*>(&other->expression_));
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_MultiBucketExpression::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[27]);
+}
+
+// ===================================================================
+
+class ExchangeRel_Broadcast::_Internal {
+ public:
+};
+
+ExchangeRel_Broadcast::ExchangeRel_Broadcast(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase(arena, is_message_owned) {
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel.Broadcast)
+}
+ExchangeRel_Broadcast::ExchangeRel_Broadcast(const ExchangeRel_Broadcast& from)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel.Broadcast)
+}
+
+
+
+
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel_Broadcast::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl,
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl,
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_Broadcast::GetClassData() const { return &_class_data_; }
+
+
+
+
+
+
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_Broadcast::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[28]);
+}
+
+// ===================================================================
+
+class ExchangeRel_RoundRobin::_Internal {
+ public:
+};
+
+ExchangeRel_RoundRobin::ExchangeRel_RoundRobin(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel.RoundRobin)
+}
+ExchangeRel_RoundRobin::ExchangeRel_RoundRobin(const ExchangeRel_RoundRobin& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  exact_ = from.exact_;
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel.RoundRobin)
+}
+
+inline void ExchangeRel_RoundRobin::SharedCtor() {
+exact_ = false;
+}
+
+ExchangeRel_RoundRobin::~ExchangeRel_RoundRobin() {
+  // @@protoc_insertion_point(destructor:substrait.ExchangeRel.RoundRobin)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void ExchangeRel_RoundRobin::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void ExchangeRel_RoundRobin::ArenaDtor(void* object) {
+  ExchangeRel_RoundRobin* _this = reinterpret_cast< ExchangeRel_RoundRobin* >(object);
+  (void)_this;
+}
+void ExchangeRel_RoundRobin::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ExchangeRel_RoundRobin::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ExchangeRel_RoundRobin::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.ExchangeRel.RoundRobin)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  exact_ = false;
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* ExchangeRel_RoundRobin::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // bool exact = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          exact_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ExchangeRel_RoundRobin::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.ExchangeRel.RoundRobin)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // bool exact = 1;
+  if (this->_internal_exact() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(1, this->_internal_exact(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.ExchangeRel.RoundRobin)
+  return target;
+}
+
+size_t ExchangeRel_RoundRobin::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.ExchangeRel.RoundRobin)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // bool exact = 1;
+  if (this->_internal_exact() != 0) {
+    total_size += 1 + 1;
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel_RoundRobin::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    ExchangeRel_RoundRobin::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_RoundRobin::GetClassData() const { return &_class_data_; }
+
+void ExchangeRel_RoundRobin::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<ExchangeRel_RoundRobin *>(to)->MergeFrom(
+      static_cast<const ExchangeRel_RoundRobin &>(from));
+}
+
+
+void ExchangeRel_RoundRobin::MergeFrom(const ExchangeRel_RoundRobin& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.ExchangeRel.RoundRobin)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_exact() != 0) {
+    _internal_set_exact(from._internal_exact());
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ExchangeRel_RoundRobin::CopyFrom(const ExchangeRel_RoundRobin& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.ExchangeRel.RoundRobin)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ExchangeRel_RoundRobin::IsInitialized() const {
+  return true;
+}
+
+void ExchangeRel_RoundRobin::InternalSwap(ExchangeRel_RoundRobin* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(exact_, other->exact_);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_RoundRobin::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[29]);
+}
+
+// ===================================================================
+
+class ExchangeRel_ExchangeTarget::_Internal {
+ public:
+  static const ::PROTOBUF_NAMESPACE_ID::Any& extended(const ExchangeRel_ExchangeTarget* msg);
+};
+
+const ::PROTOBUF_NAMESPACE_ID::Any&
+ExchangeRel_ExchangeTarget::_Internal::extended(const ExchangeRel_ExchangeTarget* msg) {
+  return *msg->target_type_.extended_;
+}
+void ExchangeRel_ExchangeTarget::set_allocated_extended(::PROTOBUF_NAMESPACE_ID::Any* extended) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_target_type();
+  if (extended) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<
+            ::PROTOBUF_NAMESPACE_ID::MessageLite>::GetOwningArena(
+                reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(extended));
+    if (message_arena != submessage_arena) {
+      extended = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, extended, submessage_arena);
+    }
+    set_has_extended();
+    target_type_.extended_ = extended;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ExchangeRel.ExchangeTarget.extended)
+}
+void ExchangeRel_ExchangeTarget::clear_extended() {
+  if (_internal_has_extended()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete target_type_.extended_;
+    }
+    clear_has_target_type();
+  }
+}
+ExchangeRel_ExchangeTarget::ExchangeRel_ExchangeTarget(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  partition_id_(arena) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel.ExchangeTarget)
+}
+ExchangeRel_ExchangeTarget::ExchangeRel_ExchangeTarget(const ExchangeRel_ExchangeTarget& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message(),
+      partition_id_(from.partition_id_) {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  clear_has_target_type();
+  switch (from.target_type_case()) {
+    case kUri: {
+      _internal_set_uri(from._internal_uri());
+      break;
+    }
+    case kExtended: {
+      _internal_mutable_extended()->::PROTOBUF_NAMESPACE_ID::Any::MergeFrom(from._internal_extended());
+      break;
+    }
+    case TARGET_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel.ExchangeTarget)
+}
+
+inline void ExchangeRel_ExchangeTarget::SharedCtor() {
+clear_has_target_type();
+}
+
+ExchangeRel_ExchangeTarget::~ExchangeRel_ExchangeTarget() {
+  // @@protoc_insertion_point(destructor:substrait.ExchangeRel.ExchangeTarget)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void ExchangeRel_ExchangeTarget::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (has_target_type()) {
+    clear_target_type();
+  }
+}
+
+void ExchangeRel_ExchangeTarget::ArenaDtor(void* object) {
+  ExchangeRel_ExchangeTarget* _this = reinterpret_cast< ExchangeRel_ExchangeTarget* >(object);
+  (void)_this;
+}
+void ExchangeRel_ExchangeTarget::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ExchangeRel_ExchangeTarget::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ExchangeRel_ExchangeTarget::clear_target_type() {
+// @@protoc_insertion_point(one_of_clear_start:substrait.ExchangeRel.ExchangeTarget)
+  switch (target_type_case()) {
+    case kUri: {
+      target_type_.uri_.Destroy(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+      break;
+    }
+    case kExtended: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete target_type_.extended_;
+      }
+      break;
+    }
+    case TARGET_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  _oneof_case_[0] = TARGET_TYPE_NOT_SET;
+}
+
+
+void ExchangeRel_ExchangeTarget::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.ExchangeRel.ExchangeTarget)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  partition_id_.Clear();
+  clear_target_type();
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* ExchangeRel_ExchangeTarget::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // repeated int32 partition_id = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedInt32Parser(_internal_mutable_partition_id(), ptr, ctx);
+          CHK_(ptr);
+        } else if (static_cast<uint8_t>(tag) == 8) {
+          _internal_add_partition_id(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string uri = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_uri();
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "substrait.ExchangeRel.ExchangeTarget.uri"));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .google.protobuf.Any extended = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr = ctx->ParseMessage(_internal_mutable_extended(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ExchangeRel_ExchangeTarget::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.ExchangeRel.ExchangeTarget)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // repeated int32 partition_id = 1;
+  {
+    int byte_size = _partition_id_cached_byte_size_.load(std::memory_order_relaxed);
+    if (byte_size > 0) {
+      target = stream->WriteInt32Packed(
+          1, _internal_partition_id(), byte_size, target);
+    }
+  }
+
+  // string uri = 2;
+  if (_internal_has_uri()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_uri().data(), static_cast<int>(this->_internal_uri().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "substrait.ExchangeRel.ExchangeTarget.uri");
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_uri(), target);
+  }
+
+  // .google.protobuf.Any extended = 3;
+  if (_internal_has_extended()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        3, _Internal::extended(this), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.ExchangeRel.ExchangeTarget)
+  return target;
+}
+
+size_t ExchangeRel_ExchangeTarget::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.ExchangeRel.ExchangeTarget)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated int32 partition_id = 1;
+  {
+    size_t data_size = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      Int32Size(this->partition_id_);
+    if (data_size > 0) {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
+            static_cast<int32_t>(data_size));
+    }
+    int cached_size = ::PROTOBUF_NAMESPACE_ID::internal::ToCachedSize(data_size);
+    _partition_id_cached_byte_size_.store(cached_size,
+                                    std::memory_order_relaxed);
+    total_size += data_size;
+  }
+
+  switch (target_type_case()) {
+    // string uri = 2;
+    case kUri: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+          this->_internal_uri());
+      break;
+    }
+    // .google.protobuf.Any extended = 3;
+    case kExtended: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *target_type_.extended_);
+      break;
+    }
+    case TARGET_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel_ExchangeTarget::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    ExchangeRel_ExchangeTarget::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_ExchangeTarget::GetClassData() const { return &_class_data_; }
+
+void ExchangeRel_ExchangeTarget::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<ExchangeRel_ExchangeTarget *>(to)->MergeFrom(
+      static_cast<const ExchangeRel_ExchangeTarget &>(from));
+}
+
+
+void ExchangeRel_ExchangeTarget::MergeFrom(const ExchangeRel_ExchangeTarget& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.ExchangeRel.ExchangeTarget)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  partition_id_.MergeFrom(from.partition_id_);
+  switch (from.target_type_case()) {
+    case kUri: {
+      _internal_set_uri(from._internal_uri());
+      break;
+    }
+    case kExtended: {
+      _internal_mutable_extended()->::PROTOBUF_NAMESPACE_ID::Any::MergeFrom(from._internal_extended());
+      break;
+    }
+    case TARGET_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ExchangeRel_ExchangeTarget::CopyFrom(const ExchangeRel_ExchangeTarget& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.ExchangeRel.ExchangeTarget)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ExchangeRel_ExchangeTarget::IsInitialized() const {
+  return true;
+}
+
+void ExchangeRel_ExchangeTarget::InternalSwap(ExchangeRel_ExchangeTarget* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  partition_id_.InternalSwap(&other->partition_id_);
+  swap(target_type_, other->target_type_);
+  swap(_oneof_case_[0], other->_oneof_case_[0]);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_ExchangeTarget::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[30]);
+}
+
+// ===================================================================
+
+class ExchangeRel::_Internal {
+ public:
+  static const ::substrait::RelCommon& common(const ExchangeRel* msg);
+  static const ::substrait::Rel& input(const ExchangeRel* msg);
+  static const ::substrait::ExchangeRel_ScatterFields& scatter_by_fields(const ExchangeRel* msg);
+  static const ::substrait::ExchangeRel_SingleBucketExpression& single_target(const ExchangeRel* msg);
+  static const ::substrait::ExchangeRel_MultiBucketExpression& multi_target(const ExchangeRel* msg);
+  static const ::substrait::ExchangeRel_RoundRobin& round_robin(const ExchangeRel* msg);
+  static const ::substrait::ExchangeRel_Broadcast& broadcast(const ExchangeRel* msg);
+  static const ::substrait::extensions::AdvancedExtension& advanced_extension(const ExchangeRel* msg);
+};
+
+const ::substrait::RelCommon&
+ExchangeRel::_Internal::common(const ExchangeRel* msg) {
+  return *msg->common_;
+}
+const ::substrait::Rel&
+ExchangeRel::_Internal::input(const ExchangeRel* msg) {
+  return *msg->input_;
+}
+const ::substrait::ExchangeRel_ScatterFields&
+ExchangeRel::_Internal::scatter_by_fields(const ExchangeRel* msg) {
+  return *msg->exchange_kind_.scatter_by_fields_;
+}
+const ::substrait::ExchangeRel_SingleBucketExpression&
+ExchangeRel::_Internal::single_target(const ExchangeRel* msg) {
+  return *msg->exchange_kind_.single_target_;
+}
+const ::substrait::ExchangeRel_MultiBucketExpression&
+ExchangeRel::_Internal::multi_target(const ExchangeRel* msg) {
+  return *msg->exchange_kind_.multi_target_;
+}
+const ::substrait::ExchangeRel_RoundRobin&
+ExchangeRel::_Internal::round_robin(const ExchangeRel* msg) {
+  return *msg->exchange_kind_.round_robin_;
+}
+const ::substrait::ExchangeRel_Broadcast&
+ExchangeRel::_Internal::broadcast(const ExchangeRel* msg) {
+  return *msg->exchange_kind_.broadcast_;
+}
+const ::substrait::extensions::AdvancedExtension&
+ExchangeRel::_Internal::advanced_extension(const ExchangeRel* msg) {
+  return *msg->advanced_extension_;
+}
+void ExchangeRel::set_allocated_scatter_by_fields(::substrait::ExchangeRel_ScatterFields* scatter_by_fields) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_exchange_kind();
+  if (scatter_by_fields) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ExchangeRel_ScatterFields>::GetOwningArena(scatter_by_fields);
+    if (message_arena != submessage_arena) {
+      scatter_by_fields = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, scatter_by_fields, submessage_arena);
+    }
+    set_has_scatter_by_fields();
+    exchange_kind_.scatter_by_fields_ = scatter_by_fields;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ExchangeRel.scatter_by_fields)
+}
+void ExchangeRel::set_allocated_single_target(::substrait::ExchangeRel_SingleBucketExpression* single_target) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_exchange_kind();
+  if (single_target) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ExchangeRel_SingleBucketExpression>::GetOwningArena(single_target);
+    if (message_arena != submessage_arena) {
+      single_target = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, single_target, submessage_arena);
+    }
+    set_has_single_target();
+    exchange_kind_.single_target_ = single_target;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ExchangeRel.single_target)
+}
+void ExchangeRel::set_allocated_multi_target(::substrait::ExchangeRel_MultiBucketExpression* multi_target) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_exchange_kind();
+  if (multi_target) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ExchangeRel_MultiBucketExpression>::GetOwningArena(multi_target);
+    if (message_arena != submessage_arena) {
+      multi_target = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, multi_target, submessage_arena);
+    }
+    set_has_multi_target();
+    exchange_kind_.multi_target_ = multi_target;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ExchangeRel.multi_target)
+}
+void ExchangeRel::set_allocated_round_robin(::substrait::ExchangeRel_RoundRobin* round_robin) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_exchange_kind();
+  if (round_robin) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ExchangeRel_RoundRobin>::GetOwningArena(round_robin);
+    if (message_arena != submessage_arena) {
+      round_robin = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, round_robin, submessage_arena);
+    }
+    set_has_round_robin();
+    exchange_kind_.round_robin_ = round_robin;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ExchangeRel.round_robin)
+}
+void ExchangeRel::set_allocated_broadcast(::substrait::ExchangeRel_Broadcast* broadcast) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_exchange_kind();
+  if (broadcast) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ExchangeRel_Broadcast>::GetOwningArena(broadcast);
+    if (message_arena != submessage_arena) {
+      broadcast = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, broadcast, submessage_arena);
+    }
+    set_has_broadcast();
+    exchange_kind_.broadcast_ = broadcast;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ExchangeRel.broadcast)
+}
+void ExchangeRel::clear_advanced_extension() {
+  if (GetArenaForAllocation() == nullptr && advanced_extension_ != nullptr) {
+    delete advanced_extension_;
+  }
+  advanced_extension_ = nullptr;
+}
+ExchangeRel::ExchangeRel(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  targets_(arena) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.ExchangeRel)
+}
+ExchangeRel::ExchangeRel(const ExchangeRel& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message(),
+      targets_(from.targets_) {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  if (from._internal_has_common()) {
+    common_ = new ::substrait::RelCommon(*from.common_);
+  } else {
+    common_ = nullptr;
+  }
+  if (from._internal_has_input()) {
+    input_ = new ::substrait::Rel(*from.input_);
+  } else {
+    input_ = nullptr;
+  }
+  if (from._internal_has_advanced_extension()) {
+    advanced_extension_ = new ::substrait::extensions::AdvancedExtension(*from.advanced_extension_);
+  } else {
+    advanced_extension_ = nullptr;
+  }
+  partition_count_ = from.partition_count_;
+  clear_has_exchange_kind();
+  switch (from.exchange_kind_case()) {
+    case kScatterByFields: {
+      _internal_mutable_scatter_by_fields()->::substrait::ExchangeRel_ScatterFields::MergeFrom(from._internal_scatter_by_fields());
+      break;
+    }
+    case kSingleTarget: {
+      _internal_mutable_single_target()->::substrait::ExchangeRel_SingleBucketExpression::MergeFrom(from._internal_single_target());
+      break;
+    }
+    case kMultiTarget: {
+      _internal_mutable_multi_target()->::substrait::ExchangeRel_MultiBucketExpression::MergeFrom(from._internal_multi_target());
+      break;
+    }
+    case kRoundRobin: {
+      _internal_mutable_round_robin()->::substrait::ExchangeRel_RoundRobin::MergeFrom(from._internal_round_robin());
+      break;
+    }
+    case kBroadcast: {
+      _internal_mutable_broadcast()->::substrait::ExchangeRel_Broadcast::MergeFrom(from._internal_broadcast());
+      break;
+    }
+    case EXCHANGE_KIND_NOT_SET: {
+      break;
+    }
+  }
+  // @@protoc_insertion_point(copy_constructor:substrait.ExchangeRel)
+}
+
+inline void ExchangeRel::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&common_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&partition_count_) -
+    reinterpret_cast<char*>(&common_)) + sizeof(partition_count_));
+clear_has_exchange_kind();
+}
+
+ExchangeRel::~ExchangeRel() {
+  // @@protoc_insertion_point(destructor:substrait.ExchangeRel)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void ExchangeRel::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (this != internal_default_instance()) delete common_;
+  if (this != internal_default_instance()) delete input_;
+  if (this != internal_default_instance()) delete advanced_extension_;
+  if (has_exchange_kind()) {
+    clear_exchange_kind();
+  }
+}
+
+void ExchangeRel::ArenaDtor(void* object) {
+  ExchangeRel* _this = reinterpret_cast< ExchangeRel* >(object);
+  (void)_this;
+}
+void ExchangeRel::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void ExchangeRel::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void ExchangeRel::clear_exchange_kind() {
+// @@protoc_insertion_point(one_of_clear_start:substrait.ExchangeRel)
+  switch (exchange_kind_case()) {
+    case kScatterByFields: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete exchange_kind_.scatter_by_fields_;
+      }
+      break;
+    }
+    case kSingleTarget: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete exchange_kind_.single_target_;
+      }
+      break;
+    }
+    case kMultiTarget: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete exchange_kind_.multi_target_;
+      }
+      break;
+    }
+    case kRoundRobin: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete exchange_kind_.round_robin_;
+      }
+      break;
+    }
+    case kBroadcast: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete exchange_kind_.broadcast_;
+      }
+      break;
+    }
+    case EXCHANGE_KIND_NOT_SET: {
+      break;
+    }
+  }
+  _oneof_case_[0] = EXCHANGE_KIND_NOT_SET;
+}
+
+
+void ExchangeRel::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.ExchangeRel)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  targets_.Clear();
+  if (GetArenaForAllocation() == nullptr && common_ != nullptr) {
+    delete common_;
+  }
+  common_ = nullptr;
+  if (GetArenaForAllocation() == nullptr && input_ != nullptr) {
+    delete input_;
+  }
+  input_ = nullptr;
+  if (GetArenaForAllocation() == nullptr && advanced_extension_ != nullptr) {
+    delete advanced_extension_;
+  }
+  advanced_extension_ = nullptr;
+  partition_count_ = 0;
+  clear_exchange_kind();
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* ExchangeRel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .substrait.RelCommon common = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_common(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Rel input = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // int32 partition_count = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          partition_count_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .substrait.ExchangeRel.ExchangeTarget targets = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_targets(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<34>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ExchangeRel.ScatterFields scatter_by_fields = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr = ctx->ParseMessage(_internal_mutable_scatter_by_fields(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ExchangeRel.SingleBucketExpression single_target = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          ptr = ctx->ParseMessage(_internal_mutable_single_target(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ExchangeRel.MultiBucketExpression multi_target = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
+          ptr = ctx->ParseMessage(_internal_mutable_multi_target(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ExchangeRel.RoundRobin round_robin = 8;
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          ptr = ctx->ParseMessage(_internal_mutable_round_robin(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ExchangeRel.Broadcast broadcast = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          ptr = ctx->ParseMessage(_internal_mutable_broadcast(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.extensions.AdvancedExtension advanced_extension = 10;
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
+          ptr = ctx->ParseMessage(_internal_mutable_advanced_extension(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* ExchangeRel::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.ExchangeRel)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .substrait.RelCommon common = 1;
+  if (this->_internal_has_common()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        1, _Internal::common(this), target, stream);
+  }
+
+  // .substrait.Rel input = 2;
+  if (this->_internal_has_input()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        2, _Internal::input(this), target, stream);
+  }
+
+  // int32 partition_count = 3;
+  if (this->_internal_partition_count() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_partition_count(), target);
+  }
+
+  // repeated .substrait.ExchangeRel.ExchangeTarget targets = 4;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_targets_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(4, this->_internal_targets(i), target, stream);
+  }
+
+  // .substrait.ExchangeRel.ScatterFields scatter_by_fields = 5;
+  if (_internal_has_scatter_by_fields()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        5, _Internal::scatter_by_fields(this), target, stream);
+  }
+
+  // .substrait.ExchangeRel.SingleBucketExpression single_target = 6;
+  if (_internal_has_single_target()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        6, _Internal::single_target(this), target, stream);
+  }
+
+  // .substrait.ExchangeRel.MultiBucketExpression multi_target = 7;
+  if (_internal_has_multi_target()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        7, _Internal::multi_target(this), target, stream);
+  }
+
+  // .substrait.ExchangeRel.RoundRobin round_robin = 8;
+  if (_internal_has_round_robin()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        8, _Internal::round_robin(this), target, stream);
+  }
+
+  // .substrait.ExchangeRel.Broadcast broadcast = 9;
+  if (_internal_has_broadcast()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        9, _Internal::broadcast(this), target, stream);
+  }
+
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
+  if (this->_internal_has_advanced_extension()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        10, _Internal::advanced_extension(this), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.ExchangeRel)
+  return target;
+}
+
+size_t ExchangeRel::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.ExchangeRel)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .substrait.ExchangeRel.ExchangeTarget targets = 4;
+  total_size += 1UL * this->_internal_targets_size();
+  for (const auto& msg : this->targets_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // .substrait.RelCommon common = 1;
+  if (this->_internal_has_common()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *common_);
+  }
+
+  // .substrait.Rel input = 2;
+  if (this->_internal_has_input()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *input_);
+  }
+
+  // .substrait.extensions.AdvancedExtension advanced_extension = 10;
+  if (this->_internal_has_advanced_extension()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *advanced_extension_);
+  }
+
+  // int32 partition_count = 3;
+  if (this->_internal_partition_count() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_partition_count());
+  }
+
+  switch (exchange_kind_case()) {
+    // .substrait.ExchangeRel.ScatterFields scatter_by_fields = 5;
+    case kScatterByFields: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *exchange_kind_.scatter_by_fields_);
+      break;
+    }
+    // .substrait.ExchangeRel.SingleBucketExpression single_target = 6;
+    case kSingleTarget: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *exchange_kind_.single_target_);
+      break;
+    }
+    // .substrait.ExchangeRel.MultiBucketExpression multi_target = 7;
+    case kMultiTarget: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *exchange_kind_.multi_target_);
+      break;
+    }
+    // .substrait.ExchangeRel.RoundRobin round_robin = 8;
+    case kRoundRobin: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *exchange_kind_.round_robin_);
+      break;
+    }
+    // .substrait.ExchangeRel.Broadcast broadcast = 9;
+    case kBroadcast: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *exchange_kind_.broadcast_);
+      break;
+    }
+    case EXCHANGE_KIND_NOT_SET: {
+      break;
+    }
+  }
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ExchangeRel::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    ExchangeRel::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel::GetClassData() const { return &_class_data_; }
+
+void ExchangeRel::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<ExchangeRel *>(to)->MergeFrom(
+      static_cast<const ExchangeRel &>(from));
+}
+
+
+void ExchangeRel::MergeFrom(const ExchangeRel& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.ExchangeRel)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  targets_.MergeFrom(from.targets_);
+  if (from._internal_has_common()) {
+    _internal_mutable_common()->::substrait::RelCommon::MergeFrom(from._internal_common());
+  }
+  if (from._internal_has_input()) {
+    _internal_mutable_input()->::substrait::Rel::MergeFrom(from._internal_input());
+  }
+  if (from._internal_has_advanced_extension()) {
+    _internal_mutable_advanced_extension()->::substrait::extensions::AdvancedExtension::MergeFrom(from._internal_advanced_extension());
+  }
+  if (from._internal_partition_count() != 0) {
+    _internal_set_partition_count(from._internal_partition_count());
+  }
+  switch (from.exchange_kind_case()) {
+    case kScatterByFields: {
+      _internal_mutable_scatter_by_fields()->::substrait::ExchangeRel_ScatterFields::MergeFrom(from._internal_scatter_by_fields());
+      break;
+    }
+    case kSingleTarget: {
+      _internal_mutable_single_target()->::substrait::ExchangeRel_SingleBucketExpression::MergeFrom(from._internal_single_target());
+      break;
+    }
+    case kMultiTarget: {
+      _internal_mutable_multi_target()->::substrait::ExchangeRel_MultiBucketExpression::MergeFrom(from._internal_multi_target());
+      break;
+    }
+    case kRoundRobin: {
+      _internal_mutable_round_robin()->::substrait::ExchangeRel_RoundRobin::MergeFrom(from._internal_round_robin());
+      break;
+    }
+    case kBroadcast: {
+      _internal_mutable_broadcast()->::substrait::ExchangeRel_Broadcast::MergeFrom(from._internal_broadcast());
+      break;
+    }
+    case EXCHANGE_KIND_NOT_SET: {
+      break;
+    }
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void ExchangeRel::CopyFrom(const ExchangeRel& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.ExchangeRel)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool ExchangeRel::IsInitialized() const {
+  return true;
+}
+
+void ExchangeRel::InternalSwap(ExchangeRel* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  targets_.InternalSwap(&other->targets_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ExchangeRel, partition_count_)
+      + sizeof(ExchangeRel::partition_count_)
+      - PROTOBUF_FIELD_OFFSET(ExchangeRel, common_)>(
+          reinterpret_cast<char*>(&common_),
+          reinterpret_cast<char*>(&other->common_));
+  swap(exchange_kind_, other->exchange_kind_);
+  swap(_oneof_case_[0], other->_oneof_case_[0]);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[31]);
 }
 
 // ===================================================================
@@ -10117,7 +12073,7 @@ const char* RelRoot::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Rel input = 1 [json_name = "input"];
+      // .substrait.Rel input = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -10125,7 +12081,7 @@ const char* RelRoot::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::in
         } else
           goto handle_unusual;
         continue;
-      // repeated string names = 2 [json_name = "names"];
+      // repeated string names = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -10169,7 +12125,7 @@ uint8_t* RelRoot::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Rel input = 1 [json_name = "input"];
+  // .substrait.Rel input = 1;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10177,7 +12133,7 @@ uint8_t* RelRoot::_InternalSerialize(
         1, _Internal::input(this), target, stream);
   }
 
-  // repeated string names = 2 [json_name = "names"];
+  // repeated string names = 2;
   for (int i = 0, n = this->_internal_names_size(); i < n; i++) {
     const auto& s = this->_internal_names(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -10203,7 +12159,7 @@ size_t RelRoot::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string names = 2 [json_name = "names"];
+  // repeated string names = 2;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(names_.size());
   for (int i = 0, n = names_.size(); i < n; i++) {
@@ -10211,7 +12167,7 @@ size_t RelRoot::ByteSizeLong() const {
       names_.Get(i));
   }
 
-  // .substrait.Rel input = 1 [json_name = "input"];
+  // .substrait.Rel input = 1;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -10268,7 +12224,7 @@ void RelRoot::InternalSwap(RelRoot* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata RelRoot::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[25]);
+      file_level_metadata_substrait_2falgebra_2eproto[32]);
 }
 
 // ===================================================================
@@ -10713,7 +12669,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ReadRel read = 1 [json_name = "read"];
+      // .substrait.ReadRel read = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_read(), ptr);
@@ -10721,7 +12677,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FilterRel filter = 2 [json_name = "filter"];
+      // .substrait.FilterRel filter = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_filter(), ptr);
@@ -10729,7 +12685,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FetchRel fetch = 3 [json_name = "fetch"];
+      // .substrait.FetchRel fetch = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_fetch(), ptr);
@@ -10737,7 +12693,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.AggregateRel aggregate = 4 [json_name = "aggregate"];
+      // .substrait.AggregateRel aggregate = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_aggregate(), ptr);
@@ -10745,7 +12701,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.SortRel sort = 5 [json_name = "sort"];
+      // .substrait.SortRel sort = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_sort(), ptr);
@@ -10753,7 +12709,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.JoinRel join = 6 [json_name = "join"];
+      // .substrait.JoinRel join = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
           ptr = ctx->ParseMessage(_internal_mutable_join(), ptr);
@@ -10761,7 +12717,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ProjectRel project = 7 [json_name = "project"];
+      // .substrait.ProjectRel project = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_project(), ptr);
@@ -10769,7 +12725,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.SetRel set = 8 [json_name = "set"];
+      // .substrait.SetRel set = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
           ptr = ctx->ParseMessage(_internal_mutable_set(), ptr);
@@ -10777,7 +12733,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ExtensionSingleRel extension_single = 9 [json_name = "extensionSingle"];
+      // .substrait.ExtensionSingleRel extension_single = 9;
       case 9:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_single(), ptr);
@@ -10785,7 +12741,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ExtensionMultiRel extension_multi = 10 [json_name = "extensionMulti"];
+      // .substrait.ExtensionMultiRel extension_multi = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_multi(), ptr);
@@ -10793,7 +12749,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ExtensionLeafRel extension_leaf = 11 [json_name = "extensionLeaf"];
+      // .substrait.ExtensionLeafRel extension_leaf = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
           ptr = ctx->ParseMessage(_internal_mutable_extension_leaf(), ptr);
@@ -10801,7 +12757,7 @@ const char* Rel::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::intern
         } else
           goto handle_unusual;
         continue;
-      // .substrait.CrossRel cross = 12 [json_name = "cross"];
+      // .substrait.CrossRel cross = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
           ptr = ctx->ParseMessage(_internal_mutable_cross(), ptr);
@@ -10838,7 +12794,7 @@ uint8_t* Rel::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ReadRel read = 1 [json_name = "read"];
+  // .substrait.ReadRel read = 1;
   if (_internal_has_read()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10846,7 +12802,7 @@ uint8_t* Rel::_InternalSerialize(
         1, _Internal::read(this), target, stream);
   }
 
-  // .substrait.FilterRel filter = 2 [json_name = "filter"];
+  // .substrait.FilterRel filter = 2;
   if (_internal_has_filter()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10854,7 +12810,7 @@ uint8_t* Rel::_InternalSerialize(
         2, _Internal::filter(this), target, stream);
   }
 
-  // .substrait.FetchRel fetch = 3 [json_name = "fetch"];
+  // .substrait.FetchRel fetch = 3;
   if (_internal_has_fetch()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10862,7 +12818,7 @@ uint8_t* Rel::_InternalSerialize(
         3, _Internal::fetch(this), target, stream);
   }
 
-  // .substrait.AggregateRel aggregate = 4 [json_name = "aggregate"];
+  // .substrait.AggregateRel aggregate = 4;
   if (_internal_has_aggregate()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10870,7 +12826,7 @@ uint8_t* Rel::_InternalSerialize(
         4, _Internal::aggregate(this), target, stream);
   }
 
-  // .substrait.SortRel sort = 5 [json_name = "sort"];
+  // .substrait.SortRel sort = 5;
   if (_internal_has_sort()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10878,7 +12834,7 @@ uint8_t* Rel::_InternalSerialize(
         5, _Internal::sort(this), target, stream);
   }
 
-  // .substrait.JoinRel join = 6 [json_name = "join"];
+  // .substrait.JoinRel join = 6;
   if (_internal_has_join()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10886,7 +12842,7 @@ uint8_t* Rel::_InternalSerialize(
         6, _Internal::join(this), target, stream);
   }
 
-  // .substrait.ProjectRel project = 7 [json_name = "project"];
+  // .substrait.ProjectRel project = 7;
   if (_internal_has_project()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10894,7 +12850,7 @@ uint8_t* Rel::_InternalSerialize(
         7, _Internal::project(this), target, stream);
   }
 
-  // .substrait.SetRel set = 8 [json_name = "set"];
+  // .substrait.SetRel set = 8;
   if (_internal_has_set()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10902,7 +12858,7 @@ uint8_t* Rel::_InternalSerialize(
         8, _Internal::set(this), target, stream);
   }
 
-  // .substrait.ExtensionSingleRel extension_single = 9 [json_name = "extensionSingle"];
+  // .substrait.ExtensionSingleRel extension_single = 9;
   if (_internal_has_extension_single()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10910,7 +12866,7 @@ uint8_t* Rel::_InternalSerialize(
         9, _Internal::extension_single(this), target, stream);
   }
 
-  // .substrait.ExtensionMultiRel extension_multi = 10 [json_name = "extensionMulti"];
+  // .substrait.ExtensionMultiRel extension_multi = 10;
   if (_internal_has_extension_multi()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10918,7 +12874,7 @@ uint8_t* Rel::_InternalSerialize(
         10, _Internal::extension_multi(this), target, stream);
   }
 
-  // .substrait.ExtensionLeafRel extension_leaf = 11 [json_name = "extensionLeaf"];
+  // .substrait.ExtensionLeafRel extension_leaf = 11;
   if (_internal_has_extension_leaf()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10926,7 +12882,7 @@ uint8_t* Rel::_InternalSerialize(
         11, _Internal::extension_leaf(this), target, stream);
   }
 
-  // .substrait.CrossRel cross = 12 [json_name = "cross"];
+  // .substrait.CrossRel cross = 12;
   if (_internal_has_cross()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -10951,84 +12907,84 @@ size_t Rel::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (rel_type_case()) {
-    // .substrait.ReadRel read = 1 [json_name = "read"];
+    // .substrait.ReadRel read = 1;
     case kRead: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.read_);
       break;
     }
-    // .substrait.FilterRel filter = 2 [json_name = "filter"];
+    // .substrait.FilterRel filter = 2;
     case kFilter: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.filter_);
       break;
     }
-    // .substrait.FetchRel fetch = 3 [json_name = "fetch"];
+    // .substrait.FetchRel fetch = 3;
     case kFetch: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.fetch_);
       break;
     }
-    // .substrait.AggregateRel aggregate = 4 [json_name = "aggregate"];
+    // .substrait.AggregateRel aggregate = 4;
     case kAggregate: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.aggregate_);
       break;
     }
-    // .substrait.SortRel sort = 5 [json_name = "sort"];
+    // .substrait.SortRel sort = 5;
     case kSort: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.sort_);
       break;
     }
-    // .substrait.JoinRel join = 6 [json_name = "join"];
+    // .substrait.JoinRel join = 6;
     case kJoin: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.join_);
       break;
     }
-    // .substrait.ProjectRel project = 7 [json_name = "project"];
+    // .substrait.ProjectRel project = 7;
     case kProject: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.project_);
       break;
     }
-    // .substrait.SetRel set = 8 [json_name = "set"];
+    // .substrait.SetRel set = 8;
     case kSet: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.set_);
       break;
     }
-    // .substrait.ExtensionSingleRel extension_single = 9 [json_name = "extensionSingle"];
+    // .substrait.ExtensionSingleRel extension_single = 9;
     case kExtensionSingle: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.extension_single_);
       break;
     }
-    // .substrait.ExtensionMultiRel extension_multi = 10 [json_name = "extensionMulti"];
+    // .substrait.ExtensionMultiRel extension_multi = 10;
     case kExtensionMulti: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.extension_multi_);
       break;
     }
-    // .substrait.ExtensionLeafRel extension_leaf = 11 [json_name = "extensionLeaf"];
+    // .substrait.ExtensionLeafRel extension_leaf = 11;
     case kExtensionLeaf: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rel_type_.extension_leaf_);
       break;
     }
-    // .substrait.CrossRel cross = 12 [json_name = "cross"];
+    // .substrait.CrossRel cross = 12;
     case kCross: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -11138,7 +13094,7 @@ void Rel::InternalSwap(Rel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Rel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[26]);
+      file_level_metadata_substrait_2falgebra_2eproto[33]);
 }
 
 // ===================================================================
@@ -11177,7 +13133,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_Enum_Empty::GetClas
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Enum_Empty::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[27]);
+      file_level_metadata_substrait_2falgebra_2eproto[34]);
 }
 
 // ===================================================================
@@ -11300,7 +13256,7 @@ const char* Expression_Enum::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPAC
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string specified = 1 [json_name = "specified"];
+      // string specified = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_specified();
@@ -11310,7 +13266,7 @@ const char* Expression_Enum::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPAC
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Enum.Empty unspecified = 2 [json_name = "unspecified"];
+      // .substrait.Expression.Enum.Empty unspecified = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_unspecified(), ptr);
@@ -11347,7 +13303,7 @@ uint8_t* Expression_Enum::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string specified = 1 [json_name = "specified"];
+  // string specified = 1;
   if (_internal_has_specified()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_specified().data(), static_cast<int>(this->_internal_specified().length()),
@@ -11357,7 +13313,7 @@ uint8_t* Expression_Enum::_InternalSerialize(
         1, this->_internal_specified(), target);
   }
 
-  // .substrait.Expression.Enum.Empty unspecified = 2 [json_name = "unspecified"];
+  // .substrait.Expression.Enum.Empty unspecified = 2;
   if (_internal_has_unspecified()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -11382,14 +13338,14 @@ size_t Expression_Enum::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (enum_kind_case()) {
-    // string specified = 1 [json_name = "specified"];
+    // string specified = 1;
     case kSpecified: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_specified());
       break;
     }
-    // .substrait.Expression.Enum.Empty unspecified = 2 [json_name = "unspecified"];
+    // .substrait.Expression.Enum.Empty unspecified = 2;
     case kUnspecified: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -11459,7 +13415,7 @@ void Expression_Enum::InternalSwap(Expression_Enum* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Enum::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[28]);
+      file_level_metadata_substrait_2falgebra_2eproto[35]);
 }
 
 // ===================================================================
@@ -11539,7 +13495,7 @@ const char* Expression_Literal_VarChar::_InternalParse(const char* ptr, ::PROTOB
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string value = 1 [json_name = "value"];
+      // string value = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_value();
@@ -11549,7 +13505,7 @@ const char* Expression_Literal_VarChar::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // uint32 length = 2 [json_name = "length"];
+      // uint32 length = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -11586,7 +13542,7 @@ uint8_t* Expression_Literal_VarChar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string value = 1 [json_name = "value"];
+  // string value = 1;
   if (!this->_internal_value().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_value().data(), static_cast<int>(this->_internal_value().length()),
@@ -11596,7 +13552,7 @@ uint8_t* Expression_Literal_VarChar::_InternalSerialize(
         1, this->_internal_value(), target);
   }
 
-  // uint32 length = 2 [json_name = "length"];
+  // uint32 length = 2;
   if (this->_internal_length() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_length(), target);
@@ -11618,14 +13574,14 @@ size_t Expression_Literal_VarChar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string value = 1 [json_name = "value"];
+  // string value = 1;
   if (!this->_internal_value().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_value());
   }
 
-  // uint32 length = 2 [json_name = "length"];
+  // uint32 length = 2;
   if (this->_internal_length() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_length());
   }
@@ -11688,7 +13644,7 @@ void Expression_Literal_VarChar::InternalSwap(Expression_Literal_VarChar* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_VarChar::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[29]);
+      file_level_metadata_substrait_2falgebra_2eproto[36]);
 }
 
 // ===================================================================
@@ -11775,7 +13731,7 @@ const char* Expression_Literal_Decimal::_InternalParse(const char* ptr, ::PROTOB
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // bytes value = 1 [json_name = "value"];
+      // bytes value = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_value();
@@ -11784,7 +13740,7 @@ const char* Expression_Literal_Decimal::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // int32 precision = 2 [json_name = "precision"];
+      // int32 precision = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           precision_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -11792,7 +13748,7 @@ const char* Expression_Literal_Decimal::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // int32 scale = 3 [json_name = "scale"];
+      // int32 scale = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           scale_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -11829,19 +13785,19 @@ uint8_t* Expression_Literal_Decimal::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // bytes value = 1 [json_name = "value"];
+  // bytes value = 1;
   if (!this->_internal_value().empty()) {
     target = stream->WriteBytesMaybeAliased(
         1, this->_internal_value(), target);
   }
 
-  // int32 precision = 2 [json_name = "precision"];
+  // int32 precision = 2;
   if (this->_internal_precision() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_precision(), target);
   }
 
-  // int32 scale = 3 [json_name = "scale"];
+  // int32 scale = 3;
   if (this->_internal_scale() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_scale(), target);
@@ -11863,19 +13819,19 @@ size_t Expression_Literal_Decimal::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // bytes value = 1 [json_name = "value"];
+  // bytes value = 1;
   if (!this->_internal_value().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
         this->_internal_value());
   }
 
-  // int32 precision = 2 [json_name = "precision"];
+  // int32 precision = 2;
   if (this->_internal_precision() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_precision());
   }
 
-  // int32 scale = 3 [json_name = "scale"];
+  // int32 scale = 3;
   if (this->_internal_scale() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_scale());
   }
@@ -11946,7 +13902,7 @@ void Expression_Literal_Decimal::InternalSwap(Expression_Literal_Decimal* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Decimal::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[30]);
+      file_level_metadata_substrait_2falgebra_2eproto[37]);
 }
 
 // ===================================================================
@@ -12043,7 +13999,7 @@ const char* Expression_Literal_Map_KeyValue::_InternalParse(const char* ptr, ::P
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Literal key = 1 [json_name = "key"];
+      // .substrait.Expression.Literal key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_key(), ptr);
@@ -12051,7 +14007,7 @@ const char* Expression_Literal_Map_KeyValue::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal value = 2 [json_name = "value"];
+      // .substrait.Expression.Literal value = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
@@ -12088,7 +14044,7 @@ uint8_t* Expression_Literal_Map_KeyValue::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal key = 1 [json_name = "key"];
+  // .substrait.Expression.Literal key = 1;
   if (this->_internal_has_key()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -12096,7 +14052,7 @@ uint8_t* Expression_Literal_Map_KeyValue::_InternalSerialize(
         1, _Internal::key(this), target, stream);
   }
 
-  // .substrait.Expression.Literal value = 2 [json_name = "value"];
+  // .substrait.Expression.Literal value = 2;
   if (this->_internal_has_value()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -12120,14 +14076,14 @@ size_t Expression_Literal_Map_KeyValue::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal key = 1 [json_name = "key"];
+  // .substrait.Expression.Literal key = 1;
   if (this->_internal_has_key()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *key_);
   }
 
-  // .substrait.Expression.Literal value = 2 [json_name = "value"];
+  // .substrait.Expression.Literal value = 2;
   if (this->_internal_has_value()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -12190,7 +14146,7 @@ void Expression_Literal_Map_KeyValue::InternalSwap(Expression_Literal_Map_KeyVal
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Map_KeyValue::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[31]);
+      file_level_metadata_substrait_2falgebra_2eproto[38]);
 }
 
 // ===================================================================
@@ -12256,7 +14212,7 @@ const char* Expression_Literal_Map::_InternalParse(const char* ptr, ::PROTOBUF_N
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.Literal.Map.KeyValue key_values = 1 [json_name = "keyValues"];
+      // repeated .substrait.Expression.Literal.Map.KeyValue key_values = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -12298,7 +14254,7 @@ uint8_t* Expression_Literal_Map::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal.Map.KeyValue key_values = 1 [json_name = "keyValues"];
+  // repeated .substrait.Expression.Literal.Map.KeyValue key_values = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_key_values_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -12322,7 +14278,7 @@ size_t Expression_Literal_Map::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal.Map.KeyValue key_values = 1 [json_name = "keyValues"];
+  // repeated .substrait.Expression.Literal.Map.KeyValue key_values = 1;
   total_size += 1UL * this->_internal_key_values_size();
   for (const auto& msg : this->key_values_) {
     total_size +=
@@ -12375,7 +14331,7 @@ void Expression_Literal_Map::InternalSwap(Expression_Literal_Map* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Map::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[32]);
+      file_level_metadata_substrait_2falgebra_2eproto[39]);
 }
 
 // ===================================================================
@@ -12448,7 +14404,7 @@ const char* Expression_Literal_IntervalYearToMonth::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 years = 1 [json_name = "years"];
+      // int32 years = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           years_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -12456,7 +14412,7 @@ const char* Expression_Literal_IntervalYearToMonth::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // int32 months = 2 [json_name = "months"];
+      // int32 months = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           months_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -12493,13 +14449,13 @@ uint8_t* Expression_Literal_IntervalYearToMonth::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 years = 1 [json_name = "years"];
+  // int32 years = 1;
   if (this->_internal_years() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_years(), target);
   }
 
-  // int32 months = 2 [json_name = "months"];
+  // int32 months = 2;
   if (this->_internal_months() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_months(), target);
@@ -12521,12 +14477,12 @@ size_t Expression_Literal_IntervalYearToMonth::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int32 years = 1 [json_name = "years"];
+  // int32 years = 1;
   if (this->_internal_years() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_years());
   }
 
-  // int32 months = 2 [json_name = "months"];
+  // int32 months = 2;
   if (this->_internal_months() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_months());
   }
@@ -12587,7 +14543,7 @@ void Expression_Literal_IntervalYearToMonth::InternalSwap(Expression_Literal_Int
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_IntervalYearToMonth::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[33]);
+      file_level_metadata_substrait_2falgebra_2eproto[40]);
 }
 
 // ===================================================================
@@ -12660,7 +14616,7 @@ const char* Expression_Literal_IntervalDayToSecond::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 days = 1 [json_name = "days"];
+      // int32 days = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           days_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -12668,7 +14624,7 @@ const char* Expression_Literal_IntervalDayToSecond::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // int32 seconds = 2 [json_name = "seconds"];
+      // int32 seconds = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           seconds_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -12705,13 +14661,13 @@ uint8_t* Expression_Literal_IntervalDayToSecond::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 days = 1 [json_name = "days"];
+  // int32 days = 1;
   if (this->_internal_days() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_days(), target);
   }
 
-  // int32 seconds = 2 [json_name = "seconds"];
+  // int32 seconds = 2;
   if (this->_internal_seconds() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_seconds(), target);
@@ -12733,12 +14689,12 @@ size_t Expression_Literal_IntervalDayToSecond::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int32 days = 1 [json_name = "days"];
+  // int32 days = 1;
   if (this->_internal_days() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_days());
   }
 
-  // int32 seconds = 2 [json_name = "seconds"];
+  // int32 seconds = 2;
   if (this->_internal_seconds() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_seconds());
   }
@@ -12799,7 +14755,7 @@ void Expression_Literal_IntervalDayToSecond::InternalSwap(Expression_Literal_Int
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_IntervalDayToSecond::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[34]);
+      file_level_metadata_substrait_2falgebra_2eproto[41]);
 }
 
 // ===================================================================
@@ -12865,7 +14821,7 @@ const char* Expression_Literal_Struct::_InternalParse(const char* ptr, ::PROTOBU
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.Literal fields = 1 [json_name = "fields"];
+      // repeated .substrait.Expression.Literal fields = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -12907,7 +14863,7 @@ uint8_t* Expression_Literal_Struct::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal fields = 1 [json_name = "fields"];
+  // repeated .substrait.Expression.Literal fields = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_fields_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -12931,7 +14887,7 @@ size_t Expression_Literal_Struct::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal fields = 1 [json_name = "fields"];
+  // repeated .substrait.Expression.Literal fields = 1;
   total_size += 1UL * this->_internal_fields_size();
   for (const auto& msg : this->fields_) {
     total_size +=
@@ -12984,7 +14940,7 @@ void Expression_Literal_Struct::InternalSwap(Expression_Literal_Struct* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Struct::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[35]);
+      file_level_metadata_substrait_2falgebra_2eproto[42]);
 }
 
 // ===================================================================
@@ -13050,7 +15006,7 @@ const char* Expression_Literal_List::_InternalParse(const char* ptr, ::PROTOBUF_
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.Literal values = 1 [json_name = "values"];
+      // repeated .substrait.Expression.Literal values = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -13092,7 +15048,7 @@ uint8_t* Expression_Literal_List::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal values = 1 [json_name = "values"];
+  // repeated .substrait.Expression.Literal values = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_values_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -13116,7 +15072,7 @@ size_t Expression_Literal_List::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.Literal values = 1 [json_name = "values"];
+  // repeated .substrait.Expression.Literal values = 1;
   total_size += 1UL * this->_internal_values_size();
   for (const auto& msg : this->values_) {
     total_size +=
@@ -13169,7 +15125,7 @@ void Expression_Literal_List::InternalSwap(Expression_Literal_List* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_List::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[36]);
+      file_level_metadata_substrait_2falgebra_2eproto[43]);
 }
 
 // ===================================================================
@@ -13715,7 +15671,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // bool boolean = 1 [json_name = "boolean"];
+      // bool boolean = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           _internal_set_boolean(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
@@ -13723,7 +15679,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int32 i8 = 2 [json_name = "i8"];
+      // int32 i8 = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           _internal_set_i8(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -13731,7 +15687,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int32 i16 = 3 [json_name = "i16"];
+      // int32 i16 = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           _internal_set_i16(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -13739,7 +15695,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int32 i32 = 5 [json_name = "i32"];
+      // int32 i32 = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
           _internal_set_i32(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -13747,7 +15703,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int64 i64 = 7 [json_name = "i64"];
+      // int64 i64 = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
           _internal_set_i64(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
@@ -13755,7 +15711,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // float fp32 = 10 [json_name = "fp32"];
+      // float fp32 = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 85)) {
           _internal_set_fp32(::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<float>(ptr));
@@ -13763,7 +15719,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // double fp64 = 11 [json_name = "fp64"];
+      // double fp64 = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 89)) {
           _internal_set_fp64(::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr));
@@ -13771,7 +15727,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // string string = 12 [json_name = "string"];
+      // string string = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
           auto str = _internal_mutable_string();
@@ -13781,7 +15737,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // bytes binary = 13 [json_name = "binary"];
+      // bytes binary = 13;
       case 13:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 106)) {
           auto str = _internal_mutable_binary();
@@ -13790,7 +15746,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int64 timestamp = 14 [json_name = "timestamp"];
+      // int64 timestamp = 14;
       case 14:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 112)) {
           _internal_set_timestamp(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
@@ -13798,7 +15754,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int32 date = 16 [json_name = "date"];
+      // int32 date = 16;
       case 16:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 128)) {
           _internal_set_date(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -13806,7 +15762,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int64 time = 17 [json_name = "time"];
+      // int64 time = 17;
       case 17:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 136)) {
           _internal_set_time(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
@@ -13814,7 +15770,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.IntervalYearToMonth interval_year_to_month = 19 [json_name = "intervalYearToMonth"];
+      // .substrait.Expression.Literal.IntervalYearToMonth interval_year_to_month = 19;
       case 19:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 154)) {
           ptr = ctx->ParseMessage(_internal_mutable_interval_year_to_month(), ptr);
@@ -13822,7 +15778,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.IntervalDayToSecond interval_day_to_second = 20 [json_name = "intervalDayToSecond"];
+      // .substrait.Expression.Literal.IntervalDayToSecond interval_day_to_second = 20;
       case 20:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 162)) {
           ptr = ctx->ParseMessage(_internal_mutable_interval_day_to_second(), ptr);
@@ -13830,7 +15786,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // string fixed_char = 21 [json_name = "fixedChar"];
+      // string fixed_char = 21;
       case 21:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 170)) {
           auto str = _internal_mutable_fixed_char();
@@ -13840,7 +15796,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.VarChar var_char = 22 [json_name = "varChar"];
+      // .substrait.Expression.Literal.VarChar var_char = 22;
       case 22:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 178)) {
           ptr = ctx->ParseMessage(_internal_mutable_var_char(), ptr);
@@ -13848,7 +15804,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // bytes fixed_binary = 23 [json_name = "fixedBinary"];
+      // bytes fixed_binary = 23;
       case 23:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
           auto str = _internal_mutable_fixed_binary();
@@ -13857,7 +15813,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.Decimal decimal = 24 [json_name = "decimal"];
+      // .substrait.Expression.Literal.Decimal decimal = 24;
       case 24:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 194)) {
           ptr = ctx->ParseMessage(_internal_mutable_decimal(), ptr);
@@ -13865,7 +15821,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.Struct struct = 25 [json_name = "struct"];
+      // .substrait.Expression.Literal.Struct struct = 25;
       case 25:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 202)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_(), ptr);
@@ -13873,7 +15829,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.Map map = 26 [json_name = "map"];
+      // .substrait.Expression.Literal.Map map = 26;
       case 26:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 210)) {
           ptr = ctx->ParseMessage(_internal_mutable_map(), ptr);
@@ -13881,7 +15837,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // int64 timestamp_tz = 27 [json_name = "timestampTz"];
+      // int64 timestamp_tz = 27;
       case 27:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 216)) {
           _internal_set_timestamp_tz(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
@@ -13889,7 +15845,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // bytes uuid = 28 [json_name = "uuid"];
+      // bytes uuid = 28;
       case 28:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 226)) {
           auto str = _internal_mutable_uuid();
@@ -13898,7 +15854,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type null = 29 [json_name = "null"];
+      // .substrait.Type null = 29;
       case 29:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 234)) {
           ptr = ctx->ParseMessage(_internal_mutable_null(), ptr);
@@ -13906,7 +15862,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Literal.List list = 30 [json_name = "list"];
+      // .substrait.Expression.Literal.List list = 30;
       case 30:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 242)) {
           ptr = ctx->ParseMessage(_internal_mutable_list(), ptr);
@@ -13914,7 +15870,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.List empty_list = 31 [json_name = "emptyList"];
+      // .substrait.Type.List empty_list = 31;
       case 31:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 250)) {
           ptr = ctx->ParseMessage(_internal_mutable_empty_list(), ptr);
@@ -13922,7 +15878,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Map empty_map = 32 [json_name = "emptyMap"];
+      // .substrait.Type.Map empty_map = 32;
       case 32:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 2)) {
           ptr = ctx->ParseMessage(_internal_mutable_empty_map(), ptr);
@@ -13930,7 +15886,7 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
-      // bool nullable = 50 [json_name = "nullable"];
+      // bool nullable = 50;
       case 50:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 144)) {
           nullable_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -13967,49 +15923,49 @@ uint8_t* Expression_Literal::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // bool boolean = 1 [json_name = "boolean"];
+  // bool boolean = 1;
   if (_internal_has_boolean()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(1, this->_internal_boolean(), target);
   }
 
-  // int32 i8 = 2 [json_name = "i8"];
+  // int32 i8 = 2;
   if (_internal_has_i8()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_i8(), target);
   }
 
-  // int32 i16 = 3 [json_name = "i16"];
+  // int32 i16 = 3;
   if (_internal_has_i16()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_i16(), target);
   }
 
-  // int32 i32 = 5 [json_name = "i32"];
+  // int32 i32 = 5;
   if (_internal_has_i32()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(5, this->_internal_i32(), target);
   }
 
-  // int64 i64 = 7 [json_name = "i64"];
+  // int64 i64 = 7;
   if (_internal_has_i64()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(7, this->_internal_i64(), target);
   }
 
-  // float fp32 = 10 [json_name = "fp32"];
+  // float fp32 = 10;
   if (_internal_has_fp32()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteFloatToArray(10, this->_internal_fp32(), target);
   }
 
-  // double fp64 = 11 [json_name = "fp64"];
+  // double fp64 = 11;
   if (_internal_has_fp64()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteDoubleToArray(11, this->_internal_fp64(), target);
   }
 
-  // string string = 12 [json_name = "string"];
+  // string string = 12;
   if (_internal_has_string()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_string().data(), static_cast<int>(this->_internal_string().length()),
@@ -14019,31 +15975,31 @@ uint8_t* Expression_Literal::_InternalSerialize(
         12, this->_internal_string(), target);
   }
 
-  // bytes binary = 13 [json_name = "binary"];
+  // bytes binary = 13;
   if (_internal_has_binary()) {
     target = stream->WriteBytesMaybeAliased(
         13, this->_internal_binary(), target);
   }
 
-  // int64 timestamp = 14 [json_name = "timestamp"];
+  // int64 timestamp = 14;
   if (_internal_has_timestamp()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(14, this->_internal_timestamp(), target);
   }
 
-  // int32 date = 16 [json_name = "date"];
+  // int32 date = 16;
   if (_internal_has_date()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(16, this->_internal_date(), target);
   }
 
-  // int64 time = 17 [json_name = "time"];
+  // int64 time = 17;
   if (_internal_has_time()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(17, this->_internal_time(), target);
   }
 
-  // .substrait.Expression.Literal.IntervalYearToMonth interval_year_to_month = 19 [json_name = "intervalYearToMonth"];
+  // .substrait.Expression.Literal.IntervalYearToMonth interval_year_to_month = 19;
   if (_internal_has_interval_year_to_month()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14051,7 +16007,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         19, _Internal::interval_year_to_month(this), target, stream);
   }
 
-  // .substrait.Expression.Literal.IntervalDayToSecond interval_day_to_second = 20 [json_name = "intervalDayToSecond"];
+  // .substrait.Expression.Literal.IntervalDayToSecond interval_day_to_second = 20;
   if (_internal_has_interval_day_to_second()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14059,7 +16015,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         20, _Internal::interval_day_to_second(this), target, stream);
   }
 
-  // string fixed_char = 21 [json_name = "fixedChar"];
+  // string fixed_char = 21;
   if (_internal_has_fixed_char()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_fixed_char().data(), static_cast<int>(this->_internal_fixed_char().length()),
@@ -14069,7 +16025,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         21, this->_internal_fixed_char(), target);
   }
 
-  // .substrait.Expression.Literal.VarChar var_char = 22 [json_name = "varChar"];
+  // .substrait.Expression.Literal.VarChar var_char = 22;
   if (_internal_has_var_char()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14077,13 +16033,13 @@ uint8_t* Expression_Literal::_InternalSerialize(
         22, _Internal::var_char(this), target, stream);
   }
 
-  // bytes fixed_binary = 23 [json_name = "fixedBinary"];
+  // bytes fixed_binary = 23;
   if (_internal_has_fixed_binary()) {
     target = stream->WriteBytesMaybeAliased(
         23, this->_internal_fixed_binary(), target);
   }
 
-  // .substrait.Expression.Literal.Decimal decimal = 24 [json_name = "decimal"];
+  // .substrait.Expression.Literal.Decimal decimal = 24;
   if (_internal_has_decimal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14091,7 +16047,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         24, _Internal::decimal(this), target, stream);
   }
 
-  // .substrait.Expression.Literal.Struct struct = 25 [json_name = "struct"];
+  // .substrait.Expression.Literal.Struct struct = 25;
   if (_internal_has_struct_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14099,7 +16055,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         25, _Internal::struct_(this), target, stream);
   }
 
-  // .substrait.Expression.Literal.Map map = 26 [json_name = "map"];
+  // .substrait.Expression.Literal.Map map = 26;
   if (_internal_has_map()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14107,19 +16063,19 @@ uint8_t* Expression_Literal::_InternalSerialize(
         26, _Internal::map(this), target, stream);
   }
 
-  // int64 timestamp_tz = 27 [json_name = "timestampTz"];
+  // int64 timestamp_tz = 27;
   if (_internal_has_timestamp_tz()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(27, this->_internal_timestamp_tz(), target);
   }
 
-  // bytes uuid = 28 [json_name = "uuid"];
+  // bytes uuid = 28;
   if (_internal_has_uuid()) {
     target = stream->WriteBytesMaybeAliased(
         28, this->_internal_uuid(), target);
   }
 
-  // .substrait.Type null = 29 [json_name = "null"];
+  // .substrait.Type null = 29;
   if (_internal_has_null()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14127,7 +16083,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         29, _Internal::null(this), target, stream);
   }
 
-  // .substrait.Expression.Literal.List list = 30 [json_name = "list"];
+  // .substrait.Expression.Literal.List list = 30;
   if (_internal_has_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14135,7 +16091,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         30, _Internal::list(this), target, stream);
   }
 
-  // .substrait.Type.List empty_list = 31 [json_name = "emptyList"];
+  // .substrait.Type.List empty_list = 31;
   if (_internal_has_empty_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14143,7 +16099,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         31, _Internal::empty_list(this), target, stream);
   }
 
-  // .substrait.Type.Map empty_map = 32 [json_name = "emptyMap"];
+  // .substrait.Type.Map empty_map = 32;
   if (_internal_has_empty_map()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14151,7 +16107,7 @@ uint8_t* Expression_Literal::_InternalSerialize(
         32, _Internal::empty_map(this), target, stream);
   }
 
-  // bool nullable = 50 [json_name = "nullable"];
+  // bool nullable = 50;
   if (this->_internal_nullable() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(50, this->_internal_nullable(), target);
@@ -14173,172 +16129,172 @@ size_t Expression_Literal::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // bool nullable = 50 [json_name = "nullable"];
+  // bool nullable = 50;
   if (this->_internal_nullable() != 0) {
     total_size += 2 + 1;
   }
 
   switch (literal_type_case()) {
-    // bool boolean = 1 [json_name = "boolean"];
+    // bool boolean = 1;
     case kBoolean: {
       total_size += 1 + 1;
       break;
     }
-    // int32 i8 = 2 [json_name = "i8"];
+    // int32 i8 = 2;
     case kI8: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_i8());
       break;
     }
-    // int32 i16 = 3 [json_name = "i16"];
+    // int32 i16 = 3;
     case kI16: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_i16());
       break;
     }
-    // int32 i32 = 5 [json_name = "i32"];
+    // int32 i32 = 5;
     case kI32: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_i32());
       break;
     }
-    // int64 i64 = 7 [json_name = "i64"];
+    // int64 i64 = 7;
     case kI64: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_i64());
       break;
     }
-    // float fp32 = 10 [json_name = "fp32"];
+    // float fp32 = 10;
     case kFp32: {
       total_size += 1 + 4;
       break;
     }
-    // double fp64 = 11 [json_name = "fp64"];
+    // double fp64 = 11;
     case kFp64: {
       total_size += 1 + 8;
       break;
     }
-    // string string = 12 [json_name = "string"];
+    // string string = 12;
     case kString: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_string());
       break;
     }
-    // bytes binary = 13 [json_name = "binary"];
+    // bytes binary = 13;
     case kBinary: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
           this->_internal_binary());
       break;
     }
-    // int64 timestamp = 14 [json_name = "timestamp"];
+    // int64 timestamp = 14;
     case kTimestamp: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_timestamp());
       break;
     }
-    // int32 date = 16 [json_name = "date"];
+    // int32 date = 16;
     case kDate: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
           this->_internal_date());
       break;
     }
-    // int64 time = 17 [json_name = "time"];
+    // int64 time = 17;
     case kTime: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64Size(
           this->_internal_time());
       break;
     }
-    // .substrait.Expression.Literal.IntervalYearToMonth interval_year_to_month = 19 [json_name = "intervalYearToMonth"];
+    // .substrait.Expression.Literal.IntervalYearToMonth interval_year_to_month = 19;
     case kIntervalYearToMonth: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.interval_year_to_month_);
       break;
     }
-    // .substrait.Expression.Literal.IntervalDayToSecond interval_day_to_second = 20 [json_name = "intervalDayToSecond"];
+    // .substrait.Expression.Literal.IntervalDayToSecond interval_day_to_second = 20;
     case kIntervalDayToSecond: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.interval_day_to_second_);
       break;
     }
-    // string fixed_char = 21 [json_name = "fixedChar"];
+    // string fixed_char = 21;
     case kFixedChar: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_fixed_char());
       break;
     }
-    // .substrait.Expression.Literal.VarChar var_char = 22 [json_name = "varChar"];
+    // .substrait.Expression.Literal.VarChar var_char = 22;
     case kVarChar: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.var_char_);
       break;
     }
-    // bytes fixed_binary = 23 [json_name = "fixedBinary"];
+    // bytes fixed_binary = 23;
     case kFixedBinary: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
           this->_internal_fixed_binary());
       break;
     }
-    // .substrait.Expression.Literal.Decimal decimal = 24 [json_name = "decimal"];
+    // .substrait.Expression.Literal.Decimal decimal = 24;
     case kDecimal: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.decimal_);
       break;
     }
-    // .substrait.Expression.Literal.Struct struct = 25 [json_name = "struct"];
+    // .substrait.Expression.Literal.Struct struct = 25;
     case kStruct: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.struct__);
       break;
     }
-    // .substrait.Expression.Literal.Map map = 26 [json_name = "map"];
+    // .substrait.Expression.Literal.Map map = 26;
     case kMap: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.map_);
       break;
     }
-    // int64 timestamp_tz = 27 [json_name = "timestampTz"];
+    // int64 timestamp_tz = 27;
     case kTimestampTz: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64Size(
           this->_internal_timestamp_tz());
       break;
     }
-    // bytes uuid = 28 [json_name = "uuid"];
+    // bytes uuid = 28;
     case kUuid: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
           this->_internal_uuid());
       break;
     }
-    // .substrait.Type null = 29 [json_name = "null"];
+    // .substrait.Type null = 29;
     case kNull: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.null_);
       break;
     }
-    // .substrait.Expression.Literal.List list = 30 [json_name = "list"];
+    // .substrait.Expression.Literal.List list = 30;
     case kList: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.list_);
       break;
     }
-    // .substrait.Type.List empty_list = 31 [json_name = "emptyList"];
+    // .substrait.Type.List empty_list = 31;
     case kEmptyList: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *literal_type_.empty_list_);
       break;
     }
-    // .substrait.Type.Map empty_map = 32 [json_name = "emptyMap"];
+    // .substrait.Type.Map empty_map = 32;
     case kEmptyMap: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -14508,7 +16464,7 @@ void Expression_Literal::InternalSwap(Expression_Literal* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[37]);
+      file_level_metadata_substrait_2falgebra_2eproto[44]);
 }
 
 // ===================================================================
@@ -14601,7 +16557,7 @@ const char* Expression_ScalarFunction::_InternalParse(const char* ptr, ::PROTOBU
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 function_reference = 1 [json_name = "functionReference"];
+      // uint32 function_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           function_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -14609,7 +16565,7 @@ const char* Expression_ScalarFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression args = 2 [json_name = "args"];
+      // repeated .substrait.Expression args = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -14622,7 +16578,7 @@ const char* Expression_ScalarFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type output_type = 3 [json_name = "outputType"];
+      // .substrait.Type output_type = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -14659,13 +16615,13 @@ uint8_t* Expression_ScalarFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 function_reference = 1 [json_name = "functionReference"];
+  // uint32 function_reference = 1;
   if (this->_internal_function_reference() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_function_reference(), target);
   }
 
-  // repeated .substrait.Expression args = 2 [json_name = "args"];
+  // repeated .substrait.Expression args = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_args_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -14673,7 +16629,7 @@ uint8_t* Expression_ScalarFunction::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_args(i), target, stream);
   }
 
-  // .substrait.Type output_type = 3 [json_name = "outputType"];
+  // .substrait.Type output_type = 3;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -14697,21 +16653,21 @@ size_t Expression_ScalarFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression args = 2 [json_name = "args"];
+  // repeated .substrait.Expression args = 2;
   total_size += 1UL * this->_internal_args_size();
   for (const auto& msg : this->args_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Type output_type = 3 [json_name = "outputType"];
+  // .substrait.Type output_type = 3;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *output_type_);
   }
 
-  // uint32 function_reference = 1 [json_name = "functionReference"];
+  // uint32 function_reference = 1;
   if (this->_internal_function_reference() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_function_reference());
   }
@@ -14774,7 +16730,7 @@ void Expression_ScalarFunction::InternalSwap(Expression_ScalarFunction* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ScalarFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[38]);
+      file_level_metadata_substrait_2falgebra_2eproto[45]);
 }
 
 // ===================================================================
@@ -14840,7 +16796,7 @@ const char* Expression_WindowFunction_Bound_Preceding::_InternalParse(const char
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int64 offset = 1 [json_name = "offset"];
+      // int64 offset = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -14877,7 +16833,7 @@ uint8_t* Expression_WindowFunction_Bound_Preceding::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int64 offset = 1 [json_name = "offset"];
+  // int64 offset = 1;
   if (this->_internal_offset() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(1, this->_internal_offset(), target);
@@ -14899,7 +16855,7 @@ size_t Expression_WindowFunction_Bound_Preceding::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int64 offset = 1 [json_name = "offset"];
+  // int64 offset = 1;
   if (this->_internal_offset() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_offset());
   }
@@ -14952,7 +16908,7 @@ void Expression_WindowFunction_Bound_Preceding::InternalSwap(Expression_WindowFu
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_Preceding::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[39]);
+      file_level_metadata_substrait_2falgebra_2eproto[46]);
 }
 
 // ===================================================================
@@ -15018,7 +16974,7 @@ const char* Expression_WindowFunction_Bound_Following::_InternalParse(const char
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int64 offset = 1 [json_name = "offset"];
+      // int64 offset = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -15055,7 +17011,7 @@ uint8_t* Expression_WindowFunction_Bound_Following::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int64 offset = 1 [json_name = "offset"];
+  // int64 offset = 1;
   if (this->_internal_offset() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(1, this->_internal_offset(), target);
@@ -15077,7 +17033,7 @@ size_t Expression_WindowFunction_Bound_Following::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int64 offset = 1 [json_name = "offset"];
+  // int64 offset = 1;
   if (this->_internal_offset() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_offset());
   }
@@ -15130,7 +17086,7 @@ void Expression_WindowFunction_Bound_Following::InternalSwap(Expression_WindowFu
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_Following::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[40]);
+      file_level_metadata_substrait_2falgebra_2eproto[47]);
 }
 
 // ===================================================================
@@ -15169,7 +17125,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_WindowFunction_Boun
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_CurrentRow::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[41]);
+      file_level_metadata_substrait_2falgebra_2eproto[48]);
 }
 
 // ===================================================================
@@ -15208,7 +17164,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_WindowFunction_Boun
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_Unbounded::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[42]);
+      file_level_metadata_substrait_2falgebra_2eproto[49]);
 }
 
 // ===================================================================
@@ -15413,7 +17369,7 @@ const char* Expression_WindowFunction_Bound::_InternalParse(const char* ptr, ::P
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.WindowFunction.Bound.Preceding preceding = 1 [json_name = "preceding"];
+      // .substrait.Expression.WindowFunction.Bound.Preceding preceding = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_preceding(), ptr);
@@ -15421,7 +17377,7 @@ const char* Expression_WindowFunction_Bound::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.WindowFunction.Bound.Following following = 2 [json_name = "following"];
+      // .substrait.Expression.WindowFunction.Bound.Following following = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_following(), ptr);
@@ -15429,7 +17385,7 @@ const char* Expression_WindowFunction_Bound::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.WindowFunction.Bound.CurrentRow current_row = 3 [json_name = "currentRow"];
+      // .substrait.Expression.WindowFunction.Bound.CurrentRow current_row = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_current_row(), ptr);
@@ -15437,7 +17393,7 @@ const char* Expression_WindowFunction_Bound::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.WindowFunction.Bound.Unbounded unbounded = 4 [json_name = "unbounded"];
+      // .substrait.Expression.WindowFunction.Bound.Unbounded unbounded = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_unbounded(), ptr);
@@ -15474,7 +17430,7 @@ uint8_t* Expression_WindowFunction_Bound::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.WindowFunction.Bound.Preceding preceding = 1 [json_name = "preceding"];
+  // .substrait.Expression.WindowFunction.Bound.Preceding preceding = 1;
   if (_internal_has_preceding()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15482,7 +17438,7 @@ uint8_t* Expression_WindowFunction_Bound::_InternalSerialize(
         1, _Internal::preceding(this), target, stream);
   }
 
-  // .substrait.Expression.WindowFunction.Bound.Following following = 2 [json_name = "following"];
+  // .substrait.Expression.WindowFunction.Bound.Following following = 2;
   if (_internal_has_following()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15490,7 +17446,7 @@ uint8_t* Expression_WindowFunction_Bound::_InternalSerialize(
         2, _Internal::following(this), target, stream);
   }
 
-  // .substrait.Expression.WindowFunction.Bound.CurrentRow current_row = 3 [json_name = "currentRow"];
+  // .substrait.Expression.WindowFunction.Bound.CurrentRow current_row = 3;
   if (_internal_has_current_row()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15498,7 +17454,7 @@ uint8_t* Expression_WindowFunction_Bound::_InternalSerialize(
         3, _Internal::current_row(this), target, stream);
   }
 
-  // .substrait.Expression.WindowFunction.Bound.Unbounded unbounded = 4 [json_name = "unbounded"];
+  // .substrait.Expression.WindowFunction.Bound.Unbounded unbounded = 4;
   if (_internal_has_unbounded()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15523,28 +17479,28 @@ size_t Expression_WindowFunction_Bound::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (kind_case()) {
-    // .substrait.Expression.WindowFunction.Bound.Preceding preceding = 1 [json_name = "preceding"];
+    // .substrait.Expression.WindowFunction.Bound.Preceding preceding = 1;
     case kPreceding: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.preceding_);
       break;
     }
-    // .substrait.Expression.WindowFunction.Bound.Following following = 2 [json_name = "following"];
+    // .substrait.Expression.WindowFunction.Bound.Following following = 2;
     case kFollowing: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.following_);
       break;
     }
-    // .substrait.Expression.WindowFunction.Bound.CurrentRow current_row = 3 [json_name = "currentRow"];
+    // .substrait.Expression.WindowFunction.Bound.CurrentRow current_row = 3;
     case kCurrentRow: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.current_row_);
       break;
     }
-    // .substrait.Expression.WindowFunction.Bound.Unbounded unbounded = 4 [json_name = "unbounded"];
+    // .substrait.Expression.WindowFunction.Bound.Unbounded unbounded = 4;
     case kUnbounded: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -15622,7 +17578,7 @@ void Expression_WindowFunction_Bound::InternalSwap(Expression_WindowFunction_Bou
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[43]);
+      file_level_metadata_substrait_2falgebra_2eproto[50]);
 }
 
 // ===================================================================
@@ -15755,7 +17711,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 function_reference = 1 [json_name = "functionReference"];
+      // uint32 function_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           function_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -15763,7 +17719,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression partitions = 2 [json_name = "partitions"];
+      // repeated .substrait.Expression partitions = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -15776,7 +17732,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+      // repeated .substrait.SortField sorts = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -15789,7 +17745,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.WindowFunction.Bound upper_bound = 4 [json_name = "upperBound"];
+      // .substrait.Expression.WindowFunction.Bound upper_bound = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_upper_bound(), ptr);
@@ -15797,7 +17753,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.WindowFunction.Bound lower_bound = 5 [json_name = "lowerBound"];
+      // .substrait.Expression.WindowFunction.Bound lower_bound = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_lower_bound(), ptr);
@@ -15805,7 +17761,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.AggregationPhase phase = 6 [json_name = "phase"];
+      // .substrait.AggregationPhase phase = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -15814,7 +17770,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type output_type = 7 [json_name = "outputType"];
+      // .substrait.Type output_type = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -15822,7 +17778,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression args = 8 [json_name = "args"];
+      // repeated .substrait.Expression args = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
           ptr -= 1;
@@ -15864,13 +17820,13 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 function_reference = 1 [json_name = "functionReference"];
+  // uint32 function_reference = 1;
   if (this->_internal_function_reference() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_function_reference(), target);
   }
 
-  // repeated .substrait.Expression partitions = 2 [json_name = "partitions"];
+  // repeated .substrait.Expression partitions = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_partitions_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -15878,7 +17834,7 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_partitions(i), target, stream);
   }
 
-  // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+  // repeated .substrait.SortField sorts = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_sorts_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -15886,7 +17842,7 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
       InternalWriteMessage(3, this->_internal_sorts(i), target, stream);
   }
 
-  // .substrait.Expression.WindowFunction.Bound upper_bound = 4 [json_name = "upperBound"];
+  // .substrait.Expression.WindowFunction.Bound upper_bound = 4;
   if (this->_internal_has_upper_bound()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15894,7 +17850,7 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
         4, _Internal::upper_bound(this), target, stream);
   }
 
-  // .substrait.Expression.WindowFunction.Bound lower_bound = 5 [json_name = "lowerBound"];
+  // .substrait.Expression.WindowFunction.Bound lower_bound = 5;
   if (this->_internal_has_lower_bound()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15902,14 +17858,14 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
         5, _Internal::lower_bound(this), target, stream);
   }
 
-  // .substrait.AggregationPhase phase = 6 [json_name = "phase"];
+  // .substrait.AggregationPhase phase = 6;
   if (this->_internal_phase() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       6, this->_internal_phase(), target);
   }
 
-  // .substrait.Type output_type = 7 [json_name = "outputType"];
+  // .substrait.Type output_type = 7;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -15917,7 +17873,7 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
         7, _Internal::output_type(this), target, stream);
   }
 
-  // repeated .substrait.Expression args = 8 [json_name = "args"];
+  // repeated .substrait.Expression args = 8;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_args_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -15941,54 +17897,54 @@ size_t Expression_WindowFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression partitions = 2 [json_name = "partitions"];
+  // repeated .substrait.Expression partitions = 2;
   total_size += 1UL * this->_internal_partitions_size();
   for (const auto& msg : this->partitions_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+  // repeated .substrait.SortField sorts = 3;
   total_size += 1UL * this->_internal_sorts_size();
   for (const auto& msg : this->sorts_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.Expression args = 8 [json_name = "args"];
+  // repeated .substrait.Expression args = 8;
   total_size += 1UL * this->_internal_args_size();
   for (const auto& msg : this->args_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Expression.WindowFunction.Bound upper_bound = 4 [json_name = "upperBound"];
+  // .substrait.Expression.WindowFunction.Bound upper_bound = 4;
   if (this->_internal_has_upper_bound()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *upper_bound_);
   }
 
-  // .substrait.Expression.WindowFunction.Bound lower_bound = 5 [json_name = "lowerBound"];
+  // .substrait.Expression.WindowFunction.Bound lower_bound = 5;
   if (this->_internal_has_lower_bound()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *lower_bound_);
   }
 
-  // .substrait.Type output_type = 7 [json_name = "outputType"];
+  // .substrait.Type output_type = 7;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *output_type_);
   }
 
-  // uint32 function_reference = 1 [json_name = "functionReference"];
+  // uint32 function_reference = 1;
   if (this->_internal_function_reference() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_function_reference());
   }
 
-  // .substrait.AggregationPhase phase = 6 [json_name = "phase"];
+  // .substrait.AggregationPhase phase = 6;
   if (this->_internal_phase() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_phase());
@@ -16065,7 +18021,7 @@ void Expression_WindowFunction::InternalSwap(Expression_WindowFunction* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[44]);
+      file_level_metadata_substrait_2falgebra_2eproto[51]);
 }
 
 // ===================================================================
@@ -16162,7 +18118,7 @@ const char* Expression_IfThen_IfClause::_InternalParse(const char* ptr, ::PROTOB
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression if = 1 [json_name = "if"];
+      // .substrait.Expression if = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_if_(), ptr);
@@ -16170,7 +18126,7 @@ const char* Expression_IfThen_IfClause::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression then = 2 [json_name = "then"];
+      // .substrait.Expression then = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_then(), ptr);
@@ -16207,7 +18163,7 @@ uint8_t* Expression_IfThen_IfClause::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression if = 1 [json_name = "if"];
+  // .substrait.Expression if = 1;
   if (this->_internal_has_if_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16215,7 +18171,7 @@ uint8_t* Expression_IfThen_IfClause::_InternalSerialize(
         1, _Internal::if_(this), target, stream);
   }
 
-  // .substrait.Expression then = 2 [json_name = "then"];
+  // .substrait.Expression then = 2;
   if (this->_internal_has_then()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16239,14 +18195,14 @@ size_t Expression_IfThen_IfClause::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression if = 1 [json_name = "if"];
+  // .substrait.Expression if = 1;
   if (this->_internal_has_if_()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *if__);
   }
 
-  // .substrait.Expression then = 2 [json_name = "then"];
+  // .substrait.Expression then = 2;
   if (this->_internal_has_then()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -16309,7 +18265,7 @@ void Expression_IfThen_IfClause::InternalSwap(Expression_IfThen_IfClause* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_IfThen_IfClause::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[45]);
+      file_level_metadata_substrait_2falgebra_2eproto[52]);
 }
 
 // ===================================================================
@@ -16391,7 +18347,7 @@ const char* Expression_IfThen::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.IfThen.IfClause ifs = 1 [json_name = "ifs"];
+      // repeated .substrait.Expression.IfThen.IfClause ifs = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -16404,7 +18360,7 @@ const char* Expression_IfThen::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression else = 2 [json_name = "else"];
+      // .substrait.Expression else = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_else_(), ptr);
@@ -16441,7 +18397,7 @@ uint8_t* Expression_IfThen::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.IfThen.IfClause ifs = 1 [json_name = "ifs"];
+  // repeated .substrait.Expression.IfThen.IfClause ifs = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_ifs_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -16449,7 +18405,7 @@ uint8_t* Expression_IfThen::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_ifs(i), target, stream);
   }
 
-  // .substrait.Expression else = 2 [json_name = "else"];
+  // .substrait.Expression else = 2;
   if (this->_internal_has_else_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16473,14 +18429,14 @@ size_t Expression_IfThen::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.IfThen.IfClause ifs = 1 [json_name = "ifs"];
+  // repeated .substrait.Expression.IfThen.IfClause ifs = 1;
   total_size += 1UL * this->_internal_ifs_size();
   for (const auto& msg : this->ifs_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Expression else = 2 [json_name = "else"];
+  // .substrait.Expression else = 2;
   if (this->_internal_has_else_()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -16537,7 +18493,7 @@ void Expression_IfThen::InternalSwap(Expression_IfThen* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_IfThen::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[46]);
+      file_level_metadata_substrait_2falgebra_2eproto[53]);
 }
 
 // ===================================================================
@@ -16640,7 +18596,7 @@ const char* Expression_Cast::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPAC
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Type type = 1 [json_name = "type"];
+      // .substrait.Type type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
@@ -16648,7 +18604,7 @@ const char* Expression_Cast::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPAC
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression input = 2 [json_name = "input"];
+      // .substrait.Expression input = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -16685,7 +18641,7 @@ uint8_t* Expression_Cast::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Type type = 1 [json_name = "type"];
+  // .substrait.Type type = 1;
   if (this->_internal_has_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16693,7 +18649,7 @@ uint8_t* Expression_Cast::_InternalSerialize(
         1, _Internal::type(this), target, stream);
   }
 
-  // .substrait.Expression input = 2 [json_name = "input"];
+  // .substrait.Expression input = 2;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16717,14 +18673,14 @@ size_t Expression_Cast::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Type type = 1 [json_name = "type"];
+  // .substrait.Type type = 1;
   if (this->_internal_has_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *type_);
   }
 
-  // .substrait.Expression input = 2 [json_name = "input"];
+  // .substrait.Expression input = 2;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -16787,7 +18743,7 @@ void Expression_Cast::InternalSwap(Expression_Cast* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Cast::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[47]);
+      file_level_metadata_substrait_2falgebra_2eproto[54]);
 }
 
 // ===================================================================
@@ -16884,7 +18840,7 @@ const char* Expression_SwitchExpression_IfValue::_InternalParse(const char* ptr,
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Literal if = 1 [json_name = "if"];
+      // .substrait.Expression.Literal if = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_if_(), ptr);
@@ -16892,7 +18848,7 @@ const char* Expression_SwitchExpression_IfValue::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression then = 2 [json_name = "then"];
+      // .substrait.Expression then = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_then(), ptr);
@@ -16929,7 +18885,7 @@ uint8_t* Expression_SwitchExpression_IfValue::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal if = 1 [json_name = "if"];
+  // .substrait.Expression.Literal if = 1;
   if (this->_internal_has_if_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16937,7 +18893,7 @@ uint8_t* Expression_SwitchExpression_IfValue::_InternalSerialize(
         1, _Internal::if_(this), target, stream);
   }
 
-  // .substrait.Expression then = 2 [json_name = "then"];
+  // .substrait.Expression then = 2;
   if (this->_internal_has_then()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -16961,14 +18917,14 @@ size_t Expression_SwitchExpression_IfValue::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal if = 1 [json_name = "if"];
+  // .substrait.Expression.Literal if = 1;
   if (this->_internal_has_if_()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *if__);
   }
 
-  // .substrait.Expression then = 2 [json_name = "then"];
+  // .substrait.Expression then = 2;
   if (this->_internal_has_then()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -17031,16 +18987,21 @@ void Expression_SwitchExpression_IfValue::InternalSwap(Expression_SwitchExpressi
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_SwitchExpression_IfValue::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[48]);
+      file_level_metadata_substrait_2falgebra_2eproto[55]);
 }
 
 // ===================================================================
 
 class Expression_SwitchExpression::_Internal {
  public:
+  static const ::substrait::Expression& match(const Expression_SwitchExpression* msg);
   static const ::substrait::Expression& else_(const Expression_SwitchExpression* msg);
 };
 
+const ::substrait::Expression&
+Expression_SwitchExpression::_Internal::match(const Expression_SwitchExpression* msg) {
+  return *msg->match_;
+}
 const ::substrait::Expression&
 Expression_SwitchExpression::_Internal::else_(const Expression_SwitchExpression* msg) {
   return *msg->else__;
@@ -17064,11 +19025,19 @@ Expression_SwitchExpression::Expression_SwitchExpression(const Expression_Switch
   } else {
     else__ = nullptr;
   }
+  if (from._internal_has_match()) {
+    match_ = new ::substrait::Expression(*from.match_);
+  } else {
+    match_ = nullptr;
+  }
   // @@protoc_insertion_point(copy_constructor:substrait.Expression.SwitchExpression)
 }
 
 inline void Expression_SwitchExpression::SharedCtor() {
-else__ = nullptr;
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&else__) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&match_) -
+    reinterpret_cast<char*>(&else__)) + sizeof(match_));
 }
 
 Expression_SwitchExpression::~Expression_SwitchExpression() {
@@ -17081,6 +19050,7 @@ Expression_SwitchExpression::~Expression_SwitchExpression() {
 inline void Expression_SwitchExpression::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
   if (this != internal_default_instance()) delete else__;
+  if (this != internal_default_instance()) delete match_;
 }
 
 void Expression_SwitchExpression::ArenaDtor(void* object) {
@@ -17104,6 +19074,10 @@ void Expression_SwitchExpression::Clear() {
     delete else__;
   }
   else__ = nullptr;
+  if (GetArenaForAllocation() == nullptr && match_ != nullptr) {
+    delete match_;
+  }
+  match_ = nullptr;
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -17113,7 +19087,7 @@ const char* Expression_SwitchExpression::_InternalParse(const char* ptr, ::PROTO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.SwitchExpression.IfValue ifs = 1 [json_name = "ifs"];
+      // repeated .substrait.Expression.SwitchExpression.IfValue ifs = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -17126,10 +19100,18 @@ const char* Expression_SwitchExpression::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression else = 2 [json_name = "else"];
+      // .substrait.Expression else = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_else_(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Expression match = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr = ctx->ParseMessage(_internal_mutable_match(), ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -17163,7 +19145,7 @@ uint8_t* Expression_SwitchExpression::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.SwitchExpression.IfValue ifs = 1 [json_name = "ifs"];
+  // repeated .substrait.Expression.SwitchExpression.IfValue ifs = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_ifs_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -17171,12 +19153,20 @@ uint8_t* Expression_SwitchExpression::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_ifs(i), target, stream);
   }
 
-  // .substrait.Expression else = 2 [json_name = "else"];
+  // .substrait.Expression else = 2;
   if (this->_internal_has_else_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(
         2, _Internal::else_(this), target, stream);
+  }
+
+  // .substrait.Expression match = 3;
+  if (this->_internal_has_match()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        3, _Internal::match(this), target, stream);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -17195,18 +19185,25 @@ size_t Expression_SwitchExpression::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.SwitchExpression.IfValue ifs = 1 [json_name = "ifs"];
+  // repeated .substrait.Expression.SwitchExpression.IfValue ifs = 1;
   total_size += 1UL * this->_internal_ifs_size();
   for (const auto& msg : this->ifs_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Expression else = 2 [json_name = "else"];
+  // .substrait.Expression else = 2;
   if (this->_internal_has_else_()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *else__);
+  }
+
+  // .substrait.Expression match = 3;
+  if (this->_internal_has_match()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *match_);
   }
 
   return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
@@ -17235,6 +19232,9 @@ void Expression_SwitchExpression::MergeFrom(const Expression_SwitchExpression& f
   if (from._internal_has_else_()) {
     _internal_mutable_else_()->::substrait::Expression::MergeFrom(from._internal_else_());
   }
+  if (from._internal_has_match()) {
+    _internal_mutable_match()->::substrait::Expression::MergeFrom(from._internal_match());
+  }
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -17253,13 +19253,18 @@ void Expression_SwitchExpression::InternalSwap(Expression_SwitchExpression* othe
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   ifs_.InternalSwap(&other->ifs_);
-  swap(else__, other->else__);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(Expression_SwitchExpression, match_)
+      + sizeof(Expression_SwitchExpression::match_)
+      - PROTOBUF_FIELD_OFFSET(Expression_SwitchExpression, else__)>(
+          reinterpret_cast<char*>(&else__),
+          reinterpret_cast<char*>(&other->else__));
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_SwitchExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[49]);
+      file_level_metadata_substrait_2falgebra_2eproto[56]);
 }
 
 // ===================================================================
@@ -17341,7 +19346,7 @@ const char* Expression_SingularOrList::_InternalParse(const char* ptr, ::PROTOBU
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression value = 1 [json_name = "value"];
+      // .substrait.Expression value = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
@@ -17349,7 +19354,7 @@ const char* Expression_SingularOrList::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression options = 2 [json_name = "options"];
+      // repeated .substrait.Expression options = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -17391,7 +19396,7 @@ uint8_t* Expression_SingularOrList::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression value = 1 [json_name = "value"];
+  // .substrait.Expression value = 1;
   if (this->_internal_has_value()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -17399,7 +19404,7 @@ uint8_t* Expression_SingularOrList::_InternalSerialize(
         1, _Internal::value(this), target, stream);
   }
 
-  // repeated .substrait.Expression options = 2 [json_name = "options"];
+  // repeated .substrait.Expression options = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_options_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -17423,14 +19428,14 @@ size_t Expression_SingularOrList::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression options = 2 [json_name = "options"];
+  // repeated .substrait.Expression options = 2;
   total_size += 1UL * this->_internal_options_size();
   for (const auto& msg : this->options_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Expression value = 1 [json_name = "value"];
+  // .substrait.Expression value = 1;
   if (this->_internal_has_value()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -17487,7 +19492,7 @@ void Expression_SingularOrList::InternalSwap(Expression_SingularOrList* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_SingularOrList::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[50]);
+      file_level_metadata_substrait_2falgebra_2eproto[57]);
 }
 
 // ===================================================================
@@ -17553,7 +19558,7 @@ const char* Expression_MultiOrList_Record::_InternalParse(const char* ptr, ::PRO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression fields = 1 [json_name = "fields"];
+      // repeated .substrait.Expression fields = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -17595,7 +19600,7 @@ uint8_t* Expression_MultiOrList_Record::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression fields = 1 [json_name = "fields"];
+  // repeated .substrait.Expression fields = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_fields_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -17619,7 +19624,7 @@ size_t Expression_MultiOrList_Record::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression fields = 1 [json_name = "fields"];
+  // repeated .substrait.Expression fields = 1;
   total_size += 1UL * this->_internal_fields_size();
   for (const auto& msg : this->fields_) {
     total_size +=
@@ -17672,7 +19677,7 @@ void Expression_MultiOrList_Record::InternalSwap(Expression_MultiOrList_Record* 
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MultiOrList_Record::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[51]);
+      file_level_metadata_substrait_2falgebra_2eproto[58]);
 }
 
 // ===================================================================
@@ -17741,7 +19746,7 @@ const char* Expression_MultiOrList::_InternalParse(const char* ptr, ::PROTOBUF_N
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression value = 1 [json_name = "value"];
+      // repeated .substrait.Expression value = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -17754,7 +19759,7 @@ const char* Expression_MultiOrList::_InternalParse(const char* ptr, ::PROTOBUF_N
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression.MultiOrList.Record options = 2 [json_name = "options"];
+      // repeated .substrait.Expression.MultiOrList.Record options = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -17796,7 +19801,7 @@ uint8_t* Expression_MultiOrList::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression value = 1 [json_name = "value"];
+  // repeated .substrait.Expression value = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_value_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -17804,7 +19809,7 @@ uint8_t* Expression_MultiOrList::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_value(i), target, stream);
   }
 
-  // repeated .substrait.Expression.MultiOrList.Record options = 2 [json_name = "options"];
+  // repeated .substrait.Expression.MultiOrList.Record options = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_options_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -17828,14 +19833,14 @@ size_t Expression_MultiOrList::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression value = 1 [json_name = "value"];
+  // repeated .substrait.Expression value = 1;
   total_size += 1UL * this->_internal_value_size();
   for (const auto& msg : this->value_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.Expression.MultiOrList.Record options = 2 [json_name = "options"];
+  // repeated .substrait.Expression.MultiOrList.Record options = 2;
   total_size += 1UL * this->_internal_options_size();
   for (const auto& msg : this->options_) {
     total_size +=
@@ -17890,7 +19895,7 @@ void Expression_MultiOrList::InternalSwap(Expression_MultiOrList* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MultiOrList::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[52]);
+      file_level_metadata_substrait_2falgebra_2eproto[59]);
 }
 
 // ===================================================================
@@ -17970,7 +19975,7 @@ const char* Expression_EmbeddedFunction_PythonPickleFunction::_InternalParse(con
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // bytes function = 1 [json_name = "function"];
+      // bytes function = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_function();
@@ -17979,7 +19984,7 @@ const char* Expression_EmbeddedFunction_PythonPickleFunction::_InternalParse(con
         } else
           goto handle_unusual;
         continue;
-      // repeated string prerequisite = 2 [json_name = "prerequisite"];
+      // repeated string prerequisite = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -18023,13 +20028,13 @@ uint8_t* Expression_EmbeddedFunction_PythonPickleFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // bytes function = 1 [json_name = "function"];
+  // bytes function = 1;
   if (!this->_internal_function().empty()) {
     target = stream->WriteBytesMaybeAliased(
         1, this->_internal_function(), target);
   }
 
-  // repeated string prerequisite = 2 [json_name = "prerequisite"];
+  // repeated string prerequisite = 2;
   for (int i = 0, n = this->_internal_prerequisite_size(); i < n; i++) {
     const auto& s = this->_internal_prerequisite(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -18055,7 +20060,7 @@ size_t Expression_EmbeddedFunction_PythonPickleFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string prerequisite = 2 [json_name = "prerequisite"];
+  // repeated string prerequisite = 2;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(prerequisite_.size());
   for (int i = 0, n = prerequisite_.size(); i < n; i++) {
@@ -18063,7 +20068,7 @@ size_t Expression_EmbeddedFunction_PythonPickleFunction::ByteSizeLong() const {
       prerequisite_.Get(i));
   }
 
-  // bytes function = 1 [json_name = "function"];
+  // bytes function = 1;
   if (!this->_internal_function().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
@@ -18126,7 +20131,7 @@ void Expression_EmbeddedFunction_PythonPickleFunction::InternalSwap(Expression_E
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_EmbeddedFunction_PythonPickleFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[53]);
+      file_level_metadata_substrait_2falgebra_2eproto[60]);
 }
 
 // ===================================================================
@@ -18206,7 +20211,7 @@ const char* Expression_EmbeddedFunction_WebAssemblyFunction::_InternalParse(cons
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // bytes script = 1 [json_name = "script"];
+      // bytes script = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_script();
@@ -18215,7 +20220,7 @@ const char* Expression_EmbeddedFunction_WebAssemblyFunction::_InternalParse(cons
         } else
           goto handle_unusual;
         continue;
-      // repeated string prerequisite = 2 [json_name = "prerequisite"];
+      // repeated string prerequisite = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -18259,13 +20264,13 @@ uint8_t* Expression_EmbeddedFunction_WebAssemblyFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // bytes script = 1 [json_name = "script"];
+  // bytes script = 1;
   if (!this->_internal_script().empty()) {
     target = stream->WriteBytesMaybeAliased(
         1, this->_internal_script(), target);
   }
 
-  // repeated string prerequisite = 2 [json_name = "prerequisite"];
+  // repeated string prerequisite = 2;
   for (int i = 0, n = this->_internal_prerequisite_size(); i < n; i++) {
     const auto& s = this->_internal_prerequisite(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -18291,7 +20296,7 @@ size_t Expression_EmbeddedFunction_WebAssemblyFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string prerequisite = 2 [json_name = "prerequisite"];
+  // repeated string prerequisite = 2;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(prerequisite_.size());
   for (int i = 0, n = prerequisite_.size(); i < n; i++) {
@@ -18299,7 +20304,7 @@ size_t Expression_EmbeddedFunction_WebAssemblyFunction::ByteSizeLong() const {
       prerequisite_.Get(i));
   }
 
-  // bytes script = 1 [json_name = "script"];
+  // bytes script = 1;
   if (!this->_internal_script().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
@@ -18362,7 +20367,7 @@ void Expression_EmbeddedFunction_WebAssemblyFunction::InternalSwap(Expression_Em
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_EmbeddedFunction_WebAssemblyFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[54]);
+      file_level_metadata_substrait_2falgebra_2eproto[61]);
 }
 
 // ===================================================================
@@ -18532,7 +20537,7 @@ const char* Expression_EmbeddedFunction::_InternalParse(const char* ptr, ::PROTO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression arguments = 1 [json_name = "arguments"];
+      // repeated .substrait.Expression arguments = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -18545,7 +20550,7 @@ const char* Expression_EmbeddedFunction::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type output_type = 2 [json_name = "outputType"];
+      // .substrait.Type output_type = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -18553,7 +20558,7 @@ const char* Expression_EmbeddedFunction::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.EmbeddedFunction.PythonPickleFunction python_pickle_function = 3 [json_name = "pythonPickleFunction"];
+      // .substrait.Expression.EmbeddedFunction.PythonPickleFunction python_pickle_function = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_python_pickle_function(), ptr);
@@ -18561,7 +20566,7 @@ const char* Expression_EmbeddedFunction::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.EmbeddedFunction.WebAssemblyFunction web_assembly_function = 4 [json_name = "webAssemblyFunction"];
+      // .substrait.Expression.EmbeddedFunction.WebAssemblyFunction web_assembly_function = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_web_assembly_function(), ptr);
@@ -18598,7 +20603,7 @@ uint8_t* Expression_EmbeddedFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression arguments = 1 [json_name = "arguments"];
+  // repeated .substrait.Expression arguments = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -18606,7 +20611,7 @@ uint8_t* Expression_EmbeddedFunction::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_arguments(i), target, stream);
   }
 
-  // .substrait.Type output_type = 2 [json_name = "outputType"];
+  // .substrait.Type output_type = 2;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -18614,7 +20619,7 @@ uint8_t* Expression_EmbeddedFunction::_InternalSerialize(
         2, _Internal::output_type(this), target, stream);
   }
 
-  // .substrait.Expression.EmbeddedFunction.PythonPickleFunction python_pickle_function = 3 [json_name = "pythonPickleFunction"];
+  // .substrait.Expression.EmbeddedFunction.PythonPickleFunction python_pickle_function = 3;
   if (_internal_has_python_pickle_function()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -18622,7 +20627,7 @@ uint8_t* Expression_EmbeddedFunction::_InternalSerialize(
         3, _Internal::python_pickle_function(this), target, stream);
   }
 
-  // .substrait.Expression.EmbeddedFunction.WebAssemblyFunction web_assembly_function = 4 [json_name = "webAssemblyFunction"];
+  // .substrait.Expression.EmbeddedFunction.WebAssemblyFunction web_assembly_function = 4;
   if (_internal_has_web_assembly_function()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -18646,14 +20651,14 @@ size_t Expression_EmbeddedFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression arguments = 1 [json_name = "arguments"];
+  // repeated .substrait.Expression arguments = 1;
   total_size += 1UL * this->_internal_arguments_size();
   for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Type output_type = 2 [json_name = "outputType"];
+  // .substrait.Type output_type = 2;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -18661,14 +20666,14 @@ size_t Expression_EmbeddedFunction::ByteSizeLong() const {
   }
 
   switch (kind_case()) {
-    // .substrait.Expression.EmbeddedFunction.PythonPickleFunction python_pickle_function = 3 [json_name = "pythonPickleFunction"];
+    // .substrait.Expression.EmbeddedFunction.PythonPickleFunction python_pickle_function = 3;
     case kPythonPickleFunction: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.python_pickle_function_);
       break;
     }
-    // .substrait.Expression.EmbeddedFunction.WebAssemblyFunction web_assembly_function = 4 [json_name = "webAssemblyFunction"];
+    // .substrait.Expression.EmbeddedFunction.WebAssemblyFunction web_assembly_function = 4;
     case kWebAssemblyFunction: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -18744,7 +20749,7 @@ void Expression_EmbeddedFunction::InternalSwap(Expression_EmbeddedFunction* othe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_EmbeddedFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[55]);
+      file_level_metadata_substrait_2falgebra_2eproto[62]);
 }
 
 // ===================================================================
@@ -18841,7 +20846,7 @@ const char* Expression_ReferenceSegment_MapKey::_InternalParse(const char* ptr, 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Literal map_key = 1 [json_name = "mapKey"];
+      // .substrait.Expression.Literal map_key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_map_key(), ptr);
@@ -18849,7 +20854,7 @@ const char* Expression_ReferenceSegment_MapKey::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+      // .substrait.Expression.ReferenceSegment child = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_child(), ptr);
@@ -18886,7 +20891,7 @@ uint8_t* Expression_ReferenceSegment_MapKey::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal map_key = 1 [json_name = "mapKey"];
+  // .substrait.Expression.Literal map_key = 1;
   if (this->_internal_has_map_key()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -18894,7 +20899,7 @@ uint8_t* Expression_ReferenceSegment_MapKey::_InternalSerialize(
         1, _Internal::map_key(this), target, stream);
   }
 
-  // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+  // .substrait.Expression.ReferenceSegment child = 2;
   if (this->_internal_has_child()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -18918,14 +20923,14 @@ size_t Expression_ReferenceSegment_MapKey::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal map_key = 1 [json_name = "mapKey"];
+  // .substrait.Expression.Literal map_key = 1;
   if (this->_internal_has_map_key()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *map_key_);
   }
 
-  // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+  // .substrait.Expression.ReferenceSegment child = 2;
   if (this->_internal_has_child()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -18988,7 +20993,7 @@ void Expression_ReferenceSegment_MapKey::InternalSwap(Expression_ReferenceSegmen
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment_MapKey::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[56]);
+      file_level_metadata_substrait_2falgebra_2eproto[63]);
 }
 
 // ===================================================================
@@ -19072,7 +21077,7 @@ const char* Expression_ReferenceSegment_StructField::_InternalParse(const char* 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 field = 1 [json_name = "field"];
+      // int32 field = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           field_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -19080,7 +21085,7 @@ const char* Expression_ReferenceSegment_StructField::_InternalParse(const char* 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+      // .substrait.Expression.ReferenceSegment child = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_child(), ptr);
@@ -19117,13 +21122,13 @@ uint8_t* Expression_ReferenceSegment_StructField::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 field = 1 [json_name = "field"];
+  // int32 field = 1;
   if (this->_internal_field() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_field(), target);
   }
 
-  // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+  // .substrait.Expression.ReferenceSegment child = 2;
   if (this->_internal_has_child()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -19147,14 +21152,14 @@ size_t Expression_ReferenceSegment_StructField::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+  // .substrait.Expression.ReferenceSegment child = 2;
   if (this->_internal_has_child()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *child_);
   }
 
-  // int32 field = 1 [json_name = "field"];
+  // int32 field = 1;
   if (this->_internal_field() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_field());
   }
@@ -19215,7 +21220,7 @@ void Expression_ReferenceSegment_StructField::InternalSwap(Expression_ReferenceS
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment_StructField::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[57]);
+      file_level_metadata_substrait_2falgebra_2eproto[64]);
 }
 
 // ===================================================================
@@ -19299,7 +21304,7 @@ const char* Expression_ReferenceSegment_ListElement::_InternalParse(const char* 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 offset = 1 [json_name = "offset"];
+      // int32 offset = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -19307,7 +21312,7 @@ const char* Expression_ReferenceSegment_ListElement::_InternalParse(const char* 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+      // .substrait.Expression.ReferenceSegment child = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_child(), ptr);
@@ -19344,13 +21349,13 @@ uint8_t* Expression_ReferenceSegment_ListElement::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 offset = 1 [json_name = "offset"];
+  // int32 offset = 1;
   if (this->_internal_offset() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_offset(), target);
   }
 
-  // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+  // .substrait.Expression.ReferenceSegment child = 2;
   if (this->_internal_has_child()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -19374,14 +21379,14 @@ size_t Expression_ReferenceSegment_ListElement::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.ReferenceSegment child = 2 [json_name = "child"];
+  // .substrait.Expression.ReferenceSegment child = 2;
   if (this->_internal_has_child()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *child_);
   }
 
-  // int32 offset = 1 [json_name = "offset"];
+  // int32 offset = 1;
   if (this->_internal_offset() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_offset());
   }
@@ -19442,7 +21447,7 @@ void Expression_ReferenceSegment_ListElement::InternalSwap(Expression_ReferenceS
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment_ListElement::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[58]);
+      file_level_metadata_substrait_2falgebra_2eproto[65]);
 }
 
 // ===================================================================
@@ -19617,7 +21622,7 @@ const char* Expression_ReferenceSegment::_InternalParse(const char* ptr, ::PROTO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.ReferenceSegment.MapKey map_key = 1 [json_name = "mapKey"];
+      // .substrait.Expression.ReferenceSegment.MapKey map_key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_map_key(), ptr);
@@ -19625,7 +21630,7 @@ const char* Expression_ReferenceSegment::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.ReferenceSegment.StructField struct_field = 2 [json_name = "structField"];
+      // .substrait.Expression.ReferenceSegment.StructField struct_field = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_field(), ptr);
@@ -19633,7 +21638,7 @@ const char* Expression_ReferenceSegment::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.ReferenceSegment.ListElement list_element = 3 [json_name = "listElement"];
+      // .substrait.Expression.ReferenceSegment.ListElement list_element = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_list_element(), ptr);
@@ -19670,7 +21675,7 @@ uint8_t* Expression_ReferenceSegment::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.ReferenceSegment.MapKey map_key = 1 [json_name = "mapKey"];
+  // .substrait.Expression.ReferenceSegment.MapKey map_key = 1;
   if (_internal_has_map_key()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -19678,7 +21683,7 @@ uint8_t* Expression_ReferenceSegment::_InternalSerialize(
         1, _Internal::map_key(this), target, stream);
   }
 
-  // .substrait.Expression.ReferenceSegment.StructField struct_field = 2 [json_name = "structField"];
+  // .substrait.Expression.ReferenceSegment.StructField struct_field = 2;
   if (_internal_has_struct_field()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -19686,7 +21691,7 @@ uint8_t* Expression_ReferenceSegment::_InternalSerialize(
         2, _Internal::struct_field(this), target, stream);
   }
 
-  // .substrait.Expression.ReferenceSegment.ListElement list_element = 3 [json_name = "listElement"];
+  // .substrait.Expression.ReferenceSegment.ListElement list_element = 3;
   if (_internal_has_list_element()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -19711,21 +21716,21 @@ size_t Expression_ReferenceSegment::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (reference_type_case()) {
-    // .substrait.Expression.ReferenceSegment.MapKey map_key = 1 [json_name = "mapKey"];
+    // .substrait.Expression.ReferenceSegment.MapKey map_key = 1;
     case kMapKey: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *reference_type_.map_key_);
       break;
     }
-    // .substrait.Expression.ReferenceSegment.StructField struct_field = 2 [json_name = "structField"];
+    // .substrait.Expression.ReferenceSegment.StructField struct_field = 2;
     case kStructField: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *reference_type_.struct_field_);
       break;
     }
-    // .substrait.Expression.ReferenceSegment.ListElement list_element = 3 [json_name = "listElement"];
+    // .substrait.Expression.ReferenceSegment.ListElement list_element = 3;
     case kListElement: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -19799,7 +21804,7 @@ void Expression_ReferenceSegment::InternalSwap(Expression_ReferenceSegment* othe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[59]);
+      file_level_metadata_substrait_2falgebra_2eproto[66]);
 }
 
 // ===================================================================
@@ -19974,7 +21979,7 @@ const char* Expression_MaskExpression_Select::_InternalParse(const char* ptr, ::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.MaskExpression.StructSelect struct = 1 [json_name = "struct"];
+      // .substrait.Expression.MaskExpression.StructSelect struct = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_(), ptr);
@@ -19982,7 +21987,7 @@ const char* Expression_MaskExpression_Select::_InternalParse(const char* ptr, ::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.ListSelect list = 2 [json_name = "list"];
+      // .substrait.Expression.MaskExpression.ListSelect list = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_list(), ptr);
@@ -19990,7 +21995,7 @@ const char* Expression_MaskExpression_Select::_InternalParse(const char* ptr, ::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.MapSelect map = 3 [json_name = "map"];
+      // .substrait.Expression.MaskExpression.MapSelect map = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_map(), ptr);
@@ -20027,7 +22032,7 @@ uint8_t* Expression_MaskExpression_Select::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.StructSelect struct = 1 [json_name = "struct"];
+  // .substrait.Expression.MaskExpression.StructSelect struct = 1;
   if (_internal_has_struct_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -20035,7 +22040,7 @@ uint8_t* Expression_MaskExpression_Select::_InternalSerialize(
         1, _Internal::struct_(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression.ListSelect list = 2 [json_name = "list"];
+  // .substrait.Expression.MaskExpression.ListSelect list = 2;
   if (_internal_has_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -20043,7 +22048,7 @@ uint8_t* Expression_MaskExpression_Select::_InternalSerialize(
         2, _Internal::list(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression.MapSelect map = 3 [json_name = "map"];
+  // .substrait.Expression.MaskExpression.MapSelect map = 3;
   if (_internal_has_map()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -20068,21 +22073,21 @@ size_t Expression_MaskExpression_Select::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (type_case()) {
-    // .substrait.Expression.MaskExpression.StructSelect struct = 1 [json_name = "struct"];
+    // .substrait.Expression.MaskExpression.StructSelect struct = 1;
     case kStruct: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *type_.struct__);
       break;
     }
-    // .substrait.Expression.MaskExpression.ListSelect list = 2 [json_name = "list"];
+    // .substrait.Expression.MaskExpression.ListSelect list = 2;
     case kList: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *type_.list_);
       break;
     }
-    // .substrait.Expression.MaskExpression.MapSelect map = 3 [json_name = "map"];
+    // .substrait.Expression.MaskExpression.MapSelect map = 3;
     case kMap: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -20156,7 +22161,7 @@ void Expression_MaskExpression_Select::InternalSwap(Expression_MaskExpression_Se
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_Select::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[60]);
+      file_level_metadata_substrait_2falgebra_2eproto[67]);
 }
 
 // ===================================================================
@@ -20222,7 +22227,7 @@ const char* Expression_MaskExpression_StructSelect::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.MaskExpression.StructItem struct_items = 1 [json_name = "structItems"];
+      // repeated .substrait.Expression.MaskExpression.StructItem struct_items = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -20264,7 +22269,7 @@ uint8_t* Expression_MaskExpression_StructSelect::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.MaskExpression.StructItem struct_items = 1 [json_name = "structItems"];
+  // repeated .substrait.Expression.MaskExpression.StructItem struct_items = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_struct_items_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -20288,7 +22293,7 @@ size_t Expression_MaskExpression_StructSelect::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.MaskExpression.StructItem struct_items = 1 [json_name = "structItems"];
+  // repeated .substrait.Expression.MaskExpression.StructItem struct_items = 1;
   total_size += 1UL * this->_internal_struct_items_size();
   for (const auto& msg : this->struct_items_) {
     total_size +=
@@ -20341,7 +22346,7 @@ void Expression_MaskExpression_StructSelect::InternalSwap(Expression_MaskExpress
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_StructSelect::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[61]);
+      file_level_metadata_substrait_2falgebra_2eproto[68]);
 }
 
 // ===================================================================
@@ -20425,7 +22430,7 @@ const char* Expression_MaskExpression_StructItem::_InternalParse(const char* ptr
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 field = 1 [json_name = "field"];
+      // int32 field = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           field_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -20433,7 +22438,7 @@ const char* Expression_MaskExpression_StructItem::_InternalParse(const char* ptr
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.Select child = 2 [json_name = "child"];
+      // .substrait.Expression.MaskExpression.Select child = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_child(), ptr);
@@ -20470,13 +22475,13 @@ uint8_t* Expression_MaskExpression_StructItem::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 field = 1 [json_name = "field"];
+  // int32 field = 1;
   if (this->_internal_field() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_field(), target);
   }
 
-  // .substrait.Expression.MaskExpression.Select child = 2 [json_name = "child"];
+  // .substrait.Expression.MaskExpression.Select child = 2;
   if (this->_internal_has_child()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -20500,14 +22505,14 @@ size_t Expression_MaskExpression_StructItem::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.Select child = 2 [json_name = "child"];
+  // .substrait.Expression.MaskExpression.Select child = 2;
   if (this->_internal_has_child()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *child_);
   }
 
-  // int32 field = 1 [json_name = "field"];
+  // int32 field = 1;
   if (this->_internal_field() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_field());
   }
@@ -20568,7 +22573,7 @@ void Expression_MaskExpression_StructItem::InternalSwap(Expression_MaskExpressio
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_StructItem::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[62]);
+      file_level_metadata_substrait_2falgebra_2eproto[69]);
 }
 
 // ===================================================================
@@ -20634,7 +22639,7 @@ const char* Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::_In
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 field = 1 [json_name = "field"];
+      // int32 field = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           field_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -20671,7 +22676,7 @@ uint8_t* Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::_Inter
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 field = 1 [json_name = "field"];
+  // int32 field = 1;
   if (this->_internal_field() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_field(), target);
@@ -20693,7 +22698,7 @@ size_t Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::ByteSize
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int32 field = 1 [json_name = "field"];
+  // int32 field = 1;
   if (this->_internal_field() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_field());
   }
@@ -20746,7 +22751,7 @@ void Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::InternalSw
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[63]);
+      file_level_metadata_substrait_2falgebra_2eproto[70]);
 }
 
 // ===================================================================
@@ -20819,7 +22824,7 @@ const char* Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::_Inte
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int32 start = 1 [json_name = "start"];
+      // int32 start = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           start_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -20827,7 +22832,7 @@ const char* Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::_Inte
         } else
           goto handle_unusual;
         continue;
-      // int32 end = 2 [json_name = "end"];
+      // int32 end = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           end_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -20864,13 +22869,13 @@ uint8_t* Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::_Interna
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int32 start = 1 [json_name = "start"];
+  // int32 start = 1;
   if (this->_internal_start() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(1, this->_internal_start(), target);
   }
 
-  // int32 end = 2 [json_name = "end"];
+  // int32 end = 2;
   if (this->_internal_end() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_end(), target);
@@ -20892,12 +22897,12 @@ size_t Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::ByteSizeLo
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int32 start = 1 [json_name = "start"];
+  // int32 start = 1;
   if (this->_internal_start() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_start());
   }
 
-  // int32 end = 2 [json_name = "end"];
+  // int32 end = 2;
   if (this->_internal_end() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_end());
   }
@@ -20958,7 +22963,7 @@ void Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::InternalSwap
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[64]);
+      file_level_metadata_substrait_2falgebra_2eproto[71]);
 }
 
 // ===================================================================
@@ -21103,7 +23108,7 @@ const char* Expression_MaskExpression_ListSelect_ListSelectItem::_InternalParse(
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListElement item = 1 [json_name = "item"];
+      // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListElement item = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_item(), ptr);
@@ -21111,7 +23116,7 @@ const char* Expression_MaskExpression_ListSelect_ListSelectItem::_InternalParse(
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListSlice slice = 2 [json_name = "slice"];
+      // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListSlice slice = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_slice(), ptr);
@@ -21148,7 +23153,7 @@ uint8_t* Expression_MaskExpression_ListSelect_ListSelectItem::_InternalSerialize
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListElement item = 1 [json_name = "item"];
+  // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListElement item = 1;
   if (_internal_has_item()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -21156,7 +23161,7 @@ uint8_t* Expression_MaskExpression_ListSelect_ListSelectItem::_InternalSerialize
         1, _Internal::item(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListSlice slice = 2 [json_name = "slice"];
+  // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListSlice slice = 2;
   if (_internal_has_slice()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -21181,14 +23186,14 @@ size_t Expression_MaskExpression_ListSelect_ListSelectItem::ByteSizeLong() const
   (void) cached_has_bits;
 
   switch (type_case()) {
-    // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListElement item = 1 [json_name = "item"];
+    // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListElement item = 1;
     case kItem: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *type_.item_);
       break;
     }
-    // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListSlice slice = 2 [json_name = "slice"];
+    // .substrait.Expression.MaskExpression.ListSelect.ListSelectItem.ListSlice slice = 2;
     case kSlice: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -21258,7 +23263,7 @@ void Expression_MaskExpression_ListSelect_ListSelectItem::InternalSwap(Expressio
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect_ListSelectItem::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[65]);
+      file_level_metadata_substrait_2falgebra_2eproto[72]);
 }
 
 // ===================================================================
@@ -21340,7 +23345,7 @@ const char* Expression_MaskExpression_ListSelect::_InternalParse(const char* ptr
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression.MaskExpression.ListSelect.ListSelectItem selection = 1 [json_name = "selection"];
+      // repeated .substrait.Expression.MaskExpression.ListSelect.ListSelectItem selection = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -21353,7 +23358,7 @@ const char* Expression_MaskExpression_ListSelect::_InternalParse(const char* ptr
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.Select child = 2 [json_name = "child"];
+      // .substrait.Expression.MaskExpression.Select child = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_child(), ptr);
@@ -21390,7 +23395,7 @@ uint8_t* Expression_MaskExpression_ListSelect::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.MaskExpression.ListSelect.ListSelectItem selection = 1 [json_name = "selection"];
+  // repeated .substrait.Expression.MaskExpression.ListSelect.ListSelectItem selection = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_selection_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -21398,7 +23403,7 @@ uint8_t* Expression_MaskExpression_ListSelect::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_selection(i), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression.Select child = 2 [json_name = "child"];
+  // .substrait.Expression.MaskExpression.Select child = 2;
   if (this->_internal_has_child()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -21422,14 +23427,14 @@ size_t Expression_MaskExpression_ListSelect::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression.MaskExpression.ListSelect.ListSelectItem selection = 1 [json_name = "selection"];
+  // repeated .substrait.Expression.MaskExpression.ListSelect.ListSelectItem selection = 1;
   total_size += 1UL * this->_internal_selection_size();
   for (const auto& msg : this->selection_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Expression.MaskExpression.Select child = 2 [json_name = "child"];
+  // .substrait.Expression.MaskExpression.Select child = 2;
   if (this->_internal_has_child()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -21486,7 +23491,7 @@ void Expression_MaskExpression_ListSelect::InternalSwap(Expression_MaskExpressio
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[66]);
+      file_level_metadata_substrait_2falgebra_2eproto[73]);
 }
 
 // ===================================================================
@@ -21563,7 +23568,7 @@ const char* Expression_MaskExpression_MapSelect_MapKey::_InternalParse(const cha
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string map_key = 1 [json_name = "mapKey"];
+      // string map_key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_map_key();
@@ -21602,7 +23607,7 @@ uint8_t* Expression_MaskExpression_MapSelect_MapKey::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string map_key = 1 [json_name = "mapKey"];
+  // string map_key = 1;
   if (!this->_internal_map_key().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_map_key().data(), static_cast<int>(this->_internal_map_key().length()),
@@ -21628,7 +23633,7 @@ size_t Expression_MaskExpression_MapSelect_MapKey::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string map_key = 1 [json_name = "mapKey"];
+  // string map_key = 1;
   if (!this->_internal_map_key().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -21689,7 +23694,7 @@ void Expression_MaskExpression_MapSelect_MapKey::InternalSwap(Expression_MaskExp
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_MapSelect_MapKey::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[67]);
+      file_level_metadata_substrait_2falgebra_2eproto[74]);
 }
 
 // ===================================================================
@@ -21766,7 +23771,7 @@ const char* Expression_MaskExpression_MapSelect_MapKeyExpression::_InternalParse
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string map_key_expression = 1 [json_name = "mapKeyExpression"];
+      // string map_key_expression = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_map_key_expression();
@@ -21805,7 +23810,7 @@ uint8_t* Expression_MaskExpression_MapSelect_MapKeyExpression::_InternalSerializ
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string map_key_expression = 1 [json_name = "mapKeyExpression"];
+  // string map_key_expression = 1;
   if (!this->_internal_map_key_expression().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_map_key_expression().data(), static_cast<int>(this->_internal_map_key_expression().length()),
@@ -21831,7 +23836,7 @@ size_t Expression_MaskExpression_MapSelect_MapKeyExpression::ByteSizeLong() cons
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string map_key_expression = 1 [json_name = "mapKeyExpression"];
+  // string map_key_expression = 1;
   if (!this->_internal_map_key_expression().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -21892,7 +23897,7 @@ void Expression_MaskExpression_MapSelect_MapKeyExpression::InternalSwap(Expressi
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_MapSelect_MapKeyExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[68]);
+      file_level_metadata_substrait_2falgebra_2eproto[75]);
 }
 
 // ===================================================================
@@ -22053,7 +24058,7 @@ const char* Expression_MaskExpression_MapSelect::_InternalParse(const char* ptr,
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.MaskExpression.MapSelect.MapKey key = 1 [json_name = "key"];
+      // .substrait.Expression.MaskExpression.MapSelect.MapKey key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_key(), ptr);
@@ -22061,7 +24066,7 @@ const char* Expression_MaskExpression_MapSelect::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.MapSelect.MapKeyExpression expression = 2 [json_name = "expression"];
+      // .substrait.Expression.MaskExpression.MapSelect.MapKeyExpression expression = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_expression(), ptr);
@@ -22069,7 +24074,7 @@ const char* Expression_MaskExpression_MapSelect::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression.Select child = 3 [json_name = "child"];
+      // .substrait.Expression.MaskExpression.Select child = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_child(), ptr);
@@ -22106,7 +24111,7 @@ uint8_t* Expression_MaskExpression_MapSelect::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.MapSelect.MapKey key = 1 [json_name = "key"];
+  // .substrait.Expression.MaskExpression.MapSelect.MapKey key = 1;
   if (_internal_has_key()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -22114,7 +24119,7 @@ uint8_t* Expression_MaskExpression_MapSelect::_InternalSerialize(
         1, _Internal::key(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression.MapSelect.MapKeyExpression expression = 2 [json_name = "expression"];
+  // .substrait.Expression.MaskExpression.MapSelect.MapKeyExpression expression = 2;
   if (_internal_has_expression()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -22122,7 +24127,7 @@ uint8_t* Expression_MaskExpression_MapSelect::_InternalSerialize(
         2, _Internal::expression(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression.Select child = 3 [json_name = "child"];
+  // .substrait.Expression.MaskExpression.Select child = 3;
   if (this->_internal_has_child()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -22146,7 +24151,7 @@ size_t Expression_MaskExpression_MapSelect::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.Select child = 3 [json_name = "child"];
+  // .substrait.Expression.MaskExpression.Select child = 3;
   if (this->_internal_has_child()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -22154,14 +24159,14 @@ size_t Expression_MaskExpression_MapSelect::ByteSizeLong() const {
   }
 
   switch (select_case()) {
-    // .substrait.Expression.MaskExpression.MapSelect.MapKey key = 1 [json_name = "key"];
+    // .substrait.Expression.MaskExpression.MapSelect.MapKey key = 1;
     case kKey: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *select_.key_);
       break;
     }
-    // .substrait.Expression.MaskExpression.MapSelect.MapKeyExpression expression = 2 [json_name = "expression"];
+    // .substrait.Expression.MaskExpression.MapSelect.MapKeyExpression expression = 2;
     case kExpression: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -22235,7 +24240,7 @@ void Expression_MaskExpression_MapSelect::InternalSwap(Expression_MaskExpression
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_MapSelect::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[69]);
+      file_level_metadata_substrait_2falgebra_2eproto[76]);
 }
 
 // ===================================================================
@@ -22319,7 +24324,7 @@ const char* Expression_MaskExpression::_InternalParse(const char* ptr, ::PROTOBU
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.MaskExpression.StructSelect select = 1 [json_name = "select"];
+      // .substrait.Expression.MaskExpression.StructSelect select = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_select(), ptr);
@@ -22327,7 +24332,7 @@ const char* Expression_MaskExpression::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // bool maintain_singular_struct = 2 [json_name = "maintainSingularStruct"];
+      // bool maintain_singular_struct = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           maintain_singular_struct_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -22364,7 +24369,7 @@ uint8_t* Expression_MaskExpression::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.StructSelect select = 1 [json_name = "select"];
+  // .substrait.Expression.MaskExpression.StructSelect select = 1;
   if (this->_internal_has_select()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -22372,7 +24377,7 @@ uint8_t* Expression_MaskExpression::_InternalSerialize(
         1, _Internal::select(this), target, stream);
   }
 
-  // bool maintain_singular_struct = 2 [json_name = "maintainSingularStruct"];
+  // bool maintain_singular_struct = 2;
   if (this->_internal_maintain_singular_struct() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(2, this->_internal_maintain_singular_struct(), target);
@@ -22394,14 +24399,14 @@ size_t Expression_MaskExpression::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression.MaskExpression.StructSelect select = 1 [json_name = "select"];
+  // .substrait.Expression.MaskExpression.StructSelect select = 1;
   if (this->_internal_has_select()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *select_);
   }
 
-  // bool maintain_singular_struct = 2 [json_name = "maintainSingularStruct"];
+  // bool maintain_singular_struct = 2;
   if (this->_internal_maintain_singular_struct() != 0) {
     total_size += 1 + 1;
   }
@@ -22462,7 +24467,7 @@ void Expression_MaskExpression::InternalSwap(Expression_MaskExpression* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[70]);
+      file_level_metadata_substrait_2falgebra_2eproto[77]);
 }
 
 // ===================================================================
@@ -22501,7 +24506,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_FieldReference_Root
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_FieldReference_RootReference::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[71]);
+      file_level_metadata_substrait_2falgebra_2eproto[78]);
 }
 
 // ===================================================================
@@ -22567,7 +24572,7 @@ const char* Expression_FieldReference_OuterReference::_InternalParse(const char*
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 steps_out = 1 [json_name = "stepsOut"];
+      // uint32 steps_out = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           steps_out_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -22604,7 +24609,7 @@ uint8_t* Expression_FieldReference_OuterReference::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 steps_out = 1 [json_name = "stepsOut"];
+  // uint32 steps_out = 1;
   if (this->_internal_steps_out() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_steps_out(), target);
@@ -22626,7 +24631,7 @@ size_t Expression_FieldReference_OuterReference::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // uint32 steps_out = 1 [json_name = "stepsOut"];
+  // uint32 steps_out = 1;
   if (this->_internal_steps_out() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_steps_out());
   }
@@ -22679,7 +24684,7 @@ void Expression_FieldReference_OuterReference::InternalSwap(Expression_FieldRefe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_FieldReference_OuterReference::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[72]);
+      file_level_metadata_substrait_2falgebra_2eproto[79]);
 }
 
 // ===================================================================
@@ -22935,7 +24940,7 @@ const char* Expression_FieldReference::_InternalParse(const char* ptr, ::PROTOBU
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.ReferenceSegment direct_reference = 1 [json_name = "directReference"];
+      // .substrait.Expression.ReferenceSegment direct_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_direct_reference(), ptr);
@@ -22943,7 +24948,7 @@ const char* Expression_FieldReference::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MaskExpression masked_reference = 2 [json_name = "maskedReference"];
+      // .substrait.Expression.MaskExpression masked_reference = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_masked_reference(), ptr);
@@ -22951,7 +24956,7 @@ const char* Expression_FieldReference::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression expression = 3 [json_name = "expression"];
+      // .substrait.Expression expression = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_expression(), ptr);
@@ -22959,7 +24964,7 @@ const char* Expression_FieldReference::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.FieldReference.RootReference root_reference = 4 [json_name = "rootReference"];
+      // .substrait.Expression.FieldReference.RootReference root_reference = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_root_reference(), ptr);
@@ -22967,7 +24972,7 @@ const char* Expression_FieldReference::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.FieldReference.OuterReference outer_reference = 5 [json_name = "outerReference"];
+      // .substrait.Expression.FieldReference.OuterReference outer_reference = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_outer_reference(), ptr);
@@ -23004,7 +25009,7 @@ uint8_t* Expression_FieldReference::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.ReferenceSegment direct_reference = 1 [json_name = "directReference"];
+  // .substrait.Expression.ReferenceSegment direct_reference = 1;
   if (_internal_has_direct_reference()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23012,7 +25017,7 @@ uint8_t* Expression_FieldReference::_InternalSerialize(
         1, _Internal::direct_reference(this), target, stream);
   }
 
-  // .substrait.Expression.MaskExpression masked_reference = 2 [json_name = "maskedReference"];
+  // .substrait.Expression.MaskExpression masked_reference = 2;
   if (_internal_has_masked_reference()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23020,7 +25025,7 @@ uint8_t* Expression_FieldReference::_InternalSerialize(
         2, _Internal::masked_reference(this), target, stream);
   }
 
-  // .substrait.Expression expression = 3 [json_name = "expression"];
+  // .substrait.Expression expression = 3;
   if (_internal_has_expression()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23028,7 +25033,7 @@ uint8_t* Expression_FieldReference::_InternalSerialize(
         3, _Internal::expression(this), target, stream);
   }
 
-  // .substrait.Expression.FieldReference.RootReference root_reference = 4 [json_name = "rootReference"];
+  // .substrait.Expression.FieldReference.RootReference root_reference = 4;
   if (_internal_has_root_reference()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23036,7 +25041,7 @@ uint8_t* Expression_FieldReference::_InternalSerialize(
         4, _Internal::root_reference(this), target, stream);
   }
 
-  // .substrait.Expression.FieldReference.OuterReference outer_reference = 5 [json_name = "outerReference"];
+  // .substrait.Expression.FieldReference.OuterReference outer_reference = 5;
   if (_internal_has_outer_reference()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23061,14 +25066,14 @@ size_t Expression_FieldReference::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (reference_type_case()) {
-    // .substrait.Expression.ReferenceSegment direct_reference = 1 [json_name = "directReference"];
+    // .substrait.Expression.ReferenceSegment direct_reference = 1;
     case kDirectReference: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *reference_type_.direct_reference_);
       break;
     }
-    // .substrait.Expression.MaskExpression masked_reference = 2 [json_name = "maskedReference"];
+    // .substrait.Expression.MaskExpression masked_reference = 2;
     case kMaskedReference: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -23080,21 +25085,21 @@ size_t Expression_FieldReference::ByteSizeLong() const {
     }
   }
   switch (root_type_case()) {
-    // .substrait.Expression expression = 3 [json_name = "expression"];
+    // .substrait.Expression expression = 3;
     case kExpression: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *root_type_.expression_);
       break;
     }
-    // .substrait.Expression.FieldReference.RootReference root_reference = 4 [json_name = "rootReference"];
+    // .substrait.Expression.FieldReference.RootReference root_reference = 4;
     case kRootReference: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *root_type_.root_reference_);
       break;
     }
-    // .substrait.Expression.FieldReference.OuterReference outer_reference = 5 [json_name = "outerReference"];
+    // .substrait.Expression.FieldReference.OuterReference outer_reference = 5;
     case kOuterReference: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -23183,7 +25188,7 @@ void Expression_FieldReference::InternalSwap(Expression_FieldReference* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_FieldReference::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[73]);
+      file_level_metadata_substrait_2falgebra_2eproto[80]);
 }
 
 // ===================================================================
@@ -23262,7 +25267,7 @@ const char* Expression_Subquery_Scalar::_InternalParse(const char* ptr, ::PROTOB
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Rel input = 1 [json_name = "input"];
+      // .substrait.Rel input = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
@@ -23299,7 +25304,7 @@ uint8_t* Expression_Subquery_Scalar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Rel input = 1 [json_name = "input"];
+  // .substrait.Rel input = 1;
   if (this->_internal_has_input()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23323,7 +25328,7 @@ size_t Expression_Subquery_Scalar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Rel input = 1 [json_name = "input"];
+  // .substrait.Rel input = 1;
   if (this->_internal_has_input()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -23378,7 +25383,7 @@ void Expression_Subquery_Scalar::InternalSwap(Expression_Subquery_Scalar* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_Scalar::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[74]);
+      file_level_metadata_substrait_2falgebra_2eproto[81]);
 }
 
 // ===================================================================
@@ -23460,7 +25465,7 @@ const char* Expression_Subquery_InPredicate::_InternalParse(const char* ptr, ::P
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.Expression needles = 1 [json_name = "needles"];
+      // repeated .substrait.Expression needles = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -23473,7 +25478,7 @@ const char* Expression_Subquery_InPredicate::_InternalParse(const char* ptr, ::P
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel haystack = 2 [json_name = "haystack"];
+      // .substrait.Rel haystack = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_haystack(), ptr);
@@ -23510,7 +25515,7 @@ uint8_t* Expression_Subquery_InPredicate::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression needles = 1 [json_name = "needles"];
+  // repeated .substrait.Expression needles = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_needles_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -23518,7 +25523,7 @@ uint8_t* Expression_Subquery_InPredicate::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_needles(i), target, stream);
   }
 
-  // .substrait.Rel haystack = 2 [json_name = "haystack"];
+  // .substrait.Rel haystack = 2;
   if (this->_internal_has_haystack()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23542,14 +25547,14 @@ size_t Expression_Subquery_InPredicate::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression needles = 1 [json_name = "needles"];
+  // repeated .substrait.Expression needles = 1;
   total_size += 1UL * this->_internal_needles_size();
   for (const auto& msg : this->needles_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Rel haystack = 2 [json_name = "haystack"];
+  // .substrait.Rel haystack = 2;
   if (this->_internal_has_haystack()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -23606,7 +25611,7 @@ void Expression_Subquery_InPredicate::InternalSwap(Expression_Subquery_InPredica
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_InPredicate::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[75]);
+      file_level_metadata_substrait_2falgebra_2eproto[82]);
 }
 
 // ===================================================================
@@ -23690,7 +25695,7 @@ const char* Expression_Subquery_SetPredicate::_InternalParse(const char* ptr, ::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Subquery.SetPredicate.PredicateOp predicate_op = 1 [json_name = "predicateOp"];
+      // .substrait.Expression.Subquery.SetPredicate.PredicateOp predicate_op = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -23699,7 +25704,7 @@ const char* Expression_Subquery_SetPredicate::_InternalParse(const char* ptr, ::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel tuples = 2 [json_name = "tuples"];
+      // .substrait.Rel tuples = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_tuples(), ptr);
@@ -23736,14 +25741,14 @@ uint8_t* Expression_Subquery_SetPredicate::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Subquery.SetPredicate.PredicateOp predicate_op = 1 [json_name = "predicateOp"];
+  // .substrait.Expression.Subquery.SetPredicate.PredicateOp predicate_op = 1;
   if (this->_internal_predicate_op() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       1, this->_internal_predicate_op(), target);
   }
 
-  // .substrait.Rel tuples = 2 [json_name = "tuples"];
+  // .substrait.Rel tuples = 2;
   if (this->_internal_has_tuples()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -23767,14 +25772,14 @@ size_t Expression_Subquery_SetPredicate::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Rel tuples = 2 [json_name = "tuples"];
+  // .substrait.Rel tuples = 2;
   if (this->_internal_has_tuples()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *tuples_);
   }
 
-  // .substrait.Expression.Subquery.SetPredicate.PredicateOp predicate_op = 1 [json_name = "predicateOp"];
+  // .substrait.Expression.Subquery.SetPredicate.PredicateOp predicate_op = 1;
   if (this->_internal_predicate_op() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_predicate_op());
@@ -23836,7 +25841,7 @@ void Expression_Subquery_SetPredicate::InternalSwap(Expression_Subquery_SetPredi
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_SetPredicate::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[76]);
+      file_level_metadata_substrait_2falgebra_2eproto[83]);
 }
 
 // ===================================================================
@@ -23939,7 +25944,7 @@ const char* Expression_Subquery_SetComparison::_InternalParse(const char* ptr, :
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Subquery.SetComparison.ReductionOp reduction_op = 1 [json_name = "reductionOp"];
+      // .substrait.Expression.Subquery.SetComparison.ReductionOp reduction_op = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -23948,7 +25953,7 @@ const char* Expression_Subquery_SetComparison::_InternalParse(const char* ptr, :
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Subquery.SetComparison.ComparisonOp comparison_op = 2 [json_name = "comparisonOp"];
+      // .substrait.Expression.Subquery.SetComparison.ComparisonOp comparison_op = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -23957,7 +25962,7 @@ const char* Expression_Subquery_SetComparison::_InternalParse(const char* ptr, :
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression left = 3 [json_name = "left"];
+      // .substrait.Expression left = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_left(), ptr);
@@ -23965,7 +25970,7 @@ const char* Expression_Subquery_SetComparison::_InternalParse(const char* ptr, :
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Rel right = 4 [json_name = "right"];
+      // .substrait.Rel right = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_right(), ptr);
@@ -24002,21 +26007,21 @@ uint8_t* Expression_Subquery_SetComparison::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Subquery.SetComparison.ReductionOp reduction_op = 1 [json_name = "reductionOp"];
+  // .substrait.Expression.Subquery.SetComparison.ReductionOp reduction_op = 1;
   if (this->_internal_reduction_op() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       1, this->_internal_reduction_op(), target);
   }
 
-  // .substrait.Expression.Subquery.SetComparison.ComparisonOp comparison_op = 2 [json_name = "comparisonOp"];
+  // .substrait.Expression.Subquery.SetComparison.ComparisonOp comparison_op = 2;
   if (this->_internal_comparison_op() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       2, this->_internal_comparison_op(), target);
   }
 
-  // .substrait.Expression left = 3 [json_name = "left"];
+  // .substrait.Expression left = 3;
   if (this->_internal_has_left()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -24024,7 +26029,7 @@ uint8_t* Expression_Subquery_SetComparison::_InternalSerialize(
         3, _Internal::left(this), target, stream);
   }
 
-  // .substrait.Rel right = 4 [json_name = "right"];
+  // .substrait.Rel right = 4;
   if (this->_internal_has_right()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -24048,27 +26053,27 @@ size_t Expression_Subquery_SetComparison::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression left = 3 [json_name = "left"];
+  // .substrait.Expression left = 3;
   if (this->_internal_has_left()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *left_);
   }
 
-  // .substrait.Rel right = 4 [json_name = "right"];
+  // .substrait.Rel right = 4;
   if (this->_internal_has_right()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *right_);
   }
 
-  // .substrait.Expression.Subquery.SetComparison.ReductionOp reduction_op = 1 [json_name = "reductionOp"];
+  // .substrait.Expression.Subquery.SetComparison.ReductionOp reduction_op = 1;
   if (this->_internal_reduction_op() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_reduction_op());
   }
 
-  // .substrait.Expression.Subquery.SetComparison.ComparisonOp comparison_op = 2 [json_name = "comparisonOp"];
+  // .substrait.Expression.Subquery.SetComparison.ComparisonOp comparison_op = 2;
   if (this->_internal_comparison_op() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_comparison_op());
@@ -24136,7 +26141,7 @@ void Expression_Subquery_SetComparison::InternalSwap(Expression_Subquery_SetComp
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_SetComparison::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[77]);
+      file_level_metadata_substrait_2falgebra_2eproto[84]);
 }
 
 // ===================================================================
@@ -24341,7 +26346,7 @@ const char* Expression_Subquery::_InternalParse(const char* ptr, ::PROTOBUF_NAME
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Subquery.Scalar scalar = 1 [json_name = "scalar"];
+      // .substrait.Expression.Subquery.Scalar scalar = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_scalar(), ptr);
@@ -24349,7 +26354,7 @@ const char* Expression_Subquery::_InternalParse(const char* ptr, ::PROTOBUF_NAME
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Subquery.InPredicate in_predicate = 2 [json_name = "inPredicate"];
+      // .substrait.Expression.Subquery.InPredicate in_predicate = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_in_predicate(), ptr);
@@ -24357,7 +26362,7 @@ const char* Expression_Subquery::_InternalParse(const char* ptr, ::PROTOBUF_NAME
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Subquery.SetPredicate set_predicate = 3 [json_name = "setPredicate"];
+      // .substrait.Expression.Subquery.SetPredicate set_predicate = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_set_predicate(), ptr);
@@ -24365,7 +26370,7 @@ const char* Expression_Subquery::_InternalParse(const char* ptr, ::PROTOBUF_NAME
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Subquery.SetComparison set_comparison = 4 [json_name = "setComparison"];
+      // .substrait.Expression.Subquery.SetComparison set_comparison = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_set_comparison(), ptr);
@@ -24402,7 +26407,7 @@ uint8_t* Expression_Subquery::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Subquery.Scalar scalar = 1 [json_name = "scalar"];
+  // .substrait.Expression.Subquery.Scalar scalar = 1;
   if (_internal_has_scalar()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -24410,7 +26415,7 @@ uint8_t* Expression_Subquery::_InternalSerialize(
         1, _Internal::scalar(this), target, stream);
   }
 
-  // .substrait.Expression.Subquery.InPredicate in_predicate = 2 [json_name = "inPredicate"];
+  // .substrait.Expression.Subquery.InPredicate in_predicate = 2;
   if (_internal_has_in_predicate()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -24418,7 +26423,7 @@ uint8_t* Expression_Subquery::_InternalSerialize(
         2, _Internal::in_predicate(this), target, stream);
   }
 
-  // .substrait.Expression.Subquery.SetPredicate set_predicate = 3 [json_name = "setPredicate"];
+  // .substrait.Expression.Subquery.SetPredicate set_predicate = 3;
   if (_internal_has_set_predicate()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -24426,7 +26431,7 @@ uint8_t* Expression_Subquery::_InternalSerialize(
         3, _Internal::set_predicate(this), target, stream);
   }
 
-  // .substrait.Expression.Subquery.SetComparison set_comparison = 4 [json_name = "setComparison"];
+  // .substrait.Expression.Subquery.SetComparison set_comparison = 4;
   if (_internal_has_set_comparison()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -24451,28 +26456,28 @@ size_t Expression_Subquery::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (subquery_type_case()) {
-    // .substrait.Expression.Subquery.Scalar scalar = 1 [json_name = "scalar"];
+    // .substrait.Expression.Subquery.Scalar scalar = 1;
     case kScalar: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *subquery_type_.scalar_);
       break;
     }
-    // .substrait.Expression.Subquery.InPredicate in_predicate = 2 [json_name = "inPredicate"];
+    // .substrait.Expression.Subquery.InPredicate in_predicate = 2;
     case kInPredicate: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *subquery_type_.in_predicate_);
       break;
     }
-    // .substrait.Expression.Subquery.SetPredicate set_predicate = 3 [json_name = "setPredicate"];
+    // .substrait.Expression.Subquery.SetPredicate set_predicate = 3;
     case kSetPredicate: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *subquery_type_.set_predicate_);
       break;
     }
-    // .substrait.Expression.Subquery.SetComparison set_comparison = 4 [json_name = "setComparison"];
+    // .substrait.Expression.Subquery.SetComparison set_comparison = 4;
     case kSetComparison: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -24550,7 +26555,7 @@ void Expression_Subquery::InternalSwap(Expression_Subquery* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[78]);
+      file_level_metadata_substrait_2falgebra_2eproto[85]);
 }
 
 // ===================================================================
@@ -24965,7 +26970,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression.Literal literal = 1 [json_name = "literal"];
+      // .substrait.Expression.Literal literal = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_literal(), ptr);
@@ -24973,7 +26978,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.FieldReference selection = 2 [json_name = "selection"];
+      // .substrait.Expression.FieldReference selection = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_selection(), ptr);
@@ -24981,7 +26986,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.ScalarFunction scalar_function = 3 [json_name = "scalarFunction"];
+      // .substrait.Expression.ScalarFunction scalar_function = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_scalar_function(), ptr);
@@ -24989,7 +26994,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.WindowFunction window_function = 5 [json_name = "windowFunction"];
+      // .substrait.Expression.WindowFunction window_function = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_window_function(), ptr);
@@ -24997,7 +27002,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.IfThen if_then = 6 [json_name = "ifThen"];
+      // .substrait.Expression.IfThen if_then = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
           ptr = ctx->ParseMessage(_internal_mutable_if_then(), ptr);
@@ -25005,7 +27010,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.SwitchExpression switch_expression = 7 [json_name = "switchExpression"];
+      // .substrait.Expression.SwitchExpression switch_expression = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_switch_expression(), ptr);
@@ -25013,7 +27018,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.SingularOrList singular_or_list = 8 [json_name = "singularOrList"];
+      // .substrait.Expression.SingularOrList singular_or_list = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
           ptr = ctx->ParseMessage(_internal_mutable_singular_or_list(), ptr);
@@ -25021,7 +27026,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.MultiOrList multi_or_list = 9 [json_name = "multiOrList"];
+      // .substrait.Expression.MultiOrList multi_or_list = 9;
       case 9:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
           ptr = ctx->ParseMessage(_internal_mutable_multi_or_list(), ptr);
@@ -25029,7 +27034,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Enum enum = 10 [json_name = "enum"];
+      // .substrait.Expression.Enum enum = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_enum_(), ptr);
@@ -25037,7 +27042,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Cast cast = 11 [json_name = "cast"];
+      // .substrait.Expression.Cast cast = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
           ptr = ctx->ParseMessage(_internal_mutable_cast(), ptr);
@@ -25045,7 +27050,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Subquery subquery = 12 [json_name = "subquery"];
+      // .substrait.Expression.Subquery subquery = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
           ptr = ctx->ParseMessage(_internal_mutable_subquery(), ptr);
@@ -25082,7 +27087,7 @@ uint8_t* Expression::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression.Literal literal = 1 [json_name = "literal"];
+  // .substrait.Expression.Literal literal = 1;
   if (_internal_has_literal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25090,7 +27095,7 @@ uint8_t* Expression::_InternalSerialize(
         1, _Internal::literal(this), target, stream);
   }
 
-  // .substrait.Expression.FieldReference selection = 2 [json_name = "selection"];
+  // .substrait.Expression.FieldReference selection = 2;
   if (_internal_has_selection()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25098,7 +27103,7 @@ uint8_t* Expression::_InternalSerialize(
         2, _Internal::selection(this), target, stream);
   }
 
-  // .substrait.Expression.ScalarFunction scalar_function = 3 [json_name = "scalarFunction"];
+  // .substrait.Expression.ScalarFunction scalar_function = 3;
   if (_internal_has_scalar_function()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25106,7 +27111,7 @@ uint8_t* Expression::_InternalSerialize(
         3, _Internal::scalar_function(this), target, stream);
   }
 
-  // .substrait.Expression.WindowFunction window_function = 5 [json_name = "windowFunction"];
+  // .substrait.Expression.WindowFunction window_function = 5;
   if (_internal_has_window_function()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25114,7 +27119,7 @@ uint8_t* Expression::_InternalSerialize(
         5, _Internal::window_function(this), target, stream);
   }
 
-  // .substrait.Expression.IfThen if_then = 6 [json_name = "ifThen"];
+  // .substrait.Expression.IfThen if_then = 6;
   if (_internal_has_if_then()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25122,7 +27127,7 @@ uint8_t* Expression::_InternalSerialize(
         6, _Internal::if_then(this), target, stream);
   }
 
-  // .substrait.Expression.SwitchExpression switch_expression = 7 [json_name = "switchExpression"];
+  // .substrait.Expression.SwitchExpression switch_expression = 7;
   if (_internal_has_switch_expression()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25130,7 +27135,7 @@ uint8_t* Expression::_InternalSerialize(
         7, _Internal::switch_expression(this), target, stream);
   }
 
-  // .substrait.Expression.SingularOrList singular_or_list = 8 [json_name = "singularOrList"];
+  // .substrait.Expression.SingularOrList singular_or_list = 8;
   if (_internal_has_singular_or_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25138,7 +27143,7 @@ uint8_t* Expression::_InternalSerialize(
         8, _Internal::singular_or_list(this), target, stream);
   }
 
-  // .substrait.Expression.MultiOrList multi_or_list = 9 [json_name = "multiOrList"];
+  // .substrait.Expression.MultiOrList multi_or_list = 9;
   if (_internal_has_multi_or_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25146,7 +27151,7 @@ uint8_t* Expression::_InternalSerialize(
         9, _Internal::multi_or_list(this), target, stream);
   }
 
-  // .substrait.Expression.Enum enum = 10 [json_name = "enum"];
+  // .substrait.Expression.Enum enum = 10;
   if (_internal_has_enum_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25154,7 +27159,7 @@ uint8_t* Expression::_InternalSerialize(
         10, _Internal::enum_(this), target, stream);
   }
 
-  // .substrait.Expression.Cast cast = 11 [json_name = "cast"];
+  // .substrait.Expression.Cast cast = 11;
   if (_internal_has_cast()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25162,7 +27167,7 @@ uint8_t* Expression::_InternalSerialize(
         11, _Internal::cast(this), target, stream);
   }
 
-  // .substrait.Expression.Subquery subquery = 12 [json_name = "subquery"];
+  // .substrait.Expression.Subquery subquery = 12;
   if (_internal_has_subquery()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25187,77 +27192,77 @@ size_t Expression::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (rex_type_case()) {
-    // .substrait.Expression.Literal literal = 1 [json_name = "literal"];
+    // .substrait.Expression.Literal literal = 1;
     case kLiteral: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.literal_);
       break;
     }
-    // .substrait.Expression.FieldReference selection = 2 [json_name = "selection"];
+    // .substrait.Expression.FieldReference selection = 2;
     case kSelection: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.selection_);
       break;
     }
-    // .substrait.Expression.ScalarFunction scalar_function = 3 [json_name = "scalarFunction"];
+    // .substrait.Expression.ScalarFunction scalar_function = 3;
     case kScalarFunction: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.scalar_function_);
       break;
     }
-    // .substrait.Expression.WindowFunction window_function = 5 [json_name = "windowFunction"];
+    // .substrait.Expression.WindowFunction window_function = 5;
     case kWindowFunction: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.window_function_);
       break;
     }
-    // .substrait.Expression.IfThen if_then = 6 [json_name = "ifThen"];
+    // .substrait.Expression.IfThen if_then = 6;
     case kIfThen: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.if_then_);
       break;
     }
-    // .substrait.Expression.SwitchExpression switch_expression = 7 [json_name = "switchExpression"];
+    // .substrait.Expression.SwitchExpression switch_expression = 7;
     case kSwitchExpression: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.switch_expression_);
       break;
     }
-    // .substrait.Expression.SingularOrList singular_or_list = 8 [json_name = "singularOrList"];
+    // .substrait.Expression.SingularOrList singular_or_list = 8;
     case kSingularOrList: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.singular_or_list_);
       break;
     }
-    // .substrait.Expression.MultiOrList multi_or_list = 9 [json_name = "multiOrList"];
+    // .substrait.Expression.MultiOrList multi_or_list = 9;
     case kMultiOrList: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.multi_or_list_);
       break;
     }
-    // .substrait.Expression.Enum enum = 10 [json_name = "enum"];
+    // .substrait.Expression.Enum enum = 10;
     case kEnum: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.enum__);
       break;
     }
-    // .substrait.Expression.Cast cast = 11 [json_name = "cast"];
+    // .substrait.Expression.Cast cast = 11;
     case kCast: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.cast_);
       break;
     }
-    // .substrait.Expression.Subquery subquery = 12 [json_name = "subquery"];
+    // .substrait.Expression.Subquery subquery = 12;
     case kSubquery: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -25363,7 +27368,7 @@ void Expression::InternalSwap(Expression* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[79]);
+      file_level_metadata_substrait_2falgebra_2eproto[86]);
 }
 
 // ===================================================================
@@ -25480,7 +27485,7 @@ const char* SortField::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Expression expr = 1 [json_name = "expr"];
+      // .substrait.Expression expr = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_expr(), ptr);
@@ -25488,7 +27493,7 @@ const char* SortField::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // .substrait.SortField.SortDirection direction = 2 [json_name = "direction"];
+      // .substrait.SortField.SortDirection direction = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -25497,7 +27502,7 @@ const char* SortField::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::
         } else
           goto handle_unusual;
         continue;
-      // uint32 comparison_function_reference = 3 [json_name = "comparisonFunctionReference"];
+      // uint32 comparison_function_reference = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           _internal_set_comparison_function_reference(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -25534,7 +27539,7 @@ uint8_t* SortField::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Expression expr = 1 [json_name = "expr"];
+  // .substrait.Expression expr = 1;
   if (this->_internal_has_expr()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25542,14 +27547,14 @@ uint8_t* SortField::_InternalSerialize(
         1, _Internal::expr(this), target, stream);
   }
 
-  // .substrait.SortField.SortDirection direction = 2 [json_name = "direction"];
+  // .substrait.SortField.SortDirection direction = 2;
   if (_internal_has_direction()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       2, this->_internal_direction(), target);
   }
 
-  // uint32 comparison_function_reference = 3 [json_name = "comparisonFunctionReference"];
+  // uint32 comparison_function_reference = 3;
   if (_internal_has_comparison_function_reference()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_comparison_function_reference(), target);
@@ -25571,7 +27576,7 @@ size_t SortField::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.Expression expr = 1 [json_name = "expr"];
+  // .substrait.Expression expr = 1;
   if (this->_internal_has_expr()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -25579,13 +27584,13 @@ size_t SortField::ByteSizeLong() const {
   }
 
   switch (sort_kind_case()) {
-    // .substrait.SortField.SortDirection direction = 2 [json_name = "direction"];
+    // .substrait.SortField.SortDirection direction = 2;
     case kDirection: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_direction());
       break;
     }
-    // uint32 comparison_function_reference = 3 [json_name = "comparisonFunctionReference"];
+    // uint32 comparison_function_reference = 3;
     case kComparisonFunctionReference: {
       total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_comparison_function_reference());
       break;
@@ -25657,7 +27662,7 @@ void SortField::InternalSwap(SortField* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata SortField::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[80]);
+      file_level_metadata_substrait_2falgebra_2eproto[87]);
 }
 
 // ===================================================================
@@ -25757,7 +27762,7 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // uint32 function_reference = 1 [json_name = "functionReference"];
+      // uint32 function_reference = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           function_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -25765,7 +27770,7 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression args = 2 [json_name = "args"];
+      // repeated .substrait.Expression args = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -25778,7 +27783,7 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+      // repeated .substrait.SortField sorts = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -25791,7 +27796,7 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.AggregationPhase phase = 4 [json_name = "phase"];
+      // .substrait.AggregationPhase phase = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -25800,7 +27805,7 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type output_type = 5 [json_name = "outputType"];
+      // .substrait.Type output_type = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -25837,13 +27842,13 @@ uint8_t* AggregateFunction::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // uint32 function_reference = 1 [json_name = "functionReference"];
+  // uint32 function_reference = 1;
   if (this->_internal_function_reference() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_function_reference(), target);
   }
 
-  // repeated .substrait.Expression args = 2 [json_name = "args"];
+  // repeated .substrait.Expression args = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_args_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -25851,7 +27856,7 @@ uint8_t* AggregateFunction::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_args(i), target, stream);
   }
 
-  // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+  // repeated .substrait.SortField sorts = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_sorts_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -25859,14 +27864,14 @@ uint8_t* AggregateFunction::_InternalSerialize(
       InternalWriteMessage(3, this->_internal_sorts(i), target, stream);
   }
 
-  // .substrait.AggregationPhase phase = 4 [json_name = "phase"];
+  // .substrait.AggregationPhase phase = 4;
   if (this->_internal_phase() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       4, this->_internal_phase(), target);
   }
 
-  // .substrait.Type output_type = 5 [json_name = "outputType"];
+  // .substrait.Type output_type = 5;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -25890,33 +27895,33 @@ size_t AggregateFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression args = 2 [json_name = "args"];
+  // repeated .substrait.Expression args = 2;
   total_size += 1UL * this->_internal_args_size();
   for (const auto& msg : this->args_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.SortField sorts = 3 [json_name = "sorts"];
+  // repeated .substrait.SortField sorts = 3;
   total_size += 1UL * this->_internal_sorts_size();
   for (const auto& msg : this->sorts_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.Type output_type = 5 [json_name = "outputType"];
+  // .substrait.Type output_type = 5;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *output_type_);
   }
 
-  // uint32 function_reference = 1 [json_name = "functionReference"];
+  // uint32 function_reference = 1;
   if (this->_internal_function_reference() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_function_reference());
   }
 
-  // .substrait.AggregationPhase phase = 4 [json_name = "phase"];
+  // .substrait.AggregationPhase phase = 4;
   if (this->_internal_phase() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_phase());
@@ -25985,7 +27990,7 @@ void AggregateFunction::InternalSwap(AggregateFunction* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata AggregateFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[81]);
+      file_level_metadata_substrait_2falgebra_2eproto[88]);
 }
 
 // @@protoc_insertion_point(namespace_scope)
@@ -26065,6 +28070,27 @@ template<> PROTOBUF_NOINLINE ::substrait::ExtensionLeafRel* Arena::CreateMaybeMe
 }
 template<> PROTOBUF_NOINLINE ::substrait::ExtensionMultiRel* Arena::CreateMaybeMessage< ::substrait::ExtensionMultiRel >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::ExtensionMultiRel >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel_ScatterFields* Arena::CreateMaybeMessage< ::substrait::ExchangeRel_ScatterFields >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel_ScatterFields >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel_SingleBucketExpression* Arena::CreateMaybeMessage< ::substrait::ExchangeRel_SingleBucketExpression >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel_SingleBucketExpression >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel_MultiBucketExpression* Arena::CreateMaybeMessage< ::substrait::ExchangeRel_MultiBucketExpression >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel_MultiBucketExpression >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel_Broadcast* Arena::CreateMaybeMessage< ::substrait::ExchangeRel_Broadcast >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel_Broadcast >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel_RoundRobin* Arena::CreateMaybeMessage< ::substrait::ExchangeRel_RoundRobin >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel_RoundRobin >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel_ExchangeTarget* Arena::CreateMaybeMessage< ::substrait::ExchangeRel_ExchangeTarget >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel_ExchangeTarget >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ExchangeRel* Arena::CreateMaybeMessage< ::substrait::ExchangeRel >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ExchangeRel >(arena);
 }
 template<> PROTOBUF_NOINLINE ::substrait::RelRoot* Arena::CreateMaybeMessage< ::substrait::RelRoot >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::RelRoot >(arena);
