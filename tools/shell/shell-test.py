@@ -541,6 +541,32 @@ select 42;
 
 test('/* ;;;;;; */ select 42;', out='42')
 
+
+# sqlite udfs
+test('''
+SELECT writefile();
+''', err='wrong number of arguments to function writefile')
+
+test('''
+SELECT writefile('hello');
+''', err='wrong number of arguments to function writefile')
+
+test('''
+SELECT writefile('duckdbtest_writefile', 'hello');
+''')
+test_writefile = 'duckdbtest_writefile'
+if not os.path.exists(test_writefile):
+     raise Exception(f"Failed to write file {test_writefile}");
+with open(test_writefile, 'r') as f:
+     text = f.read()
+if text != 'hello':
+     raise Exception("Incorrect contents for test writefile")
+os.remove(test_writefile)
+
+test('''
+SELECT lsmode(1) AS lsmode;
+''', out='lsmode')
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from
