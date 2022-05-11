@@ -91,6 +91,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
+	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
+	         py::arg("config") = py::dict(), py::arg("check_same_thread") = true)
+	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -683,6 +686,18 @@ DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
 	}
 	return default_connection.get();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
+                                                         bool read_only, const py::dict &config,
+                                                         bool check_same_thread) {
+	return self.Connect(database, read_only, config, check_same_thread);
+}
+
+bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+                              const py::object &traceback) {
+	self.Close();
+	return true;
 }
 
 void DuckDBPyConnection::Cleanup() {

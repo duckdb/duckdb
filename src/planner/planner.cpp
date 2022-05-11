@@ -33,19 +33,17 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto bound_statement = binder->Bind(statement);
 	profiler.EndPhase();
 
-	this->read_only = binder->read_only;
-	this->requires_valid_transaction = binder->requires_valid_transaction;
-	this->allow_stream_result = binder->allow_stream_result;
+	this->properties = binder->properties;
 	this->names = bound_statement.names;
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
-	this->bound_all_parameters = true;
+	properties.bound_all_parameters = true;
 
 	// set up a map of parameter number -> value entries
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
 		if (expr->return_type.id() == LogicalTypeId::INVALID || expr->return_type.id() == LogicalTypeId::UNKNOWN) {
-			this->bound_all_parameters = false;
+			properties.bound_all_parameters = false;
 			continue;
 		}
 		auto value = make_unique<Value>(expr->return_type);
@@ -73,11 +71,8 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	prepared_data->names = names;
 	prepared_data->types = types;
 	prepared_data->value_map = move(value_map);
-	prepared_data->read_only = this->read_only;
-	prepared_data->requires_valid_transaction = this->requires_valid_transaction;
-	prepared_data->allow_stream_result = this->allow_stream_result;
+	prepared_data->properties = properties;
 	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
-	prepared_data->bound_all_parameters = this->bound_all_parameters;
 	return prepared_data;
 }
 
@@ -107,7 +102,7 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
 		bind_values.push_back(move(value));
 	}
-	bool all_bound = prepared->bound_all_parameters;
+	bool all_bound = prepared->properties.bound_all_parameters;
 	if (catalog.GetCatalogVersion() != entry->second->catalog_version || !all_bound) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		for (auto &value : bind_values) {
@@ -118,7 +113,7 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types",
 			                      stmt.name);
 		}
-		D_ASSERT(prepared->bound_all_parameters);
+		D_ASSERT(prepared->properties.bound_all_parameters);
 		rebound = true;
 	}
 	// add casts to the prepared statement parameters as required
@@ -138,12 +133,9 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	}
 
 	// copy the properties of the prepared statement into the planner
-	this->read_only = prepared->read_only;
-	this->requires_valid_transaction = prepared->requires_valid_transaction;
-	this->allow_stream_result = prepared->allow_stream_result;
+	this->properties = prepared->properties;
 	this->names = prepared->names;
 	this->types = prepared->types;
-	this->bound_all_parameters = prepared->bound_all_parameters;
 	this->plan = make_unique<LogicalExecute>(move(prepared));
 }
 
@@ -153,12 +145,13 @@ void Planner::PlanPrepare(unique_ptr<SQLStatement> statement) {
 
 	auto prepare = make_unique<LogicalPrepare>(stmt.name, move(prepared_data), move(plan));
 	// we can prepare in read-only mode: prepared statements are not written to the catalog
-	this->read_only = true;
+	properties.read_only = true;
 	// we can always prepare, even if the transaction has been invalidated
 	// this is required because most clients ALWAYS invoke prepared statements
-	this->requires_valid_transaction = false;
-	this->allow_stream_result = false;
-	this->bound_all_parameters = true;
+	properties.requires_valid_transaction = false;
+	properties.allow_stream_result = false;
+	properties.bound_all_parameters = true;
+	properties.return_type = StatementReturnType::NOTHING;
 	this->names = {"Success"};
 	this->types = {LogicalType::BOOLEAN};
 	this->plan = move(prepare);

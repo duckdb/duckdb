@@ -38,6 +38,8 @@ struct ClientConfig {
 	//! Preserve identifier case while parsing.
 	//! If false, all unquoted identifiers are lower-cased (e.g. "MyTable" -> "mytable").
 	bool preserve_identifier_case = true;
+	//! The maximum expression depth limit in the parser
+	idx_t max_expression_depth = 1000;
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
