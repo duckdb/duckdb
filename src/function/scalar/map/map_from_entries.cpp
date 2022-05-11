@@ -20,11 +20,11 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	// Get the arguments vector
 	auto &array = args.data[0];
-	idx_t pair_amount = ListVector::GetListSize(array);
+	auto arg_data = FlatVector::GetData<list_entry_t>(array);
 	auto &entries = ListVector::GetEntry(array);
 
 	// Prepare the result vectors
-	result.Resize(0, pair_amount);
+	//result.Resize(0, pair_amount);
 	auto &child_entries = StructVector::GetEntries(result);
 	D_ASSERT(child_entries.size() == 2);
 	auto &key_vector = child_entries[0];
@@ -33,17 +33,24 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto key_data = FlatVector::GetData<list_entry_t>(*key_vector);
 	auto value_data = FlatVector::GetData<list_entry_t>(*value_vector);
 	// Transform to mapped values
-	key_data[0].offset = 0;
-	value_data[0].offset = 0;
-	for (idx_t i = 0; i < pair_amount; i++) {
-		auto element = entries.GetValue(i);
-		D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
-		auto &key_value = StructValue::GetChildren(element);
-		ListVector::PushBack(*key_vector, key_value[0]);
-		ListVector::PushBack(*value_vector, key_value[1]);
+	for (idx_t i = 0; i < args.size(); i++) {
+		auto pair_amount = arg_data[i].length;
+		auto offset = arg_data[i].offset;
+		key_data[i].offset = ListVector::GetListSize(*key_vector);
+		value_data[i].offset = ListVector::GetListSize(*value_vector);
+		for (idx_t col_idx = 0; col_idx < pair_amount; col_idx++) {
+			auto element = entries.GetValue(offset + col_idx);
+			D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
+			if (element.IsNull()) {
+				throw BinderException("The list of structs contains a NULL");
+			}
+			auto &key_value = StructValue::GetChildren(element);
+			ListVector::PushBack(*key_vector, key_value[0]);
+			ListVector::PushBack(*value_vector, key_value[1]);
+		}
+		key_data[i].length = pair_amount;
+		value_data[i].length = pair_amount;
 	}
-	key_data[0].length = pair_amount;
-	value_data[0].length = pair_amount;
 
 	result.Verify(args.size());
 }
@@ -53,19 +60,19 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 	child_list_t<LogicalType> child_types;
 
 	if (arguments.size() != 1) {
-		throw Exception("We need one list of structs for a map");
+		throw InvalidInputException("The input argument must be a list of structs.");
 	}
 	auto &list = arguments[0]->return_type;
 	if (list.id() != LogicalTypeId::LIST) {
-		throw Exception("Argument is not a list");
+		throw InvalidInputException("The provided argument is not a list of structs");
 	}
 	auto &elem_type = ListType::GetChildType(list);
 	if (elem_type.id() != LogicalTypeId::STRUCT) {
-		throw Exception("Elements of list aren't structs");
+		throw InvalidInputException("The elements of the list must be structs");
 	}
 	auto &children = StructType::GetChildTypes(elem_type);
 	if (children.size() != 2) {
-		throw Exception("Struct should only contain 2 fields, a key and a value");
+		throw InvalidInputException("The provided struct type should only contain 2 fields, a key and a value");
 	}
 	child_types.push_back(make_pair("key", LogicalType::LIST(children[0].second)));
 	child_types.push_back(make_pair("value", LogicalType::LIST(children[1].second)));
