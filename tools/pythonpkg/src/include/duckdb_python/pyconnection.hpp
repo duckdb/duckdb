@@ -53,6 +53,13 @@ public:
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
+	static shared_ptr<DuckDBPyConnection> Enter(DuckDBPyConnection &self,
+	                                            const string &database = ":memory:", bool read_only = false,
+	                                            const py::dict &config = py::dict(), bool check_same_thread = true);
+
+	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+	                 const py::object &traceback);
+
 	static DuckDBPyConnection *DefaultConnection();
 
 	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
