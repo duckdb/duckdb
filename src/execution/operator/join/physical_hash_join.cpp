@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -43,24 +44,36 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class HashJoinLocalState : public LocalSinkState {
-public:
-	DataChunk build_chunk;
-	DataChunk join_keys;
-	ExpressionExecutor build_executor;
-};
-
 class HashJoinGlobalState : public GlobalSinkState {
 public:
 	HashJoinGlobalState() {
 	}
 
-	//! The HT used by the join
+	//! Global HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 	//! Whether or not the hash table has been finalized
 	bool finalized = false;
+	//! Whether we are doing an external join
+	bool external;
+};
+
+class HashJoinLocalState : public LocalSinkState {
+public:
+	//! Thread-local local HT
+	unique_ptr<JoinHashTable> hash_table;
+	//! Whether the hash_table has been initialized
+	bool initialized;
+
+	DataChunk build_chunk;
+	DataChunk join_keys;
+	ExpressionExecutor build_executor;
+
+	void Initialize(const HashJoinGlobalState &gstate) {
+		hash_table = gstate.hash_table->CopyEmpty();
+		initialized = true;
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -110,11 +123,13 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	// for perfect hash join
 	state->perfect_join_executor =
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
+	state->external = ClientConfig::GetConfig(context).force_external;
 	return move(state);
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_unique<HashJoinLocalState>();
+	state->initialized = false;
 	if (!right_projection_map.empty()) {
 		state->build_chunk.Initialize(build_types);
 	}
@@ -125,10 +140,13 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 	return move(state);
 }
 
-SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                       DataChunk &input) const {
-	auto &sink = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
+	if (!lstate.initialized) {
+		auto &gstate = (HashJoinGlobalState &)gstate_p;
+		lstate.Initialize(gstate);
+	}
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
 	lstate.build_executor.Execute(input, lstate.join_keys);
@@ -141,22 +159,31 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
-		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
+		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	} else if (!build_types.empty()) {
 		// there is not a projected map: place the entire right chunk in the HT
-		sink.hash_table->Build(lstate.join_keys, input);
+		lstate.hash_table->Build(lstate.join_keys, input);
 	} else {
 		// there are only keys: place an empty chunk in the payload
 		lstate.build_chunk.SetCardinality(input.size());
-		sink.hash_table->Build(lstate.join_keys, lstate.build_chunk);
+		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	}
+
+	//	if (sink.external) {
+	//		// TODO: threshold or something
+	//	}
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &state = (HashJoinLocalState &)lstate;
+void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
+	auto &gstate = (HashJoinGlobalState &)gstate_p;
+	auto &lstate = (HashJoinLocalState &)lstate_p;
+	if (lstate.initialized) {
+		gstate.hash_table->Merge(*lstate.hash_table);
+	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &state.build_executor, "build_executor", 1);
+	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 

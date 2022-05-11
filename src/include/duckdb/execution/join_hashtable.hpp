@@ -108,8 +108,12 @@ public:
 	              vector<LogicalType> build_types, JoinType type);
 	~JoinHashTable();
 
+	//! Initialize an empty HT for the same join
+	unique_ptr<JoinHashTable> CopyEmpty() const;
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
+	//! Merge HT into this one
+	void Merge(JoinHashTable &other);
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
@@ -127,6 +131,8 @@ public:
 
 	//! BufferManager
 	BufferManager &buffer_manager;
+	//! The join conditions
+	const vector<JoinCondition> &conditions;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
 	//! The types of the keys

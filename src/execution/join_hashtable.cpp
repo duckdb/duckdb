@@ -13,7 +13,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
-    : buffer_manager(buffer_manager), build_types(move(btypes)), entry_size(0), tuple_size(0),
+    : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -60,6 +60,15 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 }
 
 JoinHashTable::~JoinHashTable() {
+}
+
+unique_ptr<JoinHashTable> JoinHashTable::CopyEmpty() const {
+	return make_unique<JoinHashTable>(buffer_manager, conditions, build_types, join_type);
+}
+
+void JoinHashTable::Merge(JoinHashTable &other) {
+	block_collection->Merge(*other.block_collection);
+	string_heap->Merge(*other.string_heap);
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
