@@ -46,8 +46,9 @@ unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery
 	return make_unique<CollateExpression>(collation, move(child));
 }
 
-ConstrainedLogicalType Transformer::TransformColumnTypeDefinition(duckdb_libpgquery::PGColumnDef *cdef) {
-	ConstrainedLogicalType target = TransformTypeName(cdef->typeName, true /* is_column_definition */);
+ConstrainedLogicalType Transformer::TransformColumnTypeDefinition(duckdb_libpgquery::PGColumnDef *cdef,
+                                                                  bool is_create_table) {
+	ConstrainedLogicalType target = TransformTypeName(cdef->typeName, is_create_table);
 	if (cdef->collClause) {
 		if (target.type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");
@@ -91,7 +92,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		case duckdb_libpgquery::T_PGColumnDef: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)c->data.ptr_value;
 			string colname = cdef->colname;
-			auto constrained_type = TransformColumnTypeDefinition(cdef);
+			auto constrained_type = TransformColumnTypeDefinition(cdef, true /* is_create_table */);
 			auto centry = ColumnDefinition(colname, constrained_type.type);
 			if (constrained_type.is_serial) {
 				// create a sequence associated with the column

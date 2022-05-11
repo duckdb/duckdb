@@ -191,7 +191,7 @@ private:
 
 	string TransformCollation(duckdb_libpgquery::PGCollateClause *collate);
 
-	ConstrainedLogicalType TransformColumnTypeDefinition(duckdb_libpgquery::PGColumnDef *cdef);
+	ConstrainedLogicalType TransformColumnTypeDefinition(duckdb_libpgquery::PGColumnDef *cdef, bool is_create_table);
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//

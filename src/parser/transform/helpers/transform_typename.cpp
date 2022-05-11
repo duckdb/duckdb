@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name, bool is_column_definition) {
+ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name, bool is_create_table) {
 	if (type_name->type != duckdb_libpgquery::T_PGTypeName) {
 		throw ParserException("Expected a type");
 	}
@@ -20,8 +20,9 @@ ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeN
 
 	bool is_serial = false;
 	int check_length = 0;
-	if (is_column_definition && base_type == LogicalTypeId::USER) {
+	if (is_create_table && base_type == LogicalTypeId::USER) {
 		// Check to see whether or this is actually a serial type
+		is_serial = true;
 		auto lower_name = StringUtil::Lower(name);
 		if (lower_name == "serial" || lower_name == "serial4") {
 			base_type = LogicalTypeId::INTEGER;
@@ -29,8 +30,10 @@ ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeN
 			base_type = LogicalTypeId::BIGINT;
 		} else if (lower_name == "smallserial" || lower_name == "serial2") {
 			base_type = LogicalTypeId::SMALLINT;
+		} else {
+			// not a serial type after all
+			is_serial = false;
 		}
-		is_serial = true;
 	}
 
 	LogicalType result_type;
@@ -72,8 +75,10 @@ ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeN
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
 		child_list_t<LogicalType> children;
-		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value, false);
-		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value, false);
+		auto key_type =
+		    TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value, false);
+		auto value_type =
+		    TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value, false);
 
 		children.push_back({"key", LogicalType::LIST(key_type.type)});
 		children.push_back({"value", LogicalType::LIST(value_type.type)});
@@ -118,9 +123,7 @@ ConstrainedLogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeN
 			if (modifier_idx > 1) {
 				throw ParserException("VARCHAR only supports a single modifier");
 			}
-			if (is_column_definition) {
-				check_length = width;
-			}
+			check_length = width;
 			width = 0;
 			result_type = LogicalType::VARCHAR;
 			break;
