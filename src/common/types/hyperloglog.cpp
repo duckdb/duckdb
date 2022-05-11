@@ -265,7 +265,7 @@ void HyperLogLog::AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], 
 
 void HyperLogLog::AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
 	lock_guard<mutex> guard(lock);
-	AddToSingleLogInternal(vdata, count / 10, indices, counts, hll);
+	AddToSingleLogInternal(vdata, count, indices, counts, hll);
 }
 
 } // namespace duckdb

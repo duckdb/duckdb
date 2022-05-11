@@ -19,10 +19,14 @@ class Vector;
 class DistinctStatistics : public BaseStatistics {
 public:
 	DistinctStatistics();
-	explicit DistinctStatistics(unique_ptr<HyperLogLog> log);
+	explicit DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count);
 
-	//! The HLL of the segment
+	//! The HLL of the table
 	unique_ptr<HyperLogLog> log;
+	//! How many values have been sampled into the HLL
+	idx_t sample_count;
+	//! How many values have been inserted (before sampling)
+	idx_t total_count;
 
 public:
 	void Merge(const BaseStatistics &other) override;
@@ -39,10 +43,10 @@ public:
 	void Update(VectorData &update_data, const LogicalType &ptype, idx_t count);
 
 	string ToString() const override;
+	idx_t GetCount() const;
 
 private:
-	//! For distinct statistics we sample the input
-	//! This speeds up insertions
+	//! For distinct statistics we sample the input to speed up insertions
 	static constexpr const double SAMPLE_RATE = 0.1;
 };
 
