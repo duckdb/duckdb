@@ -48,10 +48,7 @@ Connection.prototype.register = function(name, return_type, fun) {
         try {
             // Build an argument resolver
             const buildResolver = (arg) => {
-                let validity = null;
-                if (arg.validityBuffer !== undefined) {
-                    validity = ptrToUint8Array(mod, ptrs[arg.validityBuffer], desc.rows);
-                }
+                let validity = arg.validity || null;
                 switch (arg.physicalType) {
                     case 'STRUCT<?>': {
                         const tmp = {};
