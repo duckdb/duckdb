@@ -192,20 +192,6 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-bool sqlite3_display_result(StatementType type) {
-	switch (type) {
-	case StatementType::EXECUTE_STATEMENT:
-	case StatementType::EXPLAIN_STATEMENT:
-	case StatementType::PRAGMA_STATEMENT:
-	case StatementType::SELECT_STATEMENT:
-	case StatementType::SHOW_STATEMENT:
-	case StatementType::CALL_STATEMENT:
-		return true;
-	default:
-		return false;
-	}
-}
-
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
@@ -233,8 +219,9 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 
 		pStmt->current_row = -1;
 
-		auto statement_type = pStmt->prepared->GetStatementType();
-		if (StatementTypeReturnChanges(statement_type) && pStmt->current_chunk && pStmt->current_chunk->size() > 0) {
+		auto properties = pStmt->prepared->GetStatementProperties();
+		if (properties.return_type == StatementReturnType::CHANGED_ROWS && pStmt->current_chunk &&
+		    pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
 			if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
@@ -242,7 +229,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 				pStmt->db->total_changes += row_changes.GetValue<int64_t>();
 			}
 		}
-		if (!sqlite3_display_result(statement_type)) {
+		if (properties.return_type != StatementReturnType::QUERY_RESULT) {
 			// only SELECT statements return results
 			sqlite3_reset(pStmt);
 		}
