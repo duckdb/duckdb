@@ -126,28 +126,24 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 LocalSortState::LocalSortState() : initialized(false) {
 }
 
-static idx_t EntriesPerBlock(idx_t width) {
-	return (Storage::BLOCK_SIZE + width * STANDARD_VECTOR_SIZE - 1) / width;
-}
-
 void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p) {
 	sort_layout = &global_sort_state.sort_layout;
 	payload_layout = &global_sort_state.payload_layout;
 	buffer_manager = &buffer_manager_p;
 	// Radix sorting data
-	radix_sorting_data = make_unique<RowDataCollection>(*buffer_manager, EntriesPerBlock(sort_layout->entry_size),
-	                                                    sort_layout->entry_size);
+	radix_sorting_data = make_unique<RowDataCollection>(
+	    *buffer_manager, RowDataCollection::EntriesPerBlock(sort_layout->entry_size), sort_layout->entry_size);
 	// Blob sorting data
 	if (!sort_layout->all_constant) {
 		auto blob_row_width = sort_layout->blob_layout.GetRowWidth();
-		blob_sorting_data =
-		    make_unique<RowDataCollection>(*buffer_manager, EntriesPerBlock(blob_row_width), blob_row_width);
+		blob_sorting_data = make_unique<RowDataCollection>(
+		    *buffer_manager, RowDataCollection::EntriesPerBlock(blob_row_width), blob_row_width);
 		blob_sorting_heap = make_unique<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	// Payload data
 	auto payload_row_width = payload_layout->GetRowWidth();
-	payload_data =
-	    make_unique<RowDataCollection>(*buffer_manager, EntriesPerBlock(payload_row_width), payload_row_width);
+	payload_data = make_unique<RowDataCollection>(
+	    *buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width), payload_row_width);
 	payload_heap = make_unique<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	// Init done
 	initialized = true;

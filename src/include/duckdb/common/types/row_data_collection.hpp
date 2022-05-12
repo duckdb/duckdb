@@ -93,6 +93,10 @@ public:
 		return MaxValue(bytes, (idx_t)Storage::BLOCK_SIZE);
 	}
 
+	static idx_t EntriesPerBlock(idx_t width) {
+		return (Storage::BLOCK_SIZE + width * STANDARD_VECTOR_SIZE - 1) / width;
+	}
+
 private:
 	mutex rdc_lock;
 

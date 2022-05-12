@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
@@ -31,20 +32,7 @@ struct JoinHTScanState {
 	mutex lock;
 };
 
-struct RadixConstants {
-	static constexpr const idx_t NUM_RADIX_BITS = 7;
-	static constexpr const idx_t PARTITIONS = 1 << NUM_RADIX_BITS;
-
-	template <idx_t pass>
-	static inline constexpr hash_t RadixMask() {
-		return (hash_t(1) << (NUM_RADIX_BITS * (pass + 1))) - 1 - RadixMask<pass - 1>();
-	}
-
-	template <>
-	constexpr inline hash_t RadixMask<0>() {
-		return (hash_t(1) << NUM_RADIX_BITS) - 1;
-	}
-};
+using JoinRadixConstants = RadixPartitioningConstants<7>;
 
 //! JoinHashTable is a linear probing HT that is used for computing joins
 /*!
@@ -196,7 +184,6 @@ public:
 
 private:
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
-	void UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel);
 
 	//! Apply a bitmask to the hashes
 	void ApplyBitmask(Vector &hashes, idx_t count);
@@ -225,7 +212,7 @@ private:
 	//! Index of the byte in the hash used for the histogram
 	idx_t radix_pass;
 	//! Histogram of inserted values
-	idx_t histogram[RadixConstants::PARTITIONS];
+	idx_t histogram[JoinRadixConstants::PARTITIONS];
 	//! Histogram lock
 	mutex histogram_lock;
 	//! Partitioned data

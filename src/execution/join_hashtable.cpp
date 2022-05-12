@@ -74,30 +74,50 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 	lock_guard<mutex> lock(histogram_lock);
 	const auto other_hist = other.histogram;
-	for (idx_t i = 0; i < RadixConstants::PARTITIONS; i++) {
+	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
 		histogram[i] += other_hist[i];
 	}
+	// TODO: merge partitioned stuff as well
 }
 
 void JoinHashTable::Partition() {
-	const idx_t row_width = entry_size;
-	const idx_t capacity = block_collection->block_capacity;
-
+	D_ASSERT(partitioned_blocks.empty());
 	vector<unique_ptr<BufferHandle>> handles;
-	partitioned_blocks.reserve(RadixConstants::PARTITIONS);
-	for (idx_t i = 0; i < RadixConstants::PARTITIONS; i++) {
+	data_ptr_t dest_ptrs[JoinRadixConstants::PARTITIONS];
+
+	// Create one block per partition
+	partitioned_blocks.reserve(JoinRadixConstants::PARTITIONS);
+	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
 		if (histogram[i] == 0) {
 			partitioned_blocks.push_back(nullptr);
 			continue;
 		}
-		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, histogram[i], entry_size));
+		// Create collection for histogram bucket
+		auto capacity = MaxValue<idx_t>(histogram[i], block_collection->block_capacity);
+		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, capacity, entry_size));
+
+		// Create block and set count (will be filled later)
 		auto &new_block = partitioned_blocks.back()->CreateBlock();
-		//		handles.push_back()
+		new_block.count = histogram[i];
+
+		// Set up destination pointer
+		handles.push_back(buffer_manager.Pin(new_block.block));
+		dest_ptrs[i] = handles.back()->Ptr();
 	}
 
-	data_ptr_t dest_ptrs[RadixConstants::PARTITIONS];
-
-	// TODO: allocate heap stuff afterwards
+	auto tmp_buf_ptr = RadixPartitioning::AllocateTempBuf<JoinRadixConstants>(entry_size);
+	const data_ptr_t tmp_buf = tmp_buf_ptr.get();
+	for (auto &block : block_collection->blocks) {
+		auto handle = buffer_manager.Pin(block->block);
+		RadixPartitioning::Partition<JoinRadixConstants>(handle->Ptr(), tmp_buf, dest_ptrs, entry_size, block->count,
+		                                                 pointer_offset, radix_pass);
+	}
+	// TODO: Clear block_collection->blocks
+	//  If not all constant:
+	//  1. Create string blocks
+	//  2. Copy in order
+	//  3. Swizzle
+	//  4. Clear string_heap
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -142,43 +162,6 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
 		}
-	}
-}
-
-template <idx_t pass>
-static inline hash_t HashBitModulo(hash_t hash) {
-	return (hash & RadixConstants::RadixMask<pass>()) >> (RadixConstants::NUM_RADIX_BITS * pass);
-}
-
-template <idx_t pass>
-void UpdateHistogramInternal(const VectorData &hash_data, const idx_t count, const bool has_rsel, idx_t histogram[]) {
-	const auto hashes = (hash_t *)hash_data.data;
-	if (has_rsel) {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = hash_data.sel->get_index(i);
-			histogram[HashBitModulo<pass>(hashes[idx])]++;
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			histogram[HashBitModulo<pass>(hashes[i])]++;
-		}
-	}
-}
-
-void JoinHashTable::UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel) {
-	switch (radix_pass) {
-	case 0:
-		return UpdateHistogramInternal<0>(hash_data, count, has_rsel, histogram);
-	case 1:
-		return UpdateHistogramInternal<1>(hash_data, count, has_rsel, histogram);
-	case 2:
-		return UpdateHistogramInternal<2>(hash_data, count, has_rsel, histogram);
-	case 3:
-		return UpdateHistogramInternal<3>(hash_data, count, has_rsel, histogram);
-	case 4:
-		return UpdateHistogramInternal<4>(hash_data, count, has_rsel, histogram);
-	default:
-		throw InternalException("Too many radix passes in JoinHashTable!");
 	}
 }
 
@@ -303,7 +286,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	source_data.emplace_back(move(hdata));
 
 	// Update the histogram
-	UpdateHistogram(source_data.back(), added_count, keys.size() == added_count);
+	RadixPartitioning::UpdateHistogram<JoinRadixConstants>(source_data.back(), added_count, keys.size() == added_count,
+	                                                       histogram, radix_pass);
 
 	source_chunk.SetCardinality(keys);
 
