@@ -7,6 +7,42 @@
 
 namespace duckdb {
 
+struct VectorInfo {
+	Vector& container;
+	duckdb::list_entry_t& data;
+};
+
+static void MapStruct(Value& element, VectorInfo keys, VectorInfo values) {
+	D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
+	if (element.IsNull()) {
+		throw BinderException("The list of structs contains a NULL");
+	}
+	auto &key_value = StructValue::GetChildren(element);
+
+	//Add to the inner key/value lists of the resulting map 
+	ListVector::PushBack(keys.container, key_value[0]);
+	ListVector::PushBack(values.container, key_value[1]);
+}
+
+static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
+	//Get the length and offset of this list from the argument data
+	auto pair_amount = list.data.length;
+	auto offset = list.data.offset;
+
+	//Set the offset within the key/value list to mark where this row starts
+	keys.data.offset = offset;
+	values.data.offset = offset;
+	//Loop over the list of structs
+	for (idx_t i = offset; i < offset + pair_amount; i++) {
+		//Get the struct using the offset and the index;
+		auto element = list.container.GetValue(i);
+		MapStruct(element, keys, values);
+	}
+	//Set the length of the key value lists
+	keys.data.length = pair_amount;
+	values.data.length = pair_amount;
+}
+
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
@@ -33,32 +69,14 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto key_data = FlatVector::GetData<list_entry_t>(*key_vector);
 	auto value_data = FlatVector::GetData<list_entry_t>(*value_vector);
 
+
 	// Transform to mapped values
 	for (idx_t i = 0; i < args.size(); i++) {
-		//Get the length and offset of this list from the argument data
-		auto pair_amount = arg_data[i].length;
-		auto offset = arg_data[i].offset;
+		VectorInfo list{entries, arg_data[i]};
+		VectorInfo keys{*key_vector, key_data[i]};
+		VectorInfo values{*value_vector, value_data[i]};
 
-		//Set the offset within the key/value list to mark where this row starts
-		key_data[i].offset = offset;
-		value_data[i].offset = offset;
-		//Loop over the list of structs
-		for (idx_t col_idx = 0; col_idx < pair_amount; col_idx++) {
-			//Get the struct using the offset and the index;
-			auto element = entries.GetValue(offset + col_idx);
-			D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
-			if (element.IsNull()) {
-				throw BinderException("The list of structs contains a NULL");
-			}
-			auto &key_value = StructValue::GetChildren(element);
-
-			//Add to the inner key/value lists of the resulting map 
-			ListVector::PushBack(*key_vector, key_value[0]);
-			ListVector::PushBack(*value_vector, key_value[1]);
-		}
-		//Set the length of the key value lists
-		key_data[i].length = pair_amount;
-		value_data[i].length = pair_amount;
+		MapSingleList(list, keys, values);
 	}
 
 	result.Verify(args.size());
