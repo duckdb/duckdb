@@ -354,11 +354,12 @@ jobs:
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-20.04
-#    needs: linux-release-64
+    needs: linux-release-64
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -369,9 +370,8 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: actions/setup-node@v2
-      with:
-        node-version: '16'
+    - name: Install Ninja
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Start S3/HTTP test server
       run: |
