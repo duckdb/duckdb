@@ -2,20 +2,32 @@
 # description: Test parallel limit execution
 # group: [limit]
 
-#statement ok
-#PRAGMA threads=8
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=8
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
-#
-#query I
-#SELECT * FROM integers LIMIT 5
-#----
-#0
-#1
-#2
-#3
-#4
+
+query I
+SELECT * FROM integers LIMIT 5
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT * FROM integers WHERE i>1978321 OR i=334 LIMIT 5
+----
+334
+1978322
+1978323
+1978324
+1978325
 
 query I
 SELECT * FROM integers WHERE i>1978321 LIMIT 5
@@ -25,3 +37,12 @@ SELECT * FROM integers WHERE i>1978321 LIMIT 5
 1978324
 1978325
 1978326
+
+query I
+SELECT * FROM integers WHERE i>4978321 LIMIT 5
+----
+4978322
+4978323
+4978324
+4978325
+4978326

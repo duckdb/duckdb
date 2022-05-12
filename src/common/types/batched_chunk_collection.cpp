@@ -1,6 +1,10 @@
 #include "duckdb/common/types/batched_chunk_collection.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
+
+BatchedChunkCollection::BatchedChunkCollection() {
+}
 
 void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
@@ -17,9 +21,12 @@ void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
 }
 
 void BatchedChunkCollection::Merge(BatchedChunkCollection &other) {
-	for(auto &entry : other.data) {
+	for (auto &entry : other.data) {
 		if (data.find(entry.first) != data.end()) {
-			throw InternalException("BatchChunkCollection::Merge error - batch index %d is present in both collections. This occurs when batch indexes are not uniquely distributed over threads", entry.first);
+			throw InternalException(
+			    "BatchChunkCollection::Merge error - batch index %d is present in both collections. This occurs when "
+			    "batch indexes are not uniquely distributed over threads",
+			    entry.first);
 		}
 		data[entry.first] = move(entry.second);
 	}
@@ -47,4 +54,18 @@ void BatchedChunkCollection::Scan(BatchedChunkScanState &state, DataChunk &outpu
 	}
 }
 
+string BatchedChunkCollection::ToString() const {
+	string result;
+	result += "Batched Chunk Collection\n";
+	for (auto &entry : data) {
+		result += "Batch Index - " + to_string(entry.first) + "\n";
+		result += entry.second->ToString() + "\n\n";
+	}
+	return result;
 }
+
+void BatchedChunkCollection::Print() const {
+	Printer::Print(ToString());
+}
+
+} // namespace duckdb

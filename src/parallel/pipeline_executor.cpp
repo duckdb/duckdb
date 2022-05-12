@@ -314,6 +314,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
+	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
 	if (requires_batch_index) {
 		auto next_batch_index =
 		    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
@@ -321,7 +322,6 @@ void PipelineExecutor::FetchFromSource(DataChunk &result) {
 		         local_sink_state->batch_index == DConstants::INVALID_INDEX);
 		local_sink_state->batch_index = next_batch_index;
 	}
-	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
 	EndOperator(pipeline.source, &result);
 }
 

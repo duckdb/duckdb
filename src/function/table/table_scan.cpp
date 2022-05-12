@@ -126,8 +126,6 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
-	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	return state.scan_state.row_group_scan_state.row_group->start;
 }

@@ -1,0 +1,21 @@
+# name: benchmark/micro/limit/parallel_limit.benchmark
+# description: Benchmark of parallel limit computation
+# group: [limit]
+
+name Parallel Limit
+group micro
+subgroup limit
+
+load
+CREATE TABLE integers AS SELECT * FROM range(1000000000) tbl(i);
+
+run
+-- we use a complex statement here to avoid pushdown
+SELECT * FROM integers WHERE CASE WHEN i+i>=1729956644 THEN i%2=0 ELSE i=334 OR i=77979344 END LIMIT 5
+
+result I
+334
+77979344
+864978322
+864978324
+864978326

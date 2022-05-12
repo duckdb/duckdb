@@ -22,17 +22,22 @@ struct BatchedChunkScanState {
 //! Scans over a BatchedChunkCollection are ordered by batch index
 class BatchedChunkCollection {
 public:
+	DUCKDB_API BatchedChunkCollection();
+
 	//! Appends a datachunk with the given batch index to the batched collection
-	void Append(DataChunk &input, idx_t batch_index);
+	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);
 
 	//! Merge the other batched chunk collection into this batched collection
-	void Merge(BatchedChunkCollection &other);
+	DUCKDB_API void Merge(BatchedChunkCollection &other);
 
 	//! Initialize a scan over the batched chunk collection
-	void InitializeScan(BatchedChunkScanState &state);
+	DUCKDB_API void InitializeScan(BatchedChunkScanState &state);
 
 	//! Scan a chunk from the batched chunk collection, in-order of batch index
-	void Scan(BatchedChunkScanState &state, DataChunk &output);
+	DUCKDB_API void Scan(BatchedChunkScanState &state, DataChunk &output);
+
+	DUCKDB_API string ToString() const;
+	DUCKDB_API void Print() const;
 
 private:
 	//! The data of the batched chunk collection - a set of batch_index -> ChunkCollection pointers
