@@ -2,25 +2,25 @@
 # description: Test basic functionality of map_from_entries function
 # group: [map]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
-#query I
-#select MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y')]);
-#----
-#{1=x, 2=y}
+query I
+select MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y')]);
+----
+{1=x, 2=y}
 
-## Empty arguments not allowed
-#statement error
-#SELECT map_from_entries();
+# Empty arguments not allowed
+statement error
+SELECT map_from_entries();
 
-## Provided argument is NULL
-#statement error
-#SELECT MAP_FROM_ENTRIES(NULL);
+# Provided argument is NULL
+statement error
+SELECT MAP_FROM_ENTRIES(NULL);
 
-## Some of the structs provided are NULL
-#statement error
-#SELECT MAP_FROM_ENTRIES(ARRAY[NULL, (1, 'x'), NULL, (2, 'y')]);
+# Some of the structs provided are NULL
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[NULL, (1, 'x'), NULL, (2, 'y')]);
 
 # Provide column as parameter
 statement ok
@@ -39,22 +39,33 @@ SELECT MAP_FROM_ENTRIES(list) FROM t1;
 {2=a, 3=b}
 {6=h, 7=g}
 
-## More than one argument
-#statement error
-#SELECT map_from_entries(ARRAY[(1,2), (3,4)], ARRAY[(5,6), (7,8)]);
+statement ok
+INSERT INTO t1 VALUES (NULL)
 
-## Argument isn't an array
-#statement error
-#SELECT map_from_entries(5);
+query I
+SELECT MAP_FROM_ENTRIES(list) FROM t1;
+----
+{1=x, 2=y, 4=s}
+{2=a, 3=b}
+{6=h, 7=g}
+{}
 
-## ARRAY doesn't contain structs
-#statement error
-#SELECT map_from_entries(ARRAY[5,4,3]);
+# More than one argument
+statement error
+SELECT map_from_entries(ARRAY[(1,2), (3,4)], ARRAY[(5,6), (7,8)]);
 
-## Struct type contains more than 2 fields (key - value)
-#statement error
-#select MAP_FROM_ENTRIES(ARRAY[(1, 'x', 'extra'), (2, 'y', 'extra')]);
+# Argument isn't an array
+statement error
+SELECT map_from_entries(5);
 
-## Structs inside the ARRAY have different amounts of fields
-#statement error
-#SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y', 'extra')]);
+# ARRAY doesn't contain structs
+statement error
+SELECT map_from_entries(ARRAY[5,4,3]);
+
+# Struct type contains more than 2 fields (key - value)
+statement error
+select MAP_FROM_ENTRIES(ARRAY[(1, 'x', 'extra'), (2, 'y', 'extra')]);
+
+# Structs inside the ARRAY have different amounts of fields
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y', 'extra')]);
