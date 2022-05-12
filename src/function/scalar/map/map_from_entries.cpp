@@ -8,37 +8,37 @@
 namespace duckdb {
 
 struct VectorInfo {
-	Vector& container;
-	duckdb::list_entry_t& data;
+	Vector &container;
+	duckdb::list_entry_t &data;
 };
 
-static void MapStruct(Value& element, VectorInfo keys, VectorInfo values) {
+static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 	D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
 	if (element.IsNull()) {
 		throw BinderException("The list of structs contains a NULL");
 	}
 	auto &key_value = StructValue::GetChildren(element);
 
-	//Add to the inner key/value lists of the resulting map 
+	// Add to the inner key/value lists of the resulting map
 	ListVector::PushBack(keys.container, key_value[0]);
 	ListVector::PushBack(values.container, key_value[1]);
 }
 
 static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
-	//Get the length and offset of this list from the argument data
+	// Get the length and offset of this list from the argument data
 	auto pair_amount = list.data.length;
 	auto offset = list.data.offset;
 
-	//Set the offset within the key/value list to mark where this row starts
+	// Set the offset within the key/value list to mark where this row starts
 	keys.data.offset = offset;
 	values.data.offset = offset;
-	//Loop over the list of structs
+	// Loop over the list of structs
 	for (idx_t i = offset; i < offset + pair_amount; i++) {
-		//Get the struct using the offset and the index;
+		// Get the struct using the offset and the index;
 		auto element = list.container.GetValue(i);
 		MapStruct(element, keys, values);
 	}
-	//Set the length of the key value lists
+	// Set the length of the key value lists
 	keys.data.length = pair_amount;
 	values.data.length = pair_amount;
 }
@@ -59,18 +59,30 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &key_vector = child_entries[0];
 	auto &value_vector = child_entries[1];
 
-	//Get the offset+length data for the list(s)
+	// Get the offset+length data for the list(s)
 	auto key_data = FlatVector::GetData<list_entry_t>(*key_vector);
 	auto value_data = FlatVector::GetData<list_entry_t>(*value_vector);
+	auto &key_validity = FlatVector::Validity(*key_vector);
+	auto &value_validity = FlatVector::Validity(*value_vector);
 
+	VectorData list_data;
+	// auto count = ListVector::GetListSize(array);
+	args.data[0].Orrify(args.size(), list_data);
 
 	// Transform to mapped values
 	for (idx_t i = 0; i < args.size(); i++) {
-		VectorInfo list{entries, arg_data[i]};
-		VectorInfo keys{*key_vector, key_data[i]};
-		VectorInfo values{*value_vector, value_data[i]};
+		VectorInfo list {entries, arg_data[i]};
+		VectorInfo keys {*key_vector, key_data[i]};
+		VectorInfo values {*value_vector, value_data[i]};
 
 		MapSingleList(list, keys, values);
+
+		// Check validity
+
+		if (!list_data.validity.RowIsValid(i)) {
+			key_validity.SetInvalid(i);
+			value_validity.SetInvalid(i);
+		}
 	}
 
 	result.Verify(args.size());
