@@ -4,6 +4,8 @@
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 
+#include "duckdb/main/prepared_statement_data.hpp"
+
 SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
@@ -64,6 +66,15 @@ SQLRETURN SQL_API SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) 
 		}
 		// TODO row_count isn't work well yet, left to fix latter
 		*row_count_ptr = stmt->odbc_fetcher->GetRowCount();
+
+		switch (stmt->stmt->data->statement_type) {
+			case duckdb::StatementType::INSERT_STATEMENT:
+			case duckdb::StatementType::UPDATE_STATEMENT:
+			case duckdb::StatementType::DELETE_STATEMENT:
+				break;
+			default:
+				*row_count_ptr = 0;
+		}
 
 		// *row_count_ptr = -1; // we don't actually know most of the time
 		return SQL_SUCCESS;
