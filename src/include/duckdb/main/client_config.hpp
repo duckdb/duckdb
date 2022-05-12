@@ -63,6 +63,8 @@ struct ClientConfig {
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
+
+	static string ExtractTimezoneFromConfig(ClientConfig &config);
 };
 
 } // namespace duckdb
