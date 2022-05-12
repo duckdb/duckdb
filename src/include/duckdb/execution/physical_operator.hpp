@@ -185,6 +185,10 @@ public:
 	virtual bool SinkOrderMatters() const {
 		return false;
 	}
+
+	virtual bool RequiresBatchIndex() const {
+		return false;
+	}
 };
 
 } // namespace duckdb

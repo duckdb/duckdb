@@ -8,11 +8,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-#include "duckdb/execution/operator/order/physical_order.hpp"
-#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
 
@@ -115,7 +111,12 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!sink->ParallelSink()) {
 		return false;
 	}
-	if (sink->SinkOrderMatters() && !source->SupportsBatchIndex()) {
+	if (sink->RequiresBatchIndex()) {
+		if (!source->SupportsBatchIndex()) {
+			throw InternalException("Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		}
+	} else if (sink->SinkOrderMatters()) {
+		// FIXME: only if order actually matters to us
 		return false;
 	}
 	if (!source->ParallelSource()) {

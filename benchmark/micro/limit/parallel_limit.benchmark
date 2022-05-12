@@ -9,8 +9,8 @@ subgroup limit
 load
 CREATE TABLE integers AS SELECT * FROM range(1000000000) tbl(i);
 
+# we use a complex WHERE clause to avoid pushdown from speeding up the query
 run
--- we use a complex statement here to avoid pushdown
 SELECT * FROM integers WHERE CASE WHEN i+i>=1729956644 THEN i%2=0 ELSE i=334 OR i=77979344 END LIMIT 5
 
 result I

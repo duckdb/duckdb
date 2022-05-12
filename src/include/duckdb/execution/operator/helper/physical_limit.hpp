@@ -50,6 +50,10 @@ public:
 		return true;
 	}
 
+	bool RequiresBatchIndex() const override {
+		return true;
+	}
+
 	static bool HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit);
 	static Value GetDelimiter(DataChunk &input, Expression *expr);
 };

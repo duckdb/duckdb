@@ -8,8 +8,10 @@ PRAGMA enable_verification
 statement ok
 PRAGMA threads=8
 
+foreach table_type TABLE VIEW
+
 statement ok
-CREATE TABLE integers AS SELECT * FROM range(10000000) tbl(i);
+CREATE ${table_type} integers AS SELECT * FROM range(10000000) tbl(i);
 
 query I
 SELECT * FROM integers LIMIT 5
@@ -46,3 +48,8 @@ SELECT * FROM integers WHERE i>4978321 LIMIT 5
 4978324
 4978325
 4978326
+
+statement ok
+DROP ${table_type} integers
+
+endloop

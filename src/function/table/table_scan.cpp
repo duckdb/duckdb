@@ -127,7 +127,7 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                              FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
 	auto &state = (TableScanOperatorData &)*operator_state;
-	return state.scan_state.row_group_scan_state.row_group->start;
+	return state.scan_state.row_group_scan_state.row_group ? state.scan_state.row_group_scan_state.row_group->start : 0;
 }
 
 void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
