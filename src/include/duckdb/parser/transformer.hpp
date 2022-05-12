@@ -32,12 +32,11 @@ struct GroupingExpressionMap;
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
-	static constexpr const idx_t DEFAULT_MAX_EXPRESSION_DEPTH = 1000;
-
 	friend class StackChecker;
 
 public:
-	explicit Transformer(Transformer *parent = nullptr, idx_t max_expression_depth_p = DEFAULT_MAX_EXPRESSION_DEPTH);
+	explicit Transformer(idx_t max_expression_depth_p);
+	explicit Transformer(Transformer *parent);
 
 	//! Transforms a Postgres parse tree into a set of SQL Statements
 	bool TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements);

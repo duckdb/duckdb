@@ -414,132 +414,116 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 
 const char descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n substrait/type_expressions.proto\022\tsubs"
-  "trait\032\024substrait/type.proto\"\303$\n\024Derivati"
-  "onExpression\022-\n\004bool\030\001 \001(\0132\027.substrait.T"
-  "ype.BooleanH\000R\004bool\022$\n\002i8\030\002 \001(\0132\022.substr"
-  "ait.Type.I8H\000R\002i8\022\'\n\003i16\030\003 \001(\0132\023.substra"
-  "it.Type.I16H\000R\003i16\022\'\n\003i32\030\005 \001(\0132\023.substr"
-  "ait.Type.I32H\000R\003i32\022\'\n\003i64\030\007 \001(\0132\023.subst"
-  "rait.Type.I64H\000R\003i64\022*\n\004fp32\030\n \001(\0132\024.sub"
-  "strait.Type.FP32H\000R\004fp32\022*\n\004fp64\030\013 \001(\0132\024"
-  ".substrait.Type.FP64H\000R\004fp64\0220\n\006string\030\014"
-  " \001(\0132\026.substrait.Type.StringH\000R\006string\0220"
-  "\n\006binary\030\r \001(\0132\026.substrait.Type.BinaryH\000"
-  "R\006binary\0229\n\ttimestamp\030\016 \001(\0132\031.substrait."
-  "Type.TimestampH\000R\ttimestamp\022*\n\004date\030\020 \001("
-  "\0132\024.substrait.Type.DateH\000R\004date\022*\n\004time\030"
-  "\021 \001(\0132\024.substrait.Type.TimeH\000R\004time\022C\n\ri"
-  "nterval_year\030\023 \001(\0132\034.substrait.Type.Inte"
-  "rvalYearH\000R\014intervalYear\022@\n\014interval_day"
-  "\030\024 \001(\0132\033.substrait.Type.IntervalDayH\000R\013i"
-  "ntervalDay\022@\n\014timestamp_tz\030\035 \001(\0132\033.subst"
-  "rait.Type.TimestampTZH\000R\013timestampTz\022*\n\004"
-  "uuid\030  \001(\0132\024.substrait.Type.UUIDH\000R\004uuid"
-  "\022T\n\nfixed_char\030\025 \001(\01323.substrait.Derivat"
-  "ionExpression.ExpressionFixedCharH\000R\tfix"
-  "edChar\022M\n\007varchar\030\026 \001(\01321.substrait.Deri"
-  "vationExpression.ExpressionVarCharH\000R\007va"
-  "rchar\022Z\n\014fixed_binary\030\027 \001(\01325.substrait."
-  "DerivationExpression.ExpressionFixedBina"
-  "ryH\000R\013fixedBinary\022M\n\007decimal\030\030 \001(\01321.sub"
-  "strait.DerivationExpression.ExpressionDe"
-  "cimalH\000R\007decimal\022J\n\006struct\030\031 \001(\01320.subst"
-  "rait.DerivationExpression.ExpressionStru"
-  "ctH\000R\006struct\022D\n\004list\030\033 \001(\0132..substrait.D"
-  "erivationExpression.ExpressionListH\000R\004li"
-  "st\022A\n\003map\030\034 \001(\0132-.substrait.DerivationEx"
-  "pression.ExpressionMapH\000R\003map\0222\n\024user_de"
-  "fined_pointer\030\037 \001(\rH\000R\022userDefinedPointe"
-  "r\0220\n\023type_parameter_name\030! \001(\tH\000R\021typePa"
-  "rameterName\0226\n\026integer_parameter_name\030\" "
-  "\001(\tH\000R\024integerParameterName\022)\n\017integer_l"
-  "iteral\030# \001(\005H\000R\016integerLiteral\022D\n\010unary_"
-  "op\030$ \001(\0132\'.substrait.DerivationExpressio"
-  "n.UnaryOpH\000R\007unaryOp\022G\n\tbinary_op\030% \001(\0132"
-  "(.substrait.DerivationExpression.BinaryO"
-  "pH\000R\010binaryOp\022A\n\007if_else\030& \001(\0132&.substra"
-  "it.DerivationExpression.IfElseH\000R\006ifElse"
-  "\022V\n\016return_program\030\' \001(\0132-.substrait.Der"
-  "ivationExpression.ReturnProgramH\000R\rretur"
-  "nProgram\032\272\001\n\023ExpressionFixedChar\0227\n\006leng"
-  "th\030\001 \001(\0132\037.substrait.DerivationExpressio"
-  "nR\006length\022+\n\021variation_pointer\030\002 \001(\rR\020va"
-  "riationPointer\022=\n\013nullability\030\003 \001(\0162\033.su"
-  "bstrait.Type.NullabilityR\013nullability\032\270\001"
-  "\n\021ExpressionVarChar\0227\n\006length\030\001 \001(\0132\037.su"
-  "bstrait.DerivationExpressionR\006length\022+\n\021"
-  "variation_pointer\030\002 \001(\rR\020variationPointe"
-  "r\022=\n\013nullability\030\003 \001(\0162\033.substrait.Type."
-  "NullabilityR\013nullability\032\274\001\n\025ExpressionF"
-  "ixedBinary\0227\n\006length\030\001 \001(\0132\037.substrait.D"
-  "erivationExpressionR\006length\022+\n\021variation"
-  "_pointer\030\002 \001(\rR\020variationPointer\022=\n\013null"
-  "ability\030\003 \001(\0162\033.substrait.Type.Nullabili"
-  "tyR\013nullability\032\365\001\n\021ExpressionDecimal\0225\n"
-  "\005scale\030\001 \001(\0132\037.substrait.DerivationExpre"
-  "ssionR\005scale\022=\n\tprecision\030\002 \001(\0132\037.substr"
-  "ait.DerivationExpressionR\tprecision\022+\n\021v"
-  "ariation_pointer\030\003 \001(\rR\020variationPointer"
-  "\022=\n\013nullability\030\004 \001(\0162\033.substrait.Type.N"
-  "ullabilityR\013nullability\032\265\001\n\020ExpressionSt"
-  "ruct\0225\n\005types\030\001 \003(\0132\037.substrait.Derivati"
-  "onExpressionR\005types\022+\n\021variation_pointer"
-  "\030\002 \001(\rR\020variationPointer\022=\n\013nullability\030"
-  "\003 \001(\0162\033.substrait.Type.NullabilityR\013null"
-  "ability\032w\n\025ExpressionNamedStruct\022\024\n\005name"
-  "s\030\001 \003(\tR\005names\022H\n\006struct\030\002 \001(\01320.substra"
-  "it.DerivationExpression.ExpressionStruct"
-  "R\006struct\032\261\001\n\016ExpressionList\0223\n\004type\030\001 \001("
-  "\0132\037.substrait.DerivationExpressionR\004type"
-  "\022+\n\021variation_pointer\030\002 \001(\rR\020variationPo"
-  "inter\022=\n\013nullability\030\003 \001(\0162\033.substrait.T"
-  "ype.NullabilityR\013nullability\032\345\001\n\rExpress"
-  "ionMap\0221\n\003key\030\001 \001(\0132\037.substrait.Derivati"
-  "onExpressionR\003key\0225\n\005value\030\002 \001(\0132\037.subst"
-  "rait.DerivationExpressionR\005value\022+\n\021vari"
-  "ation_pointer\030\003 \001(\rR\020variationPointer\022=\n"
-  "\013nullability\030\004 \001(\0162\033.substrait.Type.Null"
-  "abilityR\013nullability\032\314\001\n\006IfElse\022B\n\014if_co"
-  "ndition\030\001 \001(\0132\037.substrait.DerivationExpr"
-  "essionR\013ifCondition\022<\n\tif_return\030\002 \001(\0132\037"
-  ".substrait.DerivationExpressionR\010ifRetur"
-  "n\022@\n\013else_return\030\003 \001(\0132\037.substrait.Deriv"
-  "ationExpressionR\nelseReturn\032\327\001\n\007UnaryOp\022"
-  "L\n\007op_type\030\001 \001(\01623.substrait.DerivationE"
-  "xpression.UnaryOp.UnaryOpTypeR\006opType\0221\n"
-  "\003arg\030\002 \001(\0132\037.substrait.DerivationExpress"
-  "ionR\003arg\"K\n\013UnaryOpType\022\035\n\031UNARY_OP_TYPE"
-  "_UNSPECIFIED\020\000\022\035\n\031UNARY_OP_TYPE_BOOLEAN_"
-  "NOT\020\001\032\264\004\n\010BinaryOp\022N\n\007op_type\030\001 \001(\01625.su"
-  "bstrait.DerivationExpression.BinaryOp.Bi"
-  "naryOpTypeR\006opType\0223\n\004arg1\030\002 \001(\0132\037.subst"
-  "rait.DerivationExpressionR\004arg1\0223\n\004arg2\030"
-  "\003 \001(\0132\037.substrait.DerivationExpressionR\004"
-  "arg2\"\355\002\n\014BinaryOpType\022\036\n\032BINARY_OP_TYPE_"
-  "UNSPECIFIED\020\000\022\027\n\023BINARY_OP_TYPE_PLUS\020\001\022\030"
-  "\n\024BINARY_OP_TYPE_MINUS\020\002\022\033\n\027BINARY_OP_TY"
-  "PE_MULTIPLY\020\003\022\031\n\025BINARY_OP_TYPE_DIVIDE\020\004"
-  "\022\026\n\022BINARY_OP_TYPE_MIN\020\005\022\026\n\022BINARY_OP_TY"
-  "PE_MAX\020\006\022\037\n\033BINARY_OP_TYPE_GREATER_THAN\020"
-  "\007\022\034\n\030BINARY_OP_TYPE_LESS_THAN\020\010\022\026\n\022BINAR"
-  "Y_OP_TYPE_AND\020\t\022\025\n\021BINARY_OP_TYPE_OR\020\n\022\031"
-  "\n\025BINARY_OP_TYPE_EQUALS\020\013\022\031\n\025BINARY_OP_T"
-  "YPE_COVERS\020\014\032\232\002\n\rReturnProgram\022Z\n\013assign"
-  "ments\030\001 \003(\01328.substrait.DerivationExpres"
-  "sion.ReturnProgram.AssignmentR\013assignmen"
-  "ts\022J\n\020final_expression\030\002 \001(\0132\037.substrait"
-  ".DerivationExpressionR\017finalExpression\032a"
-  "\n\nAssignment\022\022\n\004name\030\001 \001(\tR\004name\022\?\n\nexpr"
-  "ession\030\002 \001(\0132\037.substrait.DerivationExpre"
-  "ssionR\nexpressionB\006\n\004kindB+\n\022io.substrai"
-  "t.protoP\001\252\002\022Substrait.Protobufb\006proto3"
+  "trait\032\024substrait/type.proto\"\366\036\n\024Derivati"
+  "onExpression\022\'\n\004bool\030\001 \001(\0132\027.substrait.T"
+  "ype.BooleanH\000\022 \n\002i8\030\002 \001(\0132\022.substrait.Ty"
+  "pe.I8H\000\022\"\n\003i16\030\003 \001(\0132\023.substrait.Type.I1"
+  "6H\000\022\"\n\003i32\030\005 \001(\0132\023.substrait.Type.I32H\000\022"
+  "\"\n\003i64\030\007 \001(\0132\023.substrait.Type.I64H\000\022$\n\004f"
+  "p32\030\n \001(\0132\024.substrait.Type.FP32H\000\022$\n\004fp6"
+  "4\030\013 \001(\0132\024.substrait.Type.FP64H\000\022(\n\006strin"
+  "g\030\014 \001(\0132\026.substrait.Type.StringH\000\022(\n\006bin"
+  "ary\030\r \001(\0132\026.substrait.Type.BinaryH\000\022.\n\tt"
+  "imestamp\030\016 \001(\0132\031.substrait.Type.Timestam"
+  "pH\000\022$\n\004date\030\020 \001(\0132\024.substrait.Type.DateH"
+  "\000\022$\n\004time\030\021 \001(\0132\024.substrait.Type.TimeH\000\022"
+  "5\n\rinterval_year\030\023 \001(\0132\034.substrait.Type."
+  "IntervalYearH\000\0223\n\014interval_day\030\024 \001(\0132\033.s"
+  "ubstrait.Type.IntervalDayH\000\0223\n\014timestamp"
+  "_tz\030\035 \001(\0132\033.substrait.Type.TimestampTZH\000"
+  "\022$\n\004uuid\030  \001(\0132\024.substrait.Type.UUIDH\000\022I"
+  "\n\nfixed_char\030\025 \001(\01323.substrait.Derivatio"
+  "nExpression.ExpressionFixedCharH\000\022D\n\007var"
+  "char\030\026 \001(\01321.substrait.DerivationExpress"
+  "ion.ExpressionVarCharH\000\022M\n\014fixed_binary\030"
+  "\027 \001(\01325.substrait.DerivationExpression.E"
+  "xpressionFixedBinaryH\000\022D\n\007decimal\030\030 \001(\0132"
+  "1.substrait.DerivationExpression.Express"
+  "ionDecimalH\000\022B\n\006struct\030\031 \001(\01320.substrait"
+  ".DerivationExpression.ExpressionStructH\000"
+  "\022>\n\004list\030\033 \001(\0132..substrait.DerivationExp"
+  "ression.ExpressionListH\000\022<\n\003map\030\034 \001(\0132-."
+  "substrait.DerivationExpression.Expressio"
+  "nMapH\000\022\036\n\024user_defined_pointer\030\037 \001(\rH\000\022\035"
+  "\n\023type_parameter_name\030! \001(\tH\000\022 \n\026integer"
+  "_parameter_name\030\" \001(\tH\000\022\031\n\017integer_liter"
+  "al\030# \001(\005H\000\022;\n\010unary_op\030$ \001(\0132\'.substrait"
+  ".DerivationExpression.UnaryOpH\000\022=\n\tbinar"
+  "y_op\030% \001(\0132(.substrait.DerivationExpress"
+  "ion.BinaryOpH\000\0229\n\007if_else\030& \001(\0132&.substr"
+  "ait.DerivationExpression.IfElseH\000\022G\n\016ret"
+  "urn_program\030\' \001(\0132-.substrait.Derivation"
+  "Expression.ReturnProgramH\000\032\223\001\n\023Expressio"
+  "nFixedChar\022/\n\006length\030\001 \001(\0132\037.substrait.D"
+  "erivationExpression\022\031\n\021variation_pointer"
+  "\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.substrait."
+  "Type.Nullability\032\221\001\n\021ExpressionVarChar\022/"
+  "\n\006length\030\001 \001(\0132\037.substrait.DerivationExp"
+  "ression\022\031\n\021variation_pointer\030\002 \001(\r\0220\n\013nu"
+  "llability\030\003 \001(\0162\033.substrait.Type.Nullabi"
+  "lity\032\225\001\n\025ExpressionFixedBinary\022/\n\006length"
+  "\030\001 \001(\0132\037.substrait.DerivationExpression\022"
+  "\031\n\021variation_pointer\030\002 \001(\r\0220\n\013nullabilit"
+  "y\030\003 \001(\0162\033.substrait.Type.Nullability\032\304\001\n"
+  "\021ExpressionDecimal\022.\n\005scale\030\001 \001(\0132\037.subs"
+  "trait.DerivationExpression\0222\n\tprecision\030"
+  "\002 \001(\0132\037.substrait.DerivationExpression\022\031"
+  "\n\021variation_pointer\030\003 \001(\r\0220\n\013nullability"
+  "\030\004 \001(\0162\033.substrait.Type.Nullability\032\217\001\n\020"
+  "ExpressionStruct\022.\n\005types\030\001 \003(\0132\037.substr"
+  "ait.DerivationExpression\022\031\n\021variation_po"
+  "inter\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.subst"
+  "rait.Type.Nullability\032h\n\025ExpressionNamed"
+  "Struct\022\r\n\005names\030\001 \003(\t\022@\n\006struct\030\002 \001(\01320."
+  "substrait.DerivationExpression.Expressio"
+  "nStruct\032\214\001\n\016ExpressionList\022-\n\004type\030\001 \001(\013"
+  "2\037.substrait.DerivationExpression\022\031\n\021var"
+  "iation_pointer\030\002 \001(\r\0220\n\013nullability\030\003 \001("
+  "\0162\033.substrait.Type.Nullability\032\272\001\n\rExpre"
+  "ssionMap\022,\n\003key\030\001 \001(\0132\037.substrait.Deriva"
+  "tionExpression\022.\n\005value\030\002 \001(\0132\037.substrai"
+  "t.DerivationExpression\022\031\n\021variation_poin"
+  "ter\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162\033.substra"
+  "it.Type.Nullability\032\251\001\n\006IfElse\0225\n\014if_con"
+  "dition\030\001 \001(\0132\037.substrait.DerivationExpre"
+  "ssion\0222\n\tif_return\030\002 \001(\0132\037.substrait.Der"
+  "ivationExpression\0224\n\013else_return\030\003 \001(\0132\037"
+  ".substrait.DerivationExpression\032\312\001\n\007Unar"
+  "yOp\022D\n\007op_type\030\001 \001(\01623.substrait.Derivat"
+  "ionExpression.UnaryOp.UnaryOpType\022,\n\003arg"
+  "\030\002 \001(\0132\037.substrait.DerivationExpression\""
+  "K\n\013UnaryOpType\022\035\n\031UNARY_OP_TYPE_UNSPECIF"
+  "IED\020\000\022\035\n\031UNARY_OP_TYPE_BOOLEAN_NOT\020\001\032\240\004\n"
+  "\010BinaryOp\022F\n\007op_type\030\001 \001(\01625.substrait.D"
+  "erivationExpression.BinaryOp.BinaryOpTyp"
+  "e\022-\n\004arg1\030\002 \001(\0132\037.substrait.DerivationEx"
+  "pression\022-\n\004arg2\030\003 \001(\0132\037.substrait.Deriv"
+  "ationExpression\"\355\002\n\014BinaryOpType\022\036\n\032BINA"
+  "RY_OP_TYPE_UNSPECIFIED\020\000\022\027\n\023BINARY_OP_TY"
+  "PE_PLUS\020\001\022\030\n\024BINARY_OP_TYPE_MINUS\020\002\022\033\n\027B"
+  "INARY_OP_TYPE_MULTIPLY\020\003\022\031\n\025BINARY_OP_TY"
+  "PE_DIVIDE\020\004\022\026\n\022BINARY_OP_TYPE_MIN\020\005\022\026\n\022B"
+  "INARY_OP_TYPE_MAX\020\006\022\037\n\033BINARY_OP_TYPE_GR"
+  "EATER_THAN\020\007\022\034\n\030BINARY_OP_TYPE_LESS_THAN"
+  "\020\010\022\026\n\022BINARY_OP_TYPE_AND\020\t\022\025\n\021BINARY_OP_"
+  "TYPE_OR\020\n\022\031\n\025BINARY_OP_TYPE_EQUALS\020\013\022\031\n\025"
+  "BINARY_OP_TYPE_COVERS\020\014\032\352\001\n\rReturnProgra"
+  "m\022M\n\013assignments\030\001 \003(\01328.substrait.Deriv"
+  "ationExpression.ReturnProgram.Assignment"
+  "\0229\n\020final_expression\030\002 \001(\0132\037.substrait.D"
+  "erivationExpression\032O\n\nAssignment\022\014\n\004nam"
+  "e\030\001 \001(\t\0223\n\nexpression\030\002 \001(\0132\037.substrait."
+  "DerivationExpressionB\006\n\004kindBW\n\022io.subst"
+  "rait.protoP\001Z*github.com/substrait-io/su"
+  "bstrait-go/proto\252\002\022Substrait.Protobufb\006p"
+  "roto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2ftype_5fexpressions_2eproto_deps[1] = {
   &::descriptor_table_substrait_2ftype_2eproto,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2ftype_5fexpressions_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2ftype_5fexpressions_2eproto = {
-  false, false, 4798, descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto, "substrait/type_expressions.proto", 
+  false, false, 4125, descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto, "substrait/type_expressions.proto", 
   &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once, descriptor_table_substrait_2ftype_5fexpressions_2eproto_deps, 1, 14,
   schemas, file_default_instances, TableStruct_substrait_2ftype_5fexpressions_2eproto::offsets,
   file_level_metadata_substrait_2ftype_5fexpressions_2eproto, file_level_enum_descriptors_substrait_2ftype_5fexpressions_2eproto, file_level_service_descriptors_substrait_2ftype_5fexpressions_2eproto,
@@ -701,7 +685,7 @@ const char* DerivationExpression_ExpressionFixedChar::_InternalParse(const char*
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression length = 1 [json_name = "length"];
+      // .substrait.DerivationExpression length = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_length(), ptr);
@@ -709,7 +693,7 @@ const char* DerivationExpression_ExpressionFixedChar::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -717,7 +701,7 @@ const char* DerivationExpression_ExpressionFixedChar::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -755,7 +739,7 @@ uint8_t* DerivationExpression_ExpressionFixedChar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression length = 1 [json_name = "length"];
+  // .substrait.DerivationExpression length = 1;
   if (this->_internal_has_length()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -763,13 +747,13 @@ uint8_t* DerivationExpression_ExpressionFixedChar::_InternalSerialize(
         1, _Internal::length(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -792,19 +776,19 @@ size_t DerivationExpression_ExpressionFixedChar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression length = 1 [json_name = "length"];
+  // .substrait.DerivationExpression length = 1;
   if (this->_internal_has_length()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *length_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -957,7 +941,7 @@ const char* DerivationExpression_ExpressionVarChar::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression length = 1 [json_name = "length"];
+      // .substrait.DerivationExpression length = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_length(), ptr);
@@ -965,7 +949,7 @@ const char* DerivationExpression_ExpressionVarChar::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -973,7 +957,7 @@ const char* DerivationExpression_ExpressionVarChar::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1011,7 +995,7 @@ uint8_t* DerivationExpression_ExpressionVarChar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression length = 1 [json_name = "length"];
+  // .substrait.DerivationExpression length = 1;
   if (this->_internal_has_length()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1019,13 +1003,13 @@ uint8_t* DerivationExpression_ExpressionVarChar::_InternalSerialize(
         1, _Internal::length(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1048,19 +1032,19 @@ size_t DerivationExpression_ExpressionVarChar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression length = 1 [json_name = "length"];
+  // .substrait.DerivationExpression length = 1;
   if (this->_internal_has_length()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *length_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -1213,7 +1197,7 @@ const char* DerivationExpression_ExpressionFixedBinary::_InternalParse(const cha
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression length = 1 [json_name = "length"];
+      // .substrait.DerivationExpression length = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_length(), ptr);
@@ -1221,7 +1205,7 @@ const char* DerivationExpression_ExpressionFixedBinary::_InternalParse(const cha
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1229,7 +1213,7 @@ const char* DerivationExpression_ExpressionFixedBinary::_InternalParse(const cha
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1267,7 +1251,7 @@ uint8_t* DerivationExpression_ExpressionFixedBinary::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression length = 1 [json_name = "length"];
+  // .substrait.DerivationExpression length = 1;
   if (this->_internal_has_length()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1275,13 +1259,13 @@ uint8_t* DerivationExpression_ExpressionFixedBinary::_InternalSerialize(
         1, _Internal::length(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1304,19 +1288,19 @@ size_t DerivationExpression_ExpressionFixedBinary::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression length = 1 [json_name = "length"];
+  // .substrait.DerivationExpression length = 1;
   if (this->_internal_has_length()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *length_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -1484,7 +1468,7 @@ const char* DerivationExpression_ExpressionDecimal::_InternalParse(const char* p
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression scale = 1 [json_name = "scale"];
+      // .substrait.DerivationExpression scale = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_scale(), ptr);
@@ -1492,7 +1476,7 @@ const char* DerivationExpression_ExpressionDecimal::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression precision = 2 [json_name = "precision"];
+      // .substrait.DerivationExpression precision = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_precision(), ptr);
@@ -1500,7 +1484,7 @@ const char* DerivationExpression_ExpressionDecimal::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1508,7 +1492,7 @@ const char* DerivationExpression_ExpressionDecimal::_InternalParse(const char* p
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1546,7 +1530,7 @@ uint8_t* DerivationExpression_ExpressionDecimal::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression scale = 1 [json_name = "scale"];
+  // .substrait.DerivationExpression scale = 1;
   if (this->_internal_has_scale()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1554,7 +1538,7 @@ uint8_t* DerivationExpression_ExpressionDecimal::_InternalSerialize(
         1, _Internal::scale(this), target, stream);
   }
 
-  // .substrait.DerivationExpression precision = 2 [json_name = "precision"];
+  // .substrait.DerivationExpression precision = 2;
   if (this->_internal_has_precision()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1562,13 +1546,13 @@ uint8_t* DerivationExpression_ExpressionDecimal::_InternalSerialize(
         2, _Internal::precision(this), target, stream);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1591,26 +1575,26 @@ size_t DerivationExpression_ExpressionDecimal::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression scale = 1 [json_name = "scale"];
+  // .substrait.DerivationExpression scale = 1;
   if (this->_internal_has_scale()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *scale_);
   }
 
-  // .substrait.DerivationExpression precision = 2 [json_name = "precision"];
+  // .substrait.DerivationExpression precision = 2;
   if (this->_internal_has_precision()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *precision_);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -1754,7 +1738,7 @@ const char* DerivationExpression_ExpressionStruct::_InternalParse(const char* pt
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.DerivationExpression types = 1 [json_name = "types"];
+      // repeated .substrait.DerivationExpression types = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -1767,7 +1751,7 @@ const char* DerivationExpression_ExpressionStruct::_InternalParse(const char* pt
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -1775,7 +1759,7 @@ const char* DerivationExpression_ExpressionStruct::_InternalParse(const char* pt
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1813,7 +1797,7 @@ uint8_t* DerivationExpression_ExpressionStruct::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.DerivationExpression types = 1 [json_name = "types"];
+  // repeated .substrait.DerivationExpression types = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_types_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -1821,13 +1805,13 @@ uint8_t* DerivationExpression_ExpressionStruct::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_types(i), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -1850,19 +1834,19 @@ size_t DerivationExpression_ExpressionStruct::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.DerivationExpression types = 1 [json_name = "types"];
+  // repeated .substrait.DerivationExpression types = 1;
   total_size += 1UL * this->_internal_types_size();
   for (const auto& msg : this->types_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -2008,7 +1992,7 @@ const char* DerivationExpression_ExpressionNamedStruct::_InternalParse(const cha
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated string names = 1 [json_name = "names"];
+      // repeated string names = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -2023,7 +2007,7 @@ const char* DerivationExpression_ExpressionNamedStruct::_InternalParse(const cha
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionStruct struct = 2 [json_name = "struct"];
+      // .substrait.DerivationExpression.ExpressionStruct struct = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_(), ptr);
@@ -2060,7 +2044,7 @@ uint8_t* DerivationExpression_ExpressionNamedStruct::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated string names = 1 [json_name = "names"];
+  // repeated string names = 1;
   for (int i = 0, n = this->_internal_names_size(); i < n; i++) {
     const auto& s = this->_internal_names(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -2070,7 +2054,7 @@ uint8_t* DerivationExpression_ExpressionNamedStruct::_InternalSerialize(
     target = stream->WriteString(1, s, target);
   }
 
-  // .substrait.DerivationExpression.ExpressionStruct struct = 2 [json_name = "struct"];
+  // .substrait.DerivationExpression.ExpressionStruct struct = 2;
   if (this->_internal_has_struct_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2094,7 +2078,7 @@ size_t DerivationExpression_ExpressionNamedStruct::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string names = 1 [json_name = "names"];
+  // repeated string names = 1;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(names_.size());
   for (int i = 0, n = names_.size(); i < n; i++) {
@@ -2102,7 +2086,7 @@ size_t DerivationExpression_ExpressionNamedStruct::ByteSizeLong() const {
       names_.Get(i));
   }
 
-  // .substrait.DerivationExpression.ExpressionStruct struct = 2 [json_name = "struct"];
+  // .substrait.DerivationExpression.ExpressionStruct struct = 2;
   if (this->_internal_has_struct_()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -2247,7 +2231,7 @@ const char* DerivationExpression_ExpressionList::_InternalParse(const char* ptr,
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression type = 1 [json_name = "type"];
+      // .substrait.DerivationExpression type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
@@ -2255,7 +2239,7 @@ const char* DerivationExpression_ExpressionList::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -2263,7 +2247,7 @@ const char* DerivationExpression_ExpressionList::_InternalParse(const char* ptr,
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2301,7 +2285,7 @@ uint8_t* DerivationExpression_ExpressionList::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression type = 1 [json_name = "type"];
+  // .substrait.DerivationExpression type = 1;
   if (this->_internal_has_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2309,13 +2293,13 @@ uint8_t* DerivationExpression_ExpressionList::_InternalSerialize(
         1, _Internal::type(this), target, stream);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -2338,19 +2322,19 @@ size_t DerivationExpression_ExpressionList::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression type = 1 [json_name = "type"];
+  // .substrait.DerivationExpression type = 1;
   if (this->_internal_has_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *type_);
   }
 
-  // uint32 variation_pointer = 2 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 2;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 3 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 3;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -2518,7 +2502,7 @@ const char* DerivationExpression_ExpressionMap::_InternalParse(const char* ptr, 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression key = 1 [json_name = "key"];
+      // .substrait.DerivationExpression key = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_key(), ptr);
@@ -2526,7 +2510,7 @@ const char* DerivationExpression_ExpressionMap::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression value = 2 [json_name = "value"];
+      // .substrait.DerivationExpression value = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
@@ -2534,7 +2518,7 @@ const char* DerivationExpression_ExpressionMap::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+      // uint32 variation_pointer = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
@@ -2542,7 +2526,7 @@ const char* DerivationExpression_ExpressionMap::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+      // .substrait.Type.Nullability nullability = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2580,7 +2564,7 @@ uint8_t* DerivationExpression_ExpressionMap::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression key = 1 [json_name = "key"];
+  // .substrait.DerivationExpression key = 1;
   if (this->_internal_has_key()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2588,7 +2572,7 @@ uint8_t* DerivationExpression_ExpressionMap::_InternalSerialize(
         1, _Internal::key(this), target, stream);
   }
 
-  // .substrait.DerivationExpression value = 2 [json_name = "value"];
+  // .substrait.DerivationExpression value = 2;
   if (this->_internal_has_value()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2596,13 +2580,13 @@ uint8_t* DerivationExpression_ExpressionMap::_InternalSerialize(
         2, _Internal::value(this), target, stream);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(3, this->_internal_variation_pointer(), target);
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -2625,26 +2609,26 @@ size_t DerivationExpression_ExpressionMap::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression key = 1 [json_name = "key"];
+  // .substrait.DerivationExpression key = 1;
   if (this->_internal_has_key()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *key_);
   }
 
-  // .substrait.DerivationExpression value = 2 [json_name = "value"];
+  // .substrait.DerivationExpression value = 2;
   if (this->_internal_has_value()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *value_);
   }
 
-  // uint32 variation_pointer = 3 [json_name = "variationPointer"];
+  // uint32 variation_pointer = 3;
   if (this->_internal_variation_pointer() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
   }
 
-  // .substrait.Type.Nullability nullability = 4 [json_name = "nullability"];
+  // .substrait.Type.Nullability nullability = 4;
   if (this->_internal_nullability() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
@@ -2824,7 +2808,7 @@ const char* DerivationExpression_IfElse::_InternalParse(const char* ptr, ::PROTO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression if_condition = 1 [json_name = "ifCondition"];
+      // .substrait.DerivationExpression if_condition = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_if_condition(), ptr);
@@ -2832,7 +2816,7 @@ const char* DerivationExpression_IfElse::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression if_return = 2 [json_name = "ifReturn"];
+      // .substrait.DerivationExpression if_return = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_if_return(), ptr);
@@ -2840,7 +2824,7 @@ const char* DerivationExpression_IfElse::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression else_return = 3 [json_name = "elseReturn"];
+      // .substrait.DerivationExpression else_return = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_else_return(), ptr);
@@ -2877,7 +2861,7 @@ uint8_t* DerivationExpression_IfElse::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression if_condition = 1 [json_name = "ifCondition"];
+  // .substrait.DerivationExpression if_condition = 1;
   if (this->_internal_has_if_condition()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2885,7 +2869,7 @@ uint8_t* DerivationExpression_IfElse::_InternalSerialize(
         1, _Internal::if_condition(this), target, stream);
   }
 
-  // .substrait.DerivationExpression if_return = 2 [json_name = "ifReturn"];
+  // .substrait.DerivationExpression if_return = 2;
   if (this->_internal_has_if_return()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2893,7 +2877,7 @@ uint8_t* DerivationExpression_IfElse::_InternalSerialize(
         2, _Internal::if_return(this), target, stream);
   }
 
-  // .substrait.DerivationExpression else_return = 3 [json_name = "elseReturn"];
+  // .substrait.DerivationExpression else_return = 3;
   if (this->_internal_has_else_return()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2917,21 +2901,21 @@ size_t DerivationExpression_IfElse::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression if_condition = 1 [json_name = "ifCondition"];
+  // .substrait.DerivationExpression if_condition = 1;
   if (this->_internal_has_if_condition()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *if_condition_);
   }
 
-  // .substrait.DerivationExpression if_return = 2 [json_name = "ifReturn"];
+  // .substrait.DerivationExpression if_return = 2;
   if (this->_internal_has_if_return()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *if_return_);
   }
 
-  // .substrait.DerivationExpression else_return = 3 [json_name = "elseReturn"];
+  // .substrait.DerivationExpression else_return = 3;
   if (this->_internal_has_else_return()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -3081,7 +3065,7 @@ const char* DerivationExpression_UnaryOp::_InternalParse(const char* ptr, ::PROT
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression.UnaryOp.UnaryOpType op_type = 1 [json_name = "opType"];
+      // .substrait.DerivationExpression.UnaryOp.UnaryOpType op_type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -3090,7 +3074,7 @@ const char* DerivationExpression_UnaryOp::_InternalParse(const char* ptr, ::PROT
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression arg = 2 [json_name = "arg"];
+      // .substrait.DerivationExpression arg = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_arg(), ptr);
@@ -3127,14 +3111,14 @@ uint8_t* DerivationExpression_UnaryOp::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression.UnaryOp.UnaryOpType op_type = 1 [json_name = "opType"];
+  // .substrait.DerivationExpression.UnaryOp.UnaryOpType op_type = 1;
   if (this->_internal_op_type() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       1, this->_internal_op_type(), target);
   }
 
-  // .substrait.DerivationExpression arg = 2 [json_name = "arg"];
+  // .substrait.DerivationExpression arg = 2;
   if (this->_internal_has_arg()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3158,14 +3142,14 @@ size_t DerivationExpression_UnaryOp::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression arg = 2 [json_name = "arg"];
+  // .substrait.DerivationExpression arg = 2;
   if (this->_internal_has_arg()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *arg_);
   }
 
-  // .substrait.DerivationExpression.UnaryOp.UnaryOpType op_type = 1 [json_name = "opType"];
+  // .substrait.DerivationExpression.UnaryOp.UnaryOpType op_type = 1;
   if (this->_internal_op_type() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_op_type());
@@ -3326,7 +3310,7 @@ const char* DerivationExpression_BinaryOp::_InternalParse(const char* ptr, ::PRO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.DerivationExpression.BinaryOp.BinaryOpType op_type = 1 [json_name = "opType"];
+      // .substrait.DerivationExpression.BinaryOp.BinaryOpType op_type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -3335,7 +3319,7 @@ const char* DerivationExpression_BinaryOp::_InternalParse(const char* ptr, ::PRO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression arg1 = 2 [json_name = "arg1"];
+      // .substrait.DerivationExpression arg1 = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_arg1(), ptr);
@@ -3343,7 +3327,7 @@ const char* DerivationExpression_BinaryOp::_InternalParse(const char* ptr, ::PRO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression arg2 = 3 [json_name = "arg2"];
+      // .substrait.DerivationExpression arg2 = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_arg2(), ptr);
@@ -3380,14 +3364,14 @@ uint8_t* DerivationExpression_BinaryOp::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression.BinaryOp.BinaryOpType op_type = 1 [json_name = "opType"];
+  // .substrait.DerivationExpression.BinaryOp.BinaryOpType op_type = 1;
   if (this->_internal_op_type() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       1, this->_internal_op_type(), target);
   }
 
-  // .substrait.DerivationExpression arg1 = 2 [json_name = "arg1"];
+  // .substrait.DerivationExpression arg1 = 2;
   if (this->_internal_has_arg1()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3395,7 +3379,7 @@ uint8_t* DerivationExpression_BinaryOp::_InternalSerialize(
         2, _Internal::arg1(this), target, stream);
   }
 
-  // .substrait.DerivationExpression arg2 = 3 [json_name = "arg2"];
+  // .substrait.DerivationExpression arg2 = 3;
   if (this->_internal_has_arg2()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3419,21 +3403,21 @@ size_t DerivationExpression_BinaryOp::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.DerivationExpression arg1 = 2 [json_name = "arg1"];
+  // .substrait.DerivationExpression arg1 = 2;
   if (this->_internal_has_arg1()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *arg1_);
   }
 
-  // .substrait.DerivationExpression arg2 = 3 [json_name = "arg2"];
+  // .substrait.DerivationExpression arg2 = 3;
   if (this->_internal_has_arg2()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *arg2_);
   }
 
-  // .substrait.DerivationExpression.BinaryOp.BinaryOpType op_type = 1 [json_name = "opType"];
+  // .substrait.DerivationExpression.BinaryOp.BinaryOpType op_type = 1;
   if (this->_internal_op_type() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_op_type());
@@ -3591,7 +3575,7 @@ const char* DerivationExpression_ReturnProgram_Assignment::_InternalParse(const 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string name = 1 [json_name = "name"];
+      // string name = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_name();
@@ -3601,7 +3585,7 @@ const char* DerivationExpression_ReturnProgram_Assignment::_InternalParse(const 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression expression = 2 [json_name = "expression"];
+      // .substrait.DerivationExpression expression = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_expression(), ptr);
@@ -3638,7 +3622,7 @@ uint8_t* DerivationExpression_ReturnProgram_Assignment::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -3648,7 +3632,7 @@ uint8_t* DerivationExpression_ReturnProgram_Assignment::_InternalSerialize(
         1, this->_internal_name(), target);
   }
 
-  // .substrait.DerivationExpression expression = 2 [json_name = "expression"];
+  // .substrait.DerivationExpression expression = 2;
   if (this->_internal_has_expression()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3672,14 +3656,14 @@ size_t DerivationExpression_ReturnProgram_Assignment::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
   }
 
-  // .substrait.DerivationExpression expression = 2 [json_name = "expression"];
+  // .substrait.DerivationExpression expression = 2;
   if (this->_internal_has_expression()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -3826,7 +3810,7 @@ const char* DerivationExpression_ReturnProgram::_InternalParse(const char* ptr, 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.DerivationExpression.ReturnProgram.Assignment assignments = 1 [json_name = "assignments"];
+      // repeated .substrait.DerivationExpression.ReturnProgram.Assignment assignments = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -3839,7 +3823,7 @@ const char* DerivationExpression_ReturnProgram::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression final_expression = 2 [json_name = "finalExpression"];
+      // .substrait.DerivationExpression final_expression = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_final_expression(), ptr);
@@ -3876,7 +3860,7 @@ uint8_t* DerivationExpression_ReturnProgram::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.DerivationExpression.ReturnProgram.Assignment assignments = 1 [json_name = "assignments"];
+  // repeated .substrait.DerivationExpression.ReturnProgram.Assignment assignments = 1;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_assignments_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -3884,7 +3868,7 @@ uint8_t* DerivationExpression_ReturnProgram::_InternalSerialize(
       InternalWriteMessage(1, this->_internal_assignments(i), target, stream);
   }
 
-  // .substrait.DerivationExpression final_expression = 2 [json_name = "finalExpression"];
+  // .substrait.DerivationExpression final_expression = 2;
   if (this->_internal_has_final_expression()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3908,14 +3892,14 @@ size_t DerivationExpression_ReturnProgram::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.DerivationExpression.ReturnProgram.Assignment assignments = 1 [json_name = "assignments"];
+  // repeated .substrait.DerivationExpression.ReturnProgram.Assignment assignments = 1;
   total_size += 1UL * this->_internal_assignments_size();
   for (const auto& msg : this->assignments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.DerivationExpression final_expression = 2 [json_name = "finalExpression"];
+  // .substrait.DerivationExpression final_expression = 2;
   if (this->_internal_has_final_expression()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -5059,7 +5043,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.Type.Boolean bool = 1 [json_name = "bool"];
+      // .substrait.Type.Boolean bool = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_bool_(), ptr);
@@ -5067,7 +5051,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I8 i8 = 2 [json_name = "i8"];
+      // .substrait.Type.I8 i8 = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_i8(), ptr);
@@ -5075,7 +5059,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I16 i16 = 3 [json_name = "i16"];
+      // .substrait.Type.I16 i16 = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_i16(), ptr);
@@ -5083,7 +5067,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I32 i32 = 5 [json_name = "i32"];
+      // .substrait.Type.I32 i32 = 5;
       case 5:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_i32(), ptr);
@@ -5091,7 +5075,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.I64 i64 = 7 [json_name = "i64"];
+      // .substrait.Type.I64 i64 = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_i64(), ptr);
@@ -5099,7 +5083,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.FP32 fp32 = 10 [json_name = "fp32"];
+      // .substrait.Type.FP32 fp32 = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_fp32(), ptr);
@@ -5107,7 +5091,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.FP64 fp64 = 11 [json_name = "fp64"];
+      // .substrait.Type.FP64 fp64 = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
           ptr = ctx->ParseMessage(_internal_mutable_fp64(), ptr);
@@ -5115,7 +5099,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.String string = 12 [json_name = "string"];
+      // .substrait.Type.String string = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
           ptr = ctx->ParseMessage(_internal_mutable_string(), ptr);
@@ -5123,7 +5107,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Binary binary = 13 [json_name = "binary"];
+      // .substrait.Type.Binary binary = 13;
       case 13:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 106)) {
           ptr = ctx->ParseMessage(_internal_mutable_binary(), ptr);
@@ -5131,7 +5115,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Timestamp timestamp = 14 [json_name = "timestamp"];
+      // .substrait.Type.Timestamp timestamp = 14;
       case 14:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 114)) {
           ptr = ctx->ParseMessage(_internal_mutable_timestamp(), ptr);
@@ -5139,7 +5123,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Date date = 16 [json_name = "date"];
+      // .substrait.Type.Date date = 16;
       case 16:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 130)) {
           ptr = ctx->ParseMessage(_internal_mutable_date(), ptr);
@@ -5147,7 +5131,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.Time time = 17 [json_name = "time"];
+      // .substrait.Type.Time time = 17;
       case 17:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 138)) {
           ptr = ctx->ParseMessage(_internal_mutable_time(), ptr);
@@ -5155,7 +5139,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.IntervalYear interval_year = 19 [json_name = "intervalYear"];
+      // .substrait.Type.IntervalYear interval_year = 19;
       case 19:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 154)) {
           ptr = ctx->ParseMessage(_internal_mutable_interval_year(), ptr);
@@ -5163,7 +5147,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.IntervalDay interval_day = 20 [json_name = "intervalDay"];
+      // .substrait.Type.IntervalDay interval_day = 20;
       case 20:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 162)) {
           ptr = ctx->ParseMessage(_internal_mutable_interval_day(), ptr);
@@ -5171,7 +5155,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionFixedChar fixed_char = 21 [json_name = "fixedChar"];
+      // .substrait.DerivationExpression.ExpressionFixedChar fixed_char = 21;
       case 21:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 170)) {
           ptr = ctx->ParseMessage(_internal_mutable_fixed_char(), ptr);
@@ -5179,7 +5163,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionVarChar varchar = 22 [json_name = "varchar"];
+      // .substrait.DerivationExpression.ExpressionVarChar varchar = 22;
       case 22:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 178)) {
           ptr = ctx->ParseMessage(_internal_mutable_varchar(), ptr);
@@ -5187,7 +5171,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionFixedBinary fixed_binary = 23 [json_name = "fixedBinary"];
+      // .substrait.DerivationExpression.ExpressionFixedBinary fixed_binary = 23;
       case 23:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 186)) {
           ptr = ctx->ParseMessage(_internal_mutable_fixed_binary(), ptr);
@@ -5195,7 +5179,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionDecimal decimal = 24 [json_name = "decimal"];
+      // .substrait.DerivationExpression.ExpressionDecimal decimal = 24;
       case 24:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 194)) {
           ptr = ctx->ParseMessage(_internal_mutable_decimal(), ptr);
@@ -5203,7 +5187,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionStruct struct = 25 [json_name = "struct"];
+      // .substrait.DerivationExpression.ExpressionStruct struct = 25;
       case 25:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 202)) {
           ptr = ctx->ParseMessage(_internal_mutable_struct_(), ptr);
@@ -5211,7 +5195,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionList list = 27 [json_name = "list"];
+      // .substrait.DerivationExpression.ExpressionList list = 27;
       case 27:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 218)) {
           ptr = ctx->ParseMessage(_internal_mutable_list(), ptr);
@@ -5219,7 +5203,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ExpressionMap map = 28 [json_name = "map"];
+      // .substrait.DerivationExpression.ExpressionMap map = 28;
       case 28:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 226)) {
           ptr = ctx->ParseMessage(_internal_mutable_map(), ptr);
@@ -5227,7 +5211,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.TimestampTZ timestamp_tz = 29 [json_name = "timestampTz"];
+      // .substrait.Type.TimestampTZ timestamp_tz = 29;
       case 29:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 234)) {
           ptr = ctx->ParseMessage(_internal_mutable_timestamp_tz(), ptr);
@@ -5235,7 +5219,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // uint32 user_defined_pointer = 31 [json_name = "userDefinedPointer"];
+      // uint32 user_defined_pointer = 31;
       case 31:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 248)) {
           _internal_set_user_defined_pointer(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -5243,7 +5227,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type.UUID uuid = 32 [json_name = "uuid"];
+      // .substrait.Type.UUID uuid = 32;
       case 32:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 2)) {
           ptr = ctx->ParseMessage(_internal_mutable_uuid(), ptr);
@@ -5251,7 +5235,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // string type_parameter_name = 33 [json_name = "typeParameterName"];
+      // string type_parameter_name = 33;
       case 33:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_type_parameter_name();
@@ -5261,7 +5245,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // string integer_parameter_name = 34 [json_name = "integerParameterName"];
+      // string integer_parameter_name = 34;
       case 34:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           auto str = _internal_mutable_integer_parameter_name();
@@ -5271,7 +5255,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // int32 integer_literal = 35 [json_name = "integerLiteral"];
+      // int32 integer_literal = 35;
       case 35:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           _internal_set_integer_literal(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -5279,7 +5263,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.UnaryOp unary_op = 36 [json_name = "unaryOp"];
+      // .substrait.DerivationExpression.UnaryOp unary_op = 36;
       case 36:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_unary_op(), ptr);
@@ -5287,7 +5271,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.BinaryOp binary_op = 37 [json_name = "binaryOp"];
+      // .substrait.DerivationExpression.BinaryOp binary_op = 37;
       case 37:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
           ptr = ctx->ParseMessage(_internal_mutable_binary_op(), ptr);
@@ -5295,7 +5279,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.IfElse if_else = 38 [json_name = "ifElse"];
+      // .substrait.DerivationExpression.IfElse if_else = 38;
       case 38:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
           ptr = ctx->ParseMessage(_internal_mutable_if_else(), ptr);
@@ -5303,7 +5287,7 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression.ReturnProgram return_program = 39 [json_name = "returnProgram"];
+      // .substrait.DerivationExpression.ReturnProgram return_program = 39;
       case 39:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
           ptr = ctx->ParseMessage(_internal_mutable_return_program(), ptr);
@@ -5340,7 +5324,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.Type.Boolean bool = 1 [json_name = "bool"];
+  // .substrait.Type.Boolean bool = 1;
   if (_internal_has_bool_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5348,7 +5332,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         1, _Internal::bool_(this), target, stream);
   }
 
-  // .substrait.Type.I8 i8 = 2 [json_name = "i8"];
+  // .substrait.Type.I8 i8 = 2;
   if (_internal_has_i8()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5356,7 +5340,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         2, _Internal::i8(this), target, stream);
   }
 
-  // .substrait.Type.I16 i16 = 3 [json_name = "i16"];
+  // .substrait.Type.I16 i16 = 3;
   if (_internal_has_i16()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5364,7 +5348,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         3, _Internal::i16(this), target, stream);
   }
 
-  // .substrait.Type.I32 i32 = 5 [json_name = "i32"];
+  // .substrait.Type.I32 i32 = 5;
   if (_internal_has_i32()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5372,7 +5356,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         5, _Internal::i32(this), target, stream);
   }
 
-  // .substrait.Type.I64 i64 = 7 [json_name = "i64"];
+  // .substrait.Type.I64 i64 = 7;
   if (_internal_has_i64()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5380,7 +5364,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         7, _Internal::i64(this), target, stream);
   }
 
-  // .substrait.Type.FP32 fp32 = 10 [json_name = "fp32"];
+  // .substrait.Type.FP32 fp32 = 10;
   if (_internal_has_fp32()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5388,7 +5372,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         10, _Internal::fp32(this), target, stream);
   }
 
-  // .substrait.Type.FP64 fp64 = 11 [json_name = "fp64"];
+  // .substrait.Type.FP64 fp64 = 11;
   if (_internal_has_fp64()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5396,7 +5380,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         11, _Internal::fp64(this), target, stream);
   }
 
-  // .substrait.Type.String string = 12 [json_name = "string"];
+  // .substrait.Type.String string = 12;
   if (_internal_has_string()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5404,7 +5388,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         12, _Internal::string(this), target, stream);
   }
 
-  // .substrait.Type.Binary binary = 13 [json_name = "binary"];
+  // .substrait.Type.Binary binary = 13;
   if (_internal_has_binary()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5412,7 +5396,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         13, _Internal::binary(this), target, stream);
   }
 
-  // .substrait.Type.Timestamp timestamp = 14 [json_name = "timestamp"];
+  // .substrait.Type.Timestamp timestamp = 14;
   if (_internal_has_timestamp()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5420,7 +5404,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         14, _Internal::timestamp(this), target, stream);
   }
 
-  // .substrait.Type.Date date = 16 [json_name = "date"];
+  // .substrait.Type.Date date = 16;
   if (_internal_has_date()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5428,7 +5412,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         16, _Internal::date(this), target, stream);
   }
 
-  // .substrait.Type.Time time = 17 [json_name = "time"];
+  // .substrait.Type.Time time = 17;
   if (_internal_has_time()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5436,7 +5420,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         17, _Internal::time(this), target, stream);
   }
 
-  // .substrait.Type.IntervalYear interval_year = 19 [json_name = "intervalYear"];
+  // .substrait.Type.IntervalYear interval_year = 19;
   if (_internal_has_interval_year()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5444,7 +5428,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         19, _Internal::interval_year(this), target, stream);
   }
 
-  // .substrait.Type.IntervalDay interval_day = 20 [json_name = "intervalDay"];
+  // .substrait.Type.IntervalDay interval_day = 20;
   if (_internal_has_interval_day()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5452,7 +5436,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         20, _Internal::interval_day(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionFixedChar fixed_char = 21 [json_name = "fixedChar"];
+  // .substrait.DerivationExpression.ExpressionFixedChar fixed_char = 21;
   if (_internal_has_fixed_char()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5460,7 +5444,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         21, _Internal::fixed_char(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionVarChar varchar = 22 [json_name = "varchar"];
+  // .substrait.DerivationExpression.ExpressionVarChar varchar = 22;
   if (_internal_has_varchar()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5468,7 +5452,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         22, _Internal::varchar(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionFixedBinary fixed_binary = 23 [json_name = "fixedBinary"];
+  // .substrait.DerivationExpression.ExpressionFixedBinary fixed_binary = 23;
   if (_internal_has_fixed_binary()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5476,7 +5460,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         23, _Internal::fixed_binary(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionDecimal decimal = 24 [json_name = "decimal"];
+  // .substrait.DerivationExpression.ExpressionDecimal decimal = 24;
   if (_internal_has_decimal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5484,7 +5468,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         24, _Internal::decimal(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionStruct struct = 25 [json_name = "struct"];
+  // .substrait.DerivationExpression.ExpressionStruct struct = 25;
   if (_internal_has_struct_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5492,7 +5476,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         25, _Internal::struct_(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionList list = 27 [json_name = "list"];
+  // .substrait.DerivationExpression.ExpressionList list = 27;
   if (_internal_has_list()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5500,7 +5484,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         27, _Internal::list(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ExpressionMap map = 28 [json_name = "map"];
+  // .substrait.DerivationExpression.ExpressionMap map = 28;
   if (_internal_has_map()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5508,7 +5492,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         28, _Internal::map(this), target, stream);
   }
 
-  // .substrait.Type.TimestampTZ timestamp_tz = 29 [json_name = "timestampTz"];
+  // .substrait.Type.TimestampTZ timestamp_tz = 29;
   if (_internal_has_timestamp_tz()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5516,13 +5500,13 @@ uint8_t* DerivationExpression::_InternalSerialize(
         29, _Internal::timestamp_tz(this), target, stream);
   }
 
-  // uint32 user_defined_pointer = 31 [json_name = "userDefinedPointer"];
+  // uint32 user_defined_pointer = 31;
   if (_internal_has_user_defined_pointer()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(31, this->_internal_user_defined_pointer(), target);
   }
 
-  // .substrait.Type.UUID uuid = 32 [json_name = "uuid"];
+  // .substrait.Type.UUID uuid = 32;
   if (_internal_has_uuid()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5530,7 +5514,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         32, _Internal::uuid(this), target, stream);
   }
 
-  // string type_parameter_name = 33 [json_name = "typeParameterName"];
+  // string type_parameter_name = 33;
   if (_internal_has_type_parameter_name()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_type_parameter_name().data(), static_cast<int>(this->_internal_type_parameter_name().length()),
@@ -5540,7 +5524,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         33, this->_internal_type_parameter_name(), target);
   }
 
-  // string integer_parameter_name = 34 [json_name = "integerParameterName"];
+  // string integer_parameter_name = 34;
   if (_internal_has_integer_parameter_name()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_integer_parameter_name().data(), static_cast<int>(this->_internal_integer_parameter_name().length()),
@@ -5550,13 +5534,13 @@ uint8_t* DerivationExpression::_InternalSerialize(
         34, this->_internal_integer_parameter_name(), target);
   }
 
-  // int32 integer_literal = 35 [json_name = "integerLiteral"];
+  // int32 integer_literal = 35;
   if (_internal_has_integer_literal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(35, this->_internal_integer_literal(), target);
   }
 
-  // .substrait.DerivationExpression.UnaryOp unary_op = 36 [json_name = "unaryOp"];
+  // .substrait.DerivationExpression.UnaryOp unary_op = 36;
   if (_internal_has_unary_op()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5564,7 +5548,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         36, _Internal::unary_op(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.BinaryOp binary_op = 37 [json_name = "binaryOp"];
+  // .substrait.DerivationExpression.BinaryOp binary_op = 37;
   if (_internal_has_binary_op()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5572,7 +5556,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         37, _Internal::binary_op(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.IfElse if_else = 38 [json_name = "ifElse"];
+  // .substrait.DerivationExpression.IfElse if_else = 38;
   if (_internal_has_if_else()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5580,7 +5564,7 @@ uint8_t* DerivationExpression::_InternalSerialize(
         38, _Internal::if_else(this), target, stream);
   }
 
-  // .substrait.DerivationExpression.ReturnProgram return_program = 39 [json_name = "returnProgram"];
+  // .substrait.DerivationExpression.ReturnProgram return_program = 39;
   if (_internal_has_return_program()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -5605,217 +5589,217 @@ size_t DerivationExpression::ByteSizeLong() const {
   (void) cached_has_bits;
 
   switch (kind_case()) {
-    // .substrait.Type.Boolean bool = 1 [json_name = "bool"];
+    // .substrait.Type.Boolean bool = 1;
     case kBool: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.bool__);
       break;
     }
-    // .substrait.Type.I8 i8 = 2 [json_name = "i8"];
+    // .substrait.Type.I8 i8 = 2;
     case kI8: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i8_);
       break;
     }
-    // .substrait.Type.I16 i16 = 3 [json_name = "i16"];
+    // .substrait.Type.I16 i16 = 3;
     case kI16: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i16_);
       break;
     }
-    // .substrait.Type.I32 i32 = 5 [json_name = "i32"];
+    // .substrait.Type.I32 i32 = 5;
     case kI32: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i32_);
       break;
     }
-    // .substrait.Type.I64 i64 = 7 [json_name = "i64"];
+    // .substrait.Type.I64 i64 = 7;
     case kI64: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.i64_);
       break;
     }
-    // .substrait.Type.FP32 fp32 = 10 [json_name = "fp32"];
+    // .substrait.Type.FP32 fp32 = 10;
     case kFp32: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fp32_);
       break;
     }
-    // .substrait.Type.FP64 fp64 = 11 [json_name = "fp64"];
+    // .substrait.Type.FP64 fp64 = 11;
     case kFp64: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fp64_);
       break;
     }
-    // .substrait.Type.String string = 12 [json_name = "string"];
+    // .substrait.Type.String string = 12;
     case kString: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.string_);
       break;
     }
-    // .substrait.Type.Binary binary = 13 [json_name = "binary"];
+    // .substrait.Type.Binary binary = 13;
     case kBinary: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.binary_);
       break;
     }
-    // .substrait.Type.Timestamp timestamp = 14 [json_name = "timestamp"];
+    // .substrait.Type.Timestamp timestamp = 14;
     case kTimestamp: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.timestamp_);
       break;
     }
-    // .substrait.Type.Date date = 16 [json_name = "date"];
+    // .substrait.Type.Date date = 16;
     case kDate: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.date_);
       break;
     }
-    // .substrait.Type.Time time = 17 [json_name = "time"];
+    // .substrait.Type.Time time = 17;
     case kTime: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.time_);
       break;
     }
-    // .substrait.Type.IntervalYear interval_year = 19 [json_name = "intervalYear"];
+    // .substrait.Type.IntervalYear interval_year = 19;
     case kIntervalYear: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.interval_year_);
       break;
     }
-    // .substrait.Type.IntervalDay interval_day = 20 [json_name = "intervalDay"];
+    // .substrait.Type.IntervalDay interval_day = 20;
     case kIntervalDay: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.interval_day_);
       break;
     }
-    // .substrait.Type.TimestampTZ timestamp_tz = 29 [json_name = "timestampTz"];
+    // .substrait.Type.TimestampTZ timestamp_tz = 29;
     case kTimestampTz: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.timestamp_tz_);
       break;
     }
-    // .substrait.Type.UUID uuid = 32 [json_name = "uuid"];
+    // .substrait.Type.UUID uuid = 32;
     case kUuid: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.uuid_);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionFixedChar fixed_char = 21 [json_name = "fixedChar"];
+    // .substrait.DerivationExpression.ExpressionFixedChar fixed_char = 21;
     case kFixedChar: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fixed_char_);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionVarChar varchar = 22 [json_name = "varchar"];
+    // .substrait.DerivationExpression.ExpressionVarChar varchar = 22;
     case kVarchar: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.varchar_);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionFixedBinary fixed_binary = 23 [json_name = "fixedBinary"];
+    // .substrait.DerivationExpression.ExpressionFixedBinary fixed_binary = 23;
     case kFixedBinary: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.fixed_binary_);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionDecimal decimal = 24 [json_name = "decimal"];
+    // .substrait.DerivationExpression.ExpressionDecimal decimal = 24;
     case kDecimal: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.decimal_);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionStruct struct = 25 [json_name = "struct"];
+    // .substrait.DerivationExpression.ExpressionStruct struct = 25;
     case kStruct: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.struct__);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionList list = 27 [json_name = "list"];
+    // .substrait.DerivationExpression.ExpressionList list = 27;
     case kList: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.list_);
       break;
     }
-    // .substrait.DerivationExpression.ExpressionMap map = 28 [json_name = "map"];
+    // .substrait.DerivationExpression.ExpressionMap map = 28;
     case kMap: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.map_);
       break;
     }
-    // uint32 user_defined_pointer = 31 [json_name = "userDefinedPointer"];
+    // uint32 user_defined_pointer = 31;
     case kUserDefinedPointer: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
           this->_internal_user_defined_pointer());
       break;
     }
-    // string type_parameter_name = 33 [json_name = "typeParameterName"];
+    // string type_parameter_name = 33;
     case kTypeParameterName: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_type_parameter_name());
       break;
     }
-    // string integer_parameter_name = 34 [json_name = "integerParameterName"];
+    // string integer_parameter_name = 34;
     case kIntegerParameterName: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
           this->_internal_integer_parameter_name());
       break;
     }
-    // int32 integer_literal = 35 [json_name = "integerLiteral"];
+    // int32 integer_literal = 35;
     case kIntegerLiteral: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32Size(
           this->_internal_integer_literal());
       break;
     }
-    // .substrait.DerivationExpression.UnaryOp unary_op = 36 [json_name = "unaryOp"];
+    // .substrait.DerivationExpression.UnaryOp unary_op = 36;
     case kUnaryOp: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.unary_op_);
       break;
     }
-    // .substrait.DerivationExpression.BinaryOp binary_op = 37 [json_name = "binaryOp"];
+    // .substrait.DerivationExpression.BinaryOp binary_op = 37;
     case kBinaryOp: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.binary_op_);
       break;
     }
-    // .substrait.DerivationExpression.IfElse if_else = 38 [json_name = "ifElse"];
+    // .substrait.DerivationExpression.IfElse if_else = 38;
     case kIfElse: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *kind_.if_else_);
       break;
     }
-    // .substrait.DerivationExpression.ReturnProgram return_program = 39 [json_name = "returnProgram"];
+    // .substrait.DerivationExpression.ReturnProgram return_program = 39;
     case kReturnProgram: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(

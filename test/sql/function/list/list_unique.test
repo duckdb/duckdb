@@ -188,6 +188,12 @@ SELECT list_unique(['2021-08-20'::TIMESTAMPTZ])
 ----
 1
 
+# interval
+query I
+SELECT list_unique([INTERVAL 1 YEAR])
+----
+1
+
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
 
 query I
@@ -208,3 +214,24 @@ query I
 SELECT list_unique([NULL::JSON])
 ----
 0
+
+# enums
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'ok'])
+
+query I
+SELECT list_unique(e) FROM enums
+----
+2
+
+# bug in #3481
+query I
+SELECT list_unique(['a', 'b、c', 'a'])
+----
+2
