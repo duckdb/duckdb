@@ -15,12 +15,13 @@
 extern "C" {
 #endif
 
+#ifndef ARROW_C_DATA_INTERFACE
+#define ARROW_C_DATA_INTERFACE
+
 #define ARROW_FLAG_DICTIONARY_ORDERED 1
 #define ARROW_FLAG_NULLABLE           2
 #define ARROW_FLAG_MAP_KEYS_SORTED    4
 
-#ifndef ARROW_C_DATA_H
-#define ARROW_C_DATA_H
 struct ArrowSchema {
 	// Array type description
 	const char *format;
