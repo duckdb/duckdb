@@ -6,6 +6,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 
 namespace duckdb {
 
@@ -90,6 +92,55 @@ unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext 
 
 unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<GlobalSinkState>();
+}
+
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalOperator::BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
+                                          PhysicalOperator *pipeline_child) {
+	auto pipeline = make_shared<Pipeline>(executor);
+	state.SetPipelineSink(*pipeline, this);
+	// the current is dependent on this pipeline to complete
+	current.AddDependency(pipeline);
+	// recurse into the pipeline child
+	children[0]->BuildPipelines(executor, *pipeline, state);
+	if (!state.recursive_cte) {
+		// regular pipeline: schedule it
+		state.AddPipeline(executor, move(pipeline));
+	} else {
+		// CTE pipeline! add it to the CTE pipelines
+		auto &cte = (PhysicalRecursiveCTE &)*state.recursive_cte;
+		cte.pipelines.push_back(move(pipeline));
+	}
+}
+
+void PhysicalOperator::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	op_state.reset();
+	if (IsSink()) {
+		// operator is a sink, build a pipeline
+		sink_state.reset();
+
+		// single operator:
+		// the operator becomes the data source of the current pipeline
+		state.SetPipelineSource(current, this);
+		// we create a new pipeline starting from the child
+		D_ASSERT(children.size() == 1);
+
+		BuildChildPipeline(executor, current, state, children[0].get());
+	} else {
+		// operator is not a sink! recurse in children
+		if (children.empty()) {
+			// source
+			state.SetPipelineSource(current, this);
+		} else {
+			if (children.size() != 1) {
+				throw InternalException("Operator not supported yet");
+			}
+			state.AddPipelineOperator(current, this);
+			children[0]->BuildPipelines(executor, current, state);
+		}
+	}
 }
 
 } // namespace duckdb

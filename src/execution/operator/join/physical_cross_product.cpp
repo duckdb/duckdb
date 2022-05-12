@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/join/physical_join.hpp"
 
 namespace duckdb {
 
@@ -86,6 +87,10 @@ OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, Data
 	// for the next iteration, move to the next position on the right side
 	state.right_position++;
 	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+void PhysicalCrossProduct::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
 }
 
 } // namespace duckdb

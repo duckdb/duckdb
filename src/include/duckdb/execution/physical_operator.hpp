@@ -17,8 +17,10 @@
 
 namespace duckdb {
 class Event;
+class Executor;
 class PhysicalOperator;
 class Pipeline;
+class PipelineBuildState;
 
 // LCOV_EXCL_START
 class OperatorState {
@@ -189,6 +191,12 @@ public:
 	virtual bool RequiresBatchIndex() const {
 		return false;
 	}
+
+public:
+	// Pipeline construction
+	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);
+	void BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
+	                        PhysicalOperator *pipeline_child);
 };
 
 } // namespace duckdb

@@ -44,6 +44,9 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 };
 
 } // namespace duckdb

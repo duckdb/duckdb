@@ -33,6 +33,7 @@ using event_map_t = unordered_map<const Pipeline *, PipelineEventStack>;
 class Executor {
 	friend class Pipeline;
 	friend class PipelineTask;
+	friend class PipelineBuildState;
 
 public:
 	explicit Executor(ClientContext &context);
@@ -44,7 +45,6 @@ public:
 	static Executor &Get(ClientContext &context);
 
 	void Initialize(PhysicalOperator *physical_plan);
-	void BuildPipelines(PhysicalOperator *op, Pipeline *current);
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask();
@@ -139,12 +139,6 @@ private:
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
 	//! Dependencies of child pipelines
 	unordered_map<Pipeline *, vector<Pipeline *>> child_dependencies;
-
-	//! Duplicate eliminated join scan dependencies
-	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
-
-	//! Active recursive CTE node (if any)
-	PhysicalOperator *recursive_cte;
 
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;

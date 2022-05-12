@@ -17,6 +17,9 @@ public:
 	explicit PhysicalExecute(PhysicalOperator *plan);
 
 	PhysicalOperator *plan;
+
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 };
 
 } // namespace duckdb

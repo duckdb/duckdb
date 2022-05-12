@@ -42,6 +42,9 @@ public:
 	}
 
 	string ParamsToString() const override;
+
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 };
 
 } // namespace duckdb

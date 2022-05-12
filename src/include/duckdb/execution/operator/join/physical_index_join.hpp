@@ -62,6 +62,9 @@ public:
 		return true;
 	}
 
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+
 private:
 	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;
 	//! Fills result chunk

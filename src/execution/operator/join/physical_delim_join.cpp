@@ -3,7 +3,9 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -94,6 +96,37 @@ SinkFinalizeType PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, C
 
 string PhysicalDelimJoin::ParamsToString() const {
 	return join->ParamsToString();
+}
+
+void PhysicalDelimJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	op_state.reset();
+	sink_state.reset();
+
+	// duplicate eliminated join
+	auto pipeline = make_shared<Pipeline>(executor);
+	state.SetPipelineSink(*pipeline, this);
+	current.AddDependency(pipeline);
+
+	// recurse into the pipeline child
+	children[0]->BuildPipelines(executor, *pipeline, state);
+	if (type == PhysicalOperatorType::DELIM_JOIN) {
+		// recurse into the actual join
+		// any pipelines in there depend on the main pipeline
+		// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+		// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+		for (auto &delim_scan : delim_scans) {
+			state.delim_join_dependencies[delim_scan] = pipeline.get();
+		}
+		join->BuildPipelines(executor, current, state);
+	}
+	if (!state.recursive_cte) {
+		// regular pipeline: schedule it
+		state.AddPipeline(executor, move(pipeline));
+	} else {
+		// CTE pipeline! add it to the CTE pipelines
+		auto &cte = (PhysicalRecursiveCTE &)*state.recursive_cte;
+		cte.pipelines.push_back(move(pipeline));
+	}
 }
 
 } // namespace duckdb

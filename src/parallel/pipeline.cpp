@@ -113,7 +113,8 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	}
 	if (sink->RequiresBatchIndex()) {
 		if (!source->SupportsBatchIndex()) {
-			throw InternalException("Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+			throw InternalException(
+			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
 	} else if (sink->SinkOrderMatters()) {
 		// FIXME: only if order actually matters to us
@@ -226,6 +227,52 @@ vector<PhysicalOperator *> Pipeline::GetOperators() const {
 		result.push_back(sink);
 	}
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Pipeline Build State
+//===--------------------------------------------------------------------===//
+void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator *op) {
+	pipeline.source = op;
+}
+
+void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op) {
+	pipeline.sink = op;
+}
+
+void PipelineBuildState::AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op) {
+	pipeline.operators.push_back(op);
+}
+
+void PipelineBuildState::AddPipeline(Executor &executor, shared_ptr<Pipeline> pipeline) {
+	executor.pipelines.push_back(move(pipeline));
+}
+
+PhysicalOperator &PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
+	D_ASSERT(pipeline.sink);
+	return *pipeline.sink;
+}
+
+void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators) {
+	pipeline.operators = move(operators);
+}
+
+void PipelineBuildState::AddChildPipeline(Executor &executor, Pipeline &pipeline) {
+	executor.AddChildPipeline(&pipeline);
+}
+
+unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetUnionPipelines(Executor &executor) {
+	return executor.union_pipelines;
+}
+unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetChildPipelines(Executor &executor) {
+	return executor.child_pipelines;
+}
+unordered_map<Pipeline *, vector<Pipeline *>> &PipelineBuildState::GetChildDependencies(Executor &executor) {
+	return executor.child_dependencies;
+}
+
+vector<PhysicalOperator *> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
+	return pipeline.operators;
 }
 
 } // namespace duckdb

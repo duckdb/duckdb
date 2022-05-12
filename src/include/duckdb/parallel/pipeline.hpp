@@ -19,12 +19,37 @@ namespace duckdb {
 class Executor;
 class Event;
 
+class PipelineBuildState {
+public:
+	//! The current recursive CTE node (if any)
+	PhysicalOperator *recursive_cte = nullptr;
+
+	//! Duplicate eliminated join scan dependencies
+	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
+
+public:
+	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator *op);
+	void SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op);
+	void SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators);
+	void AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op);
+	void AddPipeline(Executor &executor, shared_ptr<Pipeline> pipeline);
+	void AddChildPipeline(Executor &executor, Pipeline &pipeline);
+
+	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &GetUnionPipelines(Executor &executor);
+	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &GetChildPipelines(Executor &executor);
+	unordered_map<Pipeline *, vector<Pipeline *>> &GetChildDependencies(Executor &executor);
+
+	PhysicalOperator &GetPipelineSink(Pipeline &pipeline);
+	vector<PhysicalOperator *> GetPipelineOperators(Pipeline &pipeline);
+};
+
 //! The Pipeline class represents an execution pipeline
 class Pipeline : public std::enable_shared_from_this<Pipeline> {
 	friend class Executor;
 	friend class PipelineExecutor;
 	friend class PipelineEvent;
 	friend class PipelineFinishEvent;
+	friend class PipelineBuildState;
 
 public:
 	explicit Pipeline(Executor &execution_context);
