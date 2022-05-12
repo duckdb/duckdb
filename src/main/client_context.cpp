@@ -205,20 +205,22 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->open_result == &pending);
 	D_ASSERT(active_query->prepared);
 	auto &prepared = *active_query->prepared;
-	bool create_stream_result = prepared.allow_stream_result && allow_stream_result;
+	bool create_stream_result = prepared.properties.allow_stream_result && allow_stream_result;
 	if (create_stream_result) {
 		active_query->progress_bar.reset();
 		query_progress = -1;
 
 		// successfully compiled SELECT clause and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		auto stream_result =
-		    make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types, pending.names);
+		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, pending.properties,
+		                                                    shared_from_this(), pending.types, pending.names);
 		active_query->open_result = stream_result.get();
 		return move(stream_result);
 	}
 	// create a materialized result by continuously fetching
-	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.types, pending.names);
+	auto result =
+	    make_unique<MaterializedQueryResult>(pending.statement_type, pending.properties, pending.types, pending.names);
+	result->properties = pending.properties;
 	while (true) {
 		auto chunk = FetchInternal(lock, GetExecutor(), *result);
 		if (!chunk || chunk->size() == 0) {
@@ -259,14 +261,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	plan->Verify();
 #endif
 	// extract the result column names from the plan
-	result->read_only = planner.read_only;
-	result->requires_valid_transaction = planner.requires_valid_transaction;
-	result->allow_stream_result = planner.allow_stream_result;
+	result->properties = planner.properties;
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
-	result->bound_all_parameters = planner.bound_all_parameters;
 
 	if (config.enable_optimizer) {
 		profiler.StartPhase("optimizer");
@@ -302,11 +301,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
                                                                        vector<Value> bound_values) {
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
-	if (ActiveTransaction().IsInvalidated() && statement.requires_valid_transaction) {
+	if (ActiveTransaction().IsInvalidated() && statement.properties.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	auto &db_config = DBConfig::GetConfig(*this);
-	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type)));
 	}
@@ -575,17 +574,17 @@ ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, cons
 			result = PendingStatementInternal(lock, query, move(statement));
 		} else {
 			auto &catalog = Catalog::GetCatalog(*this);
-			if (prepared->unbound_statement &&
-			    (catalog.GetCatalogVersion() != prepared->catalog_version || !prepared->bound_all_parameters)) {
+			if (prepared->unbound_statement && (catalog.GetCatalogVersion() != prepared->catalog_version ||
+			                                    !prepared->properties.bound_all_parameters)) {
 				// catalog was modified: rebind the statement before execution
 				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), values);
-				if (prepared->types != new_prepared->types && prepared->bound_all_parameters) {
+				if (prepared->types != new_prepared->types && prepared->properties.bound_all_parameters) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}
-				D_ASSERT(new_prepared->bound_all_parameters);
+				D_ASSERT(new_prepared->properties.bound_all_parameters);
 				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
-				prepared->bound_all_parameters = false;
+				prepared->properties.bound_all_parameters = false;
 			}
 			result = PendingPreparedStatement(lock, prepared, *values);
 		}
@@ -643,7 +642,11 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	}
 	if (statements.empty()) {
 		// no statements, return empty successful result
-		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
+		StatementProperties properties;
+		vector<LogicalType> types;
+		vector<string> names;
+		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(types),
+		                                            move(names));
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1131,6 +1134,7 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
+	options.max_expression_depth = ClientConfig::GetConfig(*this).max_expression_depth;
 	return options;
 }
 

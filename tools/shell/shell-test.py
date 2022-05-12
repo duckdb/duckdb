@@ -173,6 +173,36 @@ SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT '
 test('explain select sum(i) from range(1000) tbl(i)', out='RANGE')
 test('explain analyze select sum(i) from range(1000) tbl(i)', out='RANGE')
 
+# test returning insert
+test('''
+CREATE TABLE table1 (a INTEGER DEFAULT -1, b INTEGER DEFAULT -2, c INTEGER DEFAULT -3);
+INSERT INTO table1 VALUES (1, 2, 3) RETURNING *;
+SELECT COUNT(*) FROM table1;
+''', out='1')
+
+# test display of pragmas
+test('''
+CREATE TABLE table1 (mylittlecolumn INTEGER);
+pragma table_info('table1');
+''', out='mylittlecolumn')
+
+# test display of show
+test('''
+CREATE TABLE table1 (mylittlecolumn INTEGER);
+show table1;
+''', out='mylittlecolumn')
+
+# test display of call
+test('''
+CALL range(4);
+''', out='3')
+
+# test display of prepare/execute
+test('''
+PREPARE v1 AS SELECT ?::INT;
+EXECUTE v1(42);
+''', out='42')
+
 
 # this should be fixed
 test('.selftest', err='sqlite3_table_column_metadata')
@@ -540,6 +570,32 @@ select 42;
 ''', out='42')
 
 test('/* ;;;;;; */ select 42;', out='42')
+
+
+# sqlite udfs
+test('''
+SELECT writefile();
+''', err='wrong number of arguments to function writefile')
+
+test('''
+SELECT writefile('hello');
+''', err='wrong number of arguments to function writefile')
+
+test('''
+SELECT writefile('duckdbtest_writefile', 'hello');
+''')
+test_writefile = 'duckdbtest_writefile'
+if not os.path.exists(test_writefile):
+     raise Exception(f"Failed to write file {test_writefile}");
+with open(test_writefile, 'r') as f:
+     text = f.read()
+if text != 'hello':
+     raise Exception("Incorrect contents for test writefile")
+os.remove(test_writefile)
+
+test('''
+SELECT lsmode(1) AS lsmode;
+''', out='lsmode')
 
 if os.name != 'nt':
      test('''

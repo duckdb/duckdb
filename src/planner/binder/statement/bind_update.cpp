@@ -144,7 +144,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	if (!table->temporary) {
 		// update of persistent table: not read only!
-		this->read_only = false;
+		properties.read_only = false;
 	}
 	auto update = make_unique<LogicalUpdate>(table);
 
@@ -225,7 +225,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
 		result.plan = move(update);
-		this->allow_stream_result = false;
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
 	return result;
 }
