@@ -4,6 +4,15 @@
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
+statement error
+SELECT list_transform(NULL, NULL)
+
+statement error
+SELECT list_transform(NULL, x)
+
+statement error
+SELECT list_transform(NULL, x -> y);
+
 query I
 SELECT list_transform(NULL, x -> x + 1)
 ----
@@ -34,16 +43,18 @@ SELECT list_transform([1, NULL, -2, NULL], x -> x + 1)
 ----
 [2, NULL, -1, NULL]
 
-mode skip
-
 # fails with Binder Error: Invalid number of left-hand side parameters for this lambda function.
 # removing "%prec Op" from "| a_expr LAMBDA_ARROW a_expr %prec Op" in select.y fixes this, but
 # then some of the JSON tests fail
+
+# for now I removed "%prec Op", but JSON now needs fixing
 
 query I
 SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
 ----
 [x0, abc0, z0]
+
+mode skip
 
 # this fails with Attempting to initialize state of expression of unknown type!
 
@@ -92,3 +103,5 @@ SELECT list_transform([[1, NULL, 2], [3, NULL]], a -> list_filter(a, x -> x IS N
 [[1, 2], [3]]
 
 mode unskip
+
+# TODO: add test cases where the lambda parameter(s) have the same name as columns
