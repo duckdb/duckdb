@@ -24,6 +24,14 @@ static HeaderMap create_s3_header(std::string url, std::string query, std::strin
                                   std::string datetime_now = "", std::string payload_hash = "",
                                   std::string content_type = "") {
 
+	HeaderMap res;
+	res["Host"] = host;
+
+	// If access key is not set, we don't set the headers at all to allow accessing public files through s3 urls
+	if (auth_params.secret_access_key.empty() && auth_params.secret_access_key.empty()) {
+		return res;
+	}
+
 	if (payload_hash == "") {
 		payload_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"; // Empty payload hash
 	}
@@ -35,8 +43,6 @@ static HeaderMap create_s3_header(std::string url, std::string query, std::strin
 		datetime_now = StrfTimeFormat::Format(timestamp, "%Y%m%dT%H%M%SZ");
 	}
 
-	HeaderMap res;
-	res["Host"] = host;
 	res["x-amz-date"] = datetime_now;
 	res["x-amz-content-sha256"] = payload_hash;
 	if (auth_params.session_token.length() > 0) {

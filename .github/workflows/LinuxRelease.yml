@@ -354,7 +354,7 @@ jobs:
  linux-httpfs:
     name: Linux HTTPFS
     runs-on: ubuntu-20.04
-    needs: linux-release-64
+#    needs: linux-release-64
     env:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
@@ -373,21 +373,16 @@ jobs:
       with:
         node-version: '16'
 
-    - name: Build
-      run: make
-
     - name: Start S3/HTTP test server
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        mkdir -p /tmp/s3rver
-        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
+        ./scripts/run_s3_test_server.sh
+
+    - name: Build
+      run: make
 
     - name: Test
       run: make allunit
-
-    - name: Check S3/HTTP server log
-      if: always()
-      run: cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests
