@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -24,9 +25,9 @@ public:
 	//! The HLL of the table
 	unique_ptr<HyperLogLog> log;
 	//! How many values have been sampled into the HLL
-	idx_t sample_count;
+	atomic<idx_t> sample_count;
 	//! How many values have been inserted (before sampling)
-	idx_t total_count;
+	atomic<idx_t> total_count;
 
 public:
 	void Merge(const BaseStatistics &other) override;
