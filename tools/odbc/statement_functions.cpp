@@ -203,7 +203,10 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 		last_len = 0;
 	}
 
-	auto out_len = duckdb::MinValue(val_str.size() - last_len, (size_t)buffer_length);
+	uint64_t out_len = val_str.size() - last_len;
+	if (buffer_length != 0) {
+		out_len = duckdb::MinValue(val_str.size() - last_len, (size_t)buffer_length);
+	}
 	memcpy((char *)target_value_ptr, val_str.c_str() + last_len, out_len);
 
 	if (out_len == (size_t)buffer_length) {
