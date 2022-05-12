@@ -42,7 +42,6 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 		//Set the offset within the key/value list to mark where this row starts
 		key_data[i].offset = offset;
 		value_data[i].offset = offset;
-
 		//Loop over the list of structs
 		for (idx_t col_idx = 0; col_idx < pair_amount; col_idx++) {
 			//Get the struct using the offset and the index;
