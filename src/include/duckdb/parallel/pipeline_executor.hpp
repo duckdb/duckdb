@@ -78,6 +78,8 @@ private:
 	bool finalized = false;
 	//! Whether or not the pipeline has finished processing
 	bool finished_processing = false;
+	//! Whether or not this pipeline requires keeping track of the batch index of the source
+	bool requires_batch_index = false;
 
 	//! Cached chunks for any operators that require caching
 	vector<unique_ptr<DataChunk>> cached_chunks;

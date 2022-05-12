@@ -113,6 +113,16 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	}
 }
 
+idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                       LocalSourceState &lstate) const {
+	D_ASSERT(SupportsBatchIndex());
+	D_ASSERT(function.get_batch_index);
+	auto &gstate = (TableScanGlobalState &)gstate_p;
+	auto &state = (TableScanLocalState &)lstate;
+	return function.get_batch_index(context.client, bind_data.get(), state.operator_data.get(),
+	                                gstate.parallel_state.get());
+}
+
 string PhysicalTableScan::GetName() const {
 	return StringUtil::Upper(function.name);
 }

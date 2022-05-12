@@ -17,10 +17,7 @@ namespace duckdb {
 class PhysicalLimit : public PhysicalOperator {
 public:
 	PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset, unique_ptr<Expression> limit_expression,
-	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), limit_value(limit),
-	      offset_value(offset), limit_expression(move(limit_expression)), offset_expression(move(offset_expression)) {
-	}
+	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality);
 
 	idx_t limit_value;
 	idx_t offset_value;
@@ -35,11 +32,17 @@ public:
 
 public:
 	// Sink Interface
-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                    DataChunk &input) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	bool IsSink() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
 		return true;
 	}
 

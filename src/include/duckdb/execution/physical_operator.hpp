@@ -50,6 +50,13 @@ class LocalSinkState {
 public:
 	virtual ~LocalSinkState() {
 	}
+
+	//! The current batch index
+	//! This is only set in case SinkOrderMatters() is true, and the source has support for it (SupportsBatchIndex())
+	//! Otherwise this is left on INVALID_INDEX
+	//! The batch index is a globally unique, increasing index that should be used to maintain insertion order
+	//! //! in conjunction with parallelism
+	idx_t batch_index = DConstants::INVALID_INDEX;
 };
 
 class GlobalSourceState {
@@ -67,6 +74,7 @@ public:
 	virtual ~LocalSourceState() {
 	}
 };
+
 // LCOV_EXCL_STOP
 
 //! PhysicalOperator is the base class of the physical operators present in the
@@ -131,12 +139,18 @@ public:
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                     LocalSourceState &lstate) const;
+	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                            LocalSourceState &lstate) const;
 
 	virtual bool IsSource() const {
 		return false;
 	}
 
 	virtual bool ParallelSource() const {
+		return false;
+	}
+
+	virtual bool SupportsBatchIndex() const {
 		return false;
 	}
 

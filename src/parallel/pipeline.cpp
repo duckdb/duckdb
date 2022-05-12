@@ -115,6 +115,9 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!sink->ParallelSink()) {
 		return false;
 	}
+	if (sink->SinkOrderMatters() && !source->SupportsBatchIndex()) {
+		return false;
+	}
 	if (!source->ParallelSource()) {
 		return false;
 	}

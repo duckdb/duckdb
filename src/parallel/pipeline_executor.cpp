@@ -9,6 +9,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
+		requires_batch_index = pipeline.sink->SinkOrderMatters() && pipeline.source->SupportsBatchIndex();
 	}
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
@@ -313,6 +314,13 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
+	if (requires_batch_index) {
+		auto next_batch_index =
+		    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
+		D_ASSERT(local_sink_state->batch_index <= next_batch_index ||
+		         local_sink_state->batch_index == DConstants::INVALID_INDEX);
+		local_sink_state->batch_index = next_batch_index;
+	}
 	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
 	EndOperator(pipeline.source, &result);
 }

@@ -59,6 +59,11 @@ void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, Glob
                                LocalSourceState &lstate) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
+
+idx_t PhysicalOperator::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                      LocalSourceState &lstate) const {
+	throw InternalException("Calling GetBatchIndex on a node that does not support it");
+}
 // LCOV_EXCL_STOP
 
 //===--------------------------------------------------------------------===//
