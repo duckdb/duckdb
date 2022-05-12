@@ -14,7 +14,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), histogram_byte(0) {
+      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), radix_pass(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -69,12 +69,35 @@ unique_ptr<JoinHashTable> JoinHashTable::CopyEmpty() const {
 
 void JoinHashTable::Merge(JoinHashTable &other) {
 	block_collection->Merge(*other.block_collection);
-	string_heap->Merge(*other.string_heap);
+	if (!layout.AllConstant()) {
+		string_heap->Merge(*other.string_heap);
+	}
 	lock_guard<mutex> lock(histogram_lock);
 	const auto other_hist = other.histogram;
-	for (idx_t i = 0; i < 256; i++) {
+	for (idx_t i = 0; i < RadixConstants::PARTITIONS; i++) {
 		histogram[i] += other_hist[i];
 	}
+}
+
+void JoinHashTable::Partition() {
+	const idx_t row_width = entry_size;
+	const idx_t capacity = block_collection->block_capacity;
+
+	vector<unique_ptr<BufferHandle>> handles;
+	partitioned_blocks.reserve(RadixConstants::PARTITIONS);
+	for (idx_t i = 0; i < RadixConstants::PARTITIONS; i++) {
+		if (histogram[i] == 0) {
+			partitioned_blocks.push_back(nullptr);
+			continue;
+		}
+		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, histogram[i], entry_size));
+		auto &new_block = partitioned_blocks.back()->CreateBlock();
+		//		handles.push_back()
+	}
+
+	data_ptr_t dest_ptrs[RadixConstants::PARTITIONS];
+
+	// TODO: allocate heap stuff afterwards
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -122,18 +145,40 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 	}
 }
 
-void JoinHashTable::UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel) {
-	const auto hist_byte = histogram_byte;
-	const auto hash_bytes = (uint8_t *)hash_data.data;
+template <idx_t pass>
+static inline hash_t HashBitModulo(hash_t hash) {
+	return (hash & RadixConstants::RadixMask<pass>()) >> (RadixConstants::NUM_RADIX_BITS * pass);
+}
+
+template <idx_t pass>
+void UpdateHistogramInternal(const VectorData &hash_data, const idx_t count, const bool has_rsel, idx_t histogram[]) {
+	const auto hashes = (hash_t *)hash_data.data;
 	if (has_rsel) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = hash_data.sel->get_index(i);
-			histogram[hash_bytes[idx * sizeof(hash_t) + hist_byte]]++;
+			histogram[HashBitModulo<pass>(hashes[idx])]++;
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			histogram[hash_bytes[i * sizeof(hash_t) + hist_byte]]++;
+			histogram[HashBitModulo<pass>(hashes[i])]++;
 		}
+	}
+}
+
+void JoinHashTable::UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel) {
+	switch (radix_pass) {
+	case 0:
+		return UpdateHistogramInternal<0>(hash_data, count, has_rsel, histogram);
+	case 1:
+		return UpdateHistogramInternal<1>(hash_data, count, has_rsel, histogram);
+	case 2:
+		return UpdateHistogramInternal<2>(hash_data, count, has_rsel, histogram);
+	case 3:
+		return UpdateHistogramInternal<3>(hash_data, count, has_rsel, histogram);
+	case 4:
+		return UpdateHistogramInternal<4>(hash_data, count, has_rsel, histogram);
+	default:
+		throw InternalException("Too many radix passes in JoinHashTable!");
 	}
 }
 
@@ -308,12 +353,12 @@ void JoinHashTable::Finalize() {
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : block_collection->blocks) {
-		auto handle = buffer_manager.Pin(block.block);
+		auto handle = buffer_manager.Pin(block->block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
-		while (entry < block.count) {
+		while (entry < block->count) {
 			// fetch the next vector of entries from the blocks
-			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
+			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block->count - entry);
 			for (idx_t i = 0; i < next; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
@@ -769,7 +814,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 			auto &block = block_collection->blocks[state.block_position];
 			auto &handle = pinned_handles[state.block_position];
 			auto baseptr = handle->node->buffer;
-			for (; state.position < block.count; state.position++) {
+			for (; state.position < block->count; state.position++) {
 				auto tuple_base = baseptr + state.position * entry_size;
 				auto found_match = Load<bool>(tuple_base + tuple_size);
 				if (!found_match) {
@@ -812,10 +857,10 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	idx_t key_count = 0;
 	while (state.block_position < block_collection->blocks.size()) {
 		auto &block = block_collection->blocks[state.block_position];
-		auto handle = buffer_manager.Pin(block.block);
+		auto handle = buffer_manager.Pin(block->block);
 		auto base_ptr = handle->node->buffer;
 		// go through all the tuples within this block
-		while (state.position < block.count) {
+		while (state.position < block->count) {
 			auto tuple_base = base_ptr + state.position * entry_size;
 			// store its locations
 			key_locations[key_count++] = tuple_base;

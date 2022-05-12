@@ -31,6 +31,21 @@ struct JoinHTScanState {
 	mutex lock;
 };
 
+struct RadixConstants {
+	static constexpr const idx_t NUM_RADIX_BITS = 7;
+	static constexpr const idx_t PARTITIONS = 1 << NUM_RADIX_BITS;
+
+	template <idx_t pass>
+	static inline constexpr hash_t RadixMask() {
+		return (hash_t(1) << (NUM_RADIX_BITS * (pass + 1))) - 1 - RadixMask<pass - 1>();
+	}
+
+	template <>
+	constexpr inline hash_t RadixMask<0>() {
+		return (hash_t(1) << NUM_RADIX_BITS) - 1;
+	}
+};
+
 //! JoinHashTable is a linear probing HT that is used for computing joins
 /*!
    The JoinHashTable concatenates incoming chunks inside a linked list of
@@ -112,8 +127,10 @@ public:
 	unique_ptr<JoinHashTable> CopyEmpty() const;
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
-	//! Merge HT into this one
+	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
+	//! Partition the HT based on the hash histogram
+	void Partition();
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
@@ -203,13 +220,17 @@ private:
 	unique_ptr<BufferHandle> hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
+
+	//! Out of core stuff
 	//! Index of the byte in the hash used for the histogram
-	idx_t histogram_byte;
+	idx_t radix_pass;
 	//! Histogram of inserted values
-	idx_t histogram[256];
+	idx_t histogram[RadixConstants::PARTITIONS];
 	//! Histogram lock
 	mutex histogram_lock;
-
+	//! Partitioned data
+	vector<unique_ptr<RowDataCollection>> partitioned_blocks;
+	vector<unique_ptr<RowDataCollection>> partitioned_heap;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;

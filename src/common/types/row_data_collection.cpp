@@ -42,6 +42,11 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	return append_count;
 }
 
+RowDataBlock &RowDataCollection::CreateBlock() {
+	blocks.push_back(make_unique<RowDataBlock>(buffer_manager, block_capacity, entry_size));
+	return *blocks.back();
+}
+
 vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[],
                                                           idx_t entry_sizes[], const SelectionVector *sel) {
 	vector<unique_ptr<BufferHandle>> handles;
@@ -55,7 +60,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 		count += added_count;
 
 		if (!blocks.empty()) {
-			auto &last_block = blocks.back();
+			auto &last_block = *blocks.back();
 			if (last_block.count < last_block.capacity) {
 				// last block has space: pin the buffer of this block
 				auto handle = buffer_manager.Pin(last_block.block);
@@ -67,7 +72,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
+			auto &new_block = CreateBlock();
 			auto handle = buffer_manager.Pin(new_block.block);
 
 			// offset the entry sizes array if we have added entries already
@@ -77,7 +82,6 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			D_ASSERT(new_block.count > 0);
 			remaining -= append_count;
 
-			blocks.push_back(move(new_block));
 			if (keep_pinned) {
 				pinned_blocks.push_back(move(handle));
 			} else {

@@ -170,7 +170,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	if (gstate.external) {
-		// TODO: threshold or something
+		// TODO: && some kind of threshold
+		lstate.hash_table->Partition();
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
