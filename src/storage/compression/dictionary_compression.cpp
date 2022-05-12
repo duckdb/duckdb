@@ -16,12 +16,6 @@ struct StringHash {
 	}
 };
 
-struct StringCompare {
-	bool operator()(const string &lhs, const string &rhs) const {
-		return lhs == rhs;
-	}
-};
-
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
 public:
@@ -177,7 +171,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	std::unordered_map<string, uint32_t, StringHash, StringCompare> current_string_map;
+	std::unordered_map<string, uint32_t, StringHash> current_string_map;
 	std::vector<uint32_t> index_buffer;
 	std::vector<uint32_t> selection_buffer;
 
@@ -328,7 +322,7 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
 	size_t current_dict_size;
-	std::unordered_set<string, StringHash, StringCompare> current_set;
+	std::unordered_set<string, StringHash> current_set;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
