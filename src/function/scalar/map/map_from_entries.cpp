@@ -46,13 +46,7 @@ static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
 
-	// ! Otherwise if its not a constant vector, this breaks the optimizer
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-	}
+	result.SetVectorType(duckdb::VectorType::FLAT_VECTOR);
 
 	// Get the arguments vector
 	auto &array = args.data[0];
