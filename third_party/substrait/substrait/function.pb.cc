@@ -361,93 +361,81 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 };
 
 const char descriptor_table_protodef_substrait_2ffunction_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\030substrait/function.proto\022\tsubstrait\032\024s"
-  "ubstrait/type.proto\032#substrait/parameter"
-  "ized_types.proto\032 substrait/type_express"
-  "ions.proto\"\331\031\n\021FunctionSignature\032\274\002\n\020Fin"
-  "alArgVariadic\022\031\n\010min_args\030\001 \001(\003R\007minArgs"
-  "\022\031\n\010max_args\030\002 \001(\003R\007maxArgs\022d\n\013consisten"
-  "cy\030\003 \001(\0162B.substrait.FunctionSignature.F"
-  "inalArgVariadic.ParameterConsistencyR\013co"
-  "nsistency\"\213\001\n\024ParameterConsistency\022%\n!PA"
-  "RAMETER_CONSISTENCY_UNSPECIFIED\020\000\022$\n PAR"
-  "AMETER_CONSISTENCY_CONSISTENT\020\001\022&\n\"PARAM"
-  "ETER_CONSISTENCY_INCONSISTENT\020\002\032\020\n\016Final"
-  "ArgNormal\032\310\004\n\006Scalar\022C\n\targuments\030\002 \003(\0132"
-  "%.substrait.FunctionSignature.ArgumentR\t"
-  "arguments\022\022\n\004name\030\003 \003(\tR\004name\022J\n\013descrip"
-  "tion\030\004 \001(\0132(.substrait.FunctionSignature"
-  ".DescriptionR\013description\022$\n\rdeterminist"
-  "ic\030\007 \001(\010R\rdeterministic\022+\n\021session_depen"
-  "dent\030\010 \001(\010R\020sessionDependent\022@\n\013output_t"
-  "ype\030\t \001(\0132\037.substrait.DerivationExpressi"
-  "onR\noutputType\022K\n\010variadic\030\n \001(\0132-.subst"
-  "rait.FunctionSignature.FinalArgVariadicH"
-  "\000R\010variadic\022E\n\006normal\030\013 \001(\0132+.substrait."
-  "FunctionSignature.FinalArgNormalH\000R\006norm"
-  "al\022U\n\017implementations\030\014 \003(\0132+.substrait."
-  "FunctionSignature.ImplementationR\017implem"
-  "entationsB\031\n\027final_variable_behavior\032\274\005\n"
-  "\tAggregate\022C\n\targuments\030\002 \003(\0132%.substrai"
-  "t.FunctionSignature.ArgumentR\targuments\022"
-  "\022\n\004name\030\003 \001(\tR\004name\022J\n\013description\030\004 \001(\013"
-  "2(.substrait.FunctionSignature.Descripti"
-  "onR\013description\022$\n\rdeterministic\030\007 \001(\010R\r"
-  "deterministic\022+\n\021session_dependent\030\010 \001(\010"
-  "R\020sessionDependent\022@\n\013output_type\030\t \001(\0132"
-  "\037.substrait.DerivationExpressionR\noutput"
-  "Type\022K\n\010variadic\030\n \001(\0132-.substrait.Funct"
-  "ionSignature.FinalArgVariadicH\000R\010variadi"
-  "c\022E\n\006normal\030\013 \001(\0132+.substrait.FunctionSi"
-  "gnature.FinalArgNormalH\000R\006normal\022\030\n\007orde"
-  "red\030\016 \001(\010R\007ordered\022\027\n\007max_set\030\014 \001(\004R\006max"
-  "Set\022<\n\021intermediate_type\030\r \001(\0132\017.substra"
-  "it.TypeR\020intermediateType\022U\n\017implementat"
-  "ions\030\017 \003(\0132+.substrait.FunctionSignature"
-  ".ImplementationR\017implementationsB\031\n\027fina"
-  "l_variable_behavior\032\373\006\n\006Window\022C\n\targume"
-  "nts\030\002 \003(\0132%.substrait.FunctionSignature."
-  "ArgumentR\targuments\022\022\n\004name\030\003 \003(\tR\004name\022"
-  "J\n\013description\030\004 \001(\0132(.substrait.Functio"
-  "nSignature.DescriptionR\013description\022$\n\rd"
-  "eterministic\030\007 \001(\010R\rdeterministic\022+\n\021ses"
-  "sion_dependent\030\010 \001(\010R\020sessionDependent\022L"
-  "\n\021intermediate_type\030\t \001(\0132\037.substrait.De"
-  "rivationExpressionR\020intermediateType\022@\n\013"
-  "output_type\030\n \001(\0132\037.substrait.Derivation"
-  "ExpressionR\noutputType\022K\n\010variadic\030\020 \001(\013"
-  "2-.substrait.FunctionSignature.FinalArgV"
-  "ariadicH\000R\010variadic\022E\n\006normal\030\021 \001(\0132+.su"
-  "bstrait.FunctionSignature.FinalArgNormal"
-  "H\000R\006normal\022\030\n\007ordered\030\013 \001(\010R\007ordered\022\027\n\007"
-  "max_set\030\014 \001(\004R\006maxSet\022O\n\013window_type\030\016 \001"
-  "(\0162..substrait.FunctionSignature.Window."
-  "WindowTypeR\nwindowType\022U\n\017implementation"
-  "s\030\017 \003(\0132+.substrait.FunctionSignature.Im"
-  "plementationR\017implementations\"_\n\nWindowT"
-  "ype\022\033\n\027WINDOW_TYPE_UNSPECIFIED\020\000\022\031\n\025WIND"
-  "OW_TYPE_STREAMING\020\001\022\031\n\025WINDOW_TYPE_PARTI"
-  "TION\020\002B\031\n\027final_variable_behavior\032=\n\013Des"
-  "cription\022\032\n\010language\030\001 \001(\tR\010language\022\022\n\004"
-  "body\030\002 \001(\tR\004body\032\261\001\n\016Implementation\022D\n\004t"
-  "ype\030\001 \001(\01620.substrait.FunctionSignature."
-  "Implementation.TypeR\004type\022\020\n\003uri\030\002 \001(\tR\003"
-  "uri\"G\n\004Type\022\024\n\020TYPE_UNSPECIFIED\020\000\022\025\n\021TYP"
-  "E_WEB_ASSEMBLY\020\001\022\022\n\016TYPE_TRINO_JAR\020\002\032\367\003\n"
-  "\010Argument\022\022\n\004name\030\001 \001(\tR\004name\022K\n\005value\030\002"
-  " \001(\01323.substrait.FunctionSignature.Argum"
-  "ent.ValueArgumentH\000R\005value\022H\n\004type\030\003 \001(\013"
-  "22.substrait.FunctionSignature.Argument."
-  "TypeArgumentH\000R\004type\022H\n\004enum\030\004 \001(\01322.sub"
-  "strait.FunctionSignature.Argument.EnumAr"
-  "gumentH\000R\004enum\032]\n\rValueArgument\0220\n\004type\030"
-  "\001 \001(\0132\034.substrait.ParameterizedTypeR\004typ"
-  "e\022\032\n\010constant\030\002 \001(\010R\010constant\032@\n\014TypeArg"
-  "ument\0220\n\004type\030\001 \001(\0132\034.substrait.Paramete"
-  "rizedTypeR\004type\032D\n\014EnumArgument\022\030\n\007optio"
-  "ns\030\001 \003(\tR\007options\022\032\n\010optional\030\002 \001(\010R\010opt"
-  "ionalB\017\n\rargument_kindB+\n\022io.substrait.p"
-  "rotoP\001\252\002\022Substrait.Protobufb\006proto3"
+  "\n\030substrait/function.proto\022\tsubstrait\032#s"
+  "ubstrait/parameterized_types.proto\032\024subs"
+  "trait/type.proto\032 substrait/type_express"
+  "ions.proto\"\301\025\n\021FunctionSignature\032\235\002\n\020Fin"
+  "alArgVariadic\022\020\n\010min_args\030\001 \001(\003\022\020\n\010max_a"
+  "rgs\030\002 \001(\003\022W\n\013consistency\030\003 \001(\0162B.substra"
+  "it.FunctionSignature.FinalArgVariadic.Pa"
+  "rameterConsistency\"\213\001\n\024ParameterConsiste"
+  "ncy\022%\n!PARAMETER_CONSISTENCY_UNSPECIFIED"
+  "\020\000\022$\n PARAMETER_CONSISTENCY_CONSISTENT\020\001"
+  "\022&\n\"PARAMETER_CONSISTENCY_INCONSISTENT\020\002"
+  "\032\020\n\016FinalArgNormal\032\332\003\n\006Scalar\0228\n\targumen"
+  "ts\030\002 \003(\0132%.substrait.FunctionSignature.A"
+  "rgument\022\014\n\004name\030\003 \003(\t\022=\n\013description\030\004 \001"
+  "(\0132(.substrait.FunctionSignature.Descrip"
+  "tion\022\025\n\rdeterministic\030\007 \001(\010\022\031\n\021session_d"
+  "ependent\030\010 \001(\010\0224\n\013output_type\030\t \001(\0132\037.su"
+  "bstrait.DerivationExpression\022A\n\010variadic"
+  "\030\n \001(\0132-.substrait.FunctionSignature.Fin"
+  "alArgVariadicH\000\022=\n\006normal\030\013 \001(\0132+.substr"
+  "ait.FunctionSignature.FinalArgNormalH\000\022D"
+  "\n\017implementations\030\014 \003(\0132+.substrait.Func"
+  "tionSignature.ImplementationB\031\n\027final_va"
+  "riable_behavior\032\253\004\n\tAggregate\0228\n\targumen"
+  "ts\030\002 \003(\0132%.substrait.FunctionSignature.A"
+  "rgument\022\014\n\004name\030\003 \001(\t\022=\n\013description\030\004 \001"
+  "(\0132(.substrait.FunctionSignature.Descrip"
+  "tion\022\025\n\rdeterministic\030\007 \001(\010\022\031\n\021session_d"
+  "ependent\030\010 \001(\010\0224\n\013output_type\030\t \001(\0132\037.su"
+  "bstrait.DerivationExpression\022A\n\010variadic"
+  "\030\n \001(\0132-.substrait.FunctionSignature.Fin"
+  "alArgVariadicH\000\022=\n\006normal\030\013 \001(\0132+.substr"
+  "ait.FunctionSignature.FinalArgNormalH\000\022\017"
+  "\n\007ordered\030\016 \001(\010\022\017\n\007max_set\030\014 \001(\004\022*\n\021inte"
+  "rmediate_type\030\r \001(\0132\017.substrait.Type\022D\n\017"
+  "implementations\030\017 \003(\0132+.substrait.Functi"
+  "onSignature.ImplementationB\031\n\027final_vari"
+  "able_behavior\032\336\005\n\006Window\0228\n\targuments\030\002 "
+  "\003(\0132%.substrait.FunctionSignature.Argume"
+  "nt\022\014\n\004name\030\003 \003(\t\022=\n\013description\030\004 \001(\0132(."
+  "substrait.FunctionSignature.Description\022"
+  "\025\n\rdeterministic\030\007 \001(\010\022\031\n\021session_depend"
+  "ent\030\010 \001(\010\022:\n\021intermediate_type\030\t \001(\0132\037.s"
+  "ubstrait.DerivationExpression\0224\n\013output_"
+  "type\030\n \001(\0132\037.substrait.DerivationExpress"
+  "ion\022A\n\010variadic\030\020 \001(\0132-.substrait.Functi"
+  "onSignature.FinalArgVariadicH\000\022=\n\006normal"
+  "\030\021 \001(\0132+.substrait.FunctionSignature.Fin"
+  "alArgNormalH\000\022\017\n\007ordered\030\013 \001(\010\022\017\n\007max_se"
+  "t\030\014 \001(\004\022C\n\013window_type\030\016 \001(\0162..substrait"
+  ".FunctionSignature.Window.WindowType\022D\n\017"
+  "implementations\030\017 \003(\0132+.substrait.Functi"
+  "onSignature.Implementation\"_\n\nWindowType"
+  "\022\033\n\027WINDOW_TYPE_UNSPECIFIED\020\000\022\031\n\025WINDOW_"
+  "TYPE_STREAMING\020\001\022\031\n\025WINDOW_TYPE_PARTITIO"
+  "N\020\002B\031\n\027final_variable_behavior\032-\n\013Descri"
+  "ption\022\020\n\010language\030\001 \001(\t\022\014\n\004body\030\002 \001(\t\032\246\001"
+  "\n\016Implementation\022>\n\004type\030\001 \001(\01620.substra"
+  "it.FunctionSignature.Implementation.Type"
+  "\022\013\n\003uri\030\002 \001(\t\"G\n\004Type\022\024\n\020TYPE_UNSPECIFIE"
+  "D\020\000\022\025\n\021TYPE_WEB_ASSEMBLY\020\001\022\022\n\016TYPE_TRINO"
+  "_JAR\020\002\032\265\003\n\010Argument\022\014\n\004name\030\001 \001(\t\022D\n\005val"
+  "ue\030\002 \001(\01323.substrait.FunctionSignature.A"
+  "rgument.ValueArgumentH\000\022B\n\004type\030\003 \001(\01322."
+  "substrait.FunctionSignature.Argument.Typ"
+  "eArgumentH\000\022B\n\004enum\030\004 \001(\01322.substrait.Fu"
+  "nctionSignature.Argument.EnumArgumentH\000\032"
+  "M\n\rValueArgument\022*\n\004type\030\001 \001(\0132\034.substra"
+  "it.ParameterizedType\022\020\n\010constant\030\002 \001(\010\032:"
+  "\n\014TypeArgument\022*\n\004type\030\001 \001(\0132\034.substrait"
+  ".ParameterizedType\0321\n\014EnumArgument\022\017\n\007op"
+  "tions\030\001 \003(\t\022\020\n\010optional\030\002 \001(\010B\017\n\rargumen"
+  "t_kindBW\n\022io.substrait.protoP\001Z*github.c"
+  "om/substrait-io/substrait-go/proto\252\002\022Sub"
+  "strait.Protobufb\006proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2ffunction_2eproto_deps[3] = {
   &::descriptor_table_substrait_2fparameterized_5ftypes_2eproto,
@@ -456,7 +444,7 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2ffunction_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2ffunction_2eproto = {
-  false, false, 3475, descriptor_table_protodef_substrait_2ffunction_2eproto, "substrait/function.proto", 
+  false, false, 2983, descriptor_table_protodef_substrait_2ffunction_2eproto, "substrait/function.proto", 
   &descriptor_table_substrait_2ffunction_2eproto_once, descriptor_table_substrait_2ffunction_2eproto_deps, 3, 12,
   schemas, file_default_instances, TableStruct_substrait_2ffunction_2eproto::offsets,
   file_level_metadata_substrait_2ffunction_2eproto, file_level_enum_descriptors_substrait_2ffunction_2eproto, file_level_service_descriptors_substrait_2ffunction_2eproto,
@@ -608,7 +596,7 @@ const char* FunctionSignature_FinalArgVariadic::_InternalParse(const char* ptr, 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // int64 min_args = 1 [json_name = "minArgs"];
+      // int64 min_args = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           min_args_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -616,7 +604,7 @@ const char* FunctionSignature_FinalArgVariadic::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // int64 max_args = 2 [json_name = "maxArgs"];
+      // int64 max_args = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           max_args_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -624,7 +612,7 @@ const char* FunctionSignature_FinalArgVariadic::_InternalParse(const char* ptr, 
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgVariadic.ParameterConsistency consistency = 3 [json_name = "consistency"];
+      // .substrait.FunctionSignature.FinalArgVariadic.ParameterConsistency consistency = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -662,19 +650,19 @@ uint8_t* FunctionSignature_FinalArgVariadic::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // int64 min_args = 1 [json_name = "minArgs"];
+  // int64 min_args = 1;
   if (this->_internal_min_args() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(1, this->_internal_min_args(), target);
   }
 
-  // int64 max_args = 2 [json_name = "maxArgs"];
+  // int64 max_args = 2;
   if (this->_internal_max_args() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(2, this->_internal_max_args(), target);
   }
 
-  // .substrait.FunctionSignature.FinalArgVariadic.ParameterConsistency consistency = 3 [json_name = "consistency"];
+  // .substrait.FunctionSignature.FinalArgVariadic.ParameterConsistency consistency = 3;
   if (this->_internal_consistency() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
@@ -697,17 +685,17 @@ size_t FunctionSignature_FinalArgVariadic::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // int64 min_args = 1 [json_name = "minArgs"];
+  // int64 min_args = 1;
   if (this->_internal_min_args() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_min_args());
   }
 
-  // int64 max_args = 2 [json_name = "maxArgs"];
+  // int64 max_args = 2;
   if (this->_internal_max_args() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_max_args());
   }
 
-  // .substrait.FunctionSignature.FinalArgVariadic.ParameterConsistency consistency = 3 [json_name = "consistency"];
+  // .substrait.FunctionSignature.FinalArgVariadic.ParameterConsistency consistency = 3;
   if (this->_internal_consistency() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_consistency());
@@ -1011,7 +999,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+      // repeated .substrait.FunctionSignature.Argument arguments = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -1024,7 +1012,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // repeated string name = 3 [json_name = "name"];
+      // repeated string name = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -1039,7 +1027,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+      // .substrait.FunctionSignature.Description description = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_description(), ptr);
@@ -1047,7 +1035,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // bool deterministic = 7 [json_name = "deterministic"];
+      // bool deterministic = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
           deterministic_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1055,7 +1043,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // bool session_dependent = 8 [json_name = "sessionDependent"];
+      // bool session_dependent = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
           session_dependent_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1063,7 +1051,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression output_type = 9 [json_name = "outputType"];
+      // .substrait.DerivationExpression output_type = 9;
       case 9:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -1071,7 +1059,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgVariadic variadic = 10 [json_name = "variadic"];
+      // .substrait.FunctionSignature.FinalArgVariadic variadic = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_variadic(), ptr);
@@ -1079,7 +1067,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgNormal normal = 11 [json_name = "normal"];
+      // .substrait.FunctionSignature.FinalArgNormal normal = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
           ptr = ctx->ParseMessage(_internal_mutable_normal(), ptr);
@@ -1087,7 +1075,7 @@ const char* FunctionSignature_Scalar::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.FunctionSignature.Implementation implementations = 12 [json_name = "implementations"];
+      // repeated .substrait.FunctionSignature.Implementation implementations = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
           ptr -= 1;
@@ -1129,7 +1117,7 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+  // repeated .substrait.FunctionSignature.Argument arguments = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -1137,7 +1125,7 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_arguments(i), target, stream);
   }
 
-  // repeated string name = 3 [json_name = "name"];
+  // repeated string name = 3;
   for (int i = 0, n = this->_internal_name_size(); i < n; i++) {
     const auto& s = this->_internal_name(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -1147,7 +1135,7 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
     target = stream->WriteString(3, s, target);
   }
 
-  // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+  // .substrait.FunctionSignature.Description description = 4;
   if (this->_internal_has_description()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1155,19 +1143,19 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
         4, _Internal::description(this), target, stream);
   }
 
-  // bool deterministic = 7 [json_name = "deterministic"];
+  // bool deterministic = 7;
   if (this->_internal_deterministic() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(7, this->_internal_deterministic(), target);
   }
 
-  // bool session_dependent = 8 [json_name = "sessionDependent"];
+  // bool session_dependent = 8;
   if (this->_internal_session_dependent() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(8, this->_internal_session_dependent(), target);
   }
 
-  // .substrait.DerivationExpression output_type = 9 [json_name = "outputType"];
+  // .substrait.DerivationExpression output_type = 9;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1175,7 +1163,7 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
         9, _Internal::output_type(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.FinalArgVariadic variadic = 10 [json_name = "variadic"];
+  // .substrait.FunctionSignature.FinalArgVariadic variadic = 10;
   if (_internal_has_variadic()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1183,7 +1171,7 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
         10, _Internal::variadic(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.FinalArgNormal normal = 11 [json_name = "normal"];
+  // .substrait.FunctionSignature.FinalArgNormal normal = 11;
   if (_internal_has_normal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1191,7 +1179,7 @@ uint8_t* FunctionSignature_Scalar::_InternalSerialize(
         11, _Internal::normal(this), target, stream);
   }
 
-  // repeated .substrait.FunctionSignature.Implementation implementations = 12 [json_name = "implementations"];
+  // repeated .substrait.FunctionSignature.Implementation implementations = 12;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_implementations_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -1215,14 +1203,14 @@ size_t FunctionSignature_Scalar::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+  // repeated .substrait.FunctionSignature.Argument arguments = 2;
   total_size += 1UL * this->_internal_arguments_size();
   for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated string name = 3 [json_name = "name"];
+  // repeated string name = 3;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(name_.size());
   for (int i = 0, n = name_.size(); i < n; i++) {
@@ -1230,46 +1218,46 @@ size_t FunctionSignature_Scalar::ByteSizeLong() const {
       name_.Get(i));
   }
 
-  // repeated .substrait.FunctionSignature.Implementation implementations = 12 [json_name = "implementations"];
+  // repeated .substrait.FunctionSignature.Implementation implementations = 12;
   total_size += 1UL * this->_internal_implementations_size();
   for (const auto& msg : this->implementations_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+  // .substrait.FunctionSignature.Description description = 4;
   if (this->_internal_has_description()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *description_);
   }
 
-  // .substrait.DerivationExpression output_type = 9 [json_name = "outputType"];
+  // .substrait.DerivationExpression output_type = 9;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *output_type_);
   }
 
-  // bool deterministic = 7 [json_name = "deterministic"];
+  // bool deterministic = 7;
   if (this->_internal_deterministic() != 0) {
     total_size += 1 + 1;
   }
 
-  // bool session_dependent = 8 [json_name = "sessionDependent"];
+  // bool session_dependent = 8;
   if (this->_internal_session_dependent() != 0) {
     total_size += 1 + 1;
   }
 
   switch (final_variable_behavior_case()) {
-    // .substrait.FunctionSignature.FinalArgVariadic variadic = 10 [json_name = "variadic"];
+    // .substrait.FunctionSignature.FinalArgVariadic variadic = 10;
     case kVariadic: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *final_variable_behavior_.variadic_);
       break;
     }
-    // .substrait.FunctionSignature.FinalArgNormal normal = 11 [json_name = "normal"];
+    // .substrait.FunctionSignature.FinalArgNormal normal = 11;
     case kNormal: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -1595,7 +1583,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+      // repeated .substrait.FunctionSignature.Argument arguments = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -1608,7 +1596,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // string name = 3 [json_name = "name"];
+      // string name = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           auto str = _internal_mutable_name();
@@ -1618,7 +1606,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+      // .substrait.FunctionSignature.Description description = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_description(), ptr);
@@ -1626,7 +1614,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // bool deterministic = 7 [json_name = "deterministic"];
+      // bool deterministic = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
           deterministic_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1634,7 +1622,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // bool session_dependent = 8 [json_name = "sessionDependent"];
+      // bool session_dependent = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
           session_dependent_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1642,7 +1630,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression output_type = 9 [json_name = "outputType"];
+      // .substrait.DerivationExpression output_type = 9;
       case 9:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -1650,7 +1638,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgVariadic variadic = 10 [json_name = "variadic"];
+      // .substrait.FunctionSignature.FinalArgVariadic variadic = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_variadic(), ptr);
@@ -1658,7 +1646,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgNormal normal = 11 [json_name = "normal"];
+      // .substrait.FunctionSignature.FinalArgNormal normal = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
           ptr = ctx->ParseMessage(_internal_mutable_normal(), ptr);
@@ -1666,7 +1654,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // uint64 max_set = 12 [json_name = "maxSet"];
+      // uint64 max_set = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
           max_set_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1674,7 +1662,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Type intermediate_type = 13 [json_name = "intermediateType"];
+      // .substrait.Type intermediate_type = 13;
       case 13:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 106)) {
           ptr = ctx->ParseMessage(_internal_mutable_intermediate_type(), ptr);
@@ -1682,7 +1670,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // bool ordered = 14 [json_name = "ordered"];
+      // bool ordered = 14;
       case 14:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 112)) {
           ordered_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -1690,7 +1678,7 @@ const char* FunctionSignature_Aggregate::_InternalParse(const char* ptr, ::PROTO
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.FunctionSignature.Implementation implementations = 15 [json_name = "implementations"];
+      // repeated .substrait.FunctionSignature.Implementation implementations = 15;
       case 15:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 122)) {
           ptr -= 1;
@@ -1732,7 +1720,7 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+  // repeated .substrait.FunctionSignature.Argument arguments = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -1740,7 +1728,7 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_arguments(i), target, stream);
   }
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -1750,7 +1738,7 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
         3, this->_internal_name(), target);
   }
 
-  // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+  // .substrait.FunctionSignature.Description description = 4;
   if (this->_internal_has_description()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1758,19 +1746,19 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
         4, _Internal::description(this), target, stream);
   }
 
-  // bool deterministic = 7 [json_name = "deterministic"];
+  // bool deterministic = 7;
   if (this->_internal_deterministic() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(7, this->_internal_deterministic(), target);
   }
 
-  // bool session_dependent = 8 [json_name = "sessionDependent"];
+  // bool session_dependent = 8;
   if (this->_internal_session_dependent() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(8, this->_internal_session_dependent(), target);
   }
 
-  // .substrait.DerivationExpression output_type = 9 [json_name = "outputType"];
+  // .substrait.DerivationExpression output_type = 9;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1778,7 +1766,7 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
         9, _Internal::output_type(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.FinalArgVariadic variadic = 10 [json_name = "variadic"];
+  // .substrait.FunctionSignature.FinalArgVariadic variadic = 10;
   if (_internal_has_variadic()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1786,7 +1774,7 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
         10, _Internal::variadic(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.FinalArgNormal normal = 11 [json_name = "normal"];
+  // .substrait.FunctionSignature.FinalArgNormal normal = 11;
   if (_internal_has_normal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1794,13 +1782,13 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
         11, _Internal::normal(this), target, stream);
   }
 
-  // uint64 max_set = 12 [json_name = "maxSet"];
+  // uint64 max_set = 12;
   if (this->_internal_max_set() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(12, this->_internal_max_set(), target);
   }
 
-  // .substrait.Type intermediate_type = 13 [json_name = "intermediateType"];
+  // .substrait.Type intermediate_type = 13;
   if (this->_internal_has_intermediate_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -1808,13 +1796,13 @@ uint8_t* FunctionSignature_Aggregate::_InternalSerialize(
         13, _Internal::intermediate_type(this), target, stream);
   }
 
-  // bool ordered = 14 [json_name = "ordered"];
+  // bool ordered = 14;
   if (this->_internal_ordered() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(14, this->_internal_ordered(), target);
   }
 
-  // repeated .substrait.FunctionSignature.Implementation implementations = 15 [json_name = "implementations"];
+  // repeated .substrait.FunctionSignature.Implementation implementations = 15;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_implementations_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -1838,77 +1826,77 @@ size_t FunctionSignature_Aggregate::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+  // repeated .substrait.FunctionSignature.Argument arguments = 2;
   total_size += 1UL * this->_internal_arguments_size();
   for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.FunctionSignature.Implementation implementations = 15 [json_name = "implementations"];
+  // repeated .substrait.FunctionSignature.Implementation implementations = 15;
   total_size += 1UL * this->_internal_implementations_size();
   for (const auto& msg : this->implementations_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // string name = 3 [json_name = "name"];
+  // string name = 3;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_name());
   }
 
-  // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+  // .substrait.FunctionSignature.Description description = 4;
   if (this->_internal_has_description()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *description_);
   }
 
-  // .substrait.DerivationExpression output_type = 9 [json_name = "outputType"];
+  // .substrait.DerivationExpression output_type = 9;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *output_type_);
   }
 
-  // .substrait.Type intermediate_type = 13 [json_name = "intermediateType"];
+  // .substrait.Type intermediate_type = 13;
   if (this->_internal_has_intermediate_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *intermediate_type_);
   }
 
-  // bool deterministic = 7 [json_name = "deterministic"];
+  // bool deterministic = 7;
   if (this->_internal_deterministic() != 0) {
     total_size += 1 + 1;
   }
 
-  // bool session_dependent = 8 [json_name = "sessionDependent"];
+  // bool session_dependent = 8;
   if (this->_internal_session_dependent() != 0) {
     total_size += 1 + 1;
   }
 
-  // bool ordered = 14 [json_name = "ordered"];
+  // bool ordered = 14;
   if (this->_internal_ordered() != 0) {
     total_size += 1 + 1;
   }
 
-  // uint64 max_set = 12 [json_name = "maxSet"];
+  // uint64 max_set = 12;
   if (this->_internal_max_set() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_max_set());
   }
 
   switch (final_variable_behavior_case()) {
-    // .substrait.FunctionSignature.FinalArgVariadic variadic = 10 [json_name = "variadic"];
+    // .substrait.FunctionSignature.FinalArgVariadic variadic = 10;
     case kVariadic: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *final_variable_behavior_.variadic_);
       break;
     }
-    // .substrait.FunctionSignature.FinalArgNormal normal = 11 [json_name = "normal"];
+    // .substrait.FunctionSignature.FinalArgNormal normal = 11;
     case kNormal: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -2240,7 +2228,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+      // repeated .substrait.FunctionSignature.Argument arguments = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -2253,7 +2241,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // repeated string name = 3 [json_name = "name"];
+      // repeated string name = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -2268,7 +2256,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+      // .substrait.FunctionSignature.Description description = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_description(), ptr);
@@ -2276,7 +2264,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // bool deterministic = 7 [json_name = "deterministic"];
+      // bool deterministic = 7;
       case 7:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
           deterministic_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2284,7 +2272,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // bool session_dependent = 8 [json_name = "sessionDependent"];
+      // bool session_dependent = 8;
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
           session_dependent_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2292,7 +2280,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression intermediate_type = 9 [json_name = "intermediateType"];
+      // .substrait.DerivationExpression intermediate_type = 9;
       case 9:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
           ptr = ctx->ParseMessage(_internal_mutable_intermediate_type(), ptr);
@@ -2300,7 +2288,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.DerivationExpression output_type = 10 [json_name = "outputType"];
+      // .substrait.DerivationExpression output_type = 10;
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
@@ -2308,7 +2296,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // bool ordered = 11 [json_name = "ordered"];
+      // bool ordered = 11;
       case 11:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
           ordered_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2316,7 +2304,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // uint64 max_set = 12 [json_name = "maxSet"];
+      // uint64 max_set = 12;
       case 12:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
           max_set_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2324,7 +2312,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Window.WindowType window_type = 14 [json_name = "windowType"];
+      // .substrait.FunctionSignature.Window.WindowType window_type = 14;
       case 14:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 112)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -2333,7 +2321,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.FunctionSignature.Implementation implementations = 15 [json_name = "implementations"];
+      // repeated .substrait.FunctionSignature.Implementation implementations = 15;
       case 15:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 122)) {
           ptr -= 1;
@@ -2346,7 +2334,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgVariadic variadic = 16 [json_name = "variadic"];
+      // .substrait.FunctionSignature.FinalArgVariadic variadic = 16;
       case 16:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 130)) {
           ptr = ctx->ParseMessage(_internal_mutable_variadic(), ptr);
@@ -2354,7 +2342,7 @@ const char* FunctionSignature_Window::_InternalParse(const char* ptr, ::PROTOBUF
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.FinalArgNormal normal = 17 [json_name = "normal"];
+      // .substrait.FunctionSignature.FinalArgNormal normal = 17;
       case 17:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 138)) {
           ptr = ctx->ParseMessage(_internal_mutable_normal(), ptr);
@@ -2391,7 +2379,7 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+  // repeated .substrait.FunctionSignature.Argument arguments = 2;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -2399,7 +2387,7 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
       InternalWriteMessage(2, this->_internal_arguments(i), target, stream);
   }
 
-  // repeated string name = 3 [json_name = "name"];
+  // repeated string name = 3;
   for (int i = 0, n = this->_internal_name_size(); i < n; i++) {
     const auto& s = this->_internal_name(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -2409,7 +2397,7 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
     target = stream->WriteString(3, s, target);
   }
 
-  // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+  // .substrait.FunctionSignature.Description description = 4;
   if (this->_internal_has_description()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2417,19 +2405,19 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
         4, _Internal::description(this), target, stream);
   }
 
-  // bool deterministic = 7 [json_name = "deterministic"];
+  // bool deterministic = 7;
   if (this->_internal_deterministic() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(7, this->_internal_deterministic(), target);
   }
 
-  // bool session_dependent = 8 [json_name = "sessionDependent"];
+  // bool session_dependent = 8;
   if (this->_internal_session_dependent() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(8, this->_internal_session_dependent(), target);
   }
 
-  // .substrait.DerivationExpression intermediate_type = 9 [json_name = "intermediateType"];
+  // .substrait.DerivationExpression intermediate_type = 9;
   if (this->_internal_has_intermediate_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2437,7 +2425,7 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
         9, _Internal::intermediate_type(this), target, stream);
   }
 
-  // .substrait.DerivationExpression output_type = 10 [json_name = "outputType"];
+  // .substrait.DerivationExpression output_type = 10;
   if (this->_internal_has_output_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2445,26 +2433,26 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
         10, _Internal::output_type(this), target, stream);
   }
 
-  // bool ordered = 11 [json_name = "ordered"];
+  // bool ordered = 11;
   if (this->_internal_ordered() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(11, this->_internal_ordered(), target);
   }
 
-  // uint64 max_set = 12 [json_name = "maxSet"];
+  // uint64 max_set = 12;
   if (this->_internal_max_set() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(12, this->_internal_max_set(), target);
   }
 
-  // .substrait.FunctionSignature.Window.WindowType window_type = 14 [json_name = "windowType"];
+  // .substrait.FunctionSignature.Window.WindowType window_type = 14;
   if (this->_internal_window_type() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       14, this->_internal_window_type(), target);
   }
 
-  // repeated .substrait.FunctionSignature.Implementation implementations = 15 [json_name = "implementations"];
+  // repeated .substrait.FunctionSignature.Implementation implementations = 15;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_implementations_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -2472,7 +2460,7 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
       InternalWriteMessage(15, this->_internal_implementations(i), target, stream);
   }
 
-  // .substrait.FunctionSignature.FinalArgVariadic variadic = 16 [json_name = "variadic"];
+  // .substrait.FunctionSignature.FinalArgVariadic variadic = 16;
   if (_internal_has_variadic()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2480,7 +2468,7 @@ uint8_t* FunctionSignature_Window::_InternalSerialize(
         16, _Internal::variadic(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.FinalArgNormal normal = 17 [json_name = "normal"];
+  // .substrait.FunctionSignature.FinalArgNormal normal = 17;
   if (_internal_has_normal()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -2504,14 +2492,14 @@ size_t FunctionSignature_Window::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.FunctionSignature.Argument arguments = 2 [json_name = "arguments"];
+  // repeated .substrait.FunctionSignature.Argument arguments = 2;
   total_size += 1UL * this->_internal_arguments_size();
   for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated string name = 3 [json_name = "name"];
+  // repeated string name = 3;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(name_.size());
   for (int i = 0, n = name_.size(); i < n; i++) {
@@ -2519,69 +2507,69 @@ size_t FunctionSignature_Window::ByteSizeLong() const {
       name_.Get(i));
   }
 
-  // repeated .substrait.FunctionSignature.Implementation implementations = 15 [json_name = "implementations"];
+  // repeated .substrait.FunctionSignature.Implementation implementations = 15;
   total_size += 1UL * this->_internal_implementations_size();
   for (const auto& msg : this->implementations_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // .substrait.FunctionSignature.Description description = 4 [json_name = "description"];
+  // .substrait.FunctionSignature.Description description = 4;
   if (this->_internal_has_description()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *description_);
   }
 
-  // .substrait.DerivationExpression intermediate_type = 9 [json_name = "intermediateType"];
+  // .substrait.DerivationExpression intermediate_type = 9;
   if (this->_internal_has_intermediate_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *intermediate_type_);
   }
 
-  // .substrait.DerivationExpression output_type = 10 [json_name = "outputType"];
+  // .substrait.DerivationExpression output_type = 10;
   if (this->_internal_has_output_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *output_type_);
   }
 
-  // bool deterministic = 7 [json_name = "deterministic"];
+  // bool deterministic = 7;
   if (this->_internal_deterministic() != 0) {
     total_size += 1 + 1;
   }
 
-  // bool session_dependent = 8 [json_name = "sessionDependent"];
+  // bool session_dependent = 8;
   if (this->_internal_session_dependent() != 0) {
     total_size += 1 + 1;
   }
 
-  // bool ordered = 11 [json_name = "ordered"];
+  // bool ordered = 11;
   if (this->_internal_ordered() != 0) {
     total_size += 1 + 1;
   }
 
-  // .substrait.FunctionSignature.Window.WindowType window_type = 14 [json_name = "windowType"];
+  // .substrait.FunctionSignature.Window.WindowType window_type = 14;
   if (this->_internal_window_type() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_window_type());
   }
 
-  // uint64 max_set = 12 [json_name = "maxSet"];
+  // uint64 max_set = 12;
   if (this->_internal_max_set() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt64SizePlusOne(this->_internal_max_set());
   }
 
   switch (final_variable_behavior_case()) {
-    // .substrait.FunctionSignature.FinalArgVariadic variadic = 16 [json_name = "variadic"];
+    // .substrait.FunctionSignature.FinalArgVariadic variadic = 16;
     case kVariadic: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *final_variable_behavior_.variadic_);
       break;
     }
-    // .substrait.FunctionSignature.FinalArgNormal normal = 17 [json_name = "normal"];
+    // .substrait.FunctionSignature.FinalArgNormal normal = 17;
     case kNormal: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -2778,7 +2766,7 @@ const char* FunctionSignature_Description::_InternalParse(const char* ptr, ::PRO
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string language = 1 [json_name = "language"];
+      // string language = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_language();
@@ -2788,7 +2776,7 @@ const char* FunctionSignature_Description::_InternalParse(const char* ptr, ::PRO
         } else
           goto handle_unusual;
         continue;
-      // string body = 2 [json_name = "body"];
+      // string body = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           auto str = _internal_mutable_body();
@@ -2827,7 +2815,7 @@ uint8_t* FunctionSignature_Description::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string language = 1 [json_name = "language"];
+  // string language = 1;
   if (!this->_internal_language().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_language().data(), static_cast<int>(this->_internal_language().length()),
@@ -2837,7 +2825,7 @@ uint8_t* FunctionSignature_Description::_InternalSerialize(
         1, this->_internal_language(), target);
   }
 
-  // string body = 2 [json_name = "body"];
+  // string body = 2;
   if (!this->_internal_body().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_body().data(), static_cast<int>(this->_internal_body().length()),
@@ -2863,14 +2851,14 @@ size_t FunctionSignature_Description::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string language = 1 [json_name = "language"];
+  // string language = 1;
   if (!this->_internal_language().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_language());
   }
 
-  // string body = 2 [json_name = "body"];
+  // string body = 2;
   if (!this->_internal_body().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -3019,7 +3007,7 @@ const char* FunctionSignature_Implementation::_InternalParse(const char* ptr, ::
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.FunctionSignature.Implementation.Type type = 1 [json_name = "type"];
+      // .substrait.FunctionSignature.Implementation.Type type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
           uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -3028,7 +3016,7 @@ const char* FunctionSignature_Implementation::_InternalParse(const char* ptr, ::
         } else
           goto handle_unusual;
         continue;
-      // string uri = 2 [json_name = "uri"];
+      // string uri = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           auto str = _internal_mutable_uri();
@@ -3067,14 +3055,14 @@ uint8_t* FunctionSignature_Implementation::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.FunctionSignature.Implementation.Type type = 1 [json_name = "type"];
+  // .substrait.FunctionSignature.Implementation.Type type = 1;
   if (this->_internal_type() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
       1, this->_internal_type(), target);
   }
 
-  // string uri = 2 [json_name = "uri"];
+  // string uri = 2;
   if (!this->_internal_uri().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri().data(), static_cast<int>(this->_internal_uri().length()),
@@ -3100,14 +3088,14 @@ size_t FunctionSignature_Implementation::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string uri = 2 [json_name = "uri"];
+  // string uri = 2;
   if (!this->_internal_uri().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
         this->_internal_uri());
   }
 
-  // .substrait.FunctionSignature.Implementation.Type type = 1 [json_name = "type"];
+  // .substrait.FunctionSignature.Implementation.Type type = 1;
   if (this->_internal_type() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_type());
@@ -3261,7 +3249,7 @@ const char* FunctionSignature_Argument_ValueArgument::_InternalParse(const char*
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType type = 1 [json_name = "type"];
+      // .substrait.ParameterizedType type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
@@ -3269,7 +3257,7 @@ const char* FunctionSignature_Argument_ValueArgument::_InternalParse(const char*
         } else
           goto handle_unusual;
         continue;
-      // bool constant = 2 [json_name = "constant"];
+      // bool constant = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           constant_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -3306,7 +3294,7 @@ uint8_t* FunctionSignature_Argument_ValueArgument::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType type = 1 [json_name = "type"];
+  // .substrait.ParameterizedType type = 1;
   if (this->_internal_has_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3314,7 +3302,7 @@ uint8_t* FunctionSignature_Argument_ValueArgument::_InternalSerialize(
         1, _Internal::type(this), target, stream);
   }
 
-  // bool constant = 2 [json_name = "constant"];
+  // bool constant = 2;
   if (this->_internal_constant() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(2, this->_internal_constant(), target);
@@ -3336,14 +3324,14 @@ size_t FunctionSignature_Argument_ValueArgument::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType type = 1 [json_name = "type"];
+  // .substrait.ParameterizedType type = 1;
   if (this->_internal_has_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
         *type_);
   }
 
-  // bool constant = 2 [json_name = "constant"];
+  // bool constant = 2;
   if (this->_internal_constant() != 0) {
     total_size += 1 + 1;
   }
@@ -3489,7 +3477,7 @@ const char* FunctionSignature_Argument_TypeArgument::_InternalParse(const char* 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // .substrait.ParameterizedType type = 1 [json_name = "type"];
+      // .substrait.ParameterizedType type = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
@@ -3526,7 +3514,7 @@ uint8_t* FunctionSignature_Argument_TypeArgument::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType type = 1 [json_name = "type"];
+  // .substrait.ParameterizedType type = 1;
   if (this->_internal_has_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -3550,7 +3538,7 @@ size_t FunctionSignature_Argument_TypeArgument::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // .substrait.ParameterizedType type = 1 [json_name = "type"];
+  // .substrait.ParameterizedType type = 1;
   if (this->_internal_has_type()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
@@ -3674,7 +3662,7 @@ const char* FunctionSignature_Argument_EnumArgument::_InternalParse(const char* 
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated string options = 1 [json_name = "options"];
+      // repeated string options = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -3689,7 +3677,7 @@ const char* FunctionSignature_Argument_EnumArgument::_InternalParse(const char* 
         } else
           goto handle_unusual;
         continue;
-      // bool optional = 2 [json_name = "optional"];
+      // bool optional = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           optional_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
@@ -3726,7 +3714,7 @@ uint8_t* FunctionSignature_Argument_EnumArgument::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated string options = 1 [json_name = "options"];
+  // repeated string options = 1;
   for (int i = 0, n = this->_internal_options_size(); i < n; i++) {
     const auto& s = this->_internal_options(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -3736,7 +3724,7 @@ uint8_t* FunctionSignature_Argument_EnumArgument::_InternalSerialize(
     target = stream->WriteString(1, s, target);
   }
 
-  // bool optional = 2 [json_name = "optional"];
+  // bool optional = 2;
   if (this->_internal_optional() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(2, this->_internal_optional(), target);
@@ -3758,7 +3746,7 @@ size_t FunctionSignature_Argument_EnumArgument::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string options = 1 [json_name = "options"];
+  // repeated string options = 1;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(options_.size());
   for (int i = 0, n = options_.size(); i < n; i++) {
@@ -3766,7 +3754,7 @@ size_t FunctionSignature_Argument_EnumArgument::ByteSizeLong() const {
       options_.Get(i));
   }
 
-  // bool optional = 2 [json_name = "optional"];
+  // bool optional = 2;
   if (this->_internal_optional() != 0) {
     total_size += 1 + 1;
   }
@@ -4010,7 +3998,7 @@ const char* FunctionSignature_Argument::_InternalParse(const char* ptr, ::PROTOB
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string name = 1 [json_name = "name"];
+      // string name = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_name();
@@ -4020,7 +4008,7 @@ const char* FunctionSignature_Argument::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Argument.ValueArgument value = 2 [json_name = "value"];
+      // .substrait.FunctionSignature.Argument.ValueArgument value = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
@@ -4028,7 +4016,7 @@ const char* FunctionSignature_Argument::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Argument.TypeArgument type = 3 [json_name = "type"];
+      // .substrait.FunctionSignature.Argument.TypeArgument type = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
@@ -4036,7 +4024,7 @@ const char* FunctionSignature_Argument::_InternalParse(const char* ptr, ::PROTOB
         } else
           goto handle_unusual;
         continue;
-      // .substrait.FunctionSignature.Argument.EnumArgument enum = 4 [json_name = "enum"];
+      // .substrait.FunctionSignature.Argument.EnumArgument enum = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr = ctx->ParseMessage(_internal_mutable_enum_(), ptr);
@@ -4073,7 +4061,7 @@ uint8_t* FunctionSignature_Argument::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_name().data(), static_cast<int>(this->_internal_name().length()),
@@ -4083,7 +4071,7 @@ uint8_t* FunctionSignature_Argument::_InternalSerialize(
         1, this->_internal_name(), target);
   }
 
-  // .substrait.FunctionSignature.Argument.ValueArgument value = 2 [json_name = "value"];
+  // .substrait.FunctionSignature.Argument.ValueArgument value = 2;
   if (_internal_has_value()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4091,7 +4079,7 @@ uint8_t* FunctionSignature_Argument::_InternalSerialize(
         2, _Internal::value(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.Argument.TypeArgument type = 3 [json_name = "type"];
+  // .substrait.FunctionSignature.Argument.TypeArgument type = 3;
   if (_internal_has_type()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4099,7 +4087,7 @@ uint8_t* FunctionSignature_Argument::_InternalSerialize(
         3, _Internal::type(this), target, stream);
   }
 
-  // .substrait.FunctionSignature.Argument.EnumArgument enum = 4 [json_name = "enum"];
+  // .substrait.FunctionSignature.Argument.EnumArgument enum = 4;
   if (_internal_has_enum_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -4123,7 +4111,7 @@ size_t FunctionSignature_Argument::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // string name = 1 [json_name = "name"];
+  // string name = 1;
   if (!this->_internal_name().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -4131,21 +4119,21 @@ size_t FunctionSignature_Argument::ByteSizeLong() const {
   }
 
   switch (argument_kind_case()) {
-    // .substrait.FunctionSignature.Argument.ValueArgument value = 2 [json_name = "value"];
+    // .substrait.FunctionSignature.Argument.ValueArgument value = 2;
     case kValue: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *argument_kind_.value_);
       break;
     }
-    // .substrait.FunctionSignature.Argument.TypeArgument type = 3 [json_name = "type"];
+    // .substrait.FunctionSignature.Argument.TypeArgument type = 3;
     case kType: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *argument_kind_.type_);
       break;
     }
-    // .substrait.FunctionSignature.Argument.EnumArgument enum = 4 [json_name = "enum"];
+    // .substrait.FunctionSignature.Argument.EnumArgument enum = 4;
     case kEnum: {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(

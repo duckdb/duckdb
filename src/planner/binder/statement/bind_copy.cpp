@@ -140,7 +140,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		}
 		stmt.select_statement = move(statement);
 	}
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
 	} else {
