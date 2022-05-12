@@ -629,13 +629,14 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 	return true;
 }
 
-void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids) {
+void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids, DataTable &data_table) {
 	vector<LogicalType> key_types;
 
 	// Initialize the scan states
 	TableScanState scan_state;
 	scan_state.column_ids = column_ids;
 	scan_state.max_row = count;
+	idx_t old_count = this->count;
 
 	// Save cardinalities as a tuple - (cardinality_count, column_index)
 	vector<std::tuple<idx_t, idx_t>> cardinalities;
@@ -664,6 +665,7 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 
 	// Scan the RowGroup into the DataChunks
 	InitializeScan(scan_state.row_group_scan_state);
+	scan_state.row_group_scan_state.max_row = count;
 	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE < scan_state.row_group_scan_state.max_row) {
 		ScanCommitted(scan_state.row_group_scan_state, payload, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT);
 		payload.Normalify();
@@ -706,6 +708,9 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 		}
 		sorted_rowgroup->Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
 	}
+
+	int64_t count_change = new_count - old_count;
+	data_table.rows_changed += count_change;
 
 	this->columns = sorted_rowgroup->columns;
 	this->stats = sorted_rowgroup->stats;
@@ -953,7 +958,8 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 	stats[column_idx]->statistics->Merge(other);
 }
 
-RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
+                                     DataTable &data_table) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 	vector<LogicalType> types;
@@ -983,7 +989,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		}
 
 		if (!contains_illegal_types && !columns.empty() && count != 0) {
-			SortColumns(types, column_ids);
+			SortColumns(types, column_ids, data_table);
 		}
 	}
 

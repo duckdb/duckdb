@@ -118,7 +118,8 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
 
-	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
+	                           DataTable &data_table);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
@@ -151,7 +152,7 @@ private:
 	//! Scan the RowGroup to the payload DataChunk before sorting
 	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
 	//! Sort the columns before checkpointing
-	void SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids);
+	void SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids, DataTable &data_table);
 	//! Return the indices of the key columns
 	void CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
 	                                     vector<std::tuple<idx_t, idx_t>> &cardinalities);
