@@ -110,9 +110,12 @@ public:
 			*col_size_ptr = 20;
 			return SQL_SUCCESS;
 		case SQL_VARCHAR:
+			// we don't know the number of characters, but set because of ADO
+			*col_size_ptr = 256;
+			return SQL_SUCCESS;
 		case SQL_VARBINARY:
-			// we don't know the number of characters
-			*col_size_ptr = 0;
+			// we don't know the number of characters, but set because of ADO
+			*col_size_ptr = 512;
 			return SQL_SUCCESS;
 		default:
 			return SQL_ERROR;
