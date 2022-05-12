@@ -179,6 +179,7 @@ public:
 
 private:
 	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	void UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel);
 
 	//! Apply a bitmask to the hashes
 	void ApplyBitmask(Vector &hashes, idx_t count);
@@ -202,6 +203,13 @@ private:
 	unique_ptr<BufferHandle> hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
+	//! Index of the byte in the hash used for the histogram
+	idx_t histogram_byte;
+	//! Histogram of inserted values
+	idx_t histogram[256];
+	//! Histogram lock
+	mutex histogram_lock;
+
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;

@@ -14,7 +14,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false) {
+      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), histogram_byte(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -57,6 +57,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	memset(histogram, 0, sizeof(histogram));
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -69,6 +70,11 @@ unique_ptr<JoinHashTable> JoinHashTable::CopyEmpty() const {
 void JoinHashTable::Merge(JoinHashTable &other) {
 	block_collection->Merge(*other.block_collection);
 	string_heap->Merge(*other.string_heap);
+	lock_guard<mutex> lock(histogram_lock);
+	const auto other_hist = other.histogram;
+	for (idx_t i = 0; i < 256; i++) {
+		histogram[i] += other_hist[i];
+	}
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -112,6 +118,21 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 		VectorOperations::Hash(keys.data[0], hashes, sel, count);
 		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
+		}
+	}
+}
+
+void JoinHashTable::UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel) {
+	const auto hist_byte = histogram_byte;
+	const auto hash_bytes = (uint8_t *)hash_data.data;
+	if (has_rsel) {
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = hash_data.sel->get_index(i);
+			histogram[hash_bytes[idx * sizeof(hash_t) + hist_byte]]++;
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			histogram[hash_bytes[i * sizeof(hash_t) + hist_byte]]++;
 		}
 	}
 }
@@ -235,6 +256,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	VectorData hdata;
 	hash_values.Orrify(keys.size(), hdata);
 	source_data.emplace_back(move(hdata));
+
+	// Update the histogram
+	UpdateHistogram(source_data.back(), added_count, keys.size() == added_count);
 
 	source_chunk.SetCardinality(keys);
 

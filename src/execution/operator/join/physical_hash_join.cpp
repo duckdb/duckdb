@@ -142,9 +142,9 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                       DataChunk &input) const {
+	auto &gstate = (HashJoinGlobalState &)gstate_p;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	if (!lstate.initialized) {
-		auto &gstate = (HashJoinGlobalState &)gstate_p;
 		lstate.Initialize(gstate);
 	}
 	// resolve the join keys for the right chunk
@@ -169,9 +169,9 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	}
 
-	//	if (sink.external) {
-	//		// TODO: threshold or something
-	//	}
+	if (gstate.external) {
+		// TODO: threshold or something
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

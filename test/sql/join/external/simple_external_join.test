@@ -1,0 +1,28 @@
+# name: test/sql/join/external/simple_external_join.test
+# description: Test simple external join
+# group: [external]
+
+statement ok
+PRAGMA debug_force_external=true
+
+statement ok
+create table t1 as select range i from range(4)
+
+statement ok
+create table t2 as select range % 4 j from range(12)
+
+query II
+select i, j from t1, t2 where i = j
+----
+0	0
+1	1
+2	2
+3	3
+0	0
+1	1
+2	2
+3	3
+0	0
+1	1
+2	2
+3	3
