@@ -19,9 +19,32 @@ static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 	}
 	auto &key_value = StructValue::GetChildren(element);
 
+	if (key_value[0].IsNull()) {
+		throw InvalidInputException("None of the keys of the map can be NULL");
+	}
 	// Add to the inner key/value lists of the resulting map
 	ListVector::PushBack(keys.container, key_value[0]);
 	ListVector::PushBack(values.container, key_value[1]);
+}
+
+static void CheckKeyUniqueness(VectorInfo keys) {
+	auto end = keys.data.offset + keys.data.length;
+	auto &entries = ListVector::GetEntry(keys.container);
+	for (auto lhs = keys.data.offset; lhs < end; lhs++) {
+		auto element = entries.GetValue(lhs);
+		D_ASSERT(!element.IsNull());
+		for (auto rhs = lhs + 1; rhs < end; rhs++) {
+			auto other = entries.GetValue(rhs);
+			D_ASSERT(!other.IsNull());
+
+			if (element.type() != other.type()) {
+				throw InvalidInputException("Not all keys are of the same type!");
+			}
+			if (element == other) {
+				throw InvalidInputException("The given keys aren't unique");
+			}
+		}
+	}
 }
 
 static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
@@ -41,6 +64,7 @@ static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 	// Set the length of the key value lists
 	keys.data.length = pair_amount;
 	values.data.length = pair_amount;
+	CheckKeyUniqueness(keys);
 }
 
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -65,6 +89,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &key_validity = FlatVector::Validity(*key_vector);
 	auto &value_validity = FlatVector::Validity(*value_vector);
 
+	ListVector::GetEntry(*key_vector);
 	VectorData list_data;
 	// auto count = ListVector::GetListSize(array);
 	args.data[0].Orrify(args.size(), list_data);

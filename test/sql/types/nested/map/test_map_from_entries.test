@@ -69,3 +69,17 @@ select MAP_FROM_ENTRIES(ARRAY[(1, 'x', 'extra'), (2, 'y', 'extra')]);
 # Structs inside the ARRAY have different amounts of fields
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y', 'extra')]);
+
+#Nested types for key/value
+query I
+SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([3,4], 4)]);
+----
+{[1, 2]=2, [3, 4]=4}
+
+#Keys cant be NULL
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[(NULL, 2), ([3,4], 4)]);
+
+#Keys have to be unique
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[(1, 2), (1, 4)]);
