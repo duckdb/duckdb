@@ -179,6 +179,33 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 }
 
+static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
+                                ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+                                LogicalType &list_child_type) {
+
+	// check if the original expression is a lambda parameter
+	bool is_lambda_parameter = false;
+	if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+
+		// TODO: is there a better way to determine if this is the lambda parameter, maybe using __lambda_internal_...?
+		auto &bound_col_ref = (BoundColumnRefExpression &)*original;
+		if (bound_col_ref.binding.table_index == DConstants::INVALID_INDEX) {
+			is_lambda_parameter = true;
+		}
+	}
+
+	if (is_lambda_parameter) {
+		// this is a lambda parameter, so the replacement refers to the first argument, which is the list
+		replacement = make_unique<BoundReferenceExpression>(arguments[0]->alias, list_child_type, 0);
+
+	} else {
+		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
+		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type, arguments.size());
+		bound_function.arguments.push_back(original->return_type);
+		arguments.push_back(move(original));
+	}
+}
+
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 
@@ -186,14 +213,6 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 	D_ASSERT(bound_function.arguments.size() == 2);
 	D_ASSERT(arguments.size() == 2);
 
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
-	}
-
-	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
 	bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
 
 	// remove the lambda function and add the column references as arguments
@@ -201,45 +220,59 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 	arguments.pop_back();
 	bound_function.arguments.pop_back();
 
-	ExpressionIterator::EnumerateChildren(*lambda_expr,
-	                                      [&](unique_ptr<Expression> &child) {
+	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.return_type = LogicalType::SQLNULL;
+		return make_unique<VariableReturnBindData>(bound_function.return_type);
+	}
 
-                // TODO: see (when writing tests) if these two expression classes are enough
+	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
+	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
+
+	// TODO: other expression classes that do not have children
+	// TODO: see of there are tests where lambda_expr or child (as lambda parameter) have this class
+	/*
+		case ExpressionClass::BOUND_CONSTANT:
+		case ExpressionClass::BOUND_DEFAULT:
+		case ExpressionClass::BOUND_PARAMETER:
+		case ExpressionClass::BOUND_REF:
+	*/
+
+	// if the lambda expression does not have any children, transform directly
+	if (lambda_expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+
+		// move the lambda expr because we are going to replace it
+		auto original = move(lambda_expr);
+		unique_ptr<Expression> replacement;
+
+		TransformExpression(original, replacement, bound_function, arguments, list_child_type);
+
+		// now we replace the child
+		lambda_expr = move(replacement);
+
+	} else {
+		// enumerate the children of the lambda expression
+		ExpressionIterator::EnumerateChildren(*lambda_expr,
+		                                      [&](unique_ptr<Expression> &child) {
+
+                // TODO: see (when writing tests) if these this expression class is enough
 		        // TODO: in which case would the lambda expression be a BOUND_CONSTANT?
 		        // skip all other expression classes
-                if (child->expression_class == ExpressionClass::BOUND_CONSTANT || child->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+                if (child->expression_class == ExpressionClass::BOUND_CONSTANT ||
+			        child->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 
 			        // move the child expr because we are going to replace it
                     auto original = move(child);
                     unique_ptr<Expression> replacement;
 
-			        // check if the original expression is a lambda parameter
-			        bool is_lambda_parameter = false;
-			        if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+				    TransformExpression(original, replacement, bound_function, arguments, list_child_type);
 
-				        // TODO: is there a better way to determine if this is the lambda parameter, maybe using __lambda_internal_...?
-				        auto &bound_col_ref = (BoundColumnRefExpression &)*original;
-				        if (bound_col_ref.binding.table_index == DConstants::INVALID_INDEX) {
-					        is_lambda_parameter = true;
-				        }
-			        }
-
-                    if (is_lambda_parameter) {
-                        // this is a lambda parameter, so the replacement refers to the first argument, which is the list
-                        replacement = make_unique<BoundReferenceExpression>(arguments[0]->alias, list_child_type, 0);
-				        D_ASSERT(replacement);
-
-                    } else {
-                        // this is not the lambda parameter, so we need to create a new argument for the arguments vector
-                        replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type, arguments.size());
-				        bound_function.arguments.push_back(original->return_type);
-				        arguments.push_back(move(original));
-                    }
                     // now we replace the child
                     child = move(replacement);
                 }
            ;}
-	);
+		);
+	}
 
 	// now the lambda expression has been modified, put it in the function data to use it during execution
 	return make_unique<ListTransformBindData>(bound_function.return_type, move(lambda_expr));
