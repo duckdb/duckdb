@@ -210,7 +210,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		active_query->progress_bar.reset();
 		query_progress = -1;
 
-		// successfully compiled SELECT clause and it is the last statement
+		// successfully compiled SELECT clause, and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
 		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, pending.properties,
 		                                                    shared_from_this(), pending.types, pending.names);
@@ -218,8 +218,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		return move(stream_result);
 	}
 	// create a materialized result by continuously fetching
-	auto result =
-	    make_unique<MaterializedQueryResult>(pending.statement_type, pending.properties, pending.types, pending.names);
+	auto result = make_unique<MaterializedQueryResult>(pending.statement_type, pending.properties, pending.types,
+	                                                   pending.names, shared_from_this());
 	result->properties = pending.properties;
 	while (true) {
 		auto chunk = FetchInternal(lock, GetExecutor(), *result);
@@ -646,7 +646,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		vector<LogicalType> types;
 		vector<string> names;
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(types),
-		                                            move(names));
+		                                            move(names), shared_from_this());
 	}
 
 	unique_ptr<QueryResult> result;

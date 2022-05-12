@@ -112,6 +112,7 @@ private:
 	Serializer &serializer;
 	unique_ptr<BufferedSerializer> buffer;
 	idx_t field_count;
+	bool finalized;
 };
 
 template <>
@@ -197,6 +198,17 @@ public:
 		return T::Deserialize(source);
 	}
 
+	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
+	RETURN_TYPE ReadSerializable(RETURN_TYPE default_value, ARGS &&...args) {
+		if (field_count >= max_field_count) {
+			// field is not there, read the default value
+			return default_value;
+		}
+		// field is there, read the actual value
+		AddField();
+		return T::Deserialize(source, std::forward<ARGS>(args)...);
+	}
+
 	template <class T, class RETURN_TYPE = unique_ptr<T>>
 	RETURN_TYPE ReadRequiredSerializable() {
 		if (field_count >= max_field_count) {
@@ -206,6 +218,17 @@ public:
 		// field is there, read the actual value
 		AddField();
 		return T::Deserialize(source);
+	}
+
+	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
+	RETURN_TYPE ReadRequiredSerializable(ARGS &&...args) {
+		if (field_count >= max_field_count) {
+			// field is not there, read the default value
+			throw SerializationException("Attempting to read mandatory field, but field is missing");
+		}
+		// field is there, read the actual value
+		AddField();
+		return T::Deserialize(source, std::forward<ARGS>(args)...);
 	}
 
 	template <class T, class RETURN_TYPE = unique_ptr<T>>
@@ -251,6 +274,7 @@ private:
 	idx_t field_count;
 	idx_t max_field_count;
 	idx_t total_size;
+	bool finalized;
 };
 
 } // namespace duckdb

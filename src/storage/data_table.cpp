@@ -46,7 +46,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 
 		AppendRowGroup(0);
 		for (auto &type : types) {
-			column_stats.push_back(BaseStatistics::CreateEmpty(type));
+			column_stats.push_back(BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS));
 		}
 	} else {
 		D_ASSERT(column_stats.size() == types.size());
@@ -76,7 +76,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]->Copy());
 	}
-	column_stats.push_back(BaseStatistics::CreateEmpty(new_column_type));
+	column_stats.push_back(BaseStatistics::CreateEmpty(new_column_type, StatisticsType::GLOBAL_STATS));
 
 	// add the column definitions from this DataTable
 	column_definitions.emplace_back(new_column.Copy());
@@ -185,7 +185,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// the column that had its type changed will have the new statistics computed during conversion
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
 		if (i == changed_idx) {
-			column_stats.push_back(BaseStatistics::CreateEmpty(column_definitions[i].type));
+			column_stats.push_back(
+			    BaseStatistics::CreateEmpty(column_definitions[i].type, StatisticsType::GLOBAL_STATS));
 		} else {
 			column_stats.push_back(parent.column_stats[i]->Copy());
 		}
@@ -702,6 +703,13 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 		}
 	}
 	state.current_row += append_count;
+	for (idx_t col_idx = 0; col_idx < column_stats.size(); col_idx++) {
+		auto type = chunk.data[col_idx].GetType().InternalType();
+		if (type == PhysicalType::LIST || type == PhysicalType::STRUCT) {
+			continue;
+		}
+		column_stats[col_idx]->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+	}
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
@@ -1272,7 +1280,7 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	vector<unique_ptr<BaseStatistics>> global_stats;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		global_stats.push_back(BaseStatistics::CreateEmpty(column_definitions[i].type));
+		global_stats.push_back(column_stats[i]->Copy());
 	}
 
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
