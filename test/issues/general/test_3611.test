@@ -1,4 +1,4 @@
-# name: test/issues/general/3611.test
+# name: test/issues/general/test_3611.test
 # description: Issue 3611: Address Sanitiser Failure in Storage Compression
 # group: [general]
 
