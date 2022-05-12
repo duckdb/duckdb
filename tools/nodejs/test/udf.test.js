@@ -160,7 +160,7 @@ describe('UDFs', function() {
 
     it('structnestednull', function(done) {
         db.register("udf", "integer", a => {
-            return (a.x?.y == null ? -100 : a.x.y);
+            return (a.x == null ? -100 : a.x.y);
         });
         db.all("SELECT min(udf({'x': (case when v % 2 = 0 then {'y': v::INTEGER } else null end), 'z': 42}))::INTEGER as foo FROM generate_series(1, 10000) as t(v)", function(err, rows) {
             if (err) throw err;
