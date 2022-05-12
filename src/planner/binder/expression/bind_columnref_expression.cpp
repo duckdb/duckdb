@@ -98,6 +98,33 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	return move(extract_fun);
 }
 
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
+	D_ASSERT(colref.column_names.size() <= 2);
+	string error_message;
+	auto &table_name = colref.column_names.back();
+	auto binding = binder.bind_context.GetBinding(table_name, error_message);
+	if (!binding) {
+		return nullptr;
+	}
+	if (colref.column_names.size() == 2) {
+		// "schema_name.table_name"
+		auto table_entry = binding->GetTableEntry();
+		if (!table_entry) {
+			return nullptr;
+		}
+		auto &schema_name = colref.column_names[0];
+		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+			return nullptr;
+		}
+	}
+	// We found the table, now create the struct_pack expression
+	vector<unique_ptr<ParsedExpression>> child_exprs;
+	for (const auto &column_name : binding->names) {
+		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+	}
+	return make_unique<FunctionExpression>("struct_pack", move(child_exprs));
+}
+
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
 	idx_t column_parts = colref.column_names.size();
 	// column names can have an arbitrary amount of dots
@@ -106,7 +133,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// no dots (i.e. "part1")
 		// -> part1 refers to a column
 		// check if we can qualify the column name with the table name
-		return QualifyColumnName(colref.GetColumnName(), error_message);
+		auto qualified_colref = QualifyColumnName(colref.GetColumnName(), error_message);
+		if (qualified_colref) {
+			// we could: return it
+			return qualified_colref;
+		}
+		// we could not! Try creating an implicit struct_pack
+		return CreateStructPack(colref);
 	} else if (column_parts == 2) {
 		// one dot (i.e. "part1.part2")
 		// EITHER:
@@ -122,12 +155,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
-			if (!qualified_colref) {
-				// we could not! bail
-				return nullptr;
+			if (qualified_colref) {
+				// we could: create a struct extract
+				return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
 			}
-			// we could: create a struct extract
-			return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
+			// we could not! Try creating an implicit struct_pack
+			return CreateStructPack(colref);
 		}
 	} else {
 		// two or more dots (i.e. "part1.part2.part3.part4...")
@@ -175,35 +208,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 	}
 }
 
-unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
-	if (colref.column_names.size() > 2) {
-		return nullptr;
-	}
-	string error_message;
-	auto &table_name = colref.column_names.back();
-	auto binding = binder.bind_context.GetBinding(table_name, error_message);
-	if (!binding) {
-		return nullptr;
-	}
-	if (colref.column_names.size() == 2) {
-		// "schema_name.table_name"
-		auto table_entry = binding->GetTableEntry();
-		if (!table_entry) {
-			return nullptr;
-		}
-		auto &schema_name = colref.column_names[0];
-		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
-			return nullptr;
-		}
-	}
-	// We found the table, now create the struct_pack expression
-	vector<unique_ptr<ParsedExpression>> child_exprs;
-	for (const auto &column_name : binding->names) {
-		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
-	}
-	return make_unique<FunctionExpression>("struct_pack", move(child_exprs));
-}
-
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -211,10 +215,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	string error_message;
 	auto expr = QualifyColumnName(colref_p, error_message);
 	if (!expr) {
-		expr = CreateStructPack(colref_p);
-		if (!expr) {
-			return BindResult(binder.FormatError(colref_p, error_message));
-		}
+		return BindResult(binder.FormatError(colref_p, error_message));
 	}
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		return BindExpression(&expr, depth);
