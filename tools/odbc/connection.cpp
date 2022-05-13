@@ -85,7 +85,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			return SQL_NO_DATA;
 		case SQL_ATTR_QUERY_TIMEOUT: {
 			*(SQLINTEGER *)value_ptr = 0;
-			buffer_length = sizeof (SQLINTEGER);
+			buffer_length = sizeof(SQLINTEGER);
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_TXN_ISOLATION: {

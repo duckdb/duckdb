@@ -44,7 +44,8 @@ private:
 
 public:
 	explicit OdbcFetch(OdbcHandleStmt *stmt)
-	    : cursor_type(SQL_CURSOR_FORWARD_ONLY), cursor_scrollable(SQL_NONSCROLLABLE), row_count(0), stmt_ref(stmt), resultset_end(false) {
+	    : cursor_type(SQL_CURSOR_FORWARD_ONLY), cursor_scrollable(SQL_NONSCROLLABLE), row_count(0), stmt_ref(stmt),
+	      resultset_end(false) {
 		ResetLastFetchedVariableVal();
 	}
 	~OdbcFetch();
