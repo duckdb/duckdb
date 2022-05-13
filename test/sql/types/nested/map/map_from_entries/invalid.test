@@ -1,6 +1,6 @@
 # name: test/sql/types/nested/map/map_from_entries/invalid.test
 # description: Showcase error handling of invalid arguments
-# group: [map]
+# group: [map_from_entries]
 
 statement ok
 PRAGMA enable_verification

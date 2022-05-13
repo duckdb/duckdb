@@ -1,6 +1,6 @@
 # name: test/sql/types/nested/map/map_from_entries/basic.test
 # description: Test basic functionality of map_from_entries function
-# group: [map]
+# group: [map_from_entries]
 
 statement ok
 PRAGMA enable_verification

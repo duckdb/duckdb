@@ -1,6 +1,6 @@
-# name: test/sql/types/nested/map/map_from_entries/column.test
+# name: test/sql/types/nested/map/map_from_entries/column_null.test
 # description: Test basic functionality when the provided argument is a column
-# group: [map]
+# group: [map_from_entries]
 
 statement ok
 PRAGMA enable_verification

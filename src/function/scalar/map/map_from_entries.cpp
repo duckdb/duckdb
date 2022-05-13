@@ -14,9 +14,7 @@ struct VectorInfo {
 
 static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 	D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
-	if (element.IsNull()) {
-		throw BinderException("The list of structs contains a NULL");
-	}
+	D_ASSERT(!element.IsNull());
 	auto &key_value = StructValue::GetChildren(element);
 
 	if (key_value[0].IsNull()) {
@@ -47,7 +45,7 @@ static void CheckKeyUniqueness(VectorInfo keys) {
 	}
 }
 
-static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
+static bool MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 	// Get the length and offset of this list from the argument data
 	auto pair_amount = list.data.length;
 	auto offset = list.data.offset;
@@ -56,15 +54,24 @@ static void MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 	keys.data.offset = offset;
 	values.data.offset = offset;
 	// Loop over the list of structs
+	idx_t inserted_values = 0;
 	for (idx_t i = offset; i < offset + pair_amount; i++) {
 		// Get the struct using the offset and the index;
 		auto element = list.container.GetValue(i);
+		if (element.IsNull()) {
+			continue;
+		}
 		MapStruct(element, keys, values);
+		inserted_values++;
+	}
+	if (inserted_values == 0) {
+		return false;
 	}
 	// Set the length of the key value lists
-	keys.data.length = pair_amount;
-	values.data.length = pair_amount;
+	keys.data.length = inserted_values;
+	values.data.length = inserted_values;
 	CheckKeyUniqueness(keys);
+	return true;
 }
 
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -86,6 +93,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	// Get the offset+length data for the list(s)
 	auto key_data = FlatVector::GetData<list_entry_t>(*key_vector);
 	auto value_data = FlatVector::GetData<list_entry_t>(*value_vector);
+	auto &result_validity = FlatVector::Validity(result);
 	auto &key_validity = FlatVector::Validity(*key_vector);
 	auto &value_validity = FlatVector::Validity(*value_vector);
 
@@ -100,13 +108,14 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 		VectorInfo keys {*key_vector, key_data[i]};
 		VectorInfo values {*value_vector, value_data[i]};
 
-		MapSingleList(list, keys, values);
+		bool row_valid = MapSingleList(list, keys, values);
 
 		// Check validity
 
-		if (!list_data.validity.RowIsValid(i)) {
+		if (!row_valid || !list_data.validity.RowIsValid(i)) {
 			key_validity.SetInvalid(i);
 			value_validity.SetInvalid(i);
+			result_validity.SetInvalid(i);
 		}
 	}
 
