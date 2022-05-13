@@ -245,9 +245,9 @@ string TypeIdToString(PhysicalType type) {
 	case PhysicalType::INTERVAL:
 		return "INTERVAL";
 	case PhysicalType::STRUCT:
-		return "STRUCT<?>";
+		return "STRUCT";
 	case PhysicalType::LIST:
-		return "LIST<?>";
+		return "LIST";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -415,11 +415,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::VALIDITY:
 		return "VALIDITY";
 	case LogicalTypeId::STRUCT:
-		return "STRUCT<?>";
+		return "STRUCT";
 	case LogicalTypeId::LIST:
-		return "LIST<?>";
+		return "LIST";
 	case LogicalTypeId::MAP:
-		return "MAP<?>";
+		return "MAP";
 	case LogicalTypeId::HASH:
 		return "HASH";
 	case LogicalTypeId::POINTER:
@@ -433,7 +433,7 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::ENUM:
 		return "ENUM";
 	case LogicalTypeId::AGGREGATE_STATE:
-		return "AGGREGATE_STATE<?>";
+		return "AGGREGATE_STATE";
 	case LogicalTypeId::USER:
 		return "USER";
 	case LogicalTypeId::JSON:

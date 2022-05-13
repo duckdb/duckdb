@@ -14,6 +14,7 @@ struct DuckDBTypesData : public FunctionOperatorData {
 
 	vector<TypeCatalogEntry *> entries;
 	idx_t offset;
+	unordered_set<int64_t> oids;
 };
 
 static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -82,8 +83,20 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		// schema_oid, LogicalType::BIGINT
 		output.SetValue(1, count, Value::BIGINT(type_entry->schema->oid));
 		// type_oid, BIGINT
-
-		output.SetValue(2, count, Value::BIGINT(type_entry->oid));
+		int64_t oid;
+		if (type_entry->internal) {
+			oid = int64_t(type.id());
+		} else {
+			oid = type_entry->oid;
+		}
+		Value oid_val;
+		if (data.oids.find(oid) == data.oids.end()) {
+			data.oids.insert(oid);
+			oid_val = Value::BIGINT(oid);
+		} else {
+			oid_val = Value();
+		}
+		output.SetValue(2, count, move(oid_val));
 		// type_name, VARCHAR
 		output.SetValue(3, count, Value(type_entry->name));
 		// type_size, BIGINT
