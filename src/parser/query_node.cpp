@@ -183,6 +183,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 	}
 	result->modifiers = move(modifiers);
 	result->cte_map = move(cte_map);
+	reader.Finalize();
 	return result;
 }
 

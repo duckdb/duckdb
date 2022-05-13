@@ -91,7 +91,10 @@ public:
 		}
 	}
 
-	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names);
+	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names,
+	                                     string &config_timezone);
+
+	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
 	//! The current chunk used by the iterator

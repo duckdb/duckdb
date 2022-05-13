@@ -51,11 +51,11 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
 				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				                                       Value::MaximumValue(group_type), StatisticsType::LOCAL_STATS);
 				break;
 			case PhysicalType::INT16:
 				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				                                       Value::MaximumValue(group_type), StatisticsType::LOCAL_STATS);
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing

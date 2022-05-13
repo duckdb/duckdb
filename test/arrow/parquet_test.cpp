@@ -84,7 +84,8 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	auto result = ArrowToDuck(conn, *table);
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
-	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names);
+	auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*result);
+	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names, timezone_config);
 	auto result_schema = arrow::ImportSchema(&abi_arrow_schema);
 
 	while (true) {
