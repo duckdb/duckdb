@@ -2,14 +2,14 @@
 
 #include "datetime.h" // from Python
 #include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb_python/array_wrapper.hpp"
 
 namespace duckdb {
 
@@ -432,23 +432,23 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::LIST: {
 		return py::str("list");
 	}
+	case LogicalTypeId::INTERVAL: {
+		return py::str("TIMEDELTA");
+	}
 	default:
 		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 
 py::list DuckDBPyResult::Description() {
-	py::list desc(result->names.size());
-	for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
-		py::tuple col_desc(7);
-		col_desc[0] = py::str(result->names[col_idx]);
-		col_desc[1] = GetTypeToPython(result->types[col_idx]);
-		col_desc[2] = py::none();
-		col_desc[3] = py::none();
-		col_desc[4] = py::none();
-		col_desc[5] = py::none();
-		col_desc[6] = py::none();
-		desc[col_idx] = col_desc;
+	const auto names = result->names;
+
+	py::list desc(names.size());
+
+	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+		auto py_name = py::str(names[col_idx]);
+		auto py_type = GetTypeToPython(result->types[col_idx]);
+		desc[col_idx] = py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none());
 	}
 	return desc;
 }
