@@ -11,14 +11,8 @@
 namespace duckdb {
 
 struct StringHash {
-	std::size_t operator()(const string_t &k) const {
-		return Hash(k.GetDataUnsafe(), k.GetSize());
-	}
-};
-
-struct StringCompare {
-	bool operator()(const string_t &lhs, const string_t &rhs) const {
-		return StringComparisonOperators::EqualsOrNot<false>(lhs, rhs);
+	std::size_t operator()(const string &k) const {
+		return Hash(k.c_str(), k.size());
 	}
 };
 
@@ -177,7 +171,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	std::unordered_map<string_t, uint32_t, StringHash, StringCompare> current_string_map;
+	std::unordered_map<string, uint32_t, StringHash> current_string_map;
 	std::vector<uint32_t> index_buffer;
 	std::vector<uint32_t> selection_buffer;
 
@@ -197,7 +191,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	}
 
 	bool LookupString(string_t str) override {
-		auto search = current_string_map.find(str);
+		auto search = current_string_map.find(str.GetString());
 		auto has_result = search != current_string_map.end();
 
 		if (has_result) {
@@ -219,7 +213,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// Update buffers and map
 		index_buffer.push_back(current_dictionary.size);
 		selection_buffer.push_back(index_buffer.size() - 1);
-		current_string_map.insert({str, index_buffer.size() - 1});
+		current_string_map.insert({str.GetString(), index_buffer.size() - 1});
 		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
 
 		current_width = next_width;
@@ -328,19 +322,19 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
 	size_t current_dict_size;
-	std::unordered_set<string_t, StringHash, StringCompare> current_set;
+	std::unordered_set<string, StringHash> current_set;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
 	bool LookupString(string_t str) override {
-		return current_set.count(str);
+		return current_set.count(str.GetString());
 	}
 
 	void AddNewString(string_t str) override {
 		current_tuple_count++;
 		current_unique_count++;
 		current_dict_size += str.GetSize();
-		current_set.insert(str);
+		current_set.insert(str.GetString());
 		current_width = next_width;
 	}
 
