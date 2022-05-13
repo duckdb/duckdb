@@ -111,6 +111,9 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 
 vector<string> DefaultTypeGenerator::GetDefaultEntries() {
 	vector<string> result;
+	if (schema->name != DEFAULT_SCHEMA) {
+		return result;
+	}
 	for (idx_t index = 0; internal_types[index].name != nullptr; index++) {
 		result.emplace_back(internal_types[index].name);
 	}

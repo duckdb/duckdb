@@ -51,13 +51,19 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 	// lock this catalog set to disallow reading
-	lock_guard<mutex> read_lock(catalog_lock);
+	unique_lock<mutex> read_lock(catalog_lock);
 
 	// first check if the entry exists in the unordered set
 	idx_t entry_index;
 	auto mapping_value = GetMapping(context, name);
 	if (mapping_value == nullptr || mapping_value->deleted) {
 		// if it does not: entry has never been created
+
+		// check if there is a default entry
+		auto entry = CreateDefaultEntry(context, name, read_lock);
+		if (entry) {
+			return false;
+		}
 
 		// first create a dummy deleted entry for this entry
 		// so transactions started before the commit of this transaction don't
@@ -299,6 +305,7 @@ MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name,
 	if (entry != mapping.end()) {
 		mapping_value = entry->second.get();
 	} else {
+
 		return nullptr;
 	}
 	if (get_latest) {
@@ -410,20 +417,7 @@ CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr
 	return catalog_entry;
 }
 
-CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
-	unique_lock<mutex> lock(catalog_lock);
-	auto mapping_value = GetMapping(context, name);
-	if (mapping_value != nullptr && !mapping_value->deleted) {
-		// we found an entry for this name
-		// check the version numbers
-
-		auto catalog_entry = entries[mapping_value->index].get();
-		CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
-		if (current->deleted || (current->name != name && !UseTimestamp(context, mapping_value->timestamp))) {
-			return nullptr;
-		}
-		return current;
-	}
+CatalogEntry *CatalogSet::CreateDefaultEntry(ClientContext &context, const string &name, unique_lock<mutex> &lock) {
 	// no entry found with this name, check for defaults
 	if (!defaults || defaults->created_all_entries) {
 		// no defaults either: return null
@@ -449,6 +443,23 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	// just retry?
 	lock.unlock();
 	return GetEntry(context, name);
+}
+
+CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
+	unique_lock<mutex> lock(catalog_lock);
+	auto mapping_value = GetMapping(context, name);
+	if (mapping_value != nullptr && !mapping_value->deleted) {
+		// we found an entry for this name
+		// check the version numbers
+
+		auto catalog_entry = entries[mapping_value->index].get();
+		CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
+		if (current->deleted || (current->name != name && !UseTimestamp(context, mapping_value->timestamp))) {
+			return nullptr;
+		}
+		return current;
+	}
+	return CreateDefaultEntry(context, name, lock);
 }
 
 void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
@@ -567,6 +578,9 @@ void CatalogSet::CreateDefaultEntries(ClientContext &context, unique_lock<mutex>
 			// specifically for views this can happen since the view will be bound
 			lock.unlock();
 			auto entry = defaults->CreateDefaultEntry(context, default_entry);
+			if (!entry) {
+				throw InternalException("Failed to create default entry for %s", default_entry);
+			}
 
 			lock.lock();
 			CreateEntryInternal(context, move(entry));
