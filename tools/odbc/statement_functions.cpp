@@ -191,9 +191,11 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duckdb::OdbcHandleStmt *stmt,
                            SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	if (!target_value_ptr) {
-		return OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr);
+		if (OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr) != SQL_SUCCESS) {
+			duckdb::DiagRecord diag_rec("Could not set str_len_or_ind_ptr", duckdb::SQLStateType::INVALID_STR_BUFF_LENGTH, stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("GetVariableValue", SQL_ERROR, diag_rec);
+		}
 	}
-
 	SQLRETURN ret = SQL_SUCCESS;
 	stmt->odbc_fetcher->SetLastFetchedVariableVal((duckdb::row_t)col_idx);
 

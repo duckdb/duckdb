@@ -135,17 +135,6 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 		duckdb::OdbcUtils::WriteString(stmt->stmt->GetNames()[col_idx], column_name, buffer_length, name_length_ptr);
 
-/*		if (column_name && buffer_length > 0) {
-			auto out_len = duckdb::MinValue(stmt->stmt->GetNames()[col_idx].size(), (size_t)buffer_length);
-			memcpy(column_name, stmt->stmt->GetNames()[col_idx].c_str(), out_len);
-			// terminating null character
-			column_name[out_len] = '\0';
-
-			if (name_length_ptr) {
-				*name_length_ptr = out_len;
-			}
-		}
-*/
 		LogicalType col_type = stmt->stmt->GetTypes()[col_idx];
 
 		if (data_type_ptr) {
