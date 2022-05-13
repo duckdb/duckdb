@@ -110,11 +110,14 @@ public:
 			*col_size_ptr = 20;
 			return SQL_SUCCESS;
 		case SQL_VARCHAR:
-		case SQL_VARBINARY:
-			// we don't know the number of characters
 			// https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/column-size?view=sql-server-ver15
-			*col_size_ptr = SQL_NO_TOTAL;
-			//*col_size_ptr = 0;
+			//*col_size_ptr = SQL_NO_TOTAL; // causes bad alloc
+			// we don't know the number of characters, but set because of ADO
+			*col_size_ptr = 256;
+			return SQL_SUCCESS;
+		case SQL_VARBINARY:
+			// we don't know the number of characters, but set because of ADO
+			*col_size_ptr = 512;
 			return SQL_SUCCESS;
 		default:
 			return SQL_ERROR;
