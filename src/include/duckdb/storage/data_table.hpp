@@ -141,6 +141,9 @@ public:
 	//! The number of rows in the table
 	atomic<int64_t> rows_changed;
 
+	//! The end of the previously checkpointed row group
+	atomic<int64_t> prev_end;
+
 public:
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();

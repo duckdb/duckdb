@@ -691,7 +691,10 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 	}
 
 	// scan the sorted row data and add to the sorted row group
-	auto sorted_rowgroup = make_unique<RowGroup>(db, table_info, this->start, this->count);
+	int64_t count_change = new_count - old_count;
+	data_table.rows_changed += count_change;
+
+	auto sorted_rowgroup = make_unique<RowGroup>(db, table_info, data_table.prev_end, new_count);
 	sorted_rowgroup->InitializeEmpty(types);
 
 	TableAppendState append_state;
@@ -709,13 +712,13 @@ void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_
 		sorted_rowgroup->Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
 	}
 
-	int64_t count_change = new_count - old_count;
-	data_table.rows_changed += count_change;
+	data_table.prev_end += new_count;
 
 	this->columns = sorted_rowgroup->columns;
 	this->stats = sorted_rowgroup->stats;
 	this->version_info = sorted_rowgroup->version_info;
-	this->count.operator=(new_count);
+	this->count = new_count;
+	this->start = sorted_rowgroup->start;
 	this->Verify();
 }
 
