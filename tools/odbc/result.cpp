@@ -32,9 +32,8 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 }
 
 SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
-	auto ret = duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		return stmt->odbc_fetcher->DummyFetch();
-	});
+	auto ret = duckdb::WithStatement(
+	    statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN { return stmt->odbc_fetcher->DummyFetch(); });
 	if (ret != SQL_NEED_DATA) {
 		return ret;
 	}
@@ -68,12 +67,12 @@ SQLRETURN SQL_API SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) 
 		*row_count_ptr = stmt->odbc_fetcher->GetRowCount();
 
 		switch (stmt->stmt->data->statement_type) {
-			case duckdb::StatementType::INSERT_STATEMENT:
-			case duckdb::StatementType::UPDATE_STATEMENT:
-			case duckdb::StatementType::DELETE_STATEMENT:
-				break;
-			default:
-				*row_count_ptr = 0;
+		case duckdb::StatementType::INSERT_STATEMENT:
+		case duckdb::StatementType::UPDATE_STATEMENT:
+		case duckdb::StatementType::DELETE_STATEMENT:
+			break;
+		default:
+			*row_count_ptr = -1;
 		}
 
 		// *row_count_ptr = -1; // we don't actually know most of the time
