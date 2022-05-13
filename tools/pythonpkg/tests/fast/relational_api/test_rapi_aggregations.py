@@ -52,8 +52,8 @@ def aggregation_generic(aggregation_function,assertion_answers):
         aggregation_function(None).execute().fetchall()
         
     # Check broken
-    with pytest.raises(Exception, match='Referenced column "bla" not found'):
-        aggregation_function('bla').execute().fetchall()
+    with pytest.raises(Exception, match='Referenced column "nonexistant" not found'):
+        aggregation_function('nonexistant').execute().fetchall()
 
 class TestRAPIAggregations(object):
     def test_sum(self, duckdb_cursor):
