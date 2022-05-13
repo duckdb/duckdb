@@ -97,7 +97,7 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		} else {
 			oid_val = Value();
 		}
-		output.SetValue(2, count, move(oid_val));
+		output.SetValue(2, count, oid_val);
 		// type_name, VARCHAR
 		output.SetValue(3, count, Value(type_entry->name));
 		// type_size, BIGINT
