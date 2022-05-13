@@ -21,12 +21,12 @@ struct RadixPartitioningConstants {
 	static constexpr const idx_t TMP_BUF_SIZE = 8;
 
 	template <idx_t radix_pass>
-	static inline constexpr hash_t RadixMask() {
-		return (hash_t(1) << (NUM_RADIX_BITS * (radix_pass + 1))) - 1 - RadixMask<radix_pass - 1>();
+	static inline constexpr hash_t Mask() {
+		return (hash_t(1) << (NUM_RADIX_BITS * (radix_pass + 1))) - 1 - Mask<radix_pass - 1>();
 	}
 
 	template <>
-	constexpr inline hash_t RadixMask<0>() {
+	constexpr inline hash_t Mask<0>() {
 		return (hash_t(1) << NUM_RADIX_BITS) - 1;
 	}
 };
@@ -37,6 +37,7 @@ public:
 	template <class CONSTANTS>
 	static void UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel, idx_t histogram[],
 	                            idx_t radix_pass) {
+		D_ASSERT(radix_pass * CONSTANTS::NUM_RADIX_BITS <= sizeof(hash_t) * 8);
 		switch (radix_pass) {
 		case 0:
 			return RadixPartitioning::UpdateHistogramInternal<CONSTANTS, 0>(hash_data, count, has_rsel, histogram);
@@ -61,9 +62,22 @@ public:
 	template <class CONSTANTS>
 	static void Partition(data_ptr_t source_ptr, data_ptr_t tmp_buf, data_ptr_t dest_ptrs[], idx_t entry_size,
 	                      idx_t count, idx_t hash_offset, idx_t radix_pass) {
+		D_ASSERT(radix_pass * CONSTANTS::NUM_RADIX_BITS <= sizeof(hash_t) * 8);
 		switch (radix_pass) {
 		case 0:
 			return RadixPartitioning::PartitionInternal<CONSTANTS, 0>(source_ptr, tmp_buf, dest_ptrs, entry_size, count,
+			                                                          hash_offset);
+		case 1:
+			return RadixPartitioning::PartitionInternal<CONSTANTS, 1>(source_ptr, tmp_buf, dest_ptrs, entry_size, count,
+			                                                          hash_offset);
+		case 2:
+			return RadixPartitioning::PartitionInternal<CONSTANTS, 2>(source_ptr, tmp_buf, dest_ptrs, entry_size, count,
+			                                                          hash_offset);
+		case 3:
+			return RadixPartitioning::PartitionInternal<CONSTANTS, 3>(source_ptr, tmp_buf, dest_ptrs, entry_size, count,
+			                                                          hash_offset);
+		case 4:
+			return RadixPartitioning::PartitionInternal<CONSTANTS, 4>(source_ptr, tmp_buf, dest_ptrs, entry_size, count,
 			                                                          hash_offset);
 		default:
 			throw InternalException("Too many radix passes in Partition!");
@@ -72,8 +86,8 @@ public:
 
 private:
 	template <class CONSTANTS, idx_t radix_pass>
-	static inline hash_t HashBitModulo(hash_t hash) {
-		return (hash & CONSTANTS::template RadixMask<radix_pass>()) >> (CONSTANTS::NUM_RADIX_BITS * radix_pass);
+	static inline hash_t ApplyMask(hash_t hash) {
+		return (hash & CONSTANTS::template Mask<radix_pass>()) >> (CONSTANTS::NUM_RADIX_BITS * radix_pass);
 	}
 
 	template <class CONSTANTS, idx_t pass>
@@ -83,11 +97,11 @@ private:
 		if (has_rsel) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = hash_data.sel->get_index(i);
-				histogram[HashBitModulo<CONSTANTS, pass>(hashes[idx])]++;
+				histogram[ApplyMask<CONSTANTS, pass>(hashes[idx])]++;
 			}
 		} else {
 			for (idx_t i = 0; i < count; i++) {
-				histogram[HashBitModulo<CONSTANTS, pass>(hashes[i])]++;
+				histogram[ApplyMask<CONSTANTS, pass>(hashes[i])]++;
 			}
 		}
 	}
@@ -102,7 +116,7 @@ private:
 		}
 		// Partition
 		for (idx_t i = 0; i < count; i++) {
-			auto idx = HashBitModulo<CONSTANTS, radix_pass>(Load<hash_t>(source_ptr + hash_offset));
+			auto idx = ApplyMask<CONSTANTS, radix_pass>(Load<hash_t>(source_ptr + hash_offset));
 			// Temporal write
 			FastMemcpy(tmp_buf + pos[idx] * entry_size, source_ptr, entry_size);
 			source_ptr += entry_size;

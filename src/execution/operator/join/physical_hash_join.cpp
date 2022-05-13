@@ -169,20 +169,16 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	}
 
-	if (gstate.external) {
-		// TODO: && some kind of threshold
-		lstate.hash_table->Partition();
-	}
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
 	auto &gstate = (HashJoinGlobalState &)gstate_p;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
-	if (lstate.initialized) {
-		gstate.hash_table->Merge(*lstate.hash_table);
+	if (gstate.external) {
+		lstate.hash_table->SwizzleCollectedBlocks();
 	}
+	gstate.hash_table->Merge(*lstate.hash_table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
 	client_profiler.Flush(context.thread.profiler);

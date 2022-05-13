@@ -111,6 +111,9 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 }
 
 void RowDataCollection::Merge(RowDataCollection &other) {
+	if (other.count == 0) {
+		return;
+	}
 	RowDataCollection temp(buffer_manager, Storage::BLOCK_SIZE, 1);
 	{
 		//	One lock at a time to avoid deadlocks

@@ -68,56 +68,20 @@ unique_ptr<JoinHashTable> JoinHashTable::CopyEmpty() const {
 }
 
 void JoinHashTable::Merge(JoinHashTable &other) {
+	if (other.Count() == 0) {
+		return;
+	}
 	block_collection->Merge(*other.block_collection);
+	swizzled_block_collection->Merge(*other.swizzled_block_collection);
 	if (!layout.AllConstant()) {
 		string_heap->Merge(*other.string_heap);
+		swizzled_string_heap->Merge(*other.swizzled_string_heap);
 	}
 	lock_guard<mutex> lock(histogram_lock);
 	const auto other_hist = other.histogram;
 	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
 		histogram[i] += other_hist[i];
 	}
-	// TODO: merge partitioned stuff as well
-}
-
-void JoinHashTable::Partition() {
-	D_ASSERT(partitioned_blocks.empty());
-	vector<unique_ptr<BufferHandle>> handles;
-	data_ptr_t dest_ptrs[JoinRadixConstants::PARTITIONS];
-
-	// Create one block per partition
-	partitioned_blocks.reserve(JoinRadixConstants::PARTITIONS);
-	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
-		if (histogram[i] == 0) {
-			partitioned_blocks.push_back(nullptr);
-			continue;
-		}
-		// Create collection for histogram bucket
-		auto capacity = MaxValue<idx_t>(histogram[i], block_collection->block_capacity);
-		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, capacity, entry_size));
-
-		// Create block and set count (will be filled later)
-		auto &new_block = partitioned_blocks.back()->CreateBlock();
-		new_block.count = histogram[i];
-
-		// Set up destination pointer
-		handles.push_back(buffer_manager.Pin(new_block.block));
-		dest_ptrs[i] = handles.back()->Ptr();
-	}
-
-	auto tmp_buf_ptr = RadixPartitioning::AllocateTempBuf<JoinRadixConstants>(entry_size);
-	const data_ptr_t tmp_buf = tmp_buf_ptr.get();
-	for (auto &block : block_collection->blocks) {
-		auto handle = buffer_manager.Pin(block->block);
-		RadixPartitioning::Partition<JoinRadixConstants>(handle->Ptr(), tmp_buf, dest_ptrs, entry_size, block->count,
-		                                                 pointer_offset, radix_pass);
-	}
-	// TODO: Clear block_collection->blocks
-	//  If not all constant:
-	//  1. Create string blocks
-	//  2. Copy in order
-	//  3. Swizzle
-	//  4. Clear string_heap
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
@@ -855,4 +819,142 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	}
 	return key_count;
 }
+
+void JoinHashTable::SwizzleCollectedBlocks() {
+	if (Count() == 0) {
+		return;
+	}
+
+	// The main data blocks can just be moved
+	for (auto &block : block_collection->blocks) {
+		swizzled_block_collection->blocks.push_back(move(block));
+	}
+	block_collection->blocks.clear();
+
+	if (layout.AllConstant()) {
+		// No heap blocks!
+		return;
+	}
+
+	// We create one heap block per data block and swizzling the pointers
+	auto &heap_blocks = string_heap->blocks;
+	idx_t heap_block_idx = 0;
+	idx_t heap_block_remaining = heap_blocks[heap_block_idx]->count;
+	for (auto &data_block : swizzled_block_collection->blocks) {
+		if (heap_block_remaining == 0) {
+			// Move to next heap block (if needed)
+			heap_block_remaining = heap_blocks[++heap_block_idx]->count;
+		}
+
+		// Pin the data block and swizzle the pointers within the rows
+		auto data_handle = buffer_manager.Pin(data_block->block);
+		auto data_ptr = data_handle->Ptr();
+		RowOperations::SwizzleColumns(layout, data_ptr, data_block->count);
+
+		// We want to copy as little of the heap data as possible, check how the data and heap blocks line up
+		if (heap_block_remaining >= data_block->count) {
+			// Easy: current heap block contains all strings for this data block, just copy (reference) the block
+			swizzled_string_heap->blocks.push_back(heap_blocks[heap_block_idx]->Copy());
+
+			// Swizzle the heap pointer
+			auto heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
+			auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapPointerOffset());
+			RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count);
+
+			// Update counter
+			heap_block_remaining -= data_block->count;
+		} else {
+			// Strings for this data block are spread over the current heap block and the next (and possibly more)
+			idx_t data_block_remaining = data_block->count;
+			vector<unique_ptr<BufferHandle>> heap_handles;
+			vector<pair<data_ptr_t, idx_t>> ptrs_and_sizes;
+			idx_t total_size = 0;
+			while (data_block_remaining > 0) {
+				if (heap_block_remaining == 0) {
+					// Move to next heap block (if needed)
+					heap_block_remaining = heap_blocks[++heap_block_idx]->count;
+				}
+
+				// Figure out where to start copying strings, and how many bytes we need to copy
+				heap_handles.push_back(buffer_manager.Pin(heap_blocks[heap_block_idx]->block));
+				auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapPointerOffset());
+				auto size = heap_blocks[heap_block_idx]->byte_offset - (heap_ptr - heap_handles.back()->Ptr());
+				ptrs_and_sizes.emplace_back(heap_ptr, size);
+				total_size += size;
+
+				// Update where we are in the data and heap block
+				auto copy_count = MinValue<idx_t>(data_block_remaining, heap_block_remaining);
+				data_ptr += copy_count * layout.GetRowWidth();
+				data_block_remaining -= copy_count;
+				heap_block_remaining -= copy_count;
+			}
+
+			// Finally, we allocate a new heap block and copy data to it
+			swizzled_string_heap->blocks.push_back(make_unique<RowDataBlock>(buffer_manager, total_size, 1));
+			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
+			auto new_heap_ptr = new_heap_handle->Ptr();
+			for (auto &ptr_and_size : ptrs_and_sizes) {
+				memcpy(new_heap_ptr, ptr_and_size.first, ptr_and_size.second);
+				new_heap_ptr += ptr_and_size.second;
+			}
+		}
+	}
+
+	// Cleanup
+	block_collection->blocks.clear();
+	string_heap->blocks.clear();
+	string_heap->pinned_blocks.clear();
+}
+
+void JoinHashTable::FinalizeExternal() {
+	// TODO: smart stuff with histogram
+}
+
+void JoinHashTable::Partition() {
+	D_ASSERT(partitioned_blocks.empty());
+	vector<unique_ptr<BufferHandle>> handles;
+	data_ptr_t dest_ptrs[JoinRadixConstants::PARTITIONS];
+
+	// Create one block per partition
+	partitioned_blocks.reserve(JoinRadixConstants::PARTITIONS);
+	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
+		if (histogram[i] == 0) {
+			partitioned_blocks.push_back(nullptr);
+			continue;
+		}
+		// Create collection for histogram bucket
+		auto capacity = MaxValue<idx_t>(histogram[i], block_collection->block_capacity);
+		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, capacity, entry_size));
+
+		// Create block and set count (will be filled later)
+		auto &new_block = partitioned_blocks.back()->CreateBlock();
+		new_block.count = histogram[i];
+
+		// Set up destination pointer
+		handles.push_back(buffer_manager.Pin(new_block.block));
+		dest_ptrs[i] = handles.back()->Ptr();
+	}
+
+	// Partition the fixed-size data
+	auto tmp_buf_ptr = RadixPartitioning::AllocateTempBuf<JoinRadixConstants>(entry_size);
+	const data_ptr_t tmp_buf = tmp_buf_ptr.get();
+	for (auto &block : block_collection->blocks) {
+		auto handle = buffer_manager.Pin(block->block);
+		RadixPartitioning::Partition<JoinRadixConstants>(handle->Ptr(), tmp_buf, dest_ptrs, entry_size, block->count,
+		                                                 pointer_offset, radix_pass);
+	}
+	block_collection->blocks.clear();
+
+	if (layout.AllConstant()) {
+		return;
+	}
+
+	// TODO: Clear block_collection->blocks
+	//  If not all constant:
+	//  1. Create string blocks
+	//  2. Copy in order
+	//  3. Swizzle
+	//  4. Clear string_heap
+}
+
 } // namespace duckdb

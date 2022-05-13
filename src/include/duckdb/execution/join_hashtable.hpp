@@ -117,8 +117,6 @@ public:
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
-	//! Partition the HT based on the hash histogram
-	void Partition();
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
@@ -208,7 +206,24 @@ private:
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
 
-	//! Out of core stuff
+	//! Copying not allowed
+	JoinHashTable(const JoinHashTable &) = delete;
+
+	//! Out of core stuff down here
+public:
+	//! Swizzles all blocks in this HT
+	void SwizzleCollectedBlocks();
+	//! Similar to Finalize() but for an external join
+	void FinalizeExternal();
+	//! Partition the HT based on the hash histogram
+	void Partition();
+
+private:
+	//! The RowDataCollection holding the swizzled main data of the hash table
+	unique_ptr<RowDataCollection> swizzled_block_collection;
+	//! The stringheap accompanying the swizzled main data
+	unique_ptr<RowDataCollection> swizzled_string_heap;
+
 	//! Index of the byte in the hash used for the histogram
 	idx_t radix_pass;
 	//! Histogram of inserted values
@@ -218,9 +233,6 @@ private:
 	//! Partitioned data
 	vector<unique_ptr<RowDataCollection>> partitioned_blocks;
 	vector<unique_ptr<RowDataCollection>> partitioned_heap;
-
-	//! Copying not allowed
-	JoinHashTable(const JoinHashTable &) = delete;
 };
 
 } // namespace duckdb
