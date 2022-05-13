@@ -248,7 +248,7 @@ SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *s
 
 SQLRETURN OdbcFetch::DummyFetch() {
 	if (stmt_ref->retrieve_data == SQL_RD_OFF) {
-		auto row_set_size = stmt_ref->row_desc->ard->header.sql_desc_array_size;
+		auto row_set_size = (SQLLEN)stmt_ref->row_desc->ard->header.sql_desc_array_size;
 
 		if (stmt_ref->odbc_fetcher->chunk_row + row_set_size > stmt_ref->odbc_fetcher->row_count) {
 			row_set_size = stmt_ref->odbc_fetcher->row_count - stmt_ref->odbc_fetcher->chunk_row;
@@ -258,7 +258,7 @@ SQLRETURN OdbcFetch::DummyFetch() {
 		}
 		if (stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr) {
 			duckdb::idx_t row_idx;
-			for (row_idx=0; row_idx < row_set_size; row_idx++) {
+			for (row_idx = 0; row_idx < (duckdb::idx_t)row_set_size; row_idx++) {
 				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_SUCCESS;
 			}
 			for (; row_idx < stmt_ref->row_desc->ard->header.sql_desc_array_size; row_idx++) {
@@ -459,7 +459,6 @@ SQLLEN OdbcFetch::GetRowCount() {
 	}
 	return row_count;
 }
-
 
 void OdbcFetch::SetRowStatus(idx_t row_idx, SQLINTEGER status) {
 	if (stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr) {
