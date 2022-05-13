@@ -1,0 +1,12 @@
+# name: test/sql/types/nested/map/map_from_entries/basic.test
+# description: Test basic functionality of map_from_entries function
+# group: [map]
+
+statement ok
+PRAGMA enable_verification
+
+#Nested types for key/value
+query I
+SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([3,4], 4)]);
+----
+{[1, 2]=2, [3, 4]=4}

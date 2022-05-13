@@ -1,0 +1,10 @@
+# name: test/sql/types/nested/map/null_entry.test
+# description: Show expected behavior when an entry in the list of entries is NULL
+# group: [map]
+
+statement ok
+PRAGMA enable_verification
+
+# Some of the structs provided are NULL
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[NULL, (1, 'x'), NULL, (2, 'y')]);
