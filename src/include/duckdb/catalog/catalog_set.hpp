@@ -110,6 +110,8 @@ private:
 	void DeleteMapping(ClientContext &context, const string &name);
 	void DropEntryDependencies(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade);
 
+	void CreateDefaultEntries(ClientContext &context, unique_lock<mutex> &lock);
+
 private:
 	Catalog &catalog;
 	//! The catalog lock is used to make changes to the data

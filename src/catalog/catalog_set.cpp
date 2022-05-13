@@ -376,7 +376,8 @@ CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
 }
 
 pair<string, idx_t> CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
-	lock_guard<mutex> lock(catalog_lock);
+	unique_lock<mutex> lock(catalog_lock);
+	CreateDefaultEntries(context, lock);
 
 	string result;
 	idx_t current_score = (idx_t)-1;
@@ -553,26 +554,32 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	entry->catalog->ModifyCatalog();
 }
 
+void CatalogSet::CreateDefaultEntries(ClientContext &context, unique_lock<mutex> &lock) {
+	if (!defaults || defaults->created_all_entries) {
+		return;
+	}
+	// this catalog set has a default set defined:
+	auto default_entries = defaults->GetDefaultEntries();
+	for (auto &default_entry : default_entries) {
+		auto map_entry = mapping.find(default_entry);
+		if (map_entry == mapping.end()) {
+			// we unlock during the CreateEntry, since it might reference other catalog sets...
+			// specifically for views this can happen since the view will be bound
+			lock.unlock();
+			auto entry = defaults->CreateDefaultEntry(context, default_entry);
+
+			lock.lock();
+			CreateEntryInternal(context, move(entry));
+		}
+	}
+	defaults->created_all_entries = true;
+}
+
 void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback) {
 	// lock the catalog set
 	unique_lock<mutex> lock(catalog_lock);
-	if (defaults && !defaults->created_all_entries) {
-		// this catalog set has a default set defined:
-		auto default_entries = defaults->GetDefaultEntries();
-		for (auto &default_entry : default_entries) {
-			auto map_entry = mapping.find(default_entry);
-			if (map_entry == mapping.end()) {
-				// we unlock during the CreateEntry, since it might reference other catalog sets...
-				// specifically for views this can happen since the view will be bound
-				lock.unlock();
-				auto entry = defaults->CreateDefaultEntry(context, default_entry);
+	CreateDefaultEntries(context, lock);
 
-				lock.lock();
-				CreateEntryInternal(context, move(entry));
-			}
-		}
-		defaults->created_all_entries = true;
-	}
 	for (auto &kv : entries) {
 		auto entry = kv.second.get();
 		entry = GetEntryForTransaction(context, entry);
