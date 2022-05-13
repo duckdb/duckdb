@@ -42,7 +42,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 		if (info.schema == TEMP_SCHEMA) {
 			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
 		}
-		this->read_only = false;
+		properties.read_only = false;
 	} else {
 		if (info.schema != TEMP_SCHEMA) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" schema", TEMP_SCHEMA);
@@ -187,6 +187,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+	properties.return_type = StatementReturnType::NOTHING;
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
@@ -297,6 +298,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = bound_info->schema;
 		auto create_table = make_unique<LogicalCreateTable>(schema, move(bound_info));
 		if (root) {
+			// CREATE TABLE AS
+			properties.return_type = StatementReturnType::CHANGED_ROWS;
 			create_table->children.push_back(move(root));
 		}
 		result.plan = move(create_table);
@@ -310,7 +313,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw Exception("Unrecognized type!");
 	}
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
 	return result;
 }
 

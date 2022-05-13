@@ -25,6 +25,8 @@ public:
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, py::object> categories_type;
 
+	explicit DuckDBPyResult() {};
+
 public:
 	static void Initialize(py::handle &m);
 
@@ -54,6 +56,8 @@ private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
 	py::object FetchAllArrowChunks(idx_t chunk_size);
+
+	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
 };
 
 } // namespace duckdb

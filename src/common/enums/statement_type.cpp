@@ -58,15 +58,4 @@ string StatementTypeToString(StatementType type) {
 }
 // LCOV_EXCL_STOP
 
-bool StatementTypeReturnChanges(StatementType type) {
-	switch (type) {
-	case StatementType::INSERT_STATEMENT:
-	case StatementType::UPDATE_STATEMENT:
-	case StatementType::DELETE_STATEMENT:
-		return true;
-	default:
-		return false;
-	}
-}
-
 } // namespace duckdb

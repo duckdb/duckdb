@@ -169,6 +169,16 @@ struct LogQueryPathSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct MaximumExpressionDepthSetting {
+	static constexpr const char *Name = "max_expression_depth";
+	static constexpr const char *Description =
+	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
+	    "expressions might lead to stack overflow errors.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct MaximumMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";

@@ -13,10 +13,8 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 		// overflow in cast: bailout
 		return nullptr;
 	}
-	auto stats = make_unique<NumericStatistics>(target, move(min), move(max));
-	if (input.validity_stats) {
-		stats->validity_stats = input.validity_stats->Copy();
-	}
+	auto stats = make_unique<NumericStatistics>(target, move(min), move(max), input.stats_type);
+	stats->CopyBase(*input_p);
 	return move(stats);
 }
 

@@ -91,6 +91,9 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
+	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
+	         py::arg("config") = py::dict(), py::arg("check_same_thread") = true)
+	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -191,7 +194,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object)));
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else if (IsAcceptedArrowObject(py_object_type)) {
-		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
+		auto stream_factory =
+		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -329,7 +333,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	if (!IsAcceptedArrowObject(py_object_type)) {
 		throw std::runtime_error("Python Object Type " + py_object_type + " is not an accepted Arrow Object.");
 	}
-	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr());
+	auto stream_factory =
+	    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -475,7 +480,8 @@ py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) co
 }
 static unique_ptr<TableFunctionRef>
 TryReplacement(py::dict &dict, py::str &table_name,
-               unordered_map<string, vector<shared_ptr<ExternalDependency>>> &registered_objects) {
+               unordered_map<string, vector<shared_ptr<ExternalDependency>>> &registered_objects,
+               ClientConfig &config) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -495,7 +501,7 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		registered_objects[name] = move(external_dependency);
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {
 		string name = "arrow_" + GenerateRandomName();
-		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr());
+		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -530,7 +536,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
 		if (local_dict) {
-			auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
+			auto result = TryReplacement(local_dict, py_table_name, *registered_objects, context.config);
 			if (result) {
 				return result;
 			}
@@ -538,7 +544,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
 		if (global_dict) {
-			auto result = TryReplacement(global_dict, py_table_name, *registered_objects);
+			auto result = TryReplacement(global_dict, py_table_name, *registered_objects, context.config);
 			if (result) {
 				return result;
 			}
@@ -680,6 +686,18 @@ DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
 	}
 	return default_connection.get();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
+                                                         bool read_only, const py::dict &config,
+                                                         bool check_same_thread) {
+	return self.Connect(database, read_only, config, check_same_thread);
+}
+
+bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+                              const py::object &traceback) {
+	self.Close();
+	return true;
 }
 
 void DuckDBPyConnection::Cleanup() {

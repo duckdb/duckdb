@@ -1707,6 +1707,7 @@ Value Value::Deserialize(Deserializer &main_source) {
 	auto is_null = reader.ReadRequired<bool>();
 	Value new_value = Value(type);
 	if (is_null) {
+		reader.Finalize();
 		return new_value;
 	}
 	new_value.is_null = false;
