@@ -123,8 +123,8 @@ CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateS
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeInfo *info) {
-	auto sequence = make_unique<TypeCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(sequence), info->on_conflict);
+	auto type_entry = make_unique<TypeCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(type_entry), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
