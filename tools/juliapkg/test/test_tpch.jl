@@ -31,20 +31,20 @@
 
     # run all the queries
     for i in 1:22
-#         print("Q$i\n")
+        #         print("Q$i\n")
         # for each query, compare the results of the query ran on the original tables
         # versus the result when run on the Julia DataFrames
         res = DataFrame(DBInterface.execute(df_con, "PRAGMA tpch($i)"))
         res2 = DataFrame(DBInterface.execute(native_con, "PRAGMA tpch($i)"))
         @test isequal(res, res2)
-#         print("Native DuckDB\n")
-#         @time begin
-#             results = DBInterface.execute(native_con, "PRAGMA tpch($i)")
-#         end
-#         print("DataFrame\n")
-#         @time begin
-#             results = DBInterface.execute(df_con, "PRAGMA tpch($i)")
-#         end
+        #         print("Native DuckDB\n")
+        #         @time begin
+        #             results = DBInterface.execute(native_con, "PRAGMA tpch($i)")
+        #         end
+        #         print("DataFrame\n")
+        #         @time begin
+        #             results = DBInterface.execute(df_con, "PRAGMA tpch($i)")
+        #         end
     end
 
     DBInterface.close!(df_con)
