@@ -80,7 +80,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("sql query parameter cannot be null");
 		}
 
-		stmt_ref = null;
+		// In case the statement is reused, release old one first
+		if (stmt_ref != null) {
+			DuckDBNative.duckdb_jdbc_release(stmt_ref);
+			stmt_ref = null;
+		}
+
 		meta = null;
 		params = null;
 
