@@ -7,7 +7,13 @@ mutable struct DFBindInfo
     result_types::Vector{Type}
     scan_functions::Vector{Function}
 
-    function DFBindInfo(df::DataFrame, input_columns::Vector, scan_types::Vector{Type}, result_types::Vector{Type}, scan_functions::Vector{Function})
+    function DFBindInfo(
+        df::DataFrame,
+        input_columns::Vector,
+        scan_types::Vector{Type},
+        result_types::Vector{Type},
+        scan_functions::Vector{Function}
+    )
         return new(df, input_columns, scan_types, result_types, scan_functions)
     end
 end
