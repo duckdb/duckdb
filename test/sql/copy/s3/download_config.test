@@ -1,0 +1,77 @@
+# name: test/sql/copy/s3/download_config.test
+# description: Test S3 configuration
+# group: [s3]
+
+require parquet
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+statement ok
+CREATE TABLE test as SELECT * FROM range(0,10) tbl(i);
+
+foreach url_style path vhost
+
+statement ok
+SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_ssl=false;
+
+# Test the vhost style urls (this is the default)
+statement ok
+SET s3_url_style='${url_style}';
+
+statement ok
+COPY test TO 's3://test-bucket-public/root-dir/test_${url_style}_url_style.parquet';
+
+# vhost style access
+query I
+SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
+----
+0
+1
+2
+
+# path style access
+query I
+SELECT i FROM "http://duckdb-minio.com:9000/test-bucket-public/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
+----
+0
+1
+2
+
+# Test public access through s3 url
+statement ok
+SET s3_secret_access_key='';SET s3_access_key_id='';
+
+query I
+SELECT i FROM "s3://test-bucket-public/root-dir/test_${url_style}_url_style.parquet" LIMIT 3
+----
+0
+1
+2
+
+endloop
+
+# empty url style is also allowed to select the default
+statement ok
+SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000'; SET s3_use_ssl=false;
+
+statement ok
+COPY test TO 's3://test-bucket-public/root-dir/test_default_url_style.parquet';
+
+query I
+SELECT i FROM "http://test-bucket-public.duckdb-minio.com:9000/root-dir/test_default_url_style.parquet" LIMIT 3
+----
+0
+1
+2
+
+# Incorrect path style throws error
+statement ok
+SET s3_url_style='handwritten';
+
+statement error
+COPY test TO 's3://test-bucket-public/root-dir/test2.parquet';
