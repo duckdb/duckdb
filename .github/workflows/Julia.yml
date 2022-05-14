@@ -72,7 +72,7 @@ jobs:
 
       - name: Build DuckDB
         run: |
-            make
+            BUILD_TPCH=1 make
 
       - name: Run Tests
         run: |
