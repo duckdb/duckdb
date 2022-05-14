@@ -44,6 +44,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateEnum(duckdb_libpgquery::
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTypeInfo>();
+	info->internal = false;
 	info->name = ReadPgListToString(stmt->typeName)[0];
 	idx_t size = 0;
 	auto ordered_array = ReadPgListToVector(stmt->vals, size);

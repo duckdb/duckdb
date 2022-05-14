@@ -30,7 +30,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		break;
 	}
 	default: {
-		throw NotImplementedException("Join type %d not supported yet...\n", root->jointype);
+		throw NotImplementedException("Join type %d not supported\n", root->jointype);
 	}
 	}
 
