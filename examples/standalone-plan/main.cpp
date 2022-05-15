@@ -178,7 +178,7 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 
 	// we can register multiple functions here if we want overloads
 	AggregateFunctionSet set(name);
-	set.AddFunction(AggregateFunction(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr));
+	set.AddFunction(AggregateFunction(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr, false));
 
 	CreateAggregateFunctionInfo info(move(set));
 	catalog.CreateFunction(context, &info);
@@ -226,14 +226,14 @@ static unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const
 	if (bind_data.table_name == "mytable") {
 		if (column_id == 0) {
 			// i: 1, 2, 3, 4, 5
-			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(5));
+			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(5), StatisticsType::GLOBAL_STATS);
 		} else if (column_id == 1) {
 			// j: 2, 3, 4, 5, 6
-			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(2), Value::INTEGER(6));
+			return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(2), Value::INTEGER(6), StatisticsType::GLOBAL_STATS);
 		}
 	} else if (bind_data.table_name == "myothertable") {
 		// k: 1, 10, 20
-		return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(20));
+		return make_unique<NumericStatistics>(LogicalType::INTEGER, Value::INTEGER(1), Value::INTEGER(20), StatisticsType::GLOBAL_STATS);
 	}
 	return nullptr;
 }
