@@ -185,6 +185,7 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 	// Get a copy of the generated column
 	// TODO: bake the table name into the ColumnRefExpressions here
 	auto expression = table_catalog_entry->columns[column_index].GeneratedExpression().Copy();
+	;
 	BakeTableName(*expression, binding->alias);
 	return expression;
 }

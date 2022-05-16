@@ -1,4 +1,4 @@
-# name: test/sql/generated_columns/virtual/drop.test
+# name: test/sql/generated_columns/virtual/select.test
 # description: Remove generated column
 # group: [virtual]
 

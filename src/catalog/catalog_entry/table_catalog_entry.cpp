@@ -318,7 +318,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	if (info.new_column.Generated()) {
 		info.new_column.storage_oid = EXCLUDED_FROM_STORAGE_ID;
 	}
-	create_info->columns.push_back(info.new_column.Copy());
+
+	auto col = info.new_column.Copy();
+	if (col.Generated()) {
+		col.CheckValidity(columns, name);
+	}
+
+	create_info->columns.push_back(move(col));
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
@@ -570,11 +576,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && DependsOnColumn(copy.GeneratedExpression(), info.column_name)) {
-			// if (!info.cascade) {
-			//	throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated "
-			//	                       "columns depend on it, and the CASCADE option wasn't provided",
-			//	                       info.column_name);
-			// }
+			if (!info.cascade) {
+				throw CatalogException("Could not change the type of the column \"%s\" because 1 or more generated "
+				                       "columns depend on it, and the CASCADE option wasn't provided",
+				                       info.column_name);
+			}
 			continue;
 		}
 		create_info->columns.push_back(move(copy));
