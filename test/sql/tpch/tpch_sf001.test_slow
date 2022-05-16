@@ -7,9 +7,6 @@ require tpch
 statement ok
 CALL dbgen(sf=0.01);
 
-statement ok
-pragma debug_force_external=true
-
 loop i 1 9
 
 query I
