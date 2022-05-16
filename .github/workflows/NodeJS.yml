@@ -51,9 +51,11 @@ jobs:
         chmod +x cmake-3.21.3-linux-x86_64.sh
         sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
-    - name: Build extensions
-      run: |
-        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=0 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+    - uses: ./.github/actions/build_extensions
+      with:
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
+        static_link_build: 1
 
     - name: Setup
       run: ./scripts/node_version.sh upload
