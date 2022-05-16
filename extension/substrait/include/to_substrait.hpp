@@ -54,10 +54,9 @@ private:
 	void TransformBigInt(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformDate(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformVarchar(duckdb::Value &dval, substrait::Expression &sexpr);
-	void TransformHugeInt(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformBoolean(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformDecimal(duckdb::Value &dval, substrait::Expression &sexpr);
-
+	void TransformHugeInt(Value &dval, substrait::Expression &sexpr);
 	//! Methods to transform a DuckDB Expression to a Substrait Expression
 	void TransformExpr(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset = 0);
 	void TransformBoundRefExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
@@ -69,6 +68,8 @@ private:
 	void TransformNotNullExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
 	void TransformCaseExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
 
+	//! Transforms a DuckDB Logical Type into a Substrait Type
+	::substrait::Type DuckToSubstraitType(LogicalType &d_type);
 	//! Methods to transform DuckDB Filters to Substrait Expression
 	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);
 	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);

@@ -431,6 +431,9 @@ bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
+	if (!Date::IsFinite(left)) {
+		return left;
+	}
 	date_t result;
 	if (right.months != 0) {
 		int32_t year, month, day;
@@ -460,6 +463,9 @@ date_t Interval::Add(date_t left, interval_t right) {
 			throw OutOfRangeException("Date out of range");
 		}
 	}
+	if (!Date::IsFinite(result)) {
+		throw OutOfRangeException("Date out of range");
+	}
 	return result;
 }
 
@@ -477,6 +483,9 @@ dtime_t Interval::Add(dtime_t left, interval_t right, date_t &date) {
 }
 
 timestamp_t Interval::Add(timestamp_t left, interval_t right) {
+	if (!Timestamp::IsFinite(left)) {
+		return left;
+	}
 	date_t date;
 	dtime_t time;
 	Timestamp::Convert(left, date, time);

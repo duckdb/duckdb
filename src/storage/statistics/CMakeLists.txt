@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_storage_statistics
   OBJECT
   base_statistics.cpp
+  distinct_statistics.cpp
   list_statistics.cpp
   numeric_statistics.cpp
   segment_statistics.cpp

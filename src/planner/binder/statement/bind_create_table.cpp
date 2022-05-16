@@ -279,7 +279,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	}
 	// bind the generated column expressions
 	BindGeneratedColumns(base.columns, base);
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
 	return result;
 }
 

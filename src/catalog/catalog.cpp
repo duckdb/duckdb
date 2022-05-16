@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -25,6 +26,7 @@
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 
 namespace duckdb {
 
@@ -367,6 +369,19 @@ CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &sch
                                        bool if_exists, QueryErrorContext error_context) {
 	return (CollateCatalogEntry *)GetEntry(context, CatalogType::COLLATION_ENTRY, schema_name, name, if_exists,
 	                                       error_context);
+}
+
+template <>
+TypeCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
+                                    bool if_exists, QueryErrorContext error_context) {
+	return (TypeCatalogEntry *)GetEntry(context, CatalogType::TYPE_ENTRY, schema_name, name, if_exists, error_context);
+}
+
+LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name) {
+	auto user_type_catalog = GetEntry<TypeCatalogEntry>(context, schema, name);
+	auto result_type = user_type_catalog->user_type;
+	EnumType::SetCatalog(result_type, user_type_catalog);
+	return result_type;
 }
 
 void Catalog::Alter(ClientContext &context, AlterInfo *info) {

@@ -2,6 +2,9 @@
 # description: Test stats function
 # group: [generic]
 
+statement ok
+select 1=1
+
 # scalar stats
 query I
 SELECT STATS(5);

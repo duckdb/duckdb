@@ -29,6 +29,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
+
 #include "hyperloglog.hpp"
 #include "sds.hpp"
 
@@ -202,7 +205,7 @@ struct hllhdr {
 #define HLL_INVALIDATE_CACHE(hdr) (hdr)->card[7] |= (1<<7)
 #define HLL_VALID_CACHE(hdr) (((hdr)->card[7] & (1<<7)) == 0)
 
-#define HLL_P 14 /* The greater is P, the smaller the error. */
+#define HLL_P 12 /* The greater is P, the smaller the error. */
 #define HLL_Q (64-HLL_P) /* The number of bits of the hash value used for
                             determining the number of leading zeros. */
 #define HLL_REGISTERS (1<<HLL_P) /* With P=14, 16384 registers. */
@@ -499,7 +502,7 @@ int hllPatLen(unsigned char *ele, size_t elesize, long *regp) {
  * The function always succeed, however if as a result of the operation
  * the approximated cardinality changed, 1 is returned. Otherwise 0
  * is returned. */
-int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
+static inline int hllDenseSet(uint8_t *registers, long index, uint8_t count) {
     uint8_t oldcount;
 
     HLL_DENSE_GET_REGISTER(oldcount,registers,index);
@@ -1239,4 +1242,46 @@ robj *hll_merge(robj **hlls, size_t hll_count) {
     }
 	return result;
 }
+
+uint64_t get_size() {
+	return HLL_DENSE_SIZE;
 }
+
+}
+
+namespace duckdb {
+
+static inline int AddToLog(void *log, const uint64_t &index, const uint8_t &count) {
+	auto o = (duckdb_hll::robj *)log;
+	duckdb_hll::hllhdr *hdr = (duckdb_hll::hllhdr *)o->ptr;
+	D_ASSERT(hdr->encoding == HLL_DENSE);
+	return duckdb_hll::hllDenseSet(hdr->registers + 1, index, count);
+}
+
+void AddToLogsInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void ***logs[],
+                       const SelectionVector *log_sel) {
+	// 'logs' is an array of pointers to AggregateStates
+	// AggregateStates have a pointer to a HyperLogLog object
+	// HyperLogLog objects have a pointer to a 'robj', which we need
+	for (idx_t i = 0; i < count; i++) {
+		auto log = logs[log_sel->get_index(i)];
+		if (log && vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+			AddToLog(**log, indices[i], counts[i]);
+		}
+	}
+}
+
+void AddToSingleLogInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void *log) {
+	const auto o = (duckdb_hll::robj *)log;
+	duckdb_hll::hllhdr *hdr = (duckdb_hll::hllhdr *)o->ptr;
+	D_ASSERT(hdr->encoding == HLL_DENSE);
+
+	const auto registers = hdr->registers + 1;
+	for (idx_t i = 0; i < count; i++) {
+		if (vdata.validity.RowIsValid(vdata.sel->get_index(i))) {
+			duckdb_hll::hllDenseSet(registers, indices[i], counts[i]);
+		}
+	}
+}
+
+} // namespace duckdb

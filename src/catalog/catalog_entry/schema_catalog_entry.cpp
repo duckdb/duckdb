@@ -36,6 +36,7 @@
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -71,7 +72,7 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool int
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
       functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog), types(*catalog) {
+      collations(*catalog), types(*catalog, make_unique<DefaultTypeGenerator>(*catalog, this)) {
 	this->internal = internal;
 }
 
@@ -124,8 +125,8 @@ CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateS
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeInfo *info) {
-	auto sequence = make_unique<TypeCatalogEntry>(catalog, this, info);
-	return AddEntry(context, move(sequence), info->on_conflict);
+	auto type_entry = make_unique<TypeCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(type_entry), info->on_conflict);
 }
 
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {

@@ -114,9 +114,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			table_types.push_back(col.type);
 			table_names.push_back(col.name);
 			table_categories.push_back(col.category);
-			// if (col.Generated()) {
-			//	continue;
-			// }
 			return_types.push_back(col.type);
 			return_names.push_back(col.name);
 		}
