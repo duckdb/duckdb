@@ -248,6 +248,10 @@ void PipelineBuildState::AddPipeline(Executor &executor, shared_ptr<Pipeline> pi
 	executor.pipelines.push_back(move(pipeline));
 }
 
+PhysicalOperator *PipelineBuildState::GetPipelineSource(Pipeline &pipeline) {
+	return pipeline.source;
+}
+
 PhysicalOperator *PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
 	return pipeline.sink;
 }

@@ -1,9 +1,11 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/batched_chunk_collection.hpp"
+#include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 
 namespace duckdb {
 
@@ -51,25 +53,19 @@ unique_ptr<LocalSinkState> PhysicalLimit::GetLocalSinkState(ExecutionContext &co
 	return make_unique<LimitLocalState>(*this);
 }
 
-SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                   DataChunk &input) const {
-
-	D_ASSERT(input.size() > 0);
-	auto &state = (LimitLocalState &)lstate;
-	auto &limit = state.limit;
-	auto &offset = state.offset;
-
+bool PhysicalLimit::ComputeOffset(DataChunk &input, idx_t &limit, idx_t &offset, idx_t current_offset,
+                                  idx_t &max_element, Expression *limit_expression, Expression *offset_expression) {
 	if (limit != DConstants::INVALID_INDEX && offset != DConstants::INVALID_INDEX) {
-		idx_t max_element = limit + offset;
-		if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
-			return SinkResultType::FINISHED;
+		max_element = limit + offset;
+		if ((limit == 0 || current_offset >= max_element) && !(limit_expression || offset_expression)) {
+			return false;
 		}
 	}
 
 	// get the next chunk from the child
 	if (limit == DConstants::INVALID_INDEX) {
 		limit = 1ULL << 62ULL;
-		Value val = GetDelimiter(input, limit_expression.get());
+		Value val = GetDelimiter(input, limit_expression);
 		if (!val.IsNull()) {
 			limit = val.GetValue<idx_t>();
 		}
@@ -79,7 +75,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 	if (offset == DConstants::INVALID_INDEX) {
 		offset = 0;
-		Value val = GetDelimiter(input, offset_expression.get());
+		Value val = GetDelimiter(input, offset_expression);
 		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
@@ -87,11 +83,26 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", offset, 1ULL << 62ULL);
 		}
 	}
-	idx_t max_element = limit + offset;
-	if (limit == 0 || state.current_offset >= max_element) {
+	max_element = limit + offset;
+	if (limit == 0 || current_offset >= max_element) {
+		return false;
+	}
+	return true;
+}
+
+SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                   DataChunk &input) const {
+
+	D_ASSERT(input.size() > 0);
+	auto &state = (LimitLocalState &)lstate;
+	auto &limit = state.limit;
+	auto &offset = state.offset;
+
+	idx_t max_element;
+	if (!ComputeOffset(input, limit, offset, state.current_offset, max_element, limit_expression.get(),
+	                   offset_expression.get())) {
 		return SinkResultType::FINISHED;
 	}
-
 	state.data.Append(input, lstate.batch_index);
 	state.current_offset += input.size();
 	return SinkResultType::NEED_MORE_INPUT;

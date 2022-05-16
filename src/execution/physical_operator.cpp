@@ -97,14 +97,7 @@ unique_ptr<GlobalSinkState> PhysicalOperator::GetGlobalSinkState(ClientContext &
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalOperator::BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
-                                          PhysicalOperator *pipeline_child) {
-	auto pipeline = make_shared<Pipeline>(executor);
-	state.SetPipelineSink(*pipeline, this);
-	// the current is dependent on this pipeline to complete
-	current.AddDependency(pipeline);
-	// recurse into the pipeline child
-	pipeline_child->BuildPipelines(executor, *pipeline, state);
+void PhysicalOperator::AddPipeline(Executor &executor, shared_ptr<Pipeline> pipeline, PipelineBuildState &state) {
 	if (!state.recursive_cte) {
 		// regular pipeline: schedule it
 		state.AddPipeline(executor, move(pipeline));
@@ -113,6 +106,17 @@ void PhysicalOperator::BuildChildPipeline(Executor &executor, Pipeline &current,
 		auto &cte = (PhysicalRecursiveCTE &)*state.recursive_cte;
 		cte.pipelines.push_back(move(pipeline));
 	}
+}
+
+void PhysicalOperator::BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
+                                          PhysicalOperator *pipeline_child) {
+	auto pipeline = make_shared<Pipeline>(executor);
+	state.SetPipelineSink(*pipeline, this);
+	// the current is dependent on this pipeline to complete
+	current.AddDependency(pipeline);
+	// recurse into the pipeline child
+	pipeline_child->BuildPipelines(executor, *pipeline, state);
+	AddPipeline(executor, move(pipeline), state);
 }
 
 void PhysicalOperator::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
@@ -135,10 +139,27 @@ void PhysicalOperator::BuildPipelines(Executor &executor, Pipeline &current, Pip
 			state.SetPipelineSource(current, this);
 		} else {
 			if (children.size() != 1) {
-				throw InternalException("Operator not supported yet");
+				throw InternalException("Operator not supported in BuildPipelines");
 			}
 			state.AddPipelineOperator(current, this);
 			children[0]->BuildPipelines(executor, current, state);
+		}
+	}
+}
+
+const PhysicalOperator &PhysicalOperator::GetSource() const {
+	if (IsSink()) {
+		D_ASSERT(children.size() == 1);
+		return *this;
+	} else {
+		if (children.empty()) {
+			// source
+			return *this;
+		} else {
+			if (children.size() != 1) {
+				throw InternalException("Operator not supported in GetSource");
+			}
+			return children[0]->GetSource();
 		}
 	}
 }

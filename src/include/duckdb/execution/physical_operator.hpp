@@ -194,6 +194,9 @@ public:
 
 public:
 	// Pipeline construction
+	virtual const PhysicalOperator &GetSource() const;
+
+	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
 	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);
 	void BuildChildPipeline(Executor &executor, Pipeline &current, PipelineBuildState &state,
 	                        PhysicalOperator *pipeline_child);

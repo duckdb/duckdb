@@ -96,4 +96,8 @@ void PhysicalCrossProduct::BuildPipelines(Executor &executor, Pipeline &current,
 	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
 }
 
+const PhysicalOperator &PhysicalCrossProduct::GetSource() const {
+	return children[0]->GetSource();
+}
+
 } // namespace duckdb

@@ -33,6 +33,7 @@ public:
 	static void BuildJoinPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state,
 	                               PhysicalOperator &op);
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	const PhysicalOperator &GetSource() const override;
 };
 
 } // namespace duckdb

@@ -45,11 +45,12 @@ void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, Pip
 	op.BuildChildPipeline(executor, current, state, op.children[1].get());
 }
 
-//===--------------------------------------------------------------------===//
-// Pipeline Construction
-//===--------------------------------------------------------------------===//
 void PhysicalJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
+}
+
+const PhysicalOperator &PhysicalJoin::GetSource() const {
+	return children[0]->GetSource();
 }
 
 } // namespace duckdb
