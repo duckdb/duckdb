@@ -168,6 +168,9 @@ SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalExport::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	// EXPORT has an optional child
 	// we only need to schedule child pipelines if there is a child

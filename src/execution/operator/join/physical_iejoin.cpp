@@ -1101,6 +1101,9 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalIEJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	D_ASSERT(children.size() == 2);
 	if (state.recursive_cte) {

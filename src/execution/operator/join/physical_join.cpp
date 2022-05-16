@@ -19,6 +19,9 @@ bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state,
                                       PhysicalOperator &op) {
 	op.op_state.reset();
@@ -42,6 +45,9 @@ void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, Pip
 	op.BuildChildPipeline(executor, current, state, op.children[1].get());
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
 }

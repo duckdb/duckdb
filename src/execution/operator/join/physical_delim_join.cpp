@@ -98,6 +98,9 @@ string PhysicalDelimJoin::ParamsToString() const {
 	return join->ParamsToString();
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalDelimJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	op_state.reset();
 	sink_state.reset();

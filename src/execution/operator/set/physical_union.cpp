@@ -11,6 +11,9 @@ PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOpera
 	children.push_back(move(bottom));
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalUnion::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	if (state.recursive_cte) {
 		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");

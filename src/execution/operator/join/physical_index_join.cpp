@@ -199,6 +199,9 @@ OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChu
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalIndexJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	// index join: we only continue into the LHS
 	// the right side is probed by the index join

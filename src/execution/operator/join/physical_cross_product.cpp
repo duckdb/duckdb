@@ -89,6 +89,9 @@ OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, Data
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalCrossProduct::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
 }

@@ -33,6 +33,9 @@ void PhysicalChunkScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	state.chunk_index++;
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
 void PhysicalChunkScan::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	// check if there is any additional action we need to do depending on the type
 	switch (type) {

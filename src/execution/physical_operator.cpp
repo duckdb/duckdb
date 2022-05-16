@@ -104,7 +104,7 @@ void PhysicalOperator::BuildChildPipeline(Executor &executor, Pipeline &current,
 	// the current is dependent on this pipeline to complete
 	current.AddDependency(pipeline);
 	// recurse into the pipeline child
-	children[0]->BuildPipelines(executor, *pipeline, state);
+	pipeline_child->BuildPipelines(executor, *pipeline, state);
 	if (!state.recursive_cte) {
 		// regular pipeline: schedule it
 		state.AddPipeline(executor, move(pipeline));
