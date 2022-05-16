@@ -1,6 +1,6 @@
 # name: test/sql/function/list/lambdas/reduce.test
 # description: Test list_reduce function
-# group: [list]
+# group: [lambdas]
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 

@@ -1,6 +1,6 @@
 # name: test/sql/function/list/lambdas/expression_iterator_cases.test
 # description: Test the different possible cases of the expression iterator
-# group: [list]
+# group: [lambdas]
 
 # these tests check the different cases of the expression iterator
 

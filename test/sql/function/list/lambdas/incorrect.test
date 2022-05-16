@@ -1,6 +1,6 @@
 # name: test/sql/function/list/lambdas/incorrect.test
 # description: Test incorrect usage of the lambda functions
-# group: [list]
+# group: [lambdas]
 
 statement error
 SELECT list_transform(NULL, NULL)

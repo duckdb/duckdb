@@ -1,6 +1,6 @@
 # name: test/sql/function/list/lambdas/mixed_lambda_functions.test
 # description: Test mixing different lambda functions
-# group: [list]
+# group: [lambdas]
 
 # TODO: this test case requires the implementation of list_filter
 
