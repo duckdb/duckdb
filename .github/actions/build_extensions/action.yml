@@ -19,6 +19,9 @@ inputs:
   force_32_bit:
     description: 'Force the 32 bit build'
     default: 0
+  static_link_build:
+    description: 'Links duckdb statically to the built extensions'
+    default: 0
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: '/usr/local/ssl'
@@ -73,6 +76,7 @@ runs:
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
         DISABLE_BUILTIN_EXTENSIONS: 1
+        EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
       run: |
         make
