@@ -125,6 +125,14 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// add casts (if necessary)
 	left.expr = BoundCastExpression::AddCastToType(move(left.expr), input_type);
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), input_type);
+	if (where_clause) {
+		if (left.expr->type == ExpressionType::OPERATOR_CAST && left.expr->return_type.id() == LogicalTypeId::ENUM) {
+			((BoundCastExpression *)left.expr.get())->try_cast = true;
+		}
+		if (right.expr->type == ExpressionType::OPERATOR_CAST && right.expr->return_type.id() == LogicalTypeId::ENUM) {
+			((BoundCastExpression *)right.expr.get())->try_cast = true;
+		}
+	}
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);
