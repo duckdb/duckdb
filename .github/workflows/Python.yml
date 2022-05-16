@@ -124,6 +124,9 @@ jobs:
       run: |
         cmake --version
         ldd --version ldd
+        ls -al
+        pwd
+        echo "$USER"
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -181,7 +184,7 @@ jobs:
 
     - name: List extensions to be tested
       run: |
-        find tools/pythonpkg -maxdepth 1 -type f -name "*.duckdb_extension"
+        find tools/pythonpkg -maxdepth 2 -type f -name "*.duckdb_extension"
 
     - name: Build
       run: |

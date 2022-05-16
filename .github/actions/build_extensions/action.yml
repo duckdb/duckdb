@@ -79,6 +79,9 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
       run: |
+        ls -al
+        pwd
+        echo "$USER"
         make
 
     - name: Run post-install scripts
