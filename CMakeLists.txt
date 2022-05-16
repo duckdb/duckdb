@@ -647,6 +647,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   endif()
   if (EXTENSION_STATIC_BUILD)
     target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+  elseif (WIN32)
+    target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
   endif()
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
