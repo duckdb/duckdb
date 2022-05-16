@@ -33,23 +33,17 @@ env:
 jobs:
    linux-nodejs:
     name: node.js Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - name: Install requirements
-      run: |
-        sudo apt-get update -y -qq
-        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
 
     - uses: ./.github/actions/build_extensions
       with:
