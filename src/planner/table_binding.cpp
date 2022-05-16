@@ -155,7 +155,7 @@ unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colre
 
 LambdaBinding::LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name_p)
     : Binding(LambdaBinding::LAMBDA_NAME + lambda_name_p, move(types_p), move(names_p), -1), // normal binding
-      lambda_name(move(lambda_name_p))                                                              // lambda name
+      lambda_name(move(lambda_name_p))                                                       // lambda name
 {
 }
 

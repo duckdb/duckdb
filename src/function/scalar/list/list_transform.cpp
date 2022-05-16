@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 namespace duckdb {
 
@@ -50,8 +51,8 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &result_validity = FlatVector::Validity(result);
 
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-	    result_validity.SetInvalid(0);
-	    return;
+		result_validity.SetInvalid(0);
+		return;
 	}
 
 	// get the lists data
@@ -175,7 +176,6 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 		VectorData lambda_child_data;
 		lambda_vector.Orrify(element_count, lambda_child_data);
 		ListVector::Append(result, lambda_vector, *lambda_child_data.sel, element_count, 0);
-
 	}
 }
 
@@ -194,6 +194,13 @@ static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Exp
 		}
 	}
 
+	if (original->expression_class == ExpressionClass::BOUND_CONSTANT) {
+
+		// TODO: is there a better way to determine if this is the lambda parameter, maybe using __lambda_internal_...?
+		// auto &bound_const = (BoundConstantExpression &)*original;
+		// D_ASSERT(bound_const.value.IsNull());
+	}
+
 	if (is_lambda_parameter) {
 		// this is a lambda parameter, so the replacement refers to the first argument, which is the list
 		replacement = make_unique<BoundReferenceExpression>(arguments[0]->alias, list_child_type, 0);
@@ -206,6 +213,33 @@ static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Exp
 	}
 }
 
+static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+                            LogicalType &list_child_type, unique_ptr<Expression> &expr) {
+
+	// these expression classes do not have children, transform them
+	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
+	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
+	    expr->expression_class == ExpressionClass::BOUND_DEFAULT ||
+	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
+	    expr->expression_class == ExpressionClass::BOUND_REF) {
+
+		// move the expr because we are going to replace it
+		auto original = move(expr);
+		unique_ptr<Expression> replacement;
+
+		TransformExpression(original, replacement, bound_function, arguments, list_child_type);
+
+		// replace the expression
+		expr = move(replacement);
+
+	} else {
+		// enumerate the children of the expression
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			IterateChildren(bound_function, arguments, list_child_type, child);
+		});
+	}
+}
+
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 
@@ -215,7 +249,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 
 	bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
 
-	// remove the lambda function and add the column references as arguments
+	// remove the lambda function
 	auto lambda_expr = move(arguments.back());
 	arguments.pop_back();
 	bound_function.arguments.pop_back();
@@ -229,50 +263,8 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
 
-	// TODO: other expression classes that do not have children
-	// TODO: see of there are tests where lambda_expr or child (as lambda parameter) have this class
-	/*
-		case ExpressionClass::BOUND_CONSTANT:
-		case ExpressionClass::BOUND_DEFAULT:
-		case ExpressionClass::BOUND_PARAMETER:
-		case ExpressionClass::BOUND_REF:
-	*/
-
-	// if the lambda expression does not have any children, transform directly
-	if (lambda_expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-
-		// move the lambda expr because we are going to replace it
-		auto original = move(lambda_expr);
-		unique_ptr<Expression> replacement;
-
-		TransformExpression(original, replacement, bound_function, arguments, list_child_type);
-
-		// now we replace the child
-		lambda_expr = move(replacement);
-
-	} else {
-		// enumerate the children of the lambda expression
-		ExpressionIterator::EnumerateChildren(*lambda_expr,
-		                                      [&](unique_ptr<Expression> &child) {
-
-                // TODO: see (when writing tests) if these this expression class is enough
-		        // TODO: in which case would the lambda expression be a BOUND_CONSTANT?
-		        // skip all other expression classes
-                if (child->expression_class == ExpressionClass::BOUND_CONSTANT ||
-			        child->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-
-			        // move the child expr because we are going to replace it
-                    auto original = move(child);
-                    unique_ptr<Expression> replacement;
-
-				    TransformExpression(original, replacement, bound_function, arguments, list_child_type);
-
-                    // now we replace the child
-                    child = move(replacement);
-                }
-           ;}
-		);
-	}
+	// iterate and transform the children of the lambda expression
+	IterateChildren(bound_function, arguments, list_child_type, lambda_expr);
 
 	// now the lambda expression has been modified, put it in the function data to use it during execution
 	return make_unique<ListTransformBindData>(bound_function.return_type, move(lambda_expr));

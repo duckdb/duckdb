@@ -23,6 +23,20 @@ SELECT list_transform([1], x -> x)
 ----
 [1]
 
+statement ok
+CREATE TABLE lists (l integer[])
+
+statement ok
+INSERT INTO lists VALUES ([1]), ([1, 2, 3]), (NULL), ([-1, NULL, 2])
+
+query I
+SELECT list_transform(l, x -> x) FROM lists
+----
+[1]
+[1, 2, 3]
+NULL
+[-1, NULL, 2]
+
 query I
 SELECT list_transform([1, 2, 3], x -> 1)
 ----
@@ -54,9 +68,20 @@ SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
 ----
 [x0, abc0, z0]
 
-mode skip
+query I
+SELECT list_transform([[1], [2, 3], [NULL], NULL], x -> list_transform(x, y -> y + 1))
+----
+[[2], [3, 4], [NULL], NULL]
 
-# this fails with Attempting to initialize state of expression of unknown type!
+query I
+SELECT list_transform([[1], [2], [3]], x -> list_concat(x, x))
+----
+[[1, 1], [2, 2], [3, 3]]
+
+query I
+SELECT list_transform([5, NULL, 6], x -> POW(x, 2))
+----
+[25.000000, NULL, 36.000000]
 
 query I
 SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
@@ -66,32 +91,17 @@ SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
 query I
 SELECT list_transform(list_value(list_unique(list_concat([1,2],[2,2]))), x -> x + 1);
 ----
+[3.000000]
+
+query I
+SELECT list_sort(list_transform(list_distinct(list_concat([1,2],[2,2])), x -> x + 1));
+----
 [2, 3]
-
-statement ok
-CREATE TABLE lists (l integer[])
-
-statement ok
-INSERT INTO lists VALUES ([1])
-
-query I
-SELECT list_transform(l, x -> x) FROM lists
-----
-[1]
-
-# nested stuff also still fails
-
-query I
-SELECT list_transform([[1]], x -> list_transform(x, y -> y + 1))
-----
-[[2], [3], [4]]
 
 query I
 SELECT list_transform([[1], [2], [3]], x -> list_concat(list_transform(x, y -> y + 1), list_transform(x, z -> z - 1)))
 ----
-[[0,2], [1, 3], [2, 4]]
-
-mode unskip
+[[2, 0], [3, 1], [4, 2]]
 
 # TODO: this test case requires the implementation of list_filter
 
