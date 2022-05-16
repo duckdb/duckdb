@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, idx_t lambda_param_count,
-                                            LogicalType list_child_type) {
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const idx_t lambda_param_count,
+                                            const LogicalType list_child_type) {
 
 	string error;
 

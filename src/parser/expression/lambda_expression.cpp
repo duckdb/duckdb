@@ -55,7 +55,7 @@ unique_ptr<ParsedExpression> LambdaExpression::Copy() const {
 	for (auto &expr : lhs) {
 		result->lhs.push_back(expr->Copy());
 	}
-	return result;
+	return move(result);
 }
 
 void LambdaExpression::Serialize(FieldWriter &writer) const {
