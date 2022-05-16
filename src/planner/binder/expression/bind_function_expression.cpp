@@ -58,7 +58,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	if (lambda_param_count != 0) { // bind the lambda child separately
 
-		D_ASSERT(function.children.size() == 2);
+		if (function.children.size() != 2) {
+			throw BinderException("Invalid number of arguments, expected two (list, lambda function)!");
+		}
 
 		// bind the list parameter
 		BindChild(function.children[0], depth, error);
@@ -68,8 +70,12 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 		// get the logical type of the children of the list
 		auto &list_child = (BoundExpression &)*function.children[0];
-		D_ASSERT(list_child.expr->return_type.id() == LogicalTypeId::LIST ||
-		         list_child.expr->return_type.id() == LogicalTypeId::SQLNULL);
+
+		if (list_child.expr->return_type.id() != LogicalTypeId::LIST &&
+		    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
+			throw BinderException("Invalid list input type!");
+		}
+
 		LogicalType list_child_type = LogicalType::SQLNULL;
 		if (list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
 			list_child_type = ListType::GetChildType(list_child.expr->return_type);

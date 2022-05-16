@@ -4,6 +4,8 @@
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
+# test erroneous behavior
+
 statement error
 SELECT list_transform(NULL, NULL)
 
@@ -11,7 +13,19 @@ statement error
 SELECT list_transform(NULL, x)
 
 statement error
-SELECT list_transform(NULL, x -> y);
+SELECT list_transform(NULL, x -> y)
+
+statement error
+SELECT list_transform([1])
+
+statement error
+SELECT list_transform([1], NULL)
+
+statement error
+SELECT list_transform(1, x -> x + 1)
+
+statement error
+SELECT list_transform([[1]], x -> x + 1)
 
 query I
 SELECT list_transform(NULL, x -> x + 1)
@@ -57,12 +71,6 @@ SELECT list_transform([1, NULL, -2, NULL], x -> x + 1)
 ----
 [2, NULL, -1, NULL]
 
-# fails with Binder Error: Invalid number of left-hand side parameters for this lambda function.
-# removing "%prec Op" from "| a_expr LAMBDA_ARROW a_expr %prec Op" in select.y fixes this, but
-# then some of the JSON tests fail
-
-# for now I removed "%prec Op", but JSON now needs fixing
-
 query I
 SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
 ----
@@ -102,6 +110,11 @@ query I
 SELECT list_transform([[1], [2], [3]], x -> list_concat(list_transform(x, y -> y + 1), list_transform(x, z -> z - 1)))
 ----
 [[2, 0], [3, 1], [4, 2]]
+
+query I
+SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
+----
+[[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
 
 # TODO: this test case requires the implementation of list_filter
 
