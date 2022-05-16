@@ -18,6 +18,9 @@ void PhysicalUnion::BuildPipelines(Executor &executor, Pipeline &current, Pipeli
 	if (state.recursive_cte) {
 		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
 	}
+	op_state.reset();
+	sink_state.reset();
+
 	auto union_pipeline = make_shared<Pipeline>(executor);
 	auto pipeline_ptr = union_pipeline.get();
 	auto &child_pipelines = state.GetChildPipelines(executor);
@@ -38,7 +41,7 @@ void PhysicalUnion::BuildPipelines(Executor &executor, Pipeline &current, Pipeli
 	union_pipelines[&current].push_back(move(union_pipeline));
 
 	// for the union pipeline, build on the RHS
-	state.SetPipelineSink(*pipeline_ptr, &state.GetPipelineSink(current));
+	state.SetPipelineSink(*pipeline_ptr, state.GetPipelineSink(current));
 	children[1]->BuildPipelines(executor, *pipeline_ptr, state);
 }
 

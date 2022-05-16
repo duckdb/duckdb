@@ -248,9 +248,8 @@ void PipelineBuildState::AddPipeline(Executor &executor, shared_ptr<Pipeline> pi
 	executor.pipelines.push_back(move(pipeline));
 }
 
-PhysicalOperator &PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
-	D_ASSERT(pipeline.sink);
-	return *pipeline.sink;
+PhysicalOperator *PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
+	return pipeline.sink;
 }
 
 void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators) {

@@ -45,9 +45,10 @@ void PhysicalChunkScan::BuildPipelines(Executor &executor, Pipeline &current, Pi
 		// this chunk scan introduces a dependency to the current pipeline
 		// namely a dependency on the duplicate elimination pipeline to finish
 		auto delim_dependency = entry->second->shared_from_this();
-		auto &delim_sink = state.GetPipelineSink(*delim_dependency);
-		D_ASSERT(delim_sink.type == PhysicalOperatorType::DELIM_JOIN);
-		auto &delim_join = (PhysicalDelimJoin &)delim_sink;
+		auto delim_sink = state.GetPipelineSink(*delim_dependency);
+		D_ASSERT(delim_sink);
+		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
+		auto &delim_join = (PhysicalDelimJoin &)*delim_sink;
 		current.AddDependency(delim_dependency);
 		state.SetPipelineSource(current, (PhysicalOperator *)delim_join.distinct.get());
 		return;
