@@ -184,6 +184,8 @@ jobs:
       with:
         r-version: 'devel'
 
+    - uses: r-lib/actions/setup-pandoc@v2
+
     - name: Install
       run: |
         R -f tools/rpkg/dependencies.R
