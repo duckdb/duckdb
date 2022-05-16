@@ -52,7 +52,6 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		}
 		LambdaBinding new_lambda_binding(column_types, column_names, lhs_alias);
 		lambda_bindings->push_back(new_lambda_binding);
-		auto lambda_bindings_count = (*lambda_bindings).size();
 
 		// bind the lhs expressions
 		for (idx_t i = 0; i < expr.lhs.size(); i++) {
@@ -63,7 +62,6 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		}
 
 		auto result = BindExpression(&expr.rhs, depth, false);
-		D_ASSERT(lambda_bindings_count == (*lambda_bindings).size());
 		(*lambda_bindings).pop_back();
 
 		// now bind the rhs as a normal expression

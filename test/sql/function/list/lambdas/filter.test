@@ -1,4 +1,4 @@
-# name: test/sql/function/list/list_filter.test
+# name: test/sql/function/list/lambdas/filter.test
 # description: Test list_filter function
 # group: [list]
 

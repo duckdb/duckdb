@@ -1,4 +1,4 @@
-# name: test/sql/function/list/list_reduce.test
+# name: test/sql/function/list/lambdas/reduce.test
 # description: Test list_reduce function
 # group: [list]
 

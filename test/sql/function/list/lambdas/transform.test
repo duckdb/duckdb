@@ -1,31 +1,23 @@
-# name: test/sql/function/list/list_transform.test
+# name: test/sql/function/list/lambdas/transform.test
 # description: Test list_transform function
 # group: [list]
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
-# test erroneous behavior
+# lambda parameter has the same name as a column
+
+statement ok
+CREATE TABLE l_test (l integer[])
 
 statement error
-SELECT list_transform(NULL, NULL)
+SELECT l, list_transform(l, l -> l + 1) FROM l_test
 
-statement error
-SELECT list_transform(NULL, x)
+query II
+SELECT [1] AS l, list_transform([1], l -> l + 1)
+----
+[1]	[2]
 
-statement error
-SELECT list_transform(NULL, x -> y)
-
-statement error
-SELECT list_transform([1])
-
-statement error
-SELECT list_transform([1], NULL)
-
-statement error
-SELECT list_transform(1, x -> x + 1)
-
-statement error
-SELECT list_transform([[1]], x -> x + 1)
+# test NULLs and simple cases
 
 query I
 SELECT list_transform(NULL, x -> x + 1)
@@ -37,19 +29,10 @@ SELECT list_transform([1], x -> x)
 ----
 [1]
 
-statement ok
-CREATE TABLE lists (l integer[])
-
-statement ok
-INSERT INTO lists VALUES ([1]), ([1, 2, 3]), (NULL), ([-1, NULL, 2])
-
 query I
-SELECT list_transform(l, x -> x) FROM lists
+SELECT list_transform(['duck', 'a', 'ö'], duck -> concat(duck, 'DB'))
 ----
-[1]
-[1, 2, 3]
-NULL
-[-1, NULL, 2]
+[duckDB, aDB, öDB]
 
 query I
 SELECT list_transform([1, 2, 3], x -> 1)
@@ -57,9 +40,9 @@ SELECT list_transform([1, 2, 3], x -> 1)
 [1, 1, 1]
 
 query I
-SELECT list_transform([1], x -> x + 1)
+SELECT list_transform([], x -> x + 1)
 ----
-[2]
+[]
 
 query I
 SELECT list_transform([1, 2, 3], x -> x + 1)
@@ -70,6 +53,40 @@ query I
 SELECT list_transform([1, NULL, -2, NULL], x -> x + 1)
 ----
 [2, NULL, -1, NULL]
+
+# test on table with rows
+
+statement ok
+CREATE TABLE lists (n integer, l integer[])
+
+statement ok
+INSERT INTO lists VALUES (1, [1]), (2, [1, 2, 3]), (3, NULL), (4, [-1, NULL, 2])
+
+query I
+SELECT list_transform(l, x -> x) FROM lists
+----
+[1]
+[1, 2, 3]
+NULL
+[-1, NULL, 2]
+
+query I
+SELECT list_transform(l, x -> x + n) FROM lists
+----
+[2]
+[3, 4, 5]
+NULL
+[3, NULL, 6]
+
+query I
+SELECT list_transform(l, x -> x < 2) FROM lists
+----
+[True]
+[True, False, False]
+NULL
+[True, NULL, False]
+
+# test other operators and more complex/nested functions
 
 query I
 SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
@@ -115,16 +132,3 @@ query I
 SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
 ----
 [[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
-
-# TODO: this test case requires the implementation of list_filter
-
-mode skip
-
-query I
-SELECT list_transform([[1, NULL, 2], [3, NULL]], a -> list_filter(a, x -> x IS NOT NULL))
-----
-[[1, 2], [3]]
-
-mode unskip
-
-# TODO: add test cases where the lambda parameter(s) have the same name as columns

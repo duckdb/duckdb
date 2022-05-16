@@ -216,6 +216,11 @@ static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Exp
 static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                             LogicalType &list_child_type, unique_ptr<Expression> &expr) {
 
+	// these classes are not allowed within lambda expressions
+	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
+	}
+
 	// these expression classes do not have children, transform them
 	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
 	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||

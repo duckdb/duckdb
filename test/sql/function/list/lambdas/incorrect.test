@@ -1,0 +1,24 @@
+# name: test/sql/function/list/lambdas/incorrect.test
+# description: Test incorrect usage of the lambda functions
+# group: [list]
+
+statement error
+SELECT list_transform(NULL, NULL)
+
+statement error
+SELECT list_transform(NULL, x)
+
+statement error
+SELECT list_transform(NULL, x -> y)
+
+statement error
+SELECT list_transform([1])
+
+statement error
+SELECT list_transform([1], NULL)
+
+statement error
+SELECT list_transform(1, x -> x + 1)
+
+statement error
+SELECT list_transform([[1]], x -> x + 1)
