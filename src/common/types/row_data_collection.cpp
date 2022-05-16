@@ -137,4 +137,8 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 	}
 }
 
+unique_ptr<RowDataCollection> RowDataCollection::CopyEmpty() {
+	return make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
+}
+
 } // namespace duckdb

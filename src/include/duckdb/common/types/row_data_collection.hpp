@@ -79,6 +79,13 @@ public:
 	                                       const SelectionVector *sel = FlatVector::IncrementalSelectionVector());
 
 	void Merge(RowDataCollection &other);
+	unique_ptr<RowDataCollection> CopyEmpty();
+
+	void Clear() {
+		blocks.clear();
+		pinned_blocks.clear();
+		count = 0;
+	}
 
 	//! The size (in bytes) of this RowDataCollection if it were stored in a single block
 	idx_t SizeInBytes() const {

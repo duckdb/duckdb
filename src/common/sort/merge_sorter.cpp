@@ -406,7 +406,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 
 	const auto &layout = result_data.layout;
 	const idx_t row_width = layout.GetRowWidth();
-	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+	const idx_t heap_pointer_offset = layout.GetHeapOffset();
 
 	// Left and right row data to merge
 	data_ptr_t l_ptr;
@@ -615,7 +615,7 @@ void MergeSorter::FlushBlobs(const RowLayout &layout, const idx_t &source_count,
                              BufferHandle &target_heap_handle, data_ptr_t &target_heap_ptr, idx_t &copied,
                              const idx_t &count) {
 	const idx_t row_width = layout.GetRowWidth();
-	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+	const idx_t heap_pointer_offset = layout.GetHeapOffset();
 	idx_t source_entry_idx_copy = source_entry_idx;
 	data_ptr_t target_data_ptr_copy = target_data_ptr;
 	idx_t copied_copy = copied;

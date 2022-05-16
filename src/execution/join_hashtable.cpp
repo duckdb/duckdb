@@ -57,6 +57,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	swizzled_block_collection = block_collection->CopyEmpty();
+	swizzled_string_heap = string_heap->CopyEmpty();
 	memset(histogram, 0, sizeof(histogram));
 }
 
@@ -68,9 +70,6 @@ unique_ptr<JoinHashTable> JoinHashTable::CopyEmpty() const {
 }
 
 void JoinHashTable::Merge(JoinHashTable &other) {
-	if (other.Count() == 0) {
-		return;
-	}
 	block_collection->Merge(*other.block_collection);
 	swizzled_block_collection->Merge(*other.swizzled_block_collection);
 	if (!layout.AllConstant()) {
@@ -826,10 +825,7 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 	}
 
 	// The main data blocks can just be moved
-	for (auto &block : block_collection->blocks) {
-		swizzled_block_collection->blocks.push_back(move(block));
-	}
-	block_collection->blocks.clear();
+	swizzled_block_collection->Merge(*block_collection);
 
 	if (layout.AllConstant()) {
 		// No heap blocks!
@@ -842,7 +838,6 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 	idx_t heap_block_remaining = heap_blocks[heap_block_idx]->count;
 	for (auto &data_block : swizzled_block_collection->blocks) {
 		if (heap_block_remaining == 0) {
-			// Move to next heap block (if needed)
 			heap_block_remaining = heap_blocks[++heap_block_idx]->count;
 		}
 
@@ -858,8 +853,8 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 
 			// Swizzle the heap pointer
 			auto heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
-			auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapPointerOffset());
-			RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count);
+			idx_t heap_offset = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset()) - heap_handle->Ptr();
+			RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_handle->Ptr(), data_block->count, heap_offset);
 
 			// Update counter
 			heap_block_remaining -= data_block->count;
@@ -871,22 +866,25 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 			idx_t total_size = 0;
 			while (data_block_remaining > 0) {
 				if (heap_block_remaining == 0) {
-					// Move to next heap block (if needed)
 					heap_block_remaining = heap_blocks[++heap_block_idx]->count;
 				}
+				auto next = MinValue<idx_t>(data_block_remaining, heap_block_remaining);
+
+				// Swizzle the heap pointer
+				heap_handles.push_back(buffer_manager.Pin(heap_blocks[heap_block_idx]->block));
+				idx_t heap_offset = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset()) - heap_handles.back()->Ptr();
+				RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_handles.back()->Ptr(), next, heap_offset);
 
 				// Figure out where to start copying strings, and how many bytes we need to copy
-				heap_handles.push_back(buffer_manager.Pin(heap_blocks[heap_block_idx]->block));
-				auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapPointerOffset());
+				auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
 				auto size = heap_blocks[heap_block_idx]->byte_offset - (heap_ptr - heap_handles.back()->Ptr());
 				ptrs_and_sizes.emplace_back(heap_ptr, size);
 				total_size += size;
 
-				// Update where we are in the data and heap block
-				auto copy_count = MinValue<idx_t>(data_block_remaining, heap_block_remaining);
-				data_ptr += copy_count * layout.GetRowWidth();
-				data_block_remaining -= copy_count;
-				heap_block_remaining -= copy_count;
+				// Update where we are in the data and heap blocks
+				data_ptr += next * layout.GetRowWidth();
+				data_block_remaining -= next;
+				heap_block_remaining -= next;
 			}
 
 			// Finally, we allocate a new heap block and copy data to it
@@ -899,15 +897,41 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 			}
 		}
 	}
+	D_ASSERT(swizzled_block_collection->blocks.size() == swizzled_string_heap->blocks.size());
 
-	// Cleanup
-	block_collection->blocks.clear();
-	string_heap->blocks.clear();
-	string_heap->pinned_blocks.clear();
+	// Update counts and cleanup
+	swizzled_string_heap->count = string_heap->count;
+	string_heap->Clear();
 }
 
 void JoinHashTable::FinalizeExternal() {
+	// Everything should be in the 'swizzled' variants of these
+	D_ASSERT(block_collection->blocks.empty());
+	D_ASSERT(string_heap->blocks.empty());
 	// TODO: smart stuff with histogram
+
+	// Unswizzle
+	auto &blocks = swizzled_block_collection->blocks;
+	auto &heap_blocks = swizzled_string_heap->blocks;
+	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
+		auto &data_block = blocks[block_idx];
+		if (!layout.AllConstant()) {
+			auto block_handle = buffer_manager.Pin(data_block->block);
+			auto heap_handle = buffer_manager.Pin(heap_blocks[block_idx]->block);
+			RowOperations::UnswizzlePointers(layout, block_handle->Ptr(), heap_handle->Ptr(), data_block->count);
+			string_heap->blocks.push_back(move(heap_blocks[block_idx]));
+			string_heap->pinned_blocks.push_back(move(heap_handle));
+		}
+		block_collection->blocks.push_back(move(data_block));
+	}
+
+	// Update counts and clean up
+	block_collection->count = swizzled_block_collection->count;
+	string_heap->count = swizzled_string_heap->count;
+	swizzled_block_collection->Clear();
+	swizzled_string_heap->Clear();
+
+	Finalize();
 }
 
 void JoinHashTable::Partition() {

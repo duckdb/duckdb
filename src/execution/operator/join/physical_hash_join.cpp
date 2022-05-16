@@ -175,10 +175,12 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
 	auto &gstate = (HashJoinGlobalState &)gstate_p;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
-	if (gstate.external) {
-		lstate.hash_table->SwizzleCollectedBlocks();
+	if (lstate.initialized) {
+		if (gstate.external) {
+			lstate.hash_table->SwizzleCollectedBlocks();
+		}
+		gstate.hash_table->Merge(*lstate.hash_table);
 	}
-	gstate.hash_table->Merge(*lstate.hash_table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
@@ -190,8 +192,8 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)gstate;
-	// check for possible perfect hash table
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+	// check for possible perfect hash table (can't if this is an external join)
+	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin() && !sink.external;
 	if (use_perfect_hash) {
 		D_ASSERT(sink.hash_table->equality_types.size() == 1);
 		auto key_type = sink.hash_table->equality_types[0];
@@ -200,7 +202,11 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
-		sink.hash_table->Finalize();
+		if (sink.external) {
+			sink.hash_table->FinalizeExternal();
+		} else {
+			sink.hash_table->Finalize();
+		}
 	}
 	sink.finalized = true;
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {

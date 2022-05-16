@@ -224,7 +224,7 @@ private:
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
 
-	//! Index of the byte in the hash used for the histogram
+	//! The current radix pass
 	idx_t radix_pass;
 	//! Histogram of inserted values
 	idx_t histogram[JoinRadixConstants::PARTITIONS];

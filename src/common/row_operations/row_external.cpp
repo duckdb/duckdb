@@ -18,7 +18,7 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 		const idx_t next = MinValue<idx_t>(count - done, STANDARD_VECTOR_SIZE);
 		const data_ptr_t row_ptr = base_row_ptr + done * row_width;
 		// Load heap row pointers
-		data_ptr_t heap_ptr_ptr = row_ptr + layout.GetHeapPointerOffset();
+		data_ptr_t heap_ptr_ptr = row_ptr + layout.GetHeapOffset();
 		for (idx_t i = 0; i < next; i++) {
 			heap_row_ptrs[i] = Load<data_ptr_t>(heap_ptr_ptr);
 			heap_ptr_ptr += row_width;
@@ -54,10 +54,9 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 }
 
 void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
-                                       const idx_t count) {
+                                       const idx_t count, idx_t cumulative_offset) {
 	const idx_t row_width = layout.GetRowWidth();
-	row_ptr += layout.GetHeapPointerOffset();
-	idx_t cumulative_offset = 0;
+	row_ptr += layout.GetHeapOffset();
 	for (idx_t i = 0; i < count; i++) {
 		Store<idx_t>(cumulative_offset, row_ptr);
 		cumulative_offset += Load<uint32_t>(heap_base_ptr + cumulative_offset);
@@ -74,7 +73,7 @@ void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t 
 		const idx_t next = MinValue<idx_t>(count - done, STANDARD_VECTOR_SIZE);
 		const data_ptr_t row_ptr = base_row_ptr + done * row_width;
 		// Restore heap row pointers
-		data_ptr_t heap_ptr_ptr = row_ptr + layout.GetHeapPointerOffset();
+		data_ptr_t heap_ptr_ptr = row_ptr + layout.GetHeapOffset();
 		for (idx_t i = 0; i < next; i++) {
 			heap_row_ptrs[i] = base_heap_ptr + Load<idx_t>(heap_ptr_ptr);
 			Store<data_ptr_t>(heap_row_ptrs[i], heap_ptr_ptr);

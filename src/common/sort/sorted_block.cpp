@@ -253,7 +253,7 @@ data_ptr_t SBScanState::DataPtr(SortedData &sd) const {
 }
 
 data_ptr_t SBScanState::HeapPtr(SortedData &sd) const {
-	return BaseHeapPtr(sd) + Load<idx_t>(DataPtr(sd) + sd.layout.GetHeapPointerOffset());
+	return BaseHeapPtr(sd) + Load<idx_t>(DataPtr(sd) + sd.layout.GetHeapOffset());
 }
 
 data_ptr_t SBScanState::BaseHeapPtr(SortedData &sd) const {

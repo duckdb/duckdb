@@ -282,7 +282,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		data_ptr_t ordered_heap_ptr = ordered_heap_handle->Ptr();
 		// Fill the heap in order
 		ordered_data_ptr = ordered_data_handle->Ptr();
-		const idx_t heap_pointer_offset = sd.layout.GetHeapPointerOffset();
+		const idx_t heap_pointer_offset = sd.layout.GetHeapOffset();
 		for (idx_t i = 0; i < count; i++) {
 			auto heap_row_ptr = Load<data_ptr_t>(ordered_data_ptr + heap_pointer_offset);
 			auto heap_row_size = Load<uint32_t>(heap_row_ptr);
