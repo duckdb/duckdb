@@ -78,6 +78,9 @@ string DistinctStatistics::ToString() const {
 }
 
 idx_t DistinctStatistics::GetCount() const {
+	if (sample_count == 0 || total_count == 0) {
+		return 0;
+	}
 	// Estimate HLL count because we use sampling
 	double hll_count = log->Count();
 	double unique_proportion = hll_count / double(sample_count);

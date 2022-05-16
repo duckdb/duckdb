@@ -1,14 +1,26 @@
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 struct DateTrunc {
+	template <class TA, class TR, class OP>
+	static inline void UnaryExecute(Vector &left, Vector &result, idx_t count) {
+		UnaryExecutor::Execute<TA, TR>(left, result, count, [&](TA input) {
+			if (Value::IsFinite(input)) {
+				return OP::template Operation<TA, TR>(input);
+			} else {
+				return Cast::template Operation<TA, TR>(input);
+			}
+		});
+	}
 
 	struct MillenniumOperator {
 		template <class TA, class TR>
@@ -313,6 +325,10 @@ interval_t DateTrunc::MicrosecondOperator::Operation(interval_t input) {
 
 template <class TA, class TR>
 static TR TruncateElement(DatePartSpecifier type, TA element) {
+	if (!Value::IsFinite(element)) {
+		return Cast::template Operation<TA, TR>(element);
+	}
+
 	switch (type) {
 	case DatePartSpecifier::MILLENNIUM:
 		return DateTrunc::MillenniumOperator::Operation<TA, TR>(element);
@@ -363,51 +379,51 @@ template <typename TA, typename TR>
 static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result, idx_t count) {
 	switch (type) {
 	case DatePartSpecifier::MILLENNIUM:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::MillenniumOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillenniumOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::CENTURY:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::CenturyOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::CenturyOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::DECADE:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::DecadeOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DecadeOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::YEAR:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::YearOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::YearOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::QUARTER:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::QuarterOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::QuarterOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::MONTH:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::MonthOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MonthOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::WeekOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::WeekOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::ISOYEAR:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::ISOYearOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::ISOYearOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::DayOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DayOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::HOUR:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::HourOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::HourOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::MINUTE:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::MinuteOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MinuteOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::SECOND:
 	case DatePartSpecifier::EPOCH:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::SecondOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::SecondOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::MillisecondOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MillisecondOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		UnaryExecutor::Execute<TA, TR, DateTrunc::MicrosecondOperator>(left, result, count);
+		DateTrunc::UnaryExecute<TA, TR, DateTrunc::MicrosecondOperator>(left, result, count);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATETRUNC");
