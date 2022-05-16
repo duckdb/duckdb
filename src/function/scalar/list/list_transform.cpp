@@ -37,6 +37,41 @@ bool ListTransformBindData::Equals(const FunctionData &other_p) const {
 ListTransformBindData::~ListTransformBindData() {
 }
 
+void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &result_types, idx_t &element_count,
+                       idx_t &col_count, SelectionVector &sel, vector<SelectionVector> &sel_vectors,
+                       Vector &child_vector, DataChunk &args, ExpressionExecutor &expr_executor, Vector &result) {
+
+	// create the input chunk
+	DataChunk input_chunk;
+	input_chunk.InitializeEmpty(types);
+
+	// set the list child vector
+	Vector slice(child_vector, sel, element_count);
+	input_chunk.data[0].Reference(slice);
+
+	// set the other vectors
+	vector<Vector> slices;
+	for (idx_t col_idx = 0; col_idx < col_count - 1; col_idx++) {
+		slices.push_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], element_count));
+		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
+	}
+	input_chunk.SetCardinality(element_count);
+
+	// create the lambda result chunk
+	DataChunk lambda_chunk;
+	lambda_chunk.Initialize(result_types);
+	lambda_chunk.SetCardinality(element_count);
+
+	// execute the lambda expression
+	expr_executor.Execute(input_chunk, lambda_chunk);
+
+	// append the lambda_chunk to the result list
+	auto &lambda_vector = lambda_chunk.data[0];
+	VectorData lambda_child_data;
+	lambda_vector.Orrify(element_count, lambda_child_data);
+	ListVector::Append(result, lambda_vector, *lambda_child_data.sel, element_count, 0);
+}
+
 static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	// always at least the list argument
@@ -74,22 +109,25 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	// to slice the child vector
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 
+	// this vector never contains more than one element
+	vector<LogicalType> result_types;
+	result_types.push_back(lambda_expr->return_type);
+
 	// non-lambda parameter columns
 	vector<VectorData> columns;
 	vector<idx_t> indexes;
-	vector<LogicalType> types;
-	vector<LogicalType> result_types;
 	vector<SelectionVector> sel_vectors;
 
+	vector<LogicalType> types;
 	types.push_back(child_vector.GetType());
-	result_types.push_back(lambda_expr->return_type);
 
-	for (idx_t i = 1; i < col_count; i++) { // skip the list column
+	// skip the list column
+	for (idx_t i = 1; i < col_count; i++) {
 		columns.emplace_back(VectorData());
 		args.data[i].Orrify(count, columns[i - 1]);
 		indexes.push_back(0);
-		types.push_back(args.data[i].GetType());
 		sel_vectors.emplace_back(SelectionVector(STANDARD_VECTOR_SIZE));
+		types.push_back(args.data[i].GetType());
 	}
 
 	// get the expression executor
@@ -97,7 +135,6 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t element_count = 0;
-	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 
 		auto lists_index = lists_data.sel->get_index(row_idx);
@@ -109,7 +146,7 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 			continue;
 		}
 
-		result_entries[row_idx].offset = offset;
+		result_entries[row_idx].offset = list_entry.offset;
 		result_entries[row_idx].length = list_entry.length;
 
 		// empty list, nothing to execute
@@ -128,7 +165,8 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 			// reached STANDARD_VECTOR_SIZE elements, execute
 			if (element_count == STANDARD_VECTOR_SIZE) {
 
-				// TODO: same as at the end of the for-loop
+				ExecuteExpression(types, result_types, element_count, col_count, sel, sel_vectors, child_vector, args,
+				                  expr_executor, result);
 				element_count = 0;
 			}
 
@@ -142,40 +180,11 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 			}
 			element_count++;
 		}
-
-		offset += result_entries[row_idx].length;
 	}
 
 	if (element_count != 0) {
-
-		// create the input chunk
-		DataChunk input_chunk;
-		input_chunk.InitializeEmpty(types);
-
-		// set the list child vector
-		Vector slice(child_vector, sel, element_count);
-		input_chunk.data[0].Reference(slice);
-
-		// set the other vectors
-		vector<Vector> slices;
-		for (idx_t col_idx = 0; col_idx < col_count - 1; col_idx++) {
-			slices.push_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], element_count));
-			input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
-		}
-		input_chunk.SetCardinality(element_count);
-
-		// create the result chunk
-		DataChunk lambda_chunk;
-		lambda_chunk.Initialize(result_types);
-		lambda_chunk.SetCardinality(element_count);
-
-		// execute the lambda expression and append the result to the result list
-		expr_executor.Execute(input_chunk, lambda_chunk);
-
-		auto &lambda_vector = lambda_chunk.data[0];
-		VectorData lambda_child_data;
-		lambda_vector.Orrify(element_count, lambda_child_data);
-		ListVector::Append(result, lambda_vector, *lambda_child_data.sel, element_count, 0);
+		ExecuteExpression(types, result_types, element_count, col_count, sel, sel_vectors, child_vector, args,
+		                  expr_executor, result);
 	}
 }
 
@@ -187,18 +196,11 @@ static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Exp
 	bool is_lambda_parameter = false;
 	if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 
-		// TODO: is there a better way to determine if this is the lambda parameter, maybe using __lambda_internal_...?
+		// determine if this is the lambda parameter
 		auto &bound_col_ref = (BoundColumnRefExpression &)*original;
 		if (bound_col_ref.binding.table_index == DConstants::INVALID_INDEX) {
 			is_lambda_parameter = true;
 		}
-	}
-
-	if (original->expression_class == ExpressionClass::BOUND_CONSTANT) {
-
-		// TODO: is there a better way to determine if this is the lambda parameter, maybe using __lambda_internal_...?
-		// auto &bound_const = (BoundConstantExpression &)*original;
-		// D_ASSERT(bound_const.value.IsNull());
 	}
 
 	if (is_lambda_parameter) {
@@ -216,7 +218,6 @@ static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Exp
 static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
                             LogicalType &list_child_type, unique_ptr<Expression> &expr) {
 
-	// these classes are not allowed within lambda expressions
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
 	}
@@ -238,7 +239,7 @@ static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Ex
 		expr = move(replacement);
 
 	} else {
-		// enumerate the children of the expression
+		// recursively enumerate the children of the expression
 		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
 			IterateChildren(bound_function, arguments, list_child_type, child);
 		});
@@ -276,8 +277,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 }
 
 ScalarFunction ListTransformFun::GetFunction() {
-	// TODO: what logical type is the lambda function?
-	// after the bind this is any, because it is the return value of the rhs?
+	// the return type is ANY, because it is the return value of the rhs of the lambda expression
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::LIST(LogicalType::ANY),
 	                      ListTransformFunction, false, false, ListTransformBind, nullptr);
 }

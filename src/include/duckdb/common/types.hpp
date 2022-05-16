@@ -380,8 +380,7 @@ enum class LogicalTypeId : uint8_t {
 	MAP = 102,
 	TABLE = 103,
 	ENUM = 104,
-	AGGREGATE_STATE = 105,
-	LAMBDA = 106
+	AGGREGATE_STATE = 105
 };
 
 struct ExtraTypeInfo;
@@ -486,7 +485,6 @@ public:
 	static constexpr const LogicalTypeId INVALID = LogicalTypeId::INVALID;
 	static constexpr const LogicalTypeId JSON = LogicalTypeId::JSON;
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
-	static constexpr const LogicalTypeId LAMBDA = LogicalTypeId::LAMBDA;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
