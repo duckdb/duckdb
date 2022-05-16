@@ -6,7 +6,6 @@ namespace duckdb {
 WhereBinder::WhereBinder(Binder &binder, ClientContext &context, ColumnAliasBinder *column_alias_binder)
     : ExpressionBinder(binder, context), column_alias_binder(column_alias_binder) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
-	where_clause = true;
 }
 
 BindResult WhereBinder::BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth, bool root_expression) {

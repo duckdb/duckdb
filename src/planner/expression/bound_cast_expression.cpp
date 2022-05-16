@@ -9,7 +9,8 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
       try_cast(try_cast_p) {
 }
 
-unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type) {
+unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                          bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
@@ -26,7 +27,9 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 				return expr;
 			}
 		}
-		return make_unique<BoundCastExpression>(move(expr), target_type);
+		auto cast = make_unique<BoundCastExpression>(move(expr), target_type);
+		cast->try_cast = try_cast;
+		return cast;
 	}
 	return expr;
 }
