@@ -5,6 +5,10 @@
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 
+# Cant create a column with a duplicate name
+statement error
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
 statement ok
 INSERT INTO unit VALUES (5,4)
 

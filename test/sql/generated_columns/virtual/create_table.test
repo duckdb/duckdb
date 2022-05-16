@@ -26,6 +26,15 @@ CREATE TABLE unit (
     amount_sold INTEGER,
 );
 
+# Duplicate column definition
+statement error
+CREATE TABLE unit (
+    total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
+    total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
+    price INTEGER,
+    amount_sold INTEGER,
+);
+
 statement ok
 CREATE TABLE unit (
     total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL,
