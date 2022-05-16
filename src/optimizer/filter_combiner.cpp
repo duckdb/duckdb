@@ -676,44 +676,75 @@ FilterResult FilterCombiner::AddFilter(Expression *expr) {
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_BETWEEN) {
 		auto &comparison = (BoundBetweenExpression &)*expr;
 		//! check if one of the sides is a scalar value
-		bool left_is_scalar = comparison.lower->IsFoldable();
-		bool right_is_scalar = comparison.upper->IsFoldable();
-		if (left_is_scalar || right_is_scalar) {
-			//! comparison with scalar
+		bool lower_is_scalar = comparison.lower->IsFoldable();
+		bool upper_is_scalar = comparison.upper->IsFoldable();
+		if (lower_is_scalar || upper_is_scalar) {
+			//! comparison with scalar - break apart
 			auto node = GetNode(comparison.input.get());
 			idx_t equivalence_set = GetEquivalenceSet(node);
-			auto scalar = comparison.lower.get();
-			auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+			auto result = FilterResult::UNSATISFIABLE;
 
-			// create the ExpressionValueInformation
-			ExpressionValueInformation info;
-			if (comparison.lower_inclusive) {
-				info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+			if (lower_is_scalar) {
+				auto scalar = comparison.lower.get();
+				auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+				// create the ExpressionValueInformation
+				ExpressionValueInformation info;
+				if (comparison.lower_inclusive) {
+					info.comparison_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+				} else {
+					info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+				}
+				info.constant = constant_value;
+
+				// get the current bucket of constant values
+				D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
+				auto &info_list = constant_values.find(equivalence_set)->second;
+				// check the existing constant comparisons to see if we can do any pruning
+				result = AddConstantComparison(info_list, info);
 			} else {
-				info.comparison_type = ExpressionType::COMPARE_GREATERTHAN;
+				D_ASSERT(upper_is_scalar);
+				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+				                                             : ExpressionType::COMPARE_LESSTHAN;
+				auto left = comparison.lower->Copy();
+				auto right = comparison.input->Copy();
+				auto lower_comp = make_unique<BoundComparisonExpression>(type, move(left), move(right));
+				result = AddBoundComparisonFilter(lower_comp.get());
 			}
-			info.constant = constant_value;
 
-			// get the current bucket of constant values
-			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
-			auto &info_list = constant_values.find(equivalence_set)->second;
-			// check the existing constant comparisons to see if we can do any pruning
-			AddConstantComparison(info_list, info);
-			scalar = comparison.upper.get();
-			constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+			//	 Stop if we failed
+			if (result != FilterResult::SUCCESS) {
+				return result;
+			}
 
-			// create the ExpressionValueInformation
-			if (comparison.upper_inclusive) {
-				info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+			if (upper_is_scalar) {
+				auto scalar = comparison.upper.get();
+				auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+
+				// create the ExpressionValueInformation
+				ExpressionValueInformation info;
+				if (comparison.upper_inclusive) {
+					info.comparison_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+				} else {
+					info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
+				}
+				info.constant = constant_value;
+
+				// get the current bucket of constant values
+				D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
+				// check the existing constant comparisons to see if we can do any pruning
+				result = AddConstantComparison(constant_values.find(equivalence_set)->second, info);
 			} else {
-				info.comparison_type = ExpressionType::COMPARE_LESSTHAN;
+				D_ASSERT(lower_is_scalar);
+				const auto type = comparison.upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO
+				                                             : ExpressionType::COMPARE_LESSTHAN;
+				auto left = comparison.input->Copy();
+				auto right = comparison.upper->Copy();
+				auto upper_comp = make_unique<BoundComparisonExpression>(type, move(left), move(right));
+				result = AddBoundComparisonFilter(upper_comp.get());
 			}
-			info.constant = constant_value;
 
-			// get the current bucket of constant values
-			D_ASSERT(constant_values.find(equivalence_set) != constant_values.end());
-			// check the existing constant comparisons to see if we can do any pruning
-			return AddConstantComparison(constant_values.find(equivalence_set)->second, info);
+			return result;
 		}
 	} else if (expr->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 		return AddBoundComparisonFilter(expr);

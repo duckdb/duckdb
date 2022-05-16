@@ -17,9 +17,18 @@ struct S3AuthParams {
 	const std::string secret_access_key;
 	const std::string session_token;
 	const std::string endpoint;
+	const std::string url_style;
 	const bool use_ssl;
 
 	static S3AuthParams ReadFrom(FileOpener *opener);
+};
+
+struct ParsedS3Url {
+	const std::string http_proto;
+	const std::string host;
+	const std::string bucket;
+	const std::string path;
+	const std::string query_param;
 };
 
 struct S3ConfigParams {
@@ -143,8 +152,8 @@ public:
 
 	void FlushAllBuffers(S3FileHandle &handle);
 
-	static void S3UrlParse(string url, string endpoint, bool use_ssl, string &host_out, string &http_proto_out,
-	                       string &path_out, string &query_param);
+	static ParsedS3Url S3UrlParse(string url, const S3AuthParams &params);
+
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
 
 	// Uploads the contents of write_buffer to S3.

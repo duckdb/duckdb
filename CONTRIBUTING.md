@@ -16,6 +16,11 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Open a new GitHub pull request with the patch.
 * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
 
+## Outside Contributors
+* Discuss your intended changes with the core team on Github
+* Announce that you are working or want to work on a specific issue
+* Avoid large pull requests - they are much less likely to be merged as they are incredibly hard to review
+
 ## Pull Requests
 * Do not commit/push directly to the master branch. Instead, create a fork and file a pull request.
 * When maintaining a branch, merge frequently with the master.

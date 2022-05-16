@@ -10,3 +10,4 @@ def test_roundtrip_substrait(duckdb_cursor):
     expected = pd.Series(range(5), name="i", dtype="int32")
 
     pd.testing.assert_series_equal(query_result.df()["i"], expected)
+

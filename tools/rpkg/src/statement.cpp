@@ -563,7 +563,8 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
 	}
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names);
+	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	data_chunk->ToArrowArray(&arrow_data);
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
@@ -597,8 +598,8 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
-
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names);
+	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table
