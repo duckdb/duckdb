@@ -232,9 +232,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 vector<LogicalType> DataTable::GetTypes() {
 	vector<LogicalType> types;
 	for (auto &it : column_definitions) {
-		if (it.Generated()) {
-			continue;
-		}
+		// if (it.Generated()) {
+		//	continue;
+		// }
 		types.push_back(it.type);
 	}
 	return types;
@@ -715,9 +715,9 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
 		auto &col = this->column_definitions[i];
-		if (col.Generated()) {
-			continue;
-		}
+		// if (col.Generated()) {
+		//	continue;
+		// }
 		column_ids.push_back(i);
 		types.push_back(column_definitions[i].type);
 	}

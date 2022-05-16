@@ -1,0 +1,30 @@
+# name: test/sql/generated_columns/virtual/drop.test
+# description: Remove generated column
+# group: [virtual]
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+##Select basic
+#query I
+#SELECT total_profit FROM unit
+#----
+#20
+
+##Select *
+#query III
+#SELECT * FROM unit
+#----
+#5	4	20
+
+#Select tbl.*
+query III
+SELECT unit.* FROM unit
+----
+5	4	20

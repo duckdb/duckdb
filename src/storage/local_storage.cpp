@@ -359,9 +359,9 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 	column_ids.reserve(table.column_definitions.size());
 	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		auto &col = table.column_definitions[i];
-		if (col.Generated()) {
-			continue;
-		}
+		// if (col.Generated()) {
+		//	continue;
+		// }
 		column_ids.push_back(i);
 	}
 

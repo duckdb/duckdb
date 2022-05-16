@@ -2,29 +2,29 @@
 # description: Add a generated column on creation of a table
 # group: [virtual]
 
-# Function doesnt exist, neither does the referenced column
-#statement error
-#CREATE TABLE unit (
-#	total_profit BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL,
-#);
+#Function doesnt exist, neither does the referenced column
+statement error
+CREATE TABLE unit (
+	total_profit BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL,
+);
 
-# Return type and type of the generated column dont match
-#statement error
-#CREATE TABLE unit (
-#    total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL,
-#    word VARCHAR,
-#    price INTEGER,
-#    amount_sold INTEGER,
-#);
+#Return type and type of the generated column dont match
+statement error
+CREATE TABLE unit (
+    total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL,
+    word VARCHAR,
+    price INTEGER,
+    amount_sold INTEGER,
+);
 
-## Expression contains a subquery
-#statement error
-#CREATE TABLE unit (
-#    total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL,
-#    word VARCHAR,
-#    price INTEGER,
-#    amount_sold INTEGER,
-#);
+# Expression contains a subquery
+statement error
+CREATE TABLE unit (
+    total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL,
+    word VARCHAR,
+    price INTEGER,
+    amount_sold INTEGER,
+);
 
 statement ok
 CREATE TABLE unit (
@@ -36,10 +36,10 @@ CREATE TABLE unit (
 statement ok
 INSERT INTO unit VALUES (5,4)
 
-query I
+query III
 SELECT * FROM unit;
 ----
-20
+20	5	4
 
 # Delete the generated column
 statement ok

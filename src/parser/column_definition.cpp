@@ -30,9 +30,11 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, ColumnExpr
 ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
+	copy.storage_oid = oid;
 	copy.default_value = default_value ? default_value->Copy() : nullptr;
 	copy.generated_expression = generated_expression ? generated_expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
+	copy.category = category;
 	return copy;
 }
 

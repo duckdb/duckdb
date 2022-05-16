@@ -94,9 +94,6 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 		auto category = columns[i].category;
 		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
 		auto column_info = TableColumnInfo(i, category);
-		// if (column_info.column_type == TableColumnType::GENERATED) {
-		//	dprintf(2, "\nTABLE CATALOG ENTRY - GEN COL: %s\n", columns[i].name.c_str());
-		// }
 		name_map[columns[i].name] = column_info;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
@@ -106,16 +103,16 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	}
 	if (!storage) {
 		// create the physical storage
-		vector<ColumnDefinition> colum_def_copy;
+		vector<ColumnDefinition> storage_columns;
 		vector<ColumnDefinition> get_columns;
 		for (auto &col_def : columns) {
+			get_columns.push_back(col_def.Copy());
 			if (col_def.Generated()) {
 				continue;
 			}
-			colum_def_copy.push_back(col_def.Copy());
-			get_columns.push_back(col_def.Copy());
+			storage_columns.push_back(col_def.Copy());
 		}
-		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(colum_def_copy), move(info->data));
+		storage = make_shared<DataTable>(catalog->db, schema->name, name, move(storage_columns), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY and FOREIGN KEY constraints
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {
@@ -317,11 +314,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	}
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
+	info.new_column.storage_oid = storage->column_definitions.size();
+	if (info.new_column.Generated()) {
+		info.new_column.storage_oid = EXCLUDED_FROM_STORAGE_ID;
+	}
 	create_info->columns.push_back(info.new_column.Copy());
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	if (info.new_column.category == TableColumnType::GENERATED) {
+	if (info.new_column.Generated()) {
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
 	}

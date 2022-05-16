@@ -18,6 +18,7 @@ namespace duckdb {
 static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_names) {
 	auto &base = (CreateTableInfo &)*info.base;
 
+	idx_t storage_idx = 0;
 	for (uint64_t oid = 0; oid < base.columns.size(); oid++) {
 		auto &col = base.columns[oid];
 		if (allow_duplicate_names) {
@@ -35,6 +36,10 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 		auto column_info = TableColumnInfo(oid, col.category);
 		info.name_map[col.name] = column_info;
 		col.oid = oid;
+		if (col.Generated()) {
+			continue;
+		}
+		col.storage_oid = storage_idx++;
 	}
 }
 

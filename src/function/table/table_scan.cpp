@@ -28,6 +28,14 @@ struct TableScanOperatorData : public FunctionOperatorData {
 	vector<column_t> column_ids;
 };
 
+static idx_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
+	if (column_id == EXCLUDED_FROM_STORAGE_ID) {
+		return column_id;
+	}
+	auto &col = table.columns[column_id];
+	return col.storage_oid;
+}
+
 static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,
                                                       const vector<column_t> &column_ids,
                                                       TableFilterCollection *filters) {
@@ -35,6 +43,10 @@ static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, co
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	result->column_ids = column_ids;
+	for (auto &col : result->column_ids) {
+		auto storage_idx = GetStorageIndex(*bind_data.table, col);
+		col = storage_idx;
+	}
 	result->scan_state.table_filters = filters->table_filters;
 	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
 	                                         filters->table_filters);
@@ -49,7 +61,8 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
-	return bind_data.table->storage->GetStatistics(context, column_id);
+	auto storage_idx = GetStorageIndex(*bind_data.table, column_id);
+	return bind_data.table->storage->GetStatistics(context, storage_idx);
 }
 
 static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
