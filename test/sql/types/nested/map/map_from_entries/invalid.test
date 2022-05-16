@@ -29,6 +29,6 @@ SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y', 'extra')]);
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[(NULL, 2), ([3,4], 4)]);
 
-#Keys have to be unique
-statement error
-SELECT MAP_FROM_ENTRIES(ARRAY[(1, 2), (1, 4)]);
+##Keys have to be unique
+#statement error
+#SELECT MAP_FROM_ENTRIES(ARRAY[(1, 2), (1, 4)]);

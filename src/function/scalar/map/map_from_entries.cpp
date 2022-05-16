@@ -25,7 +25,8 @@ static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 	ListVector::PushBack(values.container, key_value[1]);
 }
 
-static void CheckKeyUniqueness(VectorInfo keys) {
+// FIXME: this operation has a time complexity of O(n^2)
+void CheckKeyUniqueness(VectorInfo keys) {
 	auto end = keys.data.offset + keys.data.length;
 	auto &entries = ListVector::GetEntry(keys.container);
 	for (auto lhs = keys.data.offset; lhs < end; lhs++) {
@@ -70,7 +71,7 @@ static bool MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 	// Set the length of the key value lists
 	keys.data.length = inserted_values;
 	values.data.length = inserted_values;
-	CheckKeyUniqueness(keys);
+	// CheckKeyUniqueness(keys);
 	return true;
 }
 
