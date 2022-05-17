@@ -22,7 +22,6 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
-		// BREAKING_FIX_ME: missing category, everything is labeled STANDARD now
 		auto category = i < this->categories.size() ? this->categories[i] : TableColumnType::STANDARD;
 		auto column_info = TableColumnInfo(i, category);
 		name_map[name] = column_info;

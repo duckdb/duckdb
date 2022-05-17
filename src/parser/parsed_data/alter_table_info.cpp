@@ -204,32 +204,30 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(FieldReader &reader, string 
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 ChangeColumnTypeInfo::ChangeColumnTypeInfo(string schema_p, string table_p, string column_name, LogicalType target_type,
-                                           unique_ptr<ParsedExpression> expression, bool cascade)
+                                           unique_ptr<ParsedExpression> expression)
     : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, move(schema_p), move(table_p)), column_name(move(column_name)),
-      target_type(move(target_type)), expression(move(expression)), cascade(cascade) {
+      target_type(move(target_type)), expression(move(expression)) {
 }
 ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type, expression->Copy(),
-	                                                         cascade);
+	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(schema, name, column_name, target_type,
+	                                                         expression->Copy());
 }
 
 void ChangeColumnTypeInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteString(column_name);
 	writer.WriteSerializable(target_type);
-	writer.WriteField<bool>(cascade);
 	writer.WriteOptional(expression);
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, string schema, string table) {
 	auto column_name = reader.ReadRequired<string>();
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto cascade = reader.ReadRequired<bool>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	return make_unique<ChangeColumnTypeInfo>(move(schema), move(table), move(column_name), move(target_type),
-	                                         move(expression), cascade);
+	                                         move(expression));
 }
 
 //===--------------------------------------------------------------------===//
