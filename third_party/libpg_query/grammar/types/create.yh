@@ -35,6 +35,7 @@
 %type <defelt> reloption_elem
 %type <list> columnList columnList_opt_comma
 %type <typnam> func_type
+%type <constr> GeneratedColumnType opt_GeneratedColumnType
 %type <node> ConstraintElem GeneratedConstraintElem
 %type <list> TableElementList
 %type <ival> key_match

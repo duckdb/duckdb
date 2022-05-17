@@ -30,7 +30,7 @@ unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::P
 unique_ptr<ParsedExpression> Transformer::TransformGeneratedExpression(duckdb_libpgquery::PGListCell *cell) {
 	auto constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
 	D_ASSERT(constraint);
-	D_ASSERT(constraint->contype == duckdb_libpgquery::PG_CONSTR_GENERATED);
+	D_ASSERT(constraint->contype == duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL);
 	return TransformExpression(constraint->raw_expr);
 }
 

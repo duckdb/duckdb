@@ -51,7 +51,8 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	if (cdef->colname) {
 		colname = cdef->colname;
 	}
-	LogicalType target_type = TransformTypeName(cdef->typeName);
+	bool optional_type = cdef->category == duckdb_libpgquery::COL_GENERATED;
+	LogicalType target_type = TransformTypeName(cdef->typeName, optional_type);
 	if (cdef->collClause) {
 		if (target_type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");

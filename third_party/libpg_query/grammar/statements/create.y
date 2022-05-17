@@ -216,6 +216,16 @@ ColConstraintElem:
 				}
 		;
 
+GeneratedColumnType:
+			VIRTUAL { $$ = PG_CONSTR_GENERATED_VIRTUAL; }
+			| STORED { $$ = PG_CONSTR_GENERATED_STORED; }
+			;
+
+opt_GeneratedColumnType:
+			GeneratedColumnType { $$ = $1 }
+			| /* EMPTY */ { $$ = PG_CONSTR_GENERATED_VIRTUAL; }
+			;
+
 GeneratedConstraintElem:
 			GENERATED generated_when AS IDENTITY_P OptParenthesizedSeqOptList
 				{
@@ -226,10 +236,10 @@ GeneratedConstraintElem:
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| GENERATED generated_when AS '(' a_expr ')' VIRTUAL
+			| GENERATED generated_when AS '(' a_expr ')' opt_GeneratedColumnType
 				{
 					PGConstraint *n = makeNode(PGConstraint);
-					n->contype = PG_CONSTR_GENERATED;
+					n->contype = $7;
 					n->generated_when = $2;
 					n->raw_expr = $5;
 					n->cooked_expr = NULL;
@@ -249,10 +259,10 @@ GeneratedConstraintElem:
 
 					$$ = (PGNode *)n;
 				}
-			| AS '(' a_expr ')' VIRTUAL
+			| AS '(' a_expr ')' opt_GeneratedColumnType
 				{
 					PGConstraint *n = makeNode(PGConstraint);
-					n->contype = PG_CONSTR_GENERATED;
+					n->contype = $5;
 					n->generated_when = PG_ATTRIBUTE_IDENTITY_ALWAYS;
 					n->raw_expr = $3;
 					n->cooked_expr = NULL;
@@ -409,6 +419,7 @@ ConstraintAttributeElem:
 columnDef:	ColId Typename ColQualList
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
+					n->category = COL_STANDARD;
 					n->colname = $1;
 					n->typeName = $2;
 					n->inhcount = 0;
@@ -428,6 +439,7 @@ columnDef:	ColId Typename ColQualList
 			ColId opt_Typename GeneratedConstraintElem ColQualList
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
+					n->category = COL_GENERATED;
 					n->colname = $1;
 					n->typeName = $2;
 					n->inhcount = 0;

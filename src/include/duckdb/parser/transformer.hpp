@@ -227,7 +227,7 @@ private:
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root);
 
 	//! Transform a Postgres TypeName string into a LogicalType
-	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
+	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name, bool optional = false);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode &result);

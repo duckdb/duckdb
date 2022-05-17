@@ -492,6 +492,12 @@ typedef struct PGRangeFunction {
 	PGNode *sample;   /* sample options (if any) */
 } PGRangeFunction;
 
+/* Category of the column */
+typedef enum ColumnCategory {
+	COL_STANDARD,	/* regular column */
+	COL_GENERATED	/* generated (VIRTUAL|STORED) */
+}	ColumnCategory;
+
 /*
  * PGColumnDef - column definition (used in various creates)
  *
@@ -512,7 +518,7 @@ typedef struct PGRangeFunction {
  */
 
 typedef struct PGColumnDef {
-	PGNodeTag type;
+	PGNodeTag type;               /* ENSURES COMPATIBILITY WITH 'PGNode' - has to be first line */
 	char *colname;                /* name of column */
 	PGTypeName *typeName;         /* type of column */
 	int inhcount;                 /* number of times column is inherited */
@@ -531,6 +537,7 @@ typedef struct PGColumnDef {
 	PGList *constraints;          /* other constraints on column */
 	PGList *fdwoptions;           /* per-column FDW options */
 	int location;                 /* parse location, or -1 if none/unknown */
+	ColumnCategory category;	  /* category of the column */
 } PGColumnDef;
 
 /*
@@ -1580,7 +1587,9 @@ typedef enum PGConstrType /* types of constraints */
   PG_CONSTR_ATTR_DEFERRED,
   PG_CONSTR_ATTR_IMMEDIATE,
   PG_CONSTR_COMPRESSION,
-  PG_CONSTR_GENERATED} PGConstrType;
+  PG_CONSTR_GENERATED_VIRTUAL,
+  PG_CONSTR_GENERATED_STORED,
+  } PGConstrType;
 
 /* Foreign key action codes */
 #define PG_FKCONSTR_ACTION_NOACTION 'a'

@@ -1055,13 +1055,14 @@ typedef union YYSTYPE
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 1529 of yacc.c.  */
-#line 1065 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 1066 "third_party/libpg_query/grammar/grammar_out.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

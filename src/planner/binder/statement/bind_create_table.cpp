@@ -208,6 +208,9 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
 			                      col.name);
 		}
+		if (col.type == LogicalType::ANY) {
+			col.type = bound_expression->return_type;
+		}
 		if (bound_expression->return_type != col.type) {
 			throw BinderException(
 			    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
