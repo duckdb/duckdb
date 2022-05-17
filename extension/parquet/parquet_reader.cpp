@@ -625,7 +625,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
 		auto flags = FileFlags::FILE_FLAGS_READ;
-		
+
 		if (!file_handle->OnDiskFile() && file_handle->CanSeek()) {
 			state.prefetch_mode = true;
 			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
