@@ -8,3 +8,11 @@ CREATE TABLE test (
     bar GENERATED ALWAYS AS (foo+1) VIRTUAL,
     foobar INTEGER DEFAULT 5
 );
+
+statement ok
+INSERT INTO test(foo) VALUES (1);
+
+query I
+SELECT bar FROM test
+----
+2

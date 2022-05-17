@@ -2968,17 +2968,6 @@ expr_list_opt_comma:
 				}
 		;
 
-opt_expr_list:
-			expr_list
-				{
-					$$ = $1;
-				}
-			| /* empty */
-				{
-					$$ = NULL;
-				}
-		;
-
 opt_expr_list_opt_comma:
 			expr_list_opt_comma
 				{
