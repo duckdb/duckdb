@@ -7,7 +7,7 @@ cd tools/nodejs
 make clean
 ./configure
 
-npm install --build-from-source
+npm install --build-from-source --unsafe-perms
 npm test
 export PATH=$(npm bin):$PATH
 node-pre-gyp package testpackage testbinary
