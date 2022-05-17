@@ -86,6 +86,7 @@ jobs:
         yum install -y gcc gcc-c++ cmake make
         yum install -y epel-release
         yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker
 
     - name: Install AWS CLI
       run: |
