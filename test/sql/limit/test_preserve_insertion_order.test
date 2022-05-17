@@ -1,0 +1,30 @@
+# name: test/sql/limit/test_preserve_insertion_order.test
+# description: Test limit with preserve insertion order disabled
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET preserve_insertion_order=false
+
+statement ok
+CREATE TABLE integers AS SELECT 1 FROM range(1000000)
+
+query I
+SELECT * FROM integers LIMIT 5
+----
+1
+1
+1
+1
+1
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 500000
+----
+1
+1
+1
+1
+1
