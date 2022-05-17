@@ -45,4 +45,13 @@ void PhysicalUnion::BuildPipelines(Executor &executor, Pipeline &current, Pipeli
 	children[1]->BuildPipelines(executor, *pipeline_ptr, state);
 }
 
+vector<const PhysicalOperator *> PhysicalUnion::GetSources() const {
+	vector<const PhysicalOperator *> result;
+	for (auto &child : children) {
+		auto child_sources = child->GetSources();
+		result.insert(result.end(), child_sources.begin(), child_sources.end());
+	}
+	return result;
+}
+
 } // namespace duckdb

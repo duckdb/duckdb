@@ -198,7 +198,10 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				}
 			}
 			if (!pipeline.operators.empty()) {
-				Execute(source_chunk, result);
+				auto state = Execute(source_chunk, result);
+				if (state == OperatorResultType::FINISHED) {
+					break;
+				}
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -282,6 +285,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				in_process_operators.push(current_idx);
 			} else if (result == OperatorResultType::FINISHED) {
 				D_ASSERT(current_chunk.size() == 0);
+				finished_processing = true;
 				return OperatorResultType::FINISHED;
 			}
 			current_chunk.Verify();

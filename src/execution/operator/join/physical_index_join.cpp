@@ -210,4 +210,8 @@ void PhysicalIndexJoin::BuildPipelines(Executor &executor, Pipeline &current, Pi
 	children[0]->BuildPipelines(executor, current, state);
 }
 
+vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {
+	return children[0]->GetSources();
+}
+
 } // namespace duckdb

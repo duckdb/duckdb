@@ -147,21 +147,34 @@ void PhysicalOperator::BuildPipelines(Executor &executor, Pipeline &current, Pip
 	}
 }
 
-const PhysicalOperator &PhysicalOperator::GetSource() const {
+vector<const PhysicalOperator *> PhysicalOperator::GetSources() const {
+	vector<const PhysicalOperator *> result;
 	if (IsSink()) {
 		D_ASSERT(children.size() == 1);
-		return *this;
+		result.push_back(this);
+		return result;
 	} else {
 		if (children.empty()) {
 			// source
-			return *this;
+			result.push_back(this);
+			return result;
 		} else {
 			if (children.size() != 1) {
 				throw InternalException("Operator not supported in GetSource");
 			}
-			return children[0]->GetSource();
+			return children[0]->GetSources();
 		}
 	}
+}
+
+void PhysicalOperator::Verify() {
+#ifdef DEBUG
+	auto sources = GetSources();
+	D_ASSERT(!sources.empty());
+	for (auto &child : children) {
+		child->Verify();
+	}
+#endif
 }
 
 } // namespace duckdb

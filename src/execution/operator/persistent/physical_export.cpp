@@ -181,4 +181,8 @@ void PhysicalExport::BuildPipelines(Executor &executor, Pipeline &current, Pipel
 	PhysicalOperator::BuildPipelines(executor, current, state);
 }
 
+vector<const PhysicalOperator *> PhysicalExport::GetSources() const {
+	return {this};
+}
+
 } // namespace duckdb

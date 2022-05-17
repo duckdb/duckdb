@@ -64,6 +64,7 @@ public:
 
 public:
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	vector<const PhysicalOperator *> GetSources() const override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;

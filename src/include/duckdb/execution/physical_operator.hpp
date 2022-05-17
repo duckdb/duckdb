@@ -119,6 +119,8 @@ public:
 		return false;
 	}
 
+	virtual void Verify();
+
 public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
@@ -194,7 +196,7 @@ public:
 
 public:
 	// Pipeline construction
-	virtual const PhysicalOperator &GetSource() const;
+	virtual vector<const PhysicalOperator *> GetSources() const;
 
 	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
 	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);

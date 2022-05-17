@@ -49,8 +49,12 @@ void PhysicalJoin::BuildPipelines(Executor &executor, Pipeline &current, Pipelin
 	PhysicalJoin::BuildJoinPipelines(executor, current, state, *this);
 }
 
-const PhysicalOperator &PhysicalJoin::GetSource() const {
-	return children[0]->GetSource();
+vector<const PhysicalOperator *> PhysicalJoin::GetSources() const {
+	auto result = children[0]->GetSources();
+	if (IsSource()) {
+		result.push_back(this);
+	}
+	return result;
 }
 
 } // namespace duckdb

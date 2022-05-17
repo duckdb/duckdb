@@ -18,6 +18,7 @@ public:
 
 public:
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+	vector<const PhysicalOperator *> GetSources() const override;
 };
 
 } // namespace duckdb

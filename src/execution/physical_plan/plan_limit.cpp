@@ -17,8 +17,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 		                                            move(op.offset), op.estimated_cardinality, true);
 	} else {
 		// maintaining insertion order is important
-		auto &source = plan->GetSource();
-		if (source.SupportsBatchIndex()) {
+		auto sources = plan->GetSources();
+		bool all_sources_support_batch_index = true;
+		for (auto &source : sources) {
+			if (!source->SupportsBatchIndex()) {
+				all_sources_support_batch_index = false;
+				break;
+			}
+		}
+
+		if (all_sources_support_batch_index) {
 			// source supports batch index: use streaming limit
 			limit = make_unique<PhysicalLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
 			                                   move(op.offset), op.estimated_cardinality);
