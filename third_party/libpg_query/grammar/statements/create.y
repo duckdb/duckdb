@@ -257,6 +257,7 @@ GeneratedConstraintElem:
 					n->raw_expr = $3;
 					n->cooked_expr = NULL;
 					n->location = @1;
+					$$ = (PGNode *)n;
 				}
 	    ;
 
