@@ -27,9 +27,7 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 				return expr;
 			}
 		}
-		auto cast = make_unique<BoundCastExpression>(move(expr), target_type);
-		cast->try_cast = try_cast;
-		return cast;
+		return make_unique<BoundCastExpression>(move(expr), target_type, try_cast);
 	}
 	return expr;
 }
