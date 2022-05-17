@@ -17,52 +17,12 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-
-#include <utility>
+#include "duckdb/storage/checkpoint/rle_sort.hpp"
 
 namespace duckdb {
 
 constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
 constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
-
-struct RowGroupSortBindData : public FunctionData {
-	RowGroupSortBindData(vector<LogicalType> types_p, vector<column_t> indexes_p, DatabaseInstance &db_p);
-	~RowGroupSortBindData() override;
-
-	vector<LogicalType> types;
-	vector<column_t> indexes;
-	
-	DatabaseInstance &db;
-	BufferManager &buffer_manager;
-	unique_ptr<GlobalSortState> global_sort_state;
-	RowLayout payload_layout;
-	vector<BoundOrderByNode> orders;
-
-	unique_ptr<FunctionData> Copy() override;
-};
-
-RowGroupSortBindData::RowGroupSortBindData(vector<LogicalType> types_p, vector<column_t> indexes_p, DatabaseInstance &db_p)
-    : types(types_p), indexes(indexes_p), db(db_p), buffer_manager(BufferManager::GetBufferManager(db_p)) {
-
-	// create BoundOrderByNode per column to sort
-	for (idx_t i = 0; i < types.size(); ++i) {
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, 
-		                    make_unique<BoundReferenceExpression>(types[i], indexes[i]));
-	}
-
-	// create payload layout
-	payload_layout.Initialize(types);
-
-	// initialize the global sort state	
-	global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
-}
-
-unique_ptr<FunctionData> RowGroupSortBindData::Copy() {
-	return make_unique<RowGroupSortBindData>(types, indexes, db);
-}
-
-RowGroupSortBindData::~RowGroupSortBindData() {
-}
 
 RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, idx_t start, idx_t count)
     : SegmentBase(start, count), db(db), table_info(table_info) {
@@ -373,7 +333,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT) {
 			auto &transaction_manager = TransactionManager::Get(db);
 			auto lowest_active_start = transaction_manager.LowestActiveStart();
-			auto lowest_active_id = transaction_manager.LowestActiveId()-1;
+			auto lowest_active_id = transaction_manager.LowestActiveId() - 1;
 
 			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
 			                                               valid_sel, max_count);
@@ -382,8 +342,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				NextVector(state);
 				continue;
 			}
-		}
-		else {
+		} else {
 			count = max_count;
 		}
 		if (count == max_count && !table_filters) {
@@ -500,7 +459,8 @@ void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableS
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(nullptr, state, result);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT>(nullptr, state, result);
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT>(nullptr, state,
+		                                                                                            result);
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
@@ -545,7 +505,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 					result.data[i].Sequence(this->start + current_row, 1);
 				} else {
 					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-												   ALLOW_UPDATES);
+					                               ALLOW_UPDATES);
 				}
 			}
 		} else {
@@ -603,9 +563,8 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 						}
 					} else {
 						D_ASSERT(!transaction);
-						columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i],
-															 result.data[i], sel, approved_tuple_count,
-															 ALLOW_UPDATES);
+						columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+						                                     sel, approved_tuple_count, ALLOW_UPDATES);
 					}
 				}
 			}
@@ -629,99 +588,6 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 	return true;
 }
 
-void RowGroup::SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids, DataTable &data_table) {
-	vector<LogicalType> key_types;
-
-	// Initialize the scan states
-	TableScanState scan_state;
-	scan_state.column_ids = column_ids;
-	scan_state.max_row = count;
-	idx_t old_count = this->count;
-
-	// Save cardinalities as a tuple - (cardinality_count, column_index)
-	vector<std::tuple<idx_t, idx_t>> cardinalities;
-
-	// Calculate the column cardinalities
-//	CalculateCardinalitiesPerColumn(types, scan_state, cardinalities);
-
-	// Get types for the key column
-//	for (auto i : cardinalities) {
-//		// Retrieve the index from the sorted tuples
-//		key_types.push_back(types[std::get<1>(i)]);
-//	}
-
-	// Initialize DataChunk for key columns and payload (the entire RowGroup)
-//	DataChunk keys;
-	DataChunk payload;
-//	keys.Initialize(key_types);
-	payload.Initialize(types);
-
-	// Initialize the sorting states
-	RowGroupSortBindData sort_state(types, column_ids, db);
-	auto &global_sort_state = *sort_state.global_sort_state;
-	LocalSortState local_sort_state;
-	local_sort_state.Initialize(global_sort_state, global_sort_state.buffer_manager);
-	idx_t new_count = 0;
-
-	// Scan the RowGroup into the DataChunks
-	InitializeScan(scan_state.row_group_scan_state);
-	scan_state.row_group_scan_state.max_row = count;
-	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE < scan_state.row_group_scan_state.max_row) {
-		ScanCommitted(scan_state.row_group_scan_state, payload, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT);
-		payload.Normalify();
-		// Select key columns from lowest to highest cardinality
-//		for (idx_t i = 0; i < cardinalities.size(); i++) {
-//			keys.data[i].Reference(payload.data[std::get<1>(cardinalities[i])]);
-//			keys.SetCardinality(payload.size());
-//		}
-		local_sort_state.SinkChunk(payload, payload);
-		new_count += payload.size();
-	}
-
-	if (new_count == 0) {
-		return;
-	}
-
-	// add local state to global state, which sorts the data
-	global_sort_state.AddLocalState(local_sort_state);
-	global_sort_state.PrepareMergePhase();
-
-	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-		columns[column_idx]->CleanPersistentSegments();
-	}
-
-	// scan the sorted row data and add to the sorted row group
-	int64_t count_change = new_count - old_count;
-	data_table.rows_changed += count_change;
-
-	auto sorted_rowgroup = make_unique<RowGroup>(db, table_info, data_table.prev_end, new_count);
-	sorted_rowgroup->InitializeEmpty(types);
-
-	TableAppendState append_state;
-	sorted_rowgroup->InitializeAppendInternal(append_state.row_group_append_state, new_count);
-
-	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-	DataChunk result_chunk;
-	result_chunk.Initialize(types);
-	result_chunk.SetCardinality(0);
-	for (;;) {
-		scanner.Scan(result_chunk);
-		if (result_chunk.size() == 0) {
-			break;
-		}
-		sorted_rowgroup->Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
-	}
-
-	data_table.prev_end += new_count;
-
-	this->columns = sorted_rowgroup->columns;
-	this->stats = sorted_rowgroup->stats;
-	this->version_info = sorted_rowgroup->version_info;
-	this->count = new_count;
-	this->start = sorted_rowgroup->start;
-	this->Verify();
-}
-
 void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
                                                vector<std::tuple<idx_t, idx_t>> &cardinalities) {
 	// Scan the RowGroup to calculate cardinality - initialize a HyperLogLog for each column and add values
@@ -731,12 +597,15 @@ void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, Table
 	InitializeScan(scan_state.row_group_scan_state);
 
 	// Check if we need to scan
-	if (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE >= scan_state.row_group_scan_state.max_row) {
+	if (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE >=
+	    scan_state.row_group_scan_state.max_row) {
 		return;
 	}
 
-	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE < scan_state.row_group_scan_state.max_row) {
-		ScanCommitted(scan_state.row_group_scan_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE <
+	       scan_state.row_group_scan_state.max_row) {
+		ScanCommitted(scan_state.row_group_scan_state, result,
+		              TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 		result.Normalify();
 		for (idx_t i = 0; i < columns.size(); i++) {
 			logs[i].Add(result.data[i].GetData(), sizeof(types[i].InternalType()));
@@ -961,39 +830,125 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 	stats[column_idx]->statistics->Merge(other);
 }
 
+void RowGroup::ScanSegments(const std::function<void(Vector &, idx_t)> &callback, Vector &intermediate,
+                            idx_t column_idx) {
+	Vector scan_vector(intermediate.GetType(), nullptr);
+	for (auto segment = (ColumnSegment *)columns[column_idx]->data.root_node.get(); segment;
+	     segment = (ColumnSegment *)segment->next.get()) {
+		ColumnScanState scan_state;
+		scan_state.current = segment;
+		segment->InitializeScan(scan_state);
+
+		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
+			scan_vector.Reference(intermediate);
+
+			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_state.row_index = segment->start + base_row_index;
+
+			columns[column_idx]->CheckpointScan(segment, scan_state, start, count, scan_vector);
+
+			callback(scan_vector, count);
+		}
+	}
+}
+bool CompressionForTypeExists(PhysicalType type) {
+	if (type == PhysicalType::BOOL || type == PhysicalType::INT8 || type == PhysicalType::INT16 ||
+	    type == PhysicalType::INT32 || type == PhysicalType::INT64 || type == PhysicalType::INT128 ||
+	    type == PhysicalType::UINT8 || type == PhysicalType::UINT16 || type == PhysicalType::UINT32 ||
+	    type == PhysicalType::UINT64 || type == PhysicalType::FLOAT || type == PhysicalType::DOUBLE ||
+	    type == PhysicalType::LIST || type == PhysicalType::INTERVAL || type == PhysicalType::BIT ||
+	    type == PhysicalType::VARCHAR) {
+		return true;
+	}
+	return false;
+}
+
+CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
+                                                      CompressionType compression_type) {
+	if (compression_type != CompressionType::COMPRESSION_AUTO) {
+		return compression_type;
+	}
+	auto &config = DBConfig::GetConfig(db);
+	if (config.force_compression != CompressionType::COMPRESSION_AUTO) {
+		return config.force_compression;
+	}
+	if (!CompressionForTypeExists(columns[col_idx]->type.InternalType())) {
+		return CompressionType::COMPRESSION_AUTO;
+	}
+	vector<CompressionFunction *> compression_functions =
+	    db.config.GetCompressionFunctions(columns[col_idx]->type.InternalType());
+	D_ASSERT(!compression_functions.empty());
+
+	// set up the analyze states for each compression method
+	vector<unique_ptr<AnalyzeState>> analyze_states;
+	analyze_states.reserve(compression_functions.size());
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			analyze_states.push_back(nullptr);
+			continue;
+		}
+		analyze_states.push_back(
+		    compression_functions[i]->init_analyze(*columns[col_idx], columns[col_idx]->type.InternalType()));
+	}
+	Vector intermediate(columns[col_idx]->type, true, false);
+	// scan over all the segments and run the analyze step
+	ScanSegments(
+	    [&](Vector &scan_vector, idx_t count) {
+		    for (idx_t i = 0; i < compression_functions.size(); i++) {
+			    if (!compression_functions[i]) {
+				    continue;
+			    }
+			    auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			    if (!success) {
+				    // could not use this compression function on this data set
+				    // erase it
+				    compression_functions[i] = nullptr;
+				    analyze_states[i].reset();
+			    }
+		    }
+	    },
+	    intermediate, col_idx);
+
+	// now that we have passed over all the data, we need to figure out the best method
+	// we do this using the final_analyze method
+	unique_ptr<AnalyzeState> state;
+	compression_idx = DConstants::INVALID_INDEX;
+	idx_t best_score = NumericLimits<idx_t>::Maximum();
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			continue;
+		}
+		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+		if (score < best_score) {
+			compression_idx = i;
+			best_score = score;
+			state = move(analyze_states[i]);
+		}
+	}
+	//	return state;
+	return compression_functions[compression_idx]->type;
+}
+
+vector<CompressionType> RowGroup::DetectBestCompressionMethodTable(TableDataWriter &writer) {
+	vector<CompressionType> table_compression;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		idx_t compression_idx = 0;
+		CompressionType compression_type = writer.GetColumnCompressionType(i);
+		table_compression.push_back(DetectBestCompressionMethod(compression_idx, i, compression_type));
+	}
+	return table_compression;
+}
+
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
                                      DataTable &data_table) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
-	vector<LogicalType> types;
-	vector<column_t> column_ids;
-//	bool any_deletions = false;
-//	vector<idx_t> deletion_ids;
-
-
-	if (db.config.force_compression_sorting && !columns.empty() && count != 0 && table_info.indexes.Empty()) {
-		bool contains_illegal_types = false;
-
-		// collect logical types by iterating the columns
-		for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
-			auto &column = columns[column_idx];
-			auto type_id = column->type.id();
-
-			if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::MAP ||
-			    type_id == LogicalTypeId::TABLE || type_id == LogicalTypeId::ENUM ||
-			    type_id == LogicalTypeId::AGGREGATE_STATE || type_id == LogicalTypeId::VARCHAR ||
-			    type_id == LogicalTypeId::BLOB || type_id == LogicalTypeId::INTERVAL ||
-			    type_id == LogicalTypeId::UUID) {
-				contains_illegal_types = true;
-				break;
-			}
-			types.push_back(column->type);
-			column_ids.push_back(column->column_index);
-		}
-
-		if (!contains_illegal_types && !columns.empty() && count != 0) {
-			SortColumns(types, column_ids, data_table);
-		}
+	// FIXME: This shouldn't be executed again in the column checkpointer
+	{
+		// Sorts columns to optimize RLE compression
+		auto table_compression = DetectBestCompressionMethodTable(writer);
+		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
+		rle_checkpoint_sort.Sort();
 	}
 
 	// checkpoint the individual columns of the row group

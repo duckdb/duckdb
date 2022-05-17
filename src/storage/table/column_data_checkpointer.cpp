@@ -55,7 +55,8 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
-void ForceCompression(vector<CompressionFunction *> &compression_functions, CompressionType compression_type) {
+void ColumnDataCheckpointer::ForceCompression(vector<CompressionFunction *> &compression_functions,
+                                              CompressionType compression_type) {
 	// On of the force_compression flags has been set
 	// check if this compression method is available
 	bool found = false;
@@ -151,15 +152,13 @@ void ColumnDataCheckpointer::WriteToDisk() {
 			}
 		}
 	}
-	
+
 	// TODO: Scan column to DataChunk then update each Segment like in RLE::WriteValue
-	ScanSegments(
-	    [&](Vector &scan_vector, idx_t count) {
-		    // TODO: Rewrite when the scan vector does a callback
-		    VectorData vdata;
-		    scan_vector.Orrify(count, vdata);
-		    
-	    });
+	ScanSegments([&](Vector &scan_vector, idx_t count) {
+		// TODO: Rewrite when the scan vector does a callback
+		VectorData vdata;
+		scan_vector.Orrify(count, vdata);
+	});
 
 	// now we need to write our segment
 	// we will first run an analyze step that determines which compression function to use
