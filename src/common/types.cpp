@@ -43,8 +43,8 @@ hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }
 
-void LogicalType::setExtraInfo(shared_ptr<ExtraTypeInfo> type_info) {
-	type_info_ = type_info;
+void LogicalType::SetExtraInfo(shared_ptr<ExtraTypeInfo> type_info) {
+	type_info_ = move(type_info);
 }
 
 PhysicalType LogicalType::GetInternalType() {
@@ -732,7 +732,7 @@ enum class ExtraTypeInfoType : uint8_t {
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
 	}
-	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(alias) {
+	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(move(alias)) {
 	}
 	virtual ~ExtraTypeInfo() {
 	}
@@ -763,7 +763,7 @@ void LogicalType::SetAlias(LogicalType &type, string &alias) {
 	auto info = type.AuxInfo();
 	if (!info) {
 		auto new_info = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, alias);
-		type.setExtraInfo(move(new_info));
+		type.SetExtraInfo(move(new_info));
 	} else {
 		D_ASSERT(info);
 		((ExtraTypeInfo &)*info).alias = alias;
@@ -784,7 +784,7 @@ string LogicalType::GetAlias(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 struct DecimalTypeInfo : public ExtraTypeInfo {
 	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO, alias), width(width_p), scale(scale_p) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO, move(alias)), width(width_p), scale(scale_p) {
 	}
 
 	uint8_t width;
@@ -807,7 +807,7 @@ public:
 		writer.WriteField<uint8_t>(scale);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, string alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string alias) {
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale, alias);
@@ -838,7 +838,7 @@ LogicalType LogicalType::DECIMAL(int width, int scale) {
 //===--------------------------------------------------------------------===//
 struct StringTypeInfo : public ExtraTypeInfo {
 	explicit StringTypeInfo(string collation_p, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO, alias), collation(move(collation_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO, move(alias)), collation(move(collation_p)) {
 	}
 
 	string collation;
@@ -853,7 +853,7 @@ public:
 		writer.WriteString(collation);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, string alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string alias) {
 		auto collation = reader.ReadRequired<string>();
 		return make_shared<StringTypeInfo>(move(collation), alias);
 	}
@@ -880,7 +880,7 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 //===--------------------------------------------------------------------===//
 struct ListTypeInfo : public ExtraTypeInfo {
 	explicit ListTypeInfo(LogicalType child_type_p, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO, alias), child_type(move(child_type_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO, move(alias)), child_type(move(child_type_p)) {
 	}
 
 	LogicalType child_type;
@@ -901,7 +901,7 @@ public:
 		writer.WriteSerializable(child_type);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, string alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string alias) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_shared<ListTypeInfo>(move(child_type), alias);
 	}
@@ -924,7 +924,7 @@ LogicalType LogicalType::LIST(LogicalType child) {
 //===--------------------------------------------------------------------===//
 struct StructTypeInfo : public ExtraTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO, alias), child_types(move(child_types_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO, move(alias)), child_types(move(child_types_p)) {
 	}
 
 	child_list_t<LogicalType> child_types;
@@ -950,7 +950,7 @@ public:
 		}
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, string alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string alias) {
 		child_list_t<LogicalType> child_list;
 		auto child_types_size = reader.ReadRequired<uint32_t>();
 		auto &source = reader.GetSource();
@@ -965,7 +965,7 @@ public:
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, alias), state_type(move(state_type_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, move(alias)), state_type(move(state_type_p)) {
 	}
 
 	aggregate_state_t state_type;
@@ -994,7 +994,7 @@ public:
 		}
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, string alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string alias) {
 		auto &source = reader.GetSource();
 
 		auto function_name = reader.ReadRequired<string>();
@@ -1094,7 +1094,7 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 struct UserTypeInfo : public ExtraTypeInfo {
 	explicit UserTypeInfo(string name_p, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO, alias), user_type_name(move(name_p)) {
+	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO, move(alias)), user_type_name(move(name_p)) {
 	}
 
 	string user_type_name;
@@ -1115,7 +1115,7 @@ public:
 		writer.WriteString(user_type_name);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, string alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string alias) {
 		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(move(enum_name), alias);
 	}
@@ -1138,7 +1138,7 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 //===--------------------------------------------------------------------===//
 struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size, string alias = "")
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO, alias), enum_name(move(enum_name_p)),
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO, move(alias)), enum_name(move(enum_name_p)),
 	      values_insert_order(values_insert_order_p), size(size) {
 	}
 	string enum_name;
@@ -1183,7 +1183,7 @@ public:
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p,
-	                               string alias = "")
+	                               const string alias = "")
 	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p, alias) {
 		for (idx_t count = 0; count < size_p; count++) {
 			values[values_insert_order_p.GetValue(count).ToString()] = count;
