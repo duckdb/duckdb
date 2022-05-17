@@ -90,7 +90,7 @@
 
 
 
-%type <typnam>	Typename SimpleTypename ConstTypename
+%type <typnam>	Typename SimpleTypename ConstTypename opt_Typename
 				GenericType Numeric opt_float
 				Character ConstCharacter
 				CharacterWithLength CharacterWithoutLength

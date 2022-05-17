@@ -1,0 +1,10 @@
+# name: test/sql/generated_columns/virtual/implicit.test
+# description: Test implicit typing of generated columns
+# group: [virtual]
+
+statement ok
+CREATE TABLE test (
+    foo INTEGER,
+    bar GENERATED ALWAYS AS (foo+1) VIRTUAL,
+    foobar INTEGER DEFAULT 5
+);

@@ -510,6 +510,7 @@ typedef struct PGRangeFunction {
  * the item and set raw_default instead.  PG_CONSTR_DEFAULT items
  * should not appear in any subsequent processing.
  */
+
 typedef struct PGColumnDef {
 	PGNodeTag type;
 	char *colname;                /* name of column */

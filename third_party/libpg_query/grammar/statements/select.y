@@ -1213,6 +1213,10 @@ colid_type_list:
 
 RowOrStruct: ROW | STRUCT
 
+opt_Typename:
+			Typename						{ $$ = $1; }
+			| /*EMPTY*/						{ $$ = NULL; }
+
 Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $1;

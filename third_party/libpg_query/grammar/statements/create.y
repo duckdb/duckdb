@@ -401,7 +401,7 @@ ConstraintAttributeElem:
 
 
 
-columnDef:	ColId Typename create_generic_options ColQualList
+columnDef:	ColId opt_Typename ColQualList
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
 					n->colname = $1;
@@ -414,12 +414,11 @@ columnDef:	ColId Typename create_generic_options ColQualList
 					n->raw_default = NULL;
 					n->cooked_default = NULL;
 					n->collOid = InvalidOid;
-					n->fdwoptions = $3;
-					SplitColQualList($4, &n->constraints, &n->collClause,
+					SplitColQualList($3, &n->constraints, &n->collClause,
 									 yyscanner);
 					n->location = @1;
 					$$ = (PGNode *)n;
-				}
+			}
 		;
 
 
