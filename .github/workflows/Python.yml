@@ -87,20 +87,6 @@ jobs:
         yum install -y epel-release
         yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
 
-    - name: Install Git 2.18.5
-      shell: bash
-      run: |
-        wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
-        tar xvf v2.18.5.tar.gz
-        cd git-2.18.5
-        make
-        make prefix=/usr install
-        git --version
-
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
     - name: Install AWS CLI
       run: |
         python3 -m pip install awscli
@@ -136,6 +122,20 @@ jobs:
         cd openssl-1.1.1k
         make
         make install
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install Git 2.18.5
+      shell: bash
+      run: |
+        wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
+        tar xvf v2.18.5.tar.gz
+        cd git-2.18.5
+        make
+        make prefix=/usr install
+        git --version
 
     - name: Version Check
       run: |
