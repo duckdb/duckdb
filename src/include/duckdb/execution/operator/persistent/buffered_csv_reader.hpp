@@ -17,7 +17,6 @@
 
 #include <sstream>
 #include <queue>
-#include <condition_variable>
 
 namespace duckdb {
 struct CopyInfo;
@@ -147,9 +146,6 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
-	//! During parsing of files with UseLargeBuffers() == true, we switch to this larger buffer size
-	//! Note: total memory size will be 2x(INITIAL_BUFFER_SIZE_MAX+maximum_line_size) due to the async prefetching
-	static constexpr idx_t INITIAL_BUFFER_SIZE_MAX = 1 << 25; // 32MB
 	ParserMode mode;
 
 public:
@@ -171,13 +167,6 @@ public:
 	idx_t buffer_size;
 	idx_t position;
 	idx_t start = 0;
-
-	unique_ptr<char[]> read_ahead_buffer;
-	idx_t ra_buffer_size;
-	bool ra_is_eof = false;
-	bool ra_fetch_in_progress = false;
-	std::mutex ra_fetch_lock;
-	std::condition_variable ra_fetch_cv;
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
