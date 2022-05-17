@@ -40,13 +40,6 @@ class TestArrowIntegration(object):
         if not can_run:
             return
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','unsigned.parquet')
-        data = (pyarrow.array([1,2,3,4,5,255], type=pyarrow.uint8()),pyarrow.array([1,2,3,4,5,65535], \
-            type=pyarrow.uint16()),pyarrow.array([1,2,3,4,5,4294967295], type=pyarrow.uint32()),\
-                pyarrow.array([1,2,3,4,5,18446744073709551615], type=pyarrow.uint64()))
-
-        tbl = pyarrow.Table.from_arrays([data[0],data[1],data[2],data[3]],['a','b','c','d'])
-        pyarrow.parquet.write_table(tbl, parquet_filename)
-
         cols = 'a, b, c, d'
 
         unsigned_parquet_table = pyarrow.parquet.read_table(parquet_filename)
