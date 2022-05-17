@@ -12,7 +12,7 @@ retain_count = 3
 pypi_username = "hfmuehleisen"
 pypi_password = os.getenv("PYPI_PASSWORD", "")
 if pypi_password == "":
-	print('need Hannes\' PyPI password in PYPI_PASSWORD env variable')
+	print(f'need {pypi_username}\' PyPI password in PYPI_PASSWORD env variable')
 	exit(0)
 
 ctx = ssl.create_default_context()

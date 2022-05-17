@@ -377,3 +377,21 @@ jobs:
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           python setup.py install --user
           (cd tests/ && python -m pytest)
+
+   linux-release-cleanup:
+      name: PyPi Release Cleanup
+      runs-on: ubuntu-20.04
+      env:
+        PYPI_PASSWORD: ${{secrets.PYPI_PASSWORD}}
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Cleanup Releases
+        run: python3 scripts/pypi_cleanup.py
