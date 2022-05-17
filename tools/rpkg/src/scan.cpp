@@ -79,8 +79,10 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, Tabl
 			auto levels = r.Protect(GET_LEVELS(coldata));
 			idx_t size = LENGTH(levels);
 			Vector duckdb_levels(LogicalType::VARCHAR, size);
+			auto str_ptr = FlatVector::GetData<string_t>(duckdb_levels);
 			for (idx_t level_idx = 0; level_idx < size; level_idx++) {
-				duckdb_levels.SetValue(level_idx, string(CHAR(STRING_ELT(levels, level_idx))));
+				auto csexp = STRING_ELT(levels, level_idx);
+				str_ptr[level_idx] = StringVector::AddStringOrBlob(duckdb_levels, CHAR(csexp), LENGTH(csexp));
 			}
 			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels, size);
 			break;

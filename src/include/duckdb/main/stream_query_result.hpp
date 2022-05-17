@@ -42,7 +42,6 @@ public:
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
 
-private:
 	//! The client context this StreamQueryResult belongs to
 	shared_ptr<ClientContext> context;
 
