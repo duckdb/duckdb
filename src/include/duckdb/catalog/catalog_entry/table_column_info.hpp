@@ -17,9 +17,9 @@ enum class TableColumnType { STANDARD, GENERATED };
 struct TableColumnInfo {
 	column_t index;
 	TableColumnType column_type;
-	TableColumnInfo(column_t index = 0, TableColumnType column_type = TableColumnType::STANDARD);
-	TableColumnInfo(const TableColumnInfo &table_column_info);
-	TableColumnInfo &operator=(const TableColumnInfo &table_column_info);
+	TableColumnInfo(column_t index = 0, TableColumnType column_type = TableColumnType::STANDARD)
+	    : index(index), column_type(column_type) {
+	}
 };
 
 } // namespace duckdb
