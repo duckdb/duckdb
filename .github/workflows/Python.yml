@@ -74,15 +74,25 @@ jobs:
       FORCE_32_BIT: ${{ matrix.arch == 'i686' && 1 || 0}}
 
     steps:
+    - name: Install dependencies
+      run: |
+        yum install -y gcc gcc-c++ cmake make
+        yum install -y epel-release
+        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+
+    - name: Install Git 2.18.5
+      shell: bash
+      run: |
+        wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
+        tar xvf v2.18.5.tar.gz
+        cd git-2.18.5
+        make
+        make prefix=/usr install
+        git --version
+
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Install dependencies
-      run: |
-        yum install -y gcc gcc-c++ git cmake make
-        yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
 
     - name: Install AWS CLI
       run: |
