@@ -185,8 +185,9 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	if (py_object_type == "DataFrame") {
 		{
 			py::gil_scoped_release release;
-			temporary_views[name] = connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
-			    ->CreateView(name, true, true);
+			temporary_views[name] =
+			    connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
+			        ->CreateView(name, true, true);
 		}
 
 		// keep a reference
@@ -201,12 +202,13 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 
 		{
 			py::gil_scoped_release release;
-			temporary_views[name] = connection
-			    ->TableFunction("arrow_scan",
-			                    {Value::POINTER((uintptr_t)stream_factory.get()),
-			                     Value::POINTER((uintptr_t)stream_factory_produce),
-			                     Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
-			    ->CreateView(name, true, true);
+			temporary_views[name] =
+			    connection
+			        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+			                                       Value::POINTER((uintptr_t)stream_factory_produce),
+			                                       Value::POINTER((uintptr_t)stream_factory_get_schema),
+			                                       Value::UBIGINT(rows_per_tuple)})
+			        ->CreateView(name, true, true);
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
@@ -266,7 +268,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 		throw std::runtime_error("connection closed");
 	}
 	// First check our temporary view
-	if (temporary_views.find(vname) != temporary_views.end()){
+	if (temporary_views.find(vname) != temporary_views.end()) {
 		return make_unique<DuckDBPyRelation>(temporary_views[vname]);
 	}
 	return make_unique<DuckDBPyRelation>(connection->View(vname));
