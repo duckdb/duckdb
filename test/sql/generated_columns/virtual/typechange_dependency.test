@@ -16,15 +16,15 @@ SELECT total_profit FROM unit
 ----
 20
 
-# Dependency of 'total_price' - it's dropped silently
-statement ok
+# Dependency of 'total_price' - the change is prohibited
+statement error
 ALTER TABLE unit ALTER COLUMN price TYPE BOOLEAN;
 
-# Now the generated column is deleted
-statement error
+# Generated column isn't deleted
+statement ok
 SELECT total_profit FROM unit;
 
-query II
+query III
 SELECT * FROM unit
 ----
-1	4
+5	4	20

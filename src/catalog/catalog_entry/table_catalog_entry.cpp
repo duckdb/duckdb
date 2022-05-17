@@ -574,7 +574,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && DependsOnColumn(copy.GeneratedExpression(), info.column_name)) {
-			continue;
+			throw BinderException(
+			    "This column is referenced by the generated column \"%s\", so its type can not be changed", copy.name);
 		}
 		create_info->columns.push_back(move(copy));
 	}
