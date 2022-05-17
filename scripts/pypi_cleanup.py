@@ -63,7 +63,7 @@ print("List of to-be-deleted releases")
 for release in to_delete:
 	print(release[0])
 
-to_delete = [x[1] for x in to_delete]
+to_delete = [x[0] for x in to_delete]
 print(to_delete)
 
 # gah2
