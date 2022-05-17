@@ -36,6 +36,7 @@ struct PreparedStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
+	string timezone_config;
 };
 
 struct AppenderWrapper {

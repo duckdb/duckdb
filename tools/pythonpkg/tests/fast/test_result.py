@@ -40,3 +40,13 @@ class TestPythonResult(object):
         rel = connection.table("timestamps")
         assert rel.execute().fetchall() == [(datetime.datetime(2008, 1, 1, 0, 0, 11), datetime.datetime(2008, 1, 1, 0, 0, 1, 794000), datetime.datetime(2008, 1, 1, 0, 0, 1, 989260), datetime.datetime(2008, 1, 1, 0, 0, 1, 899268))]
 
+    def test_result_interval(self):
+        connection = duckdb.connect()
+        cursor = connection.cursor()
+        cursor.execute('CREATE TABLE IF NOT EXISTS intervals (ivals INTERVAL)')
+        cursor.execute("INSERT INTO intervals VALUES ('1 day'), ('2 second'), ('1 microsecond')")
+
+        rel = connection.table("intervals")
+        res = rel.execute()
+        assert res.description() == [('ivals', 'TIMEDELTA', None, None, None, None, None)]
+        assert res.fetchall() == [(datetime.timedelta(days=1.0),), (datetime.timedelta(seconds=2.0),), (datetime.timedelta(microseconds=1.0),)]

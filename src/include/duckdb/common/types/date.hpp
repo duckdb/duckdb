@@ -30,14 +30,14 @@ public:
 	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
 	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
 
-	// min date is 5877642-06-23 (BC) (-2^31)
+	// min date is 5877642-06-25 (BC) (-2^31+2)
 	constexpr static const int32_t DATE_MIN_YEAR = -5877641;
 	constexpr static const int32_t DATE_MIN_MONTH = 6;
-	constexpr static const int32_t DATE_MIN_DAY = 23;
-	// max date is 5881580-07-11 (2^31)
+	constexpr static const int32_t DATE_MIN_DAY = 25;
+	// max date is 5881580-07-10 (2^31-2)
 	constexpr static const int32_t DATE_MAX_YEAR = 5881580;
 	constexpr static const int32_t DATE_MAX_MONTH = 7;
-	constexpr static const int32_t DATE_MAX_DAY = 11;
+	constexpr static const int32_t DATE_MAX_DAY = 10;
 	constexpr static const int32_t EPOCH_YEAR = 1970;
 
 	constexpr static const int32_t YEAR_INTERVAL = 400;
@@ -69,6 +69,11 @@ public:
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
 	DUCKDB_API static bool IsValid(int32_t year, int32_t month, int32_t day);
+
+	//! Returns true if the specified date is finite
+	static inline bool IsFinite(date_t date) {
+		return date != date_t::infinity() && date != date_t::ninfinity();
+	}
 
 	//! The max number of days in a month of a given year
 	DUCKDB_API static int32_t MonthDays(int32_t year, int32_t month);

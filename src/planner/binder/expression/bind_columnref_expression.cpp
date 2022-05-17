@@ -1,18 +1,18 @@
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
 
 namespace duckdb {
 
@@ -98,6 +98,33 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	return move(extract_fun);
 }
 
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
+	D_ASSERT(colref.column_names.size() <= 2);
+	string error_message;
+	auto &table_name = colref.column_names.back();
+	auto binding = binder.bind_context.GetBinding(table_name, error_message);
+	if (!binding) {
+		return nullptr;
+	}
+	if (colref.column_names.size() == 2) {
+		// "schema_name.table_name"
+		auto table_entry = binding->GetTableEntry();
+		if (!table_entry) {
+			return nullptr;
+		}
+		auto &schema_name = colref.column_names[0];
+		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+			return nullptr;
+		}
+	}
+	// We found the table, now create the struct_pack expression
+	vector<unique_ptr<ParsedExpression>> child_exprs;
+	for (const auto &column_name : binding->names) {
+		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+	}
+	return make_unique<FunctionExpression>("struct_pack", move(child_exprs));
+}
+
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
 	idx_t column_parts = colref.column_names.size();
 	// column names can have an arbitrary amount of dots
@@ -106,7 +133,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// no dots (i.e. "part1")
 		// -> part1 refers to a column
 		// check if we can qualify the column name with the table name
-		return QualifyColumnName(colref.GetColumnName(), error_message);
+		auto qualified_colref = QualifyColumnName(colref.GetColumnName(), error_message);
+		if (qualified_colref) {
+			// we could: return it
+			return qualified_colref;
+		}
+		// we could not! Try creating an implicit struct_pack
+		return CreateStructPack(colref);
 	} else if (column_parts == 2) {
 		// one dot (i.e. "part1.part2")
 		// EITHER:
@@ -122,12 +155,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
-			if (!qualified_colref) {
-				// we could not! bail
-				return nullptr;
+			if (qualified_colref) {
+				// we could: create a struct extract
+				return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
 			}
-			// we could: create a struct extract
-			return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
+			// we could not! Try creating an implicit struct_pack
+			return CreateStructPack(colref);
 		}
 	} else {
 		// two or more dots (i.e. "part1.part2.part3.part4...")
