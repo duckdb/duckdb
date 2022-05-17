@@ -807,7 +807,7 @@ public:
 		writer.WriteField<uint8_t>(scale);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string& alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale, alias);
@@ -853,7 +853,7 @@ public:
 		writer.WriteString(collation);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string& alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto collation = reader.ReadRequired<string>();
 		return make_shared<StringTypeInfo>(move(collation), alias);
 	}
@@ -901,7 +901,7 @@ public:
 		writer.WriteSerializable(child_type);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string& alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_shared<ListTypeInfo>(move(child_type), alias);
 	}
@@ -950,7 +950,7 @@ public:
 		}
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string& alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		child_list_t<LogicalType> child_list;
 		auto child_types_size = reader.ReadRequired<uint32_t>();
 		auto &source = reader.GetSource();
@@ -994,7 +994,7 @@ public:
 		}
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string& alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto &source = reader.GetSource();
 
 		auto function_name = reader.ReadRequired<string>();
@@ -1115,7 +1115,7 @@ public:
 		writer.WriteString(user_type_name);
 	}
 
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string& alias) {
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(move(enum_name), alias);
 	}
@@ -1183,7 +1183,7 @@ public:
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p,
-	                               const string& alias = "")
+	                               const string &alias = "")
 	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p, alias) {
 		for (idx_t count = 0; count < size_p; count++) {
 			values[values_insert_order_p.GetValue(count).ToString()] = count;
