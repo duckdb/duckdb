@@ -32,8 +32,6 @@ struct JoinHTScanState {
 	mutex lock;
 };
 
-using JoinRadixConstants = RadixPartitioningConstants<7>;
-
 //! JoinHashTable is a linear probing HT that is used for computing joins
 /*!
    The JoinHashTable concatenates incoming chunks inside a linked list of
@@ -215,19 +213,26 @@ public:
 	void SwizzleCollectedBlocks();
 	//! Similar to Finalize() but for an external join
 	void FinalizeExternal();
+
+private:
+	//! Reduces histogram on bit at a time
+	void ReduceHistogram();
 	//! Partition the HT based on the hash histogram
 	void Partition();
 
 private:
-	//! The RowDataCollection holding the swizzled main data of the hash table
+	//! The number of radix bits used to build the histogram
+	static constexpr const idx_t INITIAL_RADIX_BITS = 10;
+	//! The current number of radix bits
+	idx_t current_radix_bits;
+
+	    //! The RowDataCollection holding the swizzled main data of the hash table
 	unique_ptr<RowDataCollection> swizzled_block_collection;
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
 
-	//! The current radix pass
-	idx_t radix_pass;
 	//! Histogram of inserted values
-	idx_t histogram[JoinRadixConstants::PARTITIONS];
+	unique_ptr<idx_t[]> histogram_ptr;
 	//! Histogram lock
 	mutex histogram_lock;
 	//! Partitioned data
