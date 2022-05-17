@@ -1182,7 +1182,8 @@ public:
 
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p, string alias = "")
+	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p,
+	                               string alias = "")
 	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p, alias) {
 		for (idx_t count = 0; count < size_p; count++) {
 			values[values_insert_order_p.GetValue(count).ToString()] = count;
