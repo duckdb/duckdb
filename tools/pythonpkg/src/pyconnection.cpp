@@ -185,7 +185,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	if (py_object_type == "DataFrame") {
 		{
 			py::gil_scoped_release release;
-			connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
+			temporary_views[name] = connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
 			    ->CreateView(name, true, true);
 		}
 
@@ -201,7 +201,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 
 		{
 			py::gil_scoped_release release;
-			connection
+			temporary_views[name] = connection
 			    ->TableFunction("arrow_scan",
 			                    {Value::POINTER((uintptr_t)stream_factory.get()),
 			                     Value::POINTER((uintptr_t)stream_factory_produce),
@@ -264,6 +264,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
+	}
+	// First check our temporary view
+	if (temporary_views.find(vname) != temporary_views.end()){
+		return make_unique<DuckDBPyRelation>(temporary_views[vname]);
 	}
 	return make_unique<DuckDBPyRelation>(connection->View(vname));
 }
@@ -379,6 +383,7 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
+	temporary_views.erase(name);
 	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
