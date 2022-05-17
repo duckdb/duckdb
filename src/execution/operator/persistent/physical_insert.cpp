@@ -57,14 +57,18 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			auto &col = table->columns[i];
+			if (col.Generated()) {
+				continue;
+			}
+			auto storage_idx = col.storage_oid;
 			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
-				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
+				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[storage_idx]);
 			} else {
 				// get value from child chunk
 				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
-				D_ASSERT(istate.insert_chunk.data[i].GetType() == chunk.data[column_index_map[i]].GetType());
-				istate.insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
+				D_ASSERT(istate.insert_chunk.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
+				istate.insert_chunk.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
 			}
 		}
 	} else {

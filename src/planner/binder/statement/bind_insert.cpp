@@ -66,7 +66,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			auto &col = table->columns[i];
 			if (col.Generated()) {
 				generated_column_count++;
-				continue;
 			}
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
@@ -84,8 +83,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 				generated_column_count++;
 				continue;
 			}
-			insert->expected_types.push_back(table->columns[i].type);
 			named_column_map.push_back(i);
+			insert->expected_types.push_back(table->columns[i].type);
 		}
 	}
 
