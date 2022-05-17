@@ -2031,6 +2031,18 @@ typedef struct PGCreateEnumStmt
 	PGList	   *vals;			/* enum values (list of Value strings) */
 } PGCreateEnumStmt;
 
+/* ----------------------
+ *		Alias Statement
+ * ----------------------
+ */
+
+typedef struct PGCreateAliasStmt
+{
+	PGNodeTag		type;
+	PGTypeName *typeName;         /* trust type of alias */
+	PGList	   *aliasname;                /* name of alias */
+} PGCreateAliasStmt;
+
 
 
 

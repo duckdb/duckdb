@@ -7,6 +7,7 @@ CheckPointStmt
 CopyStmt
 CreateAsStmt
 CreateEnumStmt
+CreateAliasStmt
 CreateFunctionStmt
 CreateSchemaStmt
 CreateSeqStmt

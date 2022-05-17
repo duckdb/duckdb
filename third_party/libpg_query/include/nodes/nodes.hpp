@@ -383,6 +383,7 @@ typedef enum PGNodeTag {
 	T_PGReassignOwnedStmt,
 	T_PGCompositeTypeStmt,
 	T_PGCreateEnumStmt,
+	T_PGCreateAliasStmt,
 	T_PGCreateRangeStmt,
 	T_PGAlterEnumStmt,
 	T_PGAlterTSDictionaryStmt,

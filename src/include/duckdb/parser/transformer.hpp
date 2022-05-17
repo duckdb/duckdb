@@ -92,6 +92,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateEnumStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateEnum(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres duckdb_libpgquery::T_PGCreateAliasStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateAlias(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
@@ -268,5 +270,7 @@ private:
 	Transformer &transformer;
 	idx_t stack_usage;
 };
+
+vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list);
 
 } // namespace duckdb

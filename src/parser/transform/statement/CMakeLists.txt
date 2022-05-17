@@ -12,6 +12,7 @@ add_library_unity(
   transform_create_table.cpp
   transform_create_view.cpp
   transform_create_enum.cpp
+  transform_create_alias.cpp
   transform_delete.cpp
   transform_explain.cpp
   transform_export.cpp
