@@ -234,7 +234,7 @@ public:
 
 	// For high latency file systems a larger buffer size is used
 	bool ShouldUseLargeBuffers() {
-		return file_handle->file_system.GetName() == "HTTPFileSystem";
+		return !file_handle->OnDiskFile() && file_handle->CanSeek();
 	}
 
 private:

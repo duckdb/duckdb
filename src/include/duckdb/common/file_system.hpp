@@ -197,7 +197,8 @@ public:
 	//! Create a LocalFileSystem.
 	DUCKDB_API static unique_ptr<FileSystem> CreateLocal();
 
-	//! Return the name of the filesytem. Used for forming diagnosis messages and filesystem-specific optimization
+protected:
+	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
 };
 
