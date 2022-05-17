@@ -62,10 +62,6 @@ bool RLESort::SupportedSortCompressionType(LogicalTypeId type_id) {
 }
 
 void RLESort::Initialize() {
-	// Initialize key and payload chunks
-	keys_chunk.Initialize(key_column_types);
-	payload_chunk.Initialize(payload_column_types);
-
 	// Initialize the scan states
 	scan_state.column_ids = payload_column_ids;
 	scan_state.max_row = row_group.count;
@@ -83,6 +79,9 @@ void RLESort::Initialize() {
 void RLESort::SinkKeysPayloadSort() {
 	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE <
 	       scan_state.row_group_scan_state.max_row) {
+		DataChunk keys_chunk, payload_chunk;
+		payload_chunk.Initialize(payload_column_types);
+		keys_chunk.Initialize(key_column_types);
 		row_group.ScanCommitted(scan_state.row_group_scan_state, payload_chunk,
 		                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT);
 		payload_chunk.Normalify();
@@ -93,6 +92,9 @@ void RLESort::SinkKeysPayloadSort() {
 }
 
 void RLESort::ReplaceRowGroup(RowGroup &sorted_rowgroup) {
+	// We have to delete from the data table the difference of chunk counts
+	// These refer to deleted tuples
+	data_table.total_rows -= row_group.count - new_count;
 	row_group.columns = sorted_rowgroup.columns;
 	row_group.stats = sorted_rowgroup.stats;
 	row_group.version_info = sorted_rowgroup.version_info;

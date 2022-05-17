@@ -47,9 +47,6 @@ private:
 	vector<LogicalType> payload_column_types;
 	vector<column_t> payload_column_ids;
 
-	DataChunk keys_chunk;
-	DataChunk payload_chunk;
-
 	TableScanState scan_state;
 
 	LocalSortState local_sort_state;
