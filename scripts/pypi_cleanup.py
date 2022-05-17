@@ -13,7 +13,7 @@ pypi_username = "hfmuehleisen"
 pypi_password = os.getenv("PYPI_PASSWORD", "")
 if pypi_password == "":
 	print(f'need {pypi_username}\' PyPI password in PYPI_PASSWORD env variable')
-	exit(0)
+	exit(1)
 
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
