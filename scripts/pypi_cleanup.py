@@ -98,10 +98,12 @@ delete_headers = {
 for rev in to_delete:
 	print("Deleting %s" % rev)
 
-	delete_data = urllib.parse.urlencode({
-		"confirm_delete_version" : rev,
-		"csrf_token" : delete_crsf_token
-	}).encode()
-	call("https://pypi.org/manage/project/duckdb/release/%s/" % rev, delete_data, delete_headers)
-
-
+	try:
+		delete_data = urllib.parse.urlencode({
+			"confirm_delete_version" : rev,
+			"csrf_token" : delete_crsf_token
+		}).encode()
+		call("https://pypi.org/manage/project/duckdb/release/%s/" % rev, delete_data, delete_headers)
+	except Exception as e:
+		print(f"Failed to delete {rev}")
+		print(e)
