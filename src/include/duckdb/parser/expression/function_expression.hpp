@@ -60,7 +60,7 @@ public:
 	template <class T, class BASE>
 	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
 	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr,
-	                       bool export_state = false) {
+	                       bool export_state = false, bool add_alias = false) {
 		if (is_operator) {
 			// built-in operator
 			D_ASSERT(!distinct);
@@ -82,8 +82,11 @@ public:
 		if (distinct) {
 			result += "DISTINCT ";
 		}
-		result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-		                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
+			return child->alias.empty() || !add_alias
+			           ? child->ToString()
+			           : KeywordHelper::WriteOptionallyQuoted(child->alias) + " := " + child->ToString();
+		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {
 			if (entry.children.empty()) {

@@ -78,6 +78,7 @@ mutable struct DB <: DBInterface.Connection
 
     function DB(f::AbstractString, config::Config)
         set_config(config, "threads", "1")
+        set_config(config, "external_threads", string(Threads.nthreads() - 1))
         handle = DuckDBHandle(f, config)
         main_connection = Connection(handle)
 

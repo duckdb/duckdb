@@ -84,21 +84,19 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 
 const char descriptor_table_protodef_substrait_2fcapabilities_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n\034substrait/capabilities.proto\022\tsubstrai"
-  "t\"\354\002\n\014Capabilities\022-\n\022substrait_versions"
-  "\030\001 \003(\tR\021substraitVersions\022\?\n\034advanced_ex"
-  "tension_type_urls\030\002 \003(\tR\031advancedExtensi"
-  "onTypeUrls\022T\n\021simple_extensions\030\003 \003(\0132\'."
-  "substrait.Capabilities.SimpleExtensionR\020"
-  "simpleExtensions\032\225\001\n\017SimpleExtension\022\020\n\003"
-  "uri\030\001 \001(\tR\003uri\022#\n\rfunction_keys\030\002 \003(\tR\014f"
-  "unctionKeys\022\033\n\ttype_keys\030\003 \003(\tR\010typeKeys"
-  "\022.\n\023type_variation_keys\030\004 \003(\tR\021typeVaria"
-  "tionKeysB+\n\022io.substrait.protoP\001\252\002\022Subst"
-  "rait.Protobufb\006proto3"
+  "t\"\373\001\n\014Capabilities\022\032\n\022substrait_versions"
+  "\030\001 \003(\t\022$\n\034advanced_extension_type_urls\030\002"
+  " \003(\t\022B\n\021simple_extensions\030\003 \003(\0132\'.substr"
+  "ait.Capabilities.SimpleExtension\032e\n\017Simp"
+  "leExtension\022\013\n\003uri\030\001 \001(\t\022\025\n\rfunction_key"
+  "s\030\002 \003(\t\022\021\n\ttype_keys\030\003 \003(\t\022\033\n\023type_varia"
+  "tion_keys\030\004 \003(\tBW\n\022io.substrait.protoP\001Z"
+  "*github.com/substrait-io/substrait-go/pr"
+  "oto\252\002\022Substrait.Protobufb\006proto3"
   ;
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2fcapabilities_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2fcapabilities_2eproto = {
-  false, false, 461, descriptor_table_protodef_substrait_2fcapabilities_2eproto, "substrait/capabilities.proto", 
+  false, false, 392, descriptor_table_protodef_substrait_2fcapabilities_2eproto, "substrait/capabilities.proto", 
   &descriptor_table_substrait_2fcapabilities_2eproto_once, nullptr, 0, 2,
   schemas, file_default_instances, TableStruct_substrait_2fcapabilities_2eproto::offsets,
   file_level_metadata_substrait_2fcapabilities_2eproto, file_level_enum_descriptors_substrait_2fcapabilities_2eproto, file_level_service_descriptors_substrait_2fcapabilities_2eproto,
@@ -194,7 +192,7 @@ const char* Capabilities_SimpleExtension::_InternalParse(const char* ptr, ::PROT
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // string uri = 1 [json_name = "uri"];
+      // string uri = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           auto str = _internal_mutable_uri();
@@ -204,7 +202,7 @@ const char* Capabilities_SimpleExtension::_InternalParse(const char* ptr, ::PROT
         } else
           goto handle_unusual;
         continue;
-      // repeated string function_keys = 2 [json_name = "functionKeys"];
+      // repeated string function_keys = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -219,7 +217,7 @@ const char* Capabilities_SimpleExtension::_InternalParse(const char* ptr, ::PROT
         } else
           goto handle_unusual;
         continue;
-      // repeated string type_keys = 3 [json_name = "typeKeys"];
+      // repeated string type_keys = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -234,7 +232,7 @@ const char* Capabilities_SimpleExtension::_InternalParse(const char* ptr, ::PROT
         } else
           goto handle_unusual;
         continue;
-      // repeated string type_variation_keys = 4 [json_name = "typeVariationKeys"];
+      // repeated string type_variation_keys = 4;
       case 4:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
           ptr -= 1;
@@ -278,7 +276,7 @@ uint8_t* Capabilities_SimpleExtension::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // string uri = 1 [json_name = "uri"];
+  // string uri = 1;
   if (!this->_internal_uri().empty()) {
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
       this->_internal_uri().data(), static_cast<int>(this->_internal_uri().length()),
@@ -288,7 +286,7 @@ uint8_t* Capabilities_SimpleExtension::_InternalSerialize(
         1, this->_internal_uri(), target);
   }
 
-  // repeated string function_keys = 2 [json_name = "functionKeys"];
+  // repeated string function_keys = 2;
   for (int i = 0, n = this->_internal_function_keys_size(); i < n; i++) {
     const auto& s = this->_internal_function_keys(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -298,7 +296,7 @@ uint8_t* Capabilities_SimpleExtension::_InternalSerialize(
     target = stream->WriteString(2, s, target);
   }
 
-  // repeated string type_keys = 3 [json_name = "typeKeys"];
+  // repeated string type_keys = 3;
   for (int i = 0, n = this->_internal_type_keys_size(); i < n; i++) {
     const auto& s = this->_internal_type_keys(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -308,7 +306,7 @@ uint8_t* Capabilities_SimpleExtension::_InternalSerialize(
     target = stream->WriteString(3, s, target);
   }
 
-  // repeated string type_variation_keys = 4 [json_name = "typeVariationKeys"];
+  // repeated string type_variation_keys = 4;
   for (int i = 0, n = this->_internal_type_variation_keys_size(); i < n; i++) {
     const auto& s = this->_internal_type_variation_keys(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -334,7 +332,7 @@ size_t Capabilities_SimpleExtension::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string function_keys = 2 [json_name = "functionKeys"];
+  // repeated string function_keys = 2;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(function_keys_.size());
   for (int i = 0, n = function_keys_.size(); i < n; i++) {
@@ -342,7 +340,7 @@ size_t Capabilities_SimpleExtension::ByteSizeLong() const {
       function_keys_.Get(i));
   }
 
-  // repeated string type_keys = 3 [json_name = "typeKeys"];
+  // repeated string type_keys = 3;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(type_keys_.size());
   for (int i = 0, n = type_keys_.size(); i < n; i++) {
@@ -350,7 +348,7 @@ size_t Capabilities_SimpleExtension::ByteSizeLong() const {
       type_keys_.Get(i));
   }
 
-  // repeated string type_variation_keys = 4 [json_name = "typeVariationKeys"];
+  // repeated string type_variation_keys = 4;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(type_variation_keys_.size());
   for (int i = 0, n = type_variation_keys_.size(); i < n; i++) {
@@ -358,7 +356,7 @@ size_t Capabilities_SimpleExtension::ByteSizeLong() const {
       type_variation_keys_.Get(i));
   }
 
-  // string uri = 1 [json_name = "uri"];
+  // string uri = 1;
   if (!this->_internal_uri().empty()) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
@@ -497,7 +495,7 @@ const char* Capabilities::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
     uint32_t tag;
     ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
     switch (tag >> 3) {
-      // repeated string substrait_versions = 1 [json_name = "substraitVersions"];
+      // repeated string substrait_versions = 1;
       case 1:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
           ptr -= 1;
@@ -512,7 +510,7 @@ const char* Capabilities::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
         } else
           goto handle_unusual;
         continue;
-      // repeated string advanced_extension_type_urls = 2 [json_name = "advancedExtensionTypeUrls"];
+      // repeated string advanced_extension_type_urls = 2;
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -527,7 +525,7 @@ const char* Capabilities::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_I
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Capabilities.SimpleExtension simple_extensions = 3 [json_name = "simpleExtensions"];
+      // repeated .substrait.Capabilities.SimpleExtension simple_extensions = 3;
       case 3:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr -= 1;
@@ -569,7 +567,7 @@ uint8_t* Capabilities::_InternalSerialize(
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  // repeated string substrait_versions = 1 [json_name = "substraitVersions"];
+  // repeated string substrait_versions = 1;
   for (int i = 0, n = this->_internal_substrait_versions_size(); i < n; i++) {
     const auto& s = this->_internal_substrait_versions(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -579,7 +577,7 @@ uint8_t* Capabilities::_InternalSerialize(
     target = stream->WriteString(1, s, target);
   }
 
-  // repeated string advanced_extension_type_urls = 2 [json_name = "advancedExtensionTypeUrls"];
+  // repeated string advanced_extension_type_urls = 2;
   for (int i = 0, n = this->_internal_advanced_extension_type_urls_size(); i < n; i++) {
     const auto& s = this->_internal_advanced_extension_type_urls(i);
     ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
@@ -589,7 +587,7 @@ uint8_t* Capabilities::_InternalSerialize(
     target = stream->WriteString(2, s, target);
   }
 
-  // repeated .substrait.Capabilities.SimpleExtension simple_extensions = 3 [json_name = "simpleExtensions"];
+  // repeated .substrait.Capabilities.SimpleExtension simple_extensions = 3;
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_simple_extensions_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -613,7 +611,7 @@ size_t Capabilities::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated string substrait_versions = 1 [json_name = "substraitVersions"];
+  // repeated string substrait_versions = 1;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(substrait_versions_.size());
   for (int i = 0, n = substrait_versions_.size(); i < n; i++) {
@@ -621,7 +619,7 @@ size_t Capabilities::ByteSizeLong() const {
       substrait_versions_.Get(i));
   }
 
-  // repeated string advanced_extension_type_urls = 2 [json_name = "advancedExtensionTypeUrls"];
+  // repeated string advanced_extension_type_urls = 2;
   total_size += 1 *
       ::PROTOBUF_NAMESPACE_ID::internal::FromIntSize(advanced_extension_type_urls_.size());
   for (int i = 0, n = advanced_extension_type_urls_.size(); i < n; i++) {
@@ -629,7 +627,7 @@ size_t Capabilities::ByteSizeLong() const {
       advanced_extension_type_urls_.Get(i));
   }
 
-  // repeated .substrait.Capabilities.SimpleExtension simple_extensions = 3 [json_name = "simpleExtensions"];
+  // repeated .substrait.Capabilities.SimpleExtension simple_extensions = 3;
   total_size += 1UL * this->_internal_simple_extensions_size();
   for (const auto& msg : this->simple_extensions_) {
     total_size +=

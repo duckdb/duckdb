@@ -14,7 +14,6 @@ add_library_unity(
   allocator.cpp
   arrow_wrapper.cpp
   assert.cpp
-  radix.cpp
   compressed_file_system.cpp
   constants.cpp
   checksum.cpp
@@ -31,6 +30,7 @@ add_library_unity(
   printer.cpp
   progress_bar.cpp
   re2_regex.cpp
+  random_engine.cpp
   serializer.cpp
   string_util.cpp
   symbols.cpp

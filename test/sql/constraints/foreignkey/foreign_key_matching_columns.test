@@ -1,0 +1,107 @@
+# name: test/sql/constraints/foreignkey/foreign_key_matching_columns.test
+# description: Issue #3505: foreign key support without an explicit column name
+# group: [foreignkey]
+
+statement ok
+PRAGMA enable_verification
+
+# non-existant reference
+statement error
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (agency_id) REFERENCES agency
+);
+
+statement ok
+CREATE TABLE agency (
+	agency_id TEXT PRIMARY KEY,
+	agency_name TEXT UNIQUE NOT NULL
+);
+
+# column count mismatch
+statement error
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (route_id, agency_id) REFERENCES agency
+);
+
+statement ok
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (agency_id) REFERENCES agency
+);
+
+# verify foreign key functionality
+statement error
+INSERT INTO routes VALUES (1, 1);
+
+statement ok
+INSERT INTO agency VALUES (1, 1);
+
+statement ok
+INSERT INTO routes VALUES (1, 1);
+
+# now without a primary key
+statement error
+DROP TABLE agency;
+
+statement ok
+DROP TABLE routes;
+
+statement ok
+DROP TABLE agency;
+
+statement ok
+CREATE TABLE agency (
+	agency_id TEXT,
+	agency_name TEXT NOT NULL
+);
+
+statement error
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (agency_id) REFERENCES agency
+);
+
+# self-referential primary key
+statement ok
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (agency_id) REFERENCES routes
+);
+
+statement ok
+INSERT INTO routes VALUES (1, NULL);
+
+statement error
+INSERT INTO routes VALUES (2, 2);
+
+statement ok
+INSERT INTO routes VALUES (2, 1);
+
+# multi-column primary key constraint
+statement ok
+DROP TABLE routes;
+
+statement ok
+DROP TABLE agency;
+
+statement ok
+CREATE TABLE agency (
+	agency_id TEXT,
+	agency_id_2 TEXT,
+	agency_name TEXT NOT NULL,
+	PRIMARY KEY (agency_id, agency_id_2)
+);
+
+statement ok
+CREATE TABLE routes (
+	route_id TEXT PRIMARY KEY,
+	agency_id TEXT,
+	FOREIGN KEY (route_id, agency_id) REFERENCES agency
+);

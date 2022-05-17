@@ -24,11 +24,11 @@ bool KeywordHelper::RequiresQuotes(const string &text) {
 	return IsKeyword(text);
 }
 
-string KeywordHelper::WriteOptionallyQuoted(const string &text) {
+string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote) {
 	if (!RequiresQuotes(text)) {
 		return text;
 	}
-	return "\"" + StringUtil::Replace(text, "\"", "\"\"") + "\"";
+	return string(1, quote) + StringUtil::Replace(text, string(1, quote), string(2, quote)) + string(1, quote);
 }
 
 } // namespace duckdb
