@@ -47,12 +47,14 @@ void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &result_t
 
 	// set the list child vector
 	Vector slice(child_vector, sel, element_count);
+	slice.Normalify(element_count);
 	input_chunk.data[0].Reference(slice);
 
 	// set the other vectors
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < col_count - 1; col_idx++) {
 		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], element_count));
+		slices[col_idx].Normalify(element_count);
 		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
 	}
 	input_chunk.SetCardinality(element_count);

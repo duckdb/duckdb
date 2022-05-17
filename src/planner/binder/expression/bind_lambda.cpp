@@ -9,7 +9,7 @@
 namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const idx_t lambda_param_count,
-                                            const LogicalType list_child_type) {
+                                            const LogicalType &list_child_type) {
 
 	string error;
 
