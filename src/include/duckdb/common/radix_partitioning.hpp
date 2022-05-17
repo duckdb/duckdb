@@ -18,7 +18,7 @@ template <idx_t radix_bits>
 struct RadixPartitioningConstants {
 public:
 	static constexpr const idx_t NUM_RADIX_BITS = radix_bits;
-	static constexpr const idx_t PARTITIONS = 1 << NUM_RADIX_BITS;
+	static constexpr const idx_t NUM_PARTITIONS = 1 << NUM_RADIX_BITS;
 	static constexpr const idx_t TMP_BUF_SIZE = 8;
 
 public:
@@ -35,6 +35,9 @@ private:
 //! Generic radix partitioning functions
 struct RadixPartitioning {
 public:
+	static inline idx_t NumberOfPartitions(idx_t radix_bits) {
+		return 1 << radix_bits;
+	}
 	//! Initialize histogram for "radix_bits"
 	static unique_ptr<idx_t[]> InitializeHistogram(idx_t radix_bits);
 	//! Update histogram given a vector of hashes

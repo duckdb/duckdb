@@ -4,6 +4,8 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -60,7 +62,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	swizzled_block_collection = block_collection->CopyEmpty();
 	swizzled_string_heap = string_heap->CopyEmpty();
-	histogram_ptr = RadixPartitioning::InitializeHistogram(INITIAL_RADIX_BITS);
+	histogram_ptr = RadixPartitioning::InitializeHistogram(current_radix_bits);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -82,7 +84,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	D_ASSERT(other.current_radix_bits == INITIAL_RADIX_BITS);
 	auto histogram = histogram_ptr.get();
 	const auto other_hist = other.histogram_ptr.get();
-	for (idx_t i = 0; i < RadixPartitioningConstants<INITIAL_RADIX_BITS>::PARTITIONS; i++) {
+	for (idx_t i = 0; i < RadixPartitioningConstants<INITIAL_RADIX_BITS>::NUM_PARTITIONS; i++) {
 		histogram[i] += other_hist[i];
 	}
 }
@@ -906,13 +908,13 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 	string_heap->Clear();
 }
 
-void JoinHashTable::FinalizeExternal() {
+void JoinHashTable::FinalizeExternal(Pipeline &pipeline) {
 	// Everything should be in the 'swizzled' variants of these
 	D_ASSERT(block_collection->blocks.empty());
 	D_ASSERT(string_heap->blocks.empty());
 
-	// TODO: smart stuff with histogram
-	Partition();
+	ReduceHistogram();
+	Partition(pipeline);
 
 	// Unswizzle
 	auto &blocks = swizzled_block_collection->blocks;
@@ -938,48 +940,112 @@ void JoinHashTable::FinalizeExternal() {
 	Finalize();
 }
 
-void JoinHashTable::ReduceHistogram() {
-	// TODO: check if any single partition is too big for memory
+bool JoinHashTable::PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size) {
+	// TODO: implement (check if any single partition is too big for memory)
+	return false;
 }
 
-void JoinHashTable::Partition() {
-//	D_ASSERT(partitioned_blocks.empty());
-//	vector<unique_ptr<BufferHandle>> handles;
-//	data_ptr_t dest_ptrs[JoinRadixConstants::PARTITIONS];
-//
-//	// Create one block per partition
-//	partitioned_blocks.reserve(JoinRadixConstants::PARTITIONS);
-//	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
-//		if (histogram[i] == 0) {
-//			partitioned_blocks.push_back(nullptr);
-//			continue;
-//		}
-//		// Create collection for histogram bucket
-//		auto capacity = MaxValue<idx_t>(histogram[i], block_collection->block_capacity);
-//		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, capacity, entry_size));
-//
-//		// Create block and set count (will be filled later)
-//		auto &new_block = partitioned_blocks.back()->CreateBlock();
-//		new_block.count = histogram[i];
-//
-//		// Set up destination pointer
-//		handles.push_back(buffer_manager.Pin(new_block.block));
-//		dest_ptrs[i] = handles.back()->Ptr();
-//	}
-//
-//	// Partition the fixed-size data
-//	auto tmp_buf_ptr = RadixPartitioning::AllocateTempBuf<JoinRadixConstants>(entry_size);
-//	const data_ptr_t tmp_buf = tmp_buf_ptr.get();
-//	for (auto &block : block_collection->blocks) {
-//		auto handle = buffer_manager.Pin(block->block);
-//		RadixPartitioning::Partition<JoinRadixConstants>(handle->Ptr(), tmp_buf, dest_ptrs, entry_size, block->count,
-//		                                                 pointer_offset, radix_pass);
-//	}
-//	block_collection->blocks.clear();
-//
-//	if (layout.AllConstant()) {
-//		return;
-//	}
+void JoinHashTable::ReduceHistogram() {
+	auto avg_row_size = (swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes()) /
+	                    (swizzled_block_collection->count + swizzled_string_heap->count);
+	while (current_radix_bits >= 1) {
+		auto reduced_hist =
+		    RadixPartitioning::ReduceHistogram(histogram_ptr.get(), current_radix_bits, current_radix_bits - 1);
+		if (PartitionsFitInMemory(reduced_hist.get(), avg_row_size)) {
+			// Reduced partitions fit, continue
+			histogram_ptr = move(reduced_hist);
+		} else {
+			// Reduced partitions don't fit, stick to current histogram
+			break;
+		}
+	}
+}
+
+class PartitionTask : public ExecutorTask {
+public:
+	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &hash_table)
+	    : ExecutorTask(context), event(move(event_p)), context(context), hash_table(hash_table) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		// TODO
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+	ClientContext &context;
+	JoinHashTable &hash_table;
+};
+
+class PartitionEvent : public Event {
+public:
+	PartitionEvent(Pipeline &pipeline_p, JoinHashTable &hash_table)
+	    : Event(pipeline_p.executor), pipeline(pipeline_p), hash_table(hash_table) {
+	}
+
+	Pipeline &pipeline;
+	JoinHashTable &hash_table;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline.GetClientContext();
+
+		// Schedule tasks equal to the number of threads, by assigning an equal number of blocks per thread TODO
+		auto &ts = TaskScheduler::GetScheduler(context);
+		idx_t num_threads = ts.NumberOfThreads();
+
+		vector<unique_ptr<Task>> merge_tasks;
+		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
+			merge_tasks.push_back(make_unique<PartitionTask>(shared_from_this(), context, hash_table));
+		}
+		SetTasks(move(merge_tasks));
+	}
+
+	void FinishEvent() override {
+		// Complete partitioning, or perhaps schedule another partitioning round
+	}
+};
+
+void JoinHashTable::Partition(Pipeline &pipeline) {
+	D_ASSERT(partitioned_blocks.empty());
+	vector<unique_ptr<BufferHandle>> handles;
+	data_ptr_t dest_ptrs[JoinRadixConstants::PARTITIONS];
+
+	// Create one block per partition
+	partitioned_blocks.reserve(JoinRadixConstants::PARTITIONS);
+	for (idx_t i = 0; i < JoinRadixConstants::PARTITIONS; i++) {
+		if (histogram[i] == 0) {
+			partitioned_blocks.push_back(nullptr);
+			continue;
+		}
+		// Create collection for histogram bucket
+		auto capacity = MaxValue<idx_t>(histogram[i], block_collection->block_capacity);
+		partitioned_blocks.push_back(make_unique<RowDataCollection>(buffer_manager, capacity, entry_size));
+
+		// Create block and set count (will be filled later)
+		auto &new_block = partitioned_blocks.back()->CreateBlock();
+		new_block.count = histogram[i];
+
+		// Set up destination pointer
+		handles.push_back(buffer_manager.Pin(new_block.block));
+		dest_ptrs[i] = handles.back()->Ptr();
+	}
+
+	// Partition the fixed-size data
+	auto tmp_buf_ptr = RadixPartitioning::AllocateTempBuf<JoinRadixConstants>(entry_size);
+	const data_ptr_t tmp_buf = tmp_buf_ptr.get();
+	for (auto &block : block_collection->blocks) {
+		auto handle = buffer_manager.Pin(block->block);
+		RadixPartitioning::Partition<JoinRadixConstants>(handle->Ptr(), tmp_buf, dest_ptrs, entry_size, block->count,
+		                                                 pointer_offset, radix_pass);
+	}
+	block_collection->blocks.clear();
+
+	if (layout.AllConstant()) {
+		return;
+	}
 
 	// TODO: Clear block_collection->blocks
 	//  If not all constant:

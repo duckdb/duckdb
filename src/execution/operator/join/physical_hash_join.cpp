@@ -203,7 +203,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
 		if (sink.external) {
-			sink.hash_table->FinalizeExternal();
+			sink.hash_table->FinalizeExternal(pipeline);
 		} else {
 			sink.hash_table->Finalize();
 		}

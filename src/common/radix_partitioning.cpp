@@ -135,7 +135,7 @@ struct ReduceHistogramFunctor {
 
 		auto result = RadixPartitioning::InitializeHistogram(radix_bits_to);
 		auto histogram_to = result.get();
-		for (idx_t i = 0; i < CONSTANTS_FROM::PARTITIONS; i++) {
+		for (idx_t i = 0; i < CONSTANTS_FROM::NUM_PARTITIONS; i++) {
 			histogram_to[CONSTANTS_TO::ApplyMask(i)] += histogram_from[i];
 		}
 		return result;
@@ -152,7 +152,7 @@ struct AllocateTempBufFunctor {
 	template <idx_t radix_bits>
 	static unique_ptr<data_t[]> Operation(idx_t entry_size) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-		return unique_ptr<data_t[]>(new data_t[CONSTANTS::TMP_BUF_SIZE * CONSTANTS::PARTITIONS * entry_size]);
+		return unique_ptr<data_t[]>(new data_t[CONSTANTS::TMP_BUF_SIZE * CONSTANTS::NUM_PARTITIONS * entry_size]);
 	}
 };
 
@@ -167,7 +167,7 @@ struct PartitionFunctor {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 
 		// Initialize temporal buffer count
-		idx_t pos[CONSTANTS::PARTITIONS];
+		idx_t pos[CONSTANTS::NUM_PARTITIONS];
 		for (idx_t idx = 0; idx < CONSTANTS::PARTITIONS; idx++) {
 			pos[idx] = idx * CONSTANTS::TMP_BUF_SIZE;
 		}

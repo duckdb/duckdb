@@ -43,6 +43,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 }
 
 RowDataBlock &RowDataCollection::CreateBlock() {
+	lock_guard<mutex> write_lock(rdc_lock);
 	blocks.push_back(make_unique<RowDataBlock>(buffer_manager, block_capacity, entry_size));
 	return *blocks.back();
 }

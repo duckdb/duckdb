@@ -22,6 +22,7 @@
 namespace duckdb {
 class BufferManager;
 class BufferHandle;
+class Pipeline;
 
 struct JoinHTScanState {
 	JoinHTScanState() : position(0), block_position(0) {
@@ -103,7 +104,6 @@ public:
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
 	};
 
-private:
 public:
 	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
 	              vector<LogicalType> build_types, JoinType type);
@@ -212,13 +212,15 @@ public:
 	//! Swizzles all blocks in this HT
 	void SwizzleCollectedBlocks();
 	//! Similar to Finalize() but for an external join
-	void FinalizeExternal();
+	void FinalizeExternal(Pipeline &pipeline);
 
 private:
 	//! Reduces histogram on bit at a time
 	void ReduceHistogram();
+	//! Checks whether the current histogram
+	bool PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size);
 	//! Partition the HT based on the hash histogram
-	void Partition();
+	void Partition(Pipeline &pipeline);
 
 private:
 	//! The number of radix bits used to build the histogram
