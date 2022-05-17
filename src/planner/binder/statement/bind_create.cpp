@@ -138,14 +138,8 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 			type = LogicalType::MAP(child_types);
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
-		auto &user_type_name = UserType::GetTypeName(type);
-		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
-		                                                                               schema, user_type_name, true);
-		if (!user_type_catalog) {
-			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
-		}
-		type = user_type_catalog->user_type;
-		EnumType::SetCatalog(type, user_type_catalog);
+		auto &catalog = Catalog::GetCatalog(context);
+		type = catalog.GetType(context, schema, UserType::GetTypeName(type));
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
 		auto enum_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,

@@ -138,7 +138,7 @@ void ApiInfo::FindDataType(SQLSMALLINT data_type, vector<TypeInfo> &vec_types) {
 }
 
 void ApiInfo::WriteInfoTypesToQueryString(const vector<TypeInfo> &vec_types, string &query) {
-	for (auto i = 0; i < vec_types.size(); i++) {
+	for (duckdb::idx_t i = 0; i < vec_types.size(); i++) {
 		auto info_type = vec_types[i];
 		query += "(";
 		query += "CAST(" + string(info_type.type_name) + " AS VARCHAR),";
