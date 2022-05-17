@@ -82,6 +82,8 @@ public:
 
 	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
+	unique_ptr<QueryResult> GetResult();
+
 private:
 	void ScheduleEvents();
 	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines,

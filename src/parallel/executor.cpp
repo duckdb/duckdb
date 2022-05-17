@@ -11,6 +11,8 @@
 #include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
 
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -485,6 +487,13 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 		return true;
 	}
 } // LCOV_EXCL_STOP
+
+unique_ptr<QueryResult> Executor::GetResult() {
+	D_ASSERT(physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	auto &result_collector = (PhysicalResultCollector &) *physical_plan;
+	D_ASSERT(result_collector.sink_state);
+	return result_collector.GetResult(*result_collector.sink_state);
+}
 
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);

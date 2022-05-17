@@ -22,7 +22,7 @@ class PendingQueryResult : public BaseQueryResult {
 
 public:
 	DUCKDB_API PendingQueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
-	                              vector<LogicalType> types);
+	                              vector<LogicalType> types, bool allow_stream_result);
 	DUCKDB_API explicit PendingQueryResult(string error_message);
 	DUCKDB_API ~PendingQueryResult();
 
@@ -36,18 +36,19 @@ public:
 
 	//! Returns the result of the query as an actual query result.
 	//! This returns (mostly) instantly if ExecuteTask has been called until RESULT_READY was returned.
-	DUCKDB_API unique_ptr<QueryResult> Execute(bool allow_streaming_result = false);
+	DUCKDB_API unique_ptr<QueryResult> Execute();
 
 	DUCKDB_API void Close();
 
 private:
 	shared_ptr<ClientContext> context;
+	bool allow_stream_result;
 
 private:
 	void CheckExecutableInternal(ClientContextLock &lock);
 
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
-	unique_ptr<QueryResult> ExecuteInternal(ClientContextLock &lock, bool allow_streaming_result = false);
+	unique_ptr<QueryResult> ExecuteInternal(ClientContextLock &lock);
 	unique_ptr<ClientContextLock> LockContext();
 };
 
