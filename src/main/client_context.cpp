@@ -779,8 +779,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	BufferedDeserializer source(serializer);
 	auto deserialized_stmt = SelectStatement::Deserialize(source);
 
+	auto query_str = select_stmt->ToString();
 	Parser parser;
-	parser.ParseQuery(select_stmt->ToString());
+	parser.ParseQuery(query_str);
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 	auto parsed_statement = move(parser.statements[0]);
