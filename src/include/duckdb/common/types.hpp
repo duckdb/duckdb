@@ -441,6 +441,8 @@ struct LogicalType {
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 	DUCKDB_API static void SetAlias(LogicalType &type, string &alias);
 	DUCKDB_API static string GetAlias(const LogicalType &type);
+	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
+	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -530,8 +532,6 @@ struct EnumType{
 	DUCKDB_API static Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
-	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
-	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(idx_t size);
 };
 

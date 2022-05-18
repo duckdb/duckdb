@@ -739,6 +739,7 @@ struct ExtraTypeInfo {
 
 	ExtraTypeInfoType type;
 	string alias;
+	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
 	virtual bool Equals(ExtraTypeInfo *other_p) const {
@@ -777,6 +778,17 @@ string LogicalType::GetAlias(const LogicalType &type) {
 	} else {
 		return ((ExtraTypeInfo &)*info).alias;
 	}
+}
+
+void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((ExtraTypeInfo &)*info).catalog_entry;
 }
 
 //===--------------------------------------------------------------------===//
@@ -865,6 +877,9 @@ string StringType::GetCollation(const LogicalType &type) {
 	}
 	auto info = type.AuxInfo();
 	if (!info) {
+		return string();
+	}
+	if (info->type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 		return string();
 	}
 	return ((StringTypeInfo &)*info).collation;
@@ -1144,7 +1159,6 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	string enum_name;
 	Vector values_insert_order;
 	idx_t size;
-	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
 	// Equalities are only used in enums with different catalog entries
@@ -1267,19 +1281,6 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((EnumTypeInfo &)*info).size;
-}
-
-void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	((EnumTypeInfo &)*info).catalog_entry = catalog_entry;
-}
-TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).catalog_entry;
 }
 
 PhysicalType EnumType::GetPhysicalType(idx_t size) {

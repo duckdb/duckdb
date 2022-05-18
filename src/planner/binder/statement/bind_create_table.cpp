@@ -199,24 +199,14 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	for (auto &column : base.columns) {
 		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
 		BindLogicalType(context, column.type);
-		if (column.type.id() == LogicalTypeId::ENUM) {
+		if (column.type.id() == LogicalTypeId::ENUM || !(LogicalType::GetAlias(column.type).empty())) {
 			// We add a catalog dependency
-			auto enum_dependency = EnumType::GetCatalog(column.type);
-			if (enum_dependency) {
-				// Only if the ENUM comes from a create type
-				result->dependencies.insert(enum_dependency);
+			auto type_dependency = LogicalType::GetCatalog(column.type);
+			if (type_dependency) {
+				// Only if the USER comes from a create type
+				result->dependencies.insert(type_dependency);
 			}
-		} else {
-			auto alias = LogicalType::GetAlias(column.type);
-			if (!alias.empty()) {
-				auto &catalog = Catalog::GetCatalog(context);
-				auto alias_dependency =
-				    catalog.GetEntry(context, CatalogType::TYPE_ENTRY, DEFAULT_SCHEMA, alias, false);
-				if (alias_dependency) {
-					result->dependencies.insert(alias_dependency);
-				}
-			}
-		}
+		} 
 	}
 	properties.allow_stream_result = false;
 	return result;
