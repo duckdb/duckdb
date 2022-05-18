@@ -10,6 +10,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include <algorithm>
 
@@ -163,6 +164,29 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
+static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unresolved) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		column_t index;
+		auto columnref = (ColumnRefExpression &)expr;
+		auto name = columnref.GetColumnName();
+		bool success = table->TryGetBindingIndex(name, index);
+		success = success || table->TryGetBindingIndex(name, index, TableColumnType::GENERATED);
+		D_ASSERT(success);
+		if (table->types[index] == LogicalType::ANY) {
+			unresolved = true;
+			return;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { TypeIsUnresolved((ParsedExpression &)child, table, unresolved); });
+}
+
+static bool HasUnresolvedDependency(ParsedExpression &expr, Binding *table) {
+	bool unresolved = false;
+	TypeIsUnresolved(expr, table, unresolved);
+	return unresolved;
+}
+
 void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const CreateTableInfo &info) {
 	vector<string> names;
 	vector<LogicalType> types;
@@ -176,10 +200,6 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 		if (col.name == "rowid") {
 			add_row_id = false;
 		}
-		// TODO: add generated columns so we can resolve generated_column<->generated_column expressions
-		if (col.Generated()) {
-			continue;
-		}
 		names.push_back(col.name);
 		types.push_back(col.type);
 	}
@@ -192,13 +212,22 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
 	binder->bind_context.AddGenericBinding(table_index, info.table, names, types);
-	for (auto &col : columns) {
+	string ignore;
+	auto table_binding = binder->bind_context.GetBinding(info.table, ignore);
+	D_ASSERT(table_binding && ignore.empty());
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &col = columns[i];
 		if (!col.Generated()) {
 			// Skip regular columns
 			continue;
 		}
 		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.GeneratedExpression().Copy();
+		if (HasUnresolvedDependency(*expression, table_binding)) {
+			// TODO: try to resolve the dependencies, then try again ?
+			throw InvalidInputException("Type of generated column could not be resolved because its dependencies have "
+			                            "not been resolved yet, try changing the order of creation");
+		}
 		// expr_binder.target_type = col.type;
 		auto bound_expression = expr_binder.Bind(expression);
 		if (!bound_expression) {
@@ -210,6 +239,10 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 		}
 		if (col.type == LogicalType::ANY) {
 			col.type = bound_expression->return_type;
+
+			// Update the type in the binding, for future expansions
+			string ignore;
+			table_binding->types[i] = col.type;
 		}
 		if (bound_expression->return_type != col.type) {
 			throw BinderException(

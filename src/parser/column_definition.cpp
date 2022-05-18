@@ -83,7 +83,10 @@ static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, co
 		return true;
 	}
 	for (auto &col : columns) {
-		if (col.category == TableColumnType::STANDARD && col.name == columnref) {
+		// if (col.Generated()) {
+		//	continue;
+		// }
+		if (col.name == columnref) {
 			return true;
 		}
 	}

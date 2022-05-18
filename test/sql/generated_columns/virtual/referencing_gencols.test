@@ -1,0 +1,52 @@
+# name: test/sql/generated_columns/virtual/referencing_gencols.test
+# description: Test referencing generated columns within generated column expressions
+# group: [virtual]
+
+#ON ALTER
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
+
+statement ok
+ALTER TABLE unit ADD COLUMN profit_total AS (total_profit * 5) VIRTUAL;
+
+statement ok
+INSERT INTO unit VALUES (4,5);
+
+query IIII
+SELECT * FROM unit;
+----
+5	4	20	100
+4	5	20	100
+
+# ON CREATE
+
+# Type could not be resolved because of the order
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	circular AS (dependency * price),
+	dependency AS (price),
+);
+
+#Type is provided, so this works
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	circular AS (dependency * price),
+	dependency INTEGER AS (price),
+);
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query III
+SELECT * FROM tbl;
+----
+5	25	5
