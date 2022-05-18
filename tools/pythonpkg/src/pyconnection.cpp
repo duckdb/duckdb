@@ -298,7 +298,7 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const py::object &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}

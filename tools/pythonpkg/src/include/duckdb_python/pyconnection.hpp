@@ -84,7 +84,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
 
-	unique_ptr<DuckDBPyRelation> FromDF(py::object value);
+	unique_ptr<DuckDBPyRelation> FromDF(const py::object &value);
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
