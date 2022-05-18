@@ -272,7 +272,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	auto query = byte_array_to_string(env, query_j);
 	auto statements = conn_ref->ExtractStatements(query.c_str());
 	if (statements.empty()) {
-		env->ThrowNew(env->FindClass("java/sql/SQLException"), "No statements to execute.");
+		env->ThrowNew(J_SQLException, "No statements to execute.");
 		return nullptr;
 	}
 
@@ -282,11 +282,11 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 		try {
 			auto res = conn_ref->Query(move(statements[i]));
 			if (!res->success) {
-				env->ThrowNew(env->FindClass("java/sql/SQLException"), res->error.c_str());
+				env->ThrowNew(J_SQLException,, res->error.c_str());
 				return nullptr;
 			}
 		} catch (const std::exception &ex) {
-			env->ThrowNew(env->FindClass("java/sql/SQLException"), ex.what());
+			env->ThrowNew(J_SQLException,, ex.what());
 			return nullptr;
 		}
 	}
