@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_info.hpp"
+#include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 
 namespace duckdb {
 
@@ -46,10 +47,7 @@ public:
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	//! A map of column dependency to generated column(s)
-	case_insensitive_map_t<unordered_set<string>> gcol_dependencies;
-	//! A map of generated column name to (potentially generated)column dependencies
-	case_insensitive_map_t<unordered_set<string>> gcol_dependents;
+	ColumnDependencyManager column_dependency_manager;
 	//! A map of column name to column index
 	case_insensitive_map_t<TableColumnInfo> name_map;
 

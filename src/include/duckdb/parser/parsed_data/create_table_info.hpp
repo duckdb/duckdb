@@ -13,6 +13,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 
 namespace duckdb {
 
@@ -30,10 +31,7 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
-	//! A map of generated column name to (potentially generated)column dependencies
-	case_insensitive_map_t<unordered_set<string>> gcol_dependents;
-	//! A map of column dependency to generated column(s)
-	case_insensitive_map_t<unordered_set<string>> gcol_dependencies;
+	ColumnDependencyManager column_dependency_manager;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {

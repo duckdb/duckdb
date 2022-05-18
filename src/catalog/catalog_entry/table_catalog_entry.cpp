@@ -87,8 +87,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
-      bound_constraints(move(info->bound_constraints)), gcol_dependencies(move(info->Base().gcol_dependencies)),
-      gcol_dependents(move(info->Base().gcol_dependents)) {
+      bound_constraints(move(info->bound_constraints)),
+      column_dependency_manager(move(info->Base().column_dependency_manager)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -251,7 +251,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			create_info->columns[i].name = info.new_name;
 		}
 		auto &col = create_info->columns[i];
-		if (col.Generated()) {
+		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.name, info.old_name)) {
 			col.RenameColumnRefs(info);
 		}
 	}
@@ -302,6 +302,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		}
 		create_info->constraints.push_back(move(copy));
 	}
+	column_dependency_manager.RenameColumn(create_info->columns[rename_idx].category, info.old_name, info.new_name);
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
@@ -311,11 +312,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
-	create_info->gcol_dependencies = gcol_dependencies;
-	create_info->gcol_dependents = gcol_dependents;
+	create_info->column_dependency_manager = column_dependency_manager;
 	// Check for the new generated column if there are dependencies
 	if (info.new_column.Generated()) {
-		AddToColumnDependencyMapping(info.new_column, create_info->gcol_dependents, create_info->gcol_dependencies);
+		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column);
 	}
 
 	for (idx_t i = 0; i < columns.size(); i++) {

@@ -108,7 +108,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			}
 			// Add to the dependency/dependent map if a generated column is added
 			if (centry.Generated()) {
-				AddToColumnDependencyMapping(centry, info->gcol_dependents, info->gcol_dependencies);
+				info->column_dependency_manager.AddGeneratedColumn(centry);
 			}
 			info->columns.push_back(move(centry));
 			break;

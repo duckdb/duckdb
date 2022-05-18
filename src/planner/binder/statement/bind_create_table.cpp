@@ -183,15 +183,12 @@ static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unres
 }
 
 static bool HasUnresolvedDependency(string name, const CreateTableInfo &info, unordered_set<string> &resolved) {
-	auto entry = info.gcol_dependents.find(name);
-	if (entry == info.gcol_dependents.end()) {
+	if (!info.column_dependency_manager.HasDependencies(name)) {
 		return false;
 	}
-	auto &dependencies = entry->second;
+	auto &dependencies = info.column_dependency_manager.GetDependencies(name);
 	for (auto &dep : dependencies) {
-		auto generated_column_dependency = info.gcol_dependents.find(dep);
-		// Not a generated column
-		if (generated_column_dependency == info.gcol_dependents.end()) {
+		if (!info.column_dependency_manager.HasDependencies(dep)) {
 			continue;
 		}
 		// A generated column and not resolved yet
