@@ -206,6 +206,16 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 				// Only if the ENUM comes from a create type
 				result->dependencies.insert(enum_dependency);
 			}
+		} else {
+			auto alias = LogicalType::GetAlias(column.type);
+			if (!alias.empty()) {
+				auto &catalog = Catalog::GetCatalog(context);
+				auto alias_dependency =
+				    catalog.GetEntry(context, CatalogType::TYPE_ENTRY, DEFAULT_SCHEMA, alias, false);
+				if (alias_dependency) {
+					result->dependencies.insert(alias_dependency);
+				}
+			}
 		}
 	}
 	properties.allow_stream_result = false;
