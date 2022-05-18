@@ -33,6 +33,7 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -741,7 +742,8 @@ void ClientContext::DisableProfiling() {
 }
 
 struct VerifyStatement {
-	VerifyStatement(unique_ptr<SelectStatement> statement_p, string statement_name_p, bool require_equality = true, bool disable_optimizer = false)
+	VerifyStatement(unique_ptr<SelectStatement> statement_p, string statement_name_p, bool require_equality = true,
+	                bool disable_optimizer = false)
 	    : statement(move(statement_p)), statement_name(move(statement_name_p)), require_equality(require_equality),
 	      disable_optimizer(disable_optimizer), select_list(statement->node->GetSelectList()) {
 	}

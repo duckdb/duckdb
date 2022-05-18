@@ -80,7 +80,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 }
 
 FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
-//	LookUpConjunctions(expr.get());
+	//	LookUpConjunctions(expr.get());
 	// try to push the filter into the combiner
 	auto result = AddFilter(expr.get());
 	if (result == FilterResult::UNSUPPORTED) {
@@ -550,7 +550,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 		}
 	}
 
-//	GenerateORFilters(table_filters, column_ids);
+	//	GenerateORFilters(table_filters, column_ids);
 
 	return table_filters;
 }
@@ -1020,7 +1020,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 	}
 }
 //
-//void FilterCombiner::LookUpConjunctions(Expression *expr) {
+// void FilterCombiner::LookUpConjunctions(Expression *expr) {
 //	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 //		auto root_or_expr = (BoundConjunctionExpression *)expr;
 //		for (const auto &entry : map_col_conjunctions) {
@@ -1052,7 +1052,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	VerifyOrsToPush(*expr);
 //}
 //
-//bool FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
+// bool FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
 //	vector<BoundConjunctionExpression *> conjunctions_to_visit;
 //
 //	for (auto &child : conjunction->children) {
@@ -1084,7 +1084,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	return true;
 //}
 //
-//void FilterCombiner::VerifyOrsToPush(Expression &expr) {
+// void FilterCombiner::VerifyOrsToPush(Expression &expr) {
 //	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 //		auto colref = (BoundColumnRefExpression *)&expr;
 //		auto entry = map_col_conjunctions.find(colref);
@@ -1096,7 +1096,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child); });
 //}
 //
-//bool FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr) {
+// bool FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr) {
 //	bool left_is_scalar = comparison_expr->left->IsFoldable();
 //	bool right_is_scalar = comparison_expr->right->IsFoldable();
 //
@@ -1113,7 +1113,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	return false;
 //}
 //
-//bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
+// bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
 //                                          BoundComparisonExpression *comparison_expr) {
 //	if (cur_colref_to_push == nullptr) {
 //		cur_colref_to_push = column_ref;
@@ -1161,7 +1161,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 //	return true;
 //}
 //
-//void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
+// void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
 //	for (const auto colref : vec_colref_insertion_order) {
 //		auto column_index = column_ids[colref->binding.column_index];
 //		if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
