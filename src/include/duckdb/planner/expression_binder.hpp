@@ -62,6 +62,7 @@ public:
 	MacroBinding *macro_binding;
 
 public:
+	bool IsGeneratedColumn(ParsedExpression &expr);
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
 

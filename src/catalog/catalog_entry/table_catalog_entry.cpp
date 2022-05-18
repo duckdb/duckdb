@@ -201,59 +201,29 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
-		if (colref.column_names[0] == info.old_name) {
-			colref.column_names[0] = info.new_name;
+		if (colref.column_names.back() == info.old_name) {
+			colref.column_names.back() = info.new_name;
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { RenameExpression((ParsedExpression &)child, info); });
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::RenameGeneratedColumn(ClientContext &context, RenameColumnInfo &info,
-                                                                  const TableColumnInfo &rename_info) {
-	D_ASSERT(rename_info.column_type == TableColumnType::GENERATED);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	// Copy all the columns, except the removed one
-	auto index = rename_info.index;
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto copy = columns[i].Copy();
-		if (i == index) {
-			D_ASSERT(copy.name == info.old_name);
-			copy.name = info.new_name;
-		}
-		create_info->columns.push_back(move(copy));
-	}
-
-	// Copy all the constraints
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto constraint = constraints[i]->Copy();
-		create_info->constraints.push_back(move(constraint));
-	}
-
-	column_dependency_manager.RenameColumn(columns[index].category, info.old_name, info.new_name);
-	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
-}
-
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
 	auto rename_info = GetColumnInfo(info.old_name);
-	if (rename_info.column_type == TableColumnType::GENERATED) {
-		return RenameGeneratedColumn(context, info, rename_info);
-	}
 	auto rename_idx = rename_info.index;
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		ColumnDefinition copy = columns[i].Copy();
+		auto copy = columns[i].Copy();
 
-		create_info->columns.push_back(move(copy));
 		if (rename_idx == i) {
-			create_info->columns[i].name = info.new_name;
+			copy.name = info.new_name;
 		}
+		create_info->columns.push_back(move(copy));
 		auto &col = create_info->columns[i];
 		if (col.Generated() && column_dependency_manager.IsDependencyOf(col.name, info.old_name)) {
-			col.RenameColumnRefs(info);
+			RenameExpression(col.GeneratedExpression(), info);
 		}
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
@@ -351,24 +321,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	                                      new_storage);
 }
 
-void InnerDependsOnColumn(const ParsedExpression &expr, const string &column, bool &result) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto column_ref = (ColumnRefExpression &)expr;
-		auto &column_name = column_ref.GetColumnName();
-		if (column_name == column) {
-			result = true;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { InnerDependsOnColumn(child, column, result); });
-}
-
-bool DependsOnColumn(const ParsedExpression &expr, const string &column) {
-	bool result;
-	InnerDependsOnColumn(expr, column, result);
-	return result;
-}
-
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info,
                                                                   idx_t index) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
@@ -396,9 +348,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext 
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
 	auto remove_info = GetColumnInfo(info.removed_column, info.if_exists);
-	if (remove_info.column_type == TableColumnType::GENERATED) {
-		return RemoveGeneratedColumn(context, info, remove_info.index);
-	}
 	idx_t removed_index = remove_info.index;
 	if (removed_index == DConstants::INVALID_INDEX) {
 		return nullptr;
@@ -407,19 +356,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
-	idx_t removed_generated_columns = 0;
+	unordered_set<string> removed_columns = column_dependency_manager.GetDependencyChain(info.removed_column);
 	for (idx_t i = 0; i < columns.size(); i++) {
-		if (removed_index == i) {
-			continue;
-		}
 		auto &col = columns[i];
-		if (col.Generated() && DependsOnColumn(col.GeneratedExpression(), columns[removed_index].name)) {
-			removed_generated_columns++;
+		if (removed_columns.count(col.name)) {
 			continue;
 		}
-		create_info->columns.push_back(columns[i].Copy());
+		create_info->columns.push_back(col.Copy());
 	}
-	if (removed_generated_columns && !info.cascade) {
+	if (removed_columns.size() > 1 && !info.cascade) {
 		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
 	if (create_info->columns.empty()) {
@@ -507,6 +452,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	column_dependency_manager.RemoveColumn(columns[removed_index]);
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	if (remove_info.column_type == TableColumnType::GENERATED) {
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
+	}
 	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
@@ -585,7 +534,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			copy.type = info.target_type;
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
-		if (copy.Generated() && DependsOnColumn(copy.GeneratedExpression(), info.column_name)) {
+		if (copy.Generated() && column_dependency_manager.IsDependencyOf(copy.name, info.column_name)) {
 			throw BinderException(
 			    "This column is referenced by the generated column \"%s\", so its type can not be changed", copy.name);
 		}

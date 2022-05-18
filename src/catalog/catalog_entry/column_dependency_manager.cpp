@@ -1,7 +1,11 @@
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
+#include <queue>
+
 namespace duckdb {
+
+using std::queue;
 
 ColumnDependencyManager::ColumnDependencyManager() {
 }
@@ -60,6 +64,20 @@ const unordered_set<string> &ColumnDependencyManager::GetDependencies(string nam
 	return entry->second;
 }
 
+bool ColumnDependencyManager::HasDependents(string name) const {
+	auto entry = dependencies.find(name);
+	if (entry == dependencies.end()) {
+		return false;
+	}
+	return true;
+}
+
+const unordered_set<string> &ColumnDependencyManager::GetDependents(string name) const {
+	auto entry = dependencies.find(name);
+	D_ASSERT(entry != dependencies.end());
+	return entry->second;
+}
+
 void ColumnDependencyManager::RenameColumn(TableColumnType category, string old_name, string new_name) {
 	switch (category) {
 	case TableColumnType::GENERATED: {
@@ -112,6 +130,29 @@ void ColumnDependencyManager::InnerRenameColumn(case_insensitive_map_t<unordered
 	// Move the list of columns that connect to this column
 	dependents[new_name] = move(dependents[old_name]);
 	dependents.erase(old_name);
+}
+
+unordered_set<string> ColumnDependencyManager::GetDependencyChain(string col) const {
+	unordered_set<string> chain;
+	queue<string> to_check;
+
+	// Start by checking the column
+	to_check.push(move(col));
+	while (!to_check.empty()) {
+		auto column = move(to_check.front());
+		to_check.pop();
+
+		// Add the dependents to the list of columns to check
+		if (HasDependents(column)) {
+			auto &col_dependents = GetDependents(column);
+			for (auto &dep : col_dependents) {
+				to_check.push(dep);
+			}
+		}
+		// Finally add the dependent column to the set
+		chain.insert(move(column));
+	}
+	return chain;
 }
 
 } // namespace duckdb

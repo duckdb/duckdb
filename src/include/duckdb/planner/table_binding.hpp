@@ -63,6 +63,7 @@ struct TableBinding : public Binding {
 	LogicalGet &get;
 
 public:
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	TableCatalogEntry *GetTableEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;

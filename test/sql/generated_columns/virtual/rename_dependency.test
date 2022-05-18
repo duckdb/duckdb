@@ -11,6 +11,9 @@ INSERT INTO unit VALUES (5,4)
 statement ok
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
 
+statement ok
+ALTER TABLE unit ADD COLUMN profit_total AS (total_profit);
+
 query I
 SELECT total_profit FROM unit
 ----
@@ -19,7 +22,10 @@ SELECT total_profit FROM unit
 statement ok
 ALTER TABLE unit RENAME COLUMN price TO value
 
-query I
-SELECT total_profit FROM unit
-----
-20
+#statement ok
+#ALTER TABLE unit DROP COLUMN value;
+
+#query I
+#SELECT * FROM unit
+#----
+#20

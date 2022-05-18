@@ -9,6 +9,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -57,7 +58,10 @@ string Binding::ColumnNotFoundError(const string &column_name) const {
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
+	bool success = false;
+	success = TryGetBindingIndex(colref.GetColumnName(), column_index);
+	success = success || TryGetBindingIndex(colref.GetColumnName(), column_index, TableColumnType::GENERATED);
+	if (!success) {
 		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
 	}
 	ColumnBinding binding;
@@ -85,10 +89,35 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 	}
 }
 
+static void BakeTableName(ParsedExpression &expr, const string &table_name) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = (ColumnRefExpression &)expr;
+		D_ASSERT(!colref.IsQualified()); // If triggered - CheckValidity wasn't ran on the generated column
+		auto &col_names = colref.column_names;
+		col_names.insert(col_names.begin(), table_name);
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });
+}
+
+unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
+	auto table_catalog_entry = GetTableEntry();
+	D_ASSERT(table_catalog_entry); // Should only be called on a TableBinding
+
+	// Get the index of the generated column
+	auto column_index = GetBindingIndex(column_name, TableColumnType::GENERATED);
+	// Get a copy of the generated column
+	auto expression = table_catalog_entry->columns[column_index].GeneratedExpression().Copy();
+	BakeTableName(*expression, alias);
+	return (expression);
+}
+
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
 	column_t column_index;
-	if (!TryGetBindingIndex(column_name, column_index)) {
+	bool success = false;
+	success = TryGetBindingIndex(column_name, column_index);
+	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
 	// fetch the type of the column

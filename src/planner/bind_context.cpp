@@ -161,33 +161,13 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
-static void BakeTableName(ParsedExpression &expr, const string &table_name) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		D_ASSERT(!colref.IsQualified()); // If triggered - CheckValidity wasn't ran on the generated column
-		auto &col_names = colref.column_names;
-		col_names.insert(col_names.begin(), table_name);
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BakeTableName((ParsedExpression &)child, table_name); });
-}
-
 unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
 	string error_message;
 
 	auto binding = GetBinding(table_name, error_message);
 	D_ASSERT(binding);
-	auto table_catalog_entry = binding->GetTableEntry();
-	D_ASSERT(table_catalog_entry); // Should only be called on a TableBinding
-
-	// Get the index of the generated column
-	auto column_index = binding->GetBindingIndex(column_name, TableColumnType::GENERATED);
-	// Get a copy of the generated column
-	// TODO: bake the table name into the ColumnRefExpressions here
-	auto expression = table_catalog_entry->columns[column_index].GeneratedExpression().Copy();
-	;
-	BakeTableName(*expression, binding->alias);
-	return expression;
+	auto &table_binding = *(TableBinding *)binding;
+	return table_binding.ExpandGeneratedColumn(column_name);
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {

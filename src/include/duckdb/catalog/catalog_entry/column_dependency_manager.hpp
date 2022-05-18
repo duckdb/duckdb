@@ -28,8 +28,13 @@ public:
 
 	bool IsDependencyOf(string gcol, string col) const;
 	bool HasDependencies(string col) const;
-
 	const unordered_set<string> &GetDependencies(string name) const;
+
+	bool HasDependents(string col) const;
+	const unordered_set<string> &GetDependents(string name) const;
+
+	//! Get the list of all columns that are directly or indirectly dependent on this column
+	unordered_set<string> GetDependencyChain(string col) const;
 
 private:
 	void RemoveStandardColumn(ColumnDefinition &column);

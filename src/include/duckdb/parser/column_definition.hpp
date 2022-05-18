@@ -73,7 +73,6 @@ public:
 	//===--------------------------------------------------------------------===//
 	//! Has to be run on a newly added generated column to ensure that its valid
 	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
-	void RenameColumnRefs(RenameColumnInfo &info);
 	void GetListOfDependencies(vector<string> &dependencies);
 
 private:

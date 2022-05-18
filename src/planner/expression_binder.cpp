@@ -212,17 +212,16 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 	BindResult result = BindExpression(expr, depth, root_expression);
 	if (result.HasError()) {
 		return result.error;
-	} else {
-		// successfully bound: replace the node with a BoundExpression
-		*expr = make_unique<BoundExpression>(move(result.expression));
-		auto be = (BoundExpression *)expr->get();
-		D_ASSERT(be);
-		be->alias = alias;
-		if (!alias.empty()) {
-			be->expr->alias = alias;
-		}
-		return string();
 	}
+	// successfully bound: replace the node with a BoundExpression
+	*expr = make_unique<BoundExpression>(move(result.expression));
+	auto be = (BoundExpression *)expr->get();
+	D_ASSERT(be);
+	be->alias = alias;
+	if (!alias.empty()) {
+		be->expr->alias = alias;
+	}
+	return string();
 }
 
 } // namespace duckdb

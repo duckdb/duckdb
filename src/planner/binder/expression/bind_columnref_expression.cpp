@@ -225,6 +225,23 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 	}
 }
 
+bool ExpressionBinder::IsGeneratedColumn(ParsedExpression &expr) {
+	if (expr.type != ExpressionType::COLUMN_REF) {
+		return false;
+	}
+	auto &colref = (ColumnRefExpression &)expr;
+
+	string error_message;
+	if (colref.column_names.size() == 1) {
+		return false;
+	}
+	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
+	auto binding = binder.bind_context.GetBinding(table_name, error_message);
+
+	auto entry = binding->name_map.find(colref.GetColumnName());
+	return (entry != binding->name_map.end() && entry->second.column_type == TableColumnType::GENERATED);
+}
+
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
@@ -234,12 +251,13 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (!expr) {
 		return BindResult(binder.FormatError(colref_p, error_message));
 	}
-	if (expr->type != ExpressionType::COLUMN_REF) {
+	if (expr->type != ExpressionType::COLUMN_REF || IsGeneratedColumn(*expr)) {
 		return BindExpression(&expr, depth);
 	}
 	auto &colref = (ColumnRefExpression &)*expr;
 	D_ASSERT(colref.column_names.size() == 2 || colref.column_names.size() == 3);
 	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
+
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	// if it was a macro parameter, let macro_binding bind it to the argument
