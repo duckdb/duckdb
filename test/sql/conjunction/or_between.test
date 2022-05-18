@@ -1,0 +1,53 @@
+# name: test/sql/conjunction/or_between.test
+# description: Issue 3659: different query results with optimizer on vs. off
+# group: [conjunction]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 VARCHAR, col3 INTEGER, col4 FLOAT, col5 VARCHAR);
+
+statement ok
+INSERT INTO tab0 VALUES(0,22,43.95999908447265625,'yoyca',0,80.1399993896484375,'eoenc');
+
+statement ok
+INSERT INTO tab0 VALUES(1,51,34.900001525878905361,'zeqhw',44,13.489999771118164062,'easox');
+
+statement ok
+INSERT INTO tab0 VALUES(2,42,59.759998321533203125,'ylshk',15,4.4499998092651367187,'xgrvy');
+
+statement ok
+INSERT INTO tab0 VALUES(3,67,90.660003662109378552,'rnadc',77,50.360000610351560723,'knooo');
+
+statement ok
+INSERT INTO tab0 VALUES(4,48,53.099998474121097302,'txhlv',75,9.770000457763671875,'gvudx');
+
+statement ok
+INSERT INTO tab0 VALUES(5,18,40.580001831054683947,'wgfxz',96,12.5,'mmxbj');
+
+statement ok
+INSERT INTO tab0 VALUES(6,84,24.239999771118165838,'ttodp',31,72.999999999999998223,'wujjl');
+
+statement ok
+INSERT INTO tab0 VALUES(7,86,67.449996948242185723,'mwgbl',38,10.479999542236329013,'ypcha');
+
+statement ok
+INSERT INTO tab0 VALUES(8,68,38.470001220703125,'kaoqh',8,41.500000000000003552,'fyhzl');
+
+statement ok
+INSERT INTO tab0 VALUES(9,29,19.600000381469726562,'kbenw',20,19.579999923706054687,'gsszq');
+
+query I
+SELECT pk FROM tab0 WHERE (col0 BETWEEN 67 AND 0 OR col0 > 17 AND (col0 > 3));
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
