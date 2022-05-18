@@ -230,6 +230,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameGeneratedColumn(ClientContext 
 		create_info->constraints.push_back(move(constraint));
 	}
 
+	column_dependency_manager.RenameColumn(columns[index].category, info.old_name, info.new_name);
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
@@ -313,7 +314,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	create_info->temporary = temporary;
 
 	create_info->column_dependency_manager = column_dependency_manager;
-	// Check for the new generated column if there are dependencies
+	// Add the dependencies of the generated column
 	if (info.new_column.Generated()) {
 		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column);
 	}
@@ -387,6 +388,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext 
 		create_info->constraints.push_back(move(constraint));
 	}
 
+	column_dependency_manager.RemoveColumn(columns[index]);
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
@@ -502,6 +504,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 	}
 
+	column_dependency_manager.RemoveColumn(columns[removed_index]);
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	auto new_storage = make_shared<DataTable>(context, *storage, removed_index);
