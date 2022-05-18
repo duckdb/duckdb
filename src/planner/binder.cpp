@@ -22,8 +22,7 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, 
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false),
-      parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
+    : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
 	parameter_types = nullptr;
 	if (parent) {
@@ -424,7 +423,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	projection->AddChild(move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = move(projection);
-	this->allow_stream_result = true;
+	properties.allow_stream_result = true;
+	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }
 

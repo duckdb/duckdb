@@ -51,6 +51,11 @@ jobs:
         chmod +x cmake-3.21.3-linux-x86_64.sh
         sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build extensions
       run: |
         GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
@@ -88,6 +93,11 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
       - name: Build extensions
         run: |
@@ -163,6 +173,12 @@ jobs:
 
        - name: Node Version
          run: ./scripts/node_version.sh
+
+       - name: Setup Ccache
+         uses: hendrikmuhs/ccache-action@main
+         with:
+           key: ${{ github.job }}-${{ matrix.node }}
+           variant: sccache
 
        - name: Node
          run: ./scripts/node_build_win.sh

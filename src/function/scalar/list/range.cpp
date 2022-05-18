@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -61,6 +62,11 @@ struct TimestampRangeInfo {
 			// interval is 0: no result
 			return 0;
 		}
+		// We don't allow infinite bounds because they generate errors or infinite loops
+		if (!Timestamp::IsFinite(start_value) || !Timestamp::IsFinite(end_value)) {
+			throw InvalidInputException("Interval infinite bounds not supported");
+		}
+
 		if (is_negative && is_positive) {
 			// we don't allow a mix of
 			throw InvalidInputException("Interval with mix of negative/positive entries not supported");

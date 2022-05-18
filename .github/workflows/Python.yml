@@ -54,11 +54,18 @@ jobs:
     - name: Install
       run: pip install cibuildwheel twine
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: |
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    # All extensions uploaded by this job will be loaded by the test_extensions.py test during the linux-python3 job.
@@ -204,12 +211,19 @@ jobs:
       run: |
         find tools/pythonpkg -maxdepth 1 -type f -name "*.duckdb_extension"
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}-${{ matrix.arch }}-${{ matrix.python_build }}
+
     - name: Build
       run: |
         cd tools/pythonpkg
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         ls duckdb_tarball
+        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
         ls wheelhouse
 
@@ -248,11 +262,18 @@ jobs:
       - name: Install
         run: pip install cibuildwheel twine
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.python_build }}
+
       - name: Build
         run: |
           cd tools/pythonpkg
           python setup.py sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
       - name: Deploy
@@ -301,11 +322,18 @@ jobs:
       - name: Install
         run: pip install cibuildwheel twine
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.python_build }}
+
       - name: Build
         run: |
           cd tools/pythonpkg
           python setup.py sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+          # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           cibuildwheel --output-dir wheelhouse duckdb_tarball
 
       - name: Deploy
@@ -331,6 +359,11 @@ jobs:
       - name: Install
         run: pip install numpy pytest pandas mypy psutil
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
       - name: Build
         run: |
           python --version
@@ -341,5 +374,26 @@ jobs:
           unzip test-tarball.zip
           cd tools/pythonpkg
           export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           python setup.py install --user
           (cd tests/ && python -m pytest)
+
+   linux-release-cleanup:
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+      name: PyPi Release Cleanup
+      runs-on: ubuntu-20.04
+      needs: linux-python3-9
+      env:
+        PYPI_PASSWORD: ${{secrets.PYPI_PASSWORD}}
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Cleanup Releases
+        run: python3 scripts/pypi_cleanup.py
