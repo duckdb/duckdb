@@ -164,7 +164,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
-static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unresolved) {
+static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, column_t gcol_idx, bool &unresolved) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		column_t index;
 		auto columnref = (ColumnRefExpression &)expr;
@@ -172,18 +172,19 @@ static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unres
 		bool success = table->TryGetBindingIndex(name, index);
 		success = success || table->TryGetBindingIndex(name, index, TableColumnType::GENERATED);
 		D_ASSERT(success);
-		if (table->types[index] == LogicalType::ANY) {
+		if (index > gcol_idx || table->types[index] == LogicalType::ANY) {
 			unresolved = true;
 			return;
 		}
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { TypeIsUnresolved((ParsedExpression &)child, table, unresolved); });
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		TypeIsUnresolved((ParsedExpression &)child, table, gcol_idx, unresolved);
+	});
 }
 
-static bool HasUnresolvedDependency(ParsedExpression &expr, Binding *table) {
+static bool HasUnresolvedDependency(ParsedExpression &expr, Binding *table, column_t gcol_idx) {
 	bool unresolved = false;
-	TypeIsUnresolved(expr, table, unresolved);
+	TypeIsUnresolved(expr, table, gcol_idx, unresolved);
 	return unresolved;
 }
 
@@ -223,7 +224,7 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 		}
 		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.GeneratedExpression().Copy();
-		if (HasUnresolvedDependency(*expression, table_binding)) {
+		if (HasUnresolvedDependency(*expression, table_binding, i)) {
 			// TODO: try to resolve the dependencies, then try again ?
 			throw InvalidInputException("Type of generated column could not be resolved because its dependencies have "
 			                            "not been resolved yet, try changing the order of creation");

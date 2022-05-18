@@ -27,6 +27,13 @@ SELECT * FROM unit;
 
 # ON CREATE
 
+#Circular dependency
+statement error
+CREATE TABLE tbl2 (
+	circular INTEGER AS (dependency),
+	dependency INTEGER AS (circular)
+);
+
 # Type could not be resolved because of the order
 statement error
 CREATE TABLE tbl (
@@ -35,12 +42,20 @@ CREATE TABLE tbl (
 	dependency AS (price),
 );
 
-#Type is provided, so this works
-statement ok
+#Even when type is provided, the order is wrong
+statement error
 CREATE TABLE tbl (
 	price INTEGER,
 	circular AS (dependency * price),
 	dependency INTEGER AS (price),
+);
+
+#When the order is correct, it succeeds
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	dependency INTEGER AS (price),
+	circular AS (dependency * price),
 );
 
 statement ok
@@ -49,4 +64,4 @@ INSERT INTO tbl VALUES (5);
 query III
 SELECT * FROM tbl;
 ----
-5	25	5
+5	5	25
