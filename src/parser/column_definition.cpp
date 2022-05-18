@@ -137,6 +137,22 @@ void ColumnDefinition::RenameColumnRefs(RenameColumnInfo &info) {
 	RenameExpression(*generated_expression, info);
 }
 
+static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto columnref = (ColumnRefExpression &)expr;
+		auto name = columnref.GetColumnName();
+		dependencies.push_back(name);
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
+		InnerGetListOfDependencies((ParsedExpression &)child, dependencies);
+	});
+}
+
+void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) {
+	D_ASSERT(category == TableColumnType::GENERATED);
+	InnerGetListOfDependencies(*generated_expression, dependencies);
+}
+
 void ColumnDefinition::CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name) {
 	D_ASSERT(category == TableColumnType::GENERATED);
 	VerifyColumnRefs(table_name, columns, *generated_expression);
@@ -153,6 +169,25 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expre
 ParsedExpression &ColumnDefinition::GeneratedExpression() {
 	D_ASSERT(category == TableColumnType::GENERATED);
 	return *generated_expression;
+}
+
+void AddToColumnDependencyMapping(ColumnDefinition &col, case_insensitive_map_t<unordered_set<string>> &dependents,
+                                  case_insensitive_map_t<unordered_set<string>> &dependencies) {
+	D_ASSERT(col.Generated());
+	auto name = col.name;
+	// Get the list of dependencies for the generated column
+	vector<string> col_dependencies;
+	col.GetListOfDependencies(col_dependencies);
+	if (col_dependencies.empty()) {
+		// Dont need to add it if it doesn't depend on any columns
+		return;
+	}
+	auto &list = dependents[name];
+	for (auto &col : col_dependencies) {
+		list.insert(col);
+		// Add the generated column to the list of dependents for this column
+		dependencies[col].insert(name);
+	}
 }
 
 } // namespace duckdb

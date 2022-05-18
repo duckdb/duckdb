@@ -87,7 +87,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
-      bound_constraints(move(info->bound_constraints)) {
+      bound_constraints(move(info->bound_constraints)), gcol_dependencies(move(info->Base().gcol_dependencies)),
+      gcol_dependents(move(info->Base().gcol_dependents)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -309,6 +310,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
+
+	create_info->gcol_dependencies = gcol_dependencies;
+	create_info->gcol_dependents = gcol_dependents;
+	// Check for the new generated column if there are dependencies
+	if (info.new_column.Generated()) {
+		AddToColumnDependencyMapping(info.new_column, create_info->gcol_dependents, create_info->gcol_dependencies);
+	}
+
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}

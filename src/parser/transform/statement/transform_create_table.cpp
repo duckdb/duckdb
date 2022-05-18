@@ -4,6 +4,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_info.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -104,6 +105,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 						info->constraints.push_back(move(constraint));
 					}
 				}
+			}
+			// Add to the dependency/dependent map if a generated column is added
+			if (centry.Generated()) {
+				AddToColumnDependencyMapping(centry, info->gcol_dependents, info->gcol_dependencies);
 			}
 			info->columns.push_back(move(centry));
 			break;

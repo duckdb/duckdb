@@ -46,6 +46,10 @@ public:
 	vector<unique_ptr<Constraint>> constraints;
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
+	//! A map of column dependency to generated column(s)
+	case_insensitive_map_t<unordered_set<string>> gcol_dependencies;
+	//! A map of generated column name to (potentially generated)column dependencies
+	case_insensitive_map_t<unordered_set<string>> gcol_dependents;
 	//! A map of column name to column index
 	case_insensitive_map_t<TableColumnInfo> name_map;
 

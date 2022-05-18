@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_info.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,12 @@ struct ColumnExpression {
 	    : expression(move(expression)), type(type) {
 	}
 };
+
+class ColumnDefinition;
+
+//! Used in both TableCatalogEntry and TransformCreateTable
+void AddToColumnDependencyMapping(ColumnDefinition &col, case_insensitive_map_t<unordered_set<string>> &dependents,
+                                  case_insensitive_map_t<unordered_set<string>> &dependencies);
 
 //! A column of a table.
 class ColumnDefinition {
@@ -67,6 +74,7 @@ public:
 	//! Has to be run on a newly added generated column to ensure that its valid
 	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
 	void RenameColumnRefs(RenameColumnInfo &info);
+	void GetListOfDependencies(vector<string> &dependencies);
 
 private:
 private:

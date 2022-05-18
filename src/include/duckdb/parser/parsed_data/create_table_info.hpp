@@ -30,6 +30,10 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
+	//! A map of generated column name to (potentially generated)column dependencies
+	case_insensitive_map_t<unordered_set<string>> gcol_dependents;
+	//! A map of column dependency to generated column(s)
+	case_insensitive_map_t<unordered_set<string>> gcol_dependencies;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {

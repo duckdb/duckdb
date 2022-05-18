@@ -34,23 +34,23 @@ CREATE TABLE tbl2 (
 	dependency INTEGER AS (circular)
 );
 
-# Type could not be resolved because of the order
-statement error
-CREATE TABLE tbl (
+# Type is resolved, regardless of order
+statement ok
+CREATE TABLE tbl2 (
 	price INTEGER,
 	circular AS (dependency * price),
 	dependency AS (price),
 );
 
-#Even when type is provided, the order is wrong
-statement error
-CREATE TABLE tbl (
+#Same, but with a provided type
+statement ok
+CREATE TABLE tbl3 (
 	price INTEGER,
 	circular AS (dependency * price),
 	dependency INTEGER AS (price),
 );
 
-#When the order is correct, it succeeds
+#Example with 'correct' order
 statement ok
 CREATE TABLE tbl (
 	price INTEGER,

@@ -16,16 +16,18 @@ ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * am
 statement ok
 SELECT total_profit FROM unit
 
-# Cant create a generated column, from another generated column
-statement error
+# Can also create a column from a generated column
+statement ok
 ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
 
-# Column doesn't exist, failed to create it before
-statement error
+# Column exists
+query I
 SELECT also_total_profit FROM unit
+----
+20
 
-# Create a table with a functional generated column, and another generated column created from this other one
-statement error
+# Create a table with a generated column, and another generated column created from this other one
+statement ok
 CREATE TABLE unit2(
 	price INTEGER,
 	amount_sold INTEGER,
@@ -33,6 +35,10 @@ CREATE TABLE unit2(
 	also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL
 );
 
-# Table failed to create
-statement error
-SELECT total_profit FROM unit2;
+statement ok
+INSERT INTO unit2 VALUES (100, 0)
+
+query IIII
+SELECT * FROM unit2
+----
+100	0	0	0
