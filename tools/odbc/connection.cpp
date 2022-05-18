@@ -82,8 +82,16 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		case SQL_ATTR_TRACEFILE:
 		case SQL_ATTR_TRANSLATE_LIB:
 		case SQL_ATTR_TRANSLATE_OPTION:
-		case SQL_ATTR_TXN_ISOLATION:
 			return SQL_NO_DATA;
+		case SQL_ATTR_QUERY_TIMEOUT: {
+			*(SQLINTEGER *)value_ptr = 0;
+			buffer_length = sizeof(SQLINTEGER);
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_TXN_ISOLATION: {
+			*(SQLUINTEGER *)value_ptr = SQL_TXN_SERIALIZABLE;
+			return SQL_SUCCESS;
+		}
 		default:
 			duckdb::DiagRecord diag_rec("Attribute not supported.", SQLStateType::INVALID_ATTR_OPTION_ID,
 			                            dbc->GetDataSourceName());
@@ -175,9 +183,9 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			return SQL_SUCCESS;
 		}
 		default:
-			duckdb::DiagRecord diag_rec("Invalid attribute: " + std::to_string(attribute),
-			                            SQLStateType::INVALID_ATTR_OPTION_ID, dbc->GetDataSourceName());
-			throw duckdb::OdbcException("SQLSetConnectAttr", SQL_ERROR, diag_rec);
+			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+			                            SQLStateType::OPTION_VALUE_CHANGED, dbc->GetDataSourceName());
+			throw duckdb::OdbcException("SQLSetConnectAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
 		}
 	});
 }
@@ -738,7 +746,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	case SQL_MULT_RESULT_SETS: {
-		duckdb::OdbcUtils::WriteString(yes_str, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
+		// saying NO beucase of SQLite
+		duckdb::OdbcUtils::WriteString(no_str, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
 		return SQL_SUCCESS;
 	}
 	case SQL_MULTIPLE_ACTIVE_TXN: {

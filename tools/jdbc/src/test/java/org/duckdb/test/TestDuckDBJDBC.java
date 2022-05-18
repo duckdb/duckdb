@@ -146,6 +146,19 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_prepare_exception() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+	
+		stmt = conn.createStatement();
+		
+		try {
+			stmt.execute("this is no SQL;");
+			fail();
+		} catch (SQLException e) {
+		}
+	}
+
 	public static void test_autocommit_off() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
