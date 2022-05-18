@@ -175,4 +175,28 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
 	return make_unique<NodeStatistics>(data.row_count, data.row_count);
 }
 
+py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
+	auto copy_df = original_df.attr("copy")(false);
+	unordered_map<string, idx_t> pandas_column_names_map;
+	py::list py_column_names;
+	auto df_columns = py::list(original_df.attr("columns"));
+	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
+		auto column_name_py = py::str(df_columns[col_idx]);
+		pandas_column_names_map[column_name_py]++;
+		if (pandas_column_names_map[column_name_py] > 1) {
+			// If the column name is repeated we start adding _x where x is the repetition number
+			string column_name = column_name_py;
+			column_name += "_" + std::to_string(pandas_column_names_map[column_name_py] - 1);
+			auto new_column_name_py = py::str(column_name);
+			py_column_names.append(new_column_name_py);
+			// column_attributes[py::cast(col_idx)] = new_column_name_py;
+			pandas_column_names_map[new_column_name_py]++;
+		} else {
+			py_column_names.append(column_name_py);
+		}
+	}
+	copy_df.attr("columns") = py_column_names;
+	return copy_df;
+}
+
 } // namespace duckdb
