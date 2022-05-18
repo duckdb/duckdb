@@ -206,7 +206,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 				// Only if the USER comes from a create type
 				result->dependencies.insert(type_dependency);
 			}
-		} 
+		}
 	}
 	properties.allow_stream_result = false;
 	return result;
