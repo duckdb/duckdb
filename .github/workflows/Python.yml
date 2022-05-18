@@ -110,13 +110,13 @@ jobs:
       if: ${{matrix.arch == 'x86_64'}}
       run: |
         cd openssl-1.1.1k
-        ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
+        ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib zlib-dynamic
 
     - name: Configure OpenSSL i686
       if: ${{matrix.arch == 'i686'}}
       run: |
         cd openssl-1.1.1k
-        ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic -m32 linux-generic32
+        ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib zlib-dynamic -m32 linux-generic32
 
     - name: Build OpenSSL
       run: |
