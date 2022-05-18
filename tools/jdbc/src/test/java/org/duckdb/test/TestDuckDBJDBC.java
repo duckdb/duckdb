@@ -263,35 +263,35 @@ public class TestDuckDBJDBC {
 
 		// Test 16 bit enum
 		stmt.execute("CREATE TYPE enum_long AS ENUM ('enum0' ,'enum1' ,'enum2' ,'enum3' ,'enum4' ,'enum5' ,'enum6'"
-				+ ",'enum7' ,'enum8' ,'enum9' ,'enum10' ,'enum11' ,'enum12' ,'enum13' ,'enum14' ,'enum15' ,'enum16' ,'enum17'"
-				+ ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' ,'enum28'"
-				+ ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' ,'enum39'"
-				+ ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' ,'enum50'"
-				+ ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' ,'enum61'"
-				+ ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' ,'enum72'"
-				+ ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' ,'enum83'"
-				+ ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' ,'enum94'"
-				+ ",'enum95' ,'enum96' ,'enum97' ,'enum98' ,'enum99' ,'enum100' ,'enum101' ,'enum102' ,'enum103' ,'enum104' "
-				+ ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' ,'enum114'"
-				+ ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' ,'enum124'"
-				+ ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' ,'enum134'"
-				+ ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' ,'enum144'"
-				+ ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' ,'enum154'"
-				+ ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' ,'enum164'"
-				+ ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' ,'enum174'"
-				+ ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' ,'enum184'"
-				+ ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' ,'enum194'"
-				+ ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' ,'enum204'"
-				+ ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' ,'enum214'"
-				+ ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' ,'enum224'"
-				+ ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' ,'enum234'"
-				+ ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' ,'enum244'"
-				+ ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' ,'enum254'"
-				+ ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' ,'enum264'"
-				+ ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' ,'enum274'"
-				+ ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' ,'enum284'"
-				+ ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' ,'enum294'"
-				+ ",'enum295' ,'enum296' ,'enum297' ,'enum298' ,'enum299');");
+		+ ",'enum7' ,'enum8' ,'enum9' ,'enum10' ,'enum11' ,'enum12' ,'enum13' ,'enum14' ,'enum15' ,'enum16' ,'enum17'"
+		+ ",'enum18' ,'enum19' ,'enum20' ,'enum21' ,'enum22' ,'enum23' ,'enum24' ,'enum25' ,'enum26' ,'enum27' ,'enum28'"
+		+ ",'enum29' ,'enum30' ,'enum31' ,'enum32' ,'enum33' ,'enum34' ,'enum35' ,'enum36' ,'enum37' ,'enum38' ,'enum39'"
+		+ ",'enum40' ,'enum41' ,'enum42' ,'enum43' ,'enum44' ,'enum45' ,'enum46' ,'enum47' ,'enum48' ,'enum49' ,'enum50'"
+		+ ",'enum51' ,'enum52' ,'enum53' ,'enum54' ,'enum55' ,'enum56' ,'enum57' ,'enum58' ,'enum59' ,'enum60' ,'enum61'"
+		+ ",'enum62' ,'enum63' ,'enum64' ,'enum65' ,'enum66' ,'enum67' ,'enum68' ,'enum69' ,'enum70' ,'enum71' ,'enum72'"
+		+ ",'enum73' ,'enum74' ,'enum75' ,'enum76' ,'enum77' ,'enum78' ,'enum79' ,'enum80' ,'enum81' ,'enum82' ,'enum83'"
+		+ ",'enum84' ,'enum85' ,'enum86' ,'enum87' ,'enum88' ,'enum89' ,'enum90' ,'enum91' ,'enum92' ,'enum93' ,'enum94'"
+		+ ",'enum95' ,'enum96' ,'enum97' ,'enum98' ,'enum99' ,'enum100' ,'enum101' ,'enum102' ,'enum103' ,'enum104' "
+		+ ",'enum105' ,'enum106' ,'enum107' ,'enum108' ,'enum109' ,'enum110' ,'enum111' ,'enum112' ,'enum113' ,'enum114'"
+		+ ",'enum115' ,'enum116' ,'enum117' ,'enum118' ,'enum119' ,'enum120' ,'enum121' ,'enum122' ,'enum123' ,'enum124'"
+		+ ",'enum125' ,'enum126' ,'enum127' ,'enum128' ,'enum129' ,'enum130' ,'enum131' ,'enum132' ,'enum133' ,'enum134'"
+		+ ",'enum135' ,'enum136' ,'enum137' ,'enum138' ,'enum139' ,'enum140' ,'enum141' ,'enum142' ,'enum143' ,'enum144'"
+		+ ",'enum145' ,'enum146' ,'enum147' ,'enum148' ,'enum149' ,'enum150' ,'enum151' ,'enum152' ,'enum153' ,'enum154'"
+		+ ",'enum155' ,'enum156' ,'enum157' ,'enum158' ,'enum159' ,'enum160' ,'enum161' ,'enum162' ,'enum163' ,'enum164'"
+		+ ",'enum165' ,'enum166' ,'enum167' ,'enum168' ,'enum169' ,'enum170' ,'enum171' ,'enum172' ,'enum173' ,'enum174'"
+		+ ",'enum175' ,'enum176' ,'enum177' ,'enum178' ,'enum179' ,'enum180' ,'enum181' ,'enum182' ,'enum183' ,'enum184'"
+		+ ",'enum185' ,'enum186' ,'enum187' ,'enum188' ,'enum189' ,'enum190' ,'enum191' ,'enum192' ,'enum193' ,'enum194'"
+		+ ",'enum195' ,'enum196' ,'enum197' ,'enum198' ,'enum199' ,'enum200' ,'enum201' ,'enum202' ,'enum203' ,'enum204'"
+		+ ",'enum205' ,'enum206' ,'enum207' ,'enum208' ,'enum209' ,'enum210' ,'enum211' ,'enum212' ,'enum213' ,'enum214'"
+		+ ",'enum215' ,'enum216' ,'enum217' ,'enum218' ,'enum219' ,'enum220' ,'enum221' ,'enum222' ,'enum223' ,'enum224'"
+		+ ",'enum225' ,'enum226' ,'enum227' ,'enum228' ,'enum229' ,'enum230' ,'enum231' ,'enum232' ,'enum233' ,'enum234'"
+		+ ",'enum235' ,'enum236' ,'enum237' ,'enum238' ,'enum239' ,'enum240' ,'enum241' ,'enum242' ,'enum243' ,'enum244'"
+		+ ",'enum245' ,'enum246' ,'enum247' ,'enum248' ,'enum249' ,'enum250' ,'enum251' ,'enum252' ,'enum253' ,'enum254'"
+		+ ",'enum255' ,'enum256' ,'enum257' ,'enum258' ,'enum259' ,'enum260' ,'enum261' ,'enum262' ,'enum263' ,'enum264'"
+		+ ",'enum265' ,'enum266' ,'enum267' ,'enum268' ,'enum269' ,'enum270' ,'enum271' ,'enum272' ,'enum273' ,'enum274'"
+		+ ",'enum275' ,'enum276' ,'enum277' ,'enum278' ,'enum279' ,'enum280' ,'enum281' ,'enum282' ,'enum283' ,'enum284'"
+		+ ",'enum285' ,'enum286' ,'enum287' ,'enum288' ,'enum289' ,'enum290' ,'enum291' ,'enum292' ,'enum293' ,'enum294'"
+		+ ",'enum295' ,'enum296' ,'enum297' ,'enum298' ,'enum299');");
 
 		stmt.execute("CREATE TABLE t2 (id INT, e1 enum_long);");
 		stmt.execute("INSERT INTO t2 (id, e1) VALUES (1, 'enum290');");
@@ -350,11 +350,10 @@ public class TestDuckDBJDBC {
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt5));
 		rs.next();
 		assertTrue(rs.getObject(2, OffsetDateTime.class).isEqual(odt2Rounded));
-		assertTrue(((OffsetDateTime) rs.getObject(2)).isEqual(odt2Rounded));
+		assertTrue(((OffsetDateTime)rs.getObject(2)).isEqual(odt2Rounded));
 
 		// Metadata tests
-		assertEquals(Types.TIME_WITH_TIMEZONE,
-				((DuckDBResultSetMetaData) meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
+		assertEquals(Types.TIME_WITH_TIMEZONE, ((DuckDBResultSetMetaData)meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
 		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
 
 		rs.close();
@@ -666,7 +665,7 @@ public class TestDuckDBJDBC {
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE x (ts TIMESTAMP)");
 
-		LocalDateTime ldt = LocalDateTime.of(2021, 1, 18, 21, 20, 7);
+		LocalDateTime ldt = LocalDateTime.of(2021,1,18,21,20,7);
 
 		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO x VALUES (?)");
 		ps1.setObject(1, ldt);
@@ -690,12 +689,12 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		stmt.execute("CREATE TABLE b (vchar VARCHAR, bo BOOLEAN, sint SMALLINT, nint INTEGER, bigi BIGINT,"
-				+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
-				+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
-				+ " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, blo BLOB)");
+			+ " flt FLOAT, dbl DOUBLE, dte DATE, tme TIME, ts TIMESTAMP, dec16 DECIMAL(3,1),"
+			+ " dec32 DECIMAL(9,8), dec64 DECIMAL(16,1), dec128 DECIMAL(30,10), tint TINYINT, utint UTINYINT,"
+			+ " usint USMALLINT, uint UINTEGER, ubig UBIGINT, hin HUGEINT, blo BLOB)");
 		stmt.execute("INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
-				+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
-				+ " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, 'yeah'::BLOB)");
+			+ " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
+			+ " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, 'yeah'::BLOB)");
 
 		PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
 		ResultSet rs = ps.executeQuery();
@@ -712,7 +711,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getTime(9), rs.getObject(9, Time.class));
 		assertEquals(rs.getTimestamp(10), rs.getObject(10, Timestamp.class));
 		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.parse("1970-01-03T03:42:23"));
-		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.of(1970, 1, 3, 3, 42, 23));
+		assertEquals(rs.getObject(10, LocalDateTime.class), LocalDateTime.of(1970,1,3,3,42,23));
 		assertEquals(rs.getBigDecimal(11), rs.getObject(11, BigDecimal.class));
 		assertEquals(rs.getBigDecimal(12), rs.getObject(12, BigDecimal.class));
 		assertEquals(rs.getBigDecimal(13), rs.getObject(13, BigDecimal.class));
@@ -722,44 +721,44 @@ public class TestDuckDBJDBC {
 		try {
 			rs.getObject(11, Integer.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		try {
 			rs.getObject(12, Integer.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		try {
 			rs.getObject(13, Integer.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		try {
 			rs.getObject(14, Long.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		try {
 			rs.getObject(15, BigInteger.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		try {
 			rs.getObject(16, BigInteger.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		try {
 			rs.getObject(16, Blob.class);
 			assertTrue(false);
-		} catch (SQLException e) {
 		}
+		catch (SQLException e) {}
 
 		rs.close();
 		ps.close();
@@ -802,11 +801,9 @@ public class TestDuckDBJDBC {
 	public static void test_bigdecimal() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		stmt.execute(
-				"CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+		stmt.execute("CREATE TABLE q (id DECIMAL(3,0), dec16 DECIMAL(4,1), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
 
-		PreparedStatement ps1 = conn
-				.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)");
+		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (?, ?, ?, ?, ?)");
 		ps1.setObject(1, new BigDecimal("1"));
 		ps1.setObject(2, new BigDecimal("999.9"));
 		ps1.setObject(3, new BigDecimal("99999.9999"));
@@ -831,6 +828,8 @@ public class TestDuckDBJDBC {
 		ps1.execute();
 		ps1.close();
 
+
+
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (4, -0, -0, -0, -0)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (5, 0, 0, 0, 18446744073709551615)");
 		stmt.execute("INSERT INTO q (id, dec16, dec32, dec64, dec128) VALUES (6, 0, 0, 0, 18446744073709551616)");
@@ -840,7 +839,8 @@ public class TestDuckDBJDBC {
 
 		PreparedStatement ps = conn.prepareStatement("SELECT * FROM q ORDER BY id");
 		ResultSet rs = ps.executeQuery();
-		while (rs.next()) {
+		while (rs.next())
+		{
 			assertEquals(rs.getBigDecimal(1), rs.getObject(1, BigDecimal.class));
 			assertEquals(rs.getBigDecimal(2), rs.getObject(2, BigDecimal.class));
 			assertEquals(rs.getBigDecimal(3), rs.getObject(3, BigDecimal.class));
@@ -851,7 +851,7 @@ public class TestDuckDBJDBC {
 		rs.close();
 
 		ResultSet rs2 = ps.executeQuery();
-		DuckDBResultSetMetaData meta = (DuckDBResultSetMetaData) rs2.getMetaData();
+		DuckDBResultSetMetaData meta = (DuckDBResultSetMetaData)rs2.getMetaData();
 		rs2.next();
 		assertEquals(rs2.getBigDecimal(1), new BigDecimal("1"));
 		assertEquals(rs2.getBigDecimal(2), new BigDecimal("999.9"));
@@ -908,14 +908,14 @@ public class TestDuckDBJDBC {
 
 		Timestamp ts = Timestamp.valueOf("1970-01-01 01:01:01");
 
-		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+		for (long i = 134234533L; i < 13423453300L; i=i+73512) {
 			ts.setTime(i);
-			stmt.execute("INSERT INTO a (ts) VALUES ('" + ts + "')");
+			stmt.execute("INSERT INTO a (ts) VALUES ('" + ts +"')");
 		}
 
 		stmt.close();
 
-		for (long i = 134234533L; i < 13423453300L; i = i + 73512) {
+		for (long i = 134234533L; i < 13423453300L; i=i+73512) {
 			PreparedStatement ps = conn.prepareStatement(
 					"SELECT COUNT(ts) FROM a WHERE ts = ?");
 			ps.setTimestamp(1, ts);
@@ -932,8 +932,7 @@ public class TestDuckDBJDBC {
 	public static void test_lots_of_decimals() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		stmt.execute(
-				"CREATE TABLE q (id DECIMAL(4,0), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
+		stmt.execute("CREATE TABLE q (id DECIMAL(4,0), dec32 DECIMAL(9,4), dec64 DECIMAL(18,7), dec128 DECIMAL(38,10))");
 		stmt.close();
 
 		PreparedStatement ps1 = conn.prepareStatement("INSERT INTO q (id, dec32, dec64, dec128) VALUES (?, ?, ?, ?)");
@@ -952,7 +951,7 @@ public class TestDuckDBJDBC {
 		BigDecimal multiplicant = new BigDecimal("0.987");
 
 		for (int i = 2; i < 10000; i++) {
-			ps2.setObject(1, new BigDecimal(i - 1));
+			ps2.setObject(1, new BigDecimal(i-1));
 			ResultSet rs = ps2.executeQuery();
 			assertTrue(rs.next());
 
@@ -987,6 +986,7 @@ public class TestDuckDBJDBC {
 		ps2.close();
 		conn.close();
 	}
+
 
 	public static void test_big_data() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
