@@ -3426,6 +3426,7 @@ static void yynoreturn yy_fatal_error (const char* msg , yyscan_t yyscanner)
 {
 	struct yyguts_t * yyg = (struct yyguts_t*)yyscanner;
 	(void)yyg;
+	fprintf( stderr, "%s\n", msg );
 	throw std::runtime_error(msg); // YY_EXIT_FAILURE );
 }
 
@@ -3695,8 +3696,13 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack =  NULL;
 
 /* Defined in main.c */
+#ifdef YY_STDINIT
+    yyin = stdin;
+    yyout = stdout;
+#else
     yyin = NULL;
     yyout = NULL;
+#endif
 
     /* For future reference: Set errno on error, since we are called by
      * yylex_init()

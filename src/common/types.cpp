@@ -43,10 +43,6 @@ hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }
 
-void LogicalType::SetExtraInfo(shared_ptr<ExtraTypeInfo> type_info) {
-	type_info_ = move(type_info);
-}
-
 PhysicalType LogicalType::GetInternalType() {
 	switch (id_) {
 	case LogicalTypeId::BOOLEAN:
@@ -447,7 +443,7 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 }
 
 string LogicalType::ToString() const {
-	auto alias = LogicalType::GetAlias(*this);
+	auto alias = GetAlias();
 	if (!alias.empty()) {
 		return alias;
 	}
@@ -742,7 +738,20 @@ struct ExtraTypeInfo {
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
-	virtual bool Equals(ExtraTypeInfo *other_p) const {
+	bool Equals(ExtraTypeInfo *other_p) const {
+		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO
+			|| type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+			if (!other_p) {
+				if (alias != "") {
+					return false;
+				}
+				return true;
+			}
+			if (alias != other_p->alias) {
+				return false;
+			}
+			return true;
+		}
 		if (!other_p) {
 			return false;
 		}
@@ -750,7 +759,7 @@ public:
 			return false;
 		}
 		auto &other = (ExtraTypeInfo &)*other_p;
-		return alias == other.alias;
+		return alias == other.alias && EqualsInternal(other_p);
 	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const {};
@@ -758,25 +767,27 @@ public:
 	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+
+protected:
+	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
+		// Do nothing
+		return true;
+	}
 };
 
-void LogicalType::SetAlias(LogicalType &type, string &alias) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		auto new_info = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, alias);
-		type.SetExtraInfo(move(new_info));
+void LogicalType::SetAlias(string &alias) {
+	if (!type_info_) {
+		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, alias);
 	} else {
-		D_ASSERT(info);
-		((ExtraTypeInfo &)*info).alias = alias;
+		type_info_->alias = alias;
 	}
 }
 
-string LogicalType::GetAlias(const LogicalType &type) {
-	auto info = type.AuxInfo();
-	if (!info) {
+string LogicalType::GetAlias() const {
+	if (!type_info_) {
 		return "";
 	} else {
-		return ((ExtraTypeInfo &)*info).alias;
+		return type_info_->alias;
 	}
 }
 
@@ -787,7 +798,9 @@ void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry)
 }
 TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
+	if (!info) {
+		return nullptr;
+	}
 	return ((ExtraTypeInfo &)*info).catalog_entry;
 }
 
@@ -803,17 +816,6 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 	uint8_t scale;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (DecimalTypeInfo &)*other_p;
-		return width == other.width && scale == other.scale;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField<uint8_t>(width);
 		writer.WriteField<uint8_t>(scale);
@@ -823,6 +825,11 @@ public:
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale, alias);
+	}
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (DecimalTypeInfo &)*other_p;
+		return width == other.width && scale == other.scale;
 	}
 };
 
@@ -856,11 +863,6 @@ struct StringTypeInfo : public ExtraTypeInfo {
 	string collation;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		// collation info has no impact on equality
-		return true;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteString(collation);
 	}
@@ -868,6 +870,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto collation = reader.ReadRequired<string>();
 		return make_shared<StringTypeInfo>(move(collation), alias);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		// collation info has no impact on equality
+		return true;
 	}
 };
 
@@ -901,17 +909,6 @@ struct ListTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (ListTypeInfo &)*other_p;
-		return child_type == other.child_type;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteSerializable(child_type);
 	}
@@ -919,6 +916,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_shared<ListTypeInfo>(move(child_type), alias);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (ListTypeInfo &)*other_p;
+		return child_type == other.child_type;
 	}
 };
 
@@ -945,17 +948,6 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	child_list_t<LogicalType> child_types;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (StructTypeInfo &)*other_p;
-		return child_types == other.child_types;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField<uint32_t>(child_types.size());
 		auto &serializer = writer.GetSerializer();
@@ -976,6 +968,12 @@ public:
 		}
 		return make_shared<StructTypeInfo>(move(child_list), alias);
 	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (StructTypeInfo &)*other_p;
+		return child_types == other.child_types;
+	}
 };
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
@@ -986,19 +984,6 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	aggregate_state_t state_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (AggregateStateTypeInfo &)*other_p;
-		return state_type.function_name == other.state_type.function_name &&
-		       state_type.return_type == other.state_type.return_type &&
-		       state_type.bound_argument_types == other.state_type.bound_argument_types;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		auto &serializer = writer.GetSerializer();
 		writer.WriteString(state_type.function_name);
@@ -1023,6 +1008,14 @@ public:
 		}
 		return make_shared<AggregateStateTypeInfo>(
 		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)), alias);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (AggregateStateTypeInfo &)*other_p;
+		return state_type.function_name == other.state_type.function_name &&
+		       state_type.return_type == other.state_type.return_type &&
+		       state_type.bound_argument_types == other.state_type.bound_argument_types;
 	}
 };
 
@@ -1115,17 +1108,6 @@ struct UserTypeInfo : public ExtraTypeInfo {
 	string user_type_name;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (UserTypeInfo &)*other_p;
-		return other.user_type_name == user_type_name;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteString(user_type_name);
 	}
@@ -1133,6 +1115,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader, const string &alias) {
 		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(move(enum_name), alias);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (UserTypeInfo &)*other_p;
+		return other.user_type_name == user_type_name;
 	}
 };
 
@@ -1161,14 +1149,15 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	idx_t size;
 
 public:
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteField<uint32_t>(size);
+		writer.WriteString(enum_name);
+		((Vector &)values_insert_order).Serialize(size, writer.GetSerializer());
+	}
+
+protected:
 	// Equalities are only used in enums with different catalog entries
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
 		auto &other = (EnumTypeInfo &)*other_p;
 
 		// We must check if both enums have the same size
@@ -1185,12 +1174,6 @@ public:
 			}
 		}
 		return true;
-	}
-
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteField<uint32_t>(size);
-		writer.WriteString(enum_name);
-		((Vector &)values_insert_order).Serialize(size, writer.GetSerializer());
 	}
 };
 

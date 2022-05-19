@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TYPE alias FROM VARCHAR;
+CREATE TYPE alias AS ALIAS VARCHAR;
 
 # Test with non existent alias type
 statement error
@@ -91,10 +91,10 @@ CREATE TABLE aliens (
 );
 
 statement ok
-CREATE TYPE alias FROM VARCHAR;
+CREATE TYPE alias AS ALIAS VARCHAR;
 
 statement ok
-CREATE TYPE intelligence FROM VARCHAR;
+CREATE TYPE intelligence AS ALIAS VARCHAR;
 
 statement ok
 CREATE TABLE aliens (
@@ -139,7 +139,7 @@ The Borg	ok	ehh
 
 # Comparisons between enum columns with the same enum type
 statement ok
-CREATE TYPE car_brand FROM VARCHAR;
+CREATE TYPE car_brand AS ALIAS VARCHAR;
 
 statement ok
 CREATE TABLE person (

@@ -493,10 +493,10 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		if (!found) {
 			AdjustUserDependency(entry, column, remove);
 		}
-	} else if (!(LogicalType::GetAlias(column.type).empty())) {
-		auto alias = LogicalType::GetAlias(column.type);
+	} else if (!(column.type.GetAlias().empty())) {
+		auto alias = column.type.GetAlias();
 		for (auto &old_column : table->columns) {
-			auto old_alias = LogicalType::GetAlias(old_column.type);
+			auto old_alias = old_column.type.GetAlias();
 			if (old_column.name == column.name && old_alias != alias) {
 				AdjustUserDependency(entry, column, remove);
 				found = true;

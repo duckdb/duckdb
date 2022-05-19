@@ -436,11 +436,10 @@ struct LogicalType {
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
 	DUCKDB_API hash_t Hash() const;
-	DUCKDB_API void SetExtraInfo(shared_ptr<ExtraTypeInfo> type_info);
+	DUCKDB_API void SetAlias(string &alias);
+	DUCKDB_API string GetAlias() const;
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
-	DUCKDB_API static void SetAlias(LogicalType &type, string &alias);
-	DUCKDB_API static string GetAlias(const LogicalType &type);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 

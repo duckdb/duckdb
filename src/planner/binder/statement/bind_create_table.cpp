@@ -199,13 +199,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	for (auto &column : base.columns) {
 		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
 		BindLogicalType(context, column.type);
-		if (column.type.id() == LogicalTypeId::ENUM || !(LogicalType::GetAlias(column.type).empty())) {
-			// We add a catalog dependency
-			auto type_dependency = LogicalType::GetCatalog(column.type);
-			if (type_dependency) {
-				// Only if the USER comes from a create type
-				result->dependencies.insert(type_dependency);
-			}
+		// We add a catalog dependency
+		auto type_dependency = LogicalType::GetCatalog(column.type);
+		if (type_dependency) {
+			// Only if the USER comes from a create type
+			result->dependencies.insert(type_dependency);
 		}
 	}
 	properties.allow_stream_result = false;

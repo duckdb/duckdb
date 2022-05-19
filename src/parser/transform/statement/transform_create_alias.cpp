@@ -13,7 +13,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateAlias(duckdb_libpgquery:
 	auto info = make_unique<CreateTypeInfo>();
 	info->name = ReadPgListToString(stmt->aliasname)[0];
 	LogicalType target_type = TransformTypeName(stmt->typeName);
-	LogicalType::SetAlias(target_type, info->name);
+	target_type.SetAlias(info->name);
 	info->type = target_type;
 	result->info = move(info);
 	return result;
