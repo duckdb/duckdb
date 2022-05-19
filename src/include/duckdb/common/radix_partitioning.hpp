@@ -12,6 +12,10 @@
 
 namespace duckdb {
 
+class BufferManager;
+class RowLayout;
+class RowDataCollection;
+
 //! Templated radix partitioning constants, can be templated to the number of radix bits
 //! See: join_hashtable.hpp
 template <idx_t radix_bits>
@@ -46,12 +50,11 @@ public:
 	//! Reduce a histogram from a certain number of radix bits to a lower number
 	static unique_ptr<idx_t[]> ReduceHistogram(const idx_t histogram_from[], idx_t radix_bits_from,
 	                                           idx_t radix_bits_to);
-
-	//! Allocate a temporary "SWWCB" buffer for radix partitioning
-	static unique_ptr<data_t[]> AllocateTempBuf(idx_t entry_size, idx_t radix_bits);
-
-	static void Partition(data_ptr_t source_ptr, data_ptr_t tmp_buf, data_ptr_t dest_ptrs[], idx_t entry_size,
-	                      idx_t count, idx_t hash_offset, idx_t radix_bits);
+	//! TODO
+	static void Partition(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
+	                      RowDataCollection &block_collection, RowDataCollection &string_heap,
+	                      vector<unique_ptr<RowDataCollection>> &partition_block_collections,
+	                      vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
 };
 
 } // namespace duckdb

@@ -852,6 +852,7 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 		if (heap_block_remaining >= data_block->count) {
 			// Easy: current heap block contains all strings for this data block, just copy (reference) the block
 			swizzled_string_heap->blocks.push_back(heap_blocks[heap_block_idx]->Copy());
+			swizzled_string_heap->blocks.back()->count = 0;
 
 			// Swizzle the heap pointer
 			auto heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
@@ -908,26 +909,24 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 	string_heap->Clear();
 }
 
-void JoinHashTable::FinalizeExternal(Pipeline &pipeline) {
-	// Everything should be in the 'swizzled' variants of these
-	D_ASSERT(block_collection->blocks.empty());
-	D_ASSERT(string_heap->blocks.empty());
-
-	ReduceHistogram();
-	Partition(pipeline);
-
-	// Unswizzle
+void JoinHashTable::UnswizzleBlocks() {
 	auto &blocks = swizzled_block_collection->blocks;
 	auto &heap_blocks = swizzled_string_heap->blocks;
+
 	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
 		auto &data_block = blocks[block_idx];
+
 		if (!layout.AllConstant()) {
 			auto block_handle = buffer_manager.Pin(data_block->block);
 			auto heap_handle = buffer_manager.Pin(heap_blocks[block_idx]->block);
+
+			// Unswizzle and move
 			RowOperations::UnswizzlePointers(layout, block_handle->Ptr(), heap_handle->Ptr(), data_block->count);
 			string_heap->blocks.push_back(move(heap_blocks[block_idx]));
 			string_heap->pinned_blocks.push_back(move(heap_handle));
 		}
+
+		// Fixed size stuff can just be moved
 		block_collection->blocks.push_back(move(data_block));
 	}
 
@@ -936,6 +935,17 @@ void JoinHashTable::FinalizeExternal(Pipeline &pipeline) {
 	string_heap->count = swizzled_string_heap->count;
 	swizzled_block_collection->Clear();
 	swizzled_string_heap->Clear();
+}
+
+void JoinHashTable::FinalizeExternal(Pipeline &pipeline, Event &event) {
+	// Everything should be in the 'swizzled' variants of these
+	D_ASSERT(block_collection->blocks.empty());
+	D_ASSERT(string_heap->blocks.empty());
+
+	ReduceHistogram();
+	Partition(pipeline, event);
+	// TODO: move partitions to unswizzled_...
+	UnswizzleBlocks();
 
 	Finalize();
 }
@@ -991,25 +1001,31 @@ public:
 public:
 	void Schedule() override {
 		auto &context = pipeline.GetClientContext();
+		auto &ts = TaskScheduler::GetScheduler(context);
 
 		// Schedule tasks equal to the number of threads, by assigning an equal number of blocks per thread TODO
-		auto &ts = TaskScheduler::GetScheduler(context);
 		idx_t num_threads = ts.NumberOfThreads();
+//		idx_t num_blocks = hash_table.
 
-		vector<unique_ptr<Task>> merge_tasks;
+
+		vector<unique_ptr<Task>> partition_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<PartitionTask>(shared_from_this(), context, hash_table));
+			partition_tasks.push_back(make_unique<PartitionTask>(shared_from_this(), context, hash_table));
 		}
-		SetTasks(move(merge_tasks));
+		SetTasks(move(partition_tasks));
 	}
 
 	void FinishEvent() override {
-		// Complete partitioning, or perhaps schedule another partitioning round
+		// Complete partitioning, or perhaps schedule another partitioning round TODO
 	}
 };
 
-void JoinHashTable::Partition(Pipeline &pipeline) {
+void JoinHashTable::Partition(Pipeline &pipeline, Event &event) {
 	D_ASSERT(partitioned_blocks.empty());
+
+	auto new_event = make_shared<PartitionEvent>(pipeline, *this);
+	event.InsertEvent(move(new_event));
+
 	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t dest_ptrs[JoinRadixConstants::PARTITIONS];
 

@@ -65,6 +65,35 @@ void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_p
 	}
 }
 
+void RowOperations::CopyHeapAndSwizzle(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+                                       data_ptr_t heap_ptr, const idx_t count) {
+	const auto row_width = layout.GetRowWidth();
+	const auto heap_offset = layout.GetHeapOffset();
+	for (idx_t i = 0; i < count; i++) {
+		// Figure out source and size
+		const auto source_heap_ptr = Load<data_ptr_t>(row_ptr + heap_offset);
+		const auto size = Load<uint32_t>(source_heap_ptr);
+
+		// Copy and swizzle
+		memcpy(heap_ptr, source_heap_ptr, size);
+		Store<idx_t>(heap_ptr - heap_base_ptr, row_ptr + heap_offset);
+
+		// Increment for next iteration
+		row_ptr += row_width;
+		heap_ptr += size;
+	}
+}
+
+void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, const data_ptr_t base_row_ptr,
+                                         const data_ptr_t heap_base_ptr, const idx_t count) {
+	const auto row_width = layout.GetRowWidth();
+	data_ptr_t heap_ptr_ptr = base_row_ptr + layout.GetHeapOffset();
+	for (idx_t i = 0; i < count; i++) {
+		Store<data_ptr_t>(heap_ptr_ptr, heap_base_ptr + Load<idx_t>(heap_ptr_ptr));
+		heap_ptr_ptr += row_width;
+	}
+}
+
 void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t base_row_ptr,
                                       const data_ptr_t base_heap_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
