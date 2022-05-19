@@ -109,6 +109,7 @@ public:
 	}
 	virtual string ToString() const;
 	void Print() const;
+	virtual vector<PhysicalOperator *> GetChildren() const;
 
 	//! Return a vector of the types that will be returned by this operator
 	const vector<LogicalType> &GetTypes() const {

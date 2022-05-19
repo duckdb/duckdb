@@ -26,6 +26,14 @@ void PhysicalOperator::Print() const {
 }
 // LCOV_EXCL_STOP
 
+vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
+	vector<PhysicalOperator *> result;
+	for (auto &child : children) {
+		result.push_back(child.get());
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//

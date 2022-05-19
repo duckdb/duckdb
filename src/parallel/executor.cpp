@@ -253,8 +253,18 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
+void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan) {
+	Reset();
+	owned_plan = move(physical_plan);
+	InitializeInternal(owned_plan.get());
+}
+
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
+	InitializeInternal(plan);
+}
+
+void Executor::InitializeInternal(PhysicalOperator *plan) {
 
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
@@ -381,6 +391,7 @@ PendingExecutionResult Executor::ExecuteTask() {
 void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
 	physical_plan = nullptr;
+	owned_plan.reset();
 	root_executor.reset();
 	root_pipelines.clear();
 	root_pipeline_idx = 0;
@@ -490,7 +501,7 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 
 unique_ptr<QueryResult> Executor::GetResult() {
 	D_ASSERT(physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR);
-	auto &result_collector = (PhysicalResultCollector &) *physical_plan;
+	auto &result_collector = (PhysicalResultCollector &)*physical_plan;
 	D_ASSERT(result_collector.sink_state);
 	return result_collector.GetResult(*result_collector.sink_state);
 }

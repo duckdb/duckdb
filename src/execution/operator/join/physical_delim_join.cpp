@@ -25,6 +25,16 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 	join->children[0] = move(cached_chunk_scan);
 }
 
+vector<PhysicalOperator *> PhysicalDelimJoin::GetChildren() const {
+	vector<PhysicalOperator *> result;
+	for (auto &child : children) {
+		result.push_back(child.get());
+	}
+	result.push_back(join.get());
+	result.push_back(distinct.get());
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//

@@ -16,6 +16,11 @@
 
 namespace duckdb {
 class ClientContext;
+class PhysicalResultCollector;
+
+typedef std::function<unique_ptr<PhysicalResultCollector>(PhysicalOperator *plan, vector<string> names,
+                                                          vector<LogicalType> types)>
+    get_result_collector_t;
 
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
@@ -58,6 +63,10 @@ struct ClientConfig {
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
+
+	//! Function that is used to create the result collector for a materialized result
+	//! Defaults to PhysicalMaterializedCollector
+	get_result_collector_t result_collector = nullptr;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

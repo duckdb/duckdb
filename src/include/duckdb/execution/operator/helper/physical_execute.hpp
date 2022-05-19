@@ -19,6 +19,9 @@ public:
 	PhysicalOperator *plan;
 
 public:
+	vector<PhysicalOperator *> GetChildren() const override;
+
+public:
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 };
 

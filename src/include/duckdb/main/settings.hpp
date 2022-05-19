@@ -189,7 +189,8 @@ struct PreserveIdentifierCase {
 struct PreserveInsertionOrder {
 	static constexpr const char *Name = "preserve_insertion_order";
 	static constexpr const char *Description =
-	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results that do not contain ORDER BY clauses.";
+	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
+	    "that do not contain ORDER BY clauses.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);

@@ -45,6 +45,7 @@ public:
 	static Executor &Get(ClientContext &context);
 
 	void Initialize(PhysicalOperator *physical_plan);
+	void Initialize(unique_ptr<PhysicalOperator> physical_plan);
 
 	void CancelTasks();
 	PendingExecutionResult ExecuteTask();
@@ -85,6 +86,8 @@ public:
 	unique_ptr<QueryResult> GetResult();
 
 private:
+	void InitializeInternal(PhysicalOperator *physical_plan);
+
 	void ScheduleEvents();
 	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines,
 	                            unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
@@ -107,6 +110,7 @@ private:
 
 private:
 	PhysicalOperator *physical_plan;
+	unique_ptr<PhysicalOperator> owned_plan;
 
 	mutex executor_lock;
 	//! The pipelines of the current query

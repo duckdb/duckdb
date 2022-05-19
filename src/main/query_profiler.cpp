@@ -569,27 +569,10 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	node->extra_info = root->ParamsToString();
 	node->depth = depth;
 	tree_map[root] = node.get();
-	for (auto &child : root->children) {
-		auto child_node = CreateTree(child.get(), depth + 1);
+	auto children = root->GetChildren();
+	for (auto &child : children) {
+		auto child_node = CreateTree(child, depth + 1);
 		node->children.push_back(move(child_node));
-	}
-	switch (root->type) {
-	case PhysicalOperatorType::DELIM_JOIN: {
-		auto &delim_join = (PhysicalDelimJoin &)*root;
-		auto child_node = CreateTree((PhysicalOperator *)delim_join.join.get(), depth + 1);
-		node->children.push_back(move(child_node));
-		child_node = CreateTree((PhysicalOperator *)delim_join.distinct.get(), depth + 1);
-		node->children.push_back(move(child_node));
-		break;
-	}
-	case PhysicalOperatorType::EXECUTE: {
-		auto &execute = (PhysicalExecute &)*root;
-		auto child_node = CreateTree((PhysicalOperator *)execute.plan, depth + 1);
-		node->children.push_back(move(child_node));
-		break;
-	}
-	default:
-		break;
 	}
 	return node;
 }

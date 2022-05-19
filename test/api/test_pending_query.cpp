@@ -185,7 +185,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		auto prepared = con.Prepare("SELECT concat(SUM(i)::varchar, CASE WHEN SUM(i) IS NULL THEN 0 ELSE 'hello' "
 		                            "END)::INT FROM range(1000000) tbl(i) WHERE i>$1");
 		// this succeeds initially
-		parameters = { Value::INTEGER(0) };
+		parameters = {Value::INTEGER(0)};
 		auto pending_query = prepared->PendingQuery(parameters, true);
 		REQUIRE(pending_query->success);
 		// still succeeds...
@@ -201,7 +201,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 		// if we change the parameter this works
-		parameters = { Value::INTEGER(2000000) };
+		parameters = {Value::INTEGER(2000000)};
 		pending_query = prepared->PendingQuery(parameters, true);
 		REQUIRE(pending_query->success);
 		// still succeeds...

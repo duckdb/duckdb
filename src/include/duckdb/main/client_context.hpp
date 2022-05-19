@@ -113,7 +113,8 @@ public:
 	//! a single statement.
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query, bool allow_stream_result);
 	//! Issues a query to the database and returns a Pending Query Result
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+	                                                       bool allow_stream_result);
 
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
@@ -220,7 +221,8 @@ private:
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
 	                                                          unique_ptr<SQLStatement> statement);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
-	                                                        unique_ptr<SQLStatement> statement, PendingQueryParameters parameters);
+	                                                        unique_ptr<SQLStatement> statement,
+	                                                        PendingQueryParameters parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
 	                                             bool verify = true);
@@ -240,10 +242,9 @@ private:
 
 	PendingExecutionResult ExecuteTaskInternal(ClientContextLock &lock, PendingQueryResult &result);
 
-	unique_ptr<PendingQueryResult>
-	PendingStatementOrPreparedStatementInternal(ClientContextLock &lock, const string &query,
-	                                            unique_ptr<SQLStatement> statement,
-	                                            shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters);
+	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatementInternal(
+	    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	    shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters);
 
 	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
 	                                                            shared_ptr<PreparedStatementData> &prepared,

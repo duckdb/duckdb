@@ -32,6 +32,7 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
 namespace duckdb {
 
@@ -221,7 +222,9 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		return move(stream_result);
 	}
 	auto &executor = GetExecutor();
-	return executor.GetResult();
+	auto result = executor.GetResult();
+	CleanupInternal(lock, result.get(), false);
+	return result;
 }
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
@@ -304,9 +307,16 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	}
 	auto stream_result = parameters.allow_stream_result && statement.allow_stream_result;
 	if (!stream_result) {
-		throw InternalException("FIXME: materialized result");
+		unique_ptr<PhysicalResultCollector> collector;
+		auto &config = ClientConfig::GetConfig(*this);
+		auto get_method =
+		    config.result_collector ? config.result_collector : PhysicalResultCollector::GetResultCollector;
+		collector = get_method(statement.plan.get(), statement.names, statement.plan->types);
+		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+		executor.Initialize(move(collector));
+	} else {
+		executor.Initialize(statement.plan.get());
 	}
-	executor.Initialize(statement.plan.get());
 	auto types = executor.GetTypes();
 	D_ASSERT(types == statement.types);
 	D_ASSERT(!active_query->open_result);
@@ -448,8 +458,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(Clien
 	return PendingStatementOrPreparedStatementInternal(lock, query, nullptr, prepared, parameters);
 }
 
-unique_ptr<PendingQueryResult>
-ClientContext::PendingQuery(const string &query, shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
+                                                           shared_ptr<PreparedStatementData> &prepared,
+                                                           PendingQueryParameters parameters) {
 	auto lock = LockContext();
 	return PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 }
@@ -473,7 +484,8 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientContextLock &lock, const string &query,
-                                                                       unique_ptr<SQLStatement> statement, PendingQueryParameters parameters) {
+                                                                       unique_ptr<SQLStatement> statement,
+                                                                       PendingQueryParameters parameters) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, move(statement));
 	// execute the prepared statement
@@ -552,10 +564,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, parameters);
 }
 
-unique_ptr<PendingQueryResult>
-ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
-                                                   unique_ptr<SQLStatement> statement,
-                                                   shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
+unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(
+    ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+    shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
 	unique_ptr<PendingQueryResult> result;
 
 	BeginQueryInternal(lock, query);
@@ -693,7 +704,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query, 
 	return PendingQueryInternal(*lock, move(statements[0]), parameters);
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                           bool allow_stream_result) {
 	auto lock = LockContext();
 	PendingQueryParameters parameters;
 	parameters.allow_stream_result = allow_stream_result;
@@ -701,7 +713,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
-                                                                   unique_ptr<SQLStatement> statement, PendingQueryParameters parameters, bool verify) {
+                                                                   unique_ptr<SQLStatement> statement,
+                                                                   PendingQueryParameters parameters, bool verify) {
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
 	if (verify) {
