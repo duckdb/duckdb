@@ -169,8 +169,8 @@ struct RLECompressState : public CompressionState {
 		auto handle_ptr = handle->Ptr() + RLEConstants::RLE_HEADER_SIZE;
 		auto data_pointer = (T *)handle_ptr;
 		auto index_pointer = (rle_count_t *)(handle_ptr + max_rle_count * sizeof(T));
-//		// TODO: Implement reorder here?
-//		auto &sel_sorted = checkpointer.GetColumnData().sel_sorted;
+		//		// TODO: Implement reorder here?
+		//		auto &sel_sorted = checkpointer.GetColumnData().sel_sorted;
 		data_pointer[entry_count] = value;
 		index_pointer[entry_count] = count;
 		entry_count++;

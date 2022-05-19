@@ -36,7 +36,6 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto compression_type = reader.ReadField(CompressionType::COMPRESSION_AUTO);
 	reader.Finalize();
 
-
 	return ColumnDefinition(column_name, column_type, move(default_value), compression_type);
 }
 

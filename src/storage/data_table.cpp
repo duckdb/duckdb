@@ -1281,7 +1281,6 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	}
 
 	// update changed rows after checkpoint
-	this->total_rows += this->rows_changed;
 	this->rows_changed = 0;
 
 	// store the current position in the metadata writer

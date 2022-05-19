@@ -18,6 +18,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -30,12 +31,12 @@ class UpdateSegment;
 class Vector;
 struct RowGroupPointer;
 struct VersionNode;
-struct RowGroupSortBindData;
 
 class RowGroup : public SegmentBase {
 public:
 	friend class ColumnData;
 	friend class VersionDeleteState;
+	friend class RLESort;
 
 public:
 	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 120;
@@ -145,20 +146,24 @@ public:
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
-
+	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback, Vector &intermediate, idx_t column_idx);
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
 	//! Scan the RowGroup to the payload DataChunk before sorting
 	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
-	//! Sort the columns before checkpointing
-	void SortColumns(vector<LogicalType> &types, vector<column_t> &column_ids, DataTable &data_table);
+
 	//! Return the indices of the key columns
 	void CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
 	                                     vector<std::tuple<idx_t, idx_t>> &cardinalities);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
+
+	CompressionType DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
+	                                            CompressionType compression_type);
+
+	vector<CompressionType> DetectBestCompressionMethodTable(TableDataWriter &writer);
 
 private:
 	mutex row_group_lock;

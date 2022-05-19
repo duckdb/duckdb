@@ -379,7 +379,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 
 void ColumnData::CleanPersistentSegments() {
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
-	for (auto segment = (ColumnSegment *)data.root_node.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
+	for (auto segment = (ColumnSegment *)data.root_node.get(); segment;
+	     segment = (ColumnSegment *)segment->next.get()) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
 			auto block_id = segment->GetBlockId();
