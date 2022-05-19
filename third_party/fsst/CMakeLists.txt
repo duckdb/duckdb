@@ -4,7 +4,7 @@ project(fsst)
 
 find_package(Threads REQUIRED)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11) # Note this is 17 in repo, may give problems
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -34,8 +34,14 @@ set_source_files_properties(
 )
 endif()
 
-add_library(fsst libfsst.cpp fsst_avx512.cpp fsst_avx512_unroll1.inc fsst_avx512_unroll2.inc fsst_avx512_unroll3.inc fsst_avx512_unroll4.inc)
-add_executable(binary fsst.cpp)
-target_link_libraries (binary LINK_PUBLIC fsst)
-target_link_libraries (binary LINK_PUBLIC Threads::Threads)
-set_target_properties(binary PROPERTIES OUTPUT_NAME fsst)
+add_library(duckdb_fsst libfsst.cpp fsst_avx512.cpp fsst_avx512_unroll1.inc fsst_avx512_unroll2.inc fsst_avx512_unroll3.inc fsst_avx512_unroll4.inc)
+#add_executable(binary fsst.cpp)
+#target_link_libraries (binary LINK_PUBLIC fsst)
+#target_link_libraries (binary LINK_PUBLIC Threads::Threads)
+#set_target_properties(binary PROPERTIES OUTPUT_NAME fsst)
+
+set_target_properties(duckdb_fsst PROPERTIES EXPORT_NAME duckdb_fsst)
+install(TARGETS duckdb_fsst
+        EXPORT "${DUCKDB_EXPORT_SET}"
+        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

@@ -12,6 +12,7 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "fsst.h"
 
 namespace duckdb {
 
@@ -25,6 +26,7 @@ enum class VectorBufferType : uint8_t {
 	DICTIONARY_BUFFER,   // dictionary buffer, holds a selection vector
 	VECTOR_CHILD_BUFFER, // vector child buffer: holds another vector
 	STRING_BUFFER,       // string buffer, holds a string heap
+	FSST_BUFFER,         // fsst compressed string buffer, holds a string heap and a fsst symbol table
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
@@ -132,6 +134,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
+	VectorStringBuffer(VectorBufferType type);
 
 public:
 	string_t AddString(const char *data, idx_t len) {
@@ -156,6 +159,22 @@ private:
 	StringHeap heap;
 	// References to additional vector buffers referenced by this string buffer
 	vector<buffer_ptr<VectorBuffer>> references;
+};
+
+class VectorFSSTStringBuffer : public VectorStringBuffer {
+public:
+	VectorFSSTStringBuffer();
+
+public:
+	void AddDecoder(buffer_ptr<fsst_decoder_t>& fsst_decoder_p) {
+		fsst_decoder = fsst_decoder_p;
+	}
+	fsst_decoder_t * GetDecoder() {
+		return fsst_decoder.get();
+	}
+
+private:
+	buffer_ptr<fsst_decoder_t> fsst_decoder;
 };
 
 class VectorStructBuffer : public VectorBuffer {

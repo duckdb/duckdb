@@ -166,6 +166,12 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		}
 		return;
 	}
+
+	if (GetVectorType() == VectorType::FSST_VECTOR) {
+		Normalify(sel, count);
+		return;
+	}
+
 	Vector child_vector(*this);
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
@@ -640,6 +646,7 @@ void Vector::Normalify(idx_t count) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
+	case VectorType::FSST_VECTOR:
 	case VectorType::DICTIONARY_VECTOR: {
 		// create a new flat vector of this type
 		Vector other(GetType(), count);
@@ -749,6 +756,15 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
+	case VectorType::FSST_VECTOR: {
+		// create a new flat vector of this type
+		Vector other(GetType(), count);
+		// now copy the data of this vector to the other vector, removing the selection vector in the process
+		VectorOperations::Copy(*this, other, sel, count, 0, 0);
+		// create a reference to the data in the other vector
+		this->Reference(other);
+		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(*this, start, increment);
@@ -1322,6 +1338,46 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 		return;
 	}
 	StringVector::AddBuffer(vector, other.auxiliary);
+}
+
+string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
+	return FSSTVector::AddCompressedString(vector, string_t(data, len));
+}
+
+string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (data.IsInlined()) {
+		// string will be inlined: no need to store in string heap
+		return data;
+	}
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	return fsst_string_buffer.AddBlob(data);
+}
+
+fsst_decoder_t* FSSTVector::GetDecoder(Vector &vector) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (!vector.auxiliary) {
+		throw InternalException("GetDecoder called on FSST Vector without registered buffer");
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	return fsst_string_buffer.GetDecoder();
+}
+
+void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<fsst_decoder_t>& fsst_decoder) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
+
+	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	fsst_string_buffer.AddDecoder(fsst_decoder);
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
