@@ -159,6 +159,7 @@ jobs:
         with:
           openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
           run_tests: 0
+          treat_warn_as_error: 0
           post_install: rm build/release/src/libduckdb*
 
       - name: Deploy
