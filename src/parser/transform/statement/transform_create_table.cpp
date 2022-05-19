@@ -92,6 +92,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		throw ParserException("Table must have at least one column!");
 	}
 
+	case_insensitive_map_t<column_t> tmp_name_map;
+	idx_t column_count = 0;
 	for (auto c = stmt->tableElts->head; c != nullptr; c = lnext(c)) {
 		auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(c->data.ptr_value);
 		switch (node->type) {
@@ -106,11 +108,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 					}
 				}
 			}
-			// Add to the dependency/dependent map if a generated column is added
-			if (centry.Generated()) {
-				info->column_dependency_manager.AddGeneratedColumn(centry);
-			}
+			tmp_name_map[centry.name] = column_count;
 			info->columns.push_back(move(centry));
+			column_count++;
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
@@ -122,10 +122,25 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		}
 	}
 	// Can only check this after all columns are added
-	for (auto &gen_col : info->columns) {
+	for (idx_t i = 0; i < info->columns.size(); i++) {
+		auto &gen_col = info->columns[i];
 		if (!gen_col.Generated()) {
 			continue;
 		}
+		// Add to the dependency/dependent map if a generated column is added
+		vector<string> referenced_columns;
+		gen_col.GetListOfDependencies(referenced_columns);
+		vector<column_t> indices;
+		for (auto &col : referenced_columns) {
+			auto entry = tmp_name_map.find(col);
+			if (entry == tmp_name_map.end()) {
+				throw InvalidInputException("Referenced column was not found in the table");
+			}
+			indices.push_back(entry->second);
+		}
+		gen_col.oid = i;
+
+		info->column_dependency_manager.AddGeneratedColumn(gen_col, move(indices));
 		gen_col.CheckValidity(info->columns, info->table);
 	}
 	result->info = move(info);

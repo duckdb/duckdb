@@ -11,6 +11,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/common/set.hpp"
 
 namespace duckdb {
 
@@ -22,30 +23,31 @@ public:
 
 public:
 	//! Adds a connection between the dependent and its dependencies
-	void AddGeneratedColumn(ColumnDefinition &column);
-	void RemoveColumn(ColumnDefinition &column);
-	void RenameColumn(TableColumnType category, const string &old_name, const string &new_name);
+	void AddGeneratedColumn(ColumnDefinition &column, vector<column_t> indices);
+	void RemoveColumn(column_t index);
+	// void RenameColumn(TableColumnType category, const string &old_name, const string &new_name);
 
-	bool IsDependencyOf(const string &gcol, const string &col) const;
-	bool HasDependencies(const string &col) const;
-	const unordered_set<string> &GetDependencies(const string &name) const;
+	bool IsDependencyOf(column_t dependent, column_t dependency) const;
+	bool HasDependencies(column_t index) const;
+	const unordered_set<column_t> &GetDependencies(column_t index) const;
 
-	bool HasDependents(const string &col) const;
-	const unordered_set<string> &GetDependents(const string &name) const;
+	bool HasDependents(column_t index) const;
+	const unordered_set<column_t> &GetDependents(column_t index) const;
 
 private:
-	void RemoveStandardColumn(const string &name);
-	void RemoveGeneratedColumn(const string &name);
+	void RemoveStandardColumn(column_t index);
+	void RemoveGeneratedColumn(column_t index);
 
-	void InnerRenameColumn(case_insensitive_map_t<unordered_set<string>> &dependents_map,
-	                       case_insensitive_map_t<unordered_set<string>> &dependencies_map, const string &old_name,
-	                       const string &new_name);
+	void AdjustSingle(column_t idx, idx_t offset);
+	// Clean up the gaps created by a Remove operation
+	void CleanupInternals();
 
 private:
 	//! A map of column dependency to generated column(s)
-	case_insensitive_map_t<unordered_set<string>> dependencies_map;
+	unordered_map<column_t, unordered_set<column_t>> dependencies_map;
 	//! A map of generated column name to (potentially generated)column dependencies
-	case_insensitive_map_t<unordered_set<string>> dependents_map;
+	unordered_map<column_t, unordered_set<column_t>> dependents_map;
+	set<column_t> deleted_columns;
 };
 
 } // namespace duckdb

@@ -182,11 +182,11 @@ static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unres
 	    expr, [&](const ParsedExpression &child) { TypeIsUnresolved((ParsedExpression &)child, table, unresolved); });
 }
 
-static bool HasUnresolvedDependency(string name, const CreateTableInfo &info, unordered_set<string> &resolved) {
-	if (!info.column_dependency_manager.HasDependencies(name)) {
+static bool HasUnresolvedDependency(column_t index, const CreateTableInfo &info, unordered_set<column_t> &resolved) {
+	if (!info.column_dependency_manager.HasDependencies(index)) {
 		return false;
 	}
-	auto &dependencies = info.column_dependency_manager.GetDependencies(name);
+	auto &dependencies = info.column_dependency_manager.GetDependencies(index);
 	for (auto &dep : dependencies) {
 		if (!info.column_dependency_manager.HasDependencies(dep)) {
 			continue;
@@ -234,7 +234,7 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 	D_ASSERT(table_binding && ignore.empty());
 
 	queue<GeneratedColumnBindData> to_resolve;
-	unordered_set<string> resolved;
+	unordered_set<column_t> resolved;
 
 	// Add all generated columns
 	for (column_t i = 0; i < columns.size(); i++) {
@@ -252,13 +252,13 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 		// Already resolved
 		bool allow_unresolved = resolve_data.allow_unresolved;
 		auto &col = columns[i];
-		if (resolved.count(col.name)) {
+		if (resolved.count(i)) {
 			continue;
 		}
 
 		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.GeneratedExpression().Copy();
-		if (HasUnresolvedDependency(col.name, info, resolved)) {
+		if (HasUnresolvedDependency(i, info, resolved)) {
 			if (allow_unresolved) {
 				// Add it to the back of the queue
 				to_resolve.push({i, false});
@@ -288,7 +288,7 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 			    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
 			    bound_expression->return_type.ToString(), col.type.ToString(), col.name);
 		}
-		resolved.insert(col.name);
+		resolved.insert(i);
 	}
 }
 
