@@ -1,7 +1,8 @@
 # name: test/sql/generated_columns/virtual/cascading_delete.test
 # description: Test the chain reaction effect of deleting a column that is a dependency of a generated column
-# which itself is also a dependency of a generated column
 # group: [virtual]
+
+# which itself is also a dependency of a generated column
 
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER);

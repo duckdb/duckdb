@@ -132,6 +132,7 @@ void ColumnDependencyManager::InnerRenameColumn(case_insensitive_map_t<unordered
 	dependents.erase(old_name);
 }
 
+// FIXME: if dependencies are copied on create, we dont need this ?
 unordered_set<string> ColumnDependencyManager::GetDependencyChain(string col) const {
 	unordered_set<string> chain;
 	queue<string> to_check;

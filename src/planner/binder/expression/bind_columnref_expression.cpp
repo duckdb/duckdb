@@ -237,6 +237,9 @@ bool ExpressionBinder::IsGeneratedColumn(ParsedExpression &expr) {
 	}
 	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
 	auto binding = binder.bind_context.GetBinding(table_name, error_message);
+	if (!binding) {
+		return false;
+	}
 
 	auto entry = binding->name_map.find(colref.GetColumnName());
 	return (entry != binding->name_map.end() && entry->second.column_type == TableColumnType::GENERATED);

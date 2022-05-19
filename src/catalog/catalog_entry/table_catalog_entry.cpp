@@ -321,31 +321,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	                                      new_storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info,
-                                                                  idx_t index) {
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-
-	// Copy all the columns
-	for (idx_t i = 0; i < columns.size(); i++) {
-		if (i == index) {
-			continue;
-		}
-		auto copy = columns[i].Copy();
-		create_info->columns.push_back(move(copy));
-	}
-
-	// Copy all the constraints
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto constraint = constraints[i]->Copy();
-		create_info->constraints.push_back(move(constraint));
-	}
-
-	column_dependency_manager.RemoveColumn(columns[index]);
-	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
-}
-
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
 	auto remove_info = GetColumnInfo(info.removed_column, info.if_exists);
 	idx_t removed_index = remove_info.index;
@@ -357,15 +332,15 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	create_info->temporary = temporary;
 
 	unordered_set<string> removed_columns = column_dependency_manager.GetDependencyChain(info.removed_column);
+	if (removed_columns.size() > 1 && !info.cascade) {
+		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
+	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto &col = columns[i];
 		if (removed_columns.count(col.name)) {
 			continue;
 		}
 		create_info->columns.push_back(col.Copy());
-	}
-	if (removed_columns.size() > 1 && !info.cascade) {
-		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
@@ -487,34 +462,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::ChangeGeneratedColumnType(ClientContext &context,
-                                                                      ChangeColumnTypeInfo &info) {
-	auto change_info = GetColumnInfo(info.column_name);
-	auto index = change_info.index;
-	D_ASSERT(change_info.column_type == TableColumnType::GENERATED);
-	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-
-	// Copy all the columns
-	for (idx_t i = 0; i < columns.size(); i++) {
-		auto copy = columns[i].Copy();
-		if (i == index) {
-			copy.type = info.target_type;
-		}
-		create_info->columns.push_back(move(copy));
-	}
-	// Copy all the constraints
-	for (idx_t i = 0; i < constraints.size(); i++) {
-		auto constraint = constraints[i]->Copy();
-		create_info->constraints.push_back(move(constraint));
-	}
-
-	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	auto result =
-	    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
-	return (move(result));
-}
-
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	if (info.target_type.id() == LogicalTypeId::USER) {
 		auto &catalog = Catalog::GetCatalog(context);
@@ -522,9 +469,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	}
 	auto change_info = GetColumnInfo(info.column_name);
 	idx_t change_idx = change_info.index;
-	if (change_info.column_type == TableColumnType::GENERATED) {
-		return ChangeGeneratedColumnType(context, info);
-	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -593,6 +537,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
+	if (change_info.column_type == TableColumnType::GENERATED) {
+		auto result =
+		    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+		return result;
+	}
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
 	auto result =

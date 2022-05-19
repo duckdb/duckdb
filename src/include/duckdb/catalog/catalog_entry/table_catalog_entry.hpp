@@ -86,11 +86,9 @@ private:
 	const string &GetColumnName(const TableColumnInfo &info);
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);
-	unique_ptr<CatalogEntry> RemoveGeneratedColumn(ClientContext &context, RemoveColumnInfo &info, idx_t index);
 	unique_ptr<CatalogEntry> RemoveColumn(ClientContext &context, RemoveColumnInfo &info);
 	unique_ptr<CatalogEntry> SetDefault(ClientContext &context, SetDefaultInfo &info);
 	unique_ptr<CatalogEntry> ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
-	unique_ptr<CatalogEntry> ChangeGeneratedColumnType(ClientContext &context, ChangeColumnTypeInfo &info);
 	unique_ptr<CatalogEntry> SetForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info);
 };
 } // namespace duckdb
