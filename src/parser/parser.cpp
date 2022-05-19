@@ -18,7 +18,7 @@ Parser::Parser(ParserOptions options_p) : options(options_p) {
 }
 
 void Parser::ParseQuery(const string &query) {
-	Transformer transformer;
+	Transformer transformer(options.max_expression_depth);
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
 		PostgresParser parser;

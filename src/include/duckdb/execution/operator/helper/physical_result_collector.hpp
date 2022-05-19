@@ -9,20 +9,23 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
+class PreparedStatementData;
 
 //! PhysicalResultCollector is an abstract class that is used to generate the final result of a query
 class PhysicalResultCollector : public PhysicalOperator {
 public:
-	PhysicalResultCollector(PhysicalOperator *plan, vector<string> names, vector<LogicalType> types);
+	PhysicalResultCollector(PreparedStatementData &data);
 
+	StatementType statement_type;
+	StatementProperties properties;
 	PhysicalOperator *plan;
 	vector<string> names;
 
 public:
-	static unique_ptr<PhysicalResultCollector> GetResultCollector(PhysicalOperator *plan, vector<string> names,
-	                                                              vector<LogicalType> types);
+	static unique_ptr<PhysicalResultCollector> GetResultCollector(PreparedStatementData &data);
 
 public:
 	//! The final method used to fetch the query result from this operator

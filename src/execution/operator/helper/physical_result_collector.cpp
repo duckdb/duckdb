@@ -1,19 +1,19 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 namespace duckdb {
 
-PhysicalResultCollector::PhysicalResultCollector(PhysicalOperator *plan_p, vector<string> names_p,
-                                                 vector<LogicalType> types_p)
-    : PhysicalOperator(PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0), plan(plan_p),
-      names(move(names_p)) {
-	this->types = move(types_p);
+PhysicalResultCollector::PhysicalResultCollector(PreparedStatementData &data)
+    : PhysicalOperator(PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
+      statement_type(data.statement_type), properties(data.properties), plan(data.plan.get()),
+      names(data.names) {
+	this->types = data.types;
 }
 
-unique_ptr<PhysicalResultCollector>
-PhysicalResultCollector::GetResultCollector(PhysicalOperator *plan, vector<string> names, vector<LogicalType> types) {
-	return make_unique<PhysicalMaterializedCollector>(plan, names, types, false);
+unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(PreparedStatementData &data) {
+	return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, false);
 }
 
 vector<PhysicalOperator *> PhysicalResultCollector::GetChildren() const {

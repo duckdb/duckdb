@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-PhysicalBatchCollector::PhysicalBatchCollector(PhysicalOperator *plan, vector<string> names, vector<LogicalType> types) :
-      PhysicalResultCollector(plan, move(names), move(types)) {}
+PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) :
+      PhysicalResultCollector(data) {}
 
 //===--------------------------------------------------------------------===//
 // Sink

@@ -16,6 +16,9 @@ using std::stringstream;
 
 static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entries) {
 	for (auto &entry : entries) {
+		if (entry->internal) {
+			continue;
+		}
 		ss << entry->ToSQL() << std::endl;
 	}
 	ss << std::endl;

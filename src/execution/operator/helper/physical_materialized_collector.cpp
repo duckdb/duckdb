@@ -4,9 +4,8 @@
 
 namespace duckdb {
 
-PhysicalMaterializedCollector::PhysicalMaterializedCollector(PhysicalOperator *plan, vector<string> names,
-                                                             vector<LogicalType> types, bool parallel)
-    : PhysicalResultCollector(plan, move(names), move(types)), parallel(parallel) {
+PhysicalMaterializedCollector::PhysicalMaterializedCollector(PreparedStatementData &data, bool parallel)
+    : PhysicalResultCollector(data), parallel(parallel) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -28,7 +27,7 @@ SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, Gl
 
 unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_unique<MaterializedCollectorGlobalState>();
-	state->result = make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, types, names);
+	state->result = make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
 	return move(state);
 }
 

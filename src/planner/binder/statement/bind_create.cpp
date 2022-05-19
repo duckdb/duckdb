@@ -27,12 +27,14 @@
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 
 namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.schema.empty()) {
-		info.schema = info.temporary ? TEMP_SCHEMA : context.catalog_search_path->GetDefault();
+		info.schema = info.temporary ? TEMP_SCHEMA : ClientData::Get(context).catalog_search_path->GetDefault();
 	}
 
 	if (!info.temporary) {
@@ -40,7 +42,7 @@ SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 		if (info.schema == TEMP_SCHEMA) {
 			throw ParserException("Only TEMPORARY table names can use the \"temp\" schema");
 		}
-		this->read_only = false;
+		properties.read_only = false;
 	} else {
 		if (info.schema != TEMP_SCHEMA) {
 			throw ParserException("TEMPORARY table names can *only* use the \"%s\" schema", TEMP_SCHEMA);
@@ -136,14 +138,8 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 			type = LogicalType::MAP(child_types);
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
-		auto &user_type_name = UserType::GetTypeName(type);
-		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
-		                                                                               schema, user_type_name, true);
-		if (!user_type_catalog) {
-			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
-		}
-		type = user_type_catalog->user_type;
-		EnumType::SetCatalog(type, user_type_catalog);
+		auto &catalog = Catalog::GetCatalog(context);
+		type = catalog.GetType(context, schema, UserType::GetTypeName(type));
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto &enum_type_name = EnumType::GetTypeName(type);
 		auto enum_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
@@ -152,10 +148,40 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	}
 }
 
+static void FindMatchingPrimaryKeyColumns(vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk) {
+	if (!fk.pk_columns.empty()) {
+		return;
+	}
+	// find the matching primary key constraint
+	for (auto &constr : constraints) {
+		if (constr->type != ConstraintType::UNIQUE) {
+			continue;
+		}
+		auto &unique = (UniqueConstraint &)*constr;
+		if (!unique.is_primary_key) {
+			continue;
+		}
+		idx_t column_count;
+		if (unique.index != DConstants::INVALID_INDEX) {
+			fk.info.pk_keys.push_back(unique.index);
+			column_count = 1;
+		} else {
+			fk.pk_columns = unique.columns;
+			column_count = unique.columns.size();
+		}
+		if (column_count != fk.fk_columns.size()) {
+			throw BinderException("The number of referencing and referenced columns for foreign keys must be the same");
+		}
+		return;
+	}
+	throw BinderException("there is no primary key for referenced table \"%s\"", fk.info.table);
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+	properties.return_type = StatementReturnType::NOTHING;
 
 	auto catalog_type = stmt.info->type;
 	switch (catalog_type) {
@@ -232,13 +258,15 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
 				continue;
 			}
-			D_ASSERT(fk.info.pk_keys.empty() && !fk.pk_columns.empty());
+			D_ASSERT(fk.info.pk_keys.empty());
 			if (create_info.table == fk.info.table) {
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+				FindMatchingPrimaryKeyColumns(create_info.constraints, fk);
 			} else {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
-				D_ASSERT(!fk.pk_columns.empty() && fk.info.pk_keys.empty());
+				D_ASSERT(fk.info.pk_keys.empty());
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->constraints, fk);
 				for (auto &keyname : fk.pk_columns) {
 					auto entry = pk_table_entry_ptr->name_map.find(keyname);
 					if (entry == pk_table_entry_ptr->name_map.end()) {
@@ -264,6 +292,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = bound_info->schema;
 		auto create_table = make_unique<LogicalCreateTable>(schema, move(bound_info));
 		if (root) {
+			// CREATE TABLE AS
+			properties.return_type = StatementReturnType::CHANGED_ROWS;
 			create_table->children.push_back(move(root));
 		}
 		result.plan = move(create_table);
@@ -277,7 +307,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	default:
 		throw Exception("Unrecognized type!");
 	}
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
 	return result;
 }
 

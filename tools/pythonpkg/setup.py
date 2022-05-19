@@ -7,6 +7,53 @@ import platform
 import multiprocessing.pool
 
 from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext as _build_ext
+
+
+class CompilerLauncherMixin:
+    """Add "compiler launchers" to distutils.
+
+    We use this to be able to run the build using "ccache".
+
+    A compiler launcher is a program that is invoked instead of invoking the
+    compiler directly. It is passed the full compiler invocation command line.
+
+    A similar feature exists in CMake, see
+    https://cmake.org/cmake/help/latest/prop_tgt/LANG_COMPILER_LAUNCHER.html.
+    """
+
+    __is_set_up = False
+
+    def build_extensions(self):
+        # Integrate into "build_ext"
+        self.__setup()
+        super().build_extensions()
+
+    def build_libraries(self):
+        # Integrate into "build_clib"
+        self.__setup()
+        super().build_extensions()
+
+    def __setup(self):
+        if self.__is_set_up:
+            return
+        self.__is_set_up = True
+        compiler_launcher = os.getenv("DISTUTILS_C_COMPILER_LAUNCHER")
+        if compiler_launcher:
+
+            def spawn_with_compiler_launcher(cmd):
+                exclude_programs = ("link.exe",)
+                if not cmd[0].endswith(exclude_programs):
+                    cmd = [compiler_launcher] + cmd
+                return original_spawn(cmd)
+
+            original_spawn = self.compiler.spawn
+            self.compiler.spawn = spawn_with_compiler_launcher
+
+
+class build_ext(CompilerLauncherMixin, _build_ext):
+    pass
+
 
 lib_name = 'duckdb'
 extension_name = '_duckdb_extension'
@@ -127,7 +174,6 @@ if len(existing_duckdb_dir) == 0:
         # copy all source files to the current directory
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
-
         (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, extension_name), extensions, False, unity_build, extension_name)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
@@ -251,5 +297,6 @@ setup(
     ],
     ext_modules = [libduckdb],
     maintainer = "Hannes Muehleisen",
-    maintainer_email = "hannes@cwi.nl"
+    maintainer_email = "hannes@cwi.nl",
+    cmdclass={"build_ext": build_ext},
 )

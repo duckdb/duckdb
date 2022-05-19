@@ -38,7 +38,7 @@ static unique_ptr<FunctionOperatorData> GlobFunctionInit(ClientContext &context,
 }
 
 static void GlobFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                         DataChunk *input, DataChunk &output) {
+                         DataChunk &output) {
 	auto &bind_data = (GlobFunctionBindData &)*bind_data_p;
 	auto &state = (GlobFunctionState &)*state_p;
 

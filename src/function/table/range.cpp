@@ -4,6 +4,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -78,7 +79,7 @@ static unique_ptr<FunctionOperatorData> RangeFunctionInit(ClientContext &context
 }
 
 static void RangeFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                          DataChunk *input, DataChunk &output) {
+                          DataChunk &output) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
 	auto &state = (RangeFunctionState &)*state_p;
 
@@ -149,6 +150,11 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 	result->end = inputs[1].GetValue<timestamp_t>();
 	result->increment = inputs[2].GetValue<interval_t>();
 
+	// Infinities either cause errors or infinite loops, so just ban them
+	if (!Timestamp::IsFinite(result->start) || !Timestamp::IsFinite(result->end)) {
+		throw BinderException("RANGE with infinite bounds is not supported");
+	}
+
 	if (result->increment.months == 0 && result->increment.days == 0 && result->increment.micros == 0) {
 		throw BinderException("interval cannot be 0!");
 	}
@@ -197,7 +203,7 @@ static unique_ptr<FunctionOperatorData> RangeDateTimeInit(ClientContext &context
 }
 
 static void RangeDateTimeFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                  FunctionOperatorData *state_p, DataChunk *input, DataChunk &output) {
+                                  FunctionOperatorData *state_p, DataChunk &output) {
 	auto &bind_data = (RangeDateTimeBindData &)*bind_data_p;
 	auto &state = (RangeDateTimeState &)*state_p;
 	if (state.finished) {

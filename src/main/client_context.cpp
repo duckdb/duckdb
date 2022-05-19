@@ -10,6 +10,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -50,13 +51,8 @@ struct ActiveQueryContext {
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : profiler(make_shared<QueryProfiler>(*this)), query_profiler_history(make_unique<QueryProfilerHistory>()),
-      db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
-      temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
-      catalog_search_path(make_unique<CatalogSearchPath>(*this)),
-      file_opener(make_unique<ClientContextFileOpener>(*this)) {
-	std::random_device rd;
-	random_engine.seed(rd());
+    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
+      client_data(make_unique<ClientData>(*this)) {
 }
 
 ClientContext::~ClientContext() {
@@ -135,20 +131,20 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 }
 
 string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
-	profiler->EndQuery();
+	client_data->profiler->EndQuery();
 
 	D_ASSERT(active_query.get());
 	string error;
 	try {
 		if (transaction.HasActiveTransaction()) {
 			// Move the query profiler into the history
-			auto &prev_profilers = query_profiler_history->GetPrevProfilers();
-			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+			auto &prev_profilers = client_data->query_profiler_history->GetPrevProfilers();
+			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(client_data->profiler));
 			// Reinitialize the query profiler
-			profiler = make_shared<QueryProfiler>(*this);
+			client_data->profiler = make_shared<QueryProfiler>(*this);
 			// Propagate settings of the saved query into the new profiler.
-			profiler->Propagate(*prev_profilers.back().second);
-			if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
+			client_data->profiler->Propagate(*prev_profilers.back().second);
+			if (prev_profilers.size() >= client_data->query_profiler_history->GetPrevProfilersSize()) {
 				prev_profilers.pop_front();
 			}
 
@@ -209,15 +205,15 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->open_result == &pending);
 	D_ASSERT(active_query->prepared);
 	auto &prepared = *active_query->prepared;
-	bool create_stream_result = prepared.allow_stream_result && pending.allow_stream_result;
+	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
 	if (create_stream_result) {
 		active_query->progress_bar.reset();
 		query_progress = -1;
 
-		// successfully compiled SELECT clause and it is the last statement
+		// successfully compiled SELECT clause, and it is the last statement
 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		auto stream_result =
-		    make_unique<StreamQueryResult>(pending.statement_type, shared_from_this(), pending.types, pending.names);
+		auto stream_result = make_unique<StreamQueryResult>(pending.statement_type, pending.properties,
+		                                                    shared_from_this(), pending.types, pending.names);
 		active_query->open_result = stream_result.get();
 		return move(stream_result);
 	}
@@ -228,13 +224,19 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 }
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
-                                                                         unique_ptr<SQLStatement> statement) {
+                                                                         unique_ptr<SQLStatement> statement,
+                                                                         vector<Value> *values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
+	if (values) {
+		for (auto &value : *values) {
+			planner.parameter_types.push_back(value.type());
+		}
+	}
 	planner.CreatePlan(move(statement));
 	D_ASSERT(planner.plan);
 	profiler.EndPhase();
@@ -244,9 +246,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	plan->Verify();
 #endif
 	// extract the result column names from the plan
-	result->read_only = planner.read_only;
-	result->requires_valid_transaction = planner.requires_valid_transaction;
-	result->allow_stream_result = planner.allow_stream_result;
+	result->properties = planner.properties;
 	result->names = planner.names;
 	result->types = planner.types;
 	result->value_map = move(planner.value_map);
@@ -286,11 +286,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
                                                                        PendingQueryParameters parameters) {
 	D_ASSERT(active_query);
 	auto &statement = *statement_p;
-	if (ActiveTransaction().IsInvalidated() && statement.requires_valid_transaction) {
+	if (ActiveTransaction().IsInvalidated() && statement.properties.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	auto &db_config = DBConfig::GetConfig(*this);
-	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type)));
 	}
@@ -305,13 +305,13 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		active_query->progress_bar->Start();
 		query_progress = 0;
 	}
-	auto stream_result = parameters.allow_stream_result && statement.allow_stream_result;
+	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
 	if (!stream_result) {
 		unique_ptr<PhysicalResultCollector> collector;
 		auto &config = ClientConfig::GetConfig(*this);
 		auto get_method =
 		    config.result_collector ? config.result_collector : PhysicalResultCollector::GetResultCollector;
-		collector = get_method(statement.plan.get(), statement.names, statement.plan->types);
+		collector = get_method(statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(move(collector));
 	} else {
@@ -579,15 +579,17 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			result = PendingStatementInternal(lock, query, move(statement), parameters);
 		} else {
 			auto &catalog = Catalog::GetCatalog(*this);
-			if (prepared->unbound_statement && catalog.GetCatalogVersion() != prepared->catalog_version) {
-				D_ASSERT(prepared->unbound_statement.get());
+			if (prepared->unbound_statement && (catalog.GetCatalogVersion() != prepared->catalog_version ||
+			                                    !prepared->properties.bound_all_parameters)) {
 				// catalog was modified: rebind the statement before execution
-				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy());
-				if (prepared->types != new_prepared->types) {
+				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
+				if (prepared->types != new_prepared->types && prepared->properties.bound_all_parameters) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}
+				D_ASSERT(new_prepared->properties.bound_all_parameters);
 				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
+				prepared->properties.bound_all_parameters = false;
 			}
 			result = PendingPreparedStatement(lock, prepared, parameters);
 		}
@@ -609,12 +611,13 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 }
 
 void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
-	if (!log_query_writer) {
+	if (!client_data->log_query_writer) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
 			string log_path(DUCKDB_FORCE_QUERY_LOG);
-			log_query_writer = make_unique<BufferedFileWriter>(
-			    FileSystem::GetFileSystem(*this), log_path, BufferedFileWriter::DEFAULT_OPEN_FLAGS, file_opener.get());
+			client_data->log_query_writer =
+			    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path,
+			                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data->file_opener.get());
 		} catch (...) {
 			return;
 		}
@@ -623,10 +626,10 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #endif
 	}
 	// log query path is set: log the query
-	log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
-	log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
-	log_query_writer->Flush();
-	log_query_writer->Sync();
+	client_data->log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
+	client_data->log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+	client_data->log_query_writer->Flush();
+	client_data->log_query_writer->Sync();
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
@@ -644,7 +647,11 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 	}
 	if (statements.empty()) {
 		// no statements, return empty successful result
-		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
+		StatementProperties properties;
+		vector<LogicalType> types;
+		vector<string> names;
+		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(types),
+		                                            move(names), shared_from_this());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1138,6 +1145,7 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
+	options.max_expression_depth = ClientConfig::GetConfig(*this).max_expression_depth;
 	return options;
 }
 

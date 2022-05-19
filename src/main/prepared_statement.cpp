@@ -27,6 +27,11 @@ StatementType PreparedStatement::GetStatementType() {
 	return data->statement_type;
 }
 
+StatementProperties PreparedStatement::GetStatementProperties() {
+	D_ASSERT(data);
+	return data->properties;
+}
+
 const vector<LogicalType> &PreparedStatement::GetTypes() {
 	D_ASSERT(data);
 	return data->types;
@@ -38,7 +43,7 @@ const vector<string> &PreparedStatement::GetNames() {
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
-	auto pending = PendingQuery(values, allow_stream_result && data->allow_stream_result);
+	auto pending = PendingQuery(values, allow_stream_result && data->properties.allow_stream_result);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(pending->error);
 	}

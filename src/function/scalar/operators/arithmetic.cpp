@@ -153,7 +153,8 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		// no potential overflow: replace with non-overflowing operator
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
 	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
 	return move(stats);
 }
@@ -458,7 +459,8 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 		new_min = Value(expr.return_type);
 		new_max = Value(expr.return_type);
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
 	if (istats.validity_stats) {
 		stats->validity_stats = istats.validity_stats->Copy();
 	}

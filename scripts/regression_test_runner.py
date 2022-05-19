@@ -145,3 +145,5 @@ for res in other_results:
     print(f"Old timing: {res[1]}")
     print(f"New timing: {res[2]}")
     print("")
+
+exit(exit_code)

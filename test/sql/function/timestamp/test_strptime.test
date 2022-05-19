@@ -195,6 +195,12 @@ SELECT strptime('', NULL)
 ----
 NULL
 
+# Spaces match multiple spaces (Issue #3418)
+query I
+SELECT strptime('Jun 30 2003  2:03:10AM', '%b %d %Y %-I:%M:%S%p');
+----
+2003-06-30 02:03:10
+
 # UTC offset - produces TIMESTAMPTZ
 query I
 select strptime('2020-12-31 21:25:58.745232', '%Y-%m-%d %H:%M:%S.%f');

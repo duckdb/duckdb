@@ -76,7 +76,9 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto bound_node = move(bound_subquery->bound_node);
 	LogicalType return_type =
 	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
-	D_ASSERT(return_type.id() != LogicalTypeId::UNKNOWN);
+	if (return_type.id() == LogicalTypeId::UNKNOWN) {
+		return_type = LogicalType::SQLNULL;
+	}
 
 	auto result = make_unique<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {

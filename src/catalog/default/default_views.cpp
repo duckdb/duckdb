@@ -94,7 +94,6 @@ vector<string> DefaultViewGenerator::GetDefaultEntries() {
 		}
 	}
 	return result;
-
 }
 
 } // namespace duckdb

@@ -80,7 +80,7 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 
 	if (!gstate.parallel_state) {
 		// sequential scan
-		function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
+		function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
 		if (chunk.size() != 0) {
 			return;
 		}
@@ -88,10 +88,10 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 		// parallel scan
 		do {
 			if (function.parallel_function) {
-				function.parallel_function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk,
+				function.parallel_function(context.client, bind_data.get(), state.operator_data.get(), chunk,
 				                           gstate.parallel_state.get());
 			} else {
-				function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
+				function.function(context.client, bind_data.get(), state.operator_data.get(), chunk);
 			}
 
 			if (chunk.size() == 0) {

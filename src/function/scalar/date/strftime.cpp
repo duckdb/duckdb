@@ -634,14 +634,20 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::Execute<date_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input) {
-		dtime_t time(0);
-		idx_t len = info.format.GetLength(input, time, 0, nullptr);
-		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(input, time, target.GetDataWriteable());
-		target.Finalize();
-		return target;
-	});
+	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(
+	    args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input, ValidityMask &mask, idx_t idx) {
+		    if (Date::IsFinite(input)) {
+			    dtime_t time(0);
+			    idx_t len = info.format.GetLength(input, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    info.format.FormatString(input, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+	    });
 }
 
 template <bool REVERSED>
@@ -655,17 +661,22 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		return;
 	}
 
-	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(),
-	                                              [&](timestamp_t input) {
-		                                              date_t date;
-		                                              dtime_t time;
-		                                              Timestamp::Convert(input, date, time);
-		                                              idx_t len = info.format.GetLength(date, time, 0, nullptr);
-		                                              string_t target = StringVector::EmptyString(result, len);
-		                                              info.format.FormatString(date, time, target.GetDataWriteable());
-		                                              target.Finalize();
-		                                              return target;
-	                                              });
+	UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
+	    args.data[REVERSED ? 1 : 0], result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+		    if (Timestamp::IsFinite(input)) {
+			    date_t date;
+			    dtime_t time;
+			    Timestamp::Convert(input, date, time);
+			    idx_t len = info.format.GetLength(date, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    info.format.FormatString(date, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+	    });
 }
 
 void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -788,13 +799,30 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 
 	for (idx_t i = 0;; i++) {
 		// first compare the literal
-		if (literals[i].size() > (size - pos) || memcmp(data + pos, literals[i].c_str(), literals[i].size()) != 0) {
+		const auto &literal = literals[i];
+		for (size_t l = 0; l < literal.size();) {
+			// Match runs of spaces to runs of spaces.
+			if (StringUtil::CharacterIsSpace(literal[l])) {
+				if (!StringUtil::CharacterIsSpace(data[pos])) {
+					error_message = "Space does not match, expected " + literals[i];
+					error_position = pos;
+					return false;
+				}
+				for (++pos; pos < size && StringUtil::CharacterIsSpace(data[pos]); ++pos) {
+					continue;
+				}
+				for (++l; l < literal.size() && StringUtil::CharacterIsSpace(literal[l]); ++l) {
+					continue;
+				}
+				continue;
+			}
 			// literal does not match
-			error_message = "Literal does not match, expected " + literals[i];
-			error_position = pos;
-			return false;
+			if (data[pos++] != literal[l++]) {
+				error_message = "Literal does not match, expected " + literal;
+				error_position = pos;
+				return false;
+			}
 		}
-		pos += literals[i].size();
 		if (i == specifiers.size()) {
 			break;
 		}

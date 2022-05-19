@@ -1,7 +1,13 @@
 #define DUCKDB_EXTENSION_MAIN
 
+#include "unicode/ucol.h"
+#include "unicode/stringpiece.h"
+#include "unicode/coll.h"
+#include "unicode/sortkey.h"
+#include "unicode/timezone.h"
+#include "unicode/calendar.h"
+
 #include "include/icu-extension.hpp"
-#include "include/icu-collate.hpp"
 #include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datesub.hpp"
@@ -182,7 +188,7 @@ static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ICUTimeZoneData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
@@ -253,7 +259,7 @@ static unique_ptr<FunctionOperatorData> ICUCalendarInit(ClientContext &context, 
 }
 
 static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &data = (ICUCalendarData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {

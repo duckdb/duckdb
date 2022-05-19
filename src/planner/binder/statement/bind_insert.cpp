@@ -34,7 +34,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	D_ASSERT(table);
 	if (!table->temporary) {
 		// inserting into a non-temporary table: alters underlying database
-		this->read_only = false;
+		properties.read_only = false;
 	}
 
 	auto insert = make_unique<LogicalInsert>(table);
@@ -140,7 +140,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	} else {
 		D_ASSERT(result.types.size() == result.names.size());
 		result.plan = move(insert);
-		this->allow_stream_result = false;
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
 		return result;
 	}
 }

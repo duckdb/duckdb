@@ -147,7 +147,7 @@ public:
 	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
-	//! Creat a map value from a (key, value) pair
+	//! Create a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
@@ -534,5 +534,9 @@ template <>
 DUCKDB_API bool Value::IsFinite(float input);
 template <>
 DUCKDB_API bool Value::IsFinite(double input);
+template <>
+DUCKDB_API bool Value::IsFinite(date_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_t input);
 
 } // namespace duckdb

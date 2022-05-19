@@ -14,8 +14,8 @@ namespace duckdb {
 
 class BetweenExpression : public ParsedExpression {
 public:
-	BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
-	                  unique_ptr<ParsedExpression> upper);
+	DUCKDB_API BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
+	                             unique_ptr<ParsedExpression> upper);
 
 	unique_ptr<ParsedExpression> input;
 	unique_ptr<ParsedExpression> lower;

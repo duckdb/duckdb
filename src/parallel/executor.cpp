@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -271,7 +272,7 @@ void Executor::InitializeInternal(PhysicalOperator *plan) {
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		this->profiler = context.profiler;
+		this->profiler = ClientData::Get(context).profiler;
 		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
