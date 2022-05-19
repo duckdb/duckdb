@@ -331,13 +331,16 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
-	unordered_set<string> removed_columns = column_dependency_manager.GetDependencyChain(info.removed_column);
-	if (removed_columns.size() > 1 && !info.cascade) {
+	unordered_set<string> removed_columns;
+	if (column_dependency_manager.HasDependents(info.removed_column)) {
+		removed_columns = column_dependency_manager.GetDependents(info.removed_column);
+	}
+	if (!removed_columns.empty() && !info.cascade) {
 		throw CatalogException("Cannot drop column: column is a dependency of 1 or more generated column(s)");
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto &col = columns[i];
-		if (removed_columns.count(col.name)) {
+		if (i == remove_info.index || removed_columns.count(col.name)) {
 			continue;
 		}
 		create_info->columns.push_back(col.Copy());
