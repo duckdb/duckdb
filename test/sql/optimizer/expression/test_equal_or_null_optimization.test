@@ -52,7 +52,7 @@ physical_plan	<REGEX>:.*DISTINCT.*
 
 # do a hash join
 query I rowsort
-SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test1.i IS NULL AND test2.j IS NULL);
+SELECT test1.i FROM test AS test1, test AS test2 WHERE (test1.i=test2.j) OR (test1.i IS NULL AND test2.j IS NULL) ORDER BY 1;
 ----
 1
 2
