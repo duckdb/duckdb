@@ -46,7 +46,7 @@ public:
 public:
 	static void Initialize(py::handle &m);
 
-	static unique_ptr<DuckDBPyRelation> FromDf(py::object df,
+	static unique_ptr<DuckDBPyRelation> FromDf(const py::object &df,
 	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
@@ -78,29 +78,29 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const py::object &df, const string &expr,
 	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	py::str GetAlias();
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> AliasDF(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> AliasDF(const py::object &df, const string &expr,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> FilterDf(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> FilterDf(const py::object &df, const string &expr,
 	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n);
 
-	static unique_ptr<DuckDBPyRelation> LimitDF(py::object df, int64_t n,
+	static unique_ptr<DuckDBPyRelation> LimitDF(const py::object &df, int64_t n,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> OrderDf(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> OrderDf(const py::object &df, const string &expr,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
@@ -156,12 +156,12 @@ public:
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
-	static unique_ptr<DuckDBPyRelation> AggregateDF(py::object df, const string &expr, const string &groups = "",
+	static unique_ptr<DuckDBPyRelation> AggregateDF(const py::object &df, const string &expr, const string &groups = "",
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	static unique_ptr<DuckDBPyRelation> DistinctDF(py::object df,
+	static unique_ptr<DuckDBPyRelation> DistinctDF(const py::object &df,
 	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	py::object ToDF();
@@ -186,7 +186,7 @@ public:
 
 	void WriteCsv(const string &file);
 
-	static void WriteCsvDF(py::object df, const string &file,
+	static void WriteCsvDF(const py::object &df, const string &file,
 	                       DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	// should this return a rel with the new view?
@@ -196,7 +196,7 @@ public:
 
 	unique_ptr<DuckDBPyResult> Execute();
 
-	static unique_ptr<DuckDBPyResult> QueryDF(py::object df, const string &view_name, const string &sql_query,
+	static unique_ptr<DuckDBPyResult> QueryDF(const py::object &df, const string &view_name, const string &sql_query,
 	                                          DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	void InsertInto(const string &table);

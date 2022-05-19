@@ -177,25 +177,30 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
 
 py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
 	auto copy_df = original_df.attr("copy")(false);
-	unordered_map<string, idx_t> pandas_column_names_map;
-	py::list py_column_names;
+	unordered_map<string, idx_t> name_map;
+	py::list column_name_list;
 	auto df_columns = py::list(original_df.attr("columns"));
-	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
-		auto column_name_py = py::str(df_columns[col_idx]);
-		pandas_column_names_map[column_name_py]++;
-		if (pandas_column_names_map[column_name_py] > 1) {
-			// If the column name is repeated we start adding _x where x is the repetition number
-			string column_name = column_name_py;
-			column_name += "_" + std::to_string(pandas_column_names_map[column_name_py] - 1);
-			auto new_column_name_py = py::str(column_name);
-			py_column_names.append(new_column_name_py);
-			// column_attributes[py::cast(col_idx)] = new_column_name_py;
-			pandas_column_names_map[new_column_name_py]++;
+
+	for (auto &column_name_py : df_columns) {
+		const string column_name = py::str(column_name_py);
+		if (name_map.find(column_name) == name_map.end()) {
+			// Name does not exist yet
+			column_name_list.append(column_name);
+			name_map[column_name]++;
 		} else {
-			py_column_names.append(column_name_py);
+			// Name already exists, we add _x where x is the repetition number
+			string new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
+			while (name_map.find(new_column_name) != name_map.end()) {
+				// This name is already here due to a previous definition
+				name_map[column_name]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
+			}
+			column_name_list.append(new_column_name);
+			name_map[new_column_name]++;
 		}
 	}
-	copy_df.attr("columns") = py_column_names;
+
+	copy_df.attr("columns") = column_name_list;
 	return copy_df;
 }
 
