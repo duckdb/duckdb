@@ -106,16 +106,12 @@ void ColumnDependencyManager::RenameColumn(TableColumnType category, const strin
 }
 
 void ColumnDependencyManager::RemoveStandardColumn(const string &name) {
-	auto &dependents = dependencies_map[name];
+	if (!HasDependents(name)) {
+		return;
+	}
+	auto dependents = dependencies_map[name];
 	for (auto &gcol : dependents) {
-		// Remove this column from the dependencies list of this generated column
-		auto &gcol_dependencies = dependents_map[gcol];
-		D_ASSERT(gcol_dependencies.count(name));
-		gcol_dependencies.erase(name);
-		// If the resulting list is empty, remove the generated column from the dependents_map map altogether
-		if (gcol_dependencies.empty()) {
-			dependents_map.erase(gcol);
-		}
+		RemoveGeneratedColumn(gcol);
 	}
 	// Remove this column from the dependencies map
 	dependencies_map.erase(name);
@@ -133,16 +129,10 @@ void ColumnDependencyManager::RemoveGeneratedColumn(const string &name) {
 			dependencies_map.erase(col);
 		}
 	}
-	// Check if this generated column is referenced by other generated columns
-	if (HasDependents(name)) {
-		auto &dependents = dependencies_map[name];
-		for (auto &col : dependents) {
-			// By removing the column, this dependent is also removed
-			RemoveGeneratedColumn(col);
-		}
-	}
 	// Remove this column from the dependents_map map
 	dependents_map.erase(name);
+	// Treat it as a standard column now, to remove the (potential) dependents
+	RemoveStandardColumn(name);
 }
 
 // Used for both generated and standard column, to avoid code duplication
