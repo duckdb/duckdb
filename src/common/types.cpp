@@ -739,10 +739,10 @@ struct ExtraTypeInfo {
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const {
-		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO
-			|| type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
+		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 			if (!other_p) {
-				if (alias != "") {
+				if (alias != string()) {
 					return false;
 				}
 				return true;
@@ -785,7 +785,7 @@ void LogicalType::SetAlias(string &alias) {
 
 string LogicalType::GetAlias() const {
 	if (!type_info_) {
-		return "";
+		return string();
 	} else {
 		return type_info_->alias;
 	}
@@ -808,7 +808,7 @@ TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
 // Decimal Type
 //===--------------------------------------------------------------------===//
 struct DecimalTypeInfo : public ExtraTypeInfo {
-	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p, string alias = "")
+	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO, move(alias)), width(width_p), scale(scale_p) {
 	}
 
@@ -826,6 +826,7 @@ public:
 		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale, alias);
 	}
+
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
 		auto &other = (DecimalTypeInfo &)*other_p;
@@ -856,7 +857,7 @@ LogicalType LogicalType::DECIMAL(int width, int scale) {
 // String Type
 //===--------------------------------------------------------------------===//
 struct StringTypeInfo : public ExtraTypeInfo {
-	explicit StringTypeInfo(string collation_p, string alias = "")
+	explicit StringTypeInfo(string collation_p, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO, move(alias)), collation(move(collation_p)) {
 	}
 
@@ -902,7 +903,7 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 // List Type
 //===--------------------------------------------------------------------===//
 struct ListTypeInfo : public ExtraTypeInfo {
-	explicit ListTypeInfo(LogicalType child_type_p, string alias = "")
+	explicit ListTypeInfo(LogicalType child_type_p, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO, move(alias)), child_type(move(child_type_p)) {
 	}
 
@@ -941,7 +942,7 @@ LogicalType LogicalType::LIST(LogicalType child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 struct StructTypeInfo : public ExtraTypeInfo {
-	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p, string alias = "")
+	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO, move(alias)), child_types(move(child_types_p)) {
 	}
 
@@ -977,7 +978,7 @@ protected:
 };
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
-	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, string alias = "")
+	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO, move(alias)), state_type(move(state_type_p)) {
 	}
 
@@ -1101,7 +1102,7 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 // User Type
 //===--------------------------------------------------------------------===//
 struct UserTypeInfo : public ExtraTypeInfo {
-	explicit UserTypeInfo(string name_p, string alias = "")
+	explicit UserTypeInfo(string name_p, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO, move(alias)), user_type_name(move(name_p)) {
 	}
 
@@ -1140,7 +1141,7 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 // Enum Type
 //===--------------------------------------------------------------------===//
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size, string alias = "")
+	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size, string alias = string())
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO, move(alias)), enum_name(move(enum_name_p)),
 	      values_insert_order(values_insert_order_p), size(size) {
 	}
@@ -1180,7 +1181,7 @@ protected:
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p,
-	                               const string &alias = "")
+	                               const string &alias = string())
 	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p, alias) {
 		for (idx_t count = 0; count < size_p; count++) {
 			values[values_insert_order_p.GetValue(count).ToString()] = count;
@@ -1284,7 +1285,7 @@ PhysicalType EnumType::GetPhysicalType(idx_t size) {
 void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 	if (!info) {
 		writer.WriteField<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
-		writer.WriteString("");
+		writer.WriteString(string());
 	} else {
 		writer.WriteField<ExtraTypeInfoType>(info->type);
 		writer.WriteString(info->alias);
@@ -1293,7 +1294,7 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 }
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<ExtraTypeInfoType>();
-	auto alias = reader.ReadRequired<string>();
+	auto alias = reader.ReadField<string>(string());
 	switch (type) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO:
 		return nullptr;
