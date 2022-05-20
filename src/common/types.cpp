@@ -742,7 +742,7 @@ public:
 		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
 		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 			if (!other_p) {
-				if (alias.empty()) {
+				if (!alias.empty()) {
 					return false;
 				}
 				return true;
