@@ -41,11 +41,11 @@ RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionT
 			// We basically only sort columns with RLE compression and that are supported by the RLE algorithm
 			if (SupportedSortCompressionType(type_id) && (column_compression == CompressionType::COMPRESSION_RLE)) {
 				// Gather types and ids of key columns (i.e., the ones we will sort on)
-				key_column_ids.push_back(column->column_index);
+				key_column_ids.push_back(column_idx);
 				key_column_types.push_back(column->type);
 			}
 			// Gather types and ids of payload columns (i.e., the whole table)
-			payload_column_ids.push_back(column->column_index);
+			payload_column_ids.push_back(column_idx);
 			payload_column_types.push_back(column->type);
 		}
 	}
