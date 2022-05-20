@@ -29,6 +29,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/constraints/list.hpp"
 
 namespace duckdb {
 
@@ -177,6 +178,89 @@ static void FindMatchingPrimaryKeyColumns(vector<unique_ptr<Constraint>> &constr
 	throw BinderException("there is no primary key for referenced table \"%s\"", fk.info.table);
 }
 
+void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unordered_set<string> &gcols,
+                                       bool &contains_gcol) {
+	if (contains_gcol) {
+		return;
+	}
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)expr;
+		auto &name = column_ref.GetColumnName();
+		if (gcols.count(name)) {
+			contains_gcol = true;
+			return;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    expr, [&](const ParsedExpression &child) { ExpressionContainsGeneratedColumn(child, gcols, contains_gcol); });
+}
+
+static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) {
+	unordered_set<string> generated_columns;
+	for (auto &col : table_info.columns) {
+		if (!col.Generated()) {
+			continue;
+		}
+		generated_columns.insert(col.name);
+	}
+	if (generated_columns.empty()) {
+		return false;
+	}
+
+	for (auto &constr : table_info.constraints) {
+		switch (constr->type) {
+		case ConstraintType::CHECK: {
+			auto &constraint = (CheckConstraint &)*constr;
+			auto &expr = constraint.expression;
+			bool contains_generated_column = false;
+			ExpressionContainsGeneratedColumn(*expr, generated_columns, contains_generated_column);
+			if (contains_generated_column) {
+				return true;
+			}
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY: {
+			auto &constraint = (ForeignKeyConstraint &)*constr;
+			// Can't/dont have to check foreign keys?
+			for (auto &key : constraint.pk_columns) {
+				if (generated_columns.count(key)) {
+					return true;
+				}
+			}
+			break;
+		}
+		case ConstraintType::NOT_NULL: {
+			auto &constraint = (NotNullConstraint &)*constr;
+			auto index = constraint.index;
+			if (table_info.columns[index].Generated()) {
+				return true;
+			}
+			break;
+		}
+		case ConstraintType::UNIQUE: {
+			auto &constraint = (UniqueConstraint &)*constr;
+			auto index = constraint.index;
+			if (index == DConstants::INVALID_INDEX) {
+				for (auto &col : constraint.columns) {
+					if (generated_columns.count(col)) {
+						return true;
+					}
+				}
+			} else {
+				if (table_info.columns[index].Generated()) {
+					return true;
+				}
+			}
+			break;
+		}
+		default: {
+			throw NotImplementedException("ConstraintType not implemented");
+		}
+		}
+	}
+	return false;
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -213,7 +297,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::INDEX_ENTRY: {
 		auto &base = (CreateIndexInfo &)*stmt.info;
-
 		// visit the table reference
 		auto bound_table = Bind(*base.table);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
@@ -285,7 +368,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				}
 			}
 		}
-
+		if (AnyConstraintReferencesGeneratedColumn(create_info)) {
+			throw BinderException("Constraints on generated columns are not supported yet");
+		}
 		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);

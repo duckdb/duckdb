@@ -71,6 +71,10 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 	idx_t key_nr = 0;
 	for (auto &key : keys) {
 		D_ASSERT(key < columns.size());
+		auto &column = columns[key];
+		if (column.Generated()) {
+			throw InvalidInputException("Creating index on generated column is not supported");
+		}
 
 		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(columns[key].name, columns[key].type,
 		                                                                    ColumnBinding(0, column_ids.size())));
