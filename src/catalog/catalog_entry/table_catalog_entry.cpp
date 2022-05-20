@@ -320,7 +320,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		vector<string> referenced_columns;
 		info.new_column.GetListOfDependencies(referenced_columns);
 		vector<column_t> indices = ConvertNamesToIndices(referenced_columns, name_map);
-		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column, move(indices));
+		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column, indices);
 	}
 
 	auto col = info.new_column.Copy();

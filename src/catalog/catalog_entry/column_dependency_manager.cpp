@@ -11,7 +11,7 @@ using std::queue;
 ColumnDependencyManager::ColumnDependencyManager() {
 }
 
-void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, vector<column_t> indices) {
+void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const vector<column_t>& indices) {
 	D_ASSERT(column.Generated());
 
 	if (indices.empty()) {
@@ -160,13 +160,13 @@ void ColumnDependencyManager::CleanupInternals() {
 	// Get the lowest index that was deleted
 	column_t threshold = *deleted_columns.begin();
 
-	for (auto it : dependents_map) {
+	for (auto &it : dependents_map) {
 		auto idx = it.first;
 		if (idx > threshold) {
 			to_adjust.insert(idx);
 		}
 	}
-	for (auto it : dependencies_map) {
+	for (auto &it : dependencies_map) {
 		auto idx = it.first;
 		if (idx > threshold) {
 			to_adjust.insert(idx);

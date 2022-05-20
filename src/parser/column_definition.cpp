@@ -124,7 +124,7 @@ static void VerifyColumnRefs(const string &name, const vector<ColumnDefinition> 
 static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto columnref = (ColumnRefExpression &)expr;
-		auto name = columnref.GetColumnName();
+		auto &name = columnref.GetColumnName();
 		dependencies.push_back(name);
 	}
 	ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
