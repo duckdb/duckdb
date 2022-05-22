@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_join.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 

@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
