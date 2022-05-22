@@ -1,0 +1,21 @@
+# name: test/sql/generated_columns/virtual/casting.test
+# description: Test generated column behavior when casting is involved
+# group: [virtual]
+
+# Create a table with a generated column, that contains a CAST
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	total_price AS ((price)::DATE)
+);
+
+# Insert value(s) into the column(s)
+statement ok
+INSERT INTO tbl VALUES (5);
+
+# Select everything
+# This is the only time the cast is actually performed, because data is generated
+# Now the error introduced at CREATE is detected:
+# 'Conversion Error: Unimplemented type for cast (INTEGER -> DATE)'
+statement error
+SELECT * FROM tbl;

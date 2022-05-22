@@ -56,9 +56,12 @@ public:
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
+	//! Used by Generated Columns
+	unique_ptr<ParsedExpression> generated_expression;
 
 public:
 	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
+	void ChangeGeneratedExpressionType(const LogicalType &type);
 	ParsedExpression &GeneratedExpression();
 	DUCKDB_API ColumnDefinition Copy() const;
 
@@ -77,8 +80,6 @@ public:
 
 private:
 private:
-	//! Used by Generated Columns
-	unique_ptr<ParsedExpression> generated_expression;
 };
 
 } // namespace duckdb

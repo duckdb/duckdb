@@ -21,13 +21,8 @@ SELECT total_profit FROM unit;
 0
 4
 
-# Add a standard column named 'rowid' with a different type
-statement error
-ALTER TABLE unit ADD COLUMN rowid INTEGER;
-
-# Add a standard column named 'rowid' with the same type
 statement ok
-ALTER TABLE unit ADD COLUMN rowid BIGINT;
+ALTER TABLE unit ADD COLUMN rowid INTEGER;
 
 query I
 SELECT total_profit FROM unit;

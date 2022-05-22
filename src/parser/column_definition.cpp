@@ -3,6 +3,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 
@@ -147,7 +148,28 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expre
 		throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", name);
 	}
 	category = TableColumnType::GENERATED;
-	generated_expression = move(expression);
+
+	bool type_is_any = type.id() == LogicalTypeId::ANY;
+	if (type_is_any) {
+		generated_expression = move(expression);
+		return;
+	}
+	// Always wrap the expression in a cast, that way we can always update the cast when we change the type
+	// Except if the type is LogicalType::ANY (no type specified)
+	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(expression));
+}
+
+void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
+	// First time the type is set, add a cast around the expression
+	if (this->type.id() == LogicalTypeId::ANY && this->generated_expression->type != ExpressionType::OPERATOR_CAST) {
+		generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(generated_expression));
+		return;
+	}
+	// Every generated expression should be wrapped in a cast on creation
+	D_ASSERT(generated_expression->type == ExpressionType::OPERATOR_CAST);
+	auto &cast_expr = (CastExpression &)*generated_expression;
+	auto base_expr = move(cast_expr.child);
+	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(base_expr));
 }
 
 ParsedExpression &ColumnDefinition::GeneratedExpression() {

@@ -24,7 +24,6 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
 			auto centry = TransformColumnDefinition(cdef);
 
-			unique_ptr<ParsedExpression> generated_expression;
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);

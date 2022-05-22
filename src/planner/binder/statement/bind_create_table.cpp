@@ -207,13 +207,13 @@ struct GeneratedColumnBindData {
 void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const CreateTableInfo &info) {
 	vector<string> names;
 	vector<LogicalType> types;
+	queue<GeneratedColumnBindData> to_resolve;
 
 	D_ASSERT(info.type == CatalogType::TABLE_ENTRY);
 	// Add the 'rowid' column so we can succesfully bind to the system column
 	bool add_row_id = true;
 	// Corner case: if a generated column is named 'rowid' the system column would be referenced here, but then fail
 	// in the actual SELECT, as 'rowid' system wouldn't be added because it is already occupied in the name map
-	queue<GeneratedColumnBindData> to_resolve;
 	for (idx_t i = 0; i < info.columns.size(); i++) {
 		auto &col = info.columns[i];
 		if (col.name == "rowid") {
@@ -277,7 +277,9 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
 			                      col.name);
 		}
-		if (col.type == LogicalType::ANY) {
+		if (col.type.id() == LogicalTypeId::ANY) {
+			// Do this before changing the type, so we know it's the first time the type is set
+			col.ChangeGeneratedExpressionType(bound_expression->return_type);
 			col.type = bound_expression->return_type;
 
 			// Update the type in the binding, for future expansions

@@ -8,14 +8,25 @@ CREATE TABLE unit (
 	total_profit BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL,
 );
 
-#Return type and type of the generated column dont match
-statement error
-CREATE TABLE unit (
+#Expression (word) is cast to BOOLEAN
+statement ok
+CREATE TABLE tbl (
     total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL,
     word VARCHAR,
     price INTEGER,
     amount_sold INTEGER,
 );
+
+# word doesn't contain any data yet
+statement ok
+SELECT * FROM tbl
+
+statement ok
+INSERT INTO tbl VALUES ('string', 5, 12);
+
+# total_profit will error now
+statement error
+SELECT * FROM tbl
 
 # Expression contains a subquery
 statement error

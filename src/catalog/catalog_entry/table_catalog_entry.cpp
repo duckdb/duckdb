@@ -499,7 +499,10 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		if (change_idx == i) {
-			// set the default value of this column
+			// set the type of this column
+			if (copy.Generated()) {
+				copy.ChangeGeneratedExpressionType(info.target_type);
+			}
 			copy.type = info.target_type;
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does

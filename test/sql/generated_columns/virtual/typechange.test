@@ -18,10 +18,9 @@ SELECT total_profit FROM unit;
 20
 
 # typechange will fail, because the types (expression->return_type and col.type) dont match
-statement error
-ALTER TABLE unit ALTER COLUMN total_profit TYPE BOOLEAN;
+statement ok
+ALTER TABLE unit ALTER COLUMN total_profit TYPE DATE;
 
-query I
+# The expression could not be cast to this new type
+statement error
 SELECT total_profit FROM unit;
-----
-20

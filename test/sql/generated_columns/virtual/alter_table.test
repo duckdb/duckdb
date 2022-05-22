@@ -12,13 +12,12 @@ CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 statement ok
 INSERT INTO unit VALUES (5,4)
 
-# Function doesnt exist, neither does the referenced column
+# Function doesnt exist
 statement error
-ALTER TABLE unit ADD COLUMN total_profit BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL;
+ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL;
 
-# Return type and type of the generated column dont match
-statement error
-ALTER TABLE unit ADD COLUMN total_profit BOOLEAN GENERATED ALWAYS AS(word) VIRTUAL;
+statement ok
+ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(price) VIRTUAL;
 
 # Expression contains a subquery
 statement error
@@ -36,16 +35,16 @@ statement error
 INSERT INTO unit VALUES (1,1,1)
 
 statement ok
-INSERT INTO unit VALUES (1,1)
+INSERT INTO unit VALUES (0,1)
 
-query III
+query IIII
 SELECT * FROM unit
 ----
-5	4	20
-1	1	1
+5	4	1	20
+0	1	0	0
 
 query I
 SELECT total_profit FROM unit
 ----
 20
-1
+0
