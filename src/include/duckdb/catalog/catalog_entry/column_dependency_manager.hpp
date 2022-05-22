@@ -23,7 +23,7 @@ public:
 
 public:
 	//! Adds a connection between the dependent and its dependencies
-	void AddGeneratedColumn(ColumnDefinition &column, const vector<column_t>& indices);
+	void AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices);
 	void RemoveColumn(column_t index);
 	// void RenameColumn(TableColumnType category, const string &old_name, const string &new_name);
 

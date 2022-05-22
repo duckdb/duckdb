@@ -169,7 +169,7 @@ static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unres
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		column_t index;
 		auto columnref = (ColumnRefExpression &)expr;
-		auto& name = columnref.GetColumnName();
+		auto &name = columnref.GetColumnName();
 		bool success = table->TryGetBindingIndex(name, index);
 		success = success || table->TryGetBindingIndex(name, index, TableColumnType::GENERATED);
 		D_ASSERT(success);
@@ -213,16 +213,26 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 	bool add_row_id = true;
 	// Corner case: if a generated column is named 'rowid' the system column would be referenced here, but then fail
 	// in the actual SELECT, as 'rowid' system wouldn't be added because it is already occupied in the name map
-	for (auto &col : info.columns) {
+	queue<GeneratedColumnBindData> to_resolve;
+	for (idx_t i = 0; i < info.columns.size(); i++) {
+		auto &col = info.columns[i];
 		if (col.name == "rowid") {
 			add_row_id = false;
 		}
 		names.push_back(col.name);
 		types.push_back(col.type);
+		if (!col.Generated()) {
+			continue;
+		}
+		to_resolve.push({i, true});
 	}
 	if (add_row_id) {
 		names.emplace_back("rowid");
 		types.emplace_back(LogicalType::BIGINT);
+	}
+	// Nothing to do
+	if (to_resolve.empty()) {
+		return;
 	}
 	auto table_index = GenerateTableIndex();
 
@@ -233,17 +243,8 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 	auto table_binding = binder->bind_context.GetBinding(info.table, ignore);
 	D_ASSERT(table_binding && ignore.empty());
 
-	queue<GeneratedColumnBindData> to_resolve;
 	unordered_set<column_t> resolved;
 
-	// Add all generated columns
-	for (column_t i = 0; i < columns.size(); i++) {
-		auto &col = columns[i];
-		if (!col.Generated()) {
-			continue;
-		}
-		to_resolve.push({i, true});
-	}
 	// Continue until all generated columns are resolved
 	for (; !to_resolve.empty();) {
 		auto resolve_data = to_resolve.front();

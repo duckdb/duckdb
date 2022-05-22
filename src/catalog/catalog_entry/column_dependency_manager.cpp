@@ -11,7 +11,7 @@ using std::queue;
 ColumnDependencyManager::ColumnDependencyManager() {
 }
 
-void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const vector<column_t>& indices) {
+void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices) {
 	D_ASSERT(column.Generated());
 
 	if (indices.empty()) {
