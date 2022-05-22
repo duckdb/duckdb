@@ -3,6 +3,7 @@
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
