@@ -218,8 +218,31 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		return move(stream_result);
 	}
 	auto &executor = GetExecutor();
-	auto result = executor.GetResult();
-	CleanupInternal(lock, result.get(), false);
+	unique_ptr<QueryResult> result;
+	if (executor.HasResultCollector()) {
+		// we have a result collector - fetch the result directly from the result collector
+		result = executor.GetResult();
+		CleanupInternal(lock, result.get(), false);
+	} else {
+		// no result collector - create a materialized result by continuously fetching
+		auto materialized_result = make_unique<MaterializedQueryResult>(
+		    pending.statement_type, pending.properties, pending.types, pending.names, shared_from_this());
+		while (true) {
+			auto chunk = FetchInternal(lock, GetExecutor(), *materialized_result);
+			if (!chunk || chunk->size() == 0) {
+				break;
+			}
+#ifdef DEBUG
+			for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
+				if (pending.types[i].id() == LogicalTypeId::VARCHAR) {
+					chunk->data[i].UTFVerify(chunk->size());
+				}
+			}
+#endif
+			materialized_result->collection.Append(*chunk);
+		}
+		result = move(materialized_result);
+	}
 	return result;
 }
 
@@ -306,12 +329,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		query_progress = 0;
 	}
 	auto stream_result = parameters.allow_stream_result && statement.properties.allow_stream_result;
-	if (!stream_result) {
+	if (!stream_result && statement.properties.return_type == StatementReturnType::QUERY_RESULT) {
 		unique_ptr<PhysicalResultCollector> collector;
 		auto &config = ClientConfig::GetConfig(*this);
 		auto get_method =
 		    config.result_collector ? config.result_collector : PhysicalResultCollector::GetResultCollector;
-		collector = get_method(statement);
+		collector = get_method(*this, statement);
 		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(move(collector));
 	} else {
@@ -582,7 +605,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			if (prepared->unbound_statement && (catalog.GetCatalogVersion() != prepared->catalog_version ||
 			                                    !prepared->properties.bound_all_parameters)) {
 				// catalog was modified: rebind the statement before execution
-				auto new_prepared = CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
+				auto new_prepared =
+				    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
 				if (prepared->types != new_prepared->types && prepared->properties.bound_all_parameters) {
 					throw BinderException("Rebinding statement after catalog change resulted in change of types");
 				}

@@ -198,6 +198,7 @@ public:
 public:
 	// Pipeline construction
 	virtual vector<const PhysicalOperator *> GetSources() const;
+	bool AllSourcesSupportBatchIndex() const;
 
 	void AddPipeline(Executor &executor, shared_ptr<Pipeline> current, PipelineBuildState &state);
 	virtual void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state);

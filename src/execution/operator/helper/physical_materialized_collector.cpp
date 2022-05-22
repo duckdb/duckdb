@@ -27,7 +27,8 @@ SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, Gl
 
 unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_unique<MaterializedCollectorGlobalState>();
-	state->result = make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
+	state->result =
+	    make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
 	return move(state);
 }
 

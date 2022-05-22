@@ -175,6 +175,16 @@ vector<const PhysicalOperator *> PhysicalOperator::GetSources() const {
 	}
 }
 
+bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
+	auto sources = GetSources();
+	for (auto &source : sources) {
+		if (!source->SupportsBatchIndex()) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void PhysicalOperator::Verify() {
 #ifdef DEBUG
 	auto sources = GetSources();

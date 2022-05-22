@@ -18,7 +18,7 @@ namespace duckdb {
 class ClientContext;
 class PhysicalResultCollector;
 
-typedef std::function<unique_ptr<PhysicalResultCollector>(PreparedStatementData &data)>
+typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
     get_result_collector_t;
 
 struct ClientConfig {

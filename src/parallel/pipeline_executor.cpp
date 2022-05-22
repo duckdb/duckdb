@@ -1,5 +1,6 @@
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
 			// we can skip executing the pipeline
-			finished_processing = true;
+			FinishProcessing();
 		}
 	}
 	InitializeChunk(final_chunk);
@@ -50,7 +51,7 @@ bool PipelineExecutor::Execute(idx_t max_chunks) {
 	bool exhausted_source = false;
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	for (idx_t i = 0; i < max_chunks; i++) {
-		if (finished_processing) {
+		if (IsFinished()) {
 			break;
 		}
 		source_chunk.Reset();
@@ -61,11 +62,11 @@ bool PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 		auto result = ExecutePushInternal(source_chunk);
 		if (result == OperatorResultType::FINISHED) {
-			finished_processing = true;
+			D_ASSERT(IsFinished());
 			break;
 		}
 	}
-	if (!exhausted_source && !finished_processing) {
+	if (!exhausted_source && !IsFinished()) {
 		return false;
 	}
 	PushFinalize();
@@ -79,6 +80,15 @@ void PipelineExecutor::Execute() {
 OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) { // LCOV_EXCL_START
 	return ExecutePushInternal(input);
 } // LCOV_EXCL_STOP
+
+void PipelineExecutor::FinishProcessing(int32_t operator_idx) {
+	finished_processing_idx = operator_idx < 0 ? NumericLimits<int32_t>::Maximum() : operator_idx;
+	in_process_operators = stack<idx_t>();
+}
+
+bool PipelineExecutor::IsFinished() {
+	return finished_processing_idx >= 0;
+}
 
 OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
 	D_ASSERT(pipeline.sink);
@@ -104,6 +114,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
 			EndOperator(pipeline.sink, nullptr);
 			if (sink_result == SinkResultType::FINISHED) {
+				FinishProcessing();
 				return OperatorResultType::FINISHED;
 			}
 		}
@@ -111,7 +122,6 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 	}
-	return OperatorResultType::FINISHED;
 }
 
 void PipelineExecutor::PushFinalize() {
@@ -120,13 +130,15 @@ void PipelineExecutor::PushFinalize() {
 	}
 	finalized = true;
 	// flush all caches
-	if (!finished_processing) {
-		D_ASSERT(in_process_operators.empty());
-		for (idx_t i = 0; i < cached_chunks.size(); i++) {
-			if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
-				ExecutePushInternal(*cached_chunks[i], i + 1);
-				cached_chunks[i].reset();
-			}
+	// note that even if an operator has finished, we might still need to flush caches AFTER that operator
+	// e.g. if we have SOURCE -> LIMIT -> CROSS_PRODUCT -> SINK, if the LIMIT reports no more rows will be passed on
+	// we still need to flush caches from the CROSS_PRODUCT
+	D_ASSERT(in_process_operators.empty());
+	idx_t start_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+	for (idx_t i = start_idx; i < cached_chunks.size(); i++) {
+		if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
+			ExecutePushInternal(*cached_chunks[i], i + 1);
+			cached_chunks[i].reset();
 		}
 	}
 	D_ASSERT(local_sink_state);
@@ -182,7 +194,7 @@ void PipelineExecutor::CacheChunk(DataChunk &current_chunk, idx_t operator_idx) 
 }
 
 void PipelineExecutor::ExecutePull(DataChunk &result) {
-	if (finished_processing) {
+	if (IsFinished()) {
 		return;
 	}
 	auto &executor = pipeline.executor;
@@ -285,7 +297,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				in_process_operators.push(current_idx);
 			} else if (result == OperatorResultType::FINISHED) {
 				D_ASSERT(current_chunk.size() == 0);
-				finished_processing = true;
+				FinishProcessing(current_idx);
 				return OperatorResultType::FINISHED;
 			}
 			current_chunk.Verify();
@@ -322,6 +334,7 @@ void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	if (requires_batch_index) {
 		auto next_batch_index =
 		    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
+		next_batch_index += pipeline.base_batch_index;
 		D_ASSERT(local_sink_state->batch_index <= next_batch_index ||
 		         local_sink_state->batch_index == DConstants::INVALID_INDEX);
 		local_sink_state->batch_index = next_batch_index;

@@ -500,8 +500,12 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 	}
 } // LCOV_EXCL_STOP
 
+bool Executor::HasResultCollector() {
+	return physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR;
+}
+
 unique_ptr<QueryResult> Executor::GetResult() {
-	D_ASSERT(physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR);
+	D_ASSERT(HasResultCollector());
 	auto &result_collector = (PhysicalResultCollector &)*physical_plan;
 	D_ASSERT(result_collector.sink_state);
 	return result_collector.GetResult(*result_collector.sink_state);

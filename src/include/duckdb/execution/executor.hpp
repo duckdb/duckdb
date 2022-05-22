@@ -83,6 +83,9 @@ public:
 
 	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
+	//! Whether or not the root of the pipeline is a result collector object
+	bool HasResultCollector();
+	//! Returns the query result - can only be used if `HasResultCollector` returns true
 	unique_ptr<QueryResult> GetResult();
 
 private:

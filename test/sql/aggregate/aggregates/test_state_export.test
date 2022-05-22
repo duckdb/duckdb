@@ -57,12 +57,12 @@ select g, finalize(combine(sum(d) EXPORT_STATE, sum_state)) combined_sum from du
 statement ok
 CREATE TABLE state2 AS SELECT g, sum(d) EXPORT_STATE sum_state FROM dummy WHERE g < 5 GROUP BY g ORDER BY g;
 
-query II nosort res3
+query II rowsort res3
 select g, finalize(sum_state) * 2 combined_sum from (select g, sum(d) EXPORT_STATE sum_state from dummy where g >= 5 GROUP BY g union all SELECT * FROM state2) ORDER BY g;
 ----
 
 # combine aggregate states in JOINs with NULLs
-query II nosort res3
+query II rowsort res3
 with groups as (select distinct g from dummy)
 select g, FINALIZE(COMBINE(sum_state, sum_state2)) * 2 from groups left join state2 using(g) left join (select g, sum(d) EXPORT_STATE sum_state2 from dummy where g >= 5 GROUP BY g) using (g)
 ----

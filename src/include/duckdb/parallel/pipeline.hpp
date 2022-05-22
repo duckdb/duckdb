@@ -21,11 +21,18 @@ class Event;
 
 class PipelineBuildState {
 public:
+	//! How much to increment batch indexes when multiple pipelines share the same source
+	constexpr static idx_t BATCH_INCREMENT = 10000000000000;
+
+public:
 	//! The current recursive CTE node (if any)
 	PhysicalOperator *recursive_cte = nullptr;
 
 	//! Duplicate eliminated join scan dependencies
 	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
+
+	//! The number of pipelines that have each specific sink as their sink
+	unordered_map<PhysicalOperator *, idx_t> sink_pipeline_count;
 
 public:
 	void SetPipelineSource(Pipeline &pipeline, PhysicalOperator *op);
@@ -100,6 +107,9 @@ private:
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
+
+	//! The base batch index of this pipeline
+	idx_t base_batch_index = 0;
 
 private:
 	bool GetProgressInternal(ClientContext &context, PhysicalOperator *op, double &current_percentage);

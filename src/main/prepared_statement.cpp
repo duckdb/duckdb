@@ -43,7 +43,7 @@ const vector<string> &PreparedStatement::GetNames() {
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
-	auto pending = PendingQuery(values, allow_stream_result && data->properties.allow_stream_result);
+	auto pending = PendingQuery(values, allow_stream_result);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(pending->error);
 	}
@@ -57,7 +57,7 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &va
 	D_ASSERT(data);
 	PendingQueryParameters parameters;
 	parameters.parameters = &values;
-	parameters.allow_stream_result = allow_stream_result;
+	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
 	auto result = context->PendingQuery(query, data, parameters);
 	return result;
 }
