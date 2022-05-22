@@ -21,7 +21,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 		bool all_sources_support_batch_index = plan->AllSourcesSupportBatchIndex();
 
 		if (all_sources_support_batch_index) {
-			// source supports batch index: use streaming limit
+			// source supports batch index: use parallel batch limit
 			limit = make_unique<PhysicalLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
 			                                   move(op.offset), op.estimated_cardinality);
 		} else {

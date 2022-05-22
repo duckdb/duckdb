@@ -22,7 +22,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		chunk->Initialize(prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
 		intermediate_states.push_back(current_operator->GetOperatorState(context.client));
-		if (pipeline.sink && !pipeline.sink->SinkOrderMatters() && current_operator->RequiresCache()) {
+		if (!pipeline.IsOrderDependent() && current_operator->RequiresCache()) {
 			auto &cache_types = current_operator->GetTypes();
 			bool can_cache = true;
 			for (auto &type : cache_types) {

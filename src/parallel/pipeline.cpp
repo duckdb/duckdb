@@ -108,16 +108,8 @@ void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 }
 
 bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+	// check if the sink, source and all intermediate operators support parallelism
 	if (!sink->ParallelSink()) {
-		return false;
-	}
-	if (sink->RequiresBatchIndex()) {
-		if (!source->SupportsBatchIndex()) {
-			throw InternalException(
-			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
-		}
-	} else if (sink->SinkOrderMatters()) {
-		// FIXME: only if order actually matters to us
 		return false;
 	}
 	if (!source->ParallelSource()) {
@@ -128,8 +120,34 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			return false;
 		}
 	}
+	if (sink->RequiresBatchIndex()) {
+		if (!source->SupportsBatchIndex()) {
+			throw InternalException(
+			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		}
+	}
+	// if we want to preserve insertion order, check for order-dependent operators
+	if (IsOrderDependent()) {
+		return false;
+	}
 	idx_t max_threads = source_state->MaxThreads();
 	return LaunchScanTasks(event, max_threads);
+}
+
+bool Pipeline::IsOrderDependent() const {
+	auto &config = DBConfig::GetConfig(executor.context);
+	if (!config.preserve_insertion_order) {
+		return false;
+	}
+	if (sink->IsOrderDependent() || source->IsOrderDependent()) {
+		return true;
+	}
+	for (auto &op : operators) {
+		if (op->IsOrderDependent()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void Pipeline::Schedule(shared_ptr<Event> &event) {

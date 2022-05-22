@@ -90,6 +90,9 @@ public:
 		return sink;
 	}
 
+	//! Returns whether any of the operators in the pipeline care about preserving insertion order
+	bool IsOrderDependent() const;
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;
