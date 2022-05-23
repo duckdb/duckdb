@@ -111,11 +111,12 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 	sorted_rowgroup->InitializeAppendInternal(append_state.row_group_append_state, new_count);
 	// Create the scanner for the sorting
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-	// Scan all chunks resulting from the sorting
-	DataChunk result_chunk;
-	result_chunk.Initialize(payload_column_types);
-	result_chunk.SetCardinality(0);
+
 	for (;;) {
+		// Scan all chunks resulting from the sorting
+		DataChunk result_chunk;
+		result_chunk.Initialize(payload_column_types);
+		result_chunk.SetCardinality(0);
 		scanner.Scan(result_chunk);
 		if (result_chunk.size() == 0) {
 			break;
