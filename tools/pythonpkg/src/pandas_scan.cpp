@@ -175,4 +175,33 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
 	return make_unique<NodeStatistics>(data.row_count, data.row_count);
 }
 
+py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
+	auto copy_df = original_df.attr("copy")(false);
+	unordered_map<string, idx_t> name_map;
+	py::list column_name_list;
+	auto df_columns = py::list(original_df.attr("columns"));
+
+	for (auto &column_name_py : df_columns) {
+		const string column_name = py::str(column_name_py);
+		if (name_map.find(column_name) == name_map.end()) {
+			// Name does not exist yet
+			column_name_list.append(column_name);
+			name_map[column_name]++;
+		} else {
+			// Name already exists, we add _x where x is the repetition number
+			string new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
+			while (name_map.find(new_column_name) != name_map.end()) {
+				// This name is already here due to a previous definition
+				name_map[column_name]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
+			}
+			column_name_list.append(new_column_name);
+			name_map[new_column_name]++;
+		}
+	}
+
+	copy_df.attr("columns") = column_name_list;
+	return copy_df;
+}
+
 } // namespace duckdb
