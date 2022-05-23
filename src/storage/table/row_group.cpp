@@ -523,7 +523,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 			//! get runtime statistics
 			auto start_time = high_resolution_clock::now();
 			if (table_filters) {
-				D_ASSERT(ALLOW_UPDATES);
+				D_ASSERT(allow_updates);
 				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
 					auto tf_idx = adaptive_filter->permutation[i];
 					auto col_idx = column_ids[tf_idx];
