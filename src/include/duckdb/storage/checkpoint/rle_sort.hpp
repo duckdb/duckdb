@@ -54,7 +54,10 @@ private:
 	unique_ptr<RowGroupSortBindData> sort_state;
 
 	// Logical Types supported as keys
-	bool SupportedSortCompressionType(LogicalTypeId type_id);
+	bool SupportedKeyType(LogicalTypeId type_id);
+
+	// Logical Types supported in the payload
+	bool SupportedPayloadType(LogicalTypeId type_id);
 
 	// Initialize key chunks, payload chunks and scan states
 	void Initialize();

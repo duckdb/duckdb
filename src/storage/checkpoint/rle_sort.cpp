@@ -43,10 +43,16 @@ RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionT
 			auto type_id = column->type.id();
 			auto column_compression = table_compression[column_idx];
 			// We basically only sort columns with RLE compression and that are supported by the RLE algorithm
-			if (SupportedSortCompressionType(type_id) && (column_compression == CompressionType::COMPRESSION_RLE)) {
+			if (SupportedKeyType(type_id) && (column_compression == CompressionType::COMPRESSION_RLE)) {
 				// Gather types and ids of key columns (i.e., the ones we will sort on)
 				key_column_ids.push_back(column_idx);
 				key_column_types.push_back(column->type);
+			}
+			if (!SupportedPayloadType(type_id)) {
+				// We don't support RLE reordering on this table
+				key_column_ids.clear();
+				key_column_types.clear();
+				return;
 			}
 			// Gather types and ids of payload columns (i.e., the whole table)
 			payload_column_ids.push_back(column_idx);
@@ -55,11 +61,20 @@ RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionT
 	}
 }
 
-bool RLESort::SupportedSortCompressionType(LogicalTypeId type_id) {
+bool RLESort::SupportedKeyType(LogicalTypeId type_id) {
 	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::MAP ||
 	    type_id == LogicalTypeId::TABLE || type_id == LogicalTypeId::ENUM ||
 	    type_id == LogicalTypeId::AGGREGATE_STATE || type_id == LogicalTypeId::VARCHAR ||
 	    type_id == LogicalTypeId::BLOB || type_id == LogicalTypeId::INTERVAL || type_id == LogicalTypeId::UUID) {
+		return false;
+	}
+	return true;
+}
+
+bool RLESort::SupportedPayloadType(LogicalTypeId type_id) {
+	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP || type_id == LogicalTypeId::TABLE ||
+	    type_id == LogicalTypeId::ENUM || type_id == LogicalTypeId::AGGREGATE_STATE ||
+	    type_id == LogicalTypeId::INTERVAL || type_id == LogicalTypeId::UUID) {
 		return false;
 	}
 	return true;
@@ -135,6 +150,10 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 void RLESort::Sort() {
 	if (key_column_ids.empty()) {
 		// Nothing to sort on
+		return;
+	}
+	if (row_group.HasInterleavedTransactions()) {
+		// Has interleaved tsx, he don't run our magic stuff
 		return;
 	}
 	Initialize();

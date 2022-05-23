@@ -654,6 +654,35 @@ idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t tr
 	return info->GetCommittedSelVector(start_time, transaction_id, sel_vector, max_count);
 }
 
+bool RowGroup::HasInterleavedTransactions() {
+	if (!version_info) {
+		return false;
+	}
+	bool has_interleaved = false;
+	for (idx_t vector_idx = 0; vector_idx < count / STANDARD_VECTOR_SIZE; vector_idx++) {
+		auto info = version_info->info[vector_idx].get();
+		if (!info) {
+			continue;
+		}
+		if (info->type == ChunkInfoType::VECTOR_INFO) {
+			has_interleaved |= ((ChunkVectorInfo *)info)->insert_id >= TRANSACTION_ID_START;
+			if (((ChunkVectorInfo *)info)->any_deleted) {
+				auto deleted = ((ChunkVectorInfo *)info)->deleted;
+				for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+					if (deleted[i] == NOT_DELETED_ID) {
+						break;
+					}
+					has_interleaved |= deleted[i] >= TRANSACTION_ID_START;
+				}
+			}
+		} else if (info->type == ChunkInfoType::CONSTANT_INFO) {
+			has_interleaved |= ((ChunkConstantInfo *)info)->insert_id >= TRANSACTION_ID_START;
+			has_interleaved |= ((ChunkConstantInfo *)info)->delete_id >= TRANSACTION_ID_START;
+		}
+	}
+	return has_interleaved;
+}
+
 bool RowGroup::Fetch(Transaction &transaction, idx_t row) {
 	D_ASSERT(row < this->count);
 	lock_guard<mutex> lock(row_group_lock);
@@ -946,12 +975,12 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 	// FIXME: This shouldn't be executed again in the column checkpointer
-	{
-		// Sorts columns to optimize RLE compression
-		auto table_compression = DetectBestCompressionMethodTable(writer);
-		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
-		rle_checkpoint_sort.Sort();
-	}
+	//	{
+	//		// Sorts columns to optimize RLE compression
+	//		auto table_compression = DetectBestCompressionMethodTable(writer);
+	//		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
+	//		rle_checkpoint_sort.Sort();
+	//	}
 
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
