@@ -126,10 +126,6 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}
 	}
-	// if we want to preserve insertion order, check for order-dependent operators
-	if (IsOrderDependent()) {
-		return false;
-	}
 	idx_t max_threads = source_state->MaxThreads();
 	return LaunchScanTasks(event, max_threads);
 }

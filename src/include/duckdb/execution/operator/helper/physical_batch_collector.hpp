@@ -33,6 +33,10 @@ public:
 	bool RequiresBatchIndex() const override {
 		return true;
 	}
+
+	bool ParallelSink() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

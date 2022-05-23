@@ -7,7 +7,7 @@ group micro
 subgroup limit
 
 load
-CREATE TABLE integers AS SELECT * FROM range(1000000000) tbl(i);
+CREATE TABLE integers AS SELECT * FROM range(10000000000) tbl(i);
 
 # we use a complex WHERE clause to avoid pushdown from speeding up the query
 run
