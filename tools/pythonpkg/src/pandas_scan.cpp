@@ -182,7 +182,9 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 	auto df_columns = py::list(original_df.attr("columns"));
 
 	for (auto &column_name_py : df_columns) {
-		const string column_name = py::str(column_name_py);
+		string column_name = py::str(column_name_py);
+		// put it all lower_case
+		column_name = StringUtil::Lower(column_name);
 		if (name_map.find(column_name) == name_map.end()) {
 			// Name does not exist yet
 			column_name_list.append(column_name);
