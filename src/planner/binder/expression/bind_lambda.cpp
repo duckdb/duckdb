@@ -15,10 +15,11 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	if (lambda_param_count != 0) {
 
-		D_ASSERT(expr.lhs.size() != 0);
-
 		if (expr.lhs.size() != lambda_param_count) {
 			throw BinderException("Invalid number of left-hand side parameters for this lambda function.");
+		}
+		if (!expr.rhs) {
+			throw BinderException("Invalid lambda expression.");
 		}
 
 		// create dummy columns for the lambda parameters (lhs)
@@ -63,7 +64,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 		auto result = BindExpression(&expr.rhs, depth, false);
 		lambda_bindings->pop_back();
-		// successfully bound a subtree of nested lambdas
+
+		// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
+		// query also contain lambdas
 		if (lambda_bindings->size() == 0) {
 			lambda_bindings = nullptr;
 		}

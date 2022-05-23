@@ -35,6 +35,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		} else if (function.function_name == "list_filter" || function.function_name == "array_filter") {
 			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
 		} else if (function.function_name == "list_reduce" || function.function_name == "array_reduce") {
+			// FIXME: not yet implemented
 			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
 		}
 
@@ -56,10 +57,14 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	// bind the children of the function expression
 	string error;
 
-	if (lambda_param_count != 0) { // bind the lambda child separately
+	// bind the lambda child separately
+	if (lambda_param_count != 0) {
 
 		if (function.children.size() != 2) {
-			throw BinderException("Invalid number of arguments, expected two (list, lambda function)!");
+			throw BinderException("Invalid number of arguments, expected two (list, lambda expression)!");
+		}
+		if (function.children[1]->GetExpressionClass() != ExpressionClass::LAMBDA) {
+			throw BinderException("Invalid lambda expression!");
 		}
 
 		// bind the list parameter

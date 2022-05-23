@@ -2,23 +2,27 @@
 # description: Test incorrect usage of the lambda functions
 # group: [lambdas]
 
-statement error
-SELECT list_transform(NULL, NULL)
+foreach func_name list_transform list_filter
 
 statement error
-SELECT list_transform(NULL, x)
+SELECT ${func_name}(NULL, NULL)
 
 statement error
-SELECT list_transform(NULL, x -> y)
+SELECT ${func_name}(NULL, x)
 
 statement error
-SELECT list_transform([1])
+SELECT ${func_name}(NULL, x -> y)
 
 statement error
-SELECT list_transform([1], NULL)
+SELECT ${func_name}([1])
 
 statement error
-SELECT list_transform(1, x -> x + 1)
+SELECT ${func_name}([1], NULL)
 
 statement error
-SELECT list_transform([[1]], x -> x + 1)
+SELECT ${func_name}(1, x -> x + 1)
+
+statement error
+SELECT ${func_name}([[1]], x -> x + 1)
+
+endloop

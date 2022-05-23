@@ -2,6 +2,7 @@
 # description: Test list_reduce function
 # group: [lambdas]
 
+# FIXME: list_reduce is not yet implemented
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
 mode skip

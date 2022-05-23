@@ -9,12 +9,20 @@
 statement error
 SELECT list_transform([10], x -> sum(1) + x)
 
+statement error
+SELECT list_filter([10], x -> sum(1) > 0)
+
 # BOUND_BETWEEN
 
 query I
 SELECT list_transform([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
 ----
 [NULL, False, True]
+
+query I
+SELECT list_filter([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+----
+[2021-09-20]
 
 # BOUND_CASE
 
@@ -23,12 +31,22 @@ SELECT list_transform(['hello', 'duck', 'sunshine'], str -> CASE WHEN str LIKE '
 ----
 [e, other, e]
 
+query I
+SELECT list_filter(['hello', 'duck', 'sunshine'], str -> (CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END) LIKE 'e')
+----
+[hello, sunshine]
+
 # BOUND_CAST
 
 query I
 SELECT list_transform([2], x -> x::DOUBLE)
 ----
 [2.000000]
+
+query I
+SELECT list_filter([2], x -> x::DOUBLE == 2)
+----
+[2]
 
 # BOUND_COMPARISON
 
@@ -37,12 +55,22 @@ SELECT list_transform([2.4, NULL, -4.7], x -> x != 10.4)
 ----
 [True, NULL, True]
 
+query I
+SELECT list_filter([2.4, NULL, -4.7], x -> x != -4.7)
+----
+[2.4]
+
 # BOUND_CONJUNCTION
 
 query I
 SELECT list_transform([True, False, NULL], x -> x AND true)
 ----
 [True, False, NULL]
+
+query I
+SELECT list_filter([True, False, NULL], x -> x AND true)
+----
+[True]
 
 # BOUND_FUNCTION
 
@@ -51,6 +79,11 @@ SELECT list_transform([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP 
 ----
 [20, 3, 17]
 
+query I
+SELECT list_filter([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x) > 16)
+----
+[1992-03-22 00:00:00, 1700-03-22 00:00:00]
+
 # BOUND_OPERATOR
 
 query I
@@ -58,29 +91,22 @@ SELECT list_transform([2], x -> x + x)
 ----
 [4]
 
+query I
+SELECT list_filter([2], x -> x + x = 4)
+----
+[2]
+
 # don't allow BOUND_SUBQUERY inside lambda expressions
 
 statement error
 SELECT list_transform([2], x -> (SELECT 1 - x) * x)
 
+statement error
+SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)
+
 # BOUND_WINDOW
 
-# TODO
-
-mode skip
-
-statement ok
-CREATE TABLE window_lists (n integer, l integer[])
-
-statement ok
-INSERT INTO window_lists VALUES (1, [1]), (2, [1, 2, 3]), (3, NULL), (4, [-1, NULL, 2])
-
-query I
-SELECT list_transform(l, x -> ROW_NUMBER * x) FROM window_lists
-----
-#
-
-mode unskip
+# FIXME: how would an example query for this look like?
 
 # BOUND_UNNEST
 
@@ -88,3 +114,8 @@ query I
 SELECT list_transform([1], x -> x = UNNEST([1]));
 ----
 [True]
+
+query I
+SELECT list_filter([1], x -> x = UNNEST([1]));
+----
+[1]
