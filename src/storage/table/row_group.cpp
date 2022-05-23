@@ -333,6 +333,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT) {
 			auto &transaction_manager = TransactionManager::Get(db);
 			auto lowest_active_start = transaction_manager.LowestActiveStart();
+			// We have to decrement the lowest active transaction id by one to ensure we scan all the tuples correctly
 			auto lowest_active_id = transaction_manager.LowestActiveId() - 1;
 
 			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,

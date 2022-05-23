@@ -120,6 +120,7 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 		if (result_chunk.size() == 0) {
 			break;
 		}
+		result_chunk.SetCardinality(result_chunk.size());
 		// Append each chunk in our sorted rowgroup
 		sorted_rowgroup->Append(append_state.row_group_append_state, result_chunk, result_chunk.size());
 	}
