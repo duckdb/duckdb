@@ -331,7 +331,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
 	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
-	if (requires_batch_index) {
+	if (result.size() != 0 && requires_batch_index) {
 		auto next_batch_index =
 		    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
 		next_batch_index += pipeline.base_batch_index;

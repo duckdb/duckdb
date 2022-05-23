@@ -1,0 +1,21 @@
+# name: benchmark/micro/limit/parallel_streaming_limit.benchmark
+# description: Benchmark of parallel streaming limit computation
+# group: [limit]
+
+name Parallel Streaming Limit
+group micro
+subgroup limit
+
+load
+SET preserve_insertion_order=false;
+CREATE TABLE integers AS SELECT 1 FROM range(1000000000) tbl(i);
+
+run
+SELECT * FROM integers WHERE CASE WHEN rowid+rowid>=1729956644 THEN rowid%2=0 ELSE rowid=334 OR rowid=77979344 END LIMIT 5
+
+result I
+1
+1
+1
+1
+1
