@@ -12,6 +12,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/parser/expression/list.hpp"
 
 #include <algorithm>
 #include <queue>
@@ -55,6 +56,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
 		switch (cond->type) {
+		case ConstraintType::GENERATED:
+			(void)info;
 		case ConstraintType::CHECK: {
 			auto bound_constraint = make_unique<BoundCheckConstraint>();
 			// check constraint: bind the expression
@@ -64,6 +67,9 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			auto unbound_expression = check.expression->Copy();
 			// now bind the constraint and create a new BoundCheckConstraint
 			bound_constraint->expression = check_binder.Bind(check.expression);
+			// if (cond->type == ConstraintType::GENERATED) {
+			//	bound_constraint->type = ConstraintType::GENERATED;
+			// }
 			info.bound_constraints.push_back(move(bound_constraint));
 			// move the unbound constraint back into the original check expression
 			check.expression = move(unbound_expression);
@@ -313,11 +319,49 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 	}
 }
 
+void ReplaceGeneratedColumnReferences(unique_ptr<ParsedExpression> &expr, const BoundCreateTableInfo &table) {
+	if (expr->type == ExpressionType::COLUMN_REF) {
+		auto &column_ref = (ColumnRefExpression &)*expr;
+		auto &name = column_ref.GetColumnName();
+		auto entry = table.name_map.find(name);
+		if (entry == table.name_map.end()) {
+			return;
+		}
+		if (entry->second.column_type != TableColumnType::GENERATED) {
+			return;
+		}
+		auto index = entry->second.index;
+		auto &base = (CreateTableInfo &)*table.base;
+		auto &generated_column = base.columns[index];
+		expr = generated_column.GeneratedExpression().Copy();
+		ReplaceGeneratedColumnReferences(expr, table);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceGeneratedColumnReferences(child, table); });
+}
+
+void CreateGeneratedCheckConstraints(BoundCreateTableInfo &info) {
+	auto &base = (CreateTableInfo &)*info.base;
+	for (idx_t i = 0; i < base.columns.size(); i++) {
+		auto &col = base.columns[i];
+		if (!col.Generated()) {
+			continue;
+		}
+		auto expression = col.GeneratedExpression().Copy();
+		ReplaceGeneratedColumnReferences(expression, info);
+		;
+		base.constraints.push_back(make_unique<GeneratedCheckConstraint>(i, move(expression)));
+	}
+}
+
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
 
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
 	result->schema = BindSchema(*result->base);
+	// bind the generated column expressions
+	BindGeneratedColumns(base.columns, base);
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -332,9 +376,13 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		// create the name map for the statement
 		CreateColumnMap(*result, true);
+		// create generated check constraints
+		CreateGeneratedCheckConstraints(*result);
 	} else {
 		// create the name map for the statement
 		CreateColumnMap(*result, false);
+		// create generated check constraints
+		CreateGeneratedCheckConstraints(*result);
 		// bind any constraints
 		BindConstraints(*this, *result);
 		// bind the default values
@@ -357,8 +405,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			}
 		}
 	}
-	// bind the generated column expressions
-	BindGeneratedColumns(base.columns, base);
 	properties.allow_stream_result = false;
 	return result;
 }

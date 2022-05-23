@@ -2,25 +2,34 @@
 # description: Change the type of a generated column
 # group: [virtual]
 
-statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+#statement ok
+#CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+#statement ok
+#INSERT INTO unit VALUES (5,4)
+
+## Create a generated column
+#statement ok
+#ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+#query I
+#SELECT total_profit FROM unit;
+#----
+#20
+
+## typechange will fail, because the types (expression->return_type and col.type) dont match
+#statement ok
+#ALTER TABLE unit ALTER COLUMN total_profit TYPE DATE;
+
+## The expression could not be cast to this new type
+#statement error
+#SELECT total_profit FROM unit;
 
 statement ok
-INSERT INTO unit VALUES (5,4)
+CREATE TABLE tbl (
+	price INTEGER,
+	total_profit DATE AS (price * 5),
+);
 
-# Create a generated column
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
-
-query I
-SELECT total_profit FROM unit;
-----
-20
-
-# typechange will fail, because the types (expression->return_type and col.type) dont match
-statement ok
-ALTER TABLE unit ALTER COLUMN total_profit TYPE DATE;
-
-# The expression could not be cast to this new type
 statement error
-SELECT total_profit FROM unit;
+INSERT INTO tbl VALUES (5);

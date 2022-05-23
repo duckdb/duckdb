@@ -80,13 +80,7 @@ bool ColumnDefinition::Generated() const {
 // Generated Columns (VIRTUAL)
 //===--------------------------------------------------------------------===//
 static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, const string &columnref) {
-	if (columnref == "rowid") {
-		return true;
-	}
 	for (auto &col : columns) {
-		// if (col.Generated()) {
-		//	continue;
-		// }
 		if (col.name == columnref) {
 			return true;
 		}
@@ -172,7 +166,7 @@ void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(base_expr));
 }
 
-ParsedExpression &ColumnDefinition::GeneratedExpression() {
+ParsedExpression &ColumnDefinition::GeneratedExpression() const {
 	D_ASSERT(category == TableColumnType::GENERATED);
 	return *generated_expression;
 }

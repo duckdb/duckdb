@@ -62,7 +62,7 @@ public:
 public:
 	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
 	void ChangeGeneratedExpressionType(const LogicalType &type);
-	ParsedExpression &GeneratedExpression();
+	ParsedExpression &GeneratedExpression() const;
 	DUCKDB_API ColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;

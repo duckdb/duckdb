@@ -233,9 +233,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 vector<LogicalType> DataTable::GetTypes() {
 	vector<LogicalType> types;
 	for (auto &it : column_definitions) {
-		// if (it.Generated()) {
-		//	continue;
-		// }
 		types.push_back(it.type);
 	}
 	return types;
@@ -423,7 +420,9 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 	}
 }
 
-static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
+static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk,
+                                  bool allow_false = false) {
+	;
 	ExpressionExecutor executor(expr);
 	Vector result(LogicalType::INTEGER);
 	try {
@@ -436,6 +435,9 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	VectorData vdata;
 	result.Orrify(chunk.size(), vdata);
 
+	if (allow_false) {
+		return;
+	}
 	auto dataptr = (int32_t *)vdata.data;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -586,12 +588,19 @@ static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bf
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
-	for (auto &constraint : table.bound_constraints) {
-		switch (constraint->type) {
+	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
+		auto &base_constraint = table.constraints[i];
+		auto &constraint = table.bound_constraints[i];
+		switch (base_constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(),
 			                        table.columns[not_null.index].name);
+			break;
+		}
+		case ConstraintType::GENERATED: {
+			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			VerifyCheckConstraint(table, *check.expression, chunk, true);
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -940,6 +949,7 @@ void DataTable::VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext 
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL:
+		case ConstraintType::GENERATED:
 		case ConstraintType::CHECK:
 		case ConstraintType::UNIQUE:
 			break;
@@ -1073,6 +1083,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			}
 			break;
 		}
+		case ConstraintType::GENERATED:
 		case ConstraintType::CHECK: {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
 

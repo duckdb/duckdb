@@ -11,24 +11,12 @@ INSERT INTO unit VALUES (5,4)
 statement ok
 INSERT INTO unit VALUES (4,5)
 
-# Should be able to reference rowid in this expression
-statement ok
+# Rowid as a system column is not supported
+statement error
 ALTER TABLE unit ADD COLUMN total_profit BIGINT GENERATED ALWAYS AS (price * rowid) VIRTUAL;
-
-query I
-SELECT total_profit FROM unit;
-----
-0
-4
 
 statement ok
 ALTER TABLE unit ADD COLUMN rowid INTEGER;
-
-query I
-SELECT total_profit FROM unit;
-----
-NULL
-NULL
 
 # Cant create a generated column named 'rowid' that also tries to reference the 'rowid' system column
 statement error

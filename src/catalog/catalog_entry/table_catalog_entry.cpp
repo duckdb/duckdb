@@ -236,6 +236,18 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		case ConstraintType::NOT_NULL:
 			// NOT NULL constraint: no adjustments necessary
 			break;
+		case ConstraintType::GENERATED: {
+			auto &generated_check = (GeneratedCheckConstraint &)*copy;
+			auto index = generated_check.column_index;
+			if (!column_dependency_manager.HasDependencies(index)) {
+				break;
+			}
+			auto &dependencies = column_dependency_manager.GetDependencies(index);
+			if (index == rename_idx || dependencies.count(rename_idx)) {
+				continue;
+			}
+			break;
+		}
 		case ConstraintType::CHECK: {
 			// CHECK constraint: need to rename column references that refer to the renamed column
 			auto &check = (CheckConstraint &)*copy;
@@ -369,23 +381,35 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
 	}
+	vector<column_t> adjusted_indices = column_dependency_manager.RemoveColumn(removed_index, columns.size());
 	// handle constraints for the new table
 	D_ASSERT(constraints.size() == bound_constraints.size());
 	for (idx_t constr_idx = 0; constr_idx < constraints.size(); constr_idx++) {
 		auto &constraint = constraints[constr_idx];
 		auto &bound_constraint = bound_constraints[constr_idx];
-		switch (bound_constraint->type) {
+		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null_constraint = (BoundNotNullConstraint &)*bound_constraint;
 			if (not_null_constraint.index != removed_index) {
 				// the constraint is not about this column: we need to copy it
 				// we might need to shift the index back by one though, to account for the removed column
 				idx_t new_index = not_null_constraint.index;
-				if (not_null_constraint.index > removed_index) {
-					new_index -= 1;
-				}
+				new_index = adjusted_indices[new_index];
 				create_info->constraints.push_back(make_unique<NotNullConstraint>(new_index));
 			}
+			break;
+		}
+		case ConstraintType::GENERATED: {
+			auto &generated_check = (GeneratedCheckConstraint &)*constraint;
+			auto index = generated_check.column_index;
+			if (index == removed_index || removed_columns.count(index)) {
+				break;
+			}
+			index = adjusted_indices[index];
+			auto copy = generated_check.Copy();
+			auto &copy_ref = (GeneratedCheckConstraint &)*copy;
+			copy_ref.column_index = index;
+			create_info->constraints.push_back(move(copy));
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -415,9 +439,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 					throw CatalogException(
 					    "Cannot drop column \"%s\" because there is a UNIQUE constraint that depends on it",
 					    info.removed_column);
-				} else if (unique.index > removed_index) {
-					unique.index--;
 				}
+				unique.index = adjusted_indices[unique.index];
 			}
 			create_info->constraints.push_back(move(copy));
 			break;
@@ -448,7 +471,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 	}
 
-	column_dependency_manager.RemoveColumn(removed_index);
 	create_info->column_dependency_manager = column_dependency_manager;
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));

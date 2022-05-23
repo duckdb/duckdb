@@ -28,6 +28,9 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 	case ConstraintType::NOT_NULL:
 		result = NotNullConstraint::Deserialize(reader);
 		break;
+	case ConstraintType::GENERATED:
+		result = GeneratedCheckConstraint::Deserialize(reader);
+		break;
 	case ConstraintType::CHECK:
 		result = CheckConstraint::Deserialize(reader);
 		break;

@@ -10,12 +10,8 @@ CREATE TABLE tbl (
 );
 
 # Insert value(s) into the column(s)
-statement ok
+# Because of the silently generated CHECK constraint, this insert fails
+# '(Error: Conversion Error: Unimplemented type for cast (INTEGER -> DATE))'
+statement error
 INSERT INTO tbl VALUES (5);
 
-# Select everything
-# This is the only time the cast is actually performed, because data is generated
-# Now the error introduced at CREATE is detected:
-# 'Conversion Error: Unimplemented type for cast (INTEGER -> DATE)'
-statement error
-SELECT * FROM tbl;

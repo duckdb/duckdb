@@ -21,12 +21,9 @@ CREATE TABLE tbl (
 statement ok
 SELECT * FROM tbl
 
-statement ok
-INSERT INTO tbl VALUES ('string', 5, 12);
-
-# total_profit will error now
+# Cant convert 'string' to boolean
 statement error
-SELECT * FROM tbl
+INSERT INTO tbl VALUES ('string', 5, 12);
 
 # Expression contains a subquery
 statement error

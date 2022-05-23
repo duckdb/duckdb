@@ -209,6 +209,8 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 
 	for (auto &constr : table_info.constraints) {
 		switch (constr->type) {
+		case ConstraintType::GENERATED:
+			return false;
 		case ConstraintType::CHECK: {
 			auto &constraint = (CheckConstraint &)*constr;
 			auto &expr = constraint.expression;

@@ -36,7 +36,7 @@ void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const
 	}
 }
 
-void ColumnDependencyManager::RemoveColumn(column_t index) {
+vector<column_t> ColumnDependencyManager::RemoveColumn(column_t index, column_t column_amount) {
 	// Always add the initial column
 	deleted_columns.insert(index);
 
@@ -44,8 +44,9 @@ void ColumnDependencyManager::RemoveColumn(column_t index) {
 	RemoveStandardColumn(index);
 
 	// Clean up the internal list
-	CleanupInternals();
+	vector<column_t> new_indices = CleanupInternals(column_amount);
 	D_ASSERT(deleted_columns.empty());
+	return new_indices;
 }
 
 bool ColumnDependencyManager::IsDependencyOf(column_t gcol, column_t col) const {
@@ -154,36 +155,32 @@ void ColumnDependencyManager::AdjustSingle(column_t idx, idx_t offset) {
 	}
 }
 
-void ColumnDependencyManager::CleanupInternals() {
-	set<column_t> to_adjust;
+vector<column_t> ColumnDependencyManager::CleanupInternals(column_t column_amount) {
+	vector<column_t> to_adjust;
 	D_ASSERT(!deleted_columns.empty());
 	// Get the lowest index that was deleted
+	vector<column_t> new_indices(column_amount, DConstants::INVALID_INDEX);
 	column_t threshold = *deleted_columns.begin();
 
-	for (auto &it : dependents_map) {
-		auto idx = it.first;
-		if (idx > threshold) {
-			to_adjust.insert(idx);
-		}
-	}
-	for (auto &it : dependencies_map) {
-		auto idx = it.first;
-		if (idx > threshold) {
-			to_adjust.insert(idx);
-		}
-	}
-	auto it = deleted_columns.begin();
 	idx_t offset = 0;
-	// Adjust all indices that met the threshold (all are higher than threshold)
-	for (auto &col : to_adjust) {
-		// Calculate size of the gap
-		while (it != deleted_columns.end() && *it < col) {
+	for (column_t i = 0; i < column_amount; i++) {
+		new_indices[i] = i - offset;
+		if (deleted_columns.count(i)) {
 			offset++;
-			it++;
+			continue;
 		}
+		if (i > threshold && (HasDependencies(i) || HasDependents(i))) {
+			to_adjust.push_back(i);
+		}
+	}
+
+	// Adjust all indices inside the dependency managers internal mappings
+	for (auto &col : to_adjust) {
+		offset = col - new_indices[col];
 		AdjustSingle(col, offset);
 	}
 	deleted_columns.clear();
+	return new_indices;
 }
 
 } // namespace duckdb

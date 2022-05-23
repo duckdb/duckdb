@@ -24,8 +24,8 @@ public:
 public:
 	//! Adds a connection between the dependent and its dependencies
 	void AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices);
-	void RemoveColumn(column_t index);
-	// void RenameColumn(TableColumnType category, const string &old_name, const string &new_name);
+	//! Removes the column(s) and outputs the new column indices
+	vector<column_t> RemoveColumn(column_t index, column_t column_amount);
 
 	bool IsDependencyOf(column_t dependent, column_t dependency) const;
 	bool HasDependencies(column_t index) const;
@@ -40,7 +40,7 @@ private:
 
 	void AdjustSingle(column_t idx, idx_t offset);
 	// Clean up the gaps created by a Remove operation
-	void CleanupInternals();
+	vector<column_t> CleanupInternals(column_t column_amount);
 
 private:
 	//! A map of column dependency to generated column(s)
