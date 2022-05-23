@@ -22,4 +22,9 @@ SELECT list_reduce([5, 20, NULL, 50], (s, x) -> s + COALESCE(x, 0))
 ----
 75
 
+query I
+select list_reduce(i, (x, y) -> x + y) from (values (list_value(1, 2, 3))) tbl(i);
+----
+6
+
 mode unskip
