@@ -12,6 +12,9 @@ statement ok
 CREATE TABLE integers AS SELECT * FROM range(5000000) tbl(i);
 
 statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 8779793;
+
+statement ok
 BEGIN TRANSACTION
 
 statement ok
@@ -52,6 +55,15 @@ SELECT * FROM integers WHERE i>8978321 LIMIT 5
 8978324
 8978325
 8978326
+
+# IN-clause (semi join)
+query I
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+337
+948247
+1779793
+8779793
 
 statement ok
 DROP TABLE integers
