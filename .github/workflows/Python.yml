@@ -126,10 +126,6 @@ jobs:
         make
         make install
 
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
     - name: Version Check
       run: |
         cmake --version
