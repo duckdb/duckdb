@@ -77,6 +77,11 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 			return false;
 		}
 	}
+	// check if the filter clauses are equivalent
+	if (!BaseExpression::Equals(a->filter_expr.get(), b->filter_expr.get())) {
+		return false;
+	}
+
 	return true;
 }
 
@@ -95,6 +100,8 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	for (auto &o : orders) {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
+
+	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
 
 	new_window->start = start;
 	new_window->end = end;
@@ -120,6 +127,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	for (auto &order : orders) {
 		order.Serialize(serializer);
 	}
+	writer.WriteOptional(filter_expr);
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
 
@@ -142,6 +150,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	for (idx_t i = 0; i < order_count; i++) {
 		expr->orders.push_back(OrderByNode::Deserialize((source)));
 	}
+	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->start = reader.ReadRequired<WindowBoundary>();
 	expr->end = reader.ReadRequired<WindowBoundary>();
 
