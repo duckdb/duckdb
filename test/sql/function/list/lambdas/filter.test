@@ -4,7 +4,50 @@
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
-mode skip
+# lambda parameter has the same name as a column
+
+statement ok
+CREATE TABLE l_test (l integer[])
+
+statement error
+SELECT l, list_filter(l, l -> l > 1) FROM l_test
+
+query II
+SELECT [1] AS l, list_filter([1], l -> l > 1)
+----
+[1]	[]
+
+# test NULLs and simple cases
+
+query I
+SELECT list_filter(NULL, x -> x > 1)
+----
+NULL
+
+query I
+SELECT list_filter([True], x -> x)
+----
+[True]
+
+query I
+SELECT list_filter(['duck', 'a', 'ö'], duck -> contains(concat(duck, 'DB'), 'duck'))
+----
+[duck]
+
+query I
+SELECT list_filter([1, 2, 3], x -> x % 2 = 0)
+----
+[2]
+
+query I
+SELECT list_filter([], x -> x > 1)
+----
+[]
+
+query I
+SELECT list_filter([1, NULL, -2, NULL], x -> x % 2 != 0)
+----
+[1]
 
 query I
 SELECT list_filter([5, -6, NULL, 7], x -> x > 0)
@@ -16,4 +59,38 @@ SELECT list_filter([5, NULL, 7, NULL], x -> x IS NOT NULL)
 ----
 [5, 7]
 
-mode unskip
+# test on table with rows
+
+statement ok
+CREATE TABLE lists (n integer, l integer[])
+
+statement ok
+INSERT INTO lists VALUES (1, [1]), (2, [1, 2, 3]), (3, NULL), (4, [-1, NULL, 2])
+
+query I
+SELECT list_filter(l, x -> x + 1 <= 2) FROM lists
+----
+[1]
+[1]
+NULL
+[-1]
+
+query I
+SELECT list_filter(l, x -> x <= n) FROM lists
+----
+[1]
+[1, 2]
+NULL
+[-1, 2]
+
+query I
+SELECT list_filter(l, x -> x IS NOT NULL) FROM lists
+----
+[1]
+[1, 2, 3]
+NULL
+[-1, 2]
+
+# test other operators and more complex/nested functions
+
+# TODO
