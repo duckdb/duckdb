@@ -473,7 +473,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 	auto &column_ids = state.parent.column_ids;
 	auto &table_filters = state.parent.table_filters;
 	auto &adaptive_filter = state.parent.adaptive_filter;
-	bool ALLOW_UPDATES = false;
+	bool allow_updates = false;
 	Transaction *transaction = nullptr;
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
@@ -507,7 +507,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 					result.data[i].Sequence(this->start + current_row, 1);
 				} else {
 					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-					                               ALLOW_UPDATES);
+					                               allow_updates);
 				}
 			}
 		} else {
@@ -566,7 +566,7 @@ bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
 					} else {
 						D_ASSERT(!transaction);
 						columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-						                                     sel, approved_tuple_count, ALLOW_UPDATES);
+						                                     sel, approved_tuple_count, allow_updates);
 					}
 				}
 			}

@@ -1,6 +1,7 @@
 #include "duckdb/storage/checkpoint/rle_sort.hpp"
-
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/main/database.hpp"
+
 namespace duckdb {
 
 RowGroupSortBindData::RowGroupSortBindData(const vector<LogicalType> &payload_types,
