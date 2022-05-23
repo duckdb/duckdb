@@ -975,12 +975,12 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 	// FIXME: This shouldn't be executed again in the column checkpointer
-	//	{
-	//		// Sorts columns to optimize RLE compression
-	//		auto table_compression = DetectBestCompressionMethodTable(writer);
-	//		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
-	//		rle_checkpoint_sort.Sort();
-	//	}
+	{
+		// Sorts columns to optimize RLE compression
+		auto table_compression = DetectBestCompressionMethodTable(writer);
+		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
+		rle_checkpoint_sort.Sort();
+	}
 
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
