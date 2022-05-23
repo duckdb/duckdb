@@ -184,7 +184,7 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 
 	for (auto &column_name_py : df_columns) {
 		const string column_name = py::str(column_name_py);
-		name_map[column_name]++;
+		name_map[column_name] = 1;
 	}
 
 	for (auto &column_name_py : df_columns) {
@@ -194,8 +194,8 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 			column_name_list.append(column_name);
 			columns_seen.insert(column_name);
 		} else {
-			// `column_name` already seen. Deduplicate by with suffix _{x} where x starts at the repetition number of `column_name`
-			// If `column_name_{x}` already exists in `name_map`, increment x and try again.
+			// `column_name` already seen. Deduplicate by with suffix _{x} where x starts at the repetition number of
+			// `column_name` If `column_name_{x}` already exists in `name_map`, increment x and try again.
 			string new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
 			while (name_map.find(new_column_name) != name_map.end()) {
 				// This name is already here due to a previous definition
