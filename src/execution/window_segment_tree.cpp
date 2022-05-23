@@ -208,7 +208,7 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	}
 
 	// If we have a window function, use that
-	if (aggregate.window && UseWindowAPI() && filter_mask.AllValid()) {
+	if (aggregate.window && UseWindowAPI()) {
 		// Frame boundaries
 		auto prev = frame;
 		frame = FrameBounds(begin, end);
@@ -244,8 +244,8 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		active = FrameBounds(active_chunks.first * STANDARD_VECTOR_SIZE,
 		                     MinValue((active_chunks.second + 1) * STANDARD_VECTOR_SIZE, coll.Count()));
 
-		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid,
-		                 active.first);
+		aggregate.window(inputs.data.data(), filter_mask, bind_info, inputs.ColumnCount(), state.data(), frame, prev,
+		                 result, rid, active.first);
 		return;
 	}
 
