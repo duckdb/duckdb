@@ -212,18 +212,22 @@ private:
 public:
 	//! Swizzles all blocks in this HT
 	void SwizzleCollectedBlocks();
-	//! Similar to Finalize() but for an external join
-	void FinalizeExternal(Pipeline &pipeline, Event &event);
-
-private:
-	//! Reduces histogram on bit at a time
-	void ReduceHistogram();
-	//! Checks whether the current histogram
-	bool PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size);
-	//! Partition the HT based on the hash histogram
-	void Partition(Pipeline &pipeline, Event &event);
 	//! Unswizzle blocks in the 'swizzled_...' RowDataCollections
 	void UnswizzleBlocks();
+	//! Similar to Finalize() but for an external join
+	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> local_hts);
+	//! Partition this HT
+	void Partition(JoinHashTable &global_ht);
+	//! TODO
+	void PinPartitions();
+
+private:
+	//! Merges histogram into this one
+	void MergeHistogram(JoinHashTable &other);
+	//! Reduces histogram on bit at a time
+	void ReduceHistogram(idx_t avg_string_size);
+	//! Checks whether the current histogram
+	bool PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size);
 
 private:
 	//! The number of radix bits used to build the histogram
@@ -231,7 +235,7 @@ private:
 	//! The current number of radix bits
 	idx_t current_radix_bits;
 
-	    //! The RowDataCollection holding the swizzled main data of the hash table
+	//! The RowDataCollection holding the swizzled main data of the hash table
 	unique_ptr<RowDataCollection> swizzled_block_collection;
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
@@ -241,8 +245,10 @@ private:
 	//! Histogram lock
 	mutex histogram_lock;
 	//! Partitioned data
-	vector<unique_ptr<RowDataCollection>> partitioned_blocks;
-	vector<unique_ptr<RowDataCollection>> partitioned_heap;
+	vector<unique_ptr<RowDataCollection>> partition_block_collections;
+	vector<unique_ptr<RowDataCollection>> partition_string_heaps;
+	//! Partitioned data lock
+	mutex partition_lock;
 };
 
 } // namespace duckdb

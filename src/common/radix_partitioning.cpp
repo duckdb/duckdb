@@ -302,7 +302,7 @@ struct PartitionFunctor {
 								// Update counts and create new blocks to write to
 								p_heap_block.count = block_counts[idx];
 								partition_string_heaps[idx]->count += block_counts[idx];
-								
+
 								if (p_heap_block.byte_offset != p_heap_block.capacity) {
 									// More data fits on the heap block, just copy (reference) the block
 									partition_string_heaps[idx]->blocks.push_back(partition_heap_blocks[idx]->Copy());

@@ -55,8 +55,11 @@ public:
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 	//! Whether or not the hash table has been finalized
 	bool finalized = false;
+
 	//! Whether we are doing an external join
 	bool external;
+	//! Hash tables built by each thread
+	vector<unique_ptr<JoinHashTable>> local_hash_tables;
 };
 
 class HashJoinLocalState : public LocalSinkState {
@@ -179,7 +182,7 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 		if (gstate.external) {
 			lstate.hash_table->SwizzleCollectedBlocks();
 		}
-		gstate.hash_table->Merge(*lstate.hash_table);
+		gstate.local_hash_tables.push_back(move(lstate.hash_table));
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -192,6 +195,21 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)gstate;
+
+	if (sink.external) {
+		for (auto &ht : sink.local_hash_tables) {
+			if (ht->Count() != 0) {
+				// Has unswizzled blocks left
+				ht->SwizzleCollectedBlocks();
+			}
+		}
+	} else {
+		// Merge local hash tables into the main hash table
+		for (auto &ht : sink.local_hash_tables) {
+			sink.hash_table->Merge(*ht);
+		}
+	}
+
 	// check for possible perfect hash table (can't if this is an external join)
 	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin() && !sink.external;
 	if (use_perfect_hash) {
@@ -203,15 +221,15 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
 		if (sink.external) {
-			sink.hash_table->FinalizeExternal(pipeline, event);
+			sink.hash_table->SchedulePartitionTasks(pipeline, event, move(sink.local_hash_tables));
 		} else {
 			sink.hash_table->Finalize();
+			if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
+				return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+			}
 		}
 	}
 	sink.finalized = true;
-	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
-		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
-	}
 	return SinkFinalizeType::READY;
 }
 
