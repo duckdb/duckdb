@@ -65,10 +65,9 @@ foreach(p LIB BIN INCLUDE CMAKE)
 endforeach()
 
 # This option allows --gc-sections flag during extension linking to discard any unused functions or data
-if (EXTENSION_STATIC_BUILD)
+if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
 endif()
-
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 
@@ -654,11 +653,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
     return()
   endif()
 
-  # Todo: figure out if we want to do this for Windows?
-  if (EXTENSION_STATIC_BUILD AND NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    error("EXTENSION_STATIC_BUILD options was set, but this currently only makes sense on Linux")
-  endif()
-
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -670,14 +664,34 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   add_library(${TARGET_NAME} SHARED ${FILES})
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+
+  # Resolution of DuckDB symbols in loadable extensions is done in different ways
+  # MacOS:    The -undefined dynamic_lookup signals CLANG to ignore any missing DuckDB symbols. Because on MacOS dlopen
+  #           is called with the RTLD_GLOBAL flag by default, duckdb symbols are available when the extension is loaded.
+  # Linux:    DuckDB needs to be linked statically to each extension because RTLD_LOCAL is the default on linux. The
+  #           EXTENSION_STATIC_BUILD should be set for this.
+  # Windows:  For windows, delay loading could be used to achieve similar behaviour as MacOS, but since this requires
+  #           setting the _declspec header for every function used from an extension, we have also opted for the
+  #           EXTENSION_STATIC_BUILD approach
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   endif()
+
   if (EXTENSION_STATIC_BUILD)
-    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
-  elseif (WIN32)
-    target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+    elseif (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+    else()
+      error("EXTENSION static build is only inteded for Linux and Windows on MVSC")
+    endif()
+  else()
+    if (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+    else()
   endif()
+
+
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
