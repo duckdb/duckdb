@@ -405,8 +405,8 @@ jobs:
 
     - name: Install psqlodbc
       run: |
-        git clone https://github.com/hawkfish/psqlodbc.git
-        (cd psqlodbc && git checkout 96f5683d68e4a288e76ee4b09737478cc592aa98 && make debug)
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && git checkout 89726c417d1ea8b4080e486fe240725a79eca0d6 && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
