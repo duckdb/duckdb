@@ -350,7 +350,6 @@ void CreateGeneratedCheckConstraints(BoundCreateTableInfo &info) {
 		}
 		auto expression = col.GeneratedExpression().Copy();
 		ReplaceGeneratedColumnReferences(expression, info);
-		;
 		base.constraints.push_back(make_unique<GeneratedCheckConstraint>(i, move(expression)));
 	}
 }

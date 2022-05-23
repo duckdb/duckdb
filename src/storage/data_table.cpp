@@ -422,7 +422,6 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk,
                                   bool allow_false = false) {
-	;
 	ExpressionExecutor executor(expr);
 	Vector result(LogicalType::INTEGER);
 	try {
