@@ -202,7 +202,8 @@ struct ConstantVector {
 	}
 	static inline data_ptr_t GetData(Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		         vector.GetVectorType() == VectorType::FLAT_VECTOR ||
+		         vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 		return vector.data;
 	}
 	template <class T>

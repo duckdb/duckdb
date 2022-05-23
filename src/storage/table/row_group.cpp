@@ -1,17 +1,23 @@
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/transaction/transaction.hpp"
+
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/common/chrono.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/storage/checkpoint/rle_sort.hpp"
 
 namespace duckdb {
 
@@ -285,7 +291,8 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 template <TableScanType TYPE>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
-	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
+	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED &&
+	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT;
 	auto &table_filters = state.parent.table_filters;
 	auto &column_ids = state.parent.column_ids;
 	auto &adaptive_filter = state.parent.adaptive_filter;
@@ -316,6 +323,19 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			auto &transaction_manager = TransactionManager::Get(db);
 			auto lowest_active_start = transaction_manager.LowestActiveStart();
 			auto lowest_active_id = transaction_manager.LowestActiveId();
+
+			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
+			                                               valid_sel, max_count);
+			if (count == 0) {
+				// nothing to scan for this vector, skip the entire vector
+				NextVector(state);
+				continue;
+			}
+		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT) {
+			auto &transaction_manager = TransactionManager::Get(db);
+			auto lowest_active_start = transaction_manager.LowestActiveStart();
+			// We have to decrement the lowest active transaction id by one to ensure we scan all the tuples correctly
+			auto lowest_active_id = transaction_manager.LowestActiveId() - 1;
 
 			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
 			                                               valid_sel, max_count);
@@ -440,9 +460,170 @@ void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableS
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
 		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(nullptr, state, result);
 		break;
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT:
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT>(nullptr, state,
+		                                                                                            result);
+		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
 	}
+}
+
+bool RowGroup::ScanToDataChunks(RowGroupScanState &state, DataChunk &result) {
+	auto &column_ids = state.parent.column_ids;
+	auto &table_filters = state.parent.table_filters;
+	auto &adaptive_filter = state.parent.adaptive_filter;
+	bool ALLOW_UPDATES = false;
+	Transaction *transaction = nullptr;
+	while (true) {
+		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
+			// exceeded the amount of rows to scan
+			return false;
+		}
+		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
+		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
+
+		idx_t count;
+		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
+
+		auto &transaction_manager = TransactionManager::Get(db);
+		auto lowest_active_start = transaction_manager.LowestActiveStart();
+		auto lowest_active_id = transaction_manager.LowestActiveId();
+
+		count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
+		                                               valid_sel, max_count);
+		if (count == 0) {
+			// nothing to scan for this vector, skip the entire vector
+			NextVector(state);
+			continue;
+		}
+		if (count == max_count && !table_filters) {
+			// scan all vectors completely: full scan without deletions or table filters
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto column = column_ids[i];
+				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+					// scan row id
+					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+					result.data[i].Sequence(this->start + current_row, 1);
+				} else {
+					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+					                               ALLOW_UPDATES);
+				}
+			}
+		} else {
+			// partial scan: we have deletions or table filters
+			idx_t approved_tuple_count = count;
+			SelectionVector sel;
+			if (count != max_count) {
+				sel.Initialize(valid_sel);
+			} else {
+				sel.Initialize(nullptr);
+			}
+			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
+			//! get runtime statistics
+			auto start_time = high_resolution_clock::now();
+			if (table_filters) {
+				D_ASSERT(ALLOW_UPDATES);
+				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+					auto tf_idx = adaptive_filter->permutation[i];
+					auto col_idx = column_ids[tf_idx];
+					columns[col_idx]->Select(*transaction, state.vector_index, state.column_scans[tf_idx],
+					                         result.data[tf_idx], sel, approved_tuple_count,
+					                         *table_filters->filters[tf_idx]);
+				}
+				for (auto &table_filter : table_filters->filters) {
+					result.data[table_filter.first].Slice(sel, approved_tuple_count);
+				}
+			}
+			if (approved_tuple_count == 0) {
+				// all rows were filtered out by the table filters
+				// skip this vector in all the scans that were not scanned yet
+				D_ASSERT(table_filters);
+				result.Reset();
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					auto col_idx = column_ids[i];
+					if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+						continue;
+					}
+					if (table_filters->filters.find(i) == table_filters->filters.end()) {
+						columns[col_idx]->Skip(state.column_scans[i]);
+					}
+				}
+				state.vector_index++;
+				continue;
+			}
+			//! Now we use the selection vector to fetch data for the other columns.
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				if (!table_filters || table_filters->filters.find(i) == table_filters->filters.end()) {
+					auto column = column_ids[i];
+					if (column == COLUMN_IDENTIFIER_ROW_ID) {
+						D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
+						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
+						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
+						}
+					} else {
+						D_ASSERT(!transaction);
+						columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+						                                     sel, approved_tuple_count, ALLOW_UPDATES);
+					}
+				}
+			}
+			auto end_time = high_resolution_clock::now();
+			if (adaptive_filter && table_filters->filters.size() > 1) {
+				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+			}
+			D_ASSERT(approved_tuple_count > 0);
+			count = approved_tuple_count;
+		}
+
+		result.SetCardinality(count);
+		state.vector_index++;
+
+		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
+			// exceeded the amount of rows to scan
+			return false;
+		}
+		break;
+	}
+	return true;
+}
+
+void RowGroup::CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
+                                               vector<std::tuple<idx_t, idx_t>> &cardinalities) {
+	// Scan the RowGroup to calculate cardinality - initialize a HyperLogLog for each column and add values
+	DataChunk result;
+	result.Initialize(types);
+	vector<HyperLogLog> logs(columns.size());
+	InitializeScan(scan_state.row_group_scan_state);
+
+	// Check if we need to scan
+	if (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE >=
+	    scan_state.row_group_scan_state.max_row) {
+		return;
+	}
+
+	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE <
+	       scan_state.row_group_scan_state.max_row) {
+		ScanCommitted(scan_state.row_group_scan_state, result,
+		              TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		result.Normalify();
+		for (idx_t i = 0; i < columns.size(); i++) {
+			logs[i].Add(result.data[i].GetData(), sizeof(types[i].InternalType()));
+		}
+	}
+
+	// Get the final cardinality counts and sort them from low to high
+	for (idx_t i = 0; i < logs.size(); i++) {
+		auto current_count = logs[i].Count();
+
+		// Do not use column if above a certain cardinality
+		if (current_count < 500) {
+			cardinalities.emplace_back(logs[i].Count(), i);
+		}
+	}
+	std::sort(cardinalities.begin(), cardinalities.end());
 }
 
 ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
@@ -577,15 +758,19 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
-                                idx_t remaining_append_count) {
+void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state, idx_t offset_in_row_group) {
 	append_state.row_group = this;
-	append_state.offset_in_row_group = this->count;
+	append_state.offset_in_row_group = offset_in_row_group;
 	// for each column, initialize the append state
 	append_state.states = unique_ptr<ColumnAppendState[]>(new ColumnAppendState[columns.size()]);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		columns[i]->InitializeAppend(append_state.states[i]);
 	}
+}
+
+void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
+                                idx_t remaining_append_count) {
+	InitializeAppendInternal(append_state, this->count);
 	// append the version info for this row_group
 	idx_t append_count = MinValue<idx_t>(remaining_append_count, RowGroup::ROW_GROUP_SIZE - this->count);
 	AppendVersionInfo(transaction, this->count, append_count, transaction.transaction_id);
@@ -647,9 +832,126 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 	stats[column_idx]->statistics->Merge(other);
 }
 
-RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+void RowGroup::ScanSegments(const std::function<void(Vector &, idx_t)> &callback, Vector &intermediate,
+                            idx_t column_idx) {
+	Vector scan_vector(intermediate.GetType(), nullptr);
+	for (auto segment = (ColumnSegment *)columns[column_idx]->data.root_node.get(); segment;
+	     segment = (ColumnSegment *)segment->next.get()) {
+		ColumnScanState scan_state;
+		scan_state.current = segment;
+		segment->InitializeScan(scan_state);
+
+		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
+			scan_vector.Reference(intermediate);
+
+			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_state.row_index = segment->start + base_row_index;
+
+			columns[column_idx]->CheckpointScan(segment, scan_state, start, count, scan_vector);
+
+			callback(scan_vector, count);
+		}
+	}
+}
+bool CompressionForTypeExists(PhysicalType type) {
+	if (type == PhysicalType::BOOL || type == PhysicalType::INT8 || type == PhysicalType::INT16 ||
+	    type == PhysicalType::INT32 || type == PhysicalType::INT64 || type == PhysicalType::INT128 ||
+	    type == PhysicalType::UINT8 || type == PhysicalType::UINT16 || type == PhysicalType::UINT32 ||
+	    type == PhysicalType::UINT64 || type == PhysicalType::FLOAT || type == PhysicalType::DOUBLE ||
+	    type == PhysicalType::LIST || type == PhysicalType::INTERVAL || type == PhysicalType::BIT ||
+	    type == PhysicalType::VARCHAR) {
+		return true;
+	}
+	return false;
+}
+
+CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
+                                                      CompressionType compression_type) {
+	if (compression_type != CompressionType::COMPRESSION_AUTO) {
+		return compression_type;
+	}
+	auto &config = DBConfig::GetConfig(db);
+	if (config.force_compression != CompressionType::COMPRESSION_AUTO) {
+		return config.force_compression;
+	}
+	if (!CompressionForTypeExists(columns[col_idx]->type.InternalType())) {
+		return CompressionType::COMPRESSION_AUTO;
+	}
+	vector<CompressionFunction *> compression_functions =
+	    db.config.GetCompressionFunctions(columns[col_idx]->type.InternalType());
+	D_ASSERT(!compression_functions.empty());
+
+	// set up the analyze states for each compression method
+	vector<unique_ptr<AnalyzeState>> analyze_states;
+	analyze_states.reserve(compression_functions.size());
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			analyze_states.push_back(nullptr);
+			continue;
+		}
+		analyze_states.push_back(
+		    compression_functions[i]->init_analyze(*columns[col_idx], columns[col_idx]->type.InternalType()));
+	}
+	Vector intermediate(columns[col_idx]->type, true, false);
+	// scan over all the segments and run the analyze step
+	ScanSegments(
+	    [&](Vector &scan_vector, idx_t count) {
+		    for (idx_t i = 0; i < compression_functions.size(); i++) {
+			    if (!compression_functions[i]) {
+				    continue;
+			    }
+			    auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			    if (!success) {
+				    // could not use this compression function on this data set
+				    // erase it
+				    compression_functions[i] = nullptr;
+				    analyze_states[i].reset();
+			    }
+		    }
+	    },
+	    intermediate, col_idx);
+
+	// now that we have passed over all the data, we need to figure out the best method
+	// we do this using the final_analyze method
+	unique_ptr<AnalyzeState> state;
+	compression_idx = DConstants::INVALID_INDEX;
+	idx_t best_score = NumericLimits<idx_t>::Maximum();
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			continue;
+		}
+		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+		if (score < best_score) {
+			compression_idx = i;
+			best_score = score;
+			state = move(analyze_states[i]);
+		}
+	}
+	//	return state;
+	return compression_functions[compression_idx]->type;
+}
+
+vector<CompressionType> RowGroup::DetectBestCompressionMethodTable(TableDataWriter &writer) {
+	vector<CompressionType> table_compression;
+	for (idx_t i = 0; i < columns.size(); i++) {
+		idx_t compression_idx = 0;
+		CompressionType compression_type = writer.GetColumnCompressionType(i);
+		table_compression.push_back(DetectBestCompressionMethod(compression_idx, i, compression_type));
+	}
+	return table_compression;
+}
+
+RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
+                                     DataTable &data_table) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
+	// FIXME: This shouldn't be executed again in the column checkpointer
+	{
+		// Sorts columns to optimize RLE compression
+		auto table_compression = DetectBestCompressionMethodTable(writer);
+		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
+		rle_checkpoint_sort.Sort();
+	}
 
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {

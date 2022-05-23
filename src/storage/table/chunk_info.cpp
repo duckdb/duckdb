@@ -16,6 +16,11 @@ struct TransactionVersionOperator {
 
 struct CommittedVersionOperator {
 	static bool UseInsertedVersion(transaction_t start_time, transaction_t transaction_id, transaction_t id) {
+		// RLESort edge case - if there are interleaved transactions doing updates we might scan already deleted tuples
+		// TODO: Fix before merging
+		if (id >= TRANSACTION_ID_START) {
+			throw Exception("Interleaved transactions edge case");
+		}
 		return true;
 	}
 
@@ -185,6 +190,7 @@ idx_t ChunkVectorInfo::Delete(Transaction &transaction, row_t rows[], idx_t coun
 		}
 		// after verifying that there are no conflicts we mark the tuple as deleted
 		deleted[rows[i]] = transaction.transaction_id;
+		//		delete_id.push_back(rows[i]);
 		deleted_tuples++;
 	}
 	return deleted_tuples;

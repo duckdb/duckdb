@@ -384,6 +384,18 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Force Compression Sorting
+//===--------------------------------------------------------------------===//
+void ForceCompressionSortingSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.force_compression_sorting = input.GetValue<bool>();
+}
+
+Value ForceCompressionSortingSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.force_compression_sorting);
+}
+
+//===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {

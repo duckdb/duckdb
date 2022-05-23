@@ -127,6 +127,7 @@ LocalSortState::LocalSortState() : initialized(false) {
 }
 
 static idx_t EntriesPerBlock(idx_t width) {
+	D_ASSERT(width > 0);
 	return (Storage::BLOCK_SIZE + width * STANDARD_VECTOR_SIZE - 1) / width;
 }
 

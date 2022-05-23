@@ -26,10 +26,12 @@ public:
 	ColumnCheckpointState &GetCheckpointState();
 
 	void Checkpoint(unique_ptr<SegmentBase> segment);
+	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx);
+	static void ForceCompression(vector<CompressionFunction *> &compression_functions,
+	                             CompressionType compression_type);
 
 private:
 	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
-	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx);
 	void WriteToDisk();
 	bool HasChanges();
 	void WritePersistentSegments();

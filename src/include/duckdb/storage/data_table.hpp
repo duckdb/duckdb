@@ -135,6 +135,15 @@ public:
 	//! A reference to the database instance
 	DatabaseInstance &db;
 
+	//! The number of rows in the table
+	atomic<idx_t> total_rows;
+
+	//! The number of rows in the table
+	atomic<int64_t> rows_changed;
+
+	//! The end of the previously checkpointed row group
+	atomic<int64_t> prev_end;
+
 public:
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
@@ -247,8 +256,6 @@ private:
 private:
 	//! Lock for appending entries to the table
 	mutex append_lock;
-	//! The number of rows in the table
-	atomic<idx_t> total_rows;
 	//! The segment trees holding the various row_groups of the table
 	shared_ptr<SegmentTree> row_groups;
 	//! Column statistics

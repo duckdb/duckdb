@@ -1,0 +1,105 @@
+# name: test/sql/storage/compression/rle_sorted/rle_sort_basic.test
+# description: Test a basic integer sort before RLE compression
+# group: [rle_sorted]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+PRAGMA force_compression_sorting = true
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1,1),(2,2),(1,1);
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+1	1
+1	1
+2	2
+
+statement ok
+PRAGMA force_compression_sorting = false
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1,1),(2,2),(1,1),(2,2),(1,1),(2,2), (1,1);
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+1	1
+2	2
+1	1
+2	2
+1	1
+2	2
+1	1
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+PRAGMA force_compression_sorting = true
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1,1),(2,2),(1,1),(2,2),(1,1),(2,2),(1,1);
+
+statement ok
+checkpoint
+
+query II
+SELECT * FROM test;
+----
+1	1
+1	1
+1	1
+1	1
+2	2
+2	2
+2	2
+
+#statement ok
+#DROP TABLE IF EXISTS test;
+#
+#statement ok
+#CREATE TABLE test (a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER);
+#
+#statement ok
+#INSERT INTO test VALUES (1,1,3,4,4),(2,2,5,6,5),(1,1,7,8,5),(2,2,2,2,2),(1,1,0,1,3),(2,2,4,5,6);
+#
+#statement ok
+#checkpoint
+#
+#query IIIII
+#SELECT * FROM test;
+#----
+#1	1	3	4	4
+#1	1	7	8	5
+#1	1	0	1	3
+#2	2	5	6	5
+#2	2	2	2	2
+#2	2	4	5	6

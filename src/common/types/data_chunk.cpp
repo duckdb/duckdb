@@ -86,6 +86,14 @@ void DataChunk::Reference(DataChunk &chunk) {
 	}
 }
 
+void DataChunk::ReferencePartial(DataChunk &chunk, vector<column_t> &column_ids) {
+	SetCardinality(chunk);
+	SetCapacity(chunk);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		data[i].Reference(chunk.data[column_ids[i]]);
+	}
+}
+
 void DataChunk::Move(DataChunk &chunk) {
 	SetCardinality(chunk);
 	SetCapacity(chunk);

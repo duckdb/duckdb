@@ -16,6 +16,9 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/sort/sort.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -33,6 +36,7 @@ class RowGroup : public SegmentBase {
 public:
 	friend class ColumnData;
 	friend class VersionDeleteState;
+	friend class RLESort;
 
 public:
 	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = 120;
@@ -115,10 +119,12 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
 
-	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
+	                           DataTable &data_table);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<ColumnDefinition> &columns);
 
+	void InitializeAppendInternal(RowGroupAppendState &append_state, idx_t offset_in_row_group);
 	void InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state, idx_t remaining_append_count);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 
@@ -140,12 +146,24 @@ public:
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
-
+	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback, Vector &intermediate, idx_t column_idx);
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
+	//! Scan the RowGroup to the payload DataChunk before sorting
+	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
+
+	//! Return the indices of the key columns
+	void CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
+	                                     vector<std::tuple<idx_t, idx_t>> &cardinalities);
+
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
+
+	CompressionType DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
+	                                            CompressionType compression_type);
+
+	vector<CompressionType> DetectBestCompressionMethodTable(TableDataWriter &writer);
 
 private:
 	mutex row_group_lock;

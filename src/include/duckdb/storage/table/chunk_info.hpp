@@ -79,6 +79,7 @@ public:
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
 	atomic<transaction_t> deleted[STANDARD_VECTOR_SIZE];
+	vector<idx_t> delete_id;
 	atomic<bool> any_deleted;
 
 public:

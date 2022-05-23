@@ -378,6 +378,20 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	return checkpoint_state;
 }
 
+void ColumnData::CleanPersistentSegments() {
+	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
+	for (auto segment = (ColumnSegment *)data.root_node.get(); segment;
+	     segment = (ColumnSegment *)segment->next.get()) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
+			auto block_id = segment->GetBlockId();
+			if (block_id != INVALID_BLOCK) {
+				block_manager.MarkBlockAsModified(block_id);
+			}
+		}
+	}
+}
+
 void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
 	idx_t data_pointer_count = source.Read<idx_t>();

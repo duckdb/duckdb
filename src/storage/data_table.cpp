@@ -23,7 +23,7 @@ namespace duckdb {
 DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table,
                      vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
-      total_rows(0), is_root(true) {
+      total_rows(0), rows_changed(0), prev_end(0), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	this->row_groups = make_shared<SegmentTree>();
 	auto types = GetTypes();
@@ -1283,13 +1283,18 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 		global_stats.push_back(column_stats[i]->Copy());
 	}
 
+	this->prev_end = 0;
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
 	vector<RowGroupPointer> row_group_pointers;
 	while (row_group) {
-		auto pointer = row_group->Checkpoint(writer, global_stats);
+		auto pointer = row_group->Checkpoint(writer, global_stats, *this);
 		row_group_pointers.push_back(move(pointer));
 		row_group = (RowGroup *)row_group->next.get();
 	}
+
+	// update changed rows after checkpoint
+	this->rows_changed = 0;
+
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto &meta_writer = writer.GetMetaWriter();

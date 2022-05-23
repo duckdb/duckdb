@@ -50,6 +50,10 @@ public:
 	LogicalType type;
 	//! The parent column (if any)
 	ColumnData *parent;
+	//! Vector with reorder indices
+	SelectionVector sel_sorted;
+	//! The segments holding the data of this column segment
+	SegmentTree data;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
@@ -107,6 +111,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
 	                                                     ColumnCheckpointInfo &checkpoint_info);
 
+	virtual void CleanPersistentSegments();
+
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
@@ -134,8 +140,6 @@ protected:
 	idx_t ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
 protected:
-	//! The segments holding the data of this column segment
-	SegmentTree data;
 	//! The lock for the updates
 	mutex update_lock;
 	//! The updates for this column segment
