@@ -692,7 +692,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   else()
     if (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
-    else()
+    endif()
   endif()
 
 

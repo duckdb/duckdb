@@ -82,6 +82,7 @@ runs:
         ls -al
         pwd
         echo "$USER"
+        git config --global --add safe.directory '*'
         make
 
     - name: Run post-install scripts

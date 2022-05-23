@@ -20,9 +20,6 @@ test_that("extensions can be loaded", {
 
   for (extension in matches){
     # Test loading the extension
-    library("duckdb")
-    con <- dbConnect(duckdb::duckdb())
-    extension <- './excel.duckdb_extension'
     query <- paste("LOAD '", extension, "';", sep = "")
     dbExecute(con, query)
 
