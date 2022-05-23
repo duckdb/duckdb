@@ -53,6 +53,25 @@ class TestMultipleColumnsSameName(object):
         # Verify we are not changing original dataframe
         assert all(df.columns == ['a_1', 'a', 'a']), df.columns
 
+    def test_minimally_rename(self, duckdb_cursor):
+        df = pd.DataFrame([(1, 5, 9, 13),
+                    (2, 6, 10, 14),
+                    (3, 7, 11, 15), 
+                    (4, 8, 12, 16)],
+                                columns=['a_1', 'a', 'a', 'a_2'])
+        con = duckdb.connect()
+        con.register('df_view', df)
+        assert con.execute("DESCRIBE df_view;").fetchall() == [('a_1', 'BIGINT', 'YES', None, None, None),
+                                                                ('a', 'BIGINT', 'YES', None, None, None),
+                                                                ('a_3', 'BIGINT', 'YES', None, None, None),
+                                                                ('a_2', 'BIGINT', 'YES', None, None, None)]
+        assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)] 
+        assert con.execute("select a from df_view;").fetchall() == [(5,), (6,), (7,), (8,)] 
+        assert con.execute("select a_3 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)] 
+        assert con.execute("select a_2 from df_view;").fetchall() == [(13,), (14,), (15,), (16,)]
+        # Verify we are not changing original dataframe
+        assert all(df.columns == ['a_1', 'a', 'a', 'a_2']), df.columns
+
     def test_multiple_columns_with_same_name_2(self, duckdb_cursor):
         df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 6, 7, 8], 'a_1': [9, 10, 11, 12]})
         df = df.rename(columns={ df.columns[1]: "a_1" })
