@@ -62,7 +62,11 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		}
 
 		auto result = BindExpression(&expr.rhs, depth, false);
-		(*lambda_bindings).pop_back();
+		lambda_bindings->pop_back();
+		// successfully bound a subtree of nested lambdas
+		if (lambda_bindings->size() == 0) {
+			lambda_bindings = nullptr;
+		}
 
 		// now bind the rhs as a normal expression
 		return result;

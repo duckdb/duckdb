@@ -44,9 +44,9 @@ static void AppendTransformedToResult(Vector &lambda_vector, idx_t &elem_cnt, Ve
 	ListVector::Append(result, lambda_vector, *lambda_child_data.sel, elem_cnt, 0);
 }
 
-static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries, idx_t &elem_cnt, Vector &result, idx_t &curr_list_len,
-						   idx_t &curr_list_offset, idx_t &appended_lists_cnt, vector<idx_t> &lists_len,
-						   idx_t &curr_original_list_len, DataChunk &input_chunk) {
+static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries, idx_t &elem_cnt, Vector &result,
+                                   idx_t &curr_list_len, idx_t &curr_list_offset, idx_t &appended_lists_cnt,
+                                   vector<idx_t> &lists_len, idx_t &curr_original_list_len, DataChunk &input_chunk) {
 
 	idx_t true_count = 0;
 	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
@@ -78,7 +78,7 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 		if (lambda_validity.RowIsValid(i)) {
 			if (lambda_values[i] > 0) {
 				true_sel.set_index(true_count++, i);
-			    curr_list_len++;
+				curr_list_len++;
 			}
 		}
 		curr_original_list_len++;
@@ -102,8 +102,9 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 }
 
 static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &result_types, idx_t &elem_cnt,
-    SelectionVector &sel, vector<SelectionVector> &sel_vectors, DataChunk &input_chunk, DataChunk &lambda_chunk,
-                       Vector &child_vector, DataChunk &args, ExpressionExecutor &expr_executor) {
+                              SelectionVector &sel, vector<SelectionVector> &sel_vectors, DataChunk &input_chunk,
+                              DataChunk &lambda_chunk, Vector &child_vector, DataChunk &args,
+                              ExpressionExecutor &expr_executor) {
 
 	input_chunk.InitializeEmpty(types);
 
@@ -244,8 +245,8 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 
 	if (elem_cnt != 0) {
-		ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
-		                  child_vector, args, expr_executor);
+		ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk, child_vector,
+		                  args, expr_executor);
 		auto &lambda_vector = lambda_chunk.data[0];
 		AppendTransformedToResult(lambda_vector, elem_cnt, result);
 	}
@@ -372,11 +373,11 @@ static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
-					  child_vector, args, expr_executor);
+	ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk, child_vector, args,
+	                  expr_executor);
 	auto &lambda_vector = lambda_chunk.data[0];
 	AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-						   appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+	                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
 }
 
 static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
@@ -438,7 +439,7 @@ static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Ex
 }
 
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 
 	// remove the lambda function
 	auto lambda_expr = move(arguments.back());
@@ -462,7 +463,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 }
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+                                                  vector<unique_ptr<Expression>> &arguments) {
 
 	// the list column and the lambda function
 	D_ASSERT(bound_function.arguments.size() == 2);
