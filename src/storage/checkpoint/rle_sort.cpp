@@ -22,8 +22,12 @@ RowGroupSortBindData::RowGroupSortBindData(const vector<LogicalType> &payload_ty
 	global_sort_state = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 }
 
-unique_ptr<FunctionData> RowGroupSortBindData::Copy() {
+unique_ptr<FunctionData> RowGroupSortBindData::Copy() const {
 	return make_unique<RowGroupSortBindData>(payload_types, keys_types, indexes, db);
+}
+
+bool RowGroupSortBindData::Equals(const FunctionData &other) const {
+	return false;
 }
 
 RowGroupSortBindData::~RowGroupSortBindData() {
