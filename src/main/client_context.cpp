@@ -204,9 +204,11 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->open_result == &pending);
 	D_ASSERT(active_query->prepared);
+	auto &executor = GetExecutor();
 	auto &prepared = *active_query->prepared;
 	bool create_stream_result = prepared.properties.allow_stream_result && pending.allow_stream_result;
 	if (create_stream_result) {
+		D_ASSERT(!executor.HasResultCollector());
 		active_query->progress_bar.reset();
 		query_progress = -1;
 
@@ -217,7 +219,6 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		active_query->open_result = stream_result.get();
 		return move(stream_result);
 	}
-	auto &executor = GetExecutor();
 	unique_ptr<QueryResult> result;
 	if (executor.HasResultCollector()) {
 		// we have a result collector - fetch the result directly from the result collector

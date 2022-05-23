@@ -139,7 +139,10 @@ bool Pipeline::IsOrderDependent() const {
 	if (!config.preserve_insertion_order) {
 		return false;
 	}
-	if (sink->IsOrderDependent() || source->IsOrderDependent()) {
+	if (sink && sink->IsOrderDependent()) {
+		return true;
+	}
+	if (source->IsOrderDependent()) {
 		return true;
 	}
 	for (auto &op : operators) {
