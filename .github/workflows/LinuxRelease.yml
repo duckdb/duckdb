@@ -47,42 +47,10 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests
-
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
       run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
@@ -149,54 +117,12 @@ jobs:
       AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libffi-dev
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
-
-    - name: Install OpenSSL 1.1.1
-      run: |
-        apt-get install build-essential checkinstall zlib1g-dev -y -qq
-        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-        tar -xf openssl-1.1.1c.tar.gz
-        cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
-        make
-        make install
-        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-        ldconfig -v
-
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
 
     - name: Build
       run: |
@@ -212,8 +138,6 @@ jobs:
           ./scripts/extension-upload-test.sh local
         fi
 
-
-
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
@@ -223,42 +147,8 @@ jobs:
       GEN: ninja
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk zip
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests
-
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: actions/checkout@v3
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
       run: |
@@ -289,7 +179,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -301,6 +191,11 @@ jobs:
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: |
@@ -326,8 +221,6 @@ jobs:
           duckdb_cli-linux-rpi.zip
 
 
-
-
  old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-18.04
@@ -338,7 +231,7 @@ jobs:
       CXX: g++-4.8
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -349,30 +242,16 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make release
 
     - name: Test
       run: make allunit
-
- centos:
-    name: CentOS 7
-    runs-on: ubuntu-latest
-    container: centos:7
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make
-
-    - name: Build
-      run: make release
-
-    - name: Test
-      run: ./build/release/test/unittest
 
  release-assert:
     name: Release Assertions
@@ -392,12 +271,17 @@ jobs:
       DISABLE_SANITIZER: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: make relassert
@@ -416,13 +300,18 @@ jobs:
       CXX: g++-10
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Test
       run: python scripts/test_vector_sizes.py
@@ -432,7 +321,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -441,6 +330,11 @@ jobs:
 
     - name: Setup
       run: ./scripts/wasm_configure.sh
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build Library Module
       run: ./scripts/wasm_build_lib.sh Release
@@ -468,13 +362,18 @@ jobs:
     needs: linux-release-64
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: make
@@ -490,9 +389,10 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -500,9 +400,13 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: actions/setup-node@v2
+    - name: Install Ninja
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
       with:
-        node-version: '16'
+        key: ${{ github.job }}
 
     - name: Build
       run: make
@@ -510,25 +414,21 @@ jobs:
     - name: Start S3/HTTP test server
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        mkdir -p /tmp/s3rver
-        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
+        ./scripts/run_s3_test_server.sh
 
     - name: Test
       run: make allunit
 
-    - name: Check S3/HTTP server log
-      if: always()
-      run: cat /tmp/s3rver/access_log.txt
-
  amalgamation-tests:
     name: Amalgamation Tests
+    needs: linux-release-64
     runs-on: ubuntu-20.04
     env:
       CC: clang
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 

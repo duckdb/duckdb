@@ -22,6 +22,7 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLWarning;
 import java.sql.SQLXML;
+import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -57,6 +58,20 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		prepare(sql);
 	}
 
+	private void startTransaction() throws SQLException {
+		if (this.conn.autoCommit
+			|| this.conn.transactionRunning) {
+			return;
+		}
+
+		this.conn.transactionRunning = true;
+
+		// Start transaction via Statement
+		Statement s = conn.createStatement();
+		s.execute("BEGIN TRANSACTION;");
+		s.close();
+	}
+
 	private void prepare(String sql) throws SQLException {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
@@ -65,7 +80,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("sql query parameter cannot be null");
 		}
 
-		stmt_ref = null;
+		// In case the statement is reused, release old one first
+		if (stmt_ref != null) {
+			DuckDBNative.duckdb_jdbc_release(stmt_ref);
+			stmt_ref = null;
+		}
+
 		meta = null;
 		params = null;
 
@@ -88,6 +108,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (stmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
+		startTransaction();
 		ByteBuffer result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
 		select_result = new DuckDBResultSet(this, meta, result_ref);
 

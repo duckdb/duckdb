@@ -128,7 +128,7 @@ unique_ptr<BaseStatistics> StandardColumnData::GetUpdateStatistics() {
 		return nullptr;
 	}
 	if (!stats) {
-		stats = BaseStatistics::CreateEmpty(type);
+		stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
 	}
 	stats->validity_stats = move(validity_stats);
 	return stats;

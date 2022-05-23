@@ -11,7 +11,7 @@ string JoinTypeToString(JoinType type) {
 	case JoinType::INNER:
 		return "INNER";
 	case JoinType::OUTER:
-		return "OUTER";
+		return "FULL";
 	case JoinType::SEMI:
 		return "SEMI";
 	case JoinType::ANTI:

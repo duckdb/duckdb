@@ -77,7 +77,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	if (!my_stream->column_types.empty()) {
-		QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names);
+		QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
 		return 0;
 	}
 
@@ -97,7 +97,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names);
+	QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
 	return 0;
 }
 

@@ -110,16 +110,16 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	// Generate 10 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
-		keys[i] = EncodeFloat(generate_small_float());
+		keys[i] = Radix::EncodeFloat(generate_small_float());
 	}
 
 	// Generate 40 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
-		keys[i] = EncodeFloat(generate_float(-50, 50));
+		keys[i] = Radix::EncodeFloat(generate_float(-50, 50));
 	}
 	// Generate 50 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
-		keys[i] = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		keys[i] = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -130,28 +130,28 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 5; i++) {
-		a = EncodeFloat(generate_small_float());
-		b = EncodeFloat(generate_small_float());
+		a = Radix::EncodeFloat(generate_small_float());
+		b = Radix::EncodeFloat(generate_small_float());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 5; i++) {
-		a = EncodeFloat(generate_float(-50, 50));
-		b = EncodeFloat(generate_float(-50, 50));
+		a = Radix::EncodeFloat(generate_float(-50, 50));
+		b = Radix::EncodeFloat(generate_float(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 5; i++) {
-		a = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
-		b = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		a = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		b = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
-		int64_t low = EncodeFloat(min_values[i]);
-		int64_t high = EncodeFloat(max_values[i]);
+		int64_t low = Radix::EncodeFloat(min_values[i]);
+		int64_t high = Radix::EncodeFloat(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
 		string query =
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
@@ -182,16 +182,16 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	// Generate 10 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
-		keys[i] = EncodeFloat(generate_small_float());
+		keys[i] = Radix::EncodeFloat(generate_small_float());
 	}
 
 	// Generate 40 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
-		keys[i] = EncodeFloat(generate_float(-50, 50));
+		keys[i] = Radix::EncodeFloat(generate_float(-50, 50));
 	}
 	// Generate 50 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
-		keys[i] = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		keys[i] = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -202,28 +202,28 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 5; i++) {
-		a = EncodeDouble(generate_small_double());
-		b = EncodeDouble(generate_small_double());
+		a = Radix::EncodeDouble(generate_small_double());
+		b = Radix::EncodeDouble(generate_small_double());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 5; i++) {
-		a = EncodeDouble(generate_double(-50, 50));
-		b = EncodeDouble(generate_double(-50, 50));
+		a = Radix::EncodeDouble(generate_double(-50, 50));
+		b = Radix::EncodeDouble(generate_double(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 5; i++) {
-		a = EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
-		b = EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
+		a = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
+		b = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
-		int64_t low = EncodeDouble(min_values[i]);
-		int64_t high = EncodeDouble(max_values[i]);
+		int64_t low = Radix::EncodeDouble(min_values[i]);
+		int64_t high = Radix::EncodeDouble(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
 		string query =
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
@@ -254,16 +254,16 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	// Generate 1000 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
-		keys[i] = EncodeFloat(generate_small_float());
+		keys[i] = Radix::EncodeFloat(generate_small_float());
 	}
 
 	// Generate 4000 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
-		keys[i] = EncodeFloat(generate_float(-50, 50));
+		keys[i] = Radix::EncodeFloat(generate_float(-50, 50));
 	}
 	// Generate 5000 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
-		keys[i] = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		keys[i] = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -274,28 +274,28 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 500; i++) {
-		a = EncodeFloat(generate_small_float());
-		b = EncodeFloat(generate_small_float());
+		a = Radix::EncodeFloat(generate_small_float());
+		b = Radix::EncodeFloat(generate_small_float());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 500; i++) {
-		a = EncodeFloat(generate_float(-50, 50));
-		b = EncodeFloat(generate_float(-50, 50));
+		a = Radix::EncodeFloat(generate_float(-50, 50));
+		b = Radix::EncodeFloat(generate_float(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 500; i++) {
-		a = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
-		b = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		a = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		b = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
-		int64_t low = EncodeFloat(min_values[i]);
-		int64_t high = EncodeFloat(max_values[i]);
+		int64_t low = Radix::EncodeFloat(min_values[i]);
+		int64_t high = Radix::EncodeFloat(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
 		string query =
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";
@@ -326,16 +326,16 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	con.Query("CREATE TABLE numbers(i BIGINT)");
 	// Generate 1000 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
-		keys[i] = EncodeFloat(generate_small_float());
+		keys[i] = Radix::EncodeFloat(generate_small_float());
 	}
 
 	// Generate 4000 floats (-50/50)
 	for (idx_t i = n / 10; i < n / 2; i++) {
-		keys[i] = EncodeFloat(generate_float(-50, 50));
+		keys[i] = Radix::EncodeFloat(generate_float(-50, 50));
 	}
 	// Generate 5000 floats (min/max)
 	for (idx_t i = n / 2; i < n; i++) {
-		keys[i] = EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
+		keys[i] = Radix::EncodeFloat(generate_float(FLT_MIN, FLT_MAX));
 	}
 	// Insert values and create index
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
@@ -346,28 +346,28 @@ TEST_CASE("ART Floating Point Double", "[art-double][.]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON numbers(i)"));
 	// Generate 500 small-small range queries
 	for (idx_t i = 0; i < 500; i++) {
-		a = EncodeDouble(generate_small_double());
-		b = EncodeDouble(generate_small_double());
+		a = Radix::EncodeDouble(generate_small_double());
+		b = Radix::EncodeDouble(generate_small_double());
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 normal-normal range queries
 	for (idx_t i = 0; i < 500; i++) {
-		a = EncodeDouble(generate_double(-50, 50));
-		b = EncodeDouble(generate_double(-50, 50));
+		a = Radix::EncodeDouble(generate_double(-50, 50));
+		b = Radix::EncodeDouble(generate_double(-50, 50));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	// Generate 500 big-big range queries
 	for (idx_t i = 0; i < 500; i++) {
-		a = EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
-		b = EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
+		a = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
+		b = Radix::EncodeDouble(generate_double(FLT_MIN, FLT_MAX));
 		min_values.push_back(min(a, b));
 		max_values.push_back(max(a, b));
 	}
 	for (idx_t i = 0; i < min_values.size(); i++) {
-		int64_t low = EncodeDouble(min_values[i]);
-		int64_t high = EncodeDouble(max_values[i]);
+		int64_t low = Radix::EncodeDouble(min_values[i]);
+		int64_t high = Radix::EncodeDouble(max_values[i]);
 		int answer = full_scan<int64_t>(keys.get(), n, low, high);
 		string query =
 		    "SELECT COUNT(i) FROM numbers WHERE i >= " + to_string(low) + " and i <= " + to_string(high) + ";";

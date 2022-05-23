@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "driver.hpp"
 #include "odbc_diagnostic.hpp"
+#include "odbc_exception.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_utils.hpp"
 
@@ -11,6 +12,7 @@
 
 using duckdb::OdbcDiagnostic;
 using duckdb::OdbcUtils;
+using duckdb::SQLStateType;
 using std::string;
 
 SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
@@ -88,6 +90,7 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		case SQL_ATTR_ODBC_VERSION: {
 			switch ((SQLUINTEGER)(intptr_t)value_ptr) {
 			case SQL_OV_ODBC3:
+			case SQL_OV_ODBC2:
 				// TODO actually do something with this?
 				// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
 				return SQL_SUCCESS;
@@ -97,14 +100,18 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 			}
 		}
 		case SQL_ATTR_CONNECTION_POOLING:
+			if (env) {
+				return SQL_ERROR;
+			}
 			switch ((SQLINTEGER)(intptr_t)value_ptr) {
 			case SQL_CP_OFF:
 			case SQL_CP_ONE_PER_DRIVER:
 			case SQL_CP_ONE_PER_HENV:
 				return SQL_SUCCESS;
 			default:
-				env->error_messages.emplace_back("Connection pool option not supported.");
-				return SQL_ERROR;
+				duckdb::DiagRecord diag_rec("Connection pooling not supported: " + std::to_string(attribute),
+				                            SQLStateType::INVALID_ATTR_OPTION_ID, "Unknown DSN");
+				throw duckdb::OdbcException("SQLSetConnectAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
 			}
 		case SQL_ATTR_CP_MATCH:
 			env->error_messages.emplace_back("Optional feature not supported.");
@@ -154,8 +161,8 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
  * Get the new database name from the DSN string.
  * Otherwise, try to read the database name from odbc.ini
  */
-static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, string &new_db_name) {
-	OdbcUtils::SetValueFromConnStr(dsn, "Database", new_db_name);
+static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *conn_str, string &new_db_name) {
+	OdbcUtils::SetValueFromConnStr(conn_str, "Database", new_db_name);
 
 	// given preference for the connection attribute
 	if (!dbc->sql_attr_current_catalog.empty() && new_db_name.empty()) {
@@ -165,7 +172,7 @@ static void GetDatabaseNameFromDSN(duckdb::OdbcHandleDbc *dbc, SQLCHAR *dsn, str
 #if defined ODBC_LINK_ODBCINST || defined WIN32
 	if (new_db_name.empty()) {
 		string dsn_name;
-		OdbcUtils::SetValueFromConnStr(dsn, "DSN", dsn_name);
+		OdbcUtils::SetValueFromConnStr(conn_str, "DSN", dsn_name);
 		if (!dsn_name.empty()) {
 			const int MAX_DB_NAME = 256;
 			char db_name[MAX_DB_NAME];
