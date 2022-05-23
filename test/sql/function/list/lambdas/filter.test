@@ -108,3 +108,9 @@ SELECT list_concat(list_filter([42, -42, 8, -5, 2], elem -> elem > 0), list_filt
 ----
 [42, 8, 2, enjoy, life, the, fullest]
 
+# test aliases
+
+query I
+SELECT array_filter([1, NULL], arr_elem -> arr_elem < 4)
+----
+[1]

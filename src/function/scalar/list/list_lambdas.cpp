@@ -130,7 +130,8 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 	expr_executor.Execute(input_chunk, lambda_chunk);
 }
 
-static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+template <bool IS_TRANSFORM = true>
+static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	// always at least the list argument
 	D_ASSERT(args.ColumnCount() >= 1);
@@ -192,12 +193,23 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 	DataChunk input_chunk;
 	DataChunk lambda_chunk;
 
+	// these are only for the list_filter
+	vector<idx_t> lists_len;
+	idx_t curr_list_len = 0, curr_list_offset = 0, appended_lists_cnt = 0, curr_original_list_len = 0;
+	if (!IS_TRANSFORM) {
+		lists_len.reserve(count);
+	}
+
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t elem_cnt = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 
 		auto lists_index = lists_data.sel->get_index(row_idx);
 		const auto &list_entry = list_entries[lists_index];
+
+		if (!IS_TRANSFORM) {
+			lists_len.push_back(list_entry.length);
+		}
 
 		// set the result to NULL for this row
 		if (!lists_data.validity.RowIsValid(lists_index)) {
@@ -206,8 +218,10 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 
 		// set the length and offset of the resulting lists of list_transform
-		result_entries[row_idx].offset = list_entry.offset;
-		result_entries[row_idx].length = list_entry.length;
+		if (IS_TRANSFORM) {
+			result_entries[row_idx].offset = list_entry.offset;
+			result_entries[row_idx].length = list_entry.length;
+		}
 
 		// empty list, nothing to execute
 		if (list_entry.length == 0) {
@@ -225,139 +239,23 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 			// reached STANDARD_VECTOR_SIZE elements, execute
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
 
-				ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
-				                  child_vector, args, expr_executor);
-				auto &lambda_vector = lambda_chunk.data[0];
-				AppendTransformedToResult(lambda_vector, elem_cnt, result);
 				elem_cnt = 0;
 			}
 
-			// to slice the child vector
-			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
-			sel.set_index(elem_cnt, source_idx);
-
-			// for each column, set the index of the selection vector to slice properly
-			for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
-				sel_vectors[col_idx].set_index(elem_cnt, indexes[col_idx]);
-			}
-			elem_cnt++;
-		}
-	}
-
-	if (elem_cnt != 0) {
-		ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk, child_vector,
-		                  args, expr_executor);
-		auto &lambda_vector = lambda_chunk.data[0];
-		AppendTransformedToResult(lambda_vector, elem_cnt, result);
-	}
-}
-
-static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
-	// always at least the list argument
-	D_ASSERT(args.ColumnCount() >= 1);
-
-	auto count = args.size();
-	Vector &lists = args.data[0];
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
-	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
-		return;
-	}
-
-	// get the lists data
-	VectorData lists_data;
-	lists.Orrify(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
-
-	// get the lambda expression
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ListLambdaBindData &)*func_expr.bind_info;
-	auto &lambda_expr = info.lambda_expr;
-
-	// get the child vector and child data
-	auto lists_size = ListVector::GetListSize(lists);
-	auto &child_vector = ListVector::GetEntry(lists);
-	VectorData child_data;
-	child_vector.Orrify(lists_size, child_data);
-
-	// to slice the child vector
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-
-	// this vector never contains more than one element
-	vector<LogicalType> result_types;
-	result_types.push_back(lambda_expr->return_type);
-
-	// non-lambda parameter columns
-	vector<VectorData> columns;
-	vector<idx_t> indexes;
-	vector<SelectionVector> sel_vectors;
-
-	vector<LogicalType> types;
-	types.push_back(child_vector.GetType());
-
-	// skip the list column
-	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		columns.emplace_back(VectorData());
-		args.data[i].Orrify(count, columns[i - 1]);
-		indexes.push_back(0);
-		sel_vectors.emplace_back(SelectionVector(STANDARD_VECTOR_SIZE));
-		types.push_back(args.data[i].GetType());
-	}
-
-	// get the expression executor
-	ExpressionExecutor expr_executor(*lambda_expr);
-	DataChunk input_chunk;
-	DataChunk lambda_chunk;
-
-	// FIXME: this is only used for list_filter
-	// FIXME: so filling it with values should probably be put into a functor
-	vector<idx_t> lists_len;
-	lists_len.reserve(count);
-
-	// FIXME: this is only required for list_filter
-	idx_t curr_list_len = 0, curr_list_offset = 0, appended_lists_cnt = 0, curr_original_list_len = 0;
-
-	// loop over the child entries and create chunks to be executed by the expression executor
-	idx_t elem_cnt = 0;
-	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
-
-		auto lists_index = lists_data.sel->get_index(row_idx);
-		const auto &list_entry = list_entries[lists_index];
-
-		lists_len.push_back(list_entry.length);
-
-		// set the result to NULL for this row
-		if (!lists_data.validity.RowIsValid(lists_index)) {
-			result_validity.SetInvalid(row_idx);
-			continue;
-		}
-
-		// empty list, nothing to execute
-		if (list_entry.length == 0) {
-			continue;
-		}
-
-		// get the data indexes
-		for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
-			indexes[col_idx] = columns[col_idx].sel->get_index(row_idx);
-		}
-
-		// iterate list elements and create transformed expression columns
-		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
-			// reached STANDARD_VECTOR_SIZE elements, execute
+			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
 
 				ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
 				                  child_vector, args, expr_executor);
 				auto &lambda_vector = lambda_chunk.data[0];
-				AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-				                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+
+				if (IS_TRANSFORM) {
+					AppendTransformedToResult(lambda_vector, elem_cnt, result);
+				} else {
+					AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
+					                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
+					                       input_chunk);
+				}
 				elem_cnt = 0;
 			}
 
@@ -376,8 +274,21 @@ static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &
 	ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk, child_vector, args,
 	                  expr_executor);
 	auto &lambda_vector = lambda_chunk.data[0];
-	AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-	                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+
+	if (IS_TRANSFORM) {
+		AppendTransformedToResult(lambda_vector, elem_cnt, result);
+	} else {
+		AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
+		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+	}
+}
+
+static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	ListLambdaFunction<>(args, state, result);
+}
+
+static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	ListLambdaFunction<false>(args, state, result);
 }
 
 static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
@@ -491,7 +402,7 @@ ScalarFunction ListTransformFun::GetFunction() {
 }
 
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_transform", "array_transform"}, GetFunction());
+	set.AddFunction({"list_transform", "array_transform", "list_apply", "array_apply"}, GetFunction());
 }
 
 ScalarFunction ListFilterFun::GetFunction() {

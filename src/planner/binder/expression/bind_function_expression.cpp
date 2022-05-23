@@ -30,7 +30,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// scalar function
 
 		// scalar function with a lambda function
-		if (function.function_name == "list_transform" || function.function_name == "array_transform") {
+		if (function.function_name == "list_transform" || function.function_name == "array_transform" ||
+		    function.function_name == "list_apply" || function.function_name == "array_apply") {
 			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
 		} else if (function.function_name == "list_filter" || function.function_name == "array_filter") {
 			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);

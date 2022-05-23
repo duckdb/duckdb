@@ -67,7 +67,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 		// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
 		// query also contain lambdas
-		if (lambda_bindings->size() == 0) {
+		if (lambda_bindings->empty()) {
 			lambda_bindings = nullptr;
 		}
 

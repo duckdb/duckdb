@@ -132,3 +132,20 @@ query I
 SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
 ----
 [[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
+
+# test aliases
+
+query I
+SELECT array_transform([1, NULL], arr_elem -> arr_elem - 4)
+----
+[-3, NULL]
+
+query I
+SELECT array_apply([1, NULL], arr_elem -> arr_elem - 4)
+----
+[-3, NULL]
+
+query I
+SELECT list_apply([1, NULL], arr_elem -> arr_elem - 4)
+----
+[-3, NULL]
