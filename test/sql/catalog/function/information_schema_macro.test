@@ -1,0 +1,20 @@
+# name: test/sql/catalog/function/information_schema_macro.test
+# description: Issue #3690: Creating a MACRO in pg_catalog or information_schema causes duckdb to crash
+# group: [function]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create macro information_schema.foo(a) as a;
+
+statement ok
+create table information_schema.integers(i int);
+
+query I
+select information_schema.foo(42)
+----
+42
+
+statement ok
+select * from information_schema.integers
