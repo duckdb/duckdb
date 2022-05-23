@@ -51,11 +51,11 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 			switch (group_type.InternalType()) {
 			case PhysicalType::INT8:
 				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				                                       Value::MaximumValue(group_type), StatisticsType::LOCAL_STATS);
 				break;
 			case PhysicalType::INT16:
 				stats = make_unique<NumericStatistics>(group_type, Value::MinimumValue(group_type),
-				                                       Value::MaximumValue(group_type));
+				                                       Value::MaximumValue(group_type), StatisticsType::LOCAL_STATS);
 				break;
 			default:
 				// type is too large and there are no stats: skip perfect hashing
@@ -121,16 +121,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 	unique_ptr<PhysicalOperator> groupby;
 	D_ASSERT(op.children.size() == 1);
 
-	bool all_combinable = true;
-	for (auto &expression : op.expressions) {
-		auto &aggregate = (BoundAggregateExpression &)*expression;
-		if (!aggregate.function.combine) {
-			// unsupported aggregate for simple aggregation: use hash aggregation
-			all_combinable = false;
-			break;
-		}
-	}
-
 	auto plan = CreatePlan(*op.children[0]);
 
 	plan = ExtractAggregateExpressions(move(plan), op.expressions, op.groups);
@@ -147,7 +137,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 				break;
 			}
 		}
-		if (use_simple_aggregation && all_combinable) {
+		if (use_simple_aggregation) {
 			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
 			                                                                      op.estimated_cardinality);
 		} else {

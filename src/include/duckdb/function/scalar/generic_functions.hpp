@@ -55,7 +55,8 @@ struct SystemFun {
 struct ExportAggregateFunctionBindData : public FunctionData {
 	unique_ptr<BoundAggregateExpression> aggregate;
 	explicit ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p);
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other_p) const override;
 };
 
 struct ExportAggregateFunction {

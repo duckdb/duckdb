@@ -65,6 +65,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 		return PropagateExpression((BoundBetweenExpression &)expr, expr_ptr);
 	case ExpressionClass::BOUND_CASE:
 		return PropagateExpression((BoundCaseExpression &)expr, expr_ptr);
+	case ExpressionClass::BOUND_CONJUNCTION:
+		return PropagateExpression((BoundConjunctionExpression &)expr, expr_ptr);
 	case ExpressionClass::BOUND_FUNCTION:
 		return PropagateExpression((BoundFunctionExpression &)expr, expr_ptr);
 	case ExpressionClass::BOUND_CAST:

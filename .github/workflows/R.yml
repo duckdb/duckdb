@@ -38,7 +38,7 @@ jobs:
       LIBARROW_BINARY : 'false'
       ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -106,7 +106,7 @@ jobs:
     needs: rstats-linux
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -138,7 +138,7 @@ jobs:
     needs: rstats-linux
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 

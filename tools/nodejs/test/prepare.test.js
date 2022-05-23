@@ -543,7 +543,7 @@ describe('prepare', function() {
             });
             it("should aggregate approx_count_distinct(flt)", function (done) {
                 db.all("SELECT approx_count_distinct(flt) as approx_count_distinct FROM foo", function (err, res) {
-                    assert.ok(res[0].approx_count_distinct >= 1000);
+                    assert.ok(res[0].approx_count_distinct >= 950);
                     done(err);
                 });
             });
@@ -587,7 +587,7 @@ describe('prepare', function() {
             });
             it("should aggregate approx_count_distinct(num)", function (done) {
                 db.all("SELECT approx_count_distinct(num) as approx_count_distinct FROM foo", function (err, res) {
-                    assert.ok(res[0].approx_count_distinct >= 1000);
+                    assert.ok(res[0].approx_count_distinct >= 950);
                     done(err);
                 });
             });

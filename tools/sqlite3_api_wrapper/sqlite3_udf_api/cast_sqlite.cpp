@@ -25,13 +25,16 @@ bool CastSQLite::RequiresCastToVarchar(LogicalType type) {
 }
 
 void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chunk) {
+	new_chunk.SetCardinality(data_chunk.size());
+	if (data_chunk.ColumnCount() == 0) {
+		return;
+	}
 	auto new_types = data_chunk.GetTypes();
 	for (auto &type : new_types) {
 		if (CastSQLite::RequiresCastToVarchar(type)) {
 			type = LogicalType::VARCHAR;
 		}
 	}
-	new_chunk.SetCardinality(data_chunk.size());
 	new_chunk.Initialize(new_types);
 
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
@@ -176,8 +179,7 @@ template <>
 sqlite3_value CastToSQLiteValue::Operation(string_t input) {
 	sqlite3_value sqlite_str;
 	sqlite_str.type = SQLiteTypeValue::TEXT;
-	sqlite_str.n = input.GetSize();
-	sqlite_str.str_t = input;
+	sqlite_str.str = input.GetString();
 	return sqlite_str;
 }
 
@@ -202,7 +204,7 @@ double CastFromSQLiteValue::GetValue(sqlite3_value input) {
 
 template <>
 string_t CastFromSQLiteValue::GetValue(sqlite3_value input) {
-	return input.str_t;
+	return string_t(input.str);
 }
 
 } // namespace duckdb

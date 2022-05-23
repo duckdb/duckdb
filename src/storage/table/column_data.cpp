@@ -1,16 +1,17 @@
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/data_pointer.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/planner/table_filter.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
-
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
 
 namespace duckdb {
 
@@ -360,7 +361,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
-	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
 
 	if (!data.root_node) {
 		// empty table: flush the empty list

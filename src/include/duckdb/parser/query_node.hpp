@@ -40,6 +40,9 @@ public:
 	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
 
 public:
+	//! Convert the query node to a string
+	virtual string ToString() const = 0;
+
 	virtual bool Equals(const QueryNode *other) const;
 
 	//! Create a copy of this QueryNode
@@ -50,6 +53,9 @@ public:
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a QueryNode
 	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+
+	string CTEToString() const;
+	string ResultModifiersToString() const;
 
 protected:
 	//! Copy base QueryNode properties from another expression to this one,

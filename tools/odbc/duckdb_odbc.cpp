@@ -118,7 +118,6 @@ void OdbcHandleStmt::Close() {
 	// the parameter values can be reused after
 	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-	bound_cols.clear();
 	error_messages.clear();
 }
 
@@ -144,11 +143,17 @@ void OdbcHandleStmt::FillIRD() {
 	D_ASSERT(stmt);
 	auto ird = row_desc->GetIRD();
 	ird->Reset();
-	for (duckdb::idx_t col_idx = 0; col_idx < stmt->ColumnCount(); ++col_idx) {
+	ird->header.sql_desc_count = 0;
+	auto num_cols = stmt->ColumnCount();
+	for (duckdb::idx_t col_idx = 0; col_idx < num_cols; ++col_idx) {
 		duckdb::DescRecord new_record;
-		LogicalType col_type = stmt->GetTypes()[col_idx];
+		auto col_type = stmt->GetTypes()[col_idx];
 
 		new_record.sql_desc_base_column_name = stmt->GetNames()[col_idx];
+		new_record.sql_desc_name = new_record.sql_desc_base_column_name;
+		new_record.sql_desc_label = stmt->GetNames()[col_idx];
+		new_record.sql_desc_length = new_record.sql_desc_label.size();
+		new_record.sql_desc_octet_length = 0;
 
 		auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		if (sql_type == SQL_INTERVAL) {
@@ -158,19 +163,11 @@ void OdbcHandleStmt::FillIRD() {
 			new_record.SetSqlDescType(sql_type);
 		}
 
-		duckdb::ApiInfo::GetColumnSize(col_type, &new_record.sql_desc_display_size);
 		new_record.sql_desc_type_name = col_type.ToString();
+		duckdb::ApiInfo::GetColumnSize<SQLINTEGER>(col_type, &new_record.sql_desc_display_size);
+		new_record.SetDescUnsignedField(col_type);
 
-		switch (col_type.id()) {
-		case LogicalTypeId::UTINYINT:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::UBIGINT:
-			new_record.sql_desc_unsigned = SQL_TRUE;
-			break;
-		default:
-			new_record.sql_desc_unsigned = SQL_FALSE;
-		}
+		new_record.sql_desc_nullable = SQL_NULLABLE;
 
 		ird->records.emplace_back(new_record);
 	}

@@ -199,17 +199,17 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIME:
 		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_MS:
 		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_MS);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Maximum() - 1));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).CastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
 		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(timestamp_t(NumericLimits<int64_t>::Maximum()));
+		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:
@@ -347,6 +347,16 @@ bool Value::IsFinite(float input) {
 template <>
 bool Value::IsFinite(double input) {
 	return Value::DoubleIsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(date_t input) {
+	return Date::IsFinite(input);
+}
+
+template <>
+bool Value::IsFinite(timestamp_t input) {
+	return Timestamp::IsFinite(input);
 }
 
 bool Value::StringIsValid(const char *str, idx_t length) {
@@ -884,6 +894,11 @@ DUCKDB_API interval_t Value::GetValue() const {
 	return GetValueInternal<interval_t>();
 }
 
+template <>
+DUCKDB_API Value Value::GetValue() const {
+	return Value(*this);
+}
+
 uintptr_t Value::GetPointer() const {
 	D_ASSERT(type() == LogicalType::POINTER);
 	return value_.pointer;
@@ -1294,8 +1309,14 @@ string Value::ToString() const {
 		return Timestamp::ToString(value_.timestamp);
 	case LogicalTypeId::TIME_TZ:
 		return Time::ToString(value_.time) + Time::ToUTCOffset(0, 0);
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return Timestamp::ToString(value_.timestamp) + Time::ToUTCOffset(0, 0);
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		// Infinite TSTZ values do not display offsets in PG.
+		auto ret = Timestamp::ToString(value_.timestamp);
+		if (Timestamp::IsFinite(value_.timestamp)) {
+			ret += Time::ToUTCOffset(0, 0);
+		}
+		return ret;
+	}
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp.value));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -1702,6 +1723,7 @@ Value Value::Deserialize(Deserializer &main_source) {
 	auto is_null = reader.ReadRequired<bool>();
 	Value new_value = Value(type);
 	if (is_null) {
+		reader.Finalize();
 		return new_value;
 	}
 	new_value.is_null = false;
@@ -1764,6 +1786,10 @@ void Value::Print() const {
 	Printer::Print(ToString());
 }
 
+bool Value::NotDistinctFrom(const Value &lvalue, const Value &rvalue) {
+	return ValueOperations::NotDistinctFrom(lvalue, rvalue);
+}
+
 bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 	if (result_value.IsNull() != value.IsNull()) {
 		return false;
@@ -1799,6 +1825,9 @@ bool Value::ValuesAreEqual(const Value &result_value, const Value &value) {
 		return left == right;
 	}
 	default:
+		if (result_value.type_.id() == LogicalTypeId::FLOAT || result_value.type_.id() == LogicalTypeId::DOUBLE) {
+			return Value::ValuesAreEqual(value, result_value);
+		}
 		return value == result_value;
 	}
 }

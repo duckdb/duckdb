@@ -44,7 +44,11 @@ class TestAllTypes(object):
 			'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
 			'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
 			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
-			'date': "'1990-01-01'::DATE"}
+			'date': "'1990-01-01'::DATE",
+			'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
+			'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
+			'timestamptz_array': "[], ['1970-01-01'::TIMESTAMPTZ, NULL, '0001-01-01'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
+		}
 
 		correct_answer_map = {'bool':[(False,), (True,), (None,)]
 			, 'tinyint':[(-128,), (127,), (None,)], 'smallint': [(-32768,), (32767,), (None,)]
@@ -59,6 +63,9 @@ class TestAllTypes(object):
 			, 'uuid': [(UUID('00000000-0000-0000-0000-000000000001'),), (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),), (None,)]
 			, 'varchar': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'json': [('🦆🦆🦆🦆🦆🦆',), ('goose',), (None,)], 'blob': [(b'thisisalongblob\x00withnullbytes',), (b'\\x00\\x00\\x00a',), (None,)]
 			, 'small_enum':[('DUCK_DUCK_ENUM',), ('GOOSE',), (None,)], 'medium_enum': [('enum_0',), ('enum_299',), (None,)], 'large_enum': [('enum_0',), ('enum_69999',), (None,)]
+			, 'date_array': [([], [datetime.date(1970, 1, 1), None, datetime.date.min, datetime.date.max], [None,],)]
+			, 'timestamp_array': [([], [datetime.datetime(1970, 1, 1), None, datetime.datetime.min, datetime.datetime.max], [None,],),]
+			, 'timestamptz_array': [([], [datetime.datetime(1970, 1, 1), None, datetime.datetime.min, datetime.datetime.max], [None,],),]
 			, 'int_array': [([],), ([42, 999, None, None, -42],), (None,)], 'varchar_array': [([],), (['🦆🦆🦆🦆🦆🦆', 'goose', None, ''],), (None,)]
 			, 'double_array': [([],), ([42.0, float('nan'), float('inf'), float('-inf'), None, -42.0],), (None,)]
 			, 'nested_int_array': [([],), ([[], [42, 999, None, None, -42], None, [], [42, 999, None, None, -42]],), (None,)], 'struct': [({'a': None, 'b': None},), ({'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'},), (None,)]
@@ -71,6 +78,7 @@ class TestAllTypes(object):
 		for cur_type in all_types:
 			if cur_type in replacement_values:
 				result = conn.execute("select "+replacement_values[cur_type]).fetchall()
+				print(cur_type, result)
 			else:
 				result = conn.execute("select "+cur_type+" from test_all_types()").fetchall()
 			correct_result = correct_answer_map[cur_type]
@@ -106,11 +114,15 @@ class TestAllTypes(object):
 			'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
 			'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
 			'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
-			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ"}
+			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
+			'date': "'1990-01-01'::DATE",
+			'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
+			'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
+			'timestamptz_array': "[], ['1970-01-01'::TIMESTAMPTZ, NULL, '0001-01-01'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
+			}
 
 		conn = duckdb.connect()
 		for cur_type in all_types:
-			print(cur_type)
 			if cur_type in replacement_values:
 				dataframe = conn.execute("select "+replacement_values[cur_type]).df()
 			else:

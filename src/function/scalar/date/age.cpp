@@ -12,17 +12,30 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
-	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result, input.size(), [&](timestamp_t input) {
-		return Interval::GetAge(current_timestamp, input);
-	});
+	UnaryExecutor::ExecuteWithNulls<timestamp_t, interval_t>(input.data[0], result, input.size(),
+	                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+		                                                         if (Timestamp::IsFinite(input)) {
+			                                                         return Interval::GetAge(current_timestamp, input);
+		                                                         } else {
+			                                                         mask.SetInvalid(idx);
+			                                                         return interval_t();
+		                                                         }
+	                                                         });
 }
 
 static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
 
-	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
+	BinaryExecutor::ExecuteWithNulls<timestamp_t, timestamp_t, interval_t>(
 	    input.data[0], input.data[1], result, input.size(),
-	    [&](timestamp_t input1, timestamp_t input2) { return Interval::GetAge(input1, input2); });
+	    [&](timestamp_t input1, timestamp_t input2, ValidityMask &mask, idx_t idx) {
+		    if (Timestamp::IsFinite(input1) && Timestamp::IsFinite(input2)) {
+			    return Interval::GetAge(input1, input2);
+		    } else {
+			    mask.SetInvalid(idx);
+			    return interval_t();
+		    }
+	    });
 }
 
 void AgeFun::RegisterFunction(BuiltinFunctions &set) {
