@@ -214,7 +214,7 @@ struct PartitionFunctor {
 	                      vector<unique_ptr<RowDataCollection>> &partition_string_heaps) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 
-		const auto block_capacity = partition_block_collections[0]->block_capacity;
+		const auto block_capacity = block_collection.block_capacity;
 		D_ASSERT(block_capacity % CONSTANTS::TMP_BUF_SIZE == 0);
 		const auto row_width = layout.GetRowWidth();
 		const auto has_heap = !layout.AllConstant();
@@ -282,7 +282,7 @@ struct PartitionFunctor {
 					FastMemcpy(tmp_buf + pos[idx] * row_width, data_ptr, row_width);
 					data_ptr += row_width;
 
-					if (++pos[idx] & (CONSTANTS::TMP_BUF_SIZE - 1) == 0) {
+					if ((++pos[idx] & (CONSTANTS::TMP_BUF_SIZE - 1)) == 0) {
 						// Non-temporal write
 						pos[idx] -= CONSTANTS::TMP_BUF_SIZE;
 						memcpy(partition_data_ptrs[idx], tmp_buf + pos[idx] * row_width,

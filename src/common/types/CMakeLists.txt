@@ -12,7 +12,6 @@ add_library_unity(
   uuid.cpp
   hyperloglog.cpp
   interval.cpp
-  row_data.cpp
   row_data_collection.cpp
   row_layout.cpp
   selection_vector.cpp
