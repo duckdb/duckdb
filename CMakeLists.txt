@@ -64,6 +64,10 @@ foreach(p LIB BIN INCLUDE CMAKE)
   endif()
 endforeach()
 
+# This option allows --gc-sections flag during extension linking to discard any unused functions or data
+if (EXTENSION_STATIC_BUILD)
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
+endif()
 
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
@@ -223,7 +227,7 @@ option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
 option(EXTENSION_STATIC_BUILD
-        "Extension build "
+        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
@@ -650,6 +654,11 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
     return()
   endif()
 
+  # Todo: figure out if we want to do this for Windows?
+  if (EXTENSION_STATIC_BUILD AND NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    error("EXTENSION_STATIC_BUILD options was set, but this currently only makes sense on Linux")
+  endif()
+
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -665,7 +674,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
     set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   endif()
   if (EXTENSION_STATIC_BUILD)
-    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+    target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
   elseif (WIN32)
     target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
   endif()
