@@ -27,7 +27,8 @@ struct RowGroupSortBindData : public FunctionData {
 	RowLayout payload_layout;
 	vector<BoundOrderByNode> orders;
 
-	unique_ptr<FunctionData> Copy() override;
+	unique_ptr<FunctionData> Copy() const override;
+	bool Equals(const FunctionData &other) const override;
 };
 
 class RLESort {
