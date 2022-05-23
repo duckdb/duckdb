@@ -8,13 +8,14 @@ subgroup limit
 
 load
 SET preserve_insertion_order=false;
-CREATE TABLE integers AS SELECT 1 FROM range(1000000000) tbl(i);
+CREATE TABLE integers AS SELECT i, 1 AS j FROM range(100000000) tbl(i);
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 17797934 UNION ALL SELECT 99999998 UNION ALL SELECT 99999999
+
 
 run
-SELECT * FROM integers WHERE CASE WHEN rowid+rowid>=1729956644 THEN rowid%2=0 ELSE rowid=334 OR rowid=77979344 END LIMIT 5
+SELECT j FROM integers WHERE i IN (SELECT * FROM other_table) LIMIT 4
 
 result I
-1
 1
 1
 1
