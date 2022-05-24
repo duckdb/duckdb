@@ -153,6 +153,7 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expre
 }
 
 void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
+	D_ASSERT(Generated());
 	// First time the type is set, add a cast around the expression
 	if (this->type.id() == LogicalTypeId::ANY && this->generated_expression->type != ExpressionType::OPERATOR_CAST) {
 		generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(generated_expression));

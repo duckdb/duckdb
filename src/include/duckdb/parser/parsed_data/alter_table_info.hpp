@@ -76,7 +76,6 @@ enum class AlterTableType : uint8_t {
 	ALTER_COLUMN_TYPE = 5,
 	SET_DEFAULT = 6,
 	FOREIGN_KEY_CONSTRAINT = 7,
-	// ADD_GENERATED_COLUMN = 8
 };
 
 struct AlterTableInfo : public AlterInfo {

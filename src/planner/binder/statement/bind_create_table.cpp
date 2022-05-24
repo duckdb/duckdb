@@ -48,6 +48,24 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 	}
 }
 
+static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond,
+                                LogicalType target_type = LogicalType::INTEGER) {
+	auto &base = (CreateTableInfo &)*info.base;
+
+	auto bound_constraint = make_unique<BoundCheckConstraint>();
+	// check constraint: bind the expression
+	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
+	check_binder.target_type = target_type;
+	auto &check = (CheckConstraint &)*cond;
+	// create a copy of the unbound expression because the binding destroys the constraint
+	auto unbound_expression = check.expression->Copy();
+	// now bind the constraint and create a new BoundCheckConstraint
+	bound_constraint->expression = check_binder.Bind(check.expression);
+	info.bound_constraints.push_back(move(bound_constraint));
+	// move the unbound constraint back into the original check expression
+	check.expression = move(unbound_expression);
+}
+
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
@@ -59,38 +77,11 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::GENERATED: {
 			auto &generated_check_constraint = (GeneratedCheckConstraint &)*cond;
 			auto &generated_column = base.columns[generated_check_constraint.column_index];
-			auto bound_constraint = make_unique<BoundCheckConstraint>();
-			// check constraint: bind the expression
-			CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
-			check_binder.target_type = generated_column.type;
-			auto &check = (CheckConstraint &)*cond;
-			// create a copy of the unbound expression because the binding destroys the constraint
-			auto unbound_expression = check.expression->Copy();
-			// now bind the constraint and create a new BoundCheckConstraint
-			bound_constraint->expression = check_binder.Bind(check.expression);
-			// if (cond->type == ConstraintType::GENERATED) {
-			//	bound_constraint->type = ConstraintType::GENERATED;
-			// }
-			info.bound_constraints.push_back(move(bound_constraint));
-			// move the unbound constraint back into the original check expression
-			check.expression = move(unbound_expression);
+			BindCheckConstraint(binder, info, cond, generated_column.type);
 			break;
 		}
 		case ConstraintType::CHECK: {
-			auto bound_constraint = make_unique<BoundCheckConstraint>();
-			// check constraint: bind the expression
-			CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
-			auto &check = (CheckConstraint &)*cond;
-			// create a copy of the unbound expression because the binding destroys the constraint
-			auto unbound_expression = check.expression->Copy();
-			// now bind the constraint and create a new BoundCheckConstraint
-			bound_constraint->expression = check_binder.Bind(check.expression);
-			// if (cond->type == ConstraintType::GENERATED) {
-			//	bound_constraint->type = ConstraintType::GENERATED;
-			// }
-			info.bound_constraints.push_back(move(bound_constraint));
-			// move the unbound constraint back into the original check expression
-			check.expression = move(unbound_expression);
+			BindCheckConstraint(binder, info, cond);
 			break;
 		}
 		case ConstraintType::NOT_NULL: {
@@ -236,25 +227,14 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 	queue<GeneratedColumnBindData> to_resolve;
 
 	D_ASSERT(info.type == CatalogType::TABLE_ENTRY);
-	// Add the 'rowid' column so we can succesfully bind to the system column
-	bool add_row_id = true;
-	// Corner case: if a generated column is named 'rowid' the system column would be referenced here, but then fail
-	// in the actual SELECT, as 'rowid' system wouldn't be added because it is already occupied in the name map
 	for (idx_t i = 0; i < info.columns.size(); i++) {
 		auto &col = info.columns[i];
-		if (col.name == "rowid") {
-			add_row_id = false;
-		}
 		names.push_back(col.name);
 		types.push_back(col.type);
 		if (!col.Generated()) {
 			continue;
 		}
 		to_resolve.push({i, true});
-	}
-	if (add_row_id) {
-		names.emplace_back("rowid");
-		types.emplace_back(LogicalType::BIGINT);
 	}
 	// Nothing to do
 	if (to_resolve.empty()) {
