@@ -9,6 +9,7 @@ add_library_unity(
   physical_create_table.cpp
   physical_create_table_as.cpp
   physical_create_view.cpp
+  physical_create_matview.cpp
   physical_create_function.cpp
   physical_drop.cpp)
 set(ALL_OBJECT_FILES

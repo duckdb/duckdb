@@ -178,6 +178,26 @@ void WriteAheadLog::WriteDropType(TypeCatalogEntry *entry) {
 }
 
 //===--------------------------------------------------------------------===//
+// MATERIALIZED VIEWS
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateMatView(MatViewCatalogEntry *entry) {
+    if (skip_writing) {
+        return;
+    }
+    writer->Write<WALType>(WALType::CREATE_MATVIEW);
+    entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropMatView(MatViewCatalogEntry *entry) {
+    if (skip_writing) {
+        return;
+    }
+    writer->Write<WALType>(WALType::DROP_MATVIEW);
+    writer->WriteString(entry->schema->name);
+    writer->WriteString(entry->name);
+}
+
+//===--------------------------------------------------------------------===//
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(ViewCatalogEntry *entry) {

@@ -105,6 +105,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalExpressionGet &)op);
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		return CreatePlan((LogicalUpdate &)op);
+    case LogicalOperatorType::LOGICAL_CREATE_MATVIEW:
+        return CreatePlan((LogicalCreateMatView &)op);
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan((LogicalCreateTable &)op);
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:

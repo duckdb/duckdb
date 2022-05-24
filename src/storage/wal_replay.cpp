@@ -44,6 +44,9 @@ private:
 	void ReplayCreateView();
 	void ReplayDropView();
 
+    void ReplayCreateMatView();
+    void ReplayDropMatView();
+
 	void ReplayCreateSchema();
 	void ReplayDropSchema();
 
@@ -173,6 +176,12 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::DROP_VIEW:
 		ReplayDropView();
 		break;
+    case WALType::CREATE_MATVIEW:
+        ReplayCreateMatView();
+        break;
+    case WALType::DROP_MATVIEW:
+        ReplayDropMatView();
+        break;
 	case WALType::CREATE_SCHEMA:
 		ReplayCreateSchema();
 		break;
@@ -290,6 +299,31 @@ void ReplayState::ReplayDropView() {
 	}
 	auto &catalog = Catalog::GetCatalog(context);
 	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Materialized View
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateMatView() {
+    auto entry = MatViewCatalogEntry::Deserialize(source);
+    if (deserialize_only) {
+        return;
+    }
+
+    auto &catalog = Catalog::GetCatalog(context);
+    catalog.CreateMatView(context, move(entry));
+}
+
+void ReplayState::ReplayDropMatView() {
+    DropInfo info;
+    info.type = CatalogType::MATVIEW_ENTRY;
+    info.schema = source.Read<string>();
+    info.name = source.Read<string>();
+    if (deserialize_only) {
+        return;
+    }
+    auto &catalog = Catalog::GetCatalog(context);
+    catalog.DropEntry(context, &info);
 }
 
 //===--------------------------------------------------------------------===//

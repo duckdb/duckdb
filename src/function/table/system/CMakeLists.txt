@@ -13,6 +13,7 @@ add_library_unity(
   duckdb_tables.cpp
   duckdb_types.cpp
   duckdb_views.cpp
+  duckdb_matviews.cpp
   pragma_collations.cpp
   pragma_database_list.cpp
   pragma_database_size.cpp

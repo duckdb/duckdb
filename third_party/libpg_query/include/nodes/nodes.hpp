@@ -328,6 +328,7 @@ typedef enum PGNodeTag {
 	T_PGFetchStmt,
 	T_PGIndexStmt,
 	T_PGCreateFunctionStmt,
+    T_PGCreateMatViewStmt,
 	T_PGAlterFunctionStmt,
 	T_PGDoStmt,
 	T_PGRenameStmt,

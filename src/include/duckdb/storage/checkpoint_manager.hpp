@@ -24,6 +24,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
+class MatViewCatalogEntry;
 class TypeCatalogEntry;
 
 struct PartialColumnSegment {
@@ -79,6 +80,7 @@ private:
 	void WriteSchema(SchemaCatalogEntry &schema);
 	void WriteTable(TableCatalogEntry &table);
 	void WriteView(ViewCatalogEntry &table);
+    void WriteMatView(MatViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
 	void WriteMacro(ScalarMacroCatalogEntry &table);
 	void WriteTableMacro(TableMacroCatalogEntry &table);
@@ -87,6 +89,7 @@ private:
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
+    void ReadMatView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableMacro(ClientContext &context, MetaBlockReader &reader);
