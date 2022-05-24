@@ -1,0 +1,50 @@
+# name: test/sql/conjunction/or_comparison.test
+# description: Issue 3659: different query results with optimizer on vs. off
+# group: [conjunction]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 VARCHAR, col3 INTEGER, col4 FLOAT, col5 VARCHAR);;
+
+statement ok
+INSERT INTO tab0 VALUES(0,86,94.959999084472652697,'vuopk',91,47.779998779296875,'sikuk');
+
+statement ok
+INSERT INTO tab0 VALUES(1,37,20.850000381469726562,'zfuqj',30,10.689999580383300337,'rtcha');
+
+statement ok
+INSERT INTO tab0 VALUES(2,6,47.540000915527347302,'vubiv',38,46.630001068115234375,'nnuey');
+
+statement ok
+INSERT INTO tab0 VALUES(3,72,30.629999160766603338,'rezor',59,11.189999580383300781,'mdler');
+
+statement ok
+INSERT INTO tab0 VALUES(4,12,29.620000839233400213,'gvmir',68,69.669998168945310723,'yfnxa');
+
+statement ok
+INSERT INTO tab0 VALUES(5,64,21.489999771118162286,'ruygp',31,13.659999847412109819,'fhwkn');
+
+statement ok
+INSERT INTO tab0 VALUES(6,90,9.3699998855590820312,'tehgk',71,65.720001220703121447,'uibwi');
+
+statement ok
+INSERT INTO tab0 VALUES(7,38,43.139999389648435723,'axgch',27,98.949996948242180394,'oikcl');
+
+statement ok
+INSERT INTO tab0 VALUES(8,3,22.399999618530275213,'yigev',19,45.650001525878902697,'tbbkw');
+
+statement ok
+INSERT INTO tab0 VALUES(9,95,14.31999969482421875,'vssyg',8,12.930000305175781605,'epgyr');
+
+query I
+SELECT pk FROM tab0 WHERE col0 < 84 OR col0 < 8 ;
+----
+1
+2
+3
+4
+5
+7
+8
