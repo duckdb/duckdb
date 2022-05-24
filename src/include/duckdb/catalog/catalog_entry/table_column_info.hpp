@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-enum class TableColumnType { STANDARD, GENERATED };
+enum class TableColumnType : uint8_t { STANDARD = 0, GENERATED = 1 };
 
 struct TableColumnInfo {
 	column_t index;
