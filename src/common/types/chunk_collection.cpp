@@ -421,8 +421,8 @@ void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t 
 }
 
 string ChunkCollection::ToString() const {
-	return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
-	                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
+	return chunks.empty() ? "ChunkCollection [ 0 ]"
+	                      : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
 }
 
 void ChunkCollection::Print() const {
