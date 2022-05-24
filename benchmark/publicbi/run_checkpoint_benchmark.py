@@ -24,7 +24,7 @@ def write_to_csv(line, mode):
 def run_benchmark_file(file, subset):
     # Run the benchmark runner
     benchmark_path = f"benchmark/publicbi/checkpoints/{subset}/{file}"
-    benchmark_run = subprocess.run([f"{duckdb_root_dir}/build/benchmark/benchmark_runner",
+    benchmark_run = subprocess.run([f"{duckdb_root_dir}/release/build/benchmark/benchmark_runner",
                                     benchmark_path], capture_output=True)
 
     # Parse the output
