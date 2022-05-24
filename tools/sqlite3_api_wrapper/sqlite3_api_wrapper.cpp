@@ -1082,9 +1082,9 @@ int sqlite3_stmt_status(sqlite3_stmt *, int op, int resetFlg) {
 }
 
 int sqlite3_file_control(sqlite3 *, const char *zDbName, int op, void *ptr) {
-	switch(op) {
+	switch (op) {
 	case SQLITE_FCNTL_TEMPFILENAME: {
-		auto char_arg = (char **) ptr;
+		auto char_arg = (char **)ptr;
 		*char_arg = nullptr;
 		return -1;
 	}
