@@ -296,6 +296,34 @@ NULL
 NULL
 
 #
+# Infinities
+#
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+
+foreach ltype DATE TIMESTAMP
+
+foreach rtype DATE TIMESTAMP
+
+foreach lspecial infinity -infinity
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATE_SUB('${specifier}', '${lspecial}'::${ltype}, '${rspecial}'::${rtype});
+----
+NULL
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+#
 # VARCHAR
 #
 statement ok

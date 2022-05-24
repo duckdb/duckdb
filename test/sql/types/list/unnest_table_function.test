@@ -68,6 +68,44 @@ query I
 SELECT i FROM UNNEST([]::INT[]) AS tbl(i)
 ----
 
+# unnest from a subquery
+query I
+SELECT * FROM UNNEST((SELECT [1,2,3] UNION ALL SELECT [4,5]))
+----
+1
+2
+3
+4
+5
+
+statement ok
+CREATE TABLE lists AS SELECT [1,2,3] l UNION ALL SELECT [4,5] UNION ALL SELECT [] UNION ALL SELECT [NULL] UNION ALL SELECT [7, 8]
+
+query I
+SELECT * FROM UNNEST((SELECT l FROM lists))
+----
+1
+2
+3
+4
+5
+NULL
+7
+8
+
+# unnest with a prepared statement parameter
+statement ok
+PREPARE v1 AS SELECT * FROM UNNEST(?::INT[]);
+
+query I
+EXECUTE v1([1,2,3,4,5]);
+----
+1
+2
+3
+4
+5
+
 # null without cast (should this work?)
 statement error
 SELECT i FROM UNNEST(NULL) AS tbl(i)

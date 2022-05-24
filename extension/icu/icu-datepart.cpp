@@ -3,6 +3,7 @@
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -217,12 +218,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		adapters_t adapters;
 
-		bool Equals(FunctionData &other_p) override {
+		bool Equals(const FunctionData &other_p) const override {
 			const auto &other = (BindAdapterData &)other_p;
 			return BindData::Equals(other_p) && adapters == other.adapters;
 		}
 
-		unique_ptr<FunctionData> Copy() override {
+		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<BindAdapterData>(*this);
 		}
 	};
@@ -238,10 +239,16 @@ struct ICUDatePart : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		UnaryExecutor::Execute<timestamp_t, RESULT_TYPE>(date_arg, result, args.size(), [&](timestamp_t input) {
-			const auto micros = SetTime(calendar, input);
-			return info.adapters[0](calendar, micros);
-		});
+		UnaryExecutor::ExecuteWithNulls<INPUT_TYPE, RESULT_TYPE>(date_arg, result, args.size(),
+		                                                         [&](INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+			                                                         if (Timestamp::IsFinite(input)) {
+				                                                         const auto micros = SetTime(calendar, input);
+				                                                         return info.adapters[0](calendar, micros);
+			                                                         } else {
+				                                                         mask.SetInvalid(idx);
+				                                                         return RESULT_TYPE(0);
+			                                                         }
+		                                                         });
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -256,11 +263,17 @@ struct ICUDatePart : public ICUDateFunc {
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
-		BinaryExecutor::Execute<string_t, timestamp_t, RESULT_TYPE>(
-		    part_arg, date_arg, result, args.size(), [&](string_t specifier, INPUT_TYPE input) {
-			    const auto micros = SetTime(calendar, input);
-			    auto adapter = PartCodeAdapterFactory(GetDatePartSpecifier(specifier.GetString()));
-			    return adapter(calendar, micros);
+		BinaryExecutor::ExecuteWithNulls<string_t, INPUT_TYPE, RESULT_TYPE>(
+		    part_arg, date_arg, result, args.size(),
+		    [&](string_t specifier, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+			    if (Timestamp::IsFinite(input)) {
+				    const auto micros = SetTime(calendar, input);
+				    auto adapter = PartCodeAdapterFactory(GetDatePartSpecifier(specifier.GetString()));
+				    return adapter(calendar, micros);
+			    } else {
+				    mask.SetInvalid(idx);
+				    return RESULT_TYPE(0);
+			    }
 		    });
 	}
 
@@ -285,13 +298,18 @@ struct ICUDatePart : public ICUDateFunc {
 				ConstantVector::SetNull(result, false);
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
 				auto micros = SetTime(calendar, tdata[0]);
+				const auto is_finite = Timestamp::IsFinite(*tdata);
 				auto &child_entries = StructVector::GetEntries(result);
 				for (size_t col = 0; col < child_entries.size(); ++col) {
 					auto &child_entry = child_entries[col];
-					ConstantVector::SetNull(*child_entry, false);
-					auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
-					auto adapter = info.adapters[col];
-					pdata[0] = adapter(calendar, micros);
+					if (is_finite) {
+						ConstantVector::SetNull(*child_entry, false);
+						auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
+						auto adapter = info.adapters[col];
+						pdata[0] = adapter(calendar, micros);
+					} else {
+						ConstantVector::SetNull(*child_entry, true);
+					}
 				}
 			}
 		} else {
@@ -313,12 +331,17 @@ struct ICUDatePart : public ICUDateFunc {
 				if (arg_valid.RowIsValid(idx)) {
 					res_valid.SetValid(idx);
 					auto micros = SetTime(calendar, tdata[idx]);
+					const auto is_finite = Timestamp::IsFinite(tdata[idx]);
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
-						FlatVector::Validity(*child_entry).SetValid(idx);
-						auto pdata = FlatVector::GetData<int64_t>(*child_entry);
-						auto adapter = info.adapters[col];
-						pdata[idx] = adapter(calendar, micros);
+						if (is_finite) {
+							FlatVector::Validity(*child_entry).SetValid(idx);
+							auto pdata = FlatVector::GetData<int64_t>(*child_entry);
+							auto adapter = info.adapters[col];
+							pdata[idx] = adapter(calendar, micros);
+						} else {
+							FlatVector::Validity(*child_entry).SetInvalid(idx);
+						}
 					}
 				} else {
 					res_valid.SetInvalid(idx);
@@ -414,7 +437,8 @@ struct ICUDatePart : public ICUDateFunc {
 	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, false, BindStruct);
+		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, false,
+		                      BindStruct);
 	}
 
 	static void AddDatePartFunctions(const string &name, ClientContext &context) {
@@ -434,8 +458,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, false, false,
-		                      BindLastDate);
+		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
+		                      false, BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);

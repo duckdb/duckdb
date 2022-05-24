@@ -23,6 +23,7 @@ namespace duckdb {
 
 struct ParserOptions {
 	bool preserve_identifier_case = true;
+	idx_t max_expression_depth = 1000;
 };
 
 //! The parser is responsible for parsing the query and converting it into a set

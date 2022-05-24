@@ -134,8 +134,8 @@ function get_init_info(info::FunctionInfo, ::Type{T})::T where {T}
 end
 
 function _table_main_function(info::duckdb_function_info, chunk::duckdb_data_chunk)
-    main_function = unsafe_pointer_to_objref(duckdb_function_get_extra_info(info))
-    binfo = FunctionInfo(info, main_function)
+    main_function::TableFunction = unsafe_pointer_to_objref(duckdb_function_get_extra_info(info))
+    binfo::FunctionInfo = FunctionInfo(info, main_function)
     try
         main_function.main_func(binfo, DataChunk(chunk, false))
     catch ex

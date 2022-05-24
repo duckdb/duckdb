@@ -242,6 +242,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}
+	for (auto &constraint : constraints) {
+		create_info->constraints.push_back(constraint->Copy());
+	}
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
 	create_info->columns.push_back(info.new_column.Copy());
@@ -379,13 +382,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	if (info.target_type.id() == LogicalTypeId::USER) {
-		auto &user_type_name = UserType::GetTypeName(info.target_type);
-		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(
-		    context, CatalogType::TYPE_ENTRY, schema->name, user_type_name, true);
-		if (!user_type_catalog) {
-			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
-		}
-		info.target_type = user_type_catalog->user_type;
+		auto &catalog = Catalog::GetCatalog(context);
+		info.target_type = catalog.GetType(context, schema->name, UserType::GetTypeName(info.target_type));
 	}
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	idx_t change_idx = GetColumnIndex(info.column_name);

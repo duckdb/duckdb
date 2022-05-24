@@ -96,7 +96,7 @@ unique_ptr<FunctionOperatorData> PragmaStorageInfoInit(ClientContext &context, c
 }
 
 static void PragmaStorageInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                      FunctionOperatorData *operator_state, DataChunk &output) {
 	auto &bind_data = (PragmaStorageFunctionData &)*bind_data_p;
 	auto &data = (PragmaStorageOperatorData &)*operator_state;
 	idx_t count = 0;
