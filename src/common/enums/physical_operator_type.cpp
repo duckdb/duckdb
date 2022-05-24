@@ -95,8 +95,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_SEQUENCE";
 	case PhysicalOperatorType::CREATE_VIEW:
 		return "CREATE_VIEW";
-    case PhysicalOperatorType::CREATE_MATVIEW:
-        return "CREATE_MATERIALIZED_VIEW";
+	case PhysicalOperatorType::CREATE_MATVIEW:
+		return "CREATE_MATERIALIZED_VIEW";
 	case PhysicalOperatorType::CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
 	case PhysicalOperatorType::CREATE_MACRO:

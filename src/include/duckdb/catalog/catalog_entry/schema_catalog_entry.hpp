@@ -87,7 +87,7 @@ private:
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 	//! Creates a table with the given name in the schema
 	CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
-    //! Creates a materialized view with the given name in the schema
+	//! Creates a materialized view with the given name in the schema
 	CatalogEntry *CreateMatView(ClientContext &context, BoundCreateTableInfo *info);
 	//! Creates a view with the given name in the schema
 	CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);

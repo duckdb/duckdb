@@ -36,8 +36,8 @@ enum class WALType : uint8_t {
 	CREATE_TYPE = 13,
 	DROP_TYPE = 14,
 
-    CREATE_MATVIEW = 15,
-    DROP_MATVIEW = 16,
+	CREATE_MATVIEW = 15,
+	DROP_MATVIEW = 16,
 
 	ALTER_INFO = 20,
 

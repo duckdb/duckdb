@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+
 #include <cstring>
 
 namespace duckdb {
@@ -181,20 +182,20 @@ void WriteAheadLog::WriteDropType(TypeCatalogEntry *entry) {
 // MATERIALIZED VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMatView(MatViewCatalogEntry *entry) {
-    if (skip_writing) {
-        return;
-    }
-    writer->Write<WALType>(WALType::CREATE_MATVIEW);
-    entry->Serialize(*writer);
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_MATVIEW);
+	entry->Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropMatView(MatViewCatalogEntry *entry) {
-    if (skip_writing) {
-        return;
-    }
-    writer->Write<WALType>(WALType::DROP_MATVIEW);
-    writer->WriteString(entry->schema->name);
-    writer->WriteString(entry->name);
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_MATVIEW);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
 }
 
 //===--------------------------------------------------------------------===//

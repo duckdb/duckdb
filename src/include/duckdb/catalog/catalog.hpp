@@ -9,11 +9,11 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/query_error_context.hpp"
 
 #include <functional>
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -128,13 +128,13 @@ public:
 	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema,
 	                                     BoundCreateTableInfo *info);
 
-    //! Creates a materialized view in the catalog.
-    DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, BoundCreateTableInfo *info);
-    DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, unique_ptr<CreateTableInfo> info);
-    DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, SchemaCatalogEntry *schema,
-        BoundCreateTableInfo *info);
+	//! Creates a materialized view in the catalog.
+	DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, BoundCreateTableInfo *info);
+	DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, unique_ptr<CreateTableInfo> info);
+	DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, SchemaCatalogEntry *schema,
+	                                       BoundCreateTableInfo *info);
 
-    //! Create a table function in the catalog
+	//! Create a table function in the catalog
 	DUCKDB_API CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
 	                                             CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog

@@ -1,8 +1,9 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/query_profiler.hpp"
+
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -105,8 +106,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		return CreatePlan((LogicalExpressionGet &)op);
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		return CreatePlan((LogicalUpdate &)op);
-    case LogicalOperatorType::LOGICAL_CREATE_MATVIEW:
-        return CreatePlan((LogicalCreateMatView &)op);
+	case LogicalOperatorType::LOGICAL_CREATE_MATVIEW:
+		return CreatePlan((LogicalCreateMatView &)op);
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		return CreatePlan((LogicalCreateTable &)op);
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:

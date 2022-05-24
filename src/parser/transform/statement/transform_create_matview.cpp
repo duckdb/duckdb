@@ -24,7 +24,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateMatView(duckdb_libpgquer
 	info->schema = qname.schema;
 	info->table = qname.name;
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
-	info->temporary = stmt->into->rel->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
+	info->temporary =
+	    stmt->into->rel->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
 	info->query = move(query);
 	result->info = move(info);
 	return result;

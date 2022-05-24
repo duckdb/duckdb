@@ -1,5 +1,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
@@ -13,8 +15,6 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -55,23 +55,23 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteCreateTable((TableCatalogEntry *)parent);
 		}
 		break;
-    case CatalogType::MATVIEW_ENTRY:
-        if (entry->type == CatalogType::MATVIEW_ENTRY) {
-            MatViewCatalogEntry* mat_view_catalog_entry = (MatViewCatalogEntry *)entry;
-            // ALTER TABLE statement, read the extra data after the entry
-            auto extra_data_size = Load<idx_t>(dataptr);
-            auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
-            // deserialize it
-            BufferedDeserializer source(extra_data, extra_data_size);
-            auto info = AlterInfo::Deserialize(source);
-            // write the alter table in the log
-            mat_view_catalog_entry->CommitAlter(*info);
-            log->WriteAlter(*info);
-        } else {
-            // CREATE TABLE statement
-            log->WriteCreateMatView((MatViewCatalogEntry *)parent);
-        }
-        break;
+	case CatalogType::MATVIEW_ENTRY:
+		if (entry->type == CatalogType::MATVIEW_ENTRY) {
+			MatViewCatalogEntry *mat_view_catalog_entry = (MatViewCatalogEntry *)entry;
+			// ALTER TABLE statement, read the extra data after the entry
+			auto extra_data_size = Load<idx_t>(dataptr);
+			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
+			// deserialize it
+			BufferedDeserializer source(extra_data, extra_data_size);
+			auto info = AlterInfo::Deserialize(source);
+			// write the alter table in the log
+			mat_view_catalog_entry->CommitAlter(*info);
+			log->WriteAlter(*info);
+		} else {
+			// CREATE TABLE statement
+			log->WriteCreateMatView((MatViewCatalogEntry *)parent);
+		}
+		break;
 	case CatalogType::SCHEMA_ENTRY:
 		if (entry->type == CatalogType::SCHEMA_ENTRY) {
 			// ALTER TABLE statement, skip it
@@ -120,9 +120,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		case CatalogType::VIEW_ENTRY:
 			log->WriteDropView((ViewCatalogEntry *)entry);
 			break;
-        case CatalogType::MATVIEW_ENTRY:
-            log->WriteDropMatView((MatViewCatalogEntry *)entry);
-            break;
+		case CatalogType::MATVIEW_ENTRY:
+			log->WriteDropMatView((MatViewCatalogEntry *)entry);
+			break;
 		case CatalogType::SEQUENCE_ENTRY:
 			log->WriteDropSequence((SequenceCatalogEntry *)entry);
 			break;

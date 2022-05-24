@@ -97,7 +97,7 @@ struct DuckDBViewsFun {
 };
 
 struct DuckDBMatViewsFun {
-    static void RegisterFunction(BuiltinFunctions &set);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct TestAllTypesFun {

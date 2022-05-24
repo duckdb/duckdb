@@ -1,9 +1,9 @@
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/standard_entry.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		properties.read_only = false;
 		break;
 	case CatalogType::VIEW_ENTRY:
-    case CatalogType::MATVIEW_ENTRY:
+	case CatalogType::MATVIEW_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:

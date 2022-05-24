@@ -94,8 +94,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_TYPE";
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return "CREATE_VIEW";
-    case LogicalOperatorType::LOGICAL_CREATE_MATVIEW:
-        return "CREATE_MATERIALIZED_VIEW";
+	case LogicalOperatorType::LOGICAL_CREATE_MATVIEW:
+		return "CREATE_MATERIALIZED_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
 	case LogicalOperatorType::LOGICAL_DROP:

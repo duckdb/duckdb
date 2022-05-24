@@ -1,19 +1,19 @@
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
-#include "duckdb/planner/tableref/bound_cteref.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 
 namespace duckdb {
 
@@ -117,27 +117,27 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
-    case CatalogType::MATVIEW_ENTRY: {
-        // base table: create the BoundBaseTableRef node
-        auto table_index = GenerateTableIndex();
-        auto matView = (MatViewCatalogEntry *)table_or_view;
+	case CatalogType::MATVIEW_ENTRY: {
+		// base table: create the BoundBaseTableRef node
+		auto table_index = GenerateTableIndex();
+		auto matView = (MatViewCatalogEntry *)table_or_view;
 
-        auto scan_function = TableScanFunction::GetFunction();
-        auto bind_data = make_unique<TableScanBindData>(matView);
-        auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
-        vector<LogicalType> column_types;
-        vector<string> column_names;
-        for (auto &col : matView->columns) {
+		auto scan_function = TableScanFunction::GetFunction();
+		auto bind_data = make_unique<TableScanBindData>(matView);
+		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
+		vector<LogicalType> column_types;
+		vector<string> column_names;
+		for (auto &col : matView->columns) {
 			column_types.push_back(col.type);
 			column_names.push_back(col.name);
-        }
+		}
 		column_names = BindContext::AliasColumnNames(alias, column_names, ref.column_name_alias);
 
-        auto logical_get =
-            make_unique<LogicalGet>(table_index, scan_function, move(bind_data), column_types, column_names);
-        bind_context.AddBaseTable(table_index, alias, column_names, column_types, *logical_get);
-        return make_unique_base<BoundTableRef, BoundBaseTableRef>(matView, move(logical_get));
-    }
+		auto logical_get =
+		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), column_types, column_names);
+		bind_context.AddBaseTable(table_index, alias, column_names, column_types, *logical_get);
+		return make_unique_base<BoundTableRef, BoundBaseTableRef>(matView, move(logical_get));
+	}
 	case CatalogType::VIEW_ENTRY: {
 		// the node is a view: get the query that the view represents
 		auto view_catalog_entry = (ViewCatalogEntry *)table_or_view;
