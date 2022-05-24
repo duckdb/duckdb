@@ -246,6 +246,30 @@ SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *s
 	}
 }
 
+SQLRETURN OdbcFetch::DummyFetch() {
+	if (stmt_ref->retrieve_data == SQL_RD_OFF) {
+		auto row_set_size = (SQLLEN)stmt_ref->row_desc->ard->header.sql_desc_array_size;
+
+		if (stmt_ref->odbc_fetcher->chunk_row + row_set_size > stmt_ref->odbc_fetcher->row_count) {
+			row_set_size = stmt_ref->odbc_fetcher->row_count - stmt_ref->odbc_fetcher->chunk_row;
+		}
+		if (row_set_size <= 0) {
+			return SQL_NO_DATA;
+		}
+		if (stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr) {
+			duckdb::idx_t row_idx;
+			for (row_idx = 0; row_idx < (duckdb::idx_t)row_set_size; row_idx++) {
+				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_SUCCESS;
+			}
+			for (; row_idx < stmt_ref->row_desc->ard->header.sql_desc_array_size; row_idx++) {
+				stmt_ref->row_desc->ird->header.sql_desc_array_status_ptr[row_idx] = SQL_ROW_NOROW;
+			}
+		}
+		return SQL_SUCCESS;
+	}
+	return SQL_NEED_DATA;
+}
+
 SQLRETURN OdbcFetch::GetValue(SQLUSMALLINT col_idx, duckdb::Value &value) {
 	if (!current_chunk) {
 		// TODO could throw an exception instead
@@ -427,6 +451,13 @@ size_t OdbcFetch::GetLastFetchedLength() {
 
 bool OdbcFetch::IsInExecutionState() {
 	return !chunks.empty() && current_chunk != nullptr;
+}
+
+SQLLEN OdbcFetch::GetRowCount() {
+	if (current_chunk) {
+		return duckdb::MaxValue(row_count, (SQLLEN)current_chunk->size());
+	}
+	return row_count;
 }
 
 void OdbcFetch::SetRowStatus(idx_t row_idx, SQLINTEGER status) {

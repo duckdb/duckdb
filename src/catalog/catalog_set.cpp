@@ -409,6 +409,7 @@ CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr
 	auto entry_index = current_entry++;
 	auto catalog_entry = entry.get();
 
+	entry->set = this;
 	entry->timestamp = 0;
 
 	PutMapping(context, name, entry_index);
