@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/telco/telco.benchmark
+# description: Load telco from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=telco
+SORTINGBOOL=true

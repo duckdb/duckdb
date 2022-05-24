@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS Corporations_1;

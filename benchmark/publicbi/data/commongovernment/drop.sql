@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS CommonGovernment_10;
+DROP TABLE IF EXISTS CommonGovernment_7;
+DROP TABLE IF EXISTS CommonGovernment_13;
+DROP TABLE IF EXISTS CommonGovernment_9;
+DROP TABLE IF EXISTS CommonGovernment_1;
+DROP TABLE IF EXISTS CommonGovernment_4;
+DROP TABLE IF EXISTS CommonGovernment_11;
+DROP TABLE IF EXISTS CommonGovernment_12;
+DROP TABLE IF EXISTS CommonGovernment_5;
+DROP TABLE IF EXISTS CommonGovernment_8;
+DROP TABLE IF EXISTS CommonGovernment_6;
+DROP TABLE IF EXISTS CommonGovernment_2;
+DROP TABLE IF EXISTS CommonGovernment_3;

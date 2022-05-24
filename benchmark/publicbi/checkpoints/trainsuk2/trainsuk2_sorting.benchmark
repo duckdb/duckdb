@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/trainsuk2/trainsuk2.benchmark
+# description: Load trainsuk2 from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=trainsuk2
+SORTINGBOOL=true

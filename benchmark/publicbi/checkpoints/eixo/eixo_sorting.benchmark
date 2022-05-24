@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/eixo/eixo.benchmark
+# description: Load eixo from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=eixo
+SORTINGBOOL=true

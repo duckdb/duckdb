@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS PanCreactomy2_1;
+DROP TABLE IF EXISTS PanCreactomy2_2;
