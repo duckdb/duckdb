@@ -30,3 +30,13 @@ CREATE TABLE unit2 (
 # Table doesnt exist
 statement error
 select * from unit2
+
+statement ok
+CREATE TABLE tbl (
+	g1 AS (x),
+	g2 AS (x),
+	x INTEGER DEFAULT (5),
+);
+
+statement ok
+INSERT INTO tbl VALUES (DEFAULT);

@@ -41,3 +41,27 @@ CREATE TABLE tbl3 (
 	a INTEGER,
 	FOREIGN KEY (a) REFERENCES tbl2 (also_price)
 );
+
+#Show that normal uses of FOREIGN_KEY constraint work mixed with generated columns
+statement ok
+CREATE TABLE a (
+	a_gen1 AS (a_reg),
+	a_gen2 AS (a_reg),
+	a_reg INTEGER,
+	PRIMARY KEY (a_reg)
+);
+
+statement ok
+CREATE TABLE b (
+	gen1 AS (price),
+	gen2 AS (price),
+	price INTEGER,
+	FOREIGN KEY (price) REFERENCES a (a_reg)
+);
+
+statement ok
+INSERT INTO a VALUES (5);
+
+# Violates primary key constraint
+statement error
+INSERT INTO a VALUES (5);

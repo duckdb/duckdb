@@ -80,7 +80,7 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 		                                                                    ColumnBinding(0, column_ids.size())));
 
 		bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
-		column_ids.push_back(key);
+		column_ids.push_back(column.storage_oid);
 	}
 	// create an adaptive radix tree around the expressions
 	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type);
@@ -524,7 +524,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		if (change_idx == i) {
 			// set the type of this column
 			if (copy.Generated()) {
-				copy.ChangeGeneratedExpressionType(info.target_type);
+				throw NotImplementedException("Changing types of generated columns is not supported yet");
+				// copy.ChangeGeneratedExpressionType(info.target_type);
 			}
 			copy.type = info.target_type;
 		}

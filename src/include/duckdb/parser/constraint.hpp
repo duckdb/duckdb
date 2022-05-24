@@ -43,7 +43,7 @@ struct ForeignKeyInfo {
 	//! key table
 	string table;
 	//! The set of main key table's column's index
-	vector<idx_t> pk_keys;
+	vector<storage_t> pk_keys;
 	//! The set of foreign key table's column's index
 	vector<idx_t> fk_keys;
 };

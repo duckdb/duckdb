@@ -8,3 +8,16 @@ CREATE TABLE tbl (
 	price VARCHAR,
 	also_price VARCHAR AS (price) COLLATE NOCASE
 );
+
+statement ok
+CREATE TABLE coll (
+	g1 AS (x),
+	g2 AS (x),
+	x VARCHAR COLLATE NOCASE
+);
+
+statement ok
+INSERT INTO coll VALUES ('string'), ('STRING')
+
+statement ok
+SELECT * FROM coll;

@@ -47,7 +47,7 @@ public:
 	//! The index of the column in the table
 	idx_t oid;
 	//! The index of the column in the storage of the table
-	idx_t storage_oid;
+	storage_t storage_oid;
 	//! The type of the column
 	LogicalType type;
 	//! The default value of the column (if any)

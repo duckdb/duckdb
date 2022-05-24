@@ -56,8 +56,26 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
 		switch (cond->type) {
-		case ConstraintType::GENERATED:
-			(void)info;
+		case ConstraintType::GENERATED: {
+			auto &generated_check_constraint = (GeneratedCheckConstraint &)*cond;
+			auto &generated_column = base.columns[generated_check_constraint.column_index];
+			auto bound_constraint = make_unique<BoundCheckConstraint>();
+			// check constraint: bind the expression
+			CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
+			check_binder.target_type = generated_column.type;
+			auto &check = (CheckConstraint &)*cond;
+			// create a copy of the unbound expression because the binding destroys the constraint
+			auto unbound_expression = check.expression->Copy();
+			// now bind the constraint and create a new BoundCheckConstraint
+			bound_constraint->expression = check_binder.Bind(check.expression);
+			// if (cond->type == ConstraintType::GENERATED) {
+			//	bound_constraint->type = ConstraintType::GENERATED;
+			// }
+			info.bound_constraints.push_back(move(bound_constraint));
+			// move the unbound constraint back into the original check expression
+			check.expression = move(unbound_expression);
+			break;
+		}
 		case ConstraintType::CHECK: {
 			auto bound_constraint = make_unique<BoundCheckConstraint>();
 			// check constraint: bind the expression
@@ -77,7 +95,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		}
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (NotNullConstraint &)*cond;
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(not_null.index));
+			auto &col = base.columns[not_null.index];
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(col.storage_oid));
 			break;
 		}
 		case ConstraintType::UNIQUE: {
@@ -165,8 +184,9 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	if (has_primary_key) {
 		// if there is a primary key index, also create a NOT NULL constraint for each of the columns
 		for (auto &column_index : primary_keys) {
+			auto &column = base.columns[column_index];
 			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column_index));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.storage_oid));
 		}
 	}
 }

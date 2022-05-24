@@ -25,3 +25,17 @@ CREATE TABLE tbl (
 	amount_sold AS (price),
 	CHECK (amount_sold > price)
 );
+
+statement ok
+CREATE TABLE chk (
+	g1 AS (x),
+	g2 AS (x),
+	x INTEGER,
+	CHECK (x > 5)
+);
+
+statement ok
+INSERT INTO chk VALUES (6);
+
+statement error
+INSERT INTO chk VALUES (3);

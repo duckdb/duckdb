@@ -18,3 +18,18 @@ CREATE TABLE unit (
 	amount_sold AS (price),
 	PRIMARY KEY (amount_sold),
 );
+
+# Show that proper PRIMARY KEY constraints still work when mixed in when generated columns
+statement ok
+CREATE TABLE tbl (
+	gen1 AS (price),
+	gen2 AS (price),
+	price INTEGER PRIMARY KEY
+);
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+# Violates primary key constraint
+statement error
+INSERT INTO tbl VALUES (5);

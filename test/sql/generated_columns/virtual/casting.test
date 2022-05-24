@@ -15,3 +15,31 @@ CREATE TABLE tbl (
 statement error
 INSERT INTO tbl VALUES (5);
 
+# Test with multiple different generated columns
+statement ok
+CREATE TABLE a (
+	gen_x AS (x),
+	gen_y AS (y),
+	x TEXT,
+	y INTEGER
+);
+
+statement ok
+INSERT INTO a VALUES ('hello', 42)
+
+# TEXT -> TEXT: OK
+statement ok
+SELECT * FROM a;
+
+# Change type to BOOLEAN
+# Not supported yet
+statement error
+ALTER TABLE a ALTER COLUMN gen_x TYPE BOOLEAN;
+
+## TEXT -> BOOLEAN: KO
+#statement error
+#SELECT * FROM a;
+
+## TEXT -> BOOLEAN: KO
+#statement error
+#INSERT INTO a VALUES ('hello', 42)

@@ -17,19 +17,18 @@ SELECT total_profit FROM unit;
 ----
 20
 
-# typechange will fail, because the types (expression->return_type and col.type) dont match
-statement ok
+# Typechange is not supported yet
+statement error
 ALTER TABLE unit ALTER COLUMN total_profit TYPE BOOLEAN;
 
 statement ok
 INSERT INTO unit VALUES (5,0);
 
-# The expression could not be cast to this new type
-query I
-SELECT total_profit FROM unit
-----
-True
-False
+#query I
+#SELECT total_profit FROM unit
+#----
+#True
+#False
 
 statement ok
 CREATE TABLE tbl (

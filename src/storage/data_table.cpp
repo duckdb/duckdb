@@ -15,6 +15,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
+#include "duckdb/parser/constraints/generated_check_constraint.hpp"
 
 #include "duckdb/common/chrono.hpp"
 
@@ -143,8 +144,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	D_ASSERT(removed_column < column_definitions.size());
 	column_definitions.erase(column_definitions.begin() + removed_column);
 
+	storage_t storage_idx = 0;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		column_definitions[i].oid = i;
+		auto &col = column_definitions[i];
+		col.oid = i;
+		if (col.Generated()) {
+			continue;
+		}
+		col.storage_oid = storage_idx++;
 	}
 
 	// alter the row_groups and remove the column from each of them
@@ -420,8 +427,21 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 	}
 }
 
-static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk,
-                                  bool allow_false = false) {
+// To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
+static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk &chunk, column_t index,
+                                             Expression &expr) {
+	auto &col = table.columns[index];
+	D_ASSERT(col.Generated());
+	ExpressionExecutor executor(expr);
+	Vector result(col.type);
+	try {
+		executor.ExecuteExpression(chunk, result);
+	} catch (std::exception &ex) {
+		throw ConstraintException("Incorrect %s value for generated column \"%s\"", col.type.ToString(), col.name);
+	}
+}
+
+static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
 	ExpressionExecutor executor(expr);
 	Vector result(LogicalType::INTEGER);
 	try {
@@ -434,9 +454,6 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	VectorData vdata;
 	result.Orrify(chunk.size(), vdata);
 
-	if (allow_false) {
-		return;
-	}
 	auto dataptr = (int32_t *)vdata.data;
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -598,8 +615,9 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::GENERATED: {
-			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
-			VerifyCheckConstraint(table, *check.expression, chunk, true);
+			auto &check = (GeneratedCheckConstraint &)*base_constraint;
+			auto &bound_check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			VerifyGeneratedExpressionSuccess(table, chunk, check.column_index, *bound_check.expression);
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -990,7 +1008,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 		vector<column_t> col_ids;
 		vector<LogicalType> types;
 		for (idx_t i = 0; i < column_definitions.size(); i++) {
-			col_ids.push_back(column_definitions[i].oid);
+			col_ids.push_back(column_definitions[i].storage_oid);
 			types.emplace_back(column_definitions[i].type);
 		}
 		verify_chunk.Initialize(types);
@@ -1239,7 +1257,8 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	auto column_ids = index->column_ids;
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	for (auto &id : index->column_ids) {
-		intermediate_types.push_back(column_definitions[id].type);
+		auto &col = column_definitions[id];
+		intermediate_types.push_back(col.type);
 	}
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 	intermediate.Initialize(intermediate_types);
