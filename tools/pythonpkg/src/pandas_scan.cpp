@@ -57,7 +57,8 @@ PandasScanFunction::PandasScanFunction()
 }
 
 idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-									  FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+                                                  FunctionOperatorData *operator_state,
+                                                  ParallelState *parallel_state_p) {
 	auto &data = (PandasScanState &)*operator_state;
 	return data.batch_index;
 }
