@@ -275,7 +275,13 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	if (!stmt_ref->stmt->success) {
 		string error_msg = string(stmt_ref->stmt->error);
 		stmt_ref->stmt = nullptr;
+
+		// No success, so it must be deleted
+		delete stmt_ref;
 		env->ThrowNew(J_SQLException, error_msg.c_str());
+
+		// Just return control flow back to JVM, as an Exception is pending anyway
+		return 0;
 	}
 	return env->NewDirectByteBuffer(stmt_ref, 0);
 }

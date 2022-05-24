@@ -251,4 +251,12 @@ void DuckDB::SetExtensionLoaded(const std::string &name) {
 	instance->loaded_extensions.insert(name);
 }
 
+string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
+	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
+		return "UTC";
+	} else {
+		return config.set_variables["TimeZone"].GetValue<std::string>();
+	}
+}
+
 } // namespace duckdb

@@ -191,7 +191,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	}
 }
 
-SEXP RApiTypes::ValueToSexp(Value &val) {
+SEXP RApiTypes::ValueToSexp(Value &val, string &timezone_config) {
 	if (val.IsNull()) {
 		return R_NilValue;
 	}
@@ -219,7 +219,13 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		// TODO bit of duplication here with statement.cpp, fix this
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
-		Rf_setAttrib(res, RStrings::get().tzone_sym, R_NilValue);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, StringsToSexp({""}));
+		return res;
+	}
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		cpp11::doubles res({(double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>())});
+		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, StringsToSexp({timezone_config}));
 		return res;
 	}
 	case LogicalTypeId::TIME: {

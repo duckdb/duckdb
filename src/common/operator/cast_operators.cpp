@@ -1089,6 +1089,13 @@ bool TryCast::Operation(date_t input, date_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (input == date_t::infinity()) {
+		result = timestamp_t::infinity();
+		return true;
+	} else if (input == date_t::ninfinity()) {
+		result = timestamp_t::ninfinity();
+		return true;
+	}
 	return Timestamp::TryFromDatetime(input, Time::FromTime(0, 0, 0), result);
 }
 

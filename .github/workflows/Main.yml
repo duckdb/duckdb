@@ -34,8 +34,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
+      CC: gcc-10
+      CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       BUILD_VISUALIZER: 1
       BUILD_TPCH: 1
@@ -54,7 +54,12 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run:  make debug
@@ -88,6 +93,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make reldebug
 
@@ -112,6 +122,11 @@ jobs:
 
       - name: Install
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
       - name: Build
         run: BUILD_ARROW_ABI_TEST=1 make debug
@@ -144,6 +159,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: THREADSAN=1 make reldebug
 
@@ -173,6 +193,11 @@ jobs:
 
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: make debug
@@ -238,6 +263,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make debug
 
@@ -262,6 +292,11 @@ jobs:
         cd sqlancer
         git checkout persistent
         mvn package -q -DskipTests
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: make reldebug
@@ -295,6 +330,11 @@ jobs:
         git checkout persistent
         mvn package -q -DskipTests
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make reldebug
 
@@ -324,6 +364,11 @@ jobs:
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/cwida/jdbccts.git
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: make release
@@ -360,8 +405,13 @@ jobs:
 
     - name: Install psqlodbc
       run: |
-        git clone https://github.com/hawkfish/psqlodbc.git
-        (cd psqlodbc && git checkout 96f5683d68e4a288e76ee4b09737478cc592aa98 && make debug)
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && git checkout 89726c417d1ea8b4080e486fe240725a79eca0d6 && make debug)
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build
       run: DISABLE_SANITIZER=1 make debug

@@ -68,8 +68,27 @@ jobs:
       - name: Install
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
 
+      - name: Cache clang-tidy
+        id: date
+        run: echo "::set-output name=now::$(date)"
+
+      - name: Cache clang-tidy
+        uses: actions/cache@v3
+        with:
+          path: ~/.ctcache/cache
+          key: clang-tidy-${{ steps.date.outputs.now }}
+          restore-keys: |
+            clang-tidy
+
+      - name: Download clang-tidy-cache
+        run: |
+          set -e
+          curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
+          md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
+          chmod +x /tmp/clang-tidy-cache
+
       - name: Tidy Check
-        run: make tidy-check
+        run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
 
   codecov:
     name: CodeCov
@@ -96,7 +115,7 @@ jobs:
 
       - name: Before Install
         run: |
-          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==7.0" "psutil>=5.9.0" pytest
+          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==8.0" "psutil>=5.9.0" pytest
           sudo apt-get install g++
 
       - name: Coverage Reset

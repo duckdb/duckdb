@@ -518,6 +518,34 @@ NULL
 endloop
 
 #
+# Infinities
+#
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+
+foreach ltype DATE TIMESTAMP
+
+foreach rtype DATE TIMESTAMP
+
+foreach lspecial infinity -infinity
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATE_SUB('${specifier}', '${lspecial}'::${ltype}, '${rspecial}'::${rtype});
+----
+NULL
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+endloop
+
+#
 # VARCHAR
 #
 statement ok
@@ -554,6 +582,28 @@ millennium	0
 week	4
 yearweek	4
 isoyear	0
+
+foreach ltype DATE TIMESTAMP
+
+foreach rtype DATE TIMESTAMP
+
+foreach lspecial infinity -infinity
+
+foreach rspecial infinity -infinity
+
+query I
+SELECT DATE_SUB(datepart, '${lspecial}'::${ltype}, '${rspecial}'::${rtype}) AS sub
+FROM parts
+WHERE sub IS NOT NULL
+----
+
+endloop
+
+endloop
+
+endloop
+
+endloop
 
 statement ok
 INSERT into parts VALUES('duck');

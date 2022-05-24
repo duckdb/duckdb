@@ -54,37 +54,37 @@ private:
 	Expression *GetNode(Expression *expr);
 	idx_t GetEquivalenceSet(Expression *expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
-
-	//! Functions used to push and generate OR Filters
-	void LookUpConjunctions(Expression *expr);
-	bool BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
-	void VerifyOrsToPush(Expression &expr);
-
-	bool UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
-	bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
-	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
-
-	template <typename CONJUNCTION_TYPE>
-	void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
-		auto new_filter = NextConjunctionFilter<CONJUNCTION_TYPE>(conjunction);
-		auto conj_filter_ptr = (ConjunctionFilter *)new_filter.get();
-		last_conj_filter->child_filters.push_back(move(new_filter));
-		last_conj_filter = conj_filter_ptr;
-	}
-
-	template <typename CONJUNCTION_TYPE>
-	unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
-		unique_ptr<ConjunctionFilter> conj_filter = make_unique<CONJUNCTION_TYPE>();
-		for (auto &expr : conjunction->children) {
-			auto comp_expr = (BoundComparisonExpression *)expr.get();
-			auto &const_expr =
-			    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
-			auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
-			auto const_filter = make_unique<ConstantFilter>(comp_expr->type, const_value);
-			conj_filter->child_filters.push_back(move(const_filter));
-		}
-		return move(conj_filter);
-	}
+	//
+	//	//! Functions used to push and generate OR Filters
+	//	void LookUpConjunctions(Expression *expr);
+	//	bool BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
+	//	void VerifyOrsToPush(Expression &expr);
+	//
+	//	bool UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
+	//	bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
+	//	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
+	//
+	//	template <typename CONJUNCTION_TYPE>
+	//	void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
+	//		auto new_filter = NextConjunctionFilter<CONJUNCTION_TYPE>(conjunction);
+	//		auto conj_filter_ptr = (ConjunctionFilter *)new_filter.get();
+	//		last_conj_filter->child_filters.push_back(move(new_filter));
+	//		last_conj_filter = conj_filter_ptr;
+	//	}
+	//
+	//	template <typename CONJUNCTION_TYPE>
+	//	unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
+	//		unique_ptr<ConjunctionFilter> conj_filter = make_unique<CONJUNCTION_TYPE>();
+	//		for (auto &expr : conjunction->children) {
+	//			auto comp_expr = (BoundComparisonExpression *)expr.get();
+	//			auto &const_expr =
+	//			    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
+	//			auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
+	//			auto const_filter = make_unique<ConstantFilter>(comp_expr->type, const_value);
+	//			conj_filter->child_filters.push_back(move(const_filter));
+	//		}
+	//		return move(conj_filter);
+	//	}
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;
@@ -94,26 +94,26 @@ private:
 	unordered_map<idx_t, vector<ExpressionValueInformation>> constant_values;
 	unordered_map<idx_t, vector<Expression *>> equivalence_map;
 	idx_t set_index = 0;
-
-	//! Structures used for OR Filters
-
-	struct ConjunctionsToPush {
-		BoundConjunctionExpression *root_or;
-
-		// only preserve AND if there is a single column in the expression
-		bool preserve_and = true;
-
-		// conjunction chain for this column
-		vector<unique_ptr<BoundConjunctionExpression>> conjunctions;
-	};
-
-	expression_map_t<vector<unique_ptr<ConjunctionsToPush>>> map_col_conjunctions;
-	vector<BoundColumnRefExpression *> vec_colref_insertion_order;
-
-	BoundConjunctionExpression *cur_root_or;
-	BoundConjunctionExpression *cur_conjunction;
-
-	BoundColumnRefExpression *cur_colref_to_push;
+	//
+	//	//! Structures used for OR Filters
+	//
+	//	struct ConjunctionsToPush {
+	//		BoundConjunctionExpression *root_or;
+	//
+	//		// only preserve AND if there is a single column in the expression
+	//		bool preserve_and = true;
+	//
+	//		// conjunction chain for this column
+	//		vector<unique_ptr<BoundConjunctionExpression>> conjunctions;
+	//	};
+	//
+	//	expression_map_t<vector<unique_ptr<ConjunctionsToPush>>> map_col_conjunctions;
+	//	vector<BoundColumnRefExpression *> vec_colref_insertion_order;
+	//
+	//	BoundConjunctionExpression *cur_root_or;
+	//	BoundConjunctionExpression *cur_conjunction;
+	//
+	//	BoundColumnRefExpression *cur_colref_to_push;
 };
 
 } // namespace duckdb

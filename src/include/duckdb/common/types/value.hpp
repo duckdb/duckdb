@@ -534,5 +534,9 @@ template <>
 DUCKDB_API bool Value::IsFinite(float input);
 template <>
 DUCKDB_API bool Value::IsFinite(double input);
+template <>
+DUCKDB_API bool Value::IsFinite(date_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_t input);
 
 } // namespace duckdb

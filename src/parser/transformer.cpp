@@ -20,9 +20,12 @@ StackChecker::StackChecker(StackChecker &&other) noexcept
 	other.stack_usage = 0;
 }
 
-Transformer::Transformer(Transformer *parent, idx_t max_expression_depth_p)
-    : parent(parent), max_expression_depth(parent ? parent->max_expression_depth : max_expression_depth_p),
-      stack_depth(DConstants::INVALID_INDEX) {
+Transformer::Transformer(idx_t max_expression_depth_p)
+    : parent(nullptr), max_expression_depth(max_expression_depth_p), stack_depth(DConstants::INVALID_INDEX) {
+}
+
+Transformer::Transformer(Transformer *parent)
+    : parent(parent), max_expression_depth(parent->max_expression_depth), stack_depth(DConstants::INVALID_INDEX) {
 }
 
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
@@ -48,7 +51,9 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 	}
 	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
 	if (node->stack_depth + extra_stack >= max_expression_depth) {
-		throw ParserException("Max expression depth limit of %lld exceeded", max_expression_depth);
+		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      max_expression_depth);
 	}
 	return StackChecker(*node, extra_stack);
 }

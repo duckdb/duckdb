@@ -1,0 +1,19 @@
+# name: test/fuzzer/sqlsmith/dayofweek_overflow.test
+# description: Test overflow in dayofweek
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(date DATE);
+
+statement ok
+INSERT INTO dates VALUES('5877642-06-25 (BC)');
+
+statement ok
+INSERT INTO dates VALUES('5881580-07-10');
+
+statement ok
+SELECT dayofweek(CAST(ref_0.date AS DATE)) AS c9 FROM dates AS ref_0
+

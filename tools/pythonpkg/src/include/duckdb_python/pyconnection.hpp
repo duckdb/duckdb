@@ -13,6 +13,7 @@
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include <thread>
 
 namespace duckdb {
@@ -44,6 +45,7 @@ public:
 	shared_ptr<Connection> connection;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
+	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::thread::id thread_id = std::this_thread::get_id();
 	bool check_same_thread = true;
 
@@ -52,6 +54,13 @@ public:
 	}
 	static void Initialize(py::handle &m);
 	static void Cleanup();
+
+	static shared_ptr<DuckDBPyConnection> Enter(DuckDBPyConnection &self,
+	                                            const string &database = ":memory:", bool read_only = false,
+	                                            const py::dict &config = py::dict(), bool check_same_thread = true);
+
+	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+	                 const py::object &traceback);
 
 	static DuckDBPyConnection *DefaultConnection();
 
@@ -75,7 +84,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> TableFunction(const string &fname, py::object params = py::list());
 
-	unique_ptr<DuckDBPyRelation> FromDF(py::object value);
+	unique_ptr<DuckDBPyRelation> FromDF(const py::object &value);
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 

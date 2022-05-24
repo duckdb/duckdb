@@ -4,6 +4,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -148,6 +149,11 @@ static unique_ptr<FunctionData> RangeDateTimeBind(ClientContext &context, TableF
 	result->start = inputs[0].GetValue<timestamp_t>();
 	result->end = inputs[1].GetValue<timestamp_t>();
 	result->increment = inputs[2].GetValue<interval_t>();
+
+	// Infinities either cause errors or infinite loops, so just ban them
+	if (!Timestamp::IsFinite(result->start) || !Timestamp::IsFinite(result->end)) {
+		throw BinderException("RANGE with infinite bounds is not supported");
+	}
 
 	if (result->increment.months == 0 && result->increment.days == 0 && result->increment.micros == 0) {
 		throw BinderException("interval cannot be 0!");

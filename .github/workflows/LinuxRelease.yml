@@ -192,6 +192,11 @@ jobs:
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: |
         export TOOLCHAIN=`pwd`/rpi-tools
@@ -237,6 +242,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make release
 
@@ -268,6 +278,11 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make relassert
 
@@ -293,6 +308,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Test
       run: python scripts/test_vector_sizes.py
 
@@ -310,6 +330,11 @@ jobs:
 
     - name: Setup
       run: ./scripts/wasm_configure.sh
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
 
     - name: Build Library Module
       run: ./scripts/wasm_build_lib.sh Release
@@ -345,6 +370,11 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
       run: make
 
@@ -359,6 +389,7 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -369,9 +400,13 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: actions/setup-node@v2
+    - name: Install Ninja
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
       with:
-        node-version: '16'
+        key: ${{ github.job }}
 
     - name: Build
       run: make
@@ -379,15 +414,10 @@ jobs:
     - name: Start S3/HTTP test server
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        mkdir -p /tmp/s3rver
-        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
+        ./scripts/run_s3_test_server.sh
 
     - name: Test
       run: make allunit
-
-    - name: Check S3/HTTP server log
-      if: always()
-      run: cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests
