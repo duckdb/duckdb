@@ -6,10 +6,10 @@ namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node) {
 	if (!node->lhs) {
-		throw ParserException("Lambda function must have parameters.");
+		throw ParserException("Lambda function must have parameters (params -> expr).");
 	}
 	if (!node->rhs) {
-		throw ParserException("Lambda function must have an expression.");
+		throw ParserException("Lambda function must have an expression (params -> expr).");
 	}
 
 	vector<unique_ptr<ParsedExpression>> lhs;

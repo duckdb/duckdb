@@ -8,42 +8,46 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const idx_t lambda_param_count,
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const idx_t lambda_params_count,
                                             const LogicalType &list_child_type) {
 
 	string error;
 
-	if (lambda_param_count != 0) {
+	if (lambda_params_count != 0) {
 
-		if (expr.lhs.size() != lambda_param_count) {
-			throw BinderException("Invalid number of left-hand side parameters for this lambda function.");
-		}
-		if (!expr.rhs) {
-			throw BinderException("Invalid lambda expression.");
+		if (expr.params.size() != lambda_params_count) {
+			throw BinderException(
+			    "Invalid number of left-hand side parameters for this lambda function (params -> expr). "
+			    "Expected " +
+			    std::to_string(lambda_params_count) + ", got " + std::to_string(expr.params.size()) + ".");
 		}
 
 		// create dummy columns for the lambda parameters (lhs)
 		vector<LogicalType> column_types;
 		vector<string> column_names;
-		vector<string> lhs_strings;
+		vector<string> params_strings;
 
 		// positional parameters as column references
-		for (idx_t i = 0; i < expr.lhs.size(); i++) {
+		for (idx_t i = 0; i < expr.params.size(); i++) {
 
-			auto column_ref = (ColumnRefExpression &)*expr.lhs[i];
+			if (expr.params[i]->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
+				throw BinderException("Parameter must be a column name.");
+			}
+
+			auto column_ref = (ColumnRefExpression &)*expr.params[i];
 			if (column_ref.IsQualified()) {
 				throw BinderException("Invalid parameter name '%s': must be unqualified", column_ref.ToString());
 			}
 
 			column_types.emplace_back(list_child_type);
 			column_names.push_back(column_ref.GetColumnName());
-			lhs_strings.push_back(expr.lhs[i]->ToString());
+			params_strings.push_back(expr.params[i]->ToString());
 		}
 
 		// base table alias
-		auto lhs_alias = StringUtil::Join(lhs_strings, ", ");
-		if (lhs_strings.size() > 1) {
-			lhs_alias = "(" + lhs_alias + ")";
+		auto params_alias = StringUtil::Join(params_strings, ", ");
+		if (params_strings.size() > 1) {
+			params_alias = "(" + params_alias + ")";
 		}
 
 		// create a lambda binding and push it to the lambda bindings vector
@@ -51,18 +55,18 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		if (!lambda_bindings) {
 			lambda_bindings = &local_bindings;
 		}
-		LambdaBinding new_lambda_binding(column_types, column_names, lhs_alias);
+		LambdaBinding new_lambda_binding(column_types, column_names, params_alias);
 		lambda_bindings->push_back(new_lambda_binding);
 
-		// bind the lhs expressions
-		for (idx_t i = 0; i < expr.lhs.size(); i++) {
-			auto result = BindExpression(&expr.lhs[i], depth, false);
+		// bind the parameter expressions
+		for (idx_t i = 0; i < expr.params.size(); i++) {
+			auto result = BindExpression(&expr.params[i], depth, false);
 			if (result.HasError()) {
 				return BindResult(error);
 			}
 		}
 
-		auto result = BindExpression(&expr.rhs, depth, false);
+		auto result = BindExpression(&expr.expr, depth, false);
 		lambda_bindings->pop_back();
 
 		// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
@@ -75,9 +79,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		return result;
 	}
 
-	D_ASSERT(expr.lhs.size() == 1);
-	auto lhs_expr = expr.lhs[0]->Copy();
-	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.rhs));
+	D_ASSERT(expr.params.size() == 1);
+	auto lhs_expr = expr.params[0]->Copy();
+	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.expr));
 	return BindExpression(arrow_expr, depth);
 }
 

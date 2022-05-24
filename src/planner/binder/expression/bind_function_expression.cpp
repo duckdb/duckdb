@@ -37,7 +37,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
 		} else if (function.function_name == "list_reduce" || function.function_name == "array_reduce") {
 			// FIXME: not yet implemented
-			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
+			// return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
+			throw BinderException(function.function_name + " is not yet implemented!");
 		}
 
 		// other scalar function
@@ -79,7 +80,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 		if (list_child.expr->return_type.id() != LogicalTypeId::LIST &&
 		    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
-			throw BinderException("Invalid list input type!");
+			throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
 		}
 
 		LogicalType list_child_type = LogicalType::SQLNULL;

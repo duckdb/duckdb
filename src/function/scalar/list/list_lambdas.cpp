@@ -30,7 +30,7 @@ unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = (ListLambdaBindData &)other_p;
-	return lambda_expr->Equals(other.lambda_expr.get());
+	return lambda_expr->Equals(other.lambda_expr.get()) && stype == other.stype;
 }
 
 ListLambdaBindData::~ListLambdaBindData() {
@@ -195,7 +195,11 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// these are only for the list_filter
 	vector<idx_t> lists_len;
-	idx_t curr_list_len = 0, curr_list_offset = 0, appended_lists_cnt = 0, curr_original_list_len = 0;
+	idx_t curr_list_len = 0;
+	idx_t curr_list_offset = 0;
+	idx_t appended_lists_cnt = 0;
+	idx_t curr_original_list_len = 0;
+
 	if (!IS_TRANSFORM) {
 		lists_len.reserve(count);
 	}

@@ -316,20 +316,18 @@ bool Binder::HasMatchingBinding(const string &table_name, const string &column_n
 
 bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
                                 string &error_message) {
-	Binding *binding;
+	Binding *binding = nullptr;
 
-	auto found_lambda_binding = false;
 	if (lambda_bindings) {
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if (table_name == (*lambda_bindings)[i].alias) {
 				binding = &(*lambda_bindings)[i];
-				found_lambda_binding = true;
 				break;
 			}
 		}
 	}
 
-	if (!found_lambda_binding) {
+	if (!binding) {
 		if (macro_binding && table_name == macro_binding->alias) {
 			binding = macro_binding;
 		} else {

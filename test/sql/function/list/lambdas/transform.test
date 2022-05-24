@@ -161,8 +161,12 @@ select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 
+mode skip
+
 statement error
 select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
+mode unskip
 
 # more tests on precedence
 
