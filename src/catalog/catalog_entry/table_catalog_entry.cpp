@@ -248,6 +248,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			if (index != rename_idx && !dependencies.count(rename_idx)) {
 				continue;
 			}
+			RenameExpression(*generated_check.expression, info);
+			break;
 		}
 		case ConstraintType::CHECK: {
 			// CHECK constraint: need to rename column references that refer to the renamed column
