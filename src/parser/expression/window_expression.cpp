@@ -127,7 +127,6 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	for (auto &order : orders) {
 		order.Serialize(serializer);
 	}
-	writer.WriteOptional(filter_expr);
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
 
@@ -136,6 +135,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(offset_expr);
 	writer.WriteOptional(default_expr);
 	writer.WriteField<bool>(ignore_nulls);
+	writer.WriteOptional(filter_expr);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
@@ -150,7 +150,6 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	for (idx_t i = 0; i < order_count; i++) {
 		expr->orders.push_back(OrderByNode::Deserialize((source)));
 	}
-	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->start = reader.ReadRequired<WindowBoundary>();
 	expr->end = reader.ReadRequired<WindowBoundary>();
 
@@ -159,6 +158,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->offset_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->default_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->ignore_nulls = reader.ReadRequired<bool>();
+	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	return move(expr);
 }
 
