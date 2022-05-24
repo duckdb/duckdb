@@ -664,20 +664,30 @@ bool RowGroup::HasInterleavedTransactions() {
 		if (!info) {
 			continue;
 		}
-		if (info->type == ChunkInfoType::VECTOR_INFO) {
-			has_interleaved |= ((ChunkVectorInfo *)info)->insert_id >= TRANSACTION_ID_START;
-			if (((ChunkVectorInfo *)info)->any_deleted) {
-				auto deleted = ((ChunkVectorInfo *)info)->deleted;
-				for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-					if (deleted[i] == NOT_DELETED_ID) {
-						break;
-					}
-					has_interleaved |= deleted[i] >= TRANSACTION_ID_START;
-				}
-			}
-		} else if (info->type == ChunkInfoType::CONSTANT_INFO) {
-			has_interleaved |= ((ChunkConstantInfo *)info)->insert_id >= TRANSACTION_ID_START;
-			has_interleaved |= ((ChunkConstantInfo *)info)->delete_id >= TRANSACTION_ID_START;
+		//		if (info->type == ChunkInfoType::VECTOR_INFO) {
+		//			auto chunk_info = (ChunkVectorInfo *) info;
+		//			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		//				if (chunk_info->inserted[i] >= TRANSACTION_ID_START) {
+		//					return true;
+		//				}
+		//				has_interleaved |= chunk_info->deleted[i] >= TRANSACTION_ID_START;
+		//			}
+		//			//has_interleaved |= chunk_info->insert_id >= TRANSACTION_ID_START;
+		////			if (chunk_info->any_deleted) {
+		////				for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+		////					if (chunk_info->deleted[i] == NOT_DELETED_ID) {
+		////						break;
+		////					}
+		////					has_interleaved |= chunk_info->deleted[i] >= TRANSACTION_ID_START;
+		////				}
+		////			}
+		//		} else
+		if (info->type == ChunkInfoType::CONSTANT_INFO) {
+			auto chunk_info = (ChunkConstantInfo *)info;
+			has_interleaved |= chunk_info->insert_id >= TRANSACTION_ID_START;
+			//			if (chunk_info->delete_id != NOT_DELETED_ID){
+			has_interleaved |= chunk_info->delete_id >= TRANSACTION_ID_START;
+			//			}
 		}
 	}
 	return has_interleaved;
@@ -975,12 +985,11 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 	// FIXME: This shouldn't be executed again in the column checkpointer
-	{
-		// Sorts columns to optimize RLE compression
-		auto table_compression = DetectBestCompressionMethodTable(writer);
-		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
-		rle_checkpoint_sort.Sort();
-	}
+
+	// Sorts columns to optimize RLE compression
+	auto table_compression = DetectBestCompressionMethodTable(writer);
+	RLESort rle_checkpoint_sort(*this, data_table, table_compression);
+	rle_checkpoint_sort.Sort();
 
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {

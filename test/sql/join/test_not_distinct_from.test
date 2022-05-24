@@ -20,7 +20,7 @@ statement ok
 insert into tbl_2 values (1),(2),(NULL)
 
 query I
-SELECT a from tbl_1 WHERE a IS DISTINCT FROM b
+SELECT a from tbl_1 WHERE a IS DISTINCT FROM b order by a
 ----
 1
 2

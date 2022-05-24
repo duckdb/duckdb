@@ -31,11 +31,11 @@ SELECT COALESCE(42::${type})
 42
 
 query I
-SELECT COALESCE(a) FROM exprtest
+SELECT COALESCE(a) FROM exprtest order by a
 ----
+NULL
 42
 43
-NULL
 45
 
 query I
@@ -59,19 +59,19 @@ SELECT COALESCE(NULL, NULL, NULL)
 NULL
 
 query I
-SELECT COALESCE(a, b) FROM exprtest
+SELECT COALESCE(a, b) FROM exprtest order by a,b
 ----
+1
 42
 43
-1
 45
 
 query I
-SELECT COALESCE(NULL, NULL, NULL, a, NULL, b) FROM exprtest
+SELECT COALESCE(NULL, NULL, NULL, a, NULL, b) FROM exprtest order by a,b
 ----
+1
 42
 43
-1
 45
 
 # OR/AND

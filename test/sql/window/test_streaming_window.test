@@ -8,8 +8,9 @@ PRAGMA enable_verification
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
 
+# Depends on row_id, so shoudln't use compression
 statement ok
-create table integers (i int, j int)
+create table integers (i int USING COMPRESSION UNCOMPRESSED , j int USING COMPRESSION UNCOMPRESSED)
 
 statement ok
 insert into integers values (2, 2), (2, 1), (1, 2), (1, NULL)

@@ -153,10 +153,10 @@ void RLESort::Sort() {
 		// Nothing to sort on
 		return;
 	}
-	if (row_group.HasInterleavedTransactions()) {
-		// Has interleaved tsx, he don't run our magic stuff
-		return;
-	}
+	//	if (row_group.HasInterleavedTransactions()) {
+	//		// Has interleaved tsx, he don't run our magic stuff
+	//		return;
+	//	}
 	Initialize();
 	SinkKeysPayloadSort();
 	if (new_count == 0) {
