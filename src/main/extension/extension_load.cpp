@@ -56,7 +56,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 
 	auto extension_version = std::string((*version_fun)());
 	auto engine_version = DuckDB::LibraryVersion();
-	if (strcmp(extension_version.c_str(), engine_version) != 0) {
+	if (extension_version != string(engine_version)) {
+
 		throw InvalidInputException("Extension \"%s\" version (%s) does not match DuckDB version (%s)", filename,
 		                            extension_version, engine_version);
 	}
