@@ -819,7 +819,12 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 	}
 	idx_t removed_index = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		if (columns[i].name == column_name) {
+		auto &col = columns[i];
+		if (col.name == column_name) {
+			// No need to alter storage, removed column is generated column
+			if (col.Generated()) {
+				return;
+			}
 			removed_index = i;
 			break;
 		}

@@ -43,8 +43,12 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(name);
 	writer.WriteSerializable(type);
-	writer.WriteOptional(default_value);
-	writer.WriteOptional(generated_expression);
+	writer.WriteField<TableColumnType>(category);
+	if (Generated()) {
+		writer.WriteOptional(generated_expression);
+	} else {
+		writer.WriteOptional(default_value);
+	}
 	writer.Finalize();
 }
 
@@ -52,21 +56,16 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto column_name = reader.ReadRequired<string>();
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto default_value = reader.ReadOptional<ParsedExpression>(nullptr);
-	auto generated_expression = reader.ReadOptional<ParsedExpression>(nullptr);
+	auto category = reader.ReadRequired<TableColumnType>();
+	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	reader.Finalize();
-
-	auto category = TableColumnType::STANDARD;
-	if (generated_expression) {
-		category = TableColumnType::GENERATED;
-	}
 
 	switch (category) {
 	case TableColumnType::STANDARD:
-		return ColumnDefinition(column_name, column_type, ColumnExpression(move(default_value)));
+		return ColumnDefinition(column_name, column_type, ColumnExpression(move(expression)));
 	case TableColumnType::GENERATED:
 		return ColumnDefinition(column_name, column_type,
-		                        ColumnExpression(move(generated_expression), ColumnExpressionType::GENERATED));
+		                        ColumnExpression(move(expression), ColumnExpressionType::GENERATED));
 	default:
 		throw NotImplementedException("Type not implemented for TableColumnType");
 	}
