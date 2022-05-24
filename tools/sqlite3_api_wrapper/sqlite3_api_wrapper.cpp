@@ -19,6 +19,7 @@
 #include <chrono>
 #include <cassert>
 #include <climits>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -1080,8 +1081,17 @@ int sqlite3_stmt_status(sqlite3_stmt *, int op, int resetFlg) {
 	return -1;
 }
 
-int sqlite3_file_control(sqlite3 *, const char *zDbName, int op, void *) {
-	fprintf(stderr, "sqlite3_file_control: unsupported.\n");
+int sqlite3_file_control(sqlite3 *, const char *zDbName, int op, void *ptr) {
+	switch(op) {
+	case SQLITE_FCNTL_TEMPFILENAME: {
+		auto char_arg = (char **) ptr;
+		*char_arg = nullptr;
+		return -1;
+	}
+	default:
+		break;
+	}
+	fprintf(stderr, "sqlite3_file_control op %d: unsupported.\n", op);
 	return -1;
 }
 
@@ -1095,9 +1105,9 @@ const char *sqlite3_vtab_collation(sqlite3_index_info *, int) {
 	return nullptr;
 }
 
-int sqlite3_sleep(int) {
-	fprintf(stderr, "sqlite3_sleep: unsupported.\n");
-	return -1;
+int sqlite3_sleep(int ms) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+	return ms;
 }
 
 int sqlite3_busy_timeout(sqlite3 *, int ms) {
