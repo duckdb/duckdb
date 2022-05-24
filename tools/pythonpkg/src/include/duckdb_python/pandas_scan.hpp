@@ -56,6 +56,9 @@ public:
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
 
+	static idx_t PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                                      FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+
 	// Helper function that transform pandas df names to make them work with our binder
 	static py::object PandasReplaceCopiedNames(const py::object &original_df);
 };

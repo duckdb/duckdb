@@ -29,20 +29,22 @@ struct PandasScanFunctionData : public TableFunctionData {
 };
 
 struct PandasScanState : public FunctionOperatorData {
-	PandasScanState(idx_t start, idx_t end) : start(start), end(end) {
+	PandasScanState(idx_t start, idx_t end) : start(start), end(end), batch_index(0) {
 	}
 
 	idx_t start;
 	idx_t end;
+	idx_t batch_index;
 	vector<column_t> column_ids;
 };
 
 struct ParallelPandasScanState : public ParallelState {
-	ParallelPandasScanState() : position(0) {
+	ParallelPandasScanState() : position(0), batch_index(0) {
 	}
 
 	std::mutex lock;
 	idx_t position;
+	idx_t batch_index;
 };
 
 PandasScanFunction::PandasScanFunction()
@@ -50,6 +52,14 @@ PandasScanFunction::PandasScanFunction()
                     nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
                     PandasScanInitParallelState, PandasScanFuncParallel, PandasScanParallelInit,
                     PandasScanParallelStateNext, true, false, PandasProgress) {
+	get_batch_index = PandasScanGetBatchIndex;
+	supports_batch_index = true;
+}
+
+idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+									  FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+	auto &data = (PandasScanState &)*operator_state;
+	return data.batch_index;
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
@@ -122,6 +132,7 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 		parallel_state.position = bind_data.row_count;
 	}
 	state.end = parallel_state.position;
+	state.batch_index = parallel_state.batch_index++;
 	return true;
 }
 
