@@ -435,6 +435,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		PhysicalOperator *pipeline_child = nullptr;
 		switch (op->type) {
 		case PhysicalOperatorType::CREATE_TABLE_AS:
+		case PhysicalOperatorType::CREATE_MATVIEW:
 		case PhysicalOperatorType::INSERT:
 		case PhysicalOperatorType::DELETE_OPERATOR:
 		case PhysicalOperatorType::UPDATE:

@@ -1,12 +1,14 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/matview_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -22,7 +24,6 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -127,6 +128,7 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	// then, we fetch the tables/views/sequences information
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
+	vector<MatViewCatalogEntry *> matviews;
 	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
 			return;
@@ -135,6 +137,8 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
 			views.push_back((ViewCatalogEntry *)entry);
+		} else if (entry->type == CatalogType::MATVIEW_ENTRY) {
+			matviews.push_back((MatViewCatalogEntry *)entry);
 		} else {
 			throw NotImplementedException("Catalog type for entries");
 		}
@@ -176,6 +180,7 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	writer.WriteField<uint32_t>(sequences.size());
 	writer.WriteField<uint32_t>(tables.size());
 	writer.WriteField<uint32_t>(views.size());
+	writer.WriteField<uint32_t>(matviews.size());
 	writer.WriteField<uint32_t>(macros.size());
 	writer.WriteField<uint32_t>(table_macros.size());
 	writer.Finalize();
@@ -198,6 +203,10 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	// now write the views
 	for (auto &view : views) {
 		WriteView(*view);
+	}
+
+	for (auto &view : matviews) {
+		WriteMatView(*view);
 	}
 
 	// finally write the macro's
@@ -226,6 +235,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	uint32_t seq_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t table_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
+	uint32_t matview_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t macro_count = field_reader.ReadRequired<uint32_t>();
 	uint32_t table_macro_count = field_reader.ReadRequired<uint32_t>();
 	field_reader.Finalize();
@@ -246,6 +256,10 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	// now read the views
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
+	}
+
+	for (uint32_t i = 0; i < matview_count; i++) {
+		ReadMatView(context, reader);
 	}
 
 	// finally read the macro's
@@ -270,6 +284,17 @@ void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader
 
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateView(context, info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Materialized Views
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteMatView(MatViewCatalogEntry &view) {
+	WriteTable(view);
+}
+
+void CheckpointManager::ReadMatView(ClientContext &context, MetaBlockReader &reader) {
+	ReadTable(context, reader);
 }
 
 //===--------------------------------------------------------------------===//

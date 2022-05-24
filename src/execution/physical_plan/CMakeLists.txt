@@ -9,6 +9,7 @@ add_library_unity(
   plan_create.cpp
   plan_create_index.cpp
   plan_create_table.cpp
+  plan_create_matview.cpp
   plan_cross_product.cpp
   plan_delete.cpp
   plan_delim_get.cpp

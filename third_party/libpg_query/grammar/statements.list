@@ -10,6 +10,7 @@ CreateEnumStmt
 CreateFunctionStmt
 CreateSchemaStmt
 CreateSeqStmt
+CreateMatViewStmt
 CreateStmt
 DeallocateStmt
 DeleteStmt

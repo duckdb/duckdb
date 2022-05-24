@@ -127,7 +127,14 @@ public:
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema,
 	                                     BoundCreateTableInfo *info);
-	//! Create a table function in the catalog
+
+    //! Creates a materialized view in the catalog.
+    DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, BoundCreateTableInfo *info);
+    DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, unique_ptr<CreateTableInfo> info);
+    DUCKDB_API CatalogEntry *CreateMatView(ClientContext &context, SchemaCatalogEntry *schema,
+        BoundCreateTableInfo *info);
+
+    //! Create a table function in the catalog
 	DUCKDB_API CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
 	                                             CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog

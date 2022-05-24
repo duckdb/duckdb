@@ -29,6 +29,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class ScalarMacroCatalogEntry;
 class ViewCatalogEntry;
+class MatViewCatalogEntry;
 class TypeCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
@@ -66,6 +67,9 @@ public:
 
 	void WriteCreateView(ViewCatalogEntry *entry);
 	void WriteDropView(ViewCatalogEntry *entry);
+
+    void WriteCreateMatView(MatViewCatalogEntry *entry);
+    void WriteDropMatView(MatViewCatalogEntry *entry);
 
 	void WriteCreateSequence(SequenceCatalogEntry *entry);
 	void WriteDropSequence(SequenceCatalogEntry *entry);

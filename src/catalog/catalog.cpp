@@ -63,6 +63,21 @@ CatalogEntry *Catalog::CreateTable(ClientContext &context, SchemaCatalogEntry *s
 	return schema->CreateTable(context, info);
 }
 
+CatalogEntry *Catalog::CreateMatView(ClientContext &context, BoundCreateTableInfo *info) {
+	auto schema = GetSchema(context, info->base->schema);
+	return CreateMatView(context, schema, info);
+}
+
+CatalogEntry *Catalog::CreateMatView(ClientContext &context, unique_ptr<CreateTableInfo> info) {
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
+	return CreateMatView(context, bound_info.get());
+}
+
+CatalogEntry *Catalog::CreateMatView(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info) {
+	return schema->CreateMatView(context, info);
+}
+
 CatalogEntry *Catalog::CreateView(ClientContext &context, CreateViewInfo *info) {
 	auto schema = GetSchema(context, info->schema);
 	return CreateView(context, schema, info);
@@ -320,8 +335,8 @@ TableCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schem
 	if (!entry) {
 		return nullptr;
 	}
-	if (entry->type != CatalogType::TABLE_ENTRY) {
-		throw CatalogException(error_context.FormatError("%s is not a table", name));
+	if (entry->type != CatalogType::TABLE_ENTRY && entry->type != CatalogType::MATVIEW_ENTRY) {
+		throw CatalogException(error_context.FormatError("%s is not a TABLE or MATERIALIZED VIEW", name));
 	}
 	return (TableCatalogEntry *)entry;
 }

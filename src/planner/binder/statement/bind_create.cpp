@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_create.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/planner/operator/logical_create_matview.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
@@ -245,59 +246,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		                                              unique_ptr_cast<CreateInfo, CreateIndexInfo>(move(stmt.info)));
 		break;
 	}
+	case CatalogType::MATVIEW_ENTRY:
 	case CatalogType::TABLE_ENTRY: {
-		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
-		auto &create_info = (CreateTableInfo &)*stmt.info;
-		auto &catalog = Catalog::GetCatalog(context);
-		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
-			auto &cond = create_info.constraints[i];
-			if (cond->type != ConstraintType::FOREIGN_KEY) {
-				continue;
-			}
-			auto &fk = (ForeignKeyConstraint &)*cond;
-			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-				continue;
-			}
-			D_ASSERT(fk.info.pk_keys.empty());
-			if (create_info.table == fk.info.table) {
-				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
-				FindMatchingPrimaryKeyColumns(create_info.constraints, fk);
-			} else {
-				// have to resolve referenced table
-				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
-				D_ASSERT(fk.info.pk_keys.empty());
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->constraints, fk);
-				for (auto &keyname : fk.pk_columns) {
-					auto entry = pk_table_entry_ptr->name_map.find(keyname);
-					if (entry == pk_table_entry_ptr->name_map.end()) {
-						throw BinderException("column \"%s\" named in key does not exist", keyname);
-					}
-					fk.info.pk_keys.push_back(entry->second);
-				}
-				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
-				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
-				if (!index) {
-					auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
-					throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
-					                      "present on these columns",
-					                      pk_table_entry_ptr->name, fk_column_names);
-				}
-			}
-		}
-		// We first check if there are any user types, if yes we check to which custom types they refer.
-		auto bound_info = BindCreateTableInfo(move(stmt.info));
-		auto root = move(bound_info->query);
-
-		// create the logical operator
-		auto &schema = bound_info->schema;
-		auto create_table = make_unique<LogicalCreateTable>(schema, move(bound_info));
-		if (root) {
-			// CREATE TABLE AS
-			properties.return_type = StatementReturnType::CHANGED_ROWS;
-			create_table->children.push_back(move(root));
-		}
-		result.plan = move(create_table);
-		break;
+        BindTable(catalog_type, result, stmt);
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
@@ -309,6 +260,72 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	properties.allow_stream_result = false;
 	return result;
+}
+
+void Binder::BindTable(CatalogType catalog_type, BoundStatement &result, CreateStatement &stmt) {
+    // If there is a foreign key constraint, resolve primary key column's index from primary key column's name
+    auto &create_info = (CreateTableInfo &)*stmt.info;
+    auto &catalog = Catalog::GetCatalog(context);
+    for (idx_t i = 0; i < create_info.constraints.size(); i++) {
+        auto &cond = create_info.constraints[i];
+        if (cond->type != ConstraintType::FOREIGN_KEY) {
+            continue;
+        }
+        auto &fk = (ForeignKeyConstraint &)*cond;
+        if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+            continue;
+        }
+        D_ASSERT(fk.info.pk_keys.empty() && !fk.pk_columns.empty());
+        if (create_info.table == fk.info.table) {
+            fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+        } else {
+            // have to resolve referenced table
+            auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
+            D_ASSERT(!fk.pk_columns.empty() && fk.info.pk_keys.empty());
+            for (auto &keyname : fk.pk_columns) {
+                auto entry = pk_table_entry_ptr->name_map.find(keyname);
+                if (entry == pk_table_entry_ptr->name_map.end()) {
+                    throw BinderException("column \"%s\" named in key does not exist", keyname);
+                }
+                fk.info.pk_keys.push_back(entry->second);
+            }
+            auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
+                fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);
+            if (!index) {
+                auto fk_column_names = StringUtil::Join(fk.pk_columns, ",");
+                throw BinderException("Failed to create foreign key on %s(%s): no UNIQUE or PRIMARY KEY constraint "
+                                      "present on these columns",
+                                      pk_table_entry_ptr->name, fk_column_names);
+            }
+        }
+    }
+    // We first check if there are any user types, if yes we check to which custom types they refer.
+    auto bound_info = BindCreateTableInfo(move(stmt.info));
+    auto root = move(bound_info->query);
+
+    // create the logical operator
+    auto &schema = bound_info->schema;
+
+    switch (catalog_type) {
+    case CatalogType::TABLE_ENTRY: {
+        auto create_table = make_unique<LogicalCreateTable>(schema, move(bound_info));
+        if (root) {
+            create_table->children.push_back(move(root));
+        }
+        result.plan = move(create_table);
+        break;
+    }
+    case CatalogType::MATVIEW_ENTRY: {
+        auto create_matview = make_unique<LogicalCreateMatView>(schema, move(bound_info));
+        if (root) {
+            create_matview->children.push_back(move(root));
+        }
+        result.plan = move(create_matview);
+        break;
+    }
+    default:
+        throw BinderException("Failed to bind table or matview %s", catalog_type);
+    }
 }
 
 } // namespace duckdb

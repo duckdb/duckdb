@@ -20,7 +20,7 @@ class LogicalCopyToFile;
 class LogicalCreate;
 class LogicalCreateTable;
 class LogicalCreateIndex;
-class LogicalCreateTable;
+class LogicalCreateMatView;
 class LogicalCrossProduct;
 class LogicalCTERef;
 class LogicalDelete;
