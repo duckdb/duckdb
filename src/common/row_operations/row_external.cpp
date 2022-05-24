@@ -85,11 +85,11 @@ void RowOperations::CopyHeapAndSwizzle(const RowLayout &layout, data_ptr_t row_p
 }
 
 void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, const data_ptr_t base_row_ptr,
-                                         const data_ptr_t heap_base_ptr, const idx_t count) {
+                                         const data_ptr_t base_heap_ptr, const idx_t count) {
 	const auto row_width = layout.GetRowWidth();
 	data_ptr_t heap_ptr_ptr = base_row_ptr + layout.GetHeapOffset();
 	for (idx_t i = 0; i < count; i++) {
-		Store<data_ptr_t>(heap_ptr_ptr, heap_base_ptr + Load<idx_t>(heap_ptr_ptr));
+		Store<data_ptr_t>(base_heap_ptr + Load<idx_t>(heap_ptr_ptr), heap_ptr_ptr);
 		heap_ptr_ptr += row_width;
 	}
 }

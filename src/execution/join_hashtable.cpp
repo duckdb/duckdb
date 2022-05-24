@@ -85,6 +85,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 
 	if (partition_block_collections.empty()) {
 		lock_guard<mutex> lock(partition_lock);
+		D_ASSERT(partition_string_heaps.empty());
 		for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
 			partition_block_collections.push_back(move(other.partition_block_collections[idx]));
 			if (!layout.AllConstant()) {
@@ -941,6 +942,7 @@ void JoinHashTable::SwizzleCollectedBlocks() {
 void JoinHashTable::UnswizzleBlocks() {
 	auto &blocks = swizzled_block_collection->blocks;
 	auto &heap_blocks = swizzled_string_heap->blocks;
+	D_ASSERT(blocks.size() == heap_blocks.size());
 
 	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
 		auto &data_block = blocks[block_idx];
@@ -1029,6 +1031,8 @@ public:
 
 	void FinishEvent() override {
 		// TODO Complete partitioning, or perhaps schedule another partitioning round
+		//  for now we just move the data back to the swizzled blocks
+		global_ht.PinPartitions();
 		global_ht.UnswizzleBlocks();
 		global_ht.Finalize();
 	}

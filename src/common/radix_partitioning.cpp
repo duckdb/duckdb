@@ -296,6 +296,7 @@ struct PartitionFunctor {
 							if (has_heap) {
 								// Copy data from the input heap block to the partition heaps so we can unpin it
 								auto &p_heap_block = *partition_heap_blocks[idx];
+								partition_data_blocks[idx]->count = block_counts[idx];
 								PartitionHeap(buffer_manager, layout, p_data_block, partition_data_ptrs[idx],
 								              p_heap_block, *partition_heap_handles[idx], partition_heap_ptrs[idx]);
 
@@ -347,6 +348,7 @@ struct PartitionFunctor {
 			if (has_heap) {
 				// Copy data from the input heap block to the partition heaps so we can unpin it
 				for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
+					partition_data_blocks[idx]->count = block_counts[idx];
 					PartitionHeap(buffer_manager, layout, *partition_data_blocks[idx], partition_data_ptrs[idx],
 					              *partition_heap_blocks[idx], *partition_heap_handles[idx], partition_heap_ptrs[idx]);
 				}
@@ -355,6 +357,16 @@ struct PartitionFunctor {
 			// Delete references to input blocks that have been processed to free up memory
 			data_blocks[block_idx] = nullptr;
 			heap_blocks[block_idx] = nullptr;
+		}
+
+		// Update counts of the last block
+		for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
+			partition_data_blocks[idx]->count = block_counts[idx];
+			partition_block_collections[idx]->count += block_counts[idx];
+			if (has_heap) {
+				partition_heap_blocks[idx]->count = block_counts[idx];
+				partition_string_heaps[idx]->count += block_counts[idx];
+			}
 		}
 		// TODO: maybe delete empty blocks at the end? (although they are small and unlikely)
 	}
