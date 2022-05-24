@@ -245,7 +245,8 @@ format-master:
 	python3 scripts/format.py master --fix --noconfirm
 
 third_party/sqllogictest:
-	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+	git --git-dir third_party/sqllogictest/.git checkout 1d5bbc953f732269ff07fb7bbd8ba1b09581fc19
 
 third_party/imdb/data:
 	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
