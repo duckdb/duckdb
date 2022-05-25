@@ -28,8 +28,8 @@ struct TableScanOperatorData : public FunctionOperatorData {
 	vector<column_t> column_ids;
 };
 
-static idx_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
-	if (column_id == EXCLUDED_FROM_STORAGE_ID) {
+static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
+	if (column_id == DConstants::INVALID_INDEX) {
 		return column_id;
 	}
 	auto &col = table.columns[column_id];

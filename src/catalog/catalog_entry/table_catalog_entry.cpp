@@ -328,7 +328,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	info.new_column.oid = columns.size();
 	info.new_column.storage_oid = storage->column_definitions.size();
 	if (info.new_column.Generated()) {
-		info.new_column.storage_oid = EXCLUDED_FROM_STORAGE_ID;
+		info.new_column.storage_oid = DConstants::INVALID_INDEX;
 	}
 	// Add the dependencies of the generated column
 	if (info.new_column.Generated()) {
