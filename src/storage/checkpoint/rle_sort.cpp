@@ -130,7 +130,7 @@ void RLESort::ReplaceRowGroup(RowGroup &sorted_rowgroup) {
 void RLESort::FilterKeyColumns() {
 	InitializeScan();
 	// Initialize a HyperLogLog counter for each column
-	vector<HyperLogLog> logs(row_group.columns.size());
+	vector<HyperLogLog> logs(key_column_ids.size());
 	// Vector for the cardinalities with: Tuple(cardinality, column_id)
 	vector<std::tuple<idx_t, idx_t>> cardinalities;
 
@@ -184,7 +184,7 @@ void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std:
 		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
 //		if (current_count < 500) {
-		cardinalities.emplace_back(logs[i].Count(), i);
+		cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
 //		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
