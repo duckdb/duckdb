@@ -5,6 +5,10 @@
 
 BASE_DIR=$(dirname $0)
 
+if test -f test.db; then
+    rm test.db
+fi
+
 #Configuring ODBC files
 $BASE_DIR/../linux_setup/unixodbc_setup.sh -u -db test.db -D $(pwd)/build/debug/tools/odbc/libduckdb_odbc.so
 

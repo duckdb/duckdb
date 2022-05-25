@@ -142,6 +142,8 @@ def extract_issue(body, nr):
         return None
 
 def is_internal_error(error):
+    if 'differs from original result' in error:
+        return True
     if 'INTERNAL' in error:
         return True
     if 'signed integer overflow' in error:
@@ -233,6 +235,9 @@ print(stdout)
 print("==============  STDERR  =================")
 print(stderr)
 print("==========================================")
+if not is_internal_error(stderr):
+    print("Failed to reproduce the internal error with a single command")
+    exit(0)
 
 error_msg = reduce_sql.sanitize_error(stderr)
 

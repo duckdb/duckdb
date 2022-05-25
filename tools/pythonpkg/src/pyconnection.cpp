@@ -183,15 +183,17 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
 	if (py_object_type == "DataFrame") {
+		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(python_object);
 		{
 			py::gil_scoped_release release;
-			connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
-			    ->CreateView(name, true, true);
+			temporary_views[name] = connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)new_df.ptr())})
+			                            ->CreateView(name, true, true);
 		}
 
 		// keep a reference
 		vector<shared_ptr<ExternalDependency>> dependencies;
-		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object)));
+		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
+		                                                       make_unique<RegisteredObject>(new_df)));
 		connection->context->external_dependencies[name] = move(dependencies);
 	} else if (IsAcceptedArrowObject(py_object_type)) {
 		auto stream_factory =
@@ -201,12 +203,13 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 
 		{
 			py::gil_scoped_release release;
-			connection
-			    ->TableFunction("arrow_scan",
-			                    {Value::POINTER((uintptr_t)stream_factory.get()),
-			                     Value::POINTER((uintptr_t)stream_factory_produce),
-			                     Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
-			    ->CreateView(name, true, true);
+			temporary_views[name] =
+			    connection
+			        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+			                                       Value::POINTER((uintptr_t)stream_factory_produce),
+			                                       Value::POINTER((uintptr_t)stream_factory_get_schema),
+			                                       Value::UBIGINT(rows_per_tuple)})
+			        ->CreateView(name, true, true);
 		}
 		vector<shared_ptr<ExternalDependency>> dependencies;
 		dependencies.push_back(
@@ -265,6 +268,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
+	// First check our temporary view
+	if (temporary_views.find(vname) != temporary_views.end()) {
+		return make_unique<DuckDBPyRelation>(temporary_views[vname]);
+	}
 	return make_unique<DuckDBPyRelation>(connection->View(vname));
 }
 
@@ -291,15 +298,17 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const py::object &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	string name = "df_" + GenerateRandomName();
+	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
-	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
+	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
 	auto rel = make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
-	rel->rel->extra_dependencies = make_unique<PythonDependencies>(make_unique<RegisteredObject>(value));
+	rel->rel->extra_dependencies =
+	    make_unique<PythonDependencies>(make_unique<RegisteredObject>(value), make_unique<RegisteredObject>(new_df));
 	return rel;
 }
 
@@ -379,6 +388,7 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
+	temporary_views.erase(name);
 	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
@@ -492,11 +502,13 @@ TryReplacement(py::dict &dict, py::str &table_name,
 	vector<unique_ptr<ParsedExpression>> children;
 	if (py_object_type == "DataFrame") {
 		string name = "df_" + GenerateRandomName();
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
+		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
 		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
 		// keep a reference
 		vector<shared_ptr<ExternalDependency>> external_dependency;
-		auto object = make_shared<PythonDependencies>(make_unique<RegisteredObject>(entry));
+		auto object = make_shared<PythonDependencies>(make_unique<RegisteredObject>(entry),
+		                                              make_unique<RegisteredObject>(new_df));
 		external_dependency.push_back(move(object));
 		registered_objects[name] = move(external_dependency);
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {

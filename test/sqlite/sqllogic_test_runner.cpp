@@ -73,6 +73,9 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 
 	db = make_unique<DuckDB>(dbpath, config.get());
 	con = make_unique<Connection>(*db);
+	if (enable_verification) {
+		con->EnableQueryVerification();
+	}
 
 	// load any previously loaded extensions again
 	for (auto &extension : extensions) {
@@ -209,6 +212,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			auto system_name = StringUtil::Lower(token.parameters[0]);
 			bool our_system = system_name == "duckdb";
+			if (original_sqlite_test) {
+				our_system = our_system || system_name == "postgresql";
+			}
 			if (our_system == skip_if) {
 				// we skip this command in two situations
 				// (1) skipif duckdb

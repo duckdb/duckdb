@@ -279,7 +279,7 @@ test_that("to_duckdb passing a connection", {
   table_four <- ds %>%
     select(int, lgl, dbl) %>%
     to_duckdb(con = con_separate, auto_disconnect = FALSE)
-  table_four_name <- table_four$ops$x
+  table_four_name <- dbplyr::remote_name(table_four)
 
   result <- DBI::dbGetQuery(
     con_separate,

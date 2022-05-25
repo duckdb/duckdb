@@ -26,6 +26,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
+                                                 DUCKDB_LOCAL(DebugForceNoCrossProduct),
                                                  DUCKDB_GLOBAL(DebugManyFreeListBlocks),
                                                  DUCKDB_GLOBAL(DebugWindowMode),
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
