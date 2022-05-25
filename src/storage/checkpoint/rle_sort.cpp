@@ -137,11 +137,11 @@ void RLESort::FilterKeyColumns() {
 	ScanColumnsToHLL(logs);
 	CalculateCardinalities(logs, cardinalities, RLESortOption::CARDINALITY_BELOW_FIVE_HUNDRED);
 
+	// Clear the old key columns
+	key_column_ids.clear();
+	key_column_types.clear();
 	// Get the second element of the tuple (column_id) and add it as a key column
 	for (idx_t i = 0; i < cardinalities.size(); i++) {
-		// Clear the old key columns
-		key_column_ids.clear();
-		key_column_types.clear();
 		// Add the new key columns
 		idx_t column_id = std::get<1>(cardinalities[i]);
 		key_column_ids.push_back(column_id);
@@ -183,9 +183,9 @@ void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std:
 	for (idx_t i = 0; i < logs.size(); i++) {
 		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-		if (current_count < 500) {
-			cardinalities.emplace_back(logs[i].Count(), i);
-		}
+//		if (current_count < 500) {
+		cardinalities.emplace_back(logs[i].Count(), i);
+//		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }
