@@ -4,20 +4,12 @@
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
-# lambda parameter has the same name as a column
-
-statement ok
-CREATE TABLE l_test (l integer[])
-
-statement error
-SELECT l, list_transform(l, l -> l + 1) FROM l_test
+# test NULLs and simple cases
 
 query II
 SELECT [1] AS l, list_transform([1], l -> l + 1)
 ----
 [1]	[2]
-
-# test NULLs and simple cases
 
 query I
 SELECT list_transform(NULL, x -> x + 1)
@@ -150,24 +142,6 @@ SELECT list_apply([1, NULL], arr_elem -> arr_elem - 4)
 ----
 [-3, NULL]
 
-statement error
-select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
-
-# lambda cannot be the root of a plan
-statement error
-select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
-
-# lhs of lambda must be an unqualified column name
-statement error
-select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
-
-mode skip
-
-statement error
-select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
-
-mode unskip
-
 # more tests on precedence
 
 query I
@@ -180,5 +154,24 @@ select list_apply(i, x -> x + 1 AND x + 1) from (values (list_value(1, 2, 3))) t
 ----
 [True, True, True]
 
-statement error
-select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+# very large lists
+
+statement ok
+CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l FROM range(100) GROUP BY range % 4;
+
+statement ok
+CREATE TABLE transformed_lists (g integer, l integer[]);
+
+statement ok
+INSERT INTO transformed_lists (SELECT g + 1, list_transform(l, x -> x + 1) FROM large_lists WHERE g != 3)
+
+statement ok
+INSERT INTO transformed_lists (SELECT g - 3, list_transform(l, x -> x - 3) FROM large_lists WHERE g = 3)
+
+query I
+SELECT ll.l = tl.l FROM large_lists ll, transformed_lists tl WHERE ll.g = tl.g
+----
+True
+True
+True
+True

@@ -106,7 +106,8 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
                               DataChunk &lambda_chunk, Vector &child_vector, DataChunk &args,
                               ExpressionExecutor &expr_executor) {
 
-	input_chunk.InitializeEmpty(types);
+	input_chunk.SetCardinality(elem_cnt);
+	lambda_chunk.SetCardinality(elem_cnt);
 
 	// set the list child vector
 	Vector slice(child_vector, sel, elem_cnt);
@@ -120,11 +121,6 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 		slices[col_idx].Normalify(elem_cnt);
 		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
 	}
-	input_chunk.SetCardinality(elem_cnt);
-
-	// initialize the lambda result chunk
-	lambda_chunk.Initialize(result_types);
-	lambda_chunk.SetCardinality(elem_cnt);
 
 	// execute the lambda expression
 	expr_executor.Execute(input_chunk, lambda_chunk);
@@ -192,6 +188,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	ExpressionExecutor expr_executor(*lambda_expr);
 	DataChunk input_chunk;
 	DataChunk lambda_chunk;
+	input_chunk.InitializeEmpty(types);
+	lambda_chunk.Initialize(result_types);
 
 	// these are only for the list_filter
 	vector<idx_t> lists_len;
@@ -206,6 +204,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t elem_cnt = 0;
+	idx_t offset = 0;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 
 		auto lists_index = lists_data.sel->get_index(row_idx);
@@ -223,8 +222,9 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 		// set the length and offset of the resulting lists of list_transform
 		if (IS_TRANSFORM) {
-			result_entries[row_idx].offset = list_entry.offset;
+			result_entries[row_idx].offset = offset;
 			result_entries[row_idx].length = list_entry.length;
+			offset += list_entry.length;
 		}
 
 		// empty list, nothing to execute
@@ -239,12 +239,6 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 		// iterate list elements and create transformed expression columns
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
-			// reached STANDARD_VECTOR_SIZE elements, execute
-			if (elem_cnt == STANDARD_VECTOR_SIZE) {
-
-				elem_cnt = 0;
-			}
 
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {

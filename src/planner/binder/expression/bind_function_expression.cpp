@@ -32,17 +32,17 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		// scalar function with a lambda function
 		if (function.function_name == "list_transform" || function.function_name == "array_transform" ||
 		    function.function_name == "list_apply" || function.function_name == "array_apply") {
-			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
+			return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
 		} else if (function.function_name == "list_filter" || function.function_name == "array_filter") {
-			return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
+			return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
 		} else if (function.function_name == "list_reduce" || function.function_name == "array_reduce") {
 			// FIXME: not yet implemented
-			// return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
+			// return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
 			throw BinderException(function.function_name + " is not yet implemented!");
 		}
 
 		// other scalar function
-		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 0);
+		return BindFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
 
 	case CatalogType::MACRO_ENTRY:
 		// macro function
@@ -53,62 +53,86 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	}
 }
 
-BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth,
-                                          idx_t lambda_param_count) {
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func, idx_t depth) {
 
 	// bind the children of the function expression
 	string error;
 
-	// bind the lambda child separately
-	if (lambda_param_count != 0) {
+	// bind of each child
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		BindChild(function.children[i], depth, error);
+	}
 
-		if (function.children.size() != 2) {
-			throw BinderException("Invalid number of arguments, expected two (list, lambda expression)!");
-		}
-		if (function.children[1]->GetExpressionClass() != ExpressionClass::LAMBDA) {
-			throw BinderException("Invalid lambda expression!");
-		}
+	if (!error.empty()) {
+		return BindResult(error);
+	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
 
-		// bind the list parameter
-		BindChild(function.children[0], depth, error);
-		if (!error.empty()) {
-			return BindResult(error);
-		}
+	// all children bound successfully
+	// extract the children and types
+	vector<unique_ptr<Expression>> children;
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		auto &child = (BoundExpression &)*function.children[i];
+		D_ASSERT(child.expr);
+		children.push_back(move(child.expr));
+	}
+	unique_ptr<Expression> result =
+	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
+	if (!result) {
+		throw BinderException(binder.FormatError(function, error));
+	}
+	return BindResult(move(result));
+}
 
-		// get the logical type of the children of the list
-		auto &list_child = (BoundExpression &)*function.children[0];
+BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
+                                                idx_t depth, idx_t lambda_params_count) {
 
-		if (list_child.expr->return_type.id() != LogicalTypeId::LIST &&
-		    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
-			throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
-		}
+	// bind the children of the function expression
+	string error;
 
-		LogicalType list_child_type = LogicalType::SQLNULL;
-		if (list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
-			list_child_type = ListType::GetChildType(list_child.expr->return_type);
-		}
+	if (function.children.size() != 2) {
+		throw BinderException("Invalid number of arguments, expected two (list, lambda expression)!");
+	}
+	if (function.children[1]->GetExpressionClass() != ExpressionClass::LAMBDA) {
+		throw BinderException("Invalid lambda expression!");
+	}
 
-		// bind the lambda parameter
-		auto &lambda_expr = (LambdaExpression &)*function.children[1];
-		BindResult result = BindExpression(lambda_expr, depth, lambda_param_count, list_child_type);
+	// bind the list parameter
+	BindChild(function.children[0], depth, error);
+	if (!error.empty()) {
+		return BindResult(error);
+	}
 
-		if (result.HasError()) {
-			error = result.error;
-		} else {
-			// successfully bound: replace the node with a BoundExpression
-			auto alias = function.children[1]->alias;
-			function.children[1] = make_unique<BoundExpression>(move(result.expression));
-			auto be = (BoundExpression *)function.children[1].get();
-			D_ASSERT(be);
-			be->alias = alias;
-			if (!alias.empty()) {
-				be->expr->alias = alias;
-			}
-		}
+	// get the logical type of the children of the list
+	auto &list_child = (BoundExpression &)*function.children[0];
 
-	} else { // normal bind of each child
-		for (idx_t i = 0; i < function.children.size(); i++) {
-			BindChild(function.children[i], depth, error);
+	if (list_child.expr->return_type.id() != LogicalTypeId::LIST &&
+	    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
+		throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
+	}
+
+	LogicalType list_child_type = LogicalType::SQLNULL;
+	if (list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
+		list_child_type = ListType::GetChildType(list_child.expr->return_type);
+	}
+
+	// bind the lambda parameter
+	auto &lambda_expr = (LambdaExpression &)*function.children[1];
+	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, lambda_params_count, list_child_type);
+
+	if (bind_lambda_result.HasError()) {
+		error = bind_lambda_result.error;
+	} else {
+		// successfully bound: replace the node with a BoundExpression
+		auto alias = function.children[1]->alias;
+		function.children[1] = make_unique<BoundExpression>(move(bind_lambda_result.expression));
+		auto be = (BoundExpression *)function.children[1].get();
+		D_ASSERT(be);
+		be->alias = alias;
+		if (!alias.empty()) {
+			be->expr->alias = alias;
 		}
 	}
 

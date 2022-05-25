@@ -35,25 +35,38 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		}
 	}
 
-	// no table name: find a binding that contains this
+	// find a binding that contains this
+	string table_name = binder.bind_context.GetMatchingBinding(column_name);
+
+	// throw an error if a macro conflicts with a column name
+	auto is_macro_column = false;
+	if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(column_name)) {
+		is_macro_column = true;
+		if (!table_name.empty()) {
+			throw BinderException("Conflicting column names for column " + column_name + "!");
+		}
+	}
 
 	if (lambda_bindings) {
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if ((*lambda_bindings)[i].HasMatchingBinding(column_name)) {
-				// first priority are lambda bindings TODO: throw a warning when this name conflicts
+
+				// throw an error if a lambda conflicts with a column name or a macro
+				if (!table_name.empty() || is_macro_column) {
+					throw BinderException("Conflicting column names for column " + column_name + "!");
+				}
+
 				D_ASSERT(!(*lambda_bindings)[i].alias.empty());
 				return make_unique<ColumnRefExpression>(column_name, (*lambda_bindings)[i].alias);
 			}
 		}
 	}
 
-	if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(column_name)) {
-		// second priority are macro parameter bindings TODO: throw a warning when this name conflicts
+	if (is_macro_column) {
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	}
 
-	string table_name = binder.bind_context.GetMatchingBinding(column_name);
 	if (table_name.empty()) {
 		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");

@@ -4,20 +4,12 @@
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
-# lambda parameter has the same name as a column
-
-statement ok
-CREATE TABLE l_test (l integer[])
-
-statement error
-SELECT l, list_filter(l, l -> l > 1) FROM l_test
+# test NULLs and simple cases
 
 query II
 SELECT [1] AS l, list_filter([1], l -> l > 1)
 ----
 [1]	[]
-
-# test NULLs and simple cases
 
 query I
 SELECT list_filter(NULL, x -> x > 1)

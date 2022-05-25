@@ -23,5 +23,3 @@ query I
 SELECT list_transform([[1, NULL, 2], [3, NULL]], a -> list_filter(a, x -> x IS NOT NULL))
 ----
 [[1, 2], [3]]
-
-# NOTE: could not find a way to reproduce nested for-loops, e.g. to transpose a matrix
