@@ -19,7 +19,8 @@ namespace duckdb {
 
 class ColumnDependencyManager {
 public:
-	ColumnDependencyManager();
+	DUCKDB_API ColumnDependencyManager();
+	DUCKDB_API ~ColumnDependencyManager();
 
 public:
 	//! Adds a connection between the dependent and its dependencies

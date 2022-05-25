@@ -2,13 +2,12 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/set.hpp"
 
-#include <queue>
-
 namespace duckdb {
 
-using std::queue;
-
 ColumnDependencyManager::ColumnDependencyManager() {
+}
+
+ColumnDependencyManager::~ColumnDependencyManager() {
 }
 
 void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices) {

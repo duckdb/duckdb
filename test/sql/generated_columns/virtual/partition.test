@@ -2,6 +2,8 @@
 # description: Using a generated column as a PARTITION BY key
 # group: [virtual]
 
+require vector_size 512
+
 statement ok
 CREATE TABLE unit (price INTEGER, amount_sold INTEGER, name VARCHAR);
 

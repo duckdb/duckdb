@@ -55,7 +55,7 @@ static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, cons
 	auto bound_constraint = make_unique<BoundCheckConstraint>();
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
-	check_binder.target_type = target_type;
+	check_binder.target_type = move(target_type);
 	auto &check = (CheckConstraint &)*cond;
 	// create a copy of the unbound expression because the binding destroys the constraint
 	auto unbound_expression = check.expression->Copy();
