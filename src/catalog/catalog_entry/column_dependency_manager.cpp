@@ -10,6 +10,13 @@ ColumnDependencyManager::ColumnDependencyManager() {
 ColumnDependencyManager::~ColumnDependencyManager() {
 }
 
+ColumnDependencyManager &ColumnDependencyManager::operator=(const ColumnDependencyManager &other) {
+	dependencies_map = other.dependencies_map;
+	dependents_map = other.dependents_map;
+	deleted_columns = other.deleted_columns;
+	return *this;
+}
+
 void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices) {
 	D_ASSERT(column.Generated());
 

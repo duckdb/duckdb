@@ -56,7 +56,7 @@ public:
 	idx_t StandardColumnCount() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
 	//! Returns whether or not a column with the given name exists, of the given column type
-	bool ColumnExists(const string &name, TableColumnType type = TableColumnType::STANDARD);
+	DUCKDB_API bool ColumnExists(const string &name, TableColumnType type = TableColumnType::STANDARD);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
 	ColumnDefinition &GetColumn(const string &name, TableColumnType type = TableColumnType::STANDARD);
