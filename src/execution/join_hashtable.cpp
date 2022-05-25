@@ -1092,4 +1092,64 @@ void JoinHashTable::PinPartitions() {
 	}
 }
 
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk &payload) {
+	D_ASSERT(Count() > 0); // should be handled before
+	D_ASSERT(finalized);
+
+	// set up the scan structure
+	auto ss = make_unique<ScanStructure>(*this);
+
+	if (join_type != JoinType::INNER) {
+		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	}
+
+	// first prepare the keys for probing
+	const SelectionVector *current_sel;
+	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector, false);
+	if (ss->count == 0) {
+		return ss;
+	}
+
+	// hash all the keys
+	Vector hashes(LogicalType::HASH);
+	Hash(keys, *current_sel, ss->count, hashes);
+
+	// TODO match / no match partition stuff
+	Vector cutoff_vector(Value::HASH(partition_cutoff));
+	SelectionVector true_sel;
+	SelectionVector false_sel;
+	true_sel.Initialize();
+	false_sel.Initialize();
+	auto true_count = BinaryExecutor::Select<hash_t, hash_t, LessThan>(keys.data[0], cutoff_vector, current_sel,
+	                                                                   keys.size(), &true_sel, &false_sel);
+	auto false_count = keys.size() - true_count;
+
+	// Sink non-matching stuff into HT
+	DataChunk sink_keys;
+	sink_keys.Reference(keys);
+	sink_keys.Slice(false_sel, false_count);
+	DataChunk sink_payload;
+	sink_payload.Reference(payload);
+	sink_payload.Slice(false_sel, false_count);
+	Build(sink_keys, sink_payload);
+
+	// now initialize the pointers of the scan structure based on the hashes
+	ApplyBitmask(hashes, true_sel, ss->count, ss->pointers);
+
+	// create the selection vector linking to only non-empty entries
+	idx_t count = 0;
+	auto pointers = FlatVector::GetData<data_ptr_t>(ss->pointers);
+	for (idx_t i = 0; i < ss->count; i++) {
+		auto idx = true_sel.get_index(i);
+		pointers[idx] = Load<data_ptr_t>(pointers[idx]);
+		if (pointers[idx]) {
+			ss->sel_vector.set_index(count++, idx);
+		}
+	}
+	ss->count = count;
+
+	return ss;
+}
+
 } // namespace duckdb

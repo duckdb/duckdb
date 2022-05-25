@@ -220,6 +220,8 @@ public:
 	void Partition(JoinHashTable &global_ht);
 	//! TODO
 	void PinPartitions();
+	//! TODO
+	unique_ptr<ScanStructure> ProbeAndSink(DataChunk &keys, DataChunk &payload);
 
 private:
 	//! Merges histogram into this one
@@ -240,15 +242,18 @@ private:
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
 
-	//! Histogram of inserted values
-	unique_ptr<idx_t[]> histogram_ptr;
 	//! Histogram lock
 	mutex histogram_lock;
+	//! Histogram of inserted values
+	unique_ptr<idx_t[]> histogram_ptr;
+
+	//! Partitioned data lock
+	mutex partition_lock;
 	//! Partitioned data
 	vector<unique_ptr<RowDataCollection>> partition_block_collections;
 	vector<unique_ptr<RowDataCollection>> partition_string_heaps;
-	//! Partitioned data lock
-	mutex partition_lock;
+	//! TODO
+	idx_t partition_cutoff;
 };
 
 } // namespace duckdb
