@@ -8,7 +8,7 @@ group publicbi-compression
 load benchmark/publicbi/data/${SUBSET}/load.sql
 
 run
-PRAGMA force_compression_sorting=${SORTINGBOOL}
+PRAGMA force_compression_sorting=${SORTINGBOOL};
 CHECKPOINT;
 
 cleanup benchmark/publicbi/data/${SUBSET}/drop.sql

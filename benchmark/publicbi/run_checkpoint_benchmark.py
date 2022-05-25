@@ -2,6 +2,7 @@ import os
 import subprocess
 import duckdb
 import re
+from timeit import default_timer as timer
 
 """
 This script will run all the benchmark files in the 'checkpoints' folder. It retrieves the checkpointing times
@@ -24,7 +25,7 @@ def write_to_csv(line, mode):
 def run_benchmark_file(file, subset):
     # Run the benchmark runner
     benchmark_path = f"benchmark/publicbi/checkpoints/{subset}/{file}"
-    benchmark_run = subprocess.run([f"{duckdb_root_dir}/release/build/benchmark/benchmark_runner",
+    benchmark_run = subprocess.run([f"{duckdb_root_dir}/build/release/benchmark/benchmark_runner",
                                     benchmark_path], capture_output=True)
 
     # Parse the output
@@ -47,41 +48,70 @@ def run_checkpoint(subdir, subset, rle_sorting):
     duckdb_conn = duckdb.connect(database=db)
 
     # Set sorting PRAGMA and load data
+    duckdb_conn.execute("pragma force_compression='rle'")
     duckdb_conn.execute(f"pragma force_compression_sorting='{rle_sorting}'")
     duckdb_conn.execute(open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read())
-
+    duckdb_conn.execute("CHECKPOINT;")
+    table = duckdb_conn.execute("pragma show_tables").fetchdf()["name"][0]
+    file_size = duckdb_conn.execute(f"select count(distinct block_id) from pragma_storage_info('{table}') where segment_type not in('VARCHAR', 'VALIDITY')").fetchone()
     # Close to checkpoint and get size
     duckdb_conn.close()
-    return os.path.getsize(db)
+    file_size_disk = os.path.getsize(db)
+    os.remove(db)
+    return file_size, file_size_disk
 
 
 def run_benchmark():
     # Prepare results file
-    if os.path.exists(f'benchmark-results.csv'):
-        os.remove(f'benchmark-results.csv')
-    write_to_csv("subset, average_checkpointing_time, file_size, RLESort", mode="w")
+    # if os.path.exists(f'benchmark-results.csv'):
+    #     os.remove(f'benchmark-results.csv')
+    # write_to_csv("subset, time_nosort, block_size_nosort, filesize_nosort, time_sort, block_size_sort, filesize_sort", mode="a")
 
     # Loop through directories to look for the benchmark files
     for subdir, dirs, files in os.walk(checkpoints_dir):
         for file in files:
+            subset = os.path.split(subdir)[1]
             # Check if we apply sorting or not
-            if file.endswith('sorting.benchmark'):
-                subset = os.path.split(subdir)[1]
-                # Run the benchmark file to measure the checkpointing speed
-                average_run_time = run_benchmark_file(file, subset)
-                # # Load the data again but checkpoint to a file and check size
-                file_size = run_checkpoint(subdir, subset, rle_sorting='true')
+            try:
+                if file.endswith('nosorting.benchmark'):
+                    print(f"Running {file}")
+                    # Run the benchmark file to measure the checkpointing speed
+                    # average_run_time = run_benchmark_file(file, subset)
+                    average_run_time = 0
 
-                write_to_csv(f"{subset}, {average_run_time}, {file_size}, true", mode="a")
+                    # # Load the data again but checkpoint to a file and check size
+                    start_nosort = timer()
+                    print(f"Running {subset} checkpoint - no sorting")
+                    block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false')
+                    end_nosort=timer()
 
-            if file.endswith('nosorting.benchmark'):
-                subset = os.path.split(subdir)[1]
-                # Run the benchmark file to measure the checkpointing speed
-                average_run_time = run_benchmark_file(file, subset)
-                # # Load the data again but checkpoint to a file and check size
-                file_size = run_checkpoint(subdir, subset, rle_sorting='false')
+                    start_sort = timer()
+                    print(f"Running {subset} checkpoint - sorting")
+                    block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true')
+                    end_sort=timer()
 
-                write_to_csv(f"{subset}, {average_run_time}, {file_size}, false", mode="a")
+                    # Calculate average improvement
+
+                    print("Writing to file")
+                    write_to_csv(f"{subset}, {end_nosort-start_nosort}, {block_size_nosort},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort},{file_size_disk_sort}", mode="a")
+
+                # else:
+                #     print(f"Running {file}")
+                #     # Run the benchmark file to measure the checkpointing speed
+                #     # average_run_time = run_benchmark_file(file, subset)
+                #     average_run_time = 0
+                #     # # Load the data again but checkpoint to a file and check size
+                #     start = timer()
+                #     print(f"Running {subset} checkpoint - with sorting")
+                #     file_size = run_checkpoint(subdir, subset, rle_sorting='true')
+                #     end = timer()
+
+                #     print("Writing to file")
+                #     write_to_csv(f"{subset}, {end-start}, {file_size}, true", mode="a")
+            except BaseException as err:
+                print("Error occured in", subset, "error:", err)
+
+
 
 
 run_benchmark()
