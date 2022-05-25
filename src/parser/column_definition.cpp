@@ -10,16 +10,15 @@ namespace duckdb {
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(move(name_p)), type(move(type_p)) {
 }
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, ColumnExpression expression)
-    : name(move(name_p)), type(move(type_p)) {
-	switch (expression.type) {
-	case ColumnExpressionType::DEFAULT: {
-		default_value = move(expression.expression);
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression, TableColumnType category)
+    : name(move(name_p)), type(move(type_p)), category(category) {
+	switch (category) {
+	case TableColumnType::STANDARD: {
+		default_value = move(expression);
 		break;
 	}
-	case ColumnExpressionType::GENERATED: {
-		generated_expression = move(expression.expression);
-		category = TableColumnType::GENERATED;
+	case TableColumnType::GENERATED: {
+		generated_expression = move(expression);
 		break;
 	}
 	default: {
@@ -43,12 +42,12 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(name);
 	writer.WriteSerializable(type);
-	writer.WriteField<TableColumnType>(category);
 	if (Generated()) {
 		writer.WriteOptional(generated_expression);
 	} else {
 		writer.WriteOptional(default_value);
 	}
+	writer.WriteField<TableColumnType>(category);
 	writer.Finalize();
 }
 
@@ -56,16 +55,15 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto column_name = reader.ReadRequired<string>();
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto category = reader.ReadRequired<TableColumnType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
+	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
 	reader.Finalize();
 
 	switch (category) {
 	case TableColumnType::STANDARD:
-		return ColumnDefinition(column_name, column_type, ColumnExpression(move(expression)));
+		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::STANDARD);
 	case TableColumnType::GENERATED:
-		return ColumnDefinition(column_name, column_type,
-		                        ColumnExpression(move(expression), ColumnExpressionType::GENERATED));
+		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::GENERATED);
 	default:
 		throw NotImplementedException("Type not implemented for TableColumnType");
 	}

@@ -54,8 +54,7 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		colname = cdef->colname;
 	}
 	bool optional_type = cdef->category == duckdb_libpgquery::COL_GENERATED;
-	LogicalType target_type =
-	    (optional_type && !cdef->typeName) ? LogicalType::ANY : TransformTypeName(cdef->typeName);
+	LogicalType target_type = (optional_type && !cdef->typeName) ? LogicalType::ANY : TransformTypeName(cdef->typeName);
 	if (cdef->collClause) {
 		if (cdef->category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");

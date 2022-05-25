@@ -40,7 +40,8 @@ void AddToColumnDependencyMapping(ColumnDefinition &col, case_insensitive_map_t<
 class ColumnDefinition {
 public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type);
-	DUCKDB_API ColumnDefinition(string name, LogicalType type, ColumnExpression expression);
+	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
+	                            TableColumnType category);
 
 	//! The name of the entry
 	string name;
