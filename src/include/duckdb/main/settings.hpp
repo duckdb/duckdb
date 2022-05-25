@@ -213,6 +213,16 @@ struct PreserveIdentifierCase {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PreserveInsertionOrder {
+	static constexpr const char *Name = "preserve_insertion_order";
+	static constexpr const char *Description =
+	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
+	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ProfilerHistorySize {
 	static constexpr const char *Name = "profiler_history_size";
 	static constexpr const char *Description = "Sets the profiler history size";

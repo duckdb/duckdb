@@ -420,7 +420,12 @@ void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t 
 	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
-void ChunkCollection::Print() {
+string ChunkCollection::ToString() const {
+	return chunks.empty() ? "ChunkCollection [ 0 ]"
+	                      : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
+}
+
+void ChunkCollection::Print() const {
 	Printer::Print(ToString());
 }
 

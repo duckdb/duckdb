@@ -1101,4 +1101,36 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalIEJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	D_ASSERT(children.size() == 2);
+	if (state.recursive_cte) {
+		throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
+	}
+
+	// Build the LHS
+	auto lhs_pipeline = make_shared<Pipeline>(executor);
+	state.SetPipelineSink(*lhs_pipeline, this);
+	D_ASSERT(children[0].get());
+	children[0]->BuildPipelines(executor, *lhs_pipeline, state);
+
+	// Build the RHS
+	auto rhs_pipeline = make_shared<Pipeline>(executor);
+	state.SetPipelineSink(*rhs_pipeline, this);
+	D_ASSERT(children[1].get());
+	children[1]->BuildPipelines(executor, *rhs_pipeline, state);
+
+	// RHS => LHS => current
+	current.AddDependency(rhs_pipeline);
+	rhs_pipeline->AddDependency(lhs_pipeline);
+
+	state.AddPipeline(executor, move(lhs_pipeline));
+	state.AddPipeline(executor, move(rhs_pipeline));
+
+	// Now build both and scan
+	state.SetPipelineSource(current, this);
+}
+
 } // namespace duckdb

@@ -8,11 +8,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-#include "duckdb/execution/operator/order/physical_order.hpp"
-#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
-#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"
 
@@ -112,6 +108,7 @@ void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
 }
 
 bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
+	// check if the sink, source and all intermediate operators support parallelism
 	if (!sink->ParallelSink()) {
 		return false;
 	}
@@ -123,8 +120,33 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			return false;
 		}
 	}
+	if (sink->RequiresBatchIndex()) {
+		if (!source->SupportsBatchIndex()) {
+			throw InternalException(
+			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
+		}
+	}
 	idx_t max_threads = source_state->MaxThreads();
 	return LaunchScanTasks(event, max_threads);
+}
+
+bool Pipeline::IsOrderDependent() const {
+	auto &config = DBConfig::GetConfig(executor.context);
+	if (!config.preserve_insertion_order) {
+		return false;
+	}
+	if (sink && sink->IsOrderDependent()) {
+		return true;
+	}
+	if (source->IsOrderDependent()) {
+		return true;
+	}
+	for (auto &op : operators) {
+		if (op->IsOrderDependent()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void Pipeline::Schedule(shared_ptr<Event> &event) {
@@ -222,6 +244,59 @@ vector<PhysicalOperator *> Pipeline::GetOperators() const {
 		result.push_back(sink);
 	}
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Pipeline Build State
+//===--------------------------------------------------------------------===//
+void PipelineBuildState::SetPipelineSource(Pipeline &pipeline, PhysicalOperator *op) {
+	pipeline.source = op;
+}
+
+void PipelineBuildState::SetPipelineSink(Pipeline &pipeline, PhysicalOperator *op) {
+	pipeline.sink = op;
+	// set the base batch index of this pipeline based on how many other pipelines have this node as their sink
+	pipeline.base_batch_index = BATCH_INCREMENT * sink_pipeline_count[op];
+	// increment the number of nodes that have this pipeline as their sink
+	sink_pipeline_count[op]++;
+}
+
+void PipelineBuildState::AddPipelineOperator(Pipeline &pipeline, PhysicalOperator *op) {
+	pipeline.operators.push_back(op);
+}
+
+void PipelineBuildState::AddPipeline(Executor &executor, shared_ptr<Pipeline> pipeline) {
+	executor.pipelines.push_back(move(pipeline));
+}
+
+PhysicalOperator *PipelineBuildState::GetPipelineSource(Pipeline &pipeline) {
+	return pipeline.source;
+}
+
+PhysicalOperator *PipelineBuildState::GetPipelineSink(Pipeline &pipeline) {
+	return pipeline.sink;
+}
+
+void PipelineBuildState::SetPipelineOperators(Pipeline &pipeline, vector<PhysicalOperator *> operators) {
+	pipeline.operators = move(operators);
+}
+
+void PipelineBuildState::AddChildPipeline(Executor &executor, Pipeline &pipeline) {
+	executor.AddChildPipeline(&pipeline);
+}
+
+unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetUnionPipelines(Executor &executor) {
+	return executor.union_pipelines;
+}
+unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetChildPipelines(Executor &executor) {
+	return executor.child_pipelines;
+}
+unordered_map<Pipeline *, vector<Pipeline *>> &PipelineBuildState::GetChildDependencies(Executor &executor) {
+	return executor.child_dependencies;
+}
+
+vector<PhysicalOperator *> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
+	return pipeline.operators;
 }
 
 } // namespace duckdb

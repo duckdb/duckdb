@@ -1,0 +1,20 @@
+# name: benchmark/micro/limit/parallel_limit.benchmark
+# description: Benchmark of parallel limit computation
+# group: [limit]
+
+name Parallel Limit
+group micro
+subgroup limit
+
+load
+CREATE TABLE integers AS SELECT * FROM range(100000000) tbl(i);
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 17797934 UNION ALL SELECT 99999998 UNION ALL SELECT 99999999
+
+run
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table) LIMIT 4
+
+result I
+337
+948247
+17797934
+99999998
