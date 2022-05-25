@@ -17,11 +17,11 @@ statement ok
 COPY hugeints TO '__TEST_DIR__/hugeints.parquet' (FORMAT 'parquet');
 
 query I
-SELECT * FROM '__TEST_DIR__/hugeints.parquet'
+SELECT * FROM '__TEST_DIR__/hugeints.parquet' order by h
 ----
+NULL
 -1180591620717411303424
 0
-NULL
 1180591620717411303424
 
 query I
