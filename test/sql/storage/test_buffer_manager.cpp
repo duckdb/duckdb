@@ -59,7 +59,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	config->maximum_threads = 1;
 
 	uint64_t string_length = 64;
-	uint64_t desired_size = 10000000; // desired size is 10MB
+	uint64_t desired_size = 5000000; // desired size is 5MB
 	uint64_t iteration = 2;
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);

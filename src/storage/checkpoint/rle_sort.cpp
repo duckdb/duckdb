@@ -151,16 +151,15 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 void RLESort::Sort() {
 	if (key_column_ids.empty()) {
 		// Nothing to sort on
+		data_table.prev_end += row_group.count;
 		return;
 	}
-	//	if (row_group.HasInterleavedTransactions()) {
-	//		// Has interleaved tsx, he don't run our magic stuff
-	//		return;
-	//	}
+
 	Initialize();
 	SinkKeysPayloadSort();
 	if (new_count == 0) {
 		// No changes
+		data_table.prev_end += row_group.count;
 		return;
 	}
 

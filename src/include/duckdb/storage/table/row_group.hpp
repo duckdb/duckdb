@@ -102,8 +102,6 @@ public:
 	idx_t GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
 	                            SelectionVector &sel_vector, idx_t max_count);
-	// Checks for interleaved transactions
-	bool HasInterleavedTransactions();
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(Transaction &transaction, idx_t row);
 	//! Fetch a specific row from the row_group and insert it into the result at the specified index

@@ -654,45 +654,6 @@ idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t tr
 	return info->GetCommittedSelVector(start_time, transaction_id, sel_vector, max_count);
 }
 
-bool RowGroup::HasInterleavedTransactions() {
-	if (!version_info) {
-		return false;
-	}
-	bool has_interleaved = false;
-	for (idx_t vector_idx = 0; vector_idx < count / STANDARD_VECTOR_SIZE; vector_idx++) {
-		auto info = version_info->info[vector_idx].get();
-		if (!info) {
-			continue;
-		}
-		//		if (info->type == ChunkInfoType::VECTOR_INFO) {
-		//			auto chunk_info = (ChunkVectorInfo *) info;
-		//			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		//				if (chunk_info->inserted[i] >= TRANSACTION_ID_START) {
-		//					return true;
-		//				}
-		//				has_interleaved |= chunk_info->deleted[i] >= TRANSACTION_ID_START;
-		//			}
-		//			//has_interleaved |= chunk_info->insert_id >= TRANSACTION_ID_START;
-		////			if (chunk_info->any_deleted) {
-		////				for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		////					if (chunk_info->deleted[i] == NOT_DELETED_ID) {
-		////						break;
-		////					}
-		////					has_interleaved |= chunk_info->deleted[i] >= TRANSACTION_ID_START;
-		////				}
-		////			}
-		//		} else
-		if (info->type == ChunkInfoType::CONSTANT_INFO) {
-			auto chunk_info = (ChunkConstantInfo *)info;
-			has_interleaved |= chunk_info->insert_id >= TRANSACTION_ID_START;
-			//			if (chunk_info->delete_id != NOT_DELETED_ID){
-			has_interleaved |= chunk_info->delete_id >= TRANSACTION_ID_START;
-			//			}
-		}
-	}
-	return has_interleaved;
-}
-
 bool RowGroup::Fetch(Transaction &transaction, idx_t row) {
 	D_ASSERT(row < this->count);
 	lock_guard<mutex> lock(row_group_lock);
