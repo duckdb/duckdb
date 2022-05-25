@@ -55,15 +55,13 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	init_fun = LoadFunctionFromDLL<ext_init_fun_t>(lib_hdl, init_fun_name, filename);
 	version_fun = LoadFunctionFromDLL<ext_version_fun_t>(lib_hdl, version_fun_name, filename);
 
-	std::cout << "Loading an extension\n";
-
 	std::string engine_version = std::string(DuckDB::LibraryVersion());
-	std::cout << "Engine version is " << engine_version << "\n";
 
 	auto version_fun_result = (*version_fun)();
-	std::cout << "Extension version function retval: " << static_cast<const void*>(version_fun_result) << "\n";
+	if (version_fun_result == nullptr) {
+		throw InvalidInputException("Extension \"%s\" returned a nullptr", filename);
+	}
 	std::string extension_version = std::string(version_fun_result);
-	std::cout << "Extension version is " << extension_version << "\n";
 
 	// Trim v's if necessary
 	std::string extension_version_trimmed = extension_version;
