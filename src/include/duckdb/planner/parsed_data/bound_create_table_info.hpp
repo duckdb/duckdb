@@ -19,7 +19,8 @@ namespace duckdb {
 class CatalogEntry;
 
 struct BoundCreateTableInfo {
-	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base) : base(move(base)) {
+	explicit BoundCreateTableInfo(unique_ptr<CreateInfo> base_p) : base(move(base_p)) {
+		D_ASSERT(base);
 	}
 
 	//! The schema to create the table in
@@ -42,6 +43,7 @@ struct BoundCreateTableInfo {
 	unique_ptr<LogicalOperator> query;
 
 	CreateTableInfo &Base() {
+		D_ASSERT(base);
 		return (CreateTableInfo &)*base;
 	}
 };

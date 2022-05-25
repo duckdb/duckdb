@@ -47,6 +47,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
+                                                 DUCKDB_GLOBAL(PreserveInsertionOrder),
                                                  DUCKDB_LOCAL(ProfilerHistorySize),
                                                  DUCKDB_LOCAL(ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProfilingModeSetting),

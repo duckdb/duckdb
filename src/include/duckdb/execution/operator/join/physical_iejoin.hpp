@@ -61,6 +61,9 @@ public:
 		return true;
 	}
 
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
+
 private:
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state) const;
