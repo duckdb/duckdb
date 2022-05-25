@@ -94,7 +94,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	// now reload the database, but this time with a max memory of 5MB
 	{
-		config->maximum_memory = 50000000;
+		config->maximum_memory = 5000000;
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// we can still select the integer
