@@ -41,6 +41,7 @@ class TestRelation(object):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.limit(2).execute().fetchall() == [(1, 'one'), (2, 'two')]
+        assert rel.limit(2, offset=1).execute().fetchall() == [(2, 'two'), (3, 'three')]
 
     def test_intersect_operator(self,duckdb_cursor):
         conn = duckdb.connect()
