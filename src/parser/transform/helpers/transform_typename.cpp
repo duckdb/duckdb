@@ -7,10 +7,7 @@
 
 namespace duckdb {
 
-LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name, bool optional) {
-	if (optional && !type_name) {
-		return LogicalType::ANY;
-	}
+LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
 	if (!type_name || type_name->type != duckdb_libpgquery::T_PGTypeName) {
 		throw ParserException("Expected a type");
 	}
