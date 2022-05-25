@@ -59,7 +59,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	config->maximum_threads = 1;
 
 	uint64_t string_length = 64;
-	uint64_t desired_size = 5000000; // desired size is 5MB
+	uint64_t desired_size = 5000000 / 2; // desired size is 5MB
 	uint64_t iteration = 2;
 	// make sure the database does not exist
 	DeleteDatabase(storage_database);
@@ -94,7 +94,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	}
 	// now reload the database, but this time with a max memory of 5MB
 	{
-		config->maximum_memory = 5000000;
+		config->maximum_memory = 50000000;
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		// we can still select the integer
