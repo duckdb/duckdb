@@ -134,8 +134,20 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 
 template <class T>
 void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// FIXME: we should be able to do a zero-copy here
-	FixedSizeScanPartial<T>(segment, state, scan_count, result, 0);
+	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	auto start = segment.GetRelativeIndex(state.row_index);
+
+	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto source_data = data + start * sizeof(T);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	if (std::is_same<T, list_entry_t>()) {
+		// list columns are modified in-place during the scans to correct the offsets
+		// so we can't do a zero-copy there
+		memcpy(FlatVector::GetData(result), source_data, scan_count * sizeof(T));
+	} else {
+		FlatVector::SetData(result, source_data);
+	}
 }
 
 //===--------------------------------------------------------------------===//

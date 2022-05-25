@@ -82,6 +82,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(!updates);
 
 	idx_t scan_count = ScanVector(state, result, count);
+	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
 	auto data = FlatVector::GetData<list_entry_t>(result);
