@@ -65,51 +65,51 @@ SELECT AGE(t1, TIMESTAMPTZ '1957-06-13') FROM timestamps;
 56 years 10 months 12 days
 56 years 10 months 12 days
 61 years 11 months 29 days
-NULL
 61 years 11 months 29 days
+NULL
 NULL
 
 # Time fields caused by DST
 query T
-SELECT AGE(TIMESTAMPTZ '2001-04-10', t2) FROM timestamps;
+SELECT AGE(TIMESTAMPTZ '2001-04-10', t2) FROM timestamps order by all;
 ----
-43 years 9 months 28 days
+NULL
+NULL
+-18 years -2 months -1 days
+-18 years -2 months -1 days
 -13 years -7 days
 -12 years -8 months -21 days -23:00:00
--18 years -2 months -1 days
--18 years -2 months -1 days
-NULL
-NULL
+43 years 9 months 28 days
 
 query T
-SELECT AGE(t1, t2) FROM timestamps;
+SELECT AGE(t1, t2) FROM timestamps order by all;
 ----
-43 years 9 months 28 days
+NULL
+NULL
+NULL
+00:00:00
 8 days
 3 months 24 days 01:00:00
-00:00:00
-NULL
-NULL
-NULL
+43 years 9 months 28 days
 
 query T
-SELECT t1 - t2 FROM timestamps;
+SELECT t1 - t2 FROM timestamps order by all;
 ----
-16007 days
+NULL
+NULL
+NULL
+00:00:00
 8 days
 114 days 01:00:00
-00:00:00
-NULL
-NULL
-NULL
+16007 days
 
 query T
-SELECT AGE(t1, t2) FROM timestamps WHERE t1 > '2001-12-12';
+SELECT AGE(t1, t2) FROM timestamps WHERE t1 > '2001-12-12' order by all;
 ----
+NULL
+00:00:00
 8 days
 3 months 24 days 01:00:00
-00:00:00
-NULL
 
 query T
 SELECT AGE(NULL, NULL);
