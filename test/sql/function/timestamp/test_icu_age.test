@@ -59,15 +59,15 @@ INSERT INTO timestamps VALUES
 # computing month lengths from the originating month
 # instead of assuming a constant month size of 30 days
 query T
-SELECT AGE(t1, TIMESTAMPTZ '1957-06-13') FROM timestamps;
+SELECT AGE(t1, TIMESTAMPTZ '1957-06-13') FROM timestamps order by all;
 ----
+NULL
+NULL
 43 years 9 months 28 days
 56 years 10 months 12 days
 56 years 10 months 12 days
 61 years 11 months 29 days
 61 years 11 months 29 days
-NULL
-NULL
 
 # Time fields caused by DST
 query T
