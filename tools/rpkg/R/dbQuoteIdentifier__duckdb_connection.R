@@ -6,6 +6,10 @@ dbQuoteIdentifier__duckdb_connection <- function(conn, x, ...) {
     return(SQL(paste0(dbQuoteIdentifier(conn, x@name), collapse = ".")))
   }
 
+  if (any(is.na(x))) {
+    stop("Cannot pass NA to dbQuoteIdentifier()")
+  }
+
   x <- enc2utf8(x)
   needs_escape <- !grepl("^[a-zA-Z0-9_]+$", x) | tolower(x) %in% the$reserved_words
   x[needs_escape] <- paste0('"', gsub('"', '""', x[needs_escape]), '"')
