@@ -7,4 +7,9 @@
   s3_register("dbplyr::sql_escape_date", "duckdb_connection")
   s3_register("dbplyr::sql_escape_datetime", "duckdb_connection")
   s3_register("dplyr::tbl", "duckdb_connection")
+
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  res <- dbGetQuery(con, "SELECT * FROM duckdb_keywords();")
+  the$reserved_words <- res[[1]]
 }
