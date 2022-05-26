@@ -326,7 +326,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	active_query->executor = make_unique<Executor>(*this);
 	auto &executor = *active_query->executor;
 	if (config.enable_progress_bar) {
-		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time);
+		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time, config.print_progress_bar);
 		active_query->progress_bar->Start();
 		query_progress = 0;
 	}

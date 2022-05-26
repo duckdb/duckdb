@@ -492,12 +492,24 @@ void Executor::Flush(ThreadContext &tcontext) {
 bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
-	if (!pipelines.empty()) {
-		return pipelines.back()->GetProgress(current_progress);
-	} else {
-		current_progress = -1;
-		return true;
+	vector<double> progress;
+	vector<idx_t> cardinality;
+	idx_t total_cardinality = 0;
+	for (auto &pipeline : pipelines) {
+		double child_percentage;
+		idx_t child_cardinality;
+		if (!pipeline->GetProgress(child_percentage, child_cardinality)) {
+			return false;
+		}
+		progress.push_back(child_percentage);
+		cardinality.push_back(child_cardinality);
+		total_cardinality += child_cardinality;
 	}
+	current_progress = 0;
+	for (size_t i = 0; i < progress.size(); i++) {
+		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
+	}
+	return true;
 } // LCOV_EXCL_STOP
 
 bool Executor::HasResultCollector() {
