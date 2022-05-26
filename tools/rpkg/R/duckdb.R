@@ -13,3 +13,5 @@
 #' @docType package
 #' @name duckdb-package
 NULL
+
+the <- new.env(parent = emptyenv())
