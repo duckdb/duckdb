@@ -24,5 +24,4 @@ test_that("preserves expected DBI behaviour", {
     dbQuoteIdentifier(con, Id(schema = "SELECT", table = "b")),
     SQL('"SELECT".b')
   )
-
 })
