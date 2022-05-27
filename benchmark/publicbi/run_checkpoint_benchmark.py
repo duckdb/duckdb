@@ -93,7 +93,7 @@ def run_benchmark():
                     end_sort=timer()
 
                     # Calculate average improvement
-                    average_improvement = (file_size_disk_sort - file_size_disk_nosort)/file_size_disk_sort*100
+                    average_improvement = (file_size_disk_nosort - file_size_disk_sort)/file_size_disk_nosort*100
 
                     print("Writing to file")
                     write_to_csv(f"{subset}, {end_nosort-start_nosort}, {block_size_nosort[0]},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort[0]},{file_size_disk_sort}, {average_improvement}", mode="a", time=timestr)
