@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/redfin2/redfin2.benchmark
+# description: Load redfin2 from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=redfin2
+SORTINGBOOL=false

@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/mulheresmil/mulheresmil.benchmark
+# description: Load mulheresmil from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=mulheresmil
+SORTINGBOOL=false

@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS SalariesFrance_10;
+DROP TABLE IF EXISTS SalariesFrance_8;
+DROP TABLE IF EXISTS SalariesFrance_2;
+DROP TABLE IF EXISTS SalariesFrance_11;
+DROP TABLE IF EXISTS SalariesFrance_7;
+DROP TABLE IF EXISTS SalariesFrance_5;
+DROP TABLE IF EXISTS SalariesFrance_13;
+DROP TABLE IF EXISTS SalariesFrance_9;
+DROP TABLE IF EXISTS SalariesFrance_6;
+DROP TABLE IF EXISTS SalariesFrance_1;
+DROP TABLE IF EXISTS SalariesFrance_4;
+DROP TABLE IF EXISTS SalariesFrance_12;
+DROP TABLE IF EXISTS SalariesFrance_3;

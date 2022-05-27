@@ -149,13 +149,6 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
-	//! Scan the RowGroup to the payload DataChunk before sorting
-	bool ScanToDataChunks(RowGroupScanState &state, DataChunk &result);
-
-	//! Return the indices of the key columns
-	void CalculateCardinalitiesPerColumn(vector<LogicalType> &types, TableScanState &scan_state,
-	                                     vector<std::tuple<idx_t, idx_t>> &cardinalities);
-
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
 

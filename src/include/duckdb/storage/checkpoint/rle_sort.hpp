@@ -7,7 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "rle_sort_options.hpp"
 
 namespace duckdb {
 
@@ -59,8 +61,24 @@ private:
 	// Logical Types supported in the payload
 	bool SupportedPayloadType(LogicalTypeId type_id);
 
+	// Calculate the cardinalities with a chosen option
+	void CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities,
+	                            RLESortOption option);
+
+	// Retrieve all columns with a cardinality < 500, sorted from lowest to highest cardinality
+	void CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities);
+
+	// Filter out key columns which will not be sorted on
+	void FilterKeyColumns();
+
+	// Scan the RowGroup and add key columns to HLL
+	void ScanColumnsToHLL(vector<HyperLogLog> &logs);
+
 	// Initialize key chunks, payload chunks and scan states
-	void Initialize();
+	void InitializeScan();
+
+	// Initialize the sorting states
+	void InitializeSort();
 
 	// Sinks the Keys and Payloads Chunks from the row group into the sorting algorithm
 	void SinkKeysPayloadSort();

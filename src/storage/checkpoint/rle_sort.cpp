@@ -1,6 +1,8 @@
 #include "duckdb/storage/checkpoint/rle_sort.hpp"
-#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/checkpoint/rle_sort_options.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -81,19 +83,21 @@ bool RLESort::SupportedPayloadType(LogicalTypeId type_id) {
 	return true;
 }
 
-void RLESort::Initialize() {
+void RLESort::InitializeScan() {
 	// Initialize the scan states
 	scan_state.column_ids = payload_column_ids;
 	scan_state.max_row = row_group.count;
 
+	// Initialize the scan on the RowGroup
+	row_group.InitializeScan(scan_state.row_group_scan_state);
+	scan_state.row_group_scan_state.max_row = row_group.count;
+}
+
+void RLESort::InitializeSort() {
 	// Initialize the sorting state
 	sort_state =
 	    make_unique<RowGroupSortBindData>(payload_column_types, key_column_types, key_column_ids, row_group.db);
 	local_sort_state.Initialize(*sort_state->global_sort_state, sort_state->global_sort_state->buffer_manager);
-
-	// Scan the RowGroup into the DataChunks
-	row_group.InitializeScan(scan_state.row_group_scan_state);
-	scan_state.row_group_scan_state.max_row = row_group.count;
 }
 
 void RLESort::SinkKeysPayloadSort() {
@@ -121,6 +125,69 @@ void RLESort::ReplaceRowGroup(RowGroup &sorted_rowgroup) {
 	row_group.count = new_count;
 	row_group.start = sorted_rowgroup.start;
 	row_group.Verify();
+}
+
+void RLESort::FilterKeyColumns() {
+	InitializeScan();
+	// Initialize a HyperLogLog counter for each column
+	vector<HyperLogLog> logs(key_column_ids.size());
+	// Vector for the cardinalities with: Tuple(cardinality, column_id)
+	vector<std::tuple<idx_t, idx_t>> cardinalities;
+
+	ScanColumnsToHLL(logs);
+	CalculateCardinalities(logs, cardinalities, RLESortOption::CARDINALITY_BELOW_FIVE_HUNDRED);
+
+	// Clear the old key columns
+	key_column_ids.clear();
+	key_column_types.clear();
+	// Get the second element of the tuple (column_id) and add it as a key column
+	for (idx_t i = 0; i < cardinalities.size(); i++) {
+		// Add the new key columns
+		idx_t column_id = std::get<1>(cardinalities[i]);
+		key_column_ids.push_back(column_id);
+		key_column_types.push_back(row_group.columns[column_id]->type);
+	}
+}
+
+void RLESort::ScanColumnsToHLL(vector<HyperLogLog> &logs) {
+	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE <
+	       scan_state.row_group_scan_state.max_row) {
+		// Scan the table in chunks of STANDARD_VECTOR_SIZE
+		DataChunk result;
+		result.Initialize(payload_column_types);
+		row_group.ScanCommitted(scan_state.row_group_scan_state, result,
+		                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		result.Normalify();
+		// Add each key column to the HLL
+		for (idx_t i = 0; i < key_column_ids.size(); i++) {
+			auto key_column_idx = key_column_ids[i];
+			logs[i].Add(result.data[key_column_idx].GetData(),
+			            sizeof(payload_column_types[key_column_idx].InternalType()));
+		}
+	}
+}
+
+void RLESort::CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities,
+                                     RLESortOption option) {
+	switch (option) {
+	case RLESortOption::CARDINALITY_BELOW_FIVE_HUNDRED:
+		CardinalityBelowFiveHundred(logs, cardinalities);
+		break;
+	default:
+		throw InternalException("Unrecognized sorting option");
+	}
+}
+
+void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
+	// Get the cardinality counts and sort them from low to high
+	for (idx_t i = 0; i < logs.size(); i++) {
+		auto current_count = logs[i].Count();
+		// Do not use column if above a certain cardinality
+//		if (current_count < 500) {
+		cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
+//		}
+	}
+	std::sort(cardinalities.begin(), cardinalities.end());
 }
 
 unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_state) {
@@ -154,8 +221,14 @@ void RLESort::Sort() {
 		data_table.prev_end += row_group.count;
 		return;
 	}
+//	if (row_group.HasInterleavedTransactions()) {
+//		// Has interleaved tsx, he don't run our magic stuff
+//		return;
+//	}
 
-	Initialize();
+	FilterKeyColumns();
+	InitializeScan();
+	InitializeSort();
 	SinkKeysPayloadSort();
 	if (new_count == 0) {
 		// No changes

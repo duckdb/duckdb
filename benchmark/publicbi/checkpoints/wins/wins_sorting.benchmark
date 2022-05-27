@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/wins/wins.benchmark
+# description: Load wins from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=wins
+SORTINGBOOL=true

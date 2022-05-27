@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/realestate2/realestate2.benchmark
+# description: Load realestate2 from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=realestate2
+SORTINGBOOL=false

@@ -1,0 +1,7 @@
+# name: benchmark/publicbi/checkpoints/medpayment2/medpayment2.benchmark
+# description: Load medpayment2 from the PublicBI benchmark and check checkpointing time
+# group: [publicbi-compression]
+
+template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
+SUBSET=medpayment2
+SORTINGBOOL=false
