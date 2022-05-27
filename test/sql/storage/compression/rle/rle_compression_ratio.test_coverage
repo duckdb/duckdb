@@ -48,24 +48,24 @@ drop table test_uncompressed
 foreach type <numeric>
 
 statement ok
-PRAGMA force_compression='uncompressed';
+CREATE TABLE test_uncompressed (i ${type} USING COMPRESSION UNCOMPRESSED)
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT ((i/10)%100)::${type} FROM range(0, 2500000) tbl(i);
-
-statement ok
-checkpoint
-
-statement ok
-PRAGMA force_compression='rle'
-
-statement ok
-CREATE TABLE test_rle AS SELECT ((i/10)%100)::${type} FROM range(0, 2500000) tbl(i);
+INSERT INTO test_uncompressed SELECT ((i/10)%100)::${type} FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
 
-# assert compression ratio >2 wich should be achieved for even the smallest types for this data
+statement ok
+CREATE TABLE test_rle (i ${type} USING COMPRESSION RLE)
+
+statement ok
+INSERT INTO test_rle SELECT ((i/10)%100)::${type} FROM range(0, 2500000) tbl(i);
+
+statement ok
+checkpoint
+
+# assert compression ratio >2 which should be achieved for even the smallest types for this data
 query II
 select (uncompressed::FLOAT / rle::FLOAT) > 2, CAST(1 as ${type}) FROM (
     select

@@ -91,8 +91,9 @@ from
 42	43	44	45	46	47	48	49	50	51	52
 
 # JoinHashTable::ScanFullOuter coverage
+# Since these tests are dependent on a row_id, they can't run with compression.
 statement ok
-CREATE TABLE sqlancer_t0(c0 DOUBLE, c1 DOUBLE);
+CREATE TABLE sqlancer_t0(c0 DOUBLE USING COMPRESSION UNCOMPRESSED, c1 DOUBLE USING COMPRESSION UNCOMPRESSED);
 
 statement ok
 INSERT INTO sqlancer_t0 VALUES

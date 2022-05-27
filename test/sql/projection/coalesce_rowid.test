@@ -5,8 +5,12 @@
 statement ok
 PRAGMA enable_verification
 
+#Depends on row_id so can't use a compression
 statement ok
-create table tbl as select case when i%2=0 then null else i end as i from range(10) tbl(i);
+create table tbl (i integer using compression uncompressed)
+
+statement ok
+insert into tbl select case when i%2=0 then null else i end as i from range(10) tbl(i);
 
 query II
 select i, coalesce(rowid+i, rowid) from tbl ORDER BY rowid;
