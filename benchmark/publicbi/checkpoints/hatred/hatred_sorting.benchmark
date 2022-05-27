@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/hatred/hatred.benchmark
+# name: benchmark/publicbi/checkpoints/hatred/hatred_sorting.benchmark
 # description: Load hatred from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [hatred]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=hatred

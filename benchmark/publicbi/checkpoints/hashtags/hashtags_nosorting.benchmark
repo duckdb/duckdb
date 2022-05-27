@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/hashtags/hashtags.benchmark
+# name: benchmark/publicbi/checkpoints/hashtags/hashtags_nosorting.benchmark
 # description: Load hashtags from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [hashtags]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=hashtags

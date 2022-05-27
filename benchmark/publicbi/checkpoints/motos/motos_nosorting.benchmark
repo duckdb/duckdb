@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/motos/motos.benchmark
+# name: benchmark/publicbi/checkpoints/motos/motos_nosorting.benchmark
 # description: Load motos from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [motos]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=motos

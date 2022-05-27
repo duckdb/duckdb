@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/romance/romance.benchmark
+# name: benchmark/publicbi/checkpoints/romance/romance_sorting.benchmark
 # description: Load romance from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [romance]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=romance

@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/mlb/mlb.benchmark
+# name: benchmark/publicbi/checkpoints/mlb/mlb_sorting.benchmark
 # description: Load mlb from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [mlb]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=mlb

@@ -183,9 +183,9 @@ void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std:
 	for (idx_t i = 0; i < logs.size(); i++) {
 		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-//		if (current_count < 500) {
+		//		if (current_count < 500) {
 		cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
-//		}
+		//		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }
@@ -221,10 +221,10 @@ void RLESort::Sort() {
 		data_table.prev_end += row_group.count;
 		return;
 	}
-//	if (row_group.HasInterleavedTransactions()) {
-//		// Has interleaved tsx, he don't run our magic stuff
-//		return;
-//	}
+	//	if (row_group.HasInterleavedTransactions()) {
+	//		// Has interleaved tsx, he don't run our magic stuff
+	//		return;
+	//	}
 
 	FilterKeyColumns();
 	InitializeScan();

@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/generico/generico.benchmark
+# name: benchmark/publicbi/checkpoints/generico/generico_nosorting.benchmark
 # description: Load generico from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [generico]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=generico

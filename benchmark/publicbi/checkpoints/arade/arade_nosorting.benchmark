@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/arade/arade.benchmark
+# name: benchmark/publicbi/checkpoints/arade/arade_nosorting.benchmark
 # description: Load arade from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [arade]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=arade

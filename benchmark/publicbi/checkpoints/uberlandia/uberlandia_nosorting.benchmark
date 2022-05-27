@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/uberlandia/uberlandia.benchmark
+# name: benchmark/publicbi/checkpoints/uberlandia/uberlandia_nosorting.benchmark
 # description: Load uberlandia from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [uberlandia]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=uberlandia

@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/citymaxcapita/citymaxcapita.benchmark
+# name: benchmark/publicbi/checkpoints/citymaxcapita/citymaxcapita_sorting.benchmark
 # description: Load citymaxcapita from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [citymaxcapita]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=citymaxcapita

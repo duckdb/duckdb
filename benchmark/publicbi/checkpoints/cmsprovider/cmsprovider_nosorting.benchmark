@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/cmsprovider/cmsprovider.benchmark
+# name: benchmark/publicbi/checkpoints/cmsprovider/cmsprovider_nosorting.benchmark
 # description: Load cmsprovider from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [cmsprovider]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=cmsprovider

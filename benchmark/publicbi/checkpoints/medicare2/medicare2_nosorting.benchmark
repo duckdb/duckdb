@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/medicare2/medicare2.benchmark
+# name: benchmark/publicbi/checkpoints/medicare2/medicare2_nosorting.benchmark
 # description: Load medicare2 from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [medicare2]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=medicare2

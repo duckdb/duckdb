@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/uscensus/uscensus.benchmark
+# name: benchmark/publicbi/checkpoints/uscensus/uscensus_sorting.benchmark
 # description: Load uscensus from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [uscensus]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=uscensus

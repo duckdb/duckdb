@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/pancreactomy1/pancreactomy1.benchmark
+# name: benchmark/publicbi/checkpoints/pancreactomy1/pancreactomy1_sorting.benchmark
 # description: Load pancreactomy1 from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [pancreactomy1]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=pancreactomy1
