@@ -186,10 +186,6 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// get the expression executor
 	ExpressionExecutor expr_executor(*lambda_expr);
-	DataChunk input_chunk;
-	DataChunk lambda_chunk;
-	input_chunk.InitializeEmpty(types);
-	lambda_chunk.Initialize(result_types);
 
 	// these are only for the list_filter
 	vector<idx_t> lists_len;
@@ -243,8 +239,14 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
 
+				DataChunk input_chunk;
+				DataChunk lambda_chunk;
+				input_chunk.InitializeEmpty(types);
+				lambda_chunk.Initialize(result_types);
+
 				ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
 				                  child_vector, args, expr_executor);
+
 				auto &lambda_vector = lambda_chunk.data[0];
 
 				if (IS_TRANSFORM) {
@@ -268,6 +270,11 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 			elem_cnt++;
 		}
 	}
+
+	DataChunk input_chunk;
+	DataChunk lambda_chunk;
+	input_chunk.InitializeEmpty(types);
+	lambda_chunk.Initialize(result_types);
 
 	ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk, child_vector, args,
 	                  expr_executor);
