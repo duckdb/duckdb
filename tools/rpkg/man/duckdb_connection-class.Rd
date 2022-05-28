@@ -36,6 +36,9 @@
 \alias{dbListTables__duckdb_connection}
 \alias{dbListTables,duckdb_connection-method}
 \alias{dbQuoteIdentifier,duckdb_connection,ANY-method}
+\alias{dbQuoteIdentifier,duckdb_connection,character-method}
+\alias{dbQuoteIdentifier,duckdb_connection,SQL-method}
+\alias{dbQuoteIdentifier,duckdb_connection,Id-method}
 \alias{dbQuoteLiteral__duckdb_connection}
 \alias{dbQuoteLiteral,duckdb_connection-method}
 \alias{dbRemoveTable__duckdb_connection_character}
