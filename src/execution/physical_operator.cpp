@@ -74,6 +74,10 @@ idx_t PhysicalOperator::GetBatchIndex(ExecutionContext &context, DataChunk &chun
                                       LocalSourceState &lstate) const {
 	throw InternalException("Calling GetBatchIndex on a node that does not support it");
 }
+
+double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	return -1;
+}
 // LCOV_EXCL_STOP
 
 //===--------------------------------------------------------------------===//

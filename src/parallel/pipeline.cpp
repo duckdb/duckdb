@@ -55,50 +55,13 @@ ClientContext &Pipeline::GetClientContext() {
 	return executor.context;
 }
 
-// LCOV_EXCL_START
-bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op, double &current_percentage) {
-	current_percentage = -1;
-	switch (op->type) {
-	case PhysicalOperatorType::TABLE_SCAN: {
-		auto &get = (PhysicalTableScan &)*op;
-		if (get.function.table_scan_progress) {
-			current_percentage = get.function.table_scan_progress(context, get.bind_data.get());
-			return true;
-		}
-		// If the table_scan_progress is not implemented it means we don't support this function yet in the progress
-		// bar
-		return false;
-	}
-		// If it is not a table scan we go down on all children until we reach the leaf operators
-	default: {
-		vector<idx_t> progress;
-		vector<idx_t> cardinality;
-		double total_cardinality = 0;
-		current_percentage = 0;
-		for (auto &op_child : op->children) {
-			double child_percentage = 0;
-			if (!GetProgressInternal(context, op_child.get(), child_percentage)) {
-				return false;
-			}
-			if (!Value::DoubleIsFinite(child_percentage)) {
-				return false;
-			}
-			progress.push_back(child_percentage);
-			cardinality.push_back(op_child->estimated_cardinality);
-			total_cardinality += op_child->estimated_cardinality;
-		}
-		for (size_t i = 0; i < progress.size(); i++) {
-			current_percentage += progress[i] * cardinality[i] / total_cardinality;
-		}
-		return true;
-	}
-	}
-}
-// LCOV_EXCL_STOP
+bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality) {
+	D_ASSERT(source);
 
-bool Pipeline::GetProgress(double &current_percentage) {
 	auto &client = executor.context;
-	return GetProgressInternal(client, source, current_percentage);
+	current_percentage = source->GetProgress(client, *source_state);
+	source_cardinality = source->estimated_cardinality;
+	return current_percentage >= 0;
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
