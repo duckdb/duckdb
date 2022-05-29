@@ -165,6 +165,9 @@ public:
 		return false;
 	}
 
+	//! Returns the current progress percentage, or a negative value if progress bars are not supported
+	virtual double GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+
 public:
 	// Sink interface
 

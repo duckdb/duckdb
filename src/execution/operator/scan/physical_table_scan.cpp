@@ -113,6 +113,14 @@ void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, Glo
 	}
 }
 
+double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	if (function.table_scan_progress) {
+		return function.table_scan_progress(context, bind_data.get());
+	}
+	// if table_scan_progress is not implemented we don't support this function yet in the progress bar
+	return -1;
+}
+
 idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                        LocalSourceState &lstate) const {
 	D_ASSERT(SupportsBatchIndex());
