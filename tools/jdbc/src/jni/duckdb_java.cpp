@@ -130,7 +130,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	env->DeleteLocalRef(tmpLocalRef);
 
 	J_DuckResultSetMeta_init = env->GetMethodID(J_DuckResultSetMeta, "<init>",
-	                                            "(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
+												"(II[Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;)V");
 
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBVector");
 	J_DuckVector = (jclass)env->NewGlobalRef(tmpLocalRef);
@@ -195,7 +195,7 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass, jbyteArray database_j,
-                                                                             jboolean read_only) {
+																			 jboolean read_only) {
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
 	if (read_only) {
@@ -206,6 +206,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return 0;
 	}
 	return nullptr;
 }
@@ -224,13 +225,14 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNI
 		return env->NewDirectByteBuffer(conn, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return 0;
 	}
 	return nullptr;
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,
-                                                                                    jobject conn_ref_buf,
-                                                                                    jboolean auto_commit) {
+																					jobject conn_ref_buf,
+																					jboolean auto_commit) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref || !conn_ref->context) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
@@ -239,7 +241,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1com
 }
 
 JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_1commit(JNIEnv *env, jclass,
-                                                                                        jobject conn_ref_buf) {
+																						jobject conn_ref_buf) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
@@ -248,7 +250,7 @@ JNIEXPORT jboolean JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1auto_
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1disconnect(JNIEnv *env, jclass,
-                                                                             jobject conn_ref_buf) {
+																			 jobject conn_ref_buf) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (conn_ref) {
 		delete conn_ref;
@@ -262,10 +264,11 @@ struct StatementHolder {
 #include "utf8proc_wrapper.hpp"
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv *env, jclass, jobject conn_ref_buf,
-                                                                             jbyteArray query_j) {
+																			 jbyteArray query_j) {
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
+		return 0;
 	}
 
 	auto query = byte_array_to_string(env, query_j);
@@ -292,7 +295,7 @@ struct ResultHolder {
 };
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNIEnv *env, jclass, jobject stmt_ref_buf,
-                                                                             jobjectArray params) {
+																			 jobjectArray params) {
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
@@ -302,7 +305,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 
 	idx_t param_len = env->GetArrayLength(params);
 	if (param_len != stmt_ref->stmt->n_param) {
+		delete res_ref;
 		env->ThrowNew(J_SQLException, "Parameter count mismatch");
+		return 0;
 	}
 
 	if (param_len > 0) {
@@ -328,7 +333,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 				continue;
 			} else if (env->IsInstanceOf(param, J_Timestamp)) {
 				duckdb_params.push_back(
-				    Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
+					Value::TIMESTAMP((timestamp_t)env->CallLongMethod(param, J_Timestamp_getMicrosEpoch)));
 				continue;
 			} else if (env->IsInstanceOf(param, J_Float)) {
 				duckdb_params.push_back(Value::FLOAT(env->CallFloatMethod(param, J_Float_floatValue)));
@@ -360,7 +365,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 				env->ReleaseStringUTFChars((jstring)param, param_string);
 				continue;
 			} else {
+				delete res_ref;
 				env->ThrowNew(J_SQLException, "Unsupported parameter type");
+				return 0;
 			}
 		}
 	}
@@ -369,7 +376,9 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	if (!res_ref->res->success) {
 		string error_msg = string(res_ref->res->error);
 		res_ref->res = nullptr;
+		delete res_ref;
 		env->ThrowNew(J_SQLException, error_msg.c_str());
+		return 0;
 	}
 	return env->NewDirectByteBuffer(res_ref, 0);
 }
@@ -382,7 +391,7 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1release(JNIEnv
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1free_1result(JNIEnv *env, jclass,
-                                                                               jobject res_ref_buf) {
+																			   jobject res_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (res_ref) {
 		delete res_ref;
@@ -430,6 +439,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
+		return 0;
 	}
 
 	auto column_count = stmt_ref->stmt->ColumnCount();
@@ -449,21 +459,22 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 		}
 
 		env->SetObjectArrayElement(name_array, col_idx,
-		                           decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
+								   decode_charbuffer_to_jstring(env, names[col_idx].c_str(), names[col_idx].length()));
 		env->SetObjectArrayElement(type_array, col_idx, env->NewStringUTF(col_name.c_str()));
 		env->SetObjectArrayElement(type_detail_array, col_idx,
-		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
+								   env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
 	}
 
 	return env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, stmt_ref->stmt->n_param, column_count,
-	                      name_array, type_array, type_detail_array);
+						  name_array, type_array, type_detail_array);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
-                                                                                jobject res_ref_buf) {
+																				jobject res_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || !res_ref->res->success) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+		return 0;
 	}
 
 	res_ref->chunk = res_ref->res->Fetch();
@@ -595,6 +606,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			break;
 		default:
 			env->ThrowNew(J_SQLException, ("Unsupported result column type " + vec.GetType().ToString()).c_str());
+			return 0;
 		}
 
 		env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
@@ -611,23 +623,25 @@ JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JN
 }
 
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1type(JNIEnv *env, jclass,
-                                                                                   jobject stmt_ref_buf) {
+																				   jobject stmt_ref_buf) {
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
+		return 0;
 	}
 	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->GetStatementType()).c_str());
 }
 
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1appender(JNIEnv *env, jclass,
-                                                                                      jobject conn_ref_buf,
-                                                                                      jbyteArray schema_name_j,
-                                                                                      jbyteArray table_name_j) {
+																					  jobject conn_ref_buf,
+																					  jbyteArray schema_name_j,
+																					  jbyteArray table_name_j) {
 
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref || !conn_ref->context) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
+		return 0;
 	}
 	auto schema_name = byte_array_to_string(env, schema_name_j);
 	auto table_name = byte_array_to_string(env, table_name_j);
@@ -636,6 +650,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1app
 		return env->NewDirectByteBuffer(appender, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return 0;
 	}
 	return nullptr;
 }
@@ -644,121 +659,133 @@ static Appender *get_appender(JNIEnv *env, jobject appender_ref_buf) {
 	auto appender_ref = (Appender *)env->GetDirectBufferAddress(appender_ref_buf);
 	if (!appender_ref) {
 		env->ThrowNew(J_SQLException, "Invalid appender");
+		return nullptr;
 	}
 	return appender_ref;
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1begin_1row(JNIEnv *env, jclass,
-                                                                                       jobject appender_ref_buf) {
+																					   jobject appender_ref_buf) {
 	try {
 		get_appender(env, appender_ref_buf)->BeginRow();
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1end_1row(JNIEnv *env, jclass,
-                                                                                     jobject appender_ref_buf) {
+																					 jobject appender_ref_buf) {
 	try {
 		get_appender(env, appender_ref_buf)->EndRow();
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1flush(JNIEnv *env, jclass,
-                                                                                  jobject appender_ref_buf) {
+																				  jobject appender_ref_buf) {
 	try {
 		get_appender(env, appender_ref_buf)->Flush();
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1close(JNIEnv *env, jclass,
-                                                                                  jobject appender_ref_buf) {
+																				  jobject appender_ref_buf) {
 	try {
 		auto appender = get_appender(env, appender_ref_buf);
 		appender->Close();
 		delete appender;
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1boolean(JNIEnv *env, jclass,
-                                                                                            jobject appender_ref_buf,
-                                                                                            jboolean value) {
+																							jobject appender_ref_buf,
+																							jboolean value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((bool)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1byte(JNIEnv *env, jclass,
-                                                                                         jobject appender_ref_buf,
-                                                                                         jbyte value) {
+																						 jobject appender_ref_buf,
+																						 jbyte value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((int8_t)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1short(JNIEnv *env, jclass,
-                                                                                          jobject appender_ref_buf,
-                                                                                          jshort value) {
+																						  jobject appender_ref_buf,
+																						  jshort value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((int16_t)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1int(JNIEnv *env, jclass,
-                                                                                        jobject appender_ref_buf,
-                                                                                        jint value) {
+																						jobject appender_ref_buf,
+																						jint value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((int32_t)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1long(JNIEnv *env, jclass,
-                                                                                         jobject appender_ref_buf,
-                                                                                         jlong value) {
+																						 jobject appender_ref_buf,
+																						 jlong value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((int64_t)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1float(JNIEnv *env, jclass,
-                                                                                          jobject appender_ref_buf,
-                                                                                          jfloat value) {
+																						  jobject appender_ref_buf,
+																						  jfloat value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((float)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1double(JNIEnv *env, jclass,
-                                                                                           jobject appender_ref_buf,
-                                                                                           jdouble value) {
+																						   jobject appender_ref_buf,
+																						   jdouble value) {
 	try {
 		get_appender(env, appender_ref_buf)->Append((double)value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string(JNIEnv *env, jclass,
-                                                                                           jobject appender_ref_buf,
-                                                                                           jstring value) {
+																						   jobject appender_ref_buf,
+																						   jstring value) {
 	try {
 		if (env->IsSameObject(value, NULL)) {
 			get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
@@ -770,5 +797,6 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 		env->ReleaseStringUTFChars(value, c_string_value);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return;
 	}
 }
