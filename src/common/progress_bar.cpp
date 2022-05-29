@@ -4,8 +4,9 @@
 
 namespace duckdb {
 
-ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after)
-    : executor(executor), show_progress_after(show_progress_after), current_percentage(-1) {
+ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after, bool print_progress)
+    : executor(executor), show_progress_after(show_progress_after), current_percentage(-1),
+      print_progress(print_progress) {
 }
 
 double ProgressBar::GetCurrentPercentage() {
@@ -28,7 +29,6 @@ void ProgressBar::Update(bool final) {
 		return;
 	}
 	auto sufficient_time_elapsed = profiler.Elapsed() > show_progress_after / 1000.0;
-	auto print_progress = ClientConfig::GetConfig(executor.context).print_progress_bar;
 	if (new_percentage > current_percentage) {
 		current_percentage = new_percentage;
 	}
