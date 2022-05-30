@@ -48,6 +48,9 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto &col = columns[i];
 		if (colref.column_names[0] == col.name) {
+			if (col.Generated()) {
+				return BindExpression(&col.generated_expression, 0, false);
+			}
 			bound_columns.insert(i);
 			D_ASSERT(col.storage_oid != DConstants::INVALID_INDEX);
 			return BindResult(make_unique<BoundReferenceExpression>(col.type, col.storage_oid));

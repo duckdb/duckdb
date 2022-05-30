@@ -48,6 +48,18 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 	}
 }
 
+static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
+	auto &base = (CreateTableInfo &)*info.base;
+	D_ASSERT(!info.name_map.empty());
+
+	for (auto &col : base.columns) {
+		if (!col.Generated()) {
+			continue;
+		}
+		info.column_dependency_manager.AddGeneratedColumn(col, info.name_map);
+	}
+}
+
 static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond,
                                 LogicalType target_type = LogicalType::INTEGER) {
 	auto &base = (CreateTableInfo &)*info.base;
@@ -199,7 +211,8 @@ static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unres
 	    expr, [&](const ParsedExpression &child) { TypeIsUnresolved((ParsedExpression &)child, table, unresolved); });
 }
 
-static bool HasUnresolvedDependency(column_t index, const CreateTableInfo &info, unordered_set<column_t> &resolved) {
+static bool HasUnresolvedDependency(column_t index, const BoundCreateTableInfo &info,
+                                    unordered_set<column_t> &resolved) {
 	if (!info.column_dependency_manager.HasDependencies(index)) {
 		return false;
 	}
@@ -221,14 +234,16 @@ struct GeneratedColumnBindData {
 	bool allow_unresolved;
 };
 
-void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const CreateTableInfo &info) {
+void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
+	auto &base = (CreateTableInfo &)*info.base;
+
 	vector<string> names;
 	vector<LogicalType> types;
 	queue<GeneratedColumnBindData> to_resolve;
 
-	D_ASSERT(info.type == CatalogType::TABLE_ENTRY);
-	for (idx_t i = 0; i < info.columns.size(); i++) {
-		auto &col = info.columns[i];
+	D_ASSERT(base.type == CatalogType::TABLE_ENTRY);
+	for (idx_t i = 0; i < base.columns.size(); i++) {
+		auto &col = base.columns[i];
 		names.push_back(col.name);
 		types.push_back(col.type);
 		if (!col.Generated()) {
@@ -244,9 +259,9 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
-	binder->bind_context.AddGenericBinding(table_index, info.table, names, types);
+	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	string ignore;
-	auto table_binding = binder->bind_context.GetBinding(info.table, ignore);
+	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
 	D_ASSERT(table_binding && ignore.empty());
 
 	unordered_set<column_t> resolved;
@@ -258,7 +273,7 @@ void Binder::BindGeneratedColumns(vector<ColumnDefinition> &columns, const Creat
 		column_t i = resolve_data.index;
 		// Already resolved
 		bool allow_unresolved = resolve_data.allow_unresolved;
-		auto &col = columns[i];
+		auto &col = base.columns[i];
 		if (resolved.count(i)) {
 			continue;
 		}
@@ -359,8 +374,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 
 	auto result = make_unique<BoundCreateTableInfo>(move(info));
 	result->schema = BindSchema(*result->base);
-	// bind the generated column expressions
-	BindGeneratedColumns(base.columns, base);
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -376,10 +389,17 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		// create the name map for the statement
 		CreateColumnMap(*result, true);
 		// create generated check constraints
+		CreateColumnDependencyManager(*result);
+		// bind the generated column expressions
+		BindGeneratedColumns(*result);
 		CreateGeneratedCheckConstraints(*result);
 	} else {
 		// create the name map for the statement
 		CreateColumnMap(*result, false);
+		// create generated check constraints
+		CreateColumnDependencyManager(*result);
+		// bind the generated column expressions
+		BindGeneratedColumns(*result);
 		// create generated check constraints
 		CreateGeneratedCheckConstraints(*result);
 		// bind any constraints

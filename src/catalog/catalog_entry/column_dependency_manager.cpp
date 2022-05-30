@@ -33,6 +33,22 @@ void ColumnDependencyManager::DetectCircularDependency(column_t index) {
 	}
 }
 
+void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
+                                                 const case_insensitive_map_t<TableColumnInfo> &name_map) {
+	D_ASSERT(column.Generated());
+	vector<string> referenced_columns;
+	column.GetListOfDependencies(referenced_columns);
+	vector<column_t> indices;
+	for (auto &col : referenced_columns) {
+		auto entry = name_map.find(col);
+		if (entry == name_map.end()) {
+			throw InvalidInputException("Referenced column was not found in the table");
+		}
+		indices.push_back(entry->second.index);
+	}
+	return AddGeneratedColumn(column.oid, indices);
+}
+
 void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<column_t> &indices) {
 	if (indices.empty()) {
 		return;

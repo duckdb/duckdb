@@ -29,6 +29,9 @@ public:
 public:
 	//! Adds a connection between the dependent and its dependencies
 	void AddGeneratedColumn(column_t index, const vector<column_t> &indices);
+	//! Add a generated column from a column definition
+	void AddGeneratedColumn(const ColumnDefinition &column, const case_insensitive_map_t<TableColumnInfo> &name_map);
+
 	//! Removes the column(s) and outputs the new column indices
 	vector<column_t> RemoveColumn(column_t index, column_t column_amount);
 

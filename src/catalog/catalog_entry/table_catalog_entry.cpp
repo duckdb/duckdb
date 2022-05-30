@@ -92,7 +92,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
       bound_constraints(move(info->bound_constraints)),
-      column_dependency_manager(move(info->Base().column_dependency_manager)) {
+      column_dependency_manager(move(info->column_dependency_manager)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -218,7 +218,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	auto rename_idx = rename_info.index;
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
-	create_info->column_dependency_manager = column_dependency_manager;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 
@@ -317,8 +316,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
-	create_info->column_dependency_manager = column_dependency_manager;
-
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}
@@ -328,30 +325,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
 	info.new_column.storage_oid = storage->column_definitions.size();
-	if (info.new_column.Generated()) {
-		info.new_column.storage_oid = DConstants::INVALID_INDEX;
-	}
-	// Add the dependencies of the generated column
-	if (info.new_column.Generated()) {
-		vector<string> referenced_columns;
-		info.new_column.GetListOfDependencies(referenced_columns);
-		vector<column_t> indices = ConvertNamesToIndices(referenced_columns, name_map);
-		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column.oid, indices);
-	}
 
 	auto col = info.new_column.Copy();
-	if (col.Generated()) {
-		col.CheckValidity(columns, name);
-	}
 
 	create_info->columns.push_back(move(col));
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	if (info.new_column.Generated()) {
-		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
-		                                      storage);
-	}
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
@@ -475,7 +455,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 		}
 	}
 
-	create_info->column_dependency_manager = column_dependency_manager;
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	if (remove_info.column_type == TableColumnType::GENERATED) {

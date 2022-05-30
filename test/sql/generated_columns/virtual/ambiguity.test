@@ -9,12 +9,21 @@ CREATE TABLE unit (
 	total_profit AS (price * amount_sold)
 );
 
-statement ok
+# Not allowed to have qualified (tbl.name) column references
+statement error
 CREATE TABLE unit2 (
 	price INTEGER,
 	amount_sold INTEGER,
 	total_profit AS (price / amount_sold),
 	profit_total AS (unit2.price * unit2.amount_sold)
+);
+
+statement ok
+CREATE TABLE unit2 (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price / amount_sold),
+	profit_total AS (price * amount_sold)
 );
 
 statement ok

@@ -31,8 +31,6 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
-	//! Column dependency manager, used in CREATE TABLE to add dependencies before the table is constructed
-	ColumnDependencyManager column_dependency_manager;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {

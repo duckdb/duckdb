@@ -77,7 +77,7 @@ public:
 	//===--------------------------------------------------------------------===//
 	//! Has to be run on a newly added generated column to ensure that its valid
 	void CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name);
-	void GetListOfDependencies(vector<string> &dependencies);
+	void GetListOfDependencies(vector<string> &dependencies) const;
 
 private:
 private:

@@ -125,28 +125,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			throw NotImplementedException("ColumnDef type not handled yet");
 		}
 	}
-	// Can only check this after all columns are added
-	for (idx_t i = 0; i < info->columns.size(); i++) {
-		auto &gen_col = info->columns[i];
-		if (!gen_col.Generated()) {
-			continue;
-		}
-		// Add to the dependency/dependent map if a generated column is added
-		vector<string> referenced_columns;
-		gen_col.GetListOfDependencies(referenced_columns);
-		vector<column_t> indices;
-		for (auto &col : referenced_columns) {
-			auto entry = tmp_name_map.find(col);
-			if (entry == tmp_name_map.end()) {
-				throw InvalidInputException("Referenced column was not found in the table");
-			}
-			indices.push_back(entry->second);
-		}
-		gen_col.oid = i;
-
-		info->column_dependency_manager.AddGeneratedColumn(gen_col.oid, indices);
-		gen_col.CheckValidity(info->columns, info->table);
-	}
 	result->info = move(info);
 	return result;
 }

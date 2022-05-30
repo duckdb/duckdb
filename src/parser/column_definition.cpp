@@ -77,41 +77,17 @@ bool ColumnDefinition::Generated() const {
 //===--------------------------------------------------------------------===//
 // Generated Columns (VIRTUAL)
 //===--------------------------------------------------------------------===//
-static bool ColumnsContainsColumnRef(const vector<ColumnDefinition> &columns, const string &columnref) {
-	for (auto &col : columns) {
-		if (col.name == columnref) {
-			return true;
-		}
-	}
-	return false;
-}
 
-static void StripTableName(ColumnRefExpression &expr, const string &table_name) {
-	D_ASSERT(expr.IsQualified());
-	auto &name = expr.GetTableName();
-	auto &col_name = expr.GetColumnName();
-	if (name != table_name) {
-		throw BinderException("Column \"%s\" tries to reference a table outside of %s", expr.GetColumnName(),
-		                      table_name);
-	}
-	// Replace the column_names vector with only the column name
-	expr.column_names = vector<string> {col_name};
-}
-
-static void VerifyColumnRefs(const string &name, const vector<ColumnDefinition> &columns, ParsedExpression &expr) {
+static void VerifyColumnRefs(ParsedExpression &expr) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &column_ref = (ColumnRefExpression &)expr;
-		auto &column_name = column_ref.GetColumnName();
-		bool exists_in_table = ColumnsContainsColumnRef(columns, column_name);
-		if (!exists_in_table) {
-			throw BinderException("Column \"%s\" could not be found in table %s", column_name, name);
-		}
 		if (column_ref.IsQualified()) {
-			StripTableName(column_ref, name);
+			throw ParserException(
+			    "Qualified (tbl.name) column references are not allowed inside of generated column expressions");
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { VerifyColumnRefs(name, columns, (ParsedExpression &)child); });
+	    expr, [&](const ParsedExpression &child) { VerifyColumnRefs((ParsedExpression &)child); });
 }
 
 static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &dependencies) {
@@ -125,24 +101,16 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 	});
 }
 
-void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) {
+void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const {
 	D_ASSERT(category == TableColumnType::GENERATED);
 	InnerGetListOfDependencies(*generated_expression, dependencies);
 }
 
-void ColumnDefinition::CheckValidity(const vector<ColumnDefinition> &columns, const string &table_name) {
-	D_ASSERT(category == TableColumnType::GENERATED);
-	VerifyColumnRefs(table_name, columns, *generated_expression);
-}
-
 void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression) {
-	if (default_value) {
-		throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", name);
-	}
 	category = TableColumnType::GENERATED;
 
-	bool type_is_any = type.id() == LogicalTypeId::ANY;
-	if (type_is_any) {
+	VerifyColumnRefs(*expression);
+	if (type.id() == LogicalTypeId::ANY) {
 		generated_expression = move(expression);
 		return;
 	}
