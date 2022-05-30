@@ -101,9 +101,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the list parameter
 	BindChild(function.children[0], depth, error);
-	if (!error.empty()) {
-		return BindResult(error);
-	}
+	D_ASSERT(error.empty());
 
 	// get the logical type of the children of the list
 	auto &list_child = (BoundExpression &)*function.children[0];

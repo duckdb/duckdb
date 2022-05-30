@@ -130,3 +130,16 @@ NULL
 []
 []
 []
+
+# very large lists
+
+statement ok
+CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+query II
+SELECT g, list_count(list_filter(l, x -> x % 2 = 0)) FROM large_lists ORDER BY g
+----
+0	2500
+1	0
+2	2500
+3	0

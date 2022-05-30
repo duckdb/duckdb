@@ -18,6 +18,7 @@ string LambdaExpression::ToString() const {
 
 	auto params_string = StringUtil::Join(params_strings, ", ");
 	if (params_strings.size() > 1) {
+		// FIXME: list_reduce tests should cover this
 		params_string = "(" + params_string + ")";
 	}
 
@@ -27,11 +28,13 @@ string LambdaExpression::ToString() const {
 bool LambdaExpression::Equals(const LambdaExpression *a, const LambdaExpression *b) {
 
 	if (a->params.size() != b->params.size()) {
+		// FIXME: not yet covered
 		return false;
 	}
 
 	for (idx_t i = 0; i < a->params.size(); i++) {
 		if (!a->params[i]->Equals(b->params[i].get())) {
+			// FIXME: not yet covered
 			return false;
 		}
 	}

@@ -318,6 +318,7 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
                                 string &error_message) {
 	Binding *binding = nullptr;
 
+	// FIXME: this is not yet covered by the lambda tests, but I also don't know a way to cover it
 	if (lambda_bindings) {
 		for (idx_t i = 0; i < lambda_bindings->size(); i++) {
 			if (table_name == (*lambda_bindings)[i].alias) {

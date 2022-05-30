@@ -16,6 +16,8 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (lambda_params_count != 0) {
 
 		if (expr.params.size() != lambda_params_count) {
+			// FIXME: there are still parsing issues with two (or more) parameters, this should be investigated when
+			// implementing the list_reduce
 			throw BinderException(
 			    "Invalid number of left-hand side parameters for this lambda function (params -> expr). "
 			    "Expected " +
@@ -47,6 +49,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// base table alias
 		auto params_alias = StringUtil::Join(params_strings, ", ");
 		if (params_strings.size() > 1) {
+			// FIXME: list_reduce tests should cover this
 			params_alias = "(" + params_alias + ")";
 		}
 
@@ -61,9 +64,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// bind the parameter expressions
 		for (idx_t i = 0; i < expr.params.size(); i++) {
 			auto result = BindExpression(&expr.params[i], depth, false);
-			if (result.HasError()) {
-				return BindResult(error);
-			}
+			D_ASSERT(!result.HasError());
 		}
 
 		auto result = BindExpression(&expr.expr, depth, false);
