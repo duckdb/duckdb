@@ -1,0 +1,6 @@
+# name: test/sql/aggregate/aggregates/detect_mem_leak.test
+# description: Temporary file to test if the automated tests detect the (apparent) memory leak
+# group: [aggregates]
+
+statement ok
+CREATE TABLE test_mem_leak AS (SELECT range % 4 g, list(range || 'some_string') l FROM range(50000000) GROUP BY range % 4 LIMIT 10);
