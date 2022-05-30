@@ -224,10 +224,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		if (!bound_expression) {
 			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
 		}
-		if (bound_expression->HasSubquery()) {
-			throw BinderException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
-			                      col.name);
-		}
+		D_ASSERT(!bound_expression->HasSubquery());
 		if (col.type.id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
 			col.ChangeGeneratedExpressionType(bound_expression->return_type);
@@ -261,28 +258,6 @@ void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_
 		}
 		bound_defaults.push_back(move(bound_default));
 	}
-}
-
-void ReplaceGeneratedColumnReferences(unique_ptr<ParsedExpression> &expr, const BoundCreateTableInfo &table) {
-	if (expr->type == ExpressionType::COLUMN_REF) {
-		auto &column_ref = (ColumnRefExpression &)*expr;
-		auto &name = column_ref.GetColumnName();
-		auto entry = table.name_map.find(name);
-		if (entry == table.name_map.end()) {
-			return;
-		}
-		if (entry->second.column_type != TableColumnType::GENERATED) {
-			return;
-		}
-		auto index = entry->second.index;
-		auto &base = (CreateTableInfo &)*table.base;
-		auto &generated_column = base.columns[index];
-		expr = generated_column.GeneratedExpression().Copy();
-		ReplaceGeneratedColumnReferences(expr, table);
-		return;
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceGeneratedColumnReferences(child, table); });
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {

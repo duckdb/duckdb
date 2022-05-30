@@ -23,7 +23,7 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr
 		break;
 	}
 	default: {
-		throw InternalException("Type not implemented for ColumnExpressionType");
+		throw InternalException("Type not implemented for TableColumnType");
 	}
 	}
 }
@@ -108,6 +108,10 @@ void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const
 
 void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression) {
 	category = TableColumnType::GENERATED;
+
+	if (expression->HasSubquery()) {
+		throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", name);
+	}
 
 	VerifyColumnRefs(*expression);
 	if (type.id() == LogicalTypeId::ANY) {

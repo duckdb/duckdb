@@ -92,7 +92,7 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 static void BakeTableName(ParsedExpression &expr, const string &table_name) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
-		D_ASSERT(!colref.IsQualified()); // If triggered - CheckValidity wasn't ran on the generated column
+		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		col_names.insert(col_names.begin(), table_name);
 	}
