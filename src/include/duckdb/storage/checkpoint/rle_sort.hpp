@@ -9,7 +9,7 @@
 #pragma once
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "rle_sort_options.hpp"
+#include "duckdb/storage/checkpoint/rle_sort_options.hpp"
 
 namespace duckdb {
 

@@ -15,20 +15,7 @@ statement ok
 PRAGMA force_compression_sorting=false
 
 statement ok
-CREATE TABLE "nosorting"(
-  "Number of Records" smallint NOT NULL,
-  "activity_sec" integer NOT NULL,
-  "application" varchar(28),
-  "device" varchar(40) NOT NULL,
-  "subscribers" smallint NOT NULL,
-  "volume_total_bytes" double NOT NULL
-);
-
-statement ok
-COPY nosorting FROM '/home/jim/Documents/Github/duckdb/test/sql/storage/compression/rle_sorted/Food_1.csv.gz' ( DELIMITER '|', NULL 'null', QUOTE '', ESCAPE '\\n' );
-
-#statement ok
-#CREATE TABLE nosorting AS SELECT (i/5)::INT64 FROM range(0, 2500000) tbl(i);
+CREATE TABLE nosorting AS SELECT (i/5)::INT64 FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint;
@@ -43,20 +30,7 @@ statement ok
 PRAGMA force_compression_sorting=true
 
 statement ok
-CREATE TABLE "sorting"(
-  "Number of Records" smallint NOT NULL,
-  "activity_sec" integer NOT NULL,
-  "application" varchar(28),
-  "device" varchar(40) NOT NULL,
-  "subscribers" smallint NOT NULL,
-  "volume_total_bytes" double NOT NULL
-);
-
-statement ok
-COPY sorting FROM '/home/jim/Documents/Github/duckdb/test/sql/storage/compression/rle_sorted/Food_1.csv.gz' ( DELIMITER '|', NULL 'null', QUOTE '', ESCAPE '\\n' );
-
-#statement ok
-#CREATE TABLE sorting AS SELECT (i/10)::INT64 FROM range(0, 2500000) tbl(i);
+CREATE TABLE sorting AS SELECT (i/10)::INT64 FROM range(0, 2500000) tbl(i);
 
 statement ok
 checkpoint
