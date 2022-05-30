@@ -181,7 +181,6 @@ void RLESort::CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tupl
 void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
 	// Get the cardinality counts and sort them from low to high
 	for (idx_t i = 0; i < logs.size(); i++) {
-		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
 		//		if (current_count < 500) {
 		cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
