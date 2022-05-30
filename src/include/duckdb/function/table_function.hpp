@@ -67,7 +67,8 @@ typedef OperatorResultType (*table_in_out_function_t)(ClientContext &context, co
 typedef void (*table_function_parallel_t)(ClientContext &context, const FunctionData *bind_data,
                                           FunctionOperatorData *operator_state, DataChunk &output,
                                           ParallelState *parallel_state);
-
+typedef idx_t (*table_function_get_batch_index_t)(ClientContext &context, const FunctionData *bind_data,
+                                                  FunctionOperatorData *operator_state, ParallelState *parallel_state);
 typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionData *bind_data,
                                          FunctionOperatorData *operator_state);
 typedef idx_t (*table_function_max_threads_t)(ClientContext &context, const FunctionData *bind_data);
@@ -163,12 +164,16 @@ public:
 	table_function_parallel_state_next_t parallel_state_next;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
+	//! (Optional) returns the current batch index of the current scan operator
+	table_function_get_batch_index_t get_batch_index;
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
 	bool projection_pushdown;
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
+	//! Whether or not the table function supports fetching of a batch index
+	bool supports_batch_index;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 };
