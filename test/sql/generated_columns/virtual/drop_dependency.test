@@ -8,17 +8,20 @@ CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 statement ok
 INSERT INTO unit VALUES (5,4)
 
-statement ok
+statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
-# 'total_price' depends on this column
-statement error
+statement ok
 ALTER TABLE unit DROP COLUMN price;
 
-# With cascade we can force delete the column (and the generated column that depends on it)
-statement ok
-ALTER TABLE unit DROP COLUMN price CASCADE;
+# CREATE
 
-# 'total_profit' doesnt exist anymore
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	total_profit AS (price)
+);
+
+# total_profit depends on this
 statement error
-SELECT total_profit FROM unit;
+ALTER TABLE tbl DROP COLUMN price;

@@ -8,23 +8,18 @@ CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
 statement ok
 INSERT INTO unit VALUES (5,4)
 
-# Create a working generated column
-statement ok
+# ALTER TABLE - ADD COLUMN generated column not supported yet
+statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
-# Show that it works
-statement ok
+statement error
 SELECT total_profit FROM unit
 
-# Can also create a column from a generated column
-statement ok
+statement error
 ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
 
-# Column exists
-query I
+statement error
 SELECT also_total_profit FROM unit
-----
-20
 
 # Create a table with a generated column, and another generated column created from this other one
 statement ok

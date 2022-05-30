@@ -16,14 +16,15 @@ INSERT INTO unit VALUES (5,4)
 statement error
 ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL;
 
-statement ok
+# Adding a generated column after table creation is not supported yet
+statement error
 ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(price) VIRTUAL;
 
 # Expression contains a subquery
 statement error
 ALTER TABLE unit ADD COLUMN total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL;
 
-statement ok
+statement error
 ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
 # Cant add to a generated column
@@ -37,14 +38,8 @@ INSERT INTO unit VALUES (1,1,1)
 statement ok
 INSERT INTO unit VALUES (0,1)
 
-query IIII
+query II
 SELECT * FROM unit
 ----
-5	4	1	20
-0	1	0	0
-
-query I
-SELECT total_profit FROM unit
-----
-20
-0
+5	4
+0	1

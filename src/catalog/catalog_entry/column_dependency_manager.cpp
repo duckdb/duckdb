@@ -17,14 +17,28 @@ ColumnDependencyManager &ColumnDependencyManager::operator=(const ColumnDependen
 	return *this;
 }
 
-void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices) {
-	D_ASSERT(column.Generated());
+void ColumnDependencyManager::DetectCircularDependency(column_t index) {
+	if (!HasDependents(index)) {
+		return;
+	}
+	auto &dependents = GetDependents(index);
+	for (auto &dep : dependents) {
+		if (!HasDependents(dep)) {
+			continue;
+		}
+		auto &parent_dependents = GetDependents(dep);
+		if (parent_dependents.count(index)) {
+			throw InvalidInputException("Circular dependency encountered when resolving generated column expressions");
+		}
+	}
+}
 
+void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<column_t> &indices) {
 	if (indices.empty()) {
 		return;
 	}
-	auto index = column.oid;
 	auto &list = dependents_map[index];
+	// Create a link between the dependencies
 	for (auto &dep : indices) {
 		// Add this column as a dependency of the new column
 		list.insert(dep);
@@ -39,6 +53,14 @@ void ColumnDependencyManager::AddGeneratedColumn(ColumnDefinition &column, const
 				dependencies_map[inherited_dep].insert(index);
 			}
 		}
+	}
+	DetectCircularDependency(index);
+	if (!HasDependents(index)) {
+		return;
+	}
+	// Also let the dependents of this generated column inherit the dependencies
+	for (auto &dependent : dependencies_map[index]) {
+		AddGeneratedColumn(dependent, indices);
 	}
 }
 

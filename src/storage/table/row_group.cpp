@@ -760,10 +760,18 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Co
 
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &col = columns[i];
+		if (col.Generated()) {
+			continue;
+		}
 		auto stats = BaseStatistics::Deserialize(source, columns[i].type);
 		result.statistics.push_back(move(stats));
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &col = columns[i];
+		if (col.Generated()) {
+			continue;
+		}
 		BlockPointer pointer;
 		pointer.block_id = source.Read<block_id_t>();
 		pointer.offset = source.Read<uint64_t>();

@@ -12,6 +12,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/stack.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ public:
 
 public:
 	//! Adds a connection between the dependent and its dependencies
-	void AddGeneratedColumn(ColumnDefinition &column, const vector<column_t> &indices);
+	void AddGeneratedColumn(column_t index, const vector<column_t> &indices);
 	//! Removes the column(s) and outputs the new column indices
 	vector<column_t> RemoveColumn(column_t index, column_t column_amount);
 
@@ -39,6 +40,8 @@ public:
 	const unordered_set<column_t> &GetDependents(column_t index) const;
 
 private:
+	void DetectCircularDependency(column_t index);
+
 	void RemoveStandardColumn(column_t index);
 	void RemoveGeneratedColumn(column_t index);
 

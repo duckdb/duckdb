@@ -22,6 +22,9 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
+			if (cdef->category == duckdb_libpgquery::COL_GENERATED) {
+				throw ParserException("Adding generated columns after table creation is not supported yet");
+			}
 			auto centry = TransformColumnDefinition(cdef);
 
 			if (cdef->constraints) {

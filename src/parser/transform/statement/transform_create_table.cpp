@@ -144,7 +144,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		}
 		gen_col.oid = i;
 
-		info->column_dependency_manager.AddGeneratedColumn(gen_col, indices);
+		info->column_dependency_manager.AddGeneratedColumn(gen_col.oid, indices);
 		gen_col.CheckValidity(info->columns, info->table);
 	}
 	result->info = move(info);

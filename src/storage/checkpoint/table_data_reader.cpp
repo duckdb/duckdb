@@ -26,6 +26,11 @@ void TableDataReader::ReadTableData() {
 	// deserialize the total table statistics
 	info.data->column_stats.reserve(columns.size());
 	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &col = columns[i];
+		// Have to use 'Generated()' here, storage_oid is uninitialized here
+		if (col.Generated()) {
+			continue;
+		}
 		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, columns[i].type));
 	}
 

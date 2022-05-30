@@ -3,13 +3,14 @@
 # group: [virtual]
 
 statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold)	
+);
 
 statement ok
 INSERT INTO unit VALUES (5,4)
-
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
 
 statement ok
 ALTER TABLE unit RENAME TO not_unit;

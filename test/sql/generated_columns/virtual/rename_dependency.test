@@ -3,16 +3,15 @@
 # group: [virtual]
 
 statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+	profit_total AS (total_profit)
+);
 
 statement ok
 INSERT INTO unit VALUES (5,4)
-
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
-
-statement ok
-ALTER TABLE unit ADD COLUMN profit_total AS (total_profit);
 
 query I
 SELECT total_profit FROM unit
@@ -22,10 +21,11 @@ SELECT total_profit FROM unit
 statement ok
 ALTER TABLE unit RENAME COLUMN price TO value
 
-#statement ok
-#ALTER TABLE unit DROP COLUMN value;
+# No CASCADE provided
+statement error
+ALTER TABLE unit DROP COLUMN value;
 
-#query I
-#SELECT * FROM unit
-#----
-#20
+query IIII
+SELECT * FROM unit
+----
+5	4	20	20

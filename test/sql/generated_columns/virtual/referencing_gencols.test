@@ -2,19 +2,16 @@
 # description: Test referencing generated columns within generated column expressions
 # group: [virtual]
 
-#ON ALTER
-
 statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold),
+	profit_total AS (total_profit * 5)
+);
 
 statement ok
 INSERT INTO unit VALUES (5,4)
-
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
-
-statement ok
-ALTER TABLE unit ADD COLUMN profit_total AS (total_profit * 5) VIRTUAL;
 
 statement ok
 INSERT INTO unit VALUES (4,5);
@@ -45,9 +42,9 @@ CREATE TABLE tbl2 (
 #Same, but with a provided type
 statement ok
 CREATE TABLE tbl3 (
-	price INTEGER,
-	circular AS (dependency * price),
 	dependency INTEGER AS (price),
+	price INTEGER,
+	circular AS (dependency),
 );
 
 #Example with 'correct' order

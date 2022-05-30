@@ -5,25 +5,18 @@
 # which itself is also a dependency of a generated column
 
 statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit as (price * amount_sold),
+	profit_total AS (total_profit),
+	dependent AS (profit_total),
+	also_dependent AS (profit_total * dependent),
+	dont_delete_me AS (amount_sold),
+);
 
 statement ok
 INSERT INTO unit VALUES (5,4)
-
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
-
-statement ok
-ALTER TABLE unit ADD COLUMN profit_total AS (total_profit);
-
-statement ok
-ALTER TABLE unit ADD COLUMN dependent AS (profit_total);
-
-statement ok
-ALTER TABLE unit ADD COLUMN also_dependent AS (profit_total * dependent)
-
-statement ok
-ALTER TABLE unit ADD COLUMN dont_delete_me AS (amount_sold);
 
 query IIIIIII
 SELECT * FROM unit;
@@ -43,46 +36,29 @@ SELECT * FROM unit;
 4	4
 
 statement ok
-ALTER TABLE unit ADD COLUMN profit_total AS (5);
+INSERT INTO unit VALUES (5)
 
-statement ok
-ALTER TABLE unit ADD COLUMN test INTEGER;
-
-statement ok
-ALTER TABLE unit ADD COLUMN dependent AS (5 * profit_total);
-
-statement ok
-ALTER TABLE unit ADD COLUMN also_dependent AS (amount_sold)
-
-statement ok
-INSERT INTO unit VALUES (5, 10)
-
-query IIIIII
+query II
 SELECT * FROM unit;
 ----
-4	4	5	NULL	25	4
-5	5	5	10		25	5
-
-statement ok
-ALTER TABLE unit ADD COLUMN nullable AS (test);
+4	4
+5	5
 
 statement ok
 ALTER TABLE unit DROP COLUMN dont_delete_me;
 
-query IIIIII
+query I
 SELECT * FROM unit;
 ----
-4	5	NULL	25	4	NULL
-5	5	10		25	5	10
+4
+5
 
-statement ok
+# Cant delete last column
+statement error
 ALTER TABLE unit DROP COLUMN amount_sold CASCADE;
 
-query IIII
+query I
 SELECT * FROM unit;
 ----
-5	NULL	25	NULL
-5	10		25	10
-
-statement ok
-ALTER TABLE unit ADD COLUMN sold_amount AS (profit_total);
+4
+5

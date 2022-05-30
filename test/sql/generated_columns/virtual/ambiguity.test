@@ -3,27 +3,29 @@
 # group: [virtual]
 
 statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold)
+);
 
 statement ok
-CREATE TABLE unit2 (price INTEGER, amount_sold INTEGER);
+CREATE TABLE unit2 (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price / amount_sold),
+	profit_total AS (unit2.price * unit2.amount_sold)
+);
 
 statement ok
 INSERT INTO unit VALUES (5,4)
 
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS(price * amount_sold) VIRTUAL;
-
-# Because the table name is baked into the ColumnRefs of the generated-column expression, this doesnt result in ambiguity
-# Otherwise 'price' and 'amount_sold' would be ambiguous because they are also present in 'unit2'
-statement ok
+# Ambiguous, both have 'total_profit'
+statement error
 SELECT total_profit FROM unit, unit2
 
 statement ok
 INSERT INTO unit2 VALUES (100, 4)
-
-statement ok
-ALTER TABLE unit2 ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price / amount_sold) VIRTUAL;
 
 # When using the table name, we avoid ambiguity
 statement ok
@@ -34,9 +36,6 @@ query I
 SELECT unit.total_profit FROM unit AS unit2, unit2 AS unit
 ----
 25
-
-statement ok
-ALTER TABLE unit2 ADD COLUMN profit_total INTEGER GENERATED ALWAYS AS (unit2.price / unit2.amount_sold) VIRTUAL;
 
 # No ambiguity here
 statement ok

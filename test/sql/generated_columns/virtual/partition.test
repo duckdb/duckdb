@@ -5,7 +5,12 @@
 require vector_size 512
 
 statement ok
-CREATE TABLE unit (price INTEGER, amount_sold INTEGER, name VARCHAR);
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	name VARCHAR,
+	total_profit AS (price * amount_sold)
+);
 
 statement ok
 INSERT INTO unit VALUES (5,4, 'Soda can')
@@ -15,9 +20,6 @@ INSERT INTO unit VALUES (5,8, 'Mars bar')
 
 statement ok
 INSERT INTO unit VALUES (4, 5, 'Chewing gum')
-
-statement ok
-ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL
 
 query IIII
 SELECT total_profit, COUNT(total_profit), SUM(amount_sold), SUM(price) FROM unit GROUP BY total_profit
@@ -36,5 +38,3 @@ FROM unit;
 40	Mars bar	1	8	5
 20	Soda can	2	9	9
 20	Chewing gum	2	9	9
-
-

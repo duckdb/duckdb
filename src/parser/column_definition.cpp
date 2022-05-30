@@ -10,7 +10,8 @@ namespace duckdb {
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(move(name_p)), type(move(type_p)) {
 }
 
-ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression, TableColumnType category)
+ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
+                                   TableColumnType category)
     : name(move(name_p)), type(move(type_p)), category(category) {
 	switch (category) {
 	case TableColumnType::STANDARD: {

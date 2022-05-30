@@ -218,6 +218,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	auto rename_idx = rename_info.index;
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
+	create_info->column_dependency_manager = column_dependency_manager;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 
@@ -335,7 +336,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 		vector<string> referenced_columns;
 		info.new_column.GetListOfDependencies(referenced_columns);
 		vector<column_t> indices = ConvertNamesToIndices(referenced_columns, name_map);
-		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column, indices);
+		create_info->column_dependency_manager.AddGeneratedColumn(info.new_column.oid, indices);
 	}
 
 	auto col = info.new_column.Copy();
