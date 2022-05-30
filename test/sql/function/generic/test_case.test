@@ -17,7 +17,7 @@ statement ok
 INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 
 query I
-SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test
+SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test order by a
 ----
 22
 NULL

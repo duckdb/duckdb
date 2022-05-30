@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/iublibrary/iublibrary.benchmark
+# name: benchmark/publicbi/checkpoints/iublibrary/iublibrary_nosorting.benchmark
 # description: Load iublibrary from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [iublibrary]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=iublibrary

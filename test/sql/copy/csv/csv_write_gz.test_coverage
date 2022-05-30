@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# Necessary due to bug on reordering CSV files (See #3714)
+statement ok
+PRAGMA force_compression='uncompressed';
+
 foreach csv_name greek_utf8.csv imdb_movie_info_escaped.csv lineitem_sample.csv ncvoter.csv nfc_normalization.csv ontime_sample.csv voter.tsv web_page.csv
 
 statement ok

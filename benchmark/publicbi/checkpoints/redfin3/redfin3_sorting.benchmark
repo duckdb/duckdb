@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/redfin3/redfin3.benchmark
+# name: benchmark/publicbi/checkpoints/redfin3/redfin3_sorting.benchmark
 # description: Load redfin3 from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [redfin3]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=redfin3

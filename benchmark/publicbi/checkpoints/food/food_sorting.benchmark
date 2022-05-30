@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/food/food.benchmark
+# name: benchmark/publicbi/checkpoints/food/food_sorting.benchmark
 # description: Load food from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [food]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=food

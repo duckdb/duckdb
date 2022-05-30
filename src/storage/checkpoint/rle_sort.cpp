@@ -181,11 +181,10 @@ void RLESort::CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tupl
 void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
 	// Get the cardinality counts and sort them from low to high
 	for (idx_t i = 0; i < logs.size(); i++) {
-		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-//		if (current_count < 500) {
+		//		if (current_count < 500) {
 		cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
-//		}
+		//		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }
@@ -218,12 +217,13 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 void RLESort::Sort() {
 	if (key_column_ids.empty()) {
 		// Nothing to sort on
+		data_table.prev_end += row_group.count;
 		return;
 	}
-//	if (row_group.HasInterleavedTransactions()) {
-//		// Has interleaved tsx, he don't run our magic stuff
-//		return;
-//	}
+	//	if (row_group.HasInterleavedTransactions()) {
+	//		// Has interleaved tsx, he don't run our magic stuff
+	//		return;
+	//	}
 
 	FilterKeyColumns();
 	InitializeScan();
@@ -231,6 +231,7 @@ void RLESort::Sort() {
 	SinkKeysPayloadSort();
 	if (new_count == 0) {
 		// No changes
+		data_table.prev_end += row_group.count;
 		return;
 	}
 

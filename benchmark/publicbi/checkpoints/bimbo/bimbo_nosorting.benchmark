@@ -1,6 +1,6 @@
-# name: benchmark/publicbi/checkpoints/bimbo/bimbo.benchmark
+# name: benchmark/publicbi/checkpoints/bimbo/bimbo_nosorting.benchmark
 # description: Load bimbo from the PublicBI benchmark and check checkpointing time
-# group: [publicbi-compression]
+# group: [bimbo]
 
 template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
 SUBSET=bimbo

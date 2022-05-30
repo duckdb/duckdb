@@ -61,56 +61,56 @@ statement ok
 INSERT INTO timestamp VALUES(NULL, NULL)
 
 query T
-SELECT AGE(t1, TIMESTAMP '1957-06-13') FROM timestamp;
+SELECT AGE(t1, TIMESTAMP '1957-06-13') FROM timestamp order by t1;
 ----
+NULL
+NULL
 43 years 9 months 27 days
 56 years 10 months 12 days
 56 years 10 months 12 days
 61 years 11 months 28 days
-NULL
 61 years 11 months 28 days
-NULL
 
 query T
-SELECT AGE(TIMESTAMP '2001-04-10', t2) FROM timestamp;
+SELECT AGE(TIMESTAMP '2001-04-10', t2) FROM timestamp order by t2;
 ----
+NULL
+NULL
 43 years 9 months 27 days
--13 years -7 days
 -12 years -8 months -21 days
+-13 years -7 days
 -18 years -2 months -1 days
 -18 years -2 months -1 days
-NULL
-NULL
 
 query T
-SELECT AGE(t1, t2) FROM timestamp;
+SELECT AGE(t1, t2) FROM timestamp order by t1,t2;
 ----
+NULL
+NULL
 43 years 9 months 27 days
-8 days
 3 months 24 days
+8 days
+NULL
 00:00:00
-NULL
-NULL
-NULL
 
 query T
-SELECT t1 - t2 FROM timestamp;
+SELECT t1 - t2 FROM timestamp order by t1 - t2;
 ----
-16007 days
+NULL
+NULL
+NULL
+00:00:00
 8 days
 114 days
-00:00:00
-NULL
-NULL
-NULL
+16007 days
 
 query T
-SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '2001-12-12';
+SELECT AGE(t1, t2) FROM timestamp WHERE t1 > '2001-12-12' order by t1,t2;
 ----
-8 days
 3 months 24 days
-00:00:00
+8 days
 NULL
+00:00:00
 
 query T
 SELECT AGE(NULL, NULL);

@@ -68,7 +68,8 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 		DuckDB db(storage_database, config.get());
 		Connection con(db);
 		string big_string = string(string_length, 'a');
-		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
+		REQUIRE_NO_FAIL(con.Query(
+		    "CREATE TABLE test (a VARCHAR USING COMPRESSION UNCOMPRESSED, j BIGINT USING COMPRESSION UNCOMPRESSED);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
 		while (string_length < desired_size) {
 			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +

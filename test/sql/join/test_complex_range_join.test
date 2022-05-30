@@ -180,17 +180,17 @@ CREATE TABLE limits_nulls AS (
 );
 
 query I
-SELECT * FROM limits_nulls;
+SELECT * FROM limits_nulls order by 1;
 ----
 NULL
+NULL
+102
+119
 134
+136
 151
 168
 185
-102
-119
-136
-NULL
 
 query II
 SELECT i, z

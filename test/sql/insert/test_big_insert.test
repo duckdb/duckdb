@@ -45,12 +45,12 @@ statement ok
 INSERT INTO integers (i) SELECT j FROM integers;
 
 query II
-SELECT * FROM integers
+SELECT * FROM integers order by i,j
 ----
-3	4
-4	3
 NULL	4
-4	NULL
 3	NULL
+3	4
 4	NULL
+4	NULL
+4	3
 
