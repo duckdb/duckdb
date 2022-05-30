@@ -206,7 +206,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
-		return 0;
+		return nullptr;
 	}
 	return nullptr;
 }
@@ -225,7 +225,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNI
 		return env->NewDirectByteBuffer(conn, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
-		return 0;
+		return nullptr;
 	}
 	return nullptr;
 }
@@ -268,7 +268,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
-		return 0;
+		return nullptr;
 	}
 
 	auto query = byte_array_to_string(env, query_j);
@@ -284,7 +284,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 		env->ThrowNew(J_SQLException, error_msg.c_str());
 
 		// Just return control flow back to JVM, as an Exception is pending anyway
-		return 0;
+		return nullptr;
 	}
 	return env->NewDirectByteBuffer(stmt_ref, 0);
 }
@@ -307,7 +307,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	if (param_len != stmt_ref->stmt->n_param) {
 		delete res_ref;
 		env->ThrowNew(J_SQLException, "Parameter count mismatch");
-		return 0;
+		return nullptr;
 	}
 
 	if (param_len > 0) {
@@ -367,7 +367,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 			} else {
 				delete res_ref;
 				env->ThrowNew(J_SQLException, "Unsupported parameter type");
-				return 0;
+				return nullptr;
 			}
 		}
 	}
@@ -378,7 +378,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		res_ref->res = nullptr;
 		delete res_ref;
 		env->ThrowNew(J_SQLException, error_msg.c_str());
-		return 0;
+		return nullptr;
 	}
 	return env->NewDirectByteBuffer(res_ref, 0);
 }
@@ -439,7 +439,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
-		return 0;
+		return nullptr;
 	}
 
 	auto column_count = stmt_ref->stmt->ColumnCount();
@@ -474,7 +474,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || !res_ref->res->success) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
-		return 0;
+		return nullptr;
 	}
 
 	res_ref->chunk = res_ref->res->Fetch();
@@ -606,7 +606,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 			break;
 		default:
 			env->ThrowNew(J_SQLException, ("Unsupported result column type " + vec.GetType().ToString()).c_str());
-			return 0;
+			return nullptr;
 		}
 
 		env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
@@ -628,7 +628,7 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1ty
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
-		return 0;
+		return nullptr;
 	}
 	return env->NewStringUTF(StatementTypeToString(stmt_ref->stmt->GetStatementType()).c_str());
 }
@@ -641,7 +641,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1app
 	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_ref || !conn_ref->context) {
 		env->ThrowNew(J_SQLException, "Invalid connection");
-		return 0;
+		return nullptr;
 	}
 	auto schema_name = byte_array_to_string(env, schema_name_j);
 	auto table_name = byte_array_to_string(env, table_name_j);
@@ -650,7 +650,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1app
 		return env->NewDirectByteBuffer(appender, 0);
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
-		return 0;
+		return nullptr;
 	}
 	return nullptr;
 }
