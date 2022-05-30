@@ -106,3 +106,27 @@ query I
 SELECT array_filter([1, NULL], arr_elem -> arr_elem < 4)
 ----
 [1]
+
+# test many empty lists
+
+statement ok
+CREATE TABLE empty_lists (l integer[])
+
+statement ok
+INSERT INTO empty_lists VALUES ([]), ([]), ([]), ([1, NULL, -1]), ([]), (NULL), (NULL), ([]), ([1, 2, 3]), ([]), ([]), ([]);
+
+query I
+SELECT list_filter(l, x -> x > 0) FROM empty_lists
+----
+[]
+[]
+[]
+[1]
+[]
+NULL
+NULL
+[]
+[1, 2, 3]
+[]
+[]
+[]

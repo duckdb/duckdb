@@ -53,25 +53,13 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 	auto lambda_values = FlatVector::GetData<bool>(lambda_vector);
 	auto &lambda_validity = FlatVector::Validity(lambda_vector);
 
-	while (lists_len[appended_lists_cnt] == 0) {
-		result_entries[appended_lists_cnt].offset = curr_list_offset;
-		result_entries[appended_lists_cnt].length = 0;
-		appended_lists_cnt++;
-		if (appended_lists_cnt == lists_len.size()) {
-			break;
-		}
-	}
-
 	// compute the new lengths and offsets, and create a selection vector
 	for (idx_t i = 0; i < elem_cnt; i++) {
 
-		while (lists_len[appended_lists_cnt] == 0) {
+		while (appended_lists_cnt < lists_len.size() && lists_len[appended_lists_cnt] == 0) {
 			result_entries[appended_lists_cnt].offset = curr_list_offset;
 			result_entries[appended_lists_cnt].length = 0;
 			appended_lists_cnt++;
-			if (appended_lists_cnt == lists_len.size()) {
-				break;
-			}
 		}
 
 		// found a true value
@@ -91,6 +79,12 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 			curr_list_len = 0;
 			curr_original_list_len = 0;
 		}
+	}
+
+	while (appended_lists_cnt < lists_len.size() && lists_len[appended_lists_cnt] == 0) {
+		result_entries[appended_lists_cnt].offset = curr_list_offset;
+		result_entries[appended_lists_cnt].length = 0;
+		appended_lists_cnt++;
 	}
 
 	// slice to get the new lists and append them to the result
