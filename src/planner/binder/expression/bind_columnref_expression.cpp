@@ -45,11 +45,6 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		if (!table_name.empty()) {
 			return binder.bind_context.CreateColumnReference(table_name, column_name);
 		}
-		// it's not, might be a generated column
-		table_name = binder.bind_context.GetMatchingBinding(column_name, TableColumnType::GENERATED);
-		if (!table_name.empty()) {
-			return binder.bind_context.ExpandGeneratedColumn(table_name, column_name);
-		}
 		// it's neither, find candidates and error
 		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
@@ -154,20 +149,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
 		// first check if part1 is a table, and part2 is a standard column
-		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message,
-		                              TableColumnType::STANDARD)) {
+		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
-		}
-		// then check if part1 is a table, and part2 is a generated column
-		else if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message,
-		                                   TableColumnType::GENERATED)) {
-			return binder.bind_context.ExpandGeneratedColumn(colref.column_names[0], colref.column_names[1]);
 		} else {
-			if (binder.bind_context.GetMatchingBinding(colref.column_names[1], TableColumnType::GENERATED) ==
-			    colref.column_names[0]) {
-				return binder.bind_context.ExpandGeneratedColumn(colref.column_names[0], colref.column_names[1]);
-			}
 			// otherwise check if we can turn this into a struct extract
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
@@ -235,7 +220,10 @@ bool ExpressionBinder::IsGeneratedColumn(ParsedExpression &expr) {
 	if (colref.column_names.size() == 1) {
 		return false;
 	}
-	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
+	if (!colref.IsQualified()) {
+		return false;
+	}
+	auto table_name = colref.GetTableName();
 	auto binding = binder.bind_context.GetBinding(table_name, error_message);
 	if (!binding) {
 		return false;

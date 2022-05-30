@@ -13,12 +13,13 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
 
 #include <algorithm>
 
 namespace duckdb {
 
-string BindContext::GetMatchingBinding(const string &column_name, TableColumnType type) {
+string BindContext::GetMatchingBinding(const string &column_name) {
 	string result;
 	for (auto &kv : bindings) {
 		auto binding = kv.second.get();
@@ -26,7 +27,7 @@ string BindContext::GetMatchingBinding(const string &column_name, TableColumnTyp
 		if (is_using_binding) {
 			continue;
 		}
-		if (binding->HasMatchingBinding(column_name, type)) {
+		if (binding->HasMatchingBinding(column_name)) {
 			if (!result.empty() || is_using_binding) {
 				throw BinderException("Ambiguous reference to column name \"%s\" (use: \"%s.%s\" "
 				                      "or \"%s.%s\")",
@@ -142,12 +143,12 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 	if (!binding) {
 		throw InternalException("No binding with name \"%s\"", binding_name);
 	}
-	idx_t binding_index;
-	if (!binding->TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
+	TableColumnInfo binding_info;
+	if (!binding->TryGetBindingIndex(column_name, binding_info)) { // LCOV_EXCL_START
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
 		                        column_name);
 	} // LCOV_EXCL_STOP
-	return binding->names[binding_index];
+	return binding->names[binding_info.index];
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
@@ -186,14 +187,18 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	names.push_back(column_name);
 
 	auto result = make_unique<ColumnRefExpression>(move(names));
-	// because of case insensitivity in the binder we rename the column to the original name
-	// as it appears in the binding itself
 	auto binding = GetBinding(table_name, error_message);
-	if (binding) {
-		auto column_index = binding->GetBindingIndex(column_name);
-		if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
-			result->alias = binding->names[column_index];
-		}
+	if (!binding) {
+		return result;
+	}
+	auto column_info = binding->GetBindingInfo(column_name);
+	auto column_index = column_info.index;
+	if (column_info.column_type == TableColumnType::GENERATED) {
+		return ExpandGeneratedColumn(table_name, column_name);
+	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
+		// because of case insensitivity in the binder we rename the column to the original name
+		// as it appears in the binding itself
+		result->alias = binding->names[column_index];
 	}
 	return move(result);
 }

@@ -1,7 +1,7 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/constraints/list.hpp" //!This duplicate is not useless
+#include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/check_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
@@ -12,13 +12,12 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/parser/expression/list.hpp"
 
 #include <algorithm>
-#include <queue>
 
 namespace duckdb {
-using std::queue;
 
 static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_names) {
 	auto &base = (CreateTableInfo &)*info.base;
@@ -196,13 +195,12 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 
 static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unresolved) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		column_t index;
+		TableColumnInfo info;
 		auto columnref = (ColumnRefExpression &)expr;
 		auto &name = columnref.GetColumnName();
-		bool success = table->TryGetBindingIndex(name, index);
-		success = success || table->TryGetBindingIndex(name, index, TableColumnType::GENERATED);
+		bool success = table->TryGetBindingIndex(name, info);
 		D_ASSERT(success);
-		if (table->types[index] == LogicalType::ANY) {
+		if (table->types[info.index].id() == LogicalTypeId::ANY) {
 			unresolved = true;
 			return;
 		}
