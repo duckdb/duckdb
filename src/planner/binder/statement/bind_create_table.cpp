@@ -59,14 +59,12 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 	}
 }
 
-static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond,
-                                LogicalType target_type = LogicalType::INTEGER) {
+static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	auto bound_constraint = make_unique<BoundCheckConstraint>();
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
-	check_binder.target_type = move(target_type);
 	auto &check = (CheckConstraint &)*cond;
 	// create a copy of the unbound expression because the binding destroys the constraint
 	auto unbound_expression = check.expression->Copy();
@@ -85,12 +83,6 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	for (idx_t i = 0; i < base.constraints.size(); i++) {
 		auto &cond = base.constraints[i];
 		switch (cond->type) {
-		case ConstraintType::GENERATED: {
-			auto &generated_check_constraint = (GeneratedCheckConstraint &)*cond;
-			auto &generated_column = base.columns[generated_check_constraint.column_index];
-			BindCheckConstraint(binder, info, cond, generated_column.type);
-			break;
-		}
 		case ConstraintType::CHECK: {
 			BindCheckConstraint(binder, info, cond);
 			break;
@@ -191,22 +183,6 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.storage_oid));
 		}
 	}
-}
-
-static void TypeIsUnresolved(ParsedExpression &expr, Binding *table, bool &unresolved) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		TableColumnInfo info;
-		auto columnref = (ColumnRefExpression &)expr;
-		auto &name = columnref.GetColumnName();
-		bool success = table->TryGetBindingIndex(name, info);
-		D_ASSERT(success);
-		if (table->types[info.index].id() == LogicalTypeId::ANY) {
-			unresolved = true;
-			return;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { TypeIsUnresolved((ParsedExpression &)child, table, unresolved); });
 }
 
 static bool HasUnresolvedDependency(column_t index, const BoundCreateTableInfo &info,
@@ -354,19 +330,6 @@ void ReplaceGeneratedColumnReferences(unique_ptr<ParsedExpression> &expr, const 
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceGeneratedColumnReferences(child, table); });
 }
 
-void CreateGeneratedCheckConstraints(BoundCreateTableInfo &info) {
-	auto &base = (CreateTableInfo &)*info.base;
-	for (idx_t i = 0; i < base.columns.size(); i++) {
-		auto &col = base.columns[i];
-		if (!col.Generated()) {
-			continue;
-		}
-		auto expression = col.GeneratedExpression().Copy();
-		ReplaceGeneratedColumnReferences(expression, info);
-		base.constraints.push_back(make_unique<GeneratedCheckConstraint>(i, move(expression)));
-	}
-}
-
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
 	auto &base = (CreateTableInfo &)*info;
 
@@ -386,20 +349,15 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		// create the name map for the statement
 		CreateColumnMap(*result, true);
-		// create generated check constraints
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
-		CreateGeneratedCheckConstraints(*result);
 	} else {
 		// create the name map for the statement
 		CreateColumnMap(*result, false);
-		// create generated check constraints
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
-		// create generated check constraints
-		CreateGeneratedCheckConstraints(*result);
 		// bind any constraints
 		BindConstraints(*this, *result);
 		// bind the default values

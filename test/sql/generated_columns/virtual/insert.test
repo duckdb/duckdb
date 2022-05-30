@@ -38,3 +38,35 @@ INSERT INTO test VALUES (22, 10);
 #Using VALUES incorrectly, too many values
 statement error
 INSERT INTO test VALUES (22, 10, 10)
+
+statement ok
+CREATE TABLE tbl (
+    x INTEGER,
+    y BOOLEAN AS (x),
+);
+
+statement ok
+INSERT INTO tbl VALUES (5);
+
+query II
+SELECT * FROM tbl;
+----
+5	True
+
+statement ok
+INSERT INTO tbl VALUES (0);
+
+query II
+SELECT * FROM tbl;
+----
+5	True
+0	False
+
+statement ok
+CREATE TABLE tbl2 (
+	x TEXT,
+	y BOOLEAN AS (x),
+);
+
+statement error
+INSERT INTO tbl2 VALUES ('test');

@@ -236,21 +236,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		case ConstraintType::NOT_NULL:
 			// NOT NULL constraint: no adjustments necessary
 			break;
-		case ConstraintType::GENERATED: {
-			auto &generated_check = (GeneratedCheckConstraint &)*copy;
-			auto index = generated_check.column_index;
-			// If this generated column doesnt have dependencies, there is nothing to be done
-			if (!column_dependency_manager.HasDependencies(index)) {
-				break;
-			}
-			// If the generated column is the one to be renamed
-			auto &dependencies = column_dependency_manager.GetDependencies(index);
-			if (index != rename_idx && !dependencies.count(rename_idx)) {
-				continue;
-			}
-			RenameExpression(*generated_check.expression, info);
-			break;
-		}
 		case ConstraintType::CHECK: {
 			// CHECK constraint: need to rename column references that refer to the renamed column
 			auto &check = (CheckConstraint &)*copy;
@@ -383,19 +368,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			}
 			break;
 		}
-		case ConstraintType::GENERATED: {
-			auto &generated_check = (GeneratedCheckConstraint &)*constraint;
-			auto index = generated_check.column_index;
-			if (index == removed_index || removed_columns.count(index)) {
-				break;
-			}
-			index = adjusted_indices[index];
-			auto copy = generated_check.Copy();
-			auto &copy_ref = (GeneratedCheckConstraint &)*copy;
-			copy_ref.column_index = index;
-			create_info->constraints.push_back(move(copy));
-			break;
-		}
 		case ConstraintType::CHECK: {
 			// CHECK constraint
 			auto &bound_check = (BoundCheckConstraint &)*bound_constraint;
@@ -522,12 +494,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		switch (constraint->type) {
-		case ConstraintType::GENERATED: {
-			auto &generated_constraint = (GeneratedCheckConstraint &)*constraint;
-			auto index = generated_constraint.column_index;
-			generated_constraint.expression = create_info->columns[index].GeneratedExpression().Copy();
-			break;
-		}
 		case ConstraintType::CHECK: {
 			auto &bound_check = (BoundCheckConstraint &)*bound_constraints[i];
 			if (bound_check.bound_columns.find(change_idx) != bound_check.bound_columns.end()) {

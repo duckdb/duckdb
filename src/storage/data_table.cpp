@@ -15,7 +15,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/parser/constraints/generated_check_constraint.hpp"
+#include "duckdb/planner/expression_binder/check_binder.hpp"
 
 #include "duckdb/common/chrono.hpp"
 
@@ -428,8 +428,8 @@ static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, id
 }
 
 // To avoid throwing an error at SELECT, instead this moves the error detection to INSERT
-static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk &chunk, column_t index,
-                                             Expression &expr) {
+static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk &chunk, Expression &expr,
+                                             column_t index) {
 	auto &col = table.columns[index];
 	D_ASSERT(col.Generated());
 	ExpressionExecutor executor(expr);
@@ -604,6 +604,19 @@ static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bf
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {
+	auto binder = Binder::CreateBinder(context);
+	auto bound_columns = unordered_set<column_t>();
+	CheckBinder generated_check_binder(*binder, context, table.name, table.columns, bound_columns);
+	for (idx_t i = 0; i < table.columns.size(); i++) {
+		auto &col = table.columns[i];
+		if (!col.Generated()) {
+			continue;
+		}
+		generated_check_binder.target_type = col.type;
+		auto to_be_bound_expression = col.GeneratedExpression().Copy();
+		auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
+		VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
+	}
 	for (idx_t i = 0; i < table.bound_constraints.size(); i++) {
 		auto &base_constraint = table.constraints[i];
 		auto &constraint = table.bound_constraints[i];
@@ -612,12 +625,6 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(),
 			                        table.columns[not_null.index].name);
-			break;
-		}
-		case ConstraintType::GENERATED: {
-			auto &check = (GeneratedCheckConstraint &)*base_constraint;
-			auto &bound_check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
-			VerifyGeneratedExpressionSuccess(table, chunk, check.column_index, *bound_check.expression);
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -966,7 +973,6 @@ void DataTable::VerifyDeleteConstraints(TableCatalogEntry &table, ClientContext 
 	for (auto &constraint : table.bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL:
-		case ConstraintType::GENERATED:
 		case ConstraintType::CHECK:
 		case ConstraintType::UNIQUE:
 			break;
@@ -1100,7 +1106,6 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			}
 			break;
 		}
-		case ConstraintType::GENERATED:
 		case ConstraintType::CHECK: {
 			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
 

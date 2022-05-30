@@ -49,7 +49,8 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 		auto &col = columns[i];
 		if (colref.column_names[0] == col.name) {
 			if (col.Generated()) {
-				return BindExpression(&col.generated_expression, 0, false);
+				auto bound_expression = col.GeneratedExpression().Copy();
+				return BindExpression(&bound_expression, 0, false);
 			}
 			bound_columns.insert(i);
 			D_ASSERT(col.storage_oid != DConstants::INVALID_INDEX);

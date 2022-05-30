@@ -27,7 +27,6 @@ enum class ConstraintType : uint8_t {
 	CHECK = 2,       // CHECK constraint
 	UNIQUE = 3,      // UNIQUE constraint
 	FOREIGN_KEY = 4, // FOREIGN KEY constraint
-	GENERATED = 5,   // CHECK constraint for generated column
 };
 
 enum class ForeignKeyType : uint8_t {
