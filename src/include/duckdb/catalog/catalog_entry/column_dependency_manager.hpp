@@ -27,8 +27,11 @@ public:
 	ColumnDependencyManager &operator=(const ColumnDependencyManager &other);
 
 public:
+	//! Get bind order
+	stack<column_t> GetBindOrder();
+
 	//! Adds a connection between the dependent and its dependencies
-	void AddGeneratedColumn(column_t index, const vector<column_t> &indices);
+	void AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root = true);
 	//! Add a generated column from a column definition
 	void AddGeneratedColumn(const ColumnDefinition &column, const case_insensitive_map_t<TableColumnInfo> &name_map);
 
@@ -57,6 +60,8 @@ private:
 	unordered_map<column_t, unordered_set<column_t>> dependencies_map;
 	//! A map of generated column name to (potentially generated)column dependencies
 	unordered_map<column_t, unordered_set<column_t>> dependents_map;
+	//! For resolve-order purposes, keep track of the 'direct' (not inherited) dependencies of a generated column
+	unordered_map<column_t, unordered_set<column_t>> direct_dependencies;
 	set<column_t> deleted_columns;
 };
 

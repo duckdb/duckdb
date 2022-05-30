@@ -17,17 +17,18 @@ CREATE TABLE tbl (
 	x INTEGER
 );
 
-#statement ok
-#CREATE TABLE tbl (
-#	gcol1 AS (gcol2),
-#	gcol2 AS (gcol3),
-#	gcol3 AS (gcol4),
-#	gcol4 AS (gcol5),
-#	gcol5 AS (gcol6),
-#	gcol6 AS (gcol7),
-#	gcol7 AS (gcol8),
-#	gcol8 AS (gcol9),
-#	gcol9 AS (gcol10),
-#	gcol10 AS (x),
-#	x INTEGER,
-#);
+statement ok
+CREATE TABLE tbl (
+	gcol1 AS (gcol2),
+	gcol2 AS (gcol3),
+	gcol3 AS (gcol4),
+	gcol4 AS (gcol5),
+	gcol5 AS (gcol6),
+	gcol6 AS (gcol7),
+	gcol7 AS (gcol8),
+	gcol8 AS (gcol9),
+	gcol9 AS (gcol10),
+	gcol10 AS (x),
+	x INTEGER,
+);
+

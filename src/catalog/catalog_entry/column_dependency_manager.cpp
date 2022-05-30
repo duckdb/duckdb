@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 
@@ -49,11 +50,13 @@ void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
 	return AddGeneratedColumn(column.oid, indices);
 }
 
-void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<column_t> &indices) {
+void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root) {
+	//! Always create an entry into the dependents map for a generated column
+	//! For bind-order related purposes
+	auto &list = dependents_map[index];
 	if (indices.empty()) {
 		return;
 	}
-	auto &list = dependents_map[index];
 	// Create a link between the dependencies
 	for (auto &dep : indices) {
 		// Add this column as a dependency of the new column
@@ -69,6 +72,10 @@ void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<co
 				dependencies_map[inherited_dep].insert(index);
 			}
 		}
+		if (!root) {
+			continue;
+		}
+		direct_dependencies[index].insert(dep);
 	}
 	DetectCircularDependency(index);
 	if (!HasDependents(index)) {
@@ -76,7 +83,7 @@ void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<co
 	}
 	// Also let the dependents of this generated column inherit the dependencies
 	for (auto &dependent : dependencies_map[index]) {
-		AddGeneratedColumn(dependent, indices);
+		AddGeneratedColumn(dependent, indices, false);
 	}
 }
 
@@ -225,6 +232,47 @@ vector<column_t> ColumnDependencyManager::CleanupInternals(column_t column_amoun
 	}
 	deleted_columns.clear();
 	return new_indices;
+}
+
+stack<column_t> ColumnDependencyManager::GetBindOrder() {
+	stack<column_t> bind_order;
+	queue<column_t> to_visit;
+	unordered_set<column_t> visited;
+
+	for (auto &entry : dependents_map) {
+		auto dependent = entry.first;
+		//! Skip the dependents that are also dependencies
+		if (dependencies_map.find(dependent) != dependencies_map.end()) {
+			continue;
+		}
+		bind_order.push(dependent);
+		for (auto &dependency : direct_dependencies[dependent]) {
+			to_visit.push(dependency);
+		}
+		visited.insert(dependent);
+	}
+
+	while (!to_visit.empty()) {
+		auto column = to_visit.front();
+		to_visit.pop();
+
+		//! We dont need to visit or add a column twice
+		if (visited.count(column)) {
+			continue;
+		}
+		bind_order.push(column);
+		visited.insert(column);
+		//! If this column does not have dependencies of itself, the queue stops getting filled
+		if (direct_dependencies.find(column) == direct_dependencies.end()) {
+			continue;
+		}
+
+		for (auto &dependency : direct_dependencies[column]) {
+			to_visit.push(dependency);
+		}
+	}
+
+	return bind_order;
 }
 
 } // namespace duckdb

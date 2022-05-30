@@ -185,49 +185,17 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 	}
 }
 
-static bool HasUnresolvedDependency(column_t index, const BoundCreateTableInfo &info,
-                                    unordered_set<column_t> &resolved) {
-	if (!info.column_dependency_manager.HasDependencies(index)) {
-		return false;
-	}
-	auto &dependencies = info.column_dependency_manager.GetDependencies(index);
-	for (auto &dep : dependencies) {
-		if (!info.column_dependency_manager.HasDependencies(dep)) {
-			continue;
-		}
-		// A generated column and not resolved yet
-		if (!resolved.count(dep)) {
-			return true;
-		}
-	}
-	return false;
-}
-
-struct GeneratedColumnBindData {
-	column_t index;
-	bool allow_unresolved;
-};
-
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	vector<string> names;
 	vector<LogicalType> types;
-	queue<GeneratedColumnBindData> to_resolve;
 
 	D_ASSERT(base.type == CatalogType::TABLE_ENTRY);
 	for (idx_t i = 0; i < base.columns.size(); i++) {
 		auto &col = base.columns[i];
 		names.push_back(col.name);
 		types.push_back(col.type);
-		if (!col.Generated()) {
-			continue;
-		}
-		to_resolve.push({i, true});
-	}
-	// Nothing to do
-	if (to_resolve.empty()) {
-		return;
 	}
 	auto table_index = GenerateTableIndex();
 
@@ -238,31 +206,19 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
 	D_ASSERT(table_binding && ignore.empty());
 
-	unordered_set<column_t> resolved;
+	auto bind_order = info.column_dependency_manager.GetBindOrder();
 
-	// Continue until all generated columns are resolved
-	for (; !to_resolve.empty();) {
-		auto resolve_data = to_resolve.front();
-		to_resolve.pop();
-		column_t i = resolve_data.index;
-		// Already resolved
-		bool allow_unresolved = resolve_data.allow_unresolved;
+	while (!bind_order.empty()) {
+		auto i = bind_order.top();
+		bind_order.pop();
 		auto &col = base.columns[i];
-		if (resolved.count(i)) {
+
+		if (!col.Generated()) {
 			continue;
 		}
-
 		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.GeneratedExpression().Copy();
-		if (HasUnresolvedDependency(i, info, resolved)) {
-			if (allow_unresolved) {
-				// Add it to the back of the queue
-				to_resolve.push({i, false});
-				continue;
-			}
-			//! When it gets resolved next time and it still has unresolved dependencies, we throw an error
-			throw InvalidInputException("Circular dependency encountered when resolving generated column expression");
-		}
+
 		// expr_binder.target_type = col.type;
 		auto bound_expression = expr_binder.Bind(expression);
 		if (!bound_expression) {
@@ -286,7 +242,6 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
 			    bound_expression->return_type.ToString(), col.type.ToString(), col.name);
 		}
-		resolved.insert(i);
 	}
 }
 
