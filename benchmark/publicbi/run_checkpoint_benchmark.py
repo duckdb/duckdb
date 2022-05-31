@@ -58,7 +58,7 @@ def run_checkpoint(subdir, subset, rle_sorting):
 
     # Get block size
     table = duckdb_conn.execute("pragma show_tables").fetchdf()["name"][0]
-    file_size = duckdb_conn.execute(f"select count(distinct block_id) from pragma_storage_info('{table}') where segment_type not in('VARCHAR', 'VALIDITY')").fetchone()
+    file_size = duckdb_conn.execute(f"select count(distinct block_id) from pragma_storage_info('{table}')").fetchone()
 
     # Close to checkpoint and get size
     duckdb_conn.close()
