@@ -863,6 +863,14 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto &struct_validity_mask = FlatVector::Validity(vector);
 		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
 			SetValidityMask(*child_entries[type_idx], *array.children[type_idx], scan_state, size, nested_offset);
+			if (!struct_validity_mask.AllValid()) {
+				auto &child_validity_mark = FlatVector::Validity(*child_entries[type_idx]);
+				for (idx_t i = 0; i < size; i++) {
+					if (!struct_validity_mask.RowIsValid(i)) {
+						child_validity_mark.SetInvalid(i);
+					}
+				}
+			}
 			ColumnArrowToDuckDB(*child_entries[type_idx], *array.children[type_idx], scan_state, size,
 			                    arrow_convert_data, col_idx, arrow_convert_idx, nested_offset, &struct_validity_mask);
 		}
