@@ -39,9 +39,6 @@ private:
 //! Generic radix partitioning functions
 struct RadixPartitioning {
 public:
-	static inline idx_t NumberOfPartitions(idx_t radix_bits) {
-		return 1 << radix_bits;
-	}
 	//! Initialize histogram for "radix_bits"
 	static unique_ptr<idx_t[]> InitializeHistogram(idx_t radix_bits);
 	//! Update histogram given a vector of hashes
@@ -50,11 +47,14 @@ public:
 	//! Reduce a histogram from a certain number of radix bits to a lower number
 	static unique_ptr<idx_t[]> ReduceHistogram(const idx_t histogram_from[], idx_t radix_bits_from,
 	                                           idx_t radix_bits_to);
-	//! TODO
+	//! Partition the data in block_collection/string_heap to multiple partitions
 	static void Partition(BufferManager &buffer_manager, const RowLayout &layout, const idx_t hash_offset,
 	                      RowDataCollection &block_collection, RowDataCollection &string_heap,
 	                      vector<unique_ptr<RowDataCollection>> &partition_block_collections,
 	                      vector<unique_ptr<RowDataCollection>> &partition_string_heaps, idx_t radix_bits);
+	//! Select using a cutoff on the radix bits of the hash
+	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
+	                    SelectionVector *true_sel, SelectionVector *false_sel);
 };
 
 } // namespace duckdb

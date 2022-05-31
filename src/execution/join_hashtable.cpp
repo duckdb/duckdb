@@ -1092,7 +1092,7 @@ void JoinHashTable::PinPartitions() {
 	}
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk &payload) {
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht) {
 	D_ASSERT(Count() > 0); // should be handled before
 	D_ASSERT(finalized);
 
@@ -1115,33 +1115,36 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *current_sel, ss->count, hashes);
 
-	// TODO match / no match partition stuff
-	Vector cutoff_vector(Value::HASH(partition_cutoff));
+	// find out which keys we can match
 	SelectionVector true_sel;
 	SelectionVector false_sel;
 	true_sel.Initialize();
 	false_sel.Initialize();
-	auto true_count = BinaryExecutor::Select<hash_t, hash_t, LessThan>(keys.data[0], cutoff_vector, current_sel,
-	                                                                   keys.size(), &true_sel, &false_sel);
+	auto true_count = RadixPartitioning::Select(hashes, current_sel, ss->count, current_radix_bits, partition_cutoff,
+	                                            &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	// Sink non-matching stuff into HT
+	// sink non-matching stuff into HT for later
 	DataChunk sink_keys;
-	sink_keys.Reference(keys);
-	sink_keys.Slice(false_sel, false_count);
 	DataChunk sink_payload;
+	sink_keys.Reference(keys);
 	sink_payload.Reference(payload);
+	sink_keys.Slice(false_sel, false_count);
 	sink_payload.Slice(false_sel, false_count);
-	Build(sink_keys, sink_payload);
+	local_ht.Build(sink_keys, sink_payload);
+
+	// only probe the matching stuff
+	ss->count = true_count;
+	current_sel = &true_sel;
 
 	// now initialize the pointers of the scan structure based on the hashes
-	ApplyBitmask(hashes, true_sel, ss->count, ss->pointers);
+	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
 
 	// create the selection vector linking to only non-empty entries
 	idx_t count = 0;
 	auto pointers = FlatVector::GetData<data_ptr_t>(ss->pointers);
 	for (idx_t i = 0; i < ss->count; i++) {
-		auto idx = true_sel.get_index(i);
+		auto idx = current_sel->get_index(i);
 		pointers[idx] = Load<data_ptr_t>(pointers[idx]);
 		if (pointers[idx]) {
 			ss->sel_vector.set_index(count++, idx);

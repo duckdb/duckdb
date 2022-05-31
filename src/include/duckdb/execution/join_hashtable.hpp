@@ -221,7 +221,7 @@ public:
 	//! TODO
 	void PinPartitions();
 	//! TODO
-	unique_ptr<ScanStructure> ProbeAndSink(DataChunk &keys, DataChunk &payload);
+	unique_ptr<ScanStructure> ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht);
 
 private:
 	//! Merges histogram into this one
