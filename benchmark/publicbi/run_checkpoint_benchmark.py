@@ -57,14 +57,16 @@ def run_checkpoint(subdir, subset, rle_sorting):
     duckdb_conn.execute("CHECKPOINT;")
 
     # Get block size
-    table = duckdb_conn.execute("pragma show_tables").fetchdf()["name"][0]
-    file_size = duckdb_conn.execute(f"select count(distinct block_id) from pragma_storage_info('{table}')").fetchone()
+    tables = duckdb_conn.execute("pragma show_tables").fetchdf()["name"]
+    total_blocks = 0
+    for table in tables:
+        total_blocks += duckdb_conn.execute(f"select count(distinct block_id) from pragma_storage_info('{table}')").fetchone()[0]
 
     # Close to checkpoint and get size
     duckdb_conn.close()
     file_size_disk = os.path.getsize(db)
     os.remove(db)
-    return file_size, file_size_disk
+    return total_blocks, file_size_disk
 
 
 def run_benchmark():
@@ -96,7 +98,7 @@ def run_benchmark():
                     average_improvement = (file_size_disk_nosort - file_size_disk_sort)/file_size_disk_nosort*100
 
                     print("Writing to file")
-                    write_to_csv(f"{subset}, {end_nosort-start_nosort}, {block_size_nosort[0]},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort[0]},{file_size_disk_sort}, {average_improvement}", mode="a", time=timestr)
+                    write_to_csv(f"{subset}, {end_nosort-start_nosort}, {block_size_nosort},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort},{file_size_disk_sort}, {average_improvement}", mode="a", time=timestr)
             except BaseException as err:
                 print("Error occured in", subset, "error:", err)
 
