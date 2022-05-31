@@ -178,6 +178,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 			throw BinderException("Referenced update column %s not found in table!", colname);
 		}
 		auto &column = table->GetColumn(colname);
+		if (column.Generated()) {
+			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+		}
 		if (std::find(update->columns.begin(), update->columns.end(), column.Oid()) != update->columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
