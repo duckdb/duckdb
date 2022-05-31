@@ -1,7 +1,7 @@
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -19,6 +19,7 @@ struct ListFunction {
 	static void Destroy(STATE *state) {
 		if (state->list_vector) {
 			delete state->list_vector;
+			state->list_vector = nullptr;
 		}
 	}
 	static bool IgnoreNull() {
@@ -42,7 +43,7 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
-			state->list_vector = new Vector(list_vector_type);
+			state->list_vector = new Vector(list_vector_type, 4);
 		}
 		ListVector::Append(*state->list_vector, input, i + 1, i);
 	}
@@ -61,7 +62,9 @@ static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *b
 			continue;
 		}
 		if (!combined_ptr[i]->list_vector) {
-			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType());
+			auto new_size =
+			    ListVector::GetListSize(*combined_ptr[i]->list_vector) + ListVector::GetListSize(*state->list_vector);
+			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType(), new_size);
 		}
 		ListVector::Append(*combined_ptr[i]->list_vector, ListVector::GetEntry(*state->list_vector),
 		                   ListVector::GetListSize(*state->list_vector));
@@ -76,6 +79,7 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	auto &mask = FlatVector::Validity(result);
+	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -86,7 +90,6 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 			continue;
 		}
 
-		auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 		auto &state_lv = *state->list_vector;
 		auto state_lv_count = ListVector::GetListSize(state_lv);
 		list_struct_data[rid].length = state_lv_count;
