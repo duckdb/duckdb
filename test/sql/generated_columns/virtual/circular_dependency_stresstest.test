@@ -32,3 +32,18 @@ CREATE TABLE tbl (
 	x INTEGER,
 );
 
+statement error
+CREATE TABLE circular (
+	a AS (k),
+	k AS (j),
+	j AS (i),
+	i AS (h),
+	h AS (g),
+	g AS (f),
+	f AS (e),
+	e AS (d),
+	d AS (c),
+	c AS (b),
+	b AS (a),
+	x INTEGER,
+);

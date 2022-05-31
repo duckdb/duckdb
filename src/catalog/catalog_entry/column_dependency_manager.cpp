@@ -18,22 +18,6 @@ ColumnDependencyManager &ColumnDependencyManager::operator=(const ColumnDependen
 	return *this;
 }
 
-void ColumnDependencyManager::DetectCircularDependency(column_t index) {
-	if (!HasDependents(index)) {
-		return;
-	}
-	auto &dependents = GetDependents(index);
-	for (auto &dep : dependents) {
-		if (!HasDependents(dep)) {
-			continue;
-		}
-		auto &parent_dependents = GetDependents(dep);
-		if (parent_dependents.count(index)) {
-			throw InvalidInputException("Circular dependency encountered when resolving generated column expressions");
-		}
-	}
-}
-
 void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
                                                  const case_insensitive_map_t<TableColumnInfo> &name_map) {
 	D_ASSERT(column.Generated());
@@ -43,7 +27,7 @@ void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
 	for (auto &col : referenced_columns) {
 		auto entry = name_map.find(col);
 		if (entry == name_map.end()) {
-			throw InvalidInputException("Referenced column was not found in the table");
+			throw InvalidInputException("Referenced column \"%s\" was not found in the table", col);
 		}
 		indices.push_back(entry->second.index);
 	}
@@ -51,12 +35,10 @@ void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
 }
 
 void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root) {
-	//! Always create an entry into the dependents map for a generated column
-	//! For bind-order related purposes
-	auto &list = dependents_map[index];
 	if (indices.empty()) {
 		return;
 	}
+	auto &list = dependents_map[index];
 	// Create a link between the dependencies
 	for (auto &dep : indices) {
 		// Add this column as a dependency of the new column
@@ -77,16 +59,18 @@ void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<co
 		}
 		direct_dependencies[index].insert(dep);
 	}
-	DetectCircularDependency(index);
 	if (!HasDependents(index)) {
 		return;
 	}
+	auto &dependents = dependencies_map[index];
+	if (dependents.count(index)) {
+		throw InvalidInputException("Circular dependency encountered when resolving generated column expressions");
+	}
 	// Also let the dependents of this generated column inherit the dependencies
-	for (auto &dependent : dependencies_map[index]) {
+	for (auto &dependent : dependents) {
 		AddGeneratedColumn(dependent, indices, false);
 	}
 }
-
 vector<column_t> ColumnDependencyManager::RemoveColumn(column_t index, column_t column_amount) {
 	// Always add the initial column
 	deleted_columns.insert(index);
@@ -239,7 +223,7 @@ stack<column_t> ColumnDependencyManager::GetBindOrder() {
 	queue<column_t> to_visit;
 	unordered_set<column_t> visited;
 
-	for (auto &entry : dependents_map) {
+	for (auto &entry : direct_dependencies) {
 		auto dependent = entry.first;
 		//! Skip the dependents that are also dependencies
 		if (dependencies_map.find(dependent) != dependencies_map.end()) {
@@ -260,12 +244,12 @@ stack<column_t> ColumnDependencyManager::GetBindOrder() {
 		if (visited.count(column)) {
 			continue;
 		}
-		bind_order.push(column);
-		visited.insert(column);
 		//! If this column does not have dependencies of itself, the queue stops getting filled
 		if (direct_dependencies.find(column) == direct_dependencies.end()) {
 			continue;
 		}
+		bind_order.push(column);
+		visited.insert(column);
 
 		for (auto &dependency : direct_dependencies[column]) {
 			to_visit.push(dependency);

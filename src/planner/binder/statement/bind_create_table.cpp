@@ -219,7 +219,6 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.GeneratedExpression().Copy();
 
-		// expr_binder.target_type = col.type;
 		auto bound_expression = expr_binder.Bind(expression);
 		if (!bound_expression) {
 			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
@@ -233,11 +232,6 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			// Update the type in the binding, for future expansions
 			string ignore;
 			table_binding->types[i] = col.type;
-		}
-		if (bound_expression->return_type != col.type) {
-			throw BinderException(
-			    "Return type of the expression(%s) and the specified type(%s) dont match for generated column \"%s\"",
-			    bound_expression->return_type.ToString(), col.type.ToString(), col.name);
 		}
 	}
 }

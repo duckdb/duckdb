@@ -27,7 +27,7 @@ public:
 	ColumnDependencyManager &operator=(const ColumnDependencyManager &other);
 
 public:
-	//! Get bind order
+	//! Get the bind order that ensures dependencies are resolved before dependents are
 	stack<column_t> GetBindOrder();
 
 	//! Adds a connection between the dependent and its dependencies
@@ -46,8 +46,6 @@ public:
 	const unordered_set<column_t> &GetDependents(column_t index) const;
 
 private:
-	void DetectCircularDependency(column_t index);
-
 	void RemoveStandardColumn(column_t index);
 	void RemoveGeneratedColumn(column_t index);
 
