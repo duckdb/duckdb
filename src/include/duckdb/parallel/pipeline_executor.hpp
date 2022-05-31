@@ -77,7 +77,9 @@ private:
 	//! Whether or not the pipeline has been finalized (used for verification only)
 	bool finalized = false;
 	//! Whether or not the pipeline has finished processing
-	bool finished_processing = false;
+	int32_t finished_processing_idx = -1;
+	//! Whether or not this pipeline requires keeping track of the batch index of the source
+	bool requires_batch_index = false;
 
 	//! Cached chunks for any operators that require caching
 	vector<unique_ptr<DataChunk>> cached_chunks;
@@ -89,6 +91,9 @@ private:
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
 	void FetchFromSource(DataChunk &result);
+
+	void FinishProcessing(int32_t operator_idx = -1);
+	bool IsFinished();
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
