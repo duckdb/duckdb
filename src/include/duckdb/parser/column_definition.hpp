@@ -47,7 +47,7 @@ public:
 	void SetName(const string &name);
 
 	//! compression_type
-	const CompressionType &CompressionType() const;
+	const duckdb::CompressionType &CompressionType() const;
 	void SetCompressionType(duckdb::CompressionType compression_type);
 
 	//! storage_oid

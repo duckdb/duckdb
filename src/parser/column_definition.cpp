@@ -98,7 +98,7 @@ void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
 }
 
-const CompressionType &ColumnDefinition::CompressionType() const {
+const duckdb::CompressionType &ColumnDefinition::CompressionType() const {
 	return compression_type;
 }
 
