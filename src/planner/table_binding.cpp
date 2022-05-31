@@ -13,9 +13,10 @@
 
 namespace duckdb {
 
-Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
+Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
                  vector<TableColumnType> categories, idx_t index)
-    : alias(alias), index(index), types(move(coltypes)), names(move(colnames)), categories(move(categories)) {
+    : binding_type(binding_type), alias(alias), index(index), types(move(coltypes)), names(move(colnames)),
+      categories(move(categories)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -80,7 +81,7 @@ TableCatalogEntry *Binding::GetTableEntry() {
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<TableColumnType> categories_p, LogicalGet &get, idx_t index, bool add_row_id)
-    : Binding(alias, move(types_p), move(names_p), move(categories_p), index), get(get) {
+    : Binding(BindingType::TABLE, alias, move(types_p), move(names_p), move(categories_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
 			auto column_info = TableColumnInfo(COLUMN_IDENTIFIER_ROW_ID);
@@ -106,7 +107,7 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 
 	// Get the index of the generated column
 	auto column_info = GetBindingInfo(column_name);
-	D_ASSERT(column_info.column_type == TableColumnType::GENERATED);
+	D_ASSERT(table_catalog_entry->columns[column_info.index].Generated());
 	// Get a copy of the generated column
 	auto expression = table_catalog_entry->columns[column_info.index].GeneratedExpression().Copy();
 	BakeTableName(*expression, alias);
@@ -121,8 +122,10 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
-	D_ASSERT(column_info.column_type == TableColumnType::STANDARD);
+	auto entry = GetTableEntry();
 	auto column_index = column_info.index;
+	//! Either there is no table, or the columns category has to be standard
+	D_ASSERT(!entry || entry->columns[column_index].Category() == TableColumnType::STANDARD);
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -164,7 +167,8 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<TableColumnType>(), -1),
+    : Binding(BindingType::MACRO, MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<TableColumnType>(),
+              -1),
       macro_name(move(macro_name_p)) {
 }
 
@@ -173,7 +177,6 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (!TryGetBindingInfo(colref.GetColumnName(), column_info)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
-	D_ASSERT(column_info.column_type == TableColumnType::STANDARD);
 	auto column_index = column_info.index;
 	ColumnBinding binding;
 	binding.table_index = index;
@@ -188,7 +191,6 @@ unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colre
 	if (!TryGetBindingInfo(colref.GetColumnName(), column_info)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
-	D_ASSERT(column_info.column_type == TableColumnType::STANDARD);
 	auto arg = arguments[column_info.index]->Copy();
 	arg->alias = colref.alias;
 	return arg;

@@ -52,7 +52,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
-			if (entry->second.column_type == TableColumnType::GENERATED) {
+			if (table->columns[entry->second.index].Generated()) {
 				throw BinderException("Cannot insert into a generated column");
 			}
 			auto column_index = entry->second.index;

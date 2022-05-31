@@ -25,12 +25,16 @@ class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
 
+enum class BindingType { BASE, TABLE, MACRO };
+
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(const string &alias, vector<LogicalType> types, vector<string> names, vector<TableColumnType> categories,
-	        idx_t index);
+	Binding(BindingType binding_type, const string &alias, vector<LogicalType> types, vector<string> names,
+	        vector<TableColumnType> categories, idx_t index);
 	virtual ~Binding() = default;
 
+	//! The type of Binding
+	BindingType binding_type;
 	//! The alias of the binding
 	string alias;
 	//! The table index of the binding

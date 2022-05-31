@@ -176,6 +176,19 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &ta
 	return CreateColumnReference(schema_name, table_name, column_name);
 }
 
+static bool ColumnIsGenerated(Binding *binding, column_t index) {
+	if (binding->binding_type != BindingType::TABLE) {
+		return false;
+	}
+	auto table_binding = (TableBinding *)binding;
+	auto table_entry = table_binding->GetTableEntry();
+	if (!table_entry) {
+		return false;
+	}
+	D_ASSERT(table_entry->columns.size() >= index);
+	return table_entry->columns[index].Generated();
+}
+
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
                                                                 const string &column_name) {
 	string error_message;
@@ -193,7 +206,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	}
 	auto column_info = binding->GetBindingInfo(column_name);
 	auto column_index = column_info.index;
-	if (column_info.column_type == TableColumnType::GENERATED) {
+	if (ColumnIsGenerated(binding, column_index)) {
 		return ExpandGeneratedColumn(table_name, column_name);
 	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
 		// because of case insensitivity in the binder we rename the column to the original name
@@ -432,13 +445,13 @@ void BindContext::AddGenericBinding(idx_t index, const string &alias, const vect
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types, const vector<TableColumnType> &categories) {
-	AddBinding(alias, make_unique<Binding>(alias, types, names, categories, index));
+	AddBinding(alias, make_unique<Binding>(BindingType::BASE, alias, types, names, categories, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
 	vector<TableColumnType> categories;
-	auto binding = make_shared<Binding>(alias, types, names, categories, index);
+	auto binding = make_shared<Binding>(BindingType::BASE, alias, types, names, categories, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

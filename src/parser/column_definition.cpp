@@ -158,7 +158,7 @@ static void InnerGetListOfDependencies(ParsedExpression &expr, vector<string> &d
 }
 
 void ColumnDefinition::GetListOfDependencies(vector<string> &dependencies) const {
-	D_ASSERT(category == TableColumnType::GENERATED);
+	D_ASSERT(Generated());
 	InnerGetListOfDependencies(*generated_expression, dependencies);
 }
 
@@ -194,7 +194,7 @@ void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 }
 
 ParsedExpression &ColumnDefinition::GeneratedExpression() const {
-	D_ASSERT(category == TableColumnType::GENERATED);
+	D_ASSERT(Generated());
 	return *generated_expression;
 }
 

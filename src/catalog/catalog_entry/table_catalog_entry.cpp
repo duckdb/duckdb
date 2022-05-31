@@ -421,7 +421,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	if (remove_info.column_type == TableColumnType::GENERATED) {
+	if (columns[removed_index].Generated()) {
 		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 		                                      storage);
 	}
@@ -536,7 +536,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
-	if (change_info.column_type == TableColumnType::GENERATED) {
+	if (columns[change_idx].Generated()) {
 		auto result =
 		    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 		return move(result);
