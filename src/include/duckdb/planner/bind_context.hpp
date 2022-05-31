@@ -80,7 +80,7 @@ public:
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types,
-	                  const vector<TableColumnType> &categories, LogicalGet &get);
+	                  LogicalGet &get);
 	//! Adds a call to a table function with the given alias to the BindContext.
 	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
 	                      const vector<LogicalType> &types, LogicalGet &get);
@@ -91,9 +91,6 @@ public:
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
 	                       const vector<LogicalType> &types);
-	//! Adds a base table with the given alias to the BindContext, and categories.
-	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
-	                       const vector<LogicalType> &types, const vector<TableColumnType> &categories);
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.

@@ -14,9 +14,8 @@
 namespace duckdb {
 
 Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalType> coltypes, vector<string> colnames,
-                 vector<TableColumnType> categories, idx_t index)
-    : binding_type(binding_type), alias(alias), index(index), types(move(coltypes)), names(move(colnames)),
-      categories(move(categories)) {
+                 idx_t index)
+    : binding_type(binding_type), alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -24,13 +23,11 @@ Binding::Binding(BindingType binding_type, const string &alias, vector<LogicalTy
 		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
-		auto category = i < this->categories.size() ? this->categories[i] : TableColumnType::STANDARD;
-		auto column_info = TableColumnInfo(i, category);
-		name_map[name] = column_info;
+		name_map[name] = i;
 	}
 }
 
-bool Binding::TryGetBindingInfo(const string &column_name, TableColumnInfo &result) {
+bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		return false;
@@ -40,17 +37,17 @@ bool Binding::TryGetBindingInfo(const string &column_name, TableColumnInfo &resu
 	return true;
 }
 
-TableColumnInfo Binding::GetBindingInfo(const string &column_name) {
-	TableColumnInfo result;
-	if (!TryGetBindingInfo(column_name, result)) {
+column_t Binding::GetBindingIndex(const string &column_name) {
+	column_t result;
+	if (!TryGetBindingIndex(column_name, result)) {
 		throw InternalException("Binding index for column \"%s\" not found", column_name);
 	}
 	return result;
 }
 
 bool Binding::HasMatchingBinding(const string &column_name) {
-	TableColumnInfo result;
-	return TryGetBindingInfo(column_name, result);
+	column_t result;
+	return TryGetBindingIndex(column_name, result);
 }
 
 string Binding::ColumnNotFoundError(const string &column_name) const {
@@ -58,13 +55,12 @@ string Binding::ColumnNotFoundError(const string &column_name) const {
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	TableColumnInfo column_info;
+	column_t column_index;
 	bool success = false;
-	success = TryGetBindingInfo(colref.GetColumnName(), column_info);
+	success = TryGetBindingIndex(colref.GetColumnName(), column_index);
 	if (!success) {
 		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
 	}
-	auto column_index = column_info.index;
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = column_index;
@@ -79,13 +75,12 @@ TableCatalogEntry *Binding::GetTableEntry() {
 	return nullptr;
 }
 
-TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
-                           vector<TableColumnType> categories_p, LogicalGet &get, idx_t index, bool add_row_id)
-    : Binding(BindingType::TABLE, alias, move(types_p), move(names_p), move(categories_p), index), get(get) {
+TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
+                           idx_t index, bool add_row_id)
+    : Binding(BindingType::TABLE, alias, move(types_p), move(names_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
-			auto column_info = TableColumnInfo(COLUMN_IDENTIFIER_ROW_ID);
-			name_map["rowid"] = column_info;
+			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
 		}
 	}
 }
@@ -106,24 +101,23 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	D_ASSERT(table_catalog_entry); // Should only be called on a TableBinding
 
 	// Get the index of the generated column
-	auto column_info = GetBindingInfo(column_name);
-	D_ASSERT(table_catalog_entry->columns[column_info.index].Generated());
+	auto column_index = GetBindingIndex(column_name);
+	D_ASSERT(table_catalog_entry->columns[column_index].Generated());
 	// Get a copy of the generated column
-	auto expression = table_catalog_entry->columns[column_info.index].GeneratedExpression().Copy();
+	auto expression = table_catalog_entry->columns[column_index].GeneratedExpression().Copy();
 	BakeTableName(*expression, alias);
 	return (expression);
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
-	TableColumnInfo column_info;
+	column_t column_index;
 	bool success = false;
-	success = TryGetBindingInfo(column_name, column_info);
+	success = TryGetBindingIndex(column_name, column_index);
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
 	auto entry = GetTableEntry();
-	auto column_index = column_info.index;
 	//! Either there is no table, or the columns category has to be standard
 	D_ASSERT(!entry || entry->columns[column_index].Category() == TableColumnType::STANDARD);
 	// fetch the type of the column
@@ -167,17 +161,15 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding(BindingType::MACRO, MacroBinding::MACRO_NAME, move(types_p), move(names_p), vector<TableColumnType>(),
-              -1),
+    : Binding(BindingType::MACRO, MacroBinding::MACRO_NAME, move(types_p), move(names_p), -1),
       macro_name(move(macro_name_p)) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	TableColumnInfo column_info;
-	if (!TryGetBindingInfo(colref.GetColumnName(), column_info)) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
-	auto column_index = column_info.index;
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = column_index;
@@ -187,11 +179,11 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 }
 
 unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
-	TableColumnInfo column_info;
-	if (!TryGetBindingInfo(colref.GetColumnName(), column_info)) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
-	auto arg = arguments[column_info.index]->Copy();
+	auto arg = arguments[column_index]->Copy();
 	arg->alias = colref.alias;
 	return arg;
 }

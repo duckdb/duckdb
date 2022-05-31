@@ -14,7 +14,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 
 namespace duckdb {
@@ -29,7 +29,7 @@ struct BoundCreateTableInfo {
 	//! The base CreateInfo object
 	unique_ptr<CreateInfo> base;
 	//! The map of column names -> column index, used during binding
-	case_insensitive_map_t<TableColumnInfo> name_map;
+	case_insensitive_map_t<column_t> name_map;
 	//! Column dependency manager of the table
 	ColumnDependencyManager column_dependency_manager;
 	//! List of constraints on the table

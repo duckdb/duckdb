@@ -37,8 +37,7 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 			}
 		}
 
-		auto column_info = TableColumnInfo(oid, col.Category());
-		info.name_map[col.Name()] = column_info;
+		info.name_map[col.Name()] = oid;
 		col.SetOid(oid);
 		if (col.Generated()) {
 			continue;
@@ -113,7 +112,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw ParserException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto &column_index = entry->second.index;
+					auto &column_index = entry->second;
 					if (key_set.find(column_index) != key_set.end()) {
 						throw ParserException("column \"%s\" appears twice in "
 						                      "primary key constraint",
@@ -147,7 +146,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto column_index = entry->second.index;
+					auto column_index = entry->second;
 					fk.info.pk_keys.push_back(column_index);
 				}
 			}
@@ -157,7 +156,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 					if (entry == info.name_map.end()) {
 						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto column_index = entry->second.index;
+					auto column_index = entry->second;
 					fk.info.fk_keys.push_back(column_index);
 				}
 			}

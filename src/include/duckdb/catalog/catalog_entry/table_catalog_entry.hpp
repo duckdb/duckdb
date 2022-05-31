@@ -15,7 +15,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 
 namespace duckdb {
@@ -49,17 +49,17 @@ public:
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	ColumnDependencyManager column_dependency_manager;
 	//! A map of column name to column index
-	case_insensitive_map_t<TableColumnInfo> name_map;
+	case_insensitive_map_t<column_t> name_map;
 
 public:
 	//! For debugging purposes, count how many columns are STANDARD
 	idx_t StandardColumnCount() const;
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
-	//! Returns whether or not a column with the given name exists, of the given column type
-	DUCKDB_API bool ColumnExists(const string &name, TableColumnType type = TableColumnType::STANDARD);
+	//! Returns whether or not a column with the given name exists
+	DUCKDB_API bool ColumnExists(const string &name);
 	//! Returns a reference to the column of the specified name. Throws an
 	//! exception if the column does not exist.
-	ColumnDefinition &GetColumn(const string &name, TableColumnType type = TableColumnType::STANDARD);
+	ColumnDefinition &GetColumn(const string &name);
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;
@@ -80,7 +80,7 @@ public:
 	//! If the column does not exist:
 	//! If if_exists is true, returns DConstants::INVALID_INDEX
 	//! If if_exists is false, throws an exception
-	TableColumnInfo GetColumnInfo(string &name, bool if_exists = false);
+	column_t GetColumnIndex(string &name, bool if_exists = false);
 
 private:
 	const string &GetColumnName(column_t index);

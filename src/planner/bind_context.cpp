@@ -13,7 +13,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/catalog/catalog_entry/table_column_info.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 
 #include <algorithm>
 
@@ -143,12 +143,12 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 	if (!binding) {
 		throw InternalException("No binding with name \"%s\"", binding_name);
 	}
-	TableColumnInfo binding_info;
-	if (!binding->TryGetBindingInfo(column_name, binding_info)) { // LCOV_EXCL_START
+	column_t binding_index;
+	if (!binding->TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
 		                        column_name);
 	} // LCOV_EXCL_STOP
-	return binding->names[binding_info.index];
+	return binding->names[binding_index];
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
@@ -204,8 +204,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	if (!binding) {
 		return result;
 	}
-	auto column_info = binding->GetBindingInfo(column_name);
-	auto column_index = column_info.index;
+	auto column_index = binding->GetBindingIndex(column_name);
 	if (ColumnIsGenerated(binding, column_index)) {
 		return ExpandGeneratedColumn(table_name, column_name);
 	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
@@ -387,15 +386,13 @@ void BindContext::AddBinding(const string &alias, unique_ptr<Binding> binding) {
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
-                               const vector<LogicalType> &types, const vector<TableColumnType> &categories,
-                               LogicalGet &get) {
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, categories, get, index, true));
+                               const vector<LogicalType> &types, LogicalGet &get) {
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index, true));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, LogicalGet &get) {
-	vector<TableColumnType> categories;
-	AddBinding(alias, make_unique<TableBinding>(alias, types, names, categories, get, index));
+	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
@@ -439,19 +436,12 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	vector<TableColumnType> categories;
-	AddGenericBinding(index, alias, names, types, categories);
-}
-
-void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
-                                    const vector<LogicalType> &types, const vector<TableColumnType> &categories) {
-	AddBinding(alias, make_unique<Binding>(BindingType::BASE, alias, types, names, categories, index));
+	AddBinding(alias, make_unique<Binding>(BindingType::BASE, alias, types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	vector<TableColumnType> categories;
-	auto binding = make_shared<Binding>(BindingType::BASE, alias, types, names, categories, index);
+	auto binding = make_shared<Binding>(BindingType::BASE, alias, types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

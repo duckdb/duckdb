@@ -19,7 +19,7 @@ ColumnDependencyManager &ColumnDependencyManager::operator=(const ColumnDependen
 }
 
 void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
-                                                 const case_insensitive_map_t<TableColumnInfo> &name_map) {
+                                                 const case_insensitive_map_t<column_t> &name_map) {
 	D_ASSERT(column.Generated());
 	vector<string> referenced_columns;
 	column.GetListOfDependencies(referenced_columns);
@@ -29,7 +29,7 @@ void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
 		if (entry == name_map.end()) {
 			throw InvalidInputException("Referenced column \"%s\" was not found in the table", col);
 		}
-		indices.push_back(entry->second.index);
+		indices.push_back(entry->second);
 	}
 	return AddGeneratedColumn(column.Oid(), indices);
 }

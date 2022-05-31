@@ -38,7 +38,7 @@ const string &TableCatalogEntry::GetColumnName(column_t index) {
 	return columns[index].Name();
 }
 
-TableColumnInfo TableCatalogEntry::GetColumnInfo(string &column_name, bool if_exists) {
+column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		// entry not found: try lower-casing the name
@@ -50,7 +50,7 @@ TableColumnInfo TableCatalogEntry::GetColumnInfo(string &column_name, bool if_ex
 			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
 	}
-	column_name = GetColumnName(entry->second.index);
+	column_name = GetColumnName(entry->second);
 	return entry->second;
 }
 
@@ -88,15 +88,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
-		auto category = columns[i].Category();
 		D_ASSERT(name_map.find(columns[i].Name()) == name_map.end());
-		auto column_info = TableColumnInfo(i, category);
-		name_map[columns[i].Name()] = column_info;
+		name_map[columns[i].Name()] = i;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
-		auto column_info = TableColumnInfo(COLUMN_IDENTIFIER_ROW_ID);
-		name_map["rowid"] = column_info;
+		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
 	}
 	if (!storage) {
 		// create the physical storage
@@ -134,12 +131,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	}
 }
 
-bool TableCatalogEntry::ColumnExists(const string &name, TableColumnType type) {
+bool TableCatalogEntry::ColumnExists(const string &name) {
 	auto iterator = name_map.find(name);
 	if (iterator == name_map.end()) {
 		return false;
 	}
-	return iterator->second.column_type == type;
+	return true;
 }
 
 idx_t TableCatalogEntry::StandardColumnCount() const {
@@ -206,8 +203,7 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
-	auto rename_info = GetColumnInfo(info.old_name);
-	auto rename_idx = rename_info.index;
+	auto rename_idx = GetColumnIndex(info.old_name);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -274,8 +270,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-vector<column_t> ConvertNamesToIndices(const vector<string> &names,
-                                       const case_insensitive_map_t<TableColumnInfo> &name_map) {
+vector<column_t> ConvertNamesToIndices(const vector<string> &names, const case_insensitive_map_t<column_t> &name_map) {
 	vector<column_t> indices;
 
 	for (auto &name : names) {
@@ -283,7 +278,7 @@ vector<column_t> ConvertNamesToIndices(const vector<string> &names,
 		if (entry == name_map.end()) {
 			throw InvalidInputException("Referenced column \"%s\" is not part of the table", name);
 		}
-		auto index = entry->second.index;
+		auto index = entry->second;
 		indices.push_back(index);
 	}
 	return indices;
@@ -316,8 +311,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	auto remove_info = GetColumnInfo(info.removed_column, info.if_exists);
-	idx_t removed_index = remove_info.index;
+	auto removed_index = GetColumnIndex(info.removed_column, info.if_exists);
 	if (removed_index == DConstants::INVALID_INDEX) {
 		return nullptr;
 	}
@@ -334,7 +328,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto &col = columns[i];
-		if (i == remove_info.index || removed_columns.count(i)) {
+		if (i == removed_index || removed_columns.count(i)) {
 			continue;
 		}
 		create_info->columns.push_back(col.Copy());
@@ -432,8 +426,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	auto default_info = GetColumnInfo(info.column_name);
-	idx_t default_idx = default_info.index;
+	auto default_idx = GetColumnIndex(info.column_name);
 
 	// Copy all the columns, changing the value of the one that was specified by 'column_name'
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -461,8 +454,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		auto &catalog = Catalog::GetCatalog(context);
 		info.target_type = catalog.GetType(context, schema->name, UserType::GetTypeName(info.target_type));
 	}
-	auto change_info = GetColumnInfo(info.column_name);
-	idx_t change_idx = change_info.index;
+	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -581,13 +573,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
-ColumnDefinition &TableCatalogEntry::GetColumn(const string &name, TableColumnType type) {
+ColumnDefinition &TableCatalogEntry::GetColumn(const string &name) {
 	auto entry = name_map.find(name);
-	if (entry == name_map.end() || entry->second.index == COLUMN_IDENTIFIER_ROW_ID ||
-	    entry->second.column_type != type) {
+	if (entry == name_map.end() || entry->second == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Column with name %s does not exist!", name);
 	}
-	auto column_index = entry->second.index;
+	auto column_index = entry->second;
 	return columns[column_index];
 }
 

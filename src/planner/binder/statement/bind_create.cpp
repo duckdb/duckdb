@@ -355,7 +355,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 					if (entry == pk_table_entry_ptr->name_map.end()) {
 						throw BinderException("column \"%s\" named in key does not exist", keyname);
 					}
-					auto column_index = entry->second.index;
+					auto column_index = entry->second;
 					auto &column = pk_table_entry_ptr->columns[column_index];
 					fk.info.pk_keys.push_back(column.StorageOid());
 				}

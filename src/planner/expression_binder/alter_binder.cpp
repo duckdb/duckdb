@@ -34,8 +34,7 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 	if (colref.column_names.size() > 1) {
 		return BindQualifiedColumnName(colref, table.name);
 	}
-	auto col_info = table.GetColumnInfo(colref.column_names[0], true);
-	auto idx = col_info.index;
+	auto idx = table.GetColumnIndex(colref.column_names[0], true);
 	if (idx == DConstants::INVALID_INDEX) {
 		throw BinderException("Table does not contain column %s referenced in alter statement!",
 		                      colref.column_names[0]);

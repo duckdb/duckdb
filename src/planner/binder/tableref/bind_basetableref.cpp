@@ -113,7 +113,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		for (auto &col : table->columns) {
 			table_types.push_back(col.Type());
 			table_names.push_back(col.Name());
-			table_categories.push_back(col.Category());
 			return_types.push_back(col.Type());
 			return_names.push_back(col.Name());
 		}
@@ -121,7 +120,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(return_types),
 		                                           move(return_names));
-		bind_context.AddBaseTable(table_index, alias, table_names, table_types, table_categories, *logical_get);
+		bind_context.AddBaseTable(table_index, alias, table_names, table_types, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
 	case CatalogType::VIEW_ENTRY: {
