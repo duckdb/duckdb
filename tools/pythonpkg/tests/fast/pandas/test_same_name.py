@@ -86,6 +86,6 @@ class TestMultipleColumnsSameName(object):
         df = pd.DataFrame({'A_1': [1, 2, 3, 4],  'a_1': [9, 10, 11, 12]})
         con = duckdb.connect()
         con.register('df_view', df)
-        assert con.execute("DESCRIBE df_view;").fetchall() == [('a_1', 'BIGINT', 'YES', None, None, None), ('a_1_1', 'BIGINT', 'YES', None, None, None)]
+        assert con.execute("DESCRIBE df_view;").fetchall() == [('A_1', 'BIGINT', 'YES', None, None, None), ('a_1_1', 'BIGINT', 'YES', None, None, None)]
         assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
         assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
