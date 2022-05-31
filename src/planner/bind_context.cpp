@@ -185,6 +185,9 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 	if (!table_entry) {
 		return false;
 	}
+	if (index == COLUMN_IDENTIFIER_ROW_ID) {
+		return false;
+	}
 	D_ASSERT(table_entry->columns.size() >= index);
 	return table_entry->columns[index].Generated();
 }
