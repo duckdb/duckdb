@@ -52,12 +52,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (entry == table->name_map.end()) {
 				throw BinderException("Column %s not found in table %s", stmt.columns[i], table->name);
 			}
-			if (table->columns[entry->second].Generated()) {
-				throw BinderException("Cannot insert into a generated column");
-			}
 			auto column_index = entry->second;
 			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
+			}
+			if (table->columns[column_index].Generated()) {
+				throw BinderException("Cannot insert into a generated column");
 			}
 			insert->expected_types.push_back(table->columns[column_index].Type());
 			named_column_map.push_back(column_index);
