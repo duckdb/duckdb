@@ -25,7 +25,7 @@ public:
 	unique_ptr<AggregateFunction> aggregate;
 	//! The bound function info
 	unique_ptr<FunctionData> bind_info;
-	//! The child expressions of the main window aggregate
+	//! The child expressions of the main window function
 	vector<unique_ptr<Expression>> children;
 	//! The set of expressions to partition by
 	vector<unique_ptr<Expression>> partitions;
@@ -33,6 +33,8 @@ public:
 	vector<unique_ptr<BaseStatistics>> partitions_stats;
 	//! The set of ordering clauses
 	vector<BoundOrderByNode> orders;
+	//! Expression representing a filter, only used for aggregates
+	unique_ptr<Expression> filter_expr;
 	//! True to ignore NULL values
 	bool ignore_nulls;
 	//! The window boundaries
