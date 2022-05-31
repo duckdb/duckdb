@@ -144,7 +144,7 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 		throw InternalException("No binding with name \"%s\"", binding_name);
 	}
 	TableColumnInfo binding_info;
-	if (!binding->TryGetBindingIndex(column_name, binding_info)) { // LCOV_EXCL_START
+	if (!binding->TryGetBindingInfo(column_name, binding_info)) { // LCOV_EXCL_START
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
 		                        column_name);
 	} // LCOV_EXCL_STOP

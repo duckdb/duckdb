@@ -44,7 +44,7 @@ struct Binding {
 	case_insensitive_map_t<TableColumnInfo> name_map;
 
 public:
-	bool TryGetBindingIndex(const string &column_name, TableColumnInfo &column_index);
+	bool TryGetBindingInfo(const string &column_name, TableColumnInfo &column_index);
 	TableColumnInfo GetBindingInfo(const string &column_name);
 	bool HasMatchingBinding(const string &column_name);
 	virtual string ColumnNotFoundError(const string &column_name) const;

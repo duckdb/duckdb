@@ -29,7 +29,7 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 	}
 }
 
-bool Binding::TryGetBindingIndex(const string &column_name, TableColumnInfo &result) {
+bool Binding::TryGetBindingInfo(const string &column_name, TableColumnInfo &result) {
 	auto entry = name_map.find(column_name);
 	if (entry == name_map.end()) {
 		return false;
@@ -41,7 +41,7 @@ bool Binding::TryGetBindingIndex(const string &column_name, TableColumnInfo &res
 
 TableColumnInfo Binding::GetBindingInfo(const string &column_name) {
 	TableColumnInfo result;
-	if (!TryGetBindingIndex(column_name, result)) {
+	if (!TryGetBindingInfo(column_name, result)) {
 		throw InternalException("Binding index for column \"%s\" not found", column_name);
 	}
 	return result;
@@ -49,7 +49,7 @@ TableColumnInfo Binding::GetBindingInfo(const string &column_name) {
 
 bool Binding::HasMatchingBinding(const string &column_name) {
 	TableColumnInfo result;
-	return TryGetBindingIndex(column_name, result);
+	return TryGetBindingInfo(column_name, result);
 }
 
 string Binding::ColumnNotFoundError(const string &column_name) const {
@@ -59,7 +59,7 @@ string Binding::ColumnNotFoundError(const string &column_name) const {
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	TableColumnInfo column_info;
 	bool success = false;
-	success = TryGetBindingIndex(colref.GetColumnName(), column_info);
+	success = TryGetBindingInfo(colref.GetColumnName(), column_info);
 	if (!success) {
 		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
 	}
@@ -117,7 +117,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	auto &column_name = colref.GetColumnName();
 	TableColumnInfo column_info;
 	bool success = false;
-	success = TryGetBindingIndex(column_name, column_info);
+	success = TryGetBindingInfo(column_name, column_info);
 	if (!success) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
@@ -170,7 +170,7 @@ MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, 
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	TableColumnInfo column_info;
-	if (!TryGetBindingIndex(colref.GetColumnName(), column_info)) {
+	if (!TryGetBindingInfo(colref.GetColumnName(), column_info)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	D_ASSERT(column_info.column_type == TableColumnType::STANDARD);
@@ -185,7 +185,7 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 
 unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
 	TableColumnInfo column_info;
-	if (!TryGetBindingIndex(colref.GetColumnName(), column_info)) {
+	if (!TryGetBindingInfo(colref.GetColumnName(), column_info)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	D_ASSERT(column_info.column_type == TableColumnType::STANDARD);
