@@ -1,4 +1,5 @@
 import os
+from subprocess import Popen, PIPE
 import subprocess
 import duckdb
 import re
@@ -69,6 +70,35 @@ def run_checkpoint(subdir, subset, rle_sorting):
     return total_blocks, file_size_disk
 
 
+def run_checkpoint_cli(subdir, subset, rle_sorting):
+    if os.path.exists(f'{subdir}/{subset}.db'):
+        os.remove(f'{subdir}/{subset}.db')
+
+    db = f'{subdir}/{subset}.db'
+
+    process = Popen([f'{duckdb_root_dir}/build/release/duckdb'])
+    process.stdin.write(bytes(f".open {db}"))
+    process.stdin.flush()
+
+    process.stdin.write(bytes(f"pragma force_compression_sorting='{rle_sorting}'"))
+    process.stdin.flush()
+
+    process.stdin.write(bytes(open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read()))
+    process.stdin.flush()
+
+    # Load in the tables and checkpoint
+    process.stdin.write(bytes("CHECKPOINT;"))
+    process.stdin.flush()
+
+    process.stdin.write(bytes(".quit"))
+    process.stdin.flush()
+
+    file_size_disk = os.path.getsize(db)
+    total_blocks = 0
+    os.remove(db)
+    return total_blocks, file_size_disk
+
+
 def run_benchmark():
     # Prepare results file
     if os.path.exists(f'benchmark-results.csv'):
@@ -86,12 +116,14 @@ def run_benchmark():
                     # Checkpoint to a file and check size
                     start_nosort = timer()
                     print(f"Running {subset} checkpoint - no sorting")
-                    block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false')
+                    # block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false')
+                    block_size_nosort, file_size_disk_nosort = run_checkpoint_cli(subdir, subset, rle_sorting='false')
                     end_nosort=timer()
 
                     start_sort = timer()
                     print(f"Running {subset} checkpoint - sorting")
-                    block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true')
+                    # block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true')
+                    block_size_sort, file_size_disk_sort = run_checkpoint_cli(subdir, subset, rle_sorting='true')
                     end_sort=timer()
 
                     # Calculate average improvement
