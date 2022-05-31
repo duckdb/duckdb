@@ -55,6 +55,8 @@ public:
 	bool SupportsBatchIndex() const override {
 		return function.supports_batch_index;
 	}
+
+	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 };
 
 } // namespace duckdb
