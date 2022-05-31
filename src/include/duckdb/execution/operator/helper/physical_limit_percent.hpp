@@ -30,6 +30,11 @@ public:
 	unique_ptr<Expression> offset_expression;
 
 public:
+	bool IsOrderDependent() const override {
+		return true;
+	}
+
+public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
@@ -42,10 +47,6 @@ public:
 	                    DataChunk &input) const override;
 
 	bool IsSink() const override {
-		return true;
-	}
-
-	bool SinkOrderMatters() const override {
 		return true;
 	}
 };
