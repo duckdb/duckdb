@@ -119,7 +119,9 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	}
 	auto entry = GetTableEntry();
 	//! Either there is no table, or the columns category has to be standard
-	D_ASSERT(!entry || entry->columns[column_index].Category() == TableColumnType::STANDARD);
+	if (column_index != COLUMN_IDENTIFIER_ROW_ID) {
+		D_ASSERT(!entry || entry->columns[column_index].Category() == TableColumnType::STANDARD);
+	}
 	// fetch the type of the column
 	LogicalType col_type;
 	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
