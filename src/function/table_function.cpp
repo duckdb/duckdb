@@ -27,7 +27,7 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
       cardinality(cardinality), pushdown_complex_filter(pushdown_complex_filter), to_string(to_string),
       max_threads(max_threads), init_parallel_state(init_parallel_state), parallel_function(parallel_function),
       parallel_init(parallel_init), parallel_state_next(parallel_state_next), table_scan_progress(query_progress),
-      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
+      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown), supports_batch_index(false) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function,

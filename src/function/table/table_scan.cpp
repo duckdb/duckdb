@@ -124,6 +124,19 @@ double TableScanProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
+idx_t TableScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+                             FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+	auto &bind_data = (const TableScanBindData &)*bind_data_p;
+	auto &state = (TableScanOperatorData &)*operator_state;
+	if (state.scan_state.row_group_scan_state.row_group) {
+		return state.scan_state.row_group_scan_state.row_group->start;
+	}
+	if (state.scan_state.local_state.max_index > 0) {
+		return bind_data.table->storage->GetTotalRows() + state.scan_state.local_state.chunk_index;
+	}
+	return 0;
+}
+
 void TableScanDependency(unordered_set<CatalogEntry *> &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	entries.insert(bind_data.table);
@@ -328,7 +341,9 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				get.function.init_parallel_state = nullptr;
 				get.function.parallel_state_next = nullptr;
 				get.function.table_scan_progress = nullptr;
+				get.function.get_batch_index = nullptr;
 				get.function.filter_pushdown = false;
+				get.function.supports_batch_index = false;
 			} else {
 				bind_data.result_ids.clear();
 			}
@@ -357,8 +372,10 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.parallel_init = TableScanParallelInit;
 	scan_function.parallel_state_next = TableScanParallelStateNext;
 	scan_function.table_scan_progress = TableScanProgress;
+	scan_function.get_batch_index = TableScanGetBatchIndex;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
+	scan_function.supports_batch_index = true;
 	return scan_function;
 }
 

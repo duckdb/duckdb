@@ -457,6 +457,18 @@ Value PreserveIdentifierCase::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// PreserveInsertionOrder
+//===--------------------------------------------------------------------===//
+void PreserveInsertionOrder::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.preserve_insertion_order = input.GetValue<bool>();
+}
+
+Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.preserve_insertion_order);
+}
+
+//===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
 void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
