@@ -2,6 +2,8 @@
 #include "typesr.hpp"
 #include "altrepstring.hpp"
 
+#include <R_ext/Utils.h>
+
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
@@ -626,7 +628,16 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 		cpp11::stop("rapi_execute: Invalid statement");
 	}
 
-	auto generic_result = stmt->stmt->Execute(stmt->parameters, arrow);
+	auto pending_query = stmt->stmt->PendingQuery(stmt->parameters, arrow);
+	duckdb::PendingExecutionResult execution_result;
+	do {
+		execution_result = pending_query->ExecuteTask();
+		R_CheckUserInterrupt();
+	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+		cpp11::stop("rapi_execute: Failed to run query\nError: %s", pending_query->error.c_str());
+	}
+	auto generic_result = pending_query->Execute();
 	if (!generic_result->success) {
 		cpp11::stop("rapi_execute: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
