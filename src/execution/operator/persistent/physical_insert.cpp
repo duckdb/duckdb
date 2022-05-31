@@ -60,7 +60,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 			if (col.Generated()) {
 				continue;
 			}
-			auto storage_idx = col.storage_oid;
+			auto storage_idx = col.StorageOid();
 			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
 				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[storage_idx]);

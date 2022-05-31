@@ -95,7 +95,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		throw ParserException("Table must have at least one column!");
 	}
 
-	case_insensitive_map_t<column_t> tmp_name_map;
 	idx_t column_count = 0;
 	for (auto c = stmt->tableElts->head; c != nullptr; c = lnext(c)) {
 		auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(c->data.ptr_value);
@@ -111,7 +110,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 					}
 				}
 			}
-			tmp_name_map[centry.name] = column_count;
 			info->columns.push_back(move(centry));
 			column_count++;
 			break;

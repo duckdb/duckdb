@@ -111,11 +111,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		vector<LogicalType> return_types;
 		vector<string> return_names;
 		for (auto &col : table->columns) {
-			table_types.push_back(col.type);
-			table_names.push_back(col.name);
-			table_categories.push_back(col.category);
-			return_types.push_back(col.type);
-			return_names.push_back(col.name);
+			table_types.push_back(col.Type());
+			table_names.push_back(col.Name());
+			table_categories.push_back(col.Category());
+			return_types.push_back(col.Type());
+			return_names.push_back(col.Name());
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 

@@ -31,7 +31,7 @@ void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
 		}
 		indices.push_back(entry->second.index);
 	}
-	return AddGeneratedColumn(column.oid, indices);
+	return AddGeneratedColumn(column.Oid(), indices);
 }
 
 void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root) {

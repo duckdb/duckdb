@@ -34,16 +34,8 @@
 
 namespace duckdb {
 
-const string &TableCatalogEntry::GetColumnName(const TableColumnInfo &info) {
-	// TODO: remove this distinction here, not needed anymore
-	switch (info.column_type) {
-	case TableColumnType::GENERATED:
-		return columns[info.index].name;
-	case TableColumnType::STANDARD:
-		return columns[info.index].name;
-	default:
-		throw InternalException("Unsupported TableColumnType");
-	}
+const string &TableCatalogEntry::GetColumnName(column_t index) {
+	return columns[index].Name();
 }
 
 TableColumnInfo TableCatalogEntry::GetColumnInfo(string &column_name, bool if_exists) {
@@ -58,7 +50,7 @@ TableColumnInfo TableCatalogEntry::GetColumnInfo(string &column_name, bool if_ex
 			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
 	}
-	column_name = GetColumnName(entry->second);
+	column_name = GetColumnName(entry->second.index);
 	return entry->second;
 }
 
@@ -76,11 +68,11 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 			throw InvalidInputException("Creating index on generated column is not supported");
 		}
 
-		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(columns[key].name, columns[key].type,
+		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(columns[key].Name(), columns[key].Type(),
 		                                                                    ColumnBinding(0, column_ids.size())));
 
-		bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].type, key_nr++));
-		column_ids.push_back(column.storage_oid);
+		bound_expressions.push_back(make_unique<BoundReferenceExpression>(columns[key].Type(), key_nr++));
+		column_ids.push_back(column.StorageOid());
 	}
 	// create an adaptive radix tree around the expressions
 	auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type);
@@ -96,10 +88,10 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
-		auto category = columns[i].category;
-		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
+		auto category = columns[i].Category();
+		D_ASSERT(name_map.find(columns[i].Name()) == name_map.end());
 		auto column_info = TableColumnInfo(i, category);
-		name_map[columns[i].name] = column_info;
+		name_map[columns[i].Name()] = column_info;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
@@ -153,7 +145,7 @@ bool TableCatalogEntry::ColumnExists(const string &name, TableColumnType type) {
 idx_t TableCatalogEntry::StandardColumnCount() const {
 	idx_t count = 0;
 	for (auto &col : columns) {
-		if (col.category == TableColumnType::STANDARD) {
+		if (col.Category() == TableColumnType::STANDARD) {
 			count++;
 		}
 	}
@@ -222,7 +214,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		auto copy = columns[i].Copy();
 
 		if (rename_idx == i) {
-			copy.name = info.new_name;
+			copy.SetName(info.new_name);
 		}
 		create_info->columns.push_back(move(copy));
 		auto &col = create_info->columns[i];
@@ -307,9 +299,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	for (auto &constraint : constraints) {
 		create_info->constraints.push_back(constraint->Copy());
 	}
-	Binder::BindLogicalType(context, info.new_column.type, schema->name);
-	info.new_column.oid = columns.size();
-	info.new_column.storage_oid = storage->column_definitions.size();
+	Binder::BindLogicalType(context, info.new_column.TypeMutable(), schema->name);
+	info.new_column.SetOid(columns.size());
+	info.new_column.SetStorageOid(storage->column_definitions.size());
 
 	auto col = info.new_column.Copy();
 
@@ -449,7 +441,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 		if (default_idx == i) {
 			// set the default value of this column
 			D_ASSERT(!copy.Generated()); // Shouldnt reach here - DEFAULT value isn't supported for Generated Columns
-			copy.default_value = info.expression ? info.expression->Copy() : nullptr;
+			copy.SetDefaultValue(info.expression ? info.expression->Copy() : nullptr);
 		}
 		create_info->columns.push_back(move(copy));
 	}
@@ -481,12 +473,13 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 				throw NotImplementedException("Changing types of generated columns is not supported yet");
 				// copy.ChangeGeneratedExpressionType(info.target_type);
 			}
-			copy.type = info.target_type;
+			copy.SetType(info.target_type);
 		}
 		// TODO: check if the generated_expression breaks, only delete it if it does
 		if (copy.Generated() && column_dependency_manager.IsDependencyOf(i, change_idx)) {
 			throw BinderException(
-			    "This column is referenced by the generated column \"%s\", so its type can not be changed", copy.name);
+			    "This column is referenced by the generated column \"%s\", so its type can not be changed",
+			    copy.Name());
 		}
 		create_info->columns.push_back(move(copy));
 	}
@@ -604,7 +597,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 		if (it.Generated()) {
 			continue;
 		}
-		types.push_back(it.type);
+		types.push_back(it.Type());
 	}
 	return types;
 }
@@ -690,12 +683,12 @@ string TableCatalogEntry::ToSQL() {
 			ss << ", ";
 		}
 		auto &column = columns[i];
-		ss << KeywordHelper::WriteOptionallyQuoted(column.name) << " ";
-		ss << column.type.ToString();
-		bool not_null = not_null_columns.find(column.oid) != not_null_columns.end();
-		bool is_single_key_pk = pk_columns.find(column.oid) != pk_columns.end();
-		bool is_multi_key_pk = multi_key_pks.find(column.name) != multi_key_pks.end();
-		bool is_unique = unique_columns.find(column.oid) != unique_columns.end();
+		ss << KeywordHelper::WriteOptionallyQuoted(column.Name()) << " ";
+		ss << column.Type().ToString();
+		bool not_null = not_null_columns.find(column.Oid()) != not_null_columns.end();
+		bool is_single_key_pk = pk_columns.find(column.Oid()) != pk_columns.end();
+		bool is_multi_key_pk = multi_key_pks.find(column.Name()) != multi_key_pks.end();
+		bool is_unique = unique_columns.find(column.Oid()) != unique_columns.end();
 		if (not_null && !is_single_key_pk && !is_multi_key_pk) {
 			// NOT NULL but not a primary key column
 			ss << " NOT NULL";
@@ -708,8 +701,8 @@ string TableCatalogEntry::ToSQL() {
 			// single column unique: insert constraint here
 			ss << " UNIQUE";
 		}
-		if (column.default_value) {
-			ss << " DEFAULT(" << column.default_value->ToString() << ")";
+		if (column.DefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed
@@ -766,7 +759,7 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 	idx_t removed_index = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto &col = columns[i];
-		if (col.name == column_name) {
+		if (col.Name() == column_name) {
 			// No need to alter storage, removed column is generated column
 			if (col.Generated()) {
 				return;

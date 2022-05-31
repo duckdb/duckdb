@@ -29,24 +29,37 @@ public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
 	                            TableColumnType category);
 
-	//! The name of the entry
-	string name;
-	//! The index of the column in the table
-	idx_t oid;
-	//! The index of the column in the storage of the table
-	storage_t storage_oid;
-	//! The type of the column
-	LogicalType type;
 	//! The default value of the column (if any)
 	unique_ptr<ParsedExpression> default_value;
-	//! Compression Type used for this column
-	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
-	//! The category of the column
-	TableColumnType category = TableColumnType::STANDARD;
-	//! Used by Generated Columns
-	unique_ptr<ParsedExpression> generated_expression;
 
 public:
+	//! default_value
+	const unique_ptr<ParsedExpression> &DefaultValue() const;
+	void SetDefaultValue(unique_ptr<ParsedExpression> default_value);
+
+	//! type
+	const LogicalType &Type() const;
+	LogicalType &TypeMutable();
+	void SetType(const LogicalType &type);
+
+	//! name
+	const string &Name() const;
+	void SetName(const string &name);
+
+	//! compression_type
+	const CompressionType &CompressionType() const;
+	void SetCompressionType(duckdb::CompressionType compression_type);
+
+	//! storage_oid
+	const storage_t &StorageOid() const;
+	void SetStorageOid(storage_t storage_oid);
+
+	//! oid
+	const column_t &Oid() const;
+	void SetOid(column_t oid);
+
+	//! category
+	const TableColumnType &Category() const;
 	//! Whether this column is a Generated Column
 	bool Generated() const;
 	DUCKDB_API ColumnDefinition Copy() const;
@@ -65,6 +78,20 @@ public:
 
 private:
 private:
+	//! The name of the entry
+	string name;
+	//! The type of the column
+	LogicalType type;
+	//! Compression Type used for this column
+	duckdb::CompressionType compression_type = duckdb::CompressionType::COMPRESSION_AUTO;
+	//! The index of the column in the storage of the table
+	storage_t storage_oid;
+	//! The index of the column in the table
+	idx_t oid;
+	//! The category of the column
+	TableColumnType category = TableColumnType::STANDARD;
+	//! Used by Generated Columns
+	unique_ptr<ParsedExpression> generated_expression;
 };
 
 } // namespace duckdb

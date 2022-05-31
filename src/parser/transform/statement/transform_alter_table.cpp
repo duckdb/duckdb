@@ -59,10 +59,10 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 				expr = TransformExpression(cdef->raw_default);
 			} else {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
-				expr = make_unique<CastExpression>(column_definition.type, move(colref));
+				expr = make_unique<CastExpression>(column_definition.Type(), move(colref));
 			}
 			result->info = make_unique<ChangeColumnTypeInfo>(qname.schema, qname.name, command->name,
-			                                                 column_definition.type, move(expr));
+			                                                 column_definition.Type(), move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:

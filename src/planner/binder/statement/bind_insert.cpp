@@ -59,7 +59,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 				throw BinderException("Cannot explicitly insert values into rowid column");
 			}
-			insert->expected_types.push_back(table->columns[column_index].type);
+			insert->expected_types.push_back(table->columns[column_index].Type());
 			named_column_map.push_back(column_index);
 		}
 		for (idx_t i = 0; i < table->columns.size(); i++) {
@@ -67,7 +67,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			if (col.Generated()) {
 				generated_column_count++;
 			}
-			auto entry = column_name_map.find(col.name);
+			auto entry = column_name_map.find(col.Name());
 			if (entry == column_name_map.end()) {
 				// column not specified, set index to DConstants::INVALID_INDEX
 				insert->column_index_map.push_back(DConstants::INVALID_INDEX);
@@ -84,7 +84,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 				continue;
 			}
 			named_column_map.push_back(i);
-			insert->expected_types.push_back(table->columns[i].type);
+			insert->expected_types.push_back(table->columns[i].Type());
 		}
 	}
 
@@ -117,17 +117,17 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 			// set the expected types as the types for the INSERT statement
 			auto &column = table->columns[table_col_idx];
-			expr_list.expected_types[col_idx] = column.type;
-			expr_list.expected_names[col_idx] = column.name;
+			expr_list.expected_types[col_idx] = column.Type();
+			expr_list.expected_names[col_idx] = column.Name();
 
 			// now replace any DEFAULT values with the corresponding default expression
 			for (idx_t list_idx = 0; list_idx < expr_list.values.size(); list_idx++) {
 				if (expr_list.values[list_idx][col_idx]->type == ExpressionType::VALUE_DEFAULT) {
 					// DEFAULT value! replace the entry
-					if (column.default_value) {
-						expr_list.values[list_idx][col_idx] = column.default_value->Copy();
+					if (column.DefaultValue()) {
+						expr_list.values[list_idx][col_idx] = column.DefaultValue()->Copy();
 					} else {
-						expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.type));
+						expr_list.values[list_idx][col_idx] = make_unique<ConstantExpression>(Value(column.Type()));
 					}
 				}
 			}

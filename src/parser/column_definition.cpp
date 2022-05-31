@@ -32,7 +32,7 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	ColumnDefinition copy(name, type);
 	copy.oid = oid;
 	copy.storage_oid = storage_oid;
-	copy.default_value = default_value ? default_value->Copy() : nullptr;
+	copy.SetDefaultValue(default_value ? default_value->Copy() : nullptr);
 	copy.generated_expression = generated_expression ? generated_expression->Copy() : nullptr;
 	copy.compression_type = compression_type;
 	copy.category = category;
@@ -68,6 +68,62 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	default:
 		throw NotImplementedException("Type not implemented for TableColumnType");
 	}
+}
+
+const unique_ptr<ParsedExpression> &ColumnDefinition::DefaultValue() const {
+	return default_value;
+}
+
+void ColumnDefinition::SetDefaultValue(unique_ptr<ParsedExpression> default_value) {
+	this->default_value = move(default_value);
+}
+
+const LogicalType &ColumnDefinition::Type() const {
+	return type;
+}
+
+LogicalType &ColumnDefinition::TypeMutable() {
+	return type;
+}
+
+void ColumnDefinition::SetType(const LogicalType &type) {
+	this->type = type;
+}
+
+const string &ColumnDefinition::Name() const {
+	return name;
+}
+
+void ColumnDefinition::SetName(const string &name) {
+	this->name = name;
+}
+
+const CompressionType &ColumnDefinition::CompressionType() const {
+	return compression_type;
+}
+
+void ColumnDefinition::SetCompressionType(duckdb::CompressionType compression_type) {
+	this->compression_type = compression_type;
+}
+
+const storage_t &ColumnDefinition::StorageOid() const {
+	return storage_oid;
+}
+
+void ColumnDefinition::SetStorageOid(storage_t storage_oid) {
+	this->storage_oid = storage_oid;
+}
+
+const column_t &ColumnDefinition::Oid() const {
+	return oid;
+}
+
+void ColumnDefinition::SetOid(column_t oid) {
+	this->oid = oid;
+}
+
+const TableColumnType &ColumnDefinition::Category() const {
+	return category;
 }
 
 bool ColumnDefinition::Generated() const {

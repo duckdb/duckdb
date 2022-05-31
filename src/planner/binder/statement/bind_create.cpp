@@ -201,7 +201,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_columns.insert(col.name);
+		generated_columns.insert(col.Name());
 	}
 	if (generated_columns.empty()) {
 		return false;
@@ -357,7 +357,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 					}
 					auto column_index = entry->second.index;
 					auto &column = pk_table_entry_ptr->columns[column_index];
-					fk.info.pk_keys.push_back(column.storage_oid);
+					fk.info.pk_keys.push_back(column.StorageOid());
 				}
 				auto index = pk_table_entry_ptr->storage->info->indexes.FindForeignKeyIndex(
 				    fk.info.pk_keys, ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE);

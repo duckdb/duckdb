@@ -27,23 +27,23 @@ static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_nam
 		auto &col = base.columns[oid];
 		if (allow_duplicate_names) {
 			idx_t index = 1;
-			string base_name = col.name;
-			while (info.name_map.find(col.name) != info.name_map.end()) {
-				col.name = base_name + ":" + to_string(index++);
+			string base_name = col.Name();
+			while (info.name_map.find(col.Name()) != info.name_map.end()) {
+				col.SetName(base_name + ":" + to_string(index++));
 			}
 		} else {
-			if (info.name_map.find(col.name) != info.name_map.end()) {
-				throw CatalogException("Column with name %s already exists!", col.name);
+			if (info.name_map.find(col.Name()) != info.name_map.end()) {
+				throw CatalogException("Column with name %s already exists!", col.Name());
 			}
 		}
 
-		auto column_info = TableColumnInfo(oid, col.category);
-		info.name_map[col.name] = column_info;
-		col.oid = oid;
+		auto column_info = TableColumnInfo(oid, col.Category());
+		info.name_map[col.Name()] = column_info;
+		col.SetOid(oid);
 		if (col.Generated()) {
 			continue;
 		}
-		col.storage_oid = storage_idx++;
+		col.SetStorageOid(storage_idx++);
 	}
 }
 
@@ -90,7 +90,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = (NotNullConstraint &)*cond;
 			auto &col = base.columns[not_null.index];
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(col.storage_oid));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(col.StorageOid()));
 			break;
 		}
 		case ConstraintType::UNIQUE: {
@@ -101,7 +101,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			if (unique.index != DConstants::INVALID_INDEX) {
 				D_ASSERT(unique.index < base.columns.size());
 				// unique constraint is given by single index
-				unique.columns.push_back(base.columns[unique.index].name);
+				unique.columns.push_back(base.columns[unique.index].Name());
 				keys.push_back(unique.index);
 				key_set.insert(unique.index);
 			} else {
@@ -180,7 +180,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 		for (auto &column_index : primary_keys) {
 			auto &column = base.columns[column_index];
 			base.constraints.push_back(make_unique<NotNullConstraint>(column_index));
-			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.storage_oid));
+			info.bound_constraints.push_back(make_unique<BoundNotNullConstraint>(column.StorageOid()));
 		}
 	}
 }
@@ -194,14 +194,15 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	D_ASSERT(base.type == CatalogType::TABLE_ENTRY);
 	for (idx_t i = 0; i < base.columns.size(); i++) {
 		auto &col = base.columns[i];
-		names.push_back(col.name);
-		types.push_back(col.type);
+		names.push_back(col.Name());
+		types.push_back(col.Type());
 	}
 	auto table_index = GenerateTableIndex();
 
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
+	auto expr_binder = ExpressionBinder(*binder, context);
 	string ignore;
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
 	D_ASSERT(table_binding && ignore.empty());
@@ -216,22 +217,21 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		if (!col.Generated()) {
 			continue;
 		}
-		auto expr_binder = ExpressionBinder(*binder, context);
 		auto expression = col.GeneratedExpression().Copy();
 
 		auto bound_expression = expr_binder.Bind(expression);
 		if (!bound_expression) {
-			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.name);
+			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.Name());
 		}
 		D_ASSERT(!bound_expression->HasSubquery());
-		if (col.type.id() == LogicalTypeId::ANY) {
+		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
 			col.ChangeGeneratedExpressionType(bound_expression->return_type);
-			col.type = bound_expression->return_type;
+			col.SetType(bound_expression->return_type);
 
 			// Update the type in the binding, for future expansions
 			string ignore;
-			table_binding->types[i] = col.type;
+			table_binding->types[i] = col.Type();
 		}
 	}
 }
@@ -239,16 +239,16 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 void Binder::BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults) {
 	for (idx_t i = 0; i < columns.size(); i++) {
 		unique_ptr<Expression> bound_default;
-		if (columns[i].default_value) {
+		if (columns[i].DefaultValue()) {
 			// we bind a copy of the DEFAULT value because binding is destructive
 			// and we want to keep the original expression around for serialization
-			auto default_copy = columns[i].default_value->Copy();
+			auto default_copy = columns[i].DefaultValue()->Copy();
 			ConstantBinder default_binder(*this, context, "DEFAULT value");
-			default_binder.target_type = columns[i].type;
+			default_binder.target_type = columns[i].Type();
 			bound_default = default_binder.Bind(default_copy);
 		} else {
 			// no default value specified: push a default value of constant null
-			bound_default = make_unique<BoundConstantExpression>(Value(columns[i].type));
+			bound_default = make_unique<BoundConstantExpression>(Value(columns[i].Type()));
 		}
 		bound_defaults.push_back(move(bound_default));
 	}
@@ -293,11 +293,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Generated()) {
 			continue;
 		}
-		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
-		BindLogicalType(context, column.type);
-		if (column.type.id() == LogicalTypeId::ENUM) {
+		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
+		BindLogicalType(context, column.TypeMutable());
+		if (column.Type().id() == LogicalTypeId::ENUM) {
 			// We add a catalog dependency
-			auto enum_dependency = EnumType::GetCatalog(column.type);
+			auto enum_dependency = EnumType::GetCatalog(column.Type());
 			if (enum_dependency) {
 				// Only if the ENUM comes from a create type
 				result->dependencies.insert(enum_dependency);

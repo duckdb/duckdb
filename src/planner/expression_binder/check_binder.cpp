@@ -47,14 +47,14 @@ BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto &col = columns[i];
-		if (colref.column_names[0] == col.name) {
+		if (colref.column_names[0] == col.Name()) {
 			if (col.Generated()) {
 				auto bound_expression = col.GeneratedExpression().Copy();
 				return BindExpression(&bound_expression, 0, false);
 			}
 			bound_columns.insert(i);
-			D_ASSERT(col.storage_oid != DConstants::INVALID_INDEX);
-			return BindResult(make_unique<BoundReferenceExpression>(col.type, col.storage_oid));
+			D_ASSERT(col.StorageOid() != DConstants::INVALID_INDEX);
+			return BindResult(make_unique<BoundReferenceExpression>(col.Type(), col.StorageOid()));
 		}
 	}
 	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_names[0]);

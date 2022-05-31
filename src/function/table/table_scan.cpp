@@ -33,7 +33,7 @@ static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
 		return column_id;
 	}
 	auto &col = table.columns[column_id];
-	return col.storage_oid;
+	return col.StorageOid();
 }
 
 static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,

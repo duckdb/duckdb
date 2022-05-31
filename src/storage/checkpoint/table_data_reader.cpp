@@ -31,7 +31,7 @@ void TableDataReader::ReadTableData() {
 		if (col.Generated()) {
 			continue;
 		}
-		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, columns[i].type));
+		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, columns[i].Type()));
 	}
 
 	// deserialize each of the individual row groups

@@ -70,7 +70,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
-	auto new_column_type = new_column.type;
+	auto new_column_type = new_column.Type();
 	auto new_column_idx = parent.column_definitions.size();
 
 	// set up the statistics
@@ -94,7 +94,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	}
 
 	// fill the column with its DEFAULT value, or NULL if none is specified
-	auto new_stats = make_unique<SegmentStatistics>(new_column.type);
+	auto new_stats = make_unique<SegmentStatistics>(new_column.Type());
 	this->row_groups = make_shared<SegmentTree>();
 	auto current_row_group = (RowGroup *)parent.row_groups->GetRootSegment();
 	while (current_row_group) {
@@ -147,11 +147,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	storage_t storage_idx = 0;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
 		auto &col = column_definitions[i];
-		col.oid = i;
+		col.SetOid(i);
 		if (col.Generated()) {
 			continue;
 		}
-		col.storage_oid = storage_idx++;
+		col.SetStorageOid(storage_idx++);
 	}
 
 	// alter the row_groups and remove the column from each of them
@@ -186,14 +186,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	});
 
 	// change the type in this DataTable
-	column_definitions[changed_idx].type = target_type;
+	column_definitions[changed_idx].SetType(target_type);
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
 		if (i == changed_idx) {
 			column_stats.push_back(
-			    BaseStatistics::CreateEmpty(column_definitions[i].type, StatisticsType::GLOBAL_STATS));
+			    BaseStatistics::CreateEmpty(column_definitions[i].Type(), StatisticsType::GLOBAL_STATS));
 		} else {
 			column_stats.push_back(parent.column_stats[i]->Copy());
 		}
@@ -207,7 +207,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			scan_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
-			scan_types.push_back(parent.column_definitions[bound_columns[i]].type);
+			scan_types.push_back(parent.column_definitions[bound_columns[i]].Type());
 		}
 	}
 	DataChunk scan_chunk;
@@ -240,7 +240,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 vector<LogicalType> DataTable::GetTypes() {
 	vector<LogicalType> types;
 	for (auto &it : column_definitions) {
-		types.push_back(it.type);
+		types.push_back(it.Type());
 	}
 	return types;
 }
@@ -421,7 +421,7 @@ void DataTable::Fetch(Transaction &transaction, DataChunk &result, const vector<
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, string &col_name) {
+static void VerifyNotNullConstraint(TableCatalogEntry &table, Vector &vector, idx_t count, const string &col_name) {
 	if (VectorOperations::HasNull(vector, count)) {
 		throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 	}
@@ -433,11 +433,11 @@ static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk
 	auto &col = table.columns[index];
 	D_ASSERT(col.Generated());
 	ExpressionExecutor executor(expr);
-	Vector result(col.type);
+	Vector result(col.Type());
 	try {
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
-		throw ConstraintException("Incorrect %s value for generated column \"%s\"", col.type.ToString(), col.name);
+		throw ConstraintException("Incorrect %s value for generated column \"%s\"", col.Type().ToString(), col.Name());
 	}
 }
 
@@ -514,7 +514,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	// make the data chunk to check
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < table_entry_ptr->columns.size(); i++) {
-		types.emplace_back(table_entry_ptr->columns[i].type);
+		types.emplace_back(table_entry_ptr->columns[i].Type());
 	}
 	DataChunk dst_chunk;
 	dst_chunk.InitializeEmpty(types);
@@ -612,7 +612,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		if (!col.Generated()) {
 			continue;
 		}
-		generated_check_binder.target_type = col.type;
+		generated_check_binder.target_type = col.Type();
 		auto to_be_bound_expression = col.GeneratedExpression().Copy();
 		auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
 		VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
@@ -624,7 +624,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		case ConstraintType::NOT_NULL: {
 			auto &not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			VerifyNotNullConstraint(table, chunk.data[not_null.index], chunk.size(),
-			                        table.columns[not_null.index].name);
+			                        table.columns[not_null.index].Name());
 			break;
 		}
 		case ConstraintType::CHECK: {
@@ -757,7 +757,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
 		auto &col = this->column_definitions[i];
 		column_ids.push_back(i);
-		types.push_back(col.type);
+		types.push_back(col.Type());
 	}
 	DataChunk chunk;
 	chunk.Initialize(types);
@@ -1014,8 +1014,8 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 		vector<column_t> col_ids;
 		vector<LogicalType> types;
 		for (idx_t i = 0; i < column_definitions.size(); i++) {
-			col_ids.push_back(column_definitions[i].storage_oid);
-			types.emplace_back(column_definitions[i].type);
+			col_ids.push_back(column_definitions[i].StorageOid());
+			types.emplace_back(column_definitions[i].Type());
 		}
 		verify_chunk.Initialize(types);
 		Fetch(transaction, verify_chunk, col_ids, row_identifiers, count, fetch_state);
@@ -1100,7 +1100,7 @@ void DataTable::VerifyUpdateConstraints(TableCatalogEntry &table, DataChunk &chu
 			for (idx_t i = 0; i < column_ids.size(); i++) {
 				if (column_ids[i] == not_null.index) {
 					// found the column id: check the data in
-					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), table.columns[not_null.index].name);
+					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), table.columns[not_null.index].Name());
 					break;
 				}
 			}
@@ -1263,7 +1263,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	for (auto &id : index->column_ids) {
 		auto &col = column_definitions[id];
-		intermediate_types.push_back(col.type);
+		intermediate_types.push_back(col.Type());
 	}
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 	intermediate.Initialize(intermediate_types);

@@ -79,7 +79,7 @@ static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, TableF
 	result->plan = SubstraitPlanToDuckDBRel(*result->conn, serialized);
 	for (auto &column : result->plan->Columns()) {
 		return_types.emplace_back(column.type);
-		names.emplace_back(column.name);
+		names.emplace_back(column.Name());
 	}
 	return move(result);
 }
