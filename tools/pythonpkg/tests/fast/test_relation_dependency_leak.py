@@ -30,11 +30,11 @@ def from_arrow():
 def arrow_replacement():
     data = pa.array(np.random.rand(1_000_000), type=pa.float32())
     arrow_table = pa.Table.from_arrays([data],['a'])
-    duckdb.query("select * from arrow_table")
+    duckdb.query("select sum(a) from arrow_table").fetchall()
 
 def pandas_replacement():
     df = pd.DataFrame({"x": np.random.rand(1_000_000)})
-    duckdb.query("select * from df")
+    duckdb.query("select sum(x) from df").fetchall()
 
 
 class TestRelationDependencyMemoryLeak(object):
