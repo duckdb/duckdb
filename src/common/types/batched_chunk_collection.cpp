@@ -1,17 +1,23 @@
 #include "duckdb/common/types/batched_chunk_collection.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-BatchedChunkCollection::BatchedChunkCollection() {
+BatchedChunkCollection::BatchedChunkCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
+    : buffer_manager(buffer_manager), types(move(types_p)) {
+}
+
+BatchedChunkCollection::BatchedChunkCollection(ClientContext &context, vector<LogicalType> types_p)
+    : BatchedChunkCollection(BufferManager::GetBufferManager(context), move(types_p)) {
 }
 
 void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
 	auto entry = data.find(batch_index);
-	ChunkCollection *collection;
+	ColumnDataCollection *collection;
 	if (entry == data.end()) {
-		auto new_collection = make_unique<ChunkCollection>();
+		auto new_collection = make_unique<ColumnDataCollection>(buffer_manager, types);
 		collection = new_collection.get();
 		data.insert(make_pair(batch_index, move(new_collection)));
 	} else {
@@ -35,22 +41,26 @@ void BatchedChunkCollection::Merge(BatchedChunkCollection &other) {
 
 void BatchedChunkCollection::InitializeScan(BatchedChunkScanState &state) {
 	state.iterator = data.begin();
-	state.chunk_index = 0;
+	if (state.iterator == data.end()) {
+		return;
+	}
+	state.iterator->second->InitializeScan(state.scan_state);
 }
 
 void BatchedChunkCollection::Scan(BatchedChunkScanState &state, DataChunk &output) {
 	while (state.iterator != data.end()) {
 		// check if there is a chunk remaining in this collection
 		auto collection = state.iterator->second.get();
-		if (state.chunk_index < collection->ChunkCount()) {
-			// there is! increment the chunk count
-			output.Reference(collection->GetChunk(state.chunk_index));
-			state.chunk_index++;
+		collection->Scan(state.scan_state, output);
+		if (output.size() > 0) {
 			return;
 		}
 		// there isn't! move to the next collection
 		state.iterator++;
-		state.chunk_index = 0;
+		if (state.iterator == data.end()) {
+			return;
+		}
+		state.iterator->second->InitializeScan(state.scan_state);
 	}
 }
 

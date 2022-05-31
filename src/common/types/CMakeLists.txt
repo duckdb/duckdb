@@ -5,6 +5,7 @@ add_library_unity(
   blob.cpp
   cast_helpers.cpp
   chunk_collection.cpp
+  column_data_collection.cpp
   data_chunk.cpp
   date.cpp
   decimal.cpp
