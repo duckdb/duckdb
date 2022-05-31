@@ -247,7 +247,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	string columns;
 	for (auto &column_rel : rel->Columns()) {
-		columns += column_rel.name + ",";
+		columns += column_rel.Name() + ",";
 	}
 	columns.erase(columns.size() - 1, columns.size());
 	auto expr = GenerateExpressionList("stats", columns);
@@ -587,7 +587,7 @@ py::str DuckDBPyRelation::Type() {
 py::list DuckDBPyRelation::Columns() {
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.name);
+		res.append(col.Name());
 	}
 	return res;
 }
@@ -595,7 +595,7 @@ py::list DuckDBPyRelation::Columns() {
 py::list DuckDBPyRelation::ColumnTypes() {
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.type.ToString());
+		res.append(col.Type().ToString());
 	}
 	return res;
 }
