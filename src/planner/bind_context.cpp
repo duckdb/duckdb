@@ -205,7 +205,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	auto result = make_unique<ColumnRefExpression>(move(names));
 	auto binding = GetBinding(table_name, error_message);
 	if (!binding) {
-		return result;
+		return move(result);
 	}
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (ColumnIsGenerated(binding, column_index)) {

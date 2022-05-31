@@ -38,12 +38,12 @@ public:
 	void SetDefaultValue(unique_ptr<ParsedExpression> default_value);
 
 	//! type
-	const LogicalType &Type() const;
+	DUCKDB_API const LogicalType &Type() const;
 	LogicalType &TypeMutable();
 	void SetType(const LogicalType &type);
 
 	//! name
-	const string &Name() const;
+	DUCKDB_API const string &Name() const;
 	void SetName(const string &name);
 
 	//! compression_type
