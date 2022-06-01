@@ -3,6 +3,9 @@
 # group: [virtual]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE album (
 	gen_artistid AS (artistid),
 	gen_albumname AS (albumname),

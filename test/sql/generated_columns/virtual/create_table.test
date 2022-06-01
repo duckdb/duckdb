@@ -2,6 +2,9 @@
 # description: Add a generated column on creation of a table
 # group: [virtual]
 
+statement ok
+PRAGMA enable_verification
+
 #Function doesnt exist, neither does the referenced column
 statement error
 CREATE TABLE unit (

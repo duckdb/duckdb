@@ -2,6 +2,9 @@
 # description: Test generated columns with the UNIQUE constraint
 # group: [virtual]
 
+statement ok
+PRAGMA enable_verification
+
 #Unique constraint not supported yet (SQLite supports it, so it is planned)
 
 # Not supported appended to the column definition

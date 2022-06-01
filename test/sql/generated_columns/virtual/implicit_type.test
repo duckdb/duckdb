@@ -3,6 +3,9 @@
 # group: [virtual]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE test (
     foo INTEGER,
     bar GENERATED ALWAYS AS (foo+1),

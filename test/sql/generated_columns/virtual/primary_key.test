@@ -2,7 +2,8 @@
 # description: Test generated columns with the PRIMARY KEY constraint
 # group: [virtual]
 
-#Primary key constraint not supported (also not planned)
+statement ok
+PRAGMA enable_verification
 
 # Not supported appended to the column definition
 statement error

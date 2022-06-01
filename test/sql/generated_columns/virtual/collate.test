@@ -2,6 +2,9 @@
 # description: Test generated columns with the COLLATE option
 # group: [virtual]
 
+statement ok
+PRAGMA enable_verification
+
 #Add a collation to a generated column
 statement error
 CREATE TABLE tbl (

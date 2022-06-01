@@ -2,6 +2,9 @@
 # description: Test the chain reaction effect of deleting a column that is a dependency of a generated column
 # group: [virtual]
 
+statement ok
+PRAGMA enable_verification
+
 # which itself is also a dependency of a generated column
 
 statement ok

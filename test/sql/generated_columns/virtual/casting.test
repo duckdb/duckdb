@@ -2,6 +2,9 @@
 # description: Test generated column behavior when casting is involved
 # group: [virtual]
 
+statement ok
+PRAGMA enable_verification
+
 # Create a table with a generated column, that contains a CAST
 statement ok
 CREATE TABLE tbl (

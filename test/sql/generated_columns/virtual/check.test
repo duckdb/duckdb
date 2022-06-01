@@ -2,6 +2,9 @@
 # description: Test generated columns with the CHECK constraint
 # group: [virtual]
 
+statement ok
+PRAGMA enable_verification
+
 #Check constraint involving a generated column is not supported
 
 # Using a CHECK constraint that doesnt involve the generated column itself is fine
