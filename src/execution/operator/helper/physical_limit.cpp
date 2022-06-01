@@ -104,6 +104,10 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	                   offset_expression.get())) {
 		return SinkResultType::FINISHED;
 	}
+	auto max_cardinality = max_element - state.current_offset;
+	if (max_cardinality < input.size()) {
+		input.SetCardinality(max_cardinality);
+	}
 	state.data.Append(input, lstate.batch_index);
 	state.current_offset += input.size();
 	return SinkResultType::NEED_MORE_INPUT;

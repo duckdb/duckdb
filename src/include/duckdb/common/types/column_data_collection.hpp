@@ -69,7 +69,7 @@ struct ChunkManagementState {
 
 struct ColumnDataAppendState {
 	ChunkManagementState current_chunk_state;
-	DataChunk append_chunk;
+	vector<VectorData> vector_data;
 };
 
 struct ColumnDataScanState {
@@ -77,6 +77,8 @@ struct ColumnDataScanState {
 	idx_t internal_data_index;
 	idx_t chunk_index;
 };
+
+struct ColumnDataCopyFunction;
 
 class ColumnDataCollection {
 public:
@@ -141,6 +143,8 @@ private:
 
 	void InitializeVector(ChunkManagementState &state, VectorMetaData &vdata, Vector &result);
 
+	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
+
 private:
 	//! BufferManager
 	BufferManager &buffer_manager;
@@ -150,6 +154,8 @@ private:
 	idx_t count;
 	//! The internal meta data of the column data collection
 	vector<InternalColumnData> internal_data;
+	//! The set of copy functions
+	vector<ColumnDataCopyFunction> copy_functions;
 };
 
 } // namespace duckdb
