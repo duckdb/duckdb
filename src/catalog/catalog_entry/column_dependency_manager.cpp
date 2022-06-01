@@ -245,10 +245,6 @@ stack<column_t> ColumnDependencyManager::GetBindOrder() {
 		auto column = to_visit.front();
 		to_visit.pop();
 
-		//! We dont need to visit or add a column twice
-		if (visited.count(column)) {
-			continue;
-		}
 		//! If this column does not have dependencies, the queue stops getting filled
 		if (direct_dependencies.find(column) == direct_dependencies.end()) {
 			continue;

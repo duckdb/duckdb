@@ -207,12 +207,20 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	D_ASSERT(table_binding && ignore.empty());
 
 	auto bind_order = info.column_dependency_manager.GetBindOrder();
+	unordered_set<column_t> bound_indices;
 
 	while (!bind_order.empty()) {
 		auto i = bind_order.top();
 		bind_order.pop();
 		auto &col = base.columns[i];
 
+		//! Already bound this previously
+		//! This can not be optimized out of the GetBindOrder function
+		//! These occurrences happen because we need to make sure that ALL dependencies of a column are resolved before
+		//! it gets resolved
+		if (bound_indices.count(i)) {
+			continue;
+		}
 		if (!col.Generated()) {
 			continue;
 		}
