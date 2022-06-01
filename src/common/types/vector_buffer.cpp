@@ -58,7 +58,6 @@ void VectorListBuffer::Reserve(idx_t to_reserve) {
 		                         ? (to_reserve + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE
 		                         : nearest_pow;
 		D_ASSERT(new_capacity >= to_reserve);
-		D_ASSERT(new_capacity % STANDARD_VECTOR_SIZE == 0);
 		child->Resize(capacity, new_capacity);
 		capacity = new_capacity;
 	}
