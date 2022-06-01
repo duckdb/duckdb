@@ -25,9 +25,9 @@ struct VectorMetaData {
 	uint16_t count;
 
 	//! Child of this vector (used only for lists and structs)
-	idx_t child_data = -1;
+	idx_t child_data = DConstants::INVALID_INDEX;
 	//! Next vector entry (in case there is more data - used only in case of children of lists)
-	idx_t next_data = -1;
+	idx_t next_data = DConstants::INVALID_INDEX;
 };
 
 struct ChunkMetaData {
@@ -50,19 +50,6 @@ struct BlockMetaData {
 	uint32_t Capacity();
 };
 
-struct InternalColumnData {
-	//! The number of entries in the internal column data
-	idx_t count;
-	//! The set of blocks used by the column data collection
-	vector<BlockMetaData> blocks;
-	//! Set of chunk meta data
-	vector<ChunkMetaData> chunk_data;
-	//! Set of vector meta data
-	vector<VectorMetaData> vector_data;
-	//! The string heap for the column data collection
-	StringHeap heap;
-};
-
 struct ChunkManagementState {
 	unordered_map<idx_t, unique_ptr<BufferHandle>> handles;
 };
@@ -74,12 +61,15 @@ struct ColumnDataAppendState {
 
 struct ColumnDataScanState {
 	ChunkManagementState current_chunk_state;
-	idx_t internal_data_index;
+	idx_t segment_index;
 	idx_t chunk_index;
 };
 
 struct ColumnDataCopyFunction;
+class ColumnDataCollectionSegment;
 
+//! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
+//! It is efficient to read and scan
 class ColumnDataCollection {
 public:
 	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
@@ -131,17 +121,8 @@ public:
 	DUCKDB_API void Reset();
 
 private:
-	void CreateInternalData();
-	void AllocateNewChunk(InternalColumnData &idata);
-	idx_t AllocateVector(InternalColumnData &idata, const LogicalType &type, ChunkMetaData &chunk_data);
-
-	void AllocateBlock(InternalColumnData &idata);
-	void AllocateData(InternalColumnData &idata, idx_t size, uint32_t &block_id, uint32_t &offset);
-
-	void InitializeChunkState(InternalColumnData &idata, idx_t chunk_index, ChunkManagementState &state);
-	void InitializeChunk(InternalColumnData &idata, idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
-
-	void InitializeVector(ChunkManagementState &state, VectorMetaData &vdata, Vector &result);
+	//! Creates a new segment within the ColumnDataCollection
+	void CreateSegment();
 
 	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
 
@@ -152,8 +133,8 @@ private:
 	vector<LogicalType> types;
 	//! The number of entries stored in the column data collection
 	idx_t count;
-	//! The internal meta data of the column data collection
-	vector<InternalColumnData> internal_data;
+	//! The data segments of the column data collection
+	vector<ColumnDataCollectionSegment> segments;
 	//! The set of copy functions
 	vector<ColumnDataCopyFunction> copy_functions;
 };
