@@ -193,7 +193,12 @@ void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(base_expr));
 }
 
-ParsedExpression &ColumnDefinition::GeneratedExpression() const {
+const ParsedExpression &ColumnDefinition::GeneratedExpression() const {
+	D_ASSERT(Generated());
+	return *generated_expression;
+}
+
+ParsedExpression &ColumnDefinition::GeneratedExpressionMutable() {
 	D_ASSERT(Generated());
 	return *generated_expression;
 }

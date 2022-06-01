@@ -612,8 +612,13 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 		if (!col.Generated()) {
 			continue;
 		}
+		D_ASSERT(col.Type().id() != LogicalTypeId::ANY);
+		if (col.Type().id() == LogicalTypeId::ANY) {
+			throw InternalException("The type of generated column \"%s\" was not resolved during binding!", col.Name());
+		}
 		generated_check_binder.target_type = col.Type();
 		auto to_be_bound_expression = col.GeneratedExpression().Copy();
+		;
 		auto bound_expression = generated_check_binder.Bind(to_be_bound_expression);
 		VerifyGeneratedExpressionSuccess(table, chunk, *bound_expression, i);
 	}

@@ -215,7 +215,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 		create_info->columns.push_back(move(copy));
 		auto &col = create_info->columns[i];
 		if (col.Generated() && column_dependency_manager.IsDependencyOf(i, rename_idx)) {
-			RenameExpression(col.GeneratedExpression(), info);
+			RenameExpression(col.GeneratedExpressionMutable(), info);
 		}
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {

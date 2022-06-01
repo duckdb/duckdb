@@ -71,6 +71,7 @@ void ColumnDependencyManager::AddGeneratedColumn(column_t index, const vector<co
 		AddGeneratedColumn(dependent, indices, false);
 	}
 }
+
 vector<column_t> ColumnDependencyManager::RemoveColumn(column_t index, column_t column_amount) {
 	// Always add the initial column
 	deleted_columns.insert(index);
@@ -127,6 +128,10 @@ void ColumnDependencyManager::RemoveStandardColumn(column_t index) {
 	}
 	auto dependents = dependencies_map[index];
 	for (auto &gcol : dependents) {
+		// If index is a direct dependency of gcol, remove it from the list
+		if (direct_dependencies.find(gcol) != direct_dependencies.end()) {
+			direct_dependencies[gcol].erase(index);
+		}
 		RemoveGeneratedColumn(gcol);
 	}
 	// Remove this column from the dependencies map
@@ -230,10 +235,10 @@ stack<column_t> ColumnDependencyManager::GetBindOrder() {
 			continue;
 		}
 		bind_order.push(dependent);
+		visited.insert(dependent);
 		for (auto &dependency : direct_dependencies[dependent]) {
 			to_visit.push(dependency);
 		}
-		visited.insert(dependent);
 	}
 
 	while (!to_visit.empty()) {
@@ -244,7 +249,7 @@ stack<column_t> ColumnDependencyManager::GetBindOrder() {
 		if (visited.count(column)) {
 			continue;
 		}
-		//! If this column does not have dependencies of itself, the queue stops getting filled
+		//! If this column does not have dependencies, the queue stops getting filled
 		if (direct_dependencies.find(column) == direct_dependencies.end()) {
 			continue;
 		}

@@ -71,7 +71,8 @@ public:
 	// Generated Columns (VIRTUAL)
 	//===--------------------------------------------------------------------===//
 
-	ParsedExpression &GeneratedExpression() const;
+	ParsedExpression &GeneratedExpressionMutable();
+	const ParsedExpression &GeneratedExpression() const;
 	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
