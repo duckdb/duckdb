@@ -133,9 +133,9 @@ SELECT b FROM test LIMIT 70% OFFSET (((SELECT MIN(test.a) FROM test)-1)/10);
 22
 32
 
-# non-foldable expression in limit
+# non-foldable expression in limit that always casts to 0
 statement ok
-SELECT * FROM test LIMIT 30% OFFSET RANDOM();
+SELECT * FROM test LIMIT 30% OFFSET RANDOM() / 10.0;
 
 query I
 SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)
@@ -179,7 +179,7 @@ statement ok
 CREATE TABLE test2 (a STRING);
 
 statement ok
-INSERT INTO test2 VALUES ('first'), ('second'), ('third'), ('4th'), ('5th') 
+INSERT INTO test2 VALUES ('first'), ('second'), ('third'), ('4th'), ('5th')
 
 statement ok
 PREPARE v1 AS SELECT * FROM test2 LIMIT 40%
