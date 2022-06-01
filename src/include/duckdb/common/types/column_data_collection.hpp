@@ -17,39 +17,6 @@ class BufferManager;
 class BlockHandle;
 class ClientContext;
 
-struct VectorMetaData {
-	//! Where the vector data lives
-	uint32_t block_id;
-	uint32_t offset;
-	//! The number of entries present in this vector
-	uint16_t count;
-
-	//! Child of this vector (used only for lists and structs)
-	idx_t child_data = DConstants::INVALID_INDEX;
-	//! Next vector entry (in case there is more data - used only in case of children of lists)
-	idx_t next_data = DConstants::INVALID_INDEX;
-};
-
-struct ChunkMetaData {
-	//! The set of vectors of the chunk
-	vector<idx_t> vector_data;
-	//! The block ids referenced by the chunk
-	unordered_set<uint32_t> block_ids;
-	//! The number of entries in the chunk
-	uint16_t count;
-};
-
-struct BlockMetaData {
-	//! The underlying block handle
-	shared_ptr<BlockHandle> handle;
-	//! How much space is currently used within the block
-	uint32_t size;
-	//! How much space is available in the block
-	uint32_t capacity;
-
-	uint32_t Capacity();
-};
-
 struct ChunkManagementState {
 	unordered_map<idx_t, unique_ptr<BufferHandle>> handles;
 };

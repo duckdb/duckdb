@@ -5,6 +5,39 @@
 
 namespace duckdb {
 
+struct VectorMetaData {
+	//! Where the vector data lives
+	uint32_t block_id;
+	uint32_t offset;
+	//! The number of entries present in this vector
+	uint16_t count;
+
+	//! Child of this vector (used only for lists and structs)
+	idx_t child_data = DConstants::INVALID_INDEX;
+	//! Next vector entry (in case there is more data - used only in case of children of lists)
+	idx_t next_data = DConstants::INVALID_INDEX;
+};
+
+struct ChunkMetaData {
+	//! The set of vectors of the chunk
+	vector<idx_t> vector_data;
+	//! The block ids referenced by the chunk
+	unordered_set<uint32_t> block_ids;
+	//! The number of entries in the chunk
+	uint16_t count;
+};
+
+struct BlockMetaData {
+	//! The underlying block handle
+	shared_ptr<BlockHandle> handle;
+	//! How much space is currently used within the block
+	uint32_t size;
+	//! How much space is available in the block
+	uint32_t capacity;
+
+	uint32_t Capacity();
+};
+
 class ColumnDataCollectionSegment {
 public:
 	ColumnDataCollectionSegment(BufferManager &buffer_manager, vector<LogicalType> types_p)
@@ -38,16 +71,28 @@ public:
 	void InitializeVector(ChunkManagementState &state, VectorMetaData &vdata, Vector &result);
 };
 
-struct ColumnDataCopyFunction;
+struct ColumnDataMetaData;
 
-typedef void (*column_data_copy_function_t)(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
-                                            ColumnDataAppendState &state, const VectorData &source_data, Vector &source,
-                                            VectorMetaData &target, idx_t source_offset, idx_t target_offset,
-                                            idx_t copy_count);
+typedef void (*column_data_copy_function_t)(ColumnDataMetaData &meta_data, const VectorData &source_data,
+                                            Vector &source, idx_t source_offset, idx_t target_offset, idx_t copy_count);
 
 struct ColumnDataCopyFunction {
 	column_data_copy_function_t function;
 	vector<ColumnDataCopyFunction> child_functions;
+};
+
+struct ColumnDataMetaData {
+	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
+	                   ColumnDataAppendState &state, ChunkMetaData &chunk_data, VectorMetaData &vector_data)
+	    : copy_function(copy_function), segment(segment), state(state), chunk_data(chunk_data),
+	      vector_data(vector_data) {
+	}
+
+	ColumnDataCopyFunction &copy_function;
+	ColumnDataCollectionSegment &segment;
+	ColumnDataAppendState &state;
+	ChunkMetaData &chunk_data;
+	VectorMetaData &vector_data;
 };
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
@@ -199,11 +244,11 @@ void ColumnDataCopyValidity(const VectorData &source_data, validity_t *target, i
 }
 
 template <class T>
-static void TemplatedColumnDataCopy(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
-                                    ColumnDataAppendState &state, const VectorData &source_data, Vector &source,
-                                    VectorMetaData &target, idx_t source_offset, idx_t target_offset,
-                                    idx_t copy_count) {
-	auto base_ptr = state.current_chunk_state.handles[target.block_id]->Ptr() + target.offset;
+static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                                    idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto &append_state = meta_data.state;
+	auto &vector_data = meta_data.vector_data;
+	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)(base_ptr + sizeof(T) * STANDARD_VECTOR_SIZE);
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
 
@@ -216,11 +261,11 @@ static void TemplatedColumnDataCopy(ColumnDataCopyFunction &copy_function, Colum
 }
 
 template <>
-void TemplatedColumnDataCopy<string_t>(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
-                                       ColumnDataAppendState &state, const VectorData &source_data, Vector &source,
-                                       VectorMetaData &target, idx_t source_offset, idx_t target_offset,
-                                       idx_t copy_count) {
-	auto base_ptr = state.current_chunk_state.handles[target.block_id]->Ptr() + target.offset;
+void TemplatedColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                                       idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto &append_state = meta_data.state;
+	auto &vector_data = meta_data.vector_data;
+	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)(base_ptr + sizeof(string_t) * STANDARD_VECTOR_SIZE);
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
 
@@ -229,16 +274,16 @@ void TemplatedColumnDataCopy<string_t>(ColumnDataCopyFunction &copy_function, Co
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = source_data.sel->get_index(source_offset + i);
 		result_data[target_offset + i] =
-		    ldata[source_idx].IsInlined() ? ldata[source_idx] : segment.heap.AddString(ldata[source_idx]);
+		    ldata[source_idx].IsInlined() ? ldata[source_idx] : meta_data.segment.heap.AddString(ldata[source_idx]);
 	}
 }
 
 template <>
-void TemplatedColumnDataCopy<list_entry_t>(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
-                                           ColumnDataAppendState &state, const VectorData &source_data, Vector &source,
-                                           VectorMetaData &target, idx_t source_offset, idx_t target_offset,
-                                           idx_t copy_count) {
-	auto base_ptr = state.current_chunk_state.handles[target.block_id]->Ptr() + target.offset;
+void TemplatedColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                                           idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto &append_state = meta_data.state;
+	auto &vector_data = meta_data.vector_data;
+	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)(base_ptr + sizeof(list_entry_t) * STANDARD_VECTOR_SIZE);
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
 
@@ -249,12 +294,14 @@ void TemplatedColumnDataCopy<list_entry_t>(ColumnDataCopyFunction &copy_function
 		result_data[target_offset + i] = ldata[source_idx];
 	}
 
-	VectorData child_data;
-	auto &child_vector = ListVector::GetEntry(source);
-	auto child_size = ListVector::GetListSize(source);
-	child_vector.Orrify(child_size, child_data);
-
-	throw InternalException("FIXME: list append");
+	//	auto &child_type = ListType::GetChildType(source.GetType());
+	//	segment.AllocateVector(child_type, segment.)
+	//	VectorData child_data;
+	//	auto &child_vector = ListVector::GetEntry(source);
+	//	auto child_size = ListVector::GetListSize(source);
+	//	child_vector.Orrify(child_size, child_data);
+	//
+	//	throw InternalException("FIXME: list append");
 	//
 	//	D_ASSERT(target.child_data < idata.vector_data.size());
 	//	if (target.child_data == DConstants::INVALID_INDEX) {
@@ -333,16 +380,17 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 
 	idx_t remaining = input.size();
 	while (remaining > 0) {
-		auto &cdata = segment.chunk_data.back();
-		idx_t append_amount = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE - cdata.count);
+		auto &chunk_data = segment.chunk_data.back();
+		idx_t append_amount = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE - chunk_data.count);
 		if (append_amount > 0) {
 			idx_t offset = input.size() - remaining;
 			for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
-				copy_functions[vector_idx].function(
-				    copy_functions[vector_idx], segment, state, state.vector_data[vector_idx], input.data[vector_idx],
-				    segment.vector_data[cdata.vector_data[vector_idx]], offset, cdata.count, append_amount);
+				ColumnDataMetaData meta_data(copy_functions[vector_idx], segment, state, chunk_data,
+				                             segment.vector_data[chunk_data.vector_data[vector_idx]]);
+				copy_functions[vector_idx].function(meta_data, state.vector_data[vector_idx], input.data[vector_idx],
+				                                    offset, chunk_data.count, append_amount);
 			}
-			cdata.count += append_amount;
+			chunk_data.count += append_amount;
 		}
 		remaining -= append_amount;
 		if (remaining > 0) {
