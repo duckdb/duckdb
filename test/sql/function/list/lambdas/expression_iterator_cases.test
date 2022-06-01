@@ -4,6 +4,9 @@
 
 # these tests check the different cases of the expression iterator
 
+statement ok
+PRAGMA enable_verification
+
 # don't allow BOUND_AGGREGATE inside lambda expressions (binder error)
 
 statement error

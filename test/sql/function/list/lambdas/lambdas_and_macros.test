@@ -2,6 +2,9 @@
 # description: Test mixing lambdas and macros
 # group: [lambdas]
 
+statement ok
+PRAGMA enable_verification
+
 # conflicting column names
 statement ok
 create table test as select range i from range(3);

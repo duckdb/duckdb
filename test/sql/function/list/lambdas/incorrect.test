@@ -2,6 +2,9 @@
 # description: Test incorrect usage of the lambda functions
 # group: [lambdas]
 
+statement ok
+PRAGMA enable_verification
+
 foreach func_name list_transform list_filter
 
 # Error: Binder Error: Invalid lambda expression!

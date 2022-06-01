@@ -4,6 +4,9 @@
 
 # NOTE: some of these tests are directly taken from the Presto Array Function examples
 
+statement ok
+PRAGMA enable_verification
+
 # test NULLs and simple cases
 
 query II
@@ -143,3 +146,17 @@ SELECT g, list_count(list_filter(l, x -> x % 2 = 0)) FROM large_lists ORDER BY g
 1	0
 2	2500
 3	0
+
+# test correlated subqueries
+
+statement ok
+CREATE TABLE corr_test (n integer, l varchar[])
+
+statement ok
+INSERT INTO corr_test VALUES (1, ['a', '11', '23']), (3, [NULL, '2', 'hello', 'wie gehts']), (NULL, NULL), (0, [])
+
+query I
+SELECT n FROM corr_test WHERE list_count(list_filter(l, elem -> length(elem) >= n)) >= n
+----
+1
+0
