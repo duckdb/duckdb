@@ -194,6 +194,23 @@ static void TemplatedColumnDataCopy(InternalColumnData &idata, ColumnDataAppendS
 	}
 }
 
+template <>
+void TemplatedColumnDataCopy<string_t>(InternalColumnData &idata, ColumnDataAppendState &state,
+                                       const VectorData &source_data, Vector &source, VectorMetaData &target,
+                                       idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+	auto base_ptr = state.current_chunk_state.handles[target.block_id]->Ptr() + target.offset;
+	auto validity_data = (validity_t *)(base_ptr + sizeof(string_t) * STANDARD_VECTOR_SIZE);
+	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
+
+	auto ldata = (string_t *)source_data.data;
+	auto result_data = (string_t *)base_ptr;
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = source_data.sel->get_index(source_offset + i);
+		result_data[target_offset + i] =
+		    ldata[source_idx].IsInlined() ? ldata[source_idx] : idata.heap.AddString(ldata[source_idx]);
+	}
+}
+
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
 	column_data_copy_function_t function;
 	switch (type.InternalType()) {
@@ -223,6 +240,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	case PhysicalType::UINT64:
 		function = TemplatedColumnDataCopy<uint64_t>;
+		break;
+	case PhysicalType::VARCHAR:
+		function = TemplatedColumnDataCopy<string_t>;
 		break;
 	default:
 		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
