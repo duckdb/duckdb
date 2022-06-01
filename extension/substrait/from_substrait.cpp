@@ -164,6 +164,19 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformCastExpr(const substrai
 	return make_unique<CastExpression>(cast_type, move(cast_child));
 }
 
+unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformInExpr(const substrait::Expression &sexpr) {
+	const auto &substrait_in = sexpr.singular_or_list();
+
+	vector<unique_ptr<ParsedExpression>> values;
+	values.emplace_back(TransformExpr(substrait_in.value()));
+
+	for (idx_t i = 0; i < substrait_in.options_size(); i++) {
+		values.emplace_back(TransformExpr(substrait_in.options(i)));
+	}
+
+	return make_unique<OperatorExpression>(ExpressionType::COMPARE_IN, move(values));
+}
+
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::Expression &sexpr) {
 	switch (sexpr.rex_type_case()) {
 	case substrait::Expression::RexTypeCase::kLiteral:
@@ -176,6 +189,8 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::E
 		return TransformIfThenExpr(sexpr);
 	case substrait::Expression::RexTypeCase::kCast:
 		return TransformCastExpr(sexpr);
+	case substrait::Expression::RexTypeCase::kSingularOrList:
+		return TransformInExpr(sexpr);
 	case substrait::Expression::RexTypeCase::kSubquery:
 	default:
 		throw InternalException("Unsupported expression type " + to_string(sexpr.rex_type_case()));
