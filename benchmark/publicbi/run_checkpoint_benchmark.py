@@ -75,23 +75,17 @@ def run_checkpoint_cli(subdir, subset, rle_sorting):
         os.remove(f'{subdir}/{subset}.db')
 
     db = f'{subdir}/{subset}.db'
+    load_file = open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read()
 
-    process = Popen([f'{duckdb_root_dir}/build/release/duckdb'])
-    process.stdin.write(bytes(f".open {db}"))
-    process.stdin.flush()
+    commands = f"""
+        .open {db}\n
+        pragma force_compression_sorting='{rle_sorting}';\n
+        {load_file}\n
+        CHECKPOINT;\n
+        .quit\n
+    """
 
-    process.stdin.write(bytes(f"pragma force_compression_sorting='{rle_sorting}'"))
-    process.stdin.flush()
-
-    process.stdin.write(bytes(open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read()))
-    process.stdin.flush()
-
-    # Load in the tables and checkpoint
-    process.stdin.write(bytes("CHECKPOINT;"))
-    process.stdin.flush()
-
-    process.stdin.write(bytes(".quit"))
-    process.stdin.flush()
+    subprocess.run([f'{duckdb_root_dir}/build/release/duckdb'], shell=True, input=bytes(commands, encoding='utf8'))
 
     file_size_disk = os.path.getsize(db)
     total_blocks = 0
