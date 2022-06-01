@@ -19,7 +19,6 @@ struct ListFunction {
 	static void Destroy(STATE *state) {
 		if (state->list_vector) {
 			delete state->list_vector;
-			state->list_vector = nullptr;
 		}
 	}
 	static bool IgnoreNull() {
@@ -44,6 +43,7 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
 			// NOTE: any number bigger than 1 can cause DuckDB to run out of memory for specific queries
+			// consisting of millions of groups in the group by and complex (nested) vectors
 			state->list_vector = new Vector(list_vector_type, 1);
 		}
 		ListVector::Append(*state->list_vector, input, i + 1, i);
@@ -63,8 +63,9 @@ static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *b
 			continue;
 		}
 		if (!combined_ptr[i]->list_vector) {
-			// NOTE: already initializing this with a capacity of ListVector::GetListSize(*state->list_vector) causes
-			// DuckDB to run out of memory
+			// NOTE: initializing this with a capacity of ListVector::GetListSize(*state->list_vector) causes
+			// DuckDB to run out of memory for multiple threads with millions of groups in the group by and complex
+			// (nested) vectors
 			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType(), 1);
 		}
 		ListVector::Append(*combined_ptr[i]->list_vector, ListVector::GetEntry(*state->list_vector),
