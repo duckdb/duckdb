@@ -3,14 +3,24 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
+static DataChunk &ReferenceLeft(DataChunk &target, DataChunk &source) {
+	D_ASSERT(target.ColumnCount() <= source.ColumnCount());
+	target.SetCardinality(source);
+	target.SetCapacity(source);
+	for (idx_t i = 0; i < target.ColumnCount(); ++i) {
+		target.data[i].Reference(source.data[i]);
+	}
 
-WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
-                                     const LogicalType &result_type_p, ChunkCollection *input,
+	return target;
+}
+
+WindowSegmentTree::WindowSegmentTree(BoundWindowExpression &wexpr, ChunkCollection *input,
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
-    : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
-      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), active(0, 1),
+    : aggregate(*wexpr.aggregate), bind_info(wexpr.bind_info.get()), result_type(wexpr.return_type),
+      state(aggregate.state_size()), statep(Value::POINTER((idx_t)state.data())), frame(0, 0), active(0, 1),
       statev(Value::POINTER((idx_t)state.data())), internal_nodes(0), input_ref(input), filter_mask(filter_mask_p),
       mode(mode_p) {
 #if STANDARD_VECTOR_SIZE < 512
@@ -19,13 +29,17 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 	statep.Normalify(STANDARD_VECTOR_SIZE);
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
-	if (input_ref && input_ref->ColumnCount() > 0) {
+	const auto child_count = wexpr.children.size();
+	if (input_ref && child_count > 0) {
 		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
-		inputs.Initialize(input_ref->Types());
+		auto types = input_ref->Types();
+		types.resize(child_count);
+		inputs.Initialize(types);
+		left.Initialize(types);
 		// if we have a frame-by-frame method, share the single state
 		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
-			inputs.Reference(input_ref->GetChunk(0));
+			ReferenceLeft(inputs, input_ref->GetChunk(0));
 		} else if (aggregate.combine && UseCombineAPI()) {
 			ConstructTree();
 		}
@@ -76,7 +90,7 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	}
 
 	const idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
-	const auto input_count = input_ref->ColumnCount();
+	const auto input_count = inputs.ColumnCount();
 	if (start_in_vector + size <= STANDARD_VECTOR_SIZE) {
 		inputs.SetCardinality(size);
 		auto &chunk = input_ref->GetChunkForRow(begin);
@@ -129,7 +143,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	Vector s(statep, 0);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
-		aggregate.update(&inputs.data[0], bind_info, input_ref->ColumnCount(), s, inputs.size());
+		aggregate.update(&inputs.data[0], bind_info, inputs.ColumnCount(), s, inputs.size());
 	} else {
 		inputs.Reset();
 		inputs.SetCardinality(end - begin);
@@ -226,18 +240,18 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		if (active_chunks.first == active_chunks.second) {
 			// If all the data is in a single chunk, then just reference it
 			if (prev_chunks != active_chunks || (!prev.first && !prev.second)) {
-				inputs.Reference(coll.GetChunk(active_chunks.first));
+				ReferenceLeft(inputs, coll.GetChunk(active_chunks.first));
 			}
 		} else if (active_chunks.first == prev_chunks.first && prev_chunks.first != prev_chunks.second) {
 			// If the start chunk did not change, and we are not just a reference, then extend if necessary
 			for (auto chunk_idx = prev_chunks.second + 1; chunk_idx <= active_chunks.second; ++chunk_idx) {
-				inputs.Append(coll.GetChunk(chunk_idx), true);
+				inputs.Append(ReferenceLeft(left, coll.GetChunk(chunk_idx)), true);
 			}
 		} else {
 			// If the first chunk changed, start over
 			inputs.Reset();
 			for (auto chunk_idx = active_chunks.first; chunk_idx <= active_chunks.second; ++chunk_idx) {
-				inputs.Append(coll.GetChunk(chunk_idx), true);
+				inputs.Append(ReferenceLeft(left, coll.GetChunk(chunk_idx)), true);
 			}
 		}
 
