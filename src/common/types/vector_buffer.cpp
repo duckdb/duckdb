@@ -53,10 +53,7 @@ VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_c
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
 	if (to_reserve > capacity) {
-		auto nearest_pow = NextPowerOfTwo(to_reserve);
-		idx_t new_capacity = nearest_pow > STANDARD_VECTOR_SIZE
-		                         ? (to_reserve + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE
-		                         : nearest_pow;
+		idx_t new_capacity = NextPowerOfTwo(to_reserve);
 		D_ASSERT(new_capacity >= to_reserve);
 		child->Resize(capacity, new_capacity);
 		capacity = new_capacity;
