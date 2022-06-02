@@ -57,11 +57,8 @@ def run_checkpoint(subdir, subset, rle_sorting):
     duckdb_conn.execute(open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read())
     duckdb_conn.execute("CHECKPOINT;")
 
-    # Get block size
-    tables = duckdb_conn.execute("pragma show_tables").fetchdf()["name"]
-    total_blocks = 0
-    for table in tables:
-        total_blocks += duckdb_conn.execute(f"select count(distinct block_id) from pragma_storage_info('{table}')").fetchone()[0]
+    # Get amount of used blocks
+    total_blocks = duckdb_conn.execute(f"select used_blocks from pragma_database_size();").fetchone()
 
     # Close to checkpoint and get size
     duckdb_conn.close()
@@ -110,14 +107,12 @@ def run_benchmark():
                     # Checkpoint to a file and check size
                     start_nosort = timer()
                     print(f"Running {subset} checkpoint - no sorting")
-                    # block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false')
-                    block_size_nosort, file_size_disk_nosort = run_checkpoint_cli(subdir, subset, rle_sorting='false')
+                    block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false')
                     end_nosort=timer()
 
                     start_sort = timer()
                     print(f"Running {subset} checkpoint - sorting")
-                    # block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true')
-                    block_size_sort, file_size_disk_sort = run_checkpoint_cli(subdir, subset, rle_sorting='true')
+                    block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true')
                     end_sort=timer()
 
                     # Calculate average improvement
@@ -127,8 +122,6 @@ def run_benchmark():
                     write_to_csv(f"{subset}, {end_nosort-start_nosort}, {block_size_nosort},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort},{file_size_disk_sort}, {average_improvement}", mode="a", time=timestr)
             except BaseException as err:
                 print("Error occured in", subset, "error:", err)
-
-
 
 
 run_benchmark()
