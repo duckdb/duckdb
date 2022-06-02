@@ -60,7 +60,10 @@ public:
 
 public:
 	void AllocateNewChunk();
+	//! Allocate space for a vector of a specific type in the segment
 	idx_t AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data);
+	//! Allocate space for a vector during append,
+	idx_t AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data, ColumnDataAppendState &append_state);
 
 	void AllocateBlock();
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset);
@@ -68,13 +71,13 @@ public:
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void InitializeChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
 
-	void InitializeVector(ChunkManagementState &state, VectorMetaData &vdata, Vector &result);
+	idx_t InitializeVector(ChunkManagementState &state, idx_t vector_index, Vector &result);
 };
 
 struct ColumnDataMetaData;
 
 typedef void (*column_data_copy_function_t)(ColumnDataMetaData &meta_data, const VectorData &source_data,
-                                            Vector &source, idx_t source_offset, idx_t target_offset, idx_t copy_count);
+                                            Vector &source, idx_t source_offset, idx_t copy_count);
 
 struct ColumnDataCopyFunction {
 	column_data_copy_function_t function;
@@ -83,16 +86,25 @@ struct ColumnDataCopyFunction {
 
 struct ColumnDataMetaData {
 	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
-	                   ColumnDataAppendState &state, ChunkMetaData &chunk_data, VectorMetaData &vector_data)
+	                   ColumnDataAppendState &state, ChunkMetaData &chunk_data, idx_t vector_data_index)
 	    : copy_function(copy_function), segment(segment), state(state), chunk_data(chunk_data),
-	      vector_data(vector_data) {
+	      vector_data_index(vector_data_index) {
+	}
+	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataMetaData &parent, idx_t vector_data_index)
+	    : copy_function(copy_function), segment(parent.segment), state(parent.state), chunk_data(parent.chunk_data),
+	      vector_data_index(vector_data_index) {
 	}
 
 	ColumnDataCopyFunction &copy_function;
 	ColumnDataCollectionSegment &segment;
 	ColumnDataAppendState &state;
 	ChunkMetaData &chunk_data;
-	VectorMetaData &vector_data;
+	idx_t vector_data_index;
+	idx_t child_list_size = DConstants::INVALID_INDEX;
+
+	VectorMetaData &GetVectorMetaData() {
+		return segment.vector_data[vector_data_index];
+	}
 };
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
@@ -155,6 +167,20 @@ idx_t ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, Chunk
 	return index;
 }
 
+idx_t ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+                                                  ColumnDataAppendState &append_state) {
+	idx_t block_count = blocks.size();
+	idx_t vector_index = AllocateVector(type, chunk_data);
+	if (blocks.size() != block_count) {
+		// we allocated a new block for this vector: pin it
+		auto &vdata = vector_data[vector_index];
+		D_ASSERT(blocks.size() == block_count + 1);
+		auto &last_block = blocks.back();
+		append_state.current_chunk_state.handles[vdata.block_id] = buffer_manager.Pin(last_block.handle);
+	}
+	return vector_index;
+}
+
 void ColumnDataCollectionSegment::AllocateNewChunk() {
 	ChunkMetaData meta_data;
 	meta_data.count = 0;
@@ -193,22 +219,62 @@ void ColumnDataCollectionSegment::InitializeChunkState(idx_t chunk_index, ChunkM
 	}
 }
 
-void ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state, VectorMetaData &vdata, Vector &result) {
-	auto type_size = GetTypeIdSize(result.GetType().InternalType());
+idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state, idx_t vector_index, Vector &result) {
+	auto &vector_type = result.GetType();
+	auto internal_type = vector_type.InternalType();
+	auto type_size = GetTypeIdSize(internal_type);
+	auto &vdata = vector_data[vector_index];
+	if (internal_type == PhysicalType::LIST) {
+		// list: copy child
+		auto &child_vector = ListVector::GetEntry(result);
+		auto child_count = InitializeVector(state, vdata.child_data, child_vector);
+		ListVector::SetListSize(result, child_count);
+	}
 
 	auto base_ptr = state.handles[vdata.block_id]->Ptr() + vdata.offset;
 	auto validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
-	FlatVector::SetData(result, base_ptr);
-	FlatVector::Validity(result).Initialize(validity_data);
+	if (vdata.next_data == DConstants::INVALID_INDEX) {
+		// no next data, we can do a zero-copy read of this vector
+		FlatVector::SetData(result, base_ptr);
+		FlatVector::Validity(result).Initialize(validity_data);
+		return vdata.count;
+	}
+
+	// the data for this vector is spread over multiple vector data entries
+	// we need to copy over the data for each of the vectors
+	// first figure out how many rows we need to copy by looping over all of the child vector indexes
+	idx_t vector_count = 0;
+	idx_t next_index = vector_index;
+	while (next_index != DConstants::INVALID_INDEX) {
+		auto &current_vdata = vector_data[next_index];
+		vector_count += current_vdata.count;
+		next_index = current_vdata.next_data;
+	}
+	// resize the result vector
+	result.Resize(0, vector_count);
+	next_index = vector_index;
+	// now perform the copy of each of the vectors
+	auto target_data = FlatVector::GetData(result);
+	idx_t current_offset = 0;
+	while (next_index != DConstants::INVALID_INDEX) {
+		auto &current_vdata = vector_data[next_index];
+		base_ptr = state.handles[current_vdata.block_id]->Ptr() + current_vdata.offset;
+		validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
+		memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
+		// FIXME: copy validity
+		current_offset += current_vdata.count;
+		next_index = current_vdata.next_data;
+	}
+	return vector_count;
 }
 
 void ColumnDataCollectionSegment::InitializeChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk) {
 	InitializeChunkState(chunk_index, state);
-	auto &cdata = chunk_data[chunk_index];
+	auto &chunk_meta = chunk_data[chunk_index];
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
-		InitializeVector(state, vector_data[cdata.vector_data[vector_idx]], chunk.data[vector_idx]);
+		InitializeVector(state, chunk_meta.vector_data[vector_idx], chunk.data[vector_idx]);
 	}
-	chunk.SetCardinality(cdata.count);
+	chunk.SetCardinality(chunk_meta.count);
 }
 
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
@@ -227,7 +293,7 @@ void ColumnDataCopyValidity(const VectorData &source_data, validity_t *target, i
                             idx_t copy_count) {
 	ValidityMask validity(target);
 	if (target_offset == 0) {
-		// first time appending to this chunk
+		// first time appending to this vector
 		// all data here is still uninitialized
 		// initialize the validity mask to set all to valid
 		validity.SetAllValid(STANDARD_VECTOR_SIZE);
@@ -243,75 +309,106 @@ void ColumnDataCopyValidity(const VectorData &source_data, validity_t *target, i
 	}
 }
 
-template <class T>
-static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
-                                    idx_t source_offset, idx_t target_offset, idx_t copy_count) {
+struct StandardValueCopy {
+	template <class T>
+	static T Operation(ColumnDataMetaData &, T input) {
+		return input;
+	}
+};
+
+struct StringValueCopy {
+	template <class T>
+	static T Operation(ColumnDataMetaData &meta_data, T input) {
+		return input.IsInlined() ? input : meta_data.segment.heap.AddString(input);
+	}
+};
+
+struct ListValueCopy {
+	template <class T>
+	static T Operation(ColumnDataMetaData &meta_data, T input) {
+		input.offset += meta_data.child_list_size;
+		return input;
+	}
+};
+
+template <class T, class OP>
+static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorData &source_data, idx_t source_offset,
+                                    idx_t copy_count) {
 	auto &append_state = meta_data.state;
-	auto &vector_data = meta_data.vector_data;
+	auto &vector_data = meta_data.GetVectorMetaData();
+	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
+	         append_state.current_chunk_state.handles.end());
 	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)(base_ptr + sizeof(T) * STANDARD_VECTOR_SIZE);
-	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
+	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 
 	auto ldata = (T *)source_data.data;
 	auto result_data = (T *)base_ptr;
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = source_data.sel->get_index(source_offset + i);
-		result_data[target_offset + i] = ldata[source_idx];
+		if (source_data.validity.RowIsValid(source_idx)) {
+			result_data[vector_data.count + i] = OP::Operation(meta_data, ldata[source_idx]);
+		}
 	}
+	vector_data.count += copy_count;
+}
+
+template <class T>
+static void ColumnDataCopy(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                           idx_t source_offset, idx_t copy_count) {
+	TemplatedColumnDataCopy<T, StandardValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
 template <>
-void TemplatedColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
-                                       idx_t source_offset, idx_t target_offset, idx_t copy_count) {
-	auto &append_state = meta_data.state;
-	auto &vector_data = meta_data.vector_data;
-	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
-	auto validity_data = (validity_t *)(base_ptr + sizeof(string_t) * STANDARD_VECTOR_SIZE);
-	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
-
-	auto ldata = (string_t *)source_data.data;
-	auto result_data = (string_t *)base_ptr;
-	for (idx_t i = 0; i < copy_count; i++) {
-		auto source_idx = source_data.sel->get_index(source_offset + i);
-		result_data[target_offset + i] =
-		    ldata[source_idx].IsInlined() ? ldata[source_idx] : meta_data.segment.heap.AddString(ldata[source_idx]);
-	}
+void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                              idx_t source_offset, idx_t copy_count) {
+	TemplatedColumnDataCopy<string_t, StringValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
 template <>
-void TemplatedColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
-                                           idx_t source_offset, idx_t target_offset, idx_t copy_count) {
-	auto &append_state = meta_data.state;
-	auto &vector_data = meta_data.vector_data;
-	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
-	auto validity_data = (validity_t *)(base_ptr + sizeof(list_entry_t) * STANDARD_VECTOR_SIZE);
-	ColumnDataCopyValidity(source_data, validity_data, source_offset, target_offset, copy_count);
+void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                                  idx_t source_offset, idx_t copy_count) {
 
-	auto ldata = (list_entry_t *)source_data.data;
-	auto result_data = (list_entry_t *)base_ptr;
-	for (idx_t i = 0; i < copy_count; i++) {
-		auto source_idx = source_data.sel->get_index(source_offset + i);
-		result_data[target_offset + i] = ldata[source_idx];
+	auto &vdata_list = meta_data.segment.vector_data;
+	// first append the child entries of the list
+	auto &child_vector = ListVector::GetEntry(source);
+	idx_t child_list_size = ListVector::GetListSize(source);
+	auto &child_type = child_vector.GetType();
+
+	VectorData child_vector_data;
+	child_vector.Orrify(child_list_size, child_vector_data);
+
+	if (vdata_list[meta_data.vector_data_index].child_data == DConstants::INVALID_INDEX) {
+		vdata_list[meta_data.vector_data_index].child_data =
+		    meta_data.segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
 	}
+	auto &child_function = meta_data.copy_function.child_functions[0];
+	idx_t child_index = vdata_list[meta_data.vector_data_index].child_data;
 
-	//	auto &child_type = ListType::GetChildType(source.GetType());
-	//	segment.AllocateVector(child_type, segment.)
-	//	VectorData child_data;
-	//	auto &child_vector = ListVector::GetEntry(source);
-	//	auto child_size = ListVector::GetListSize(source);
-	//	child_vector.Orrify(child_size, child_data);
-	//
-	//	throw InternalException("FIXME: list append");
-	//
-	//	D_ASSERT(target.child_data < idata.vector_data.size());
-	//	if (target.child_data == DConstants::INVALID_INDEX) {
-	//
-	//	}
-	//	auto &child_meta_data = idata.vector_data[target.child_data];
-	//
-	//	auto &child_function = copy_function.child_functions[0];
-	//	child_function.function(child_function, idata, state, child_data, child_vector, child_meta_data, 0,
-	// child_meta_data.count, child_size);
+	idx_t remaining = child_list_size;
+	idx_t current_list_size = 0;
+	while (remaining > 0) {
+		current_list_size += meta_data.segment.vector_data[child_index].count;
+		idx_t child_append_count =
+		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - meta_data.segment.vector_data[child_index].count, remaining);
+		if (child_append_count > 0) {
+			ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
+			child_function.function(child_meta_data, child_vector_data, child_vector, child_list_size - remaining,
+			                        child_append_count);
+		}
+		remaining -= child_append_count;
+		if (remaining > 0) {
+			// need to append more, check if we need to allocate a new vector or not
+			if (meta_data.segment.vector_data[child_index].next_data == DConstants::INVALID_INDEX) {
+				meta_data.segment.vector_data[child_index].next_data =
+				    meta_data.segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+			}
+			child_index = meta_data.segment.vector_data[child_index].next_data;
+		}
+	}
+	// now copy the list entries
+	meta_data.child_list_size = current_list_size;
+	TemplatedColumnDataCopy<list_entry_t, ListValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
@@ -319,46 +416,46 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	column_data_copy_function_t function;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		function = TemplatedColumnDataCopy<bool>;
+		function = ColumnDataCopy<bool>;
 		break;
 	case PhysicalType::INT8:
-		function = TemplatedColumnDataCopy<int8_t>;
+		function = ColumnDataCopy<int8_t>;
 		break;
 	case PhysicalType::INT16:
-		function = TemplatedColumnDataCopy<int16_t>;
+		function = ColumnDataCopy<int16_t>;
 		break;
 	case PhysicalType::INT32:
-		function = TemplatedColumnDataCopy<int32_t>;
+		function = ColumnDataCopy<int32_t>;
 		break;
 	case PhysicalType::INT64:
-		function = TemplatedColumnDataCopy<int64_t>;
+		function = ColumnDataCopy<int64_t>;
 		break;
 	case PhysicalType::INT128:
-		function = TemplatedColumnDataCopy<hugeint_t>;
+		function = ColumnDataCopy<hugeint_t>;
 		break;
 	case PhysicalType::UINT8:
-		function = TemplatedColumnDataCopy<uint8_t>;
+		function = ColumnDataCopy<uint8_t>;
 		break;
 	case PhysicalType::UINT16:
-		function = TemplatedColumnDataCopy<uint16_t>;
+		function = ColumnDataCopy<uint16_t>;
 		break;
 	case PhysicalType::UINT32:
-		function = TemplatedColumnDataCopy<uint32_t>;
+		function = ColumnDataCopy<uint32_t>;
 		break;
 	case PhysicalType::UINT64:
-		function = TemplatedColumnDataCopy<uint64_t>;
+		function = ColumnDataCopy<uint64_t>;
 		break;
 	case PhysicalType::FLOAT:
-		function = TemplatedColumnDataCopy<float>;
+		function = ColumnDataCopy<float>;
 		break;
 	case PhysicalType::DOUBLE:
-		function = TemplatedColumnDataCopy<double>;
+		function = ColumnDataCopy<double>;
 		break;
 	case PhysicalType::VARCHAR:
-		function = TemplatedColumnDataCopy<string_t>;
+		function = ColumnDataCopy<string_t>;
 		break;
 	case PhysicalType::LIST: {
-		function = TemplatedColumnDataCopy<list_entry_t>;
+		function = ColumnDataCopy<list_entry_t>;
 		auto child_function = GetCopyFunction(ListType::GetChildType(type));
 		result.child_functions.push_back(child_function);
 		break;
@@ -386,9 +483,9 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 			idx_t offset = input.size() - remaining;
 			for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
 				ColumnDataMetaData meta_data(copy_functions[vector_idx], segment, state, chunk_data,
-				                             segment.vector_data[chunk_data.vector_data[vector_idx]]);
+				                             chunk_data.vector_data[vector_idx]);
 				copy_functions[vector_idx].function(meta_data, state.vector_data[vector_idx], input.data[vector_idx],
-				                                    offset, chunk_data.count, append_amount);
+				                                    offset, append_amount);
 			}
 			chunk_data.count += append_amount;
 		}
