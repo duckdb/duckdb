@@ -411,6 +411,25 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 	TemplatedColumnDataCopy<list_entry_t, ListValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
+void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+                              idx_t source_offset, idx_t copy_count) {
+	// copy the NULL values for the main struct vector
+	auto &append_state = meta_data.state;
+	auto &vector_data = meta_data.GetVectorMetaData();
+	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
+	         append_state.current_chunk_state.handles.end());
+	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
+	auto validity_data = (validity_t *) base_ptr;
+	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
+
+	// now copy all the child vectors
+	if (vector_data.child_data == DConstants::INVALID_INDEX) {
+
+	}
+
+}
+
+
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
 	ColumnDataCopyFunction result;
 	column_data_copy_function_t function;
@@ -454,6 +473,14 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	case PhysicalType::VARCHAR:
 		function = ColumnDataCopy<string_t>;
 		break;
+	case PhysicalType::STRUCT: {
+		function = ColumnDataCopyStruct;
+		auto &child_types = StructType::GetChildTypes(type);
+		for(auto &kv : child_types) {
+			result.child_functions.push_back(GetCopyFunction(kv.second));
+		}
+		break;
+	}
 	case PhysicalType::LIST: {
 		function = ColumnDataCopy<list_entry_t>;
 		auto child_function = GetCopyFunction(ListType::GetChildType(type));

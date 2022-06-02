@@ -17,7 +17,7 @@ statement ok
 CREATE ${table_type} integers AS SELECT i, [i, i + 1, i + 2] AS k, {'i': i} AS l FROM range(1000000) tbl(i);
 
 query I
-SELECT k FROM integers LIMIT 5
+SELECT k, l FROM integers LIMIT 5
 ----
 [0, 1, 2]
 [1, 2, 3]
