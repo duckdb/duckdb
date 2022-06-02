@@ -6,11 +6,11 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 #Enums with the same name shouldn't work
 statement error
-CREATE TYPE alias AS ALIAS INTEGER;
+CREATE TYPE alias AS INTEGER;
 
 # Delete ALIASs
 statement ok
@@ -22,7 +22,7 @@ DROP TYPE alias;
 
 # We can create alias again
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 #This will drop alias
 statement ok
@@ -34,7 +34,7 @@ DROP TYPE IF EXISTS alias;
 
 # We can create alias again
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 DROP TYPE IF EXISTS alias;

@@ -2020,28 +2020,20 @@ typedef struct PGPositionalReference {
 } PGPositionalReference;
 
 /* ----------------------
- *		Enum Statement
+ *		Type Statement
  * ----------------------
  */
 
-typedef struct PGCreateEnumStmt
+typedef enum { PG_NEWTYPE_NONE, PG_NEWTYPE_ENUM, PG_NEWTYPE_ALIAS } PGNewTypeKind;
+
+typedef struct PGCreateTypeStmt
 {
 	PGNodeTag		type;
+	PGNewTypeKind	kind;
 	PGList	   *typeName;		/* qualified name (list of Value strings) */
 	PGList	   *vals;			/* enum values (list of Value strings) */
-} PGCreateEnumStmt;
-
-/* ----------------------
- *		Alias Statement
- * ----------------------
- */
-
-typedef struct PGCreateAliasStmt
-{
-	PGNodeTag		type;
-	PGTypeName *typeName;         /* trust type of alias */
-	PGList	   *aliasname;                /* name of alias */
-} PGCreateAliasStmt;
+	PGTypeName *ofType;			/* original type of alias name */
+} PGCreateTypeStmt;
 
 
 

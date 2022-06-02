@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -28,7 +28,7 @@ drop type alias
 
 # We can recreate all of them again
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -42,7 +42,7 @@ DROP TYPE alias CASCADE
 
 #DROP TYPE after we alter the table so the dependency is gone (ALTER)
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -61,7 +61,7 @@ DROP TABLE person
 
 #DROP TYPE after we alter the table so the dependency is gone (DROP COLUMN)
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -80,7 +80,7 @@ DROP TABLE person
 
 #Dependencies introduced by alter statements, i.e. ADD COLUMN with ENUM type
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -109,7 +109,7 @@ COMMIT;
 # Try with two dependencies to the same type ( Delete One column, try do delete type, change type of the other column,
 # delete type, recreate type, add column with type, try to delete type)
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -130,7 +130,7 @@ statement ok
 DROP TYPE alias
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 ALTER TABLE person ADD COLUMN current_alias alias
@@ -147,7 +147,7 @@ DROP TYPE alias
 
 # Transactions with rollbacks
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -178,7 +178,7 @@ statement ok
 DROP TYPE alias;
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -209,7 +209,7 @@ statement ok
 DROP TYPE alias;
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -233,7 +233,7 @@ DROP TABLE person
 # Test Column Rename
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (
@@ -258,7 +258,7 @@ DROP TYPE alias
 # Test Table Multiple Columns Same Type
 
 statement ok
-CREATE TYPE alias AS ALIAS VARCHAR;
+CREATE TYPE alias AS VARCHAR;
 
 statement ok
 CREATE TABLE person (

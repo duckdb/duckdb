@@ -6,16 +6,18 @@
 CreateTypeStmt:
                 CREATE_P TYPE_P any_name AS ENUM_P '(' opt_enum_val_list ')'
 				{
-					PGCreateEnumStmt *n = makeNode(PGCreateEnumStmt);
+					PGCreateTypeStmt *n = makeNode(PGCreateTypeStmt);
+					n->kind = PG_NEWTYPE_ENUM;
 					n->typeName = $3;
 					n->vals = $7;
 					$$ = (PGNode *)n;
 				}
-				| CREATE_P TYPE_P any_name AS ALIAS_P Typename
+				| CREATE_P TYPE_P any_name AS ConstTypename
 				{
-					PGCreateAliasStmt *n = makeNode(PGCreateAliasStmt);
-					n->typeName = $6;
-					n->aliasname = $3;
+					PGCreateTypeStmt *n = makeNode(PGCreateTypeStmt);
+					n->kind = PG_NEWTYPE_ALIAS;
+					n->typeName = $3;
+					n->ofType = $5;
 					$$ = (PGNode *)n;
 				}
 		;
