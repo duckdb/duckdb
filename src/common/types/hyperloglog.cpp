@@ -172,11 +172,11 @@ inline uint64_t TemplatedHash(const string_t &elem) {
 	data_ptr_t data = (data_ptr_t)elem.GetDataUnsafe();
 	const auto &len = elem.GetSize();
 	uint64_t h = 0;
-	for (idx_t i = 0; i < len / 8; i += 8) {
+	for (idx_t i = 0; i + sizeof(uint64_t) <= len; i += sizeof(uint64_t)) {
 		h ^= TemplatedHash<uint64_t>(Load<uint64_t>(data));
-		data += 8;
+		data += sizeof(uint64_t);
 	}
-	switch (len & 7) {
+	switch (len & (sizeof(uint64_t) - 1)) {
 	case 4:
 		h ^= TemplatedHash<uint32_t>(Load<uint32_t>(data));
 		break;
