@@ -19,7 +19,7 @@ duckdb_root_dir = 'duckdb'
 
 
 def write_to_csv(line, mode, time):
-    with open(f"benchmark-results-{time}.csv", mode) as csv_file:
+    with open(f"results/benchmark-results-{time}.csv", mode) as csv_file:
         csv_file.write(line)
         csv_file.write('\n')
 
@@ -77,12 +77,12 @@ def run_checkpoint_cli(subdir, subset, rle_sorting):
     db = f'{subdir}/{subset}.db'
     load_file = open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read()
 
-    commands = f"""
-        .open {db}\n
-        pragma force_compression_sorting='{rle_sorting}';\n
-        {load_file}\n
-        CHECKPOINT;\n
-        .quit\n
+    commands = f""".open {db}\n
+PRAGMA wal_autocheckpoint='1TB';\n
+pragma force_compression_sorting='{rle_sorting}';\n
+{load_file}\n
+CHECKPOINT;\n
+.quit\n
     """
 
     subprocess.run([f'{duckdb_root_dir}/build/release/duckdb'], shell=True, input=bytes(commands, encoding='utf8'))
