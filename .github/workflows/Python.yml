@@ -72,17 +72,11 @@ jobs:
    centos7-extensions:
     name: CentOS 7 Extensions
     runs-on: ubuntu-latest
-    container: ${{ matrix.image }}
+    container: quay.io/pypa/manylinux2014_x86_64
 #    needs: linux-python3-9
     strategy:
       matrix:
-#        arch: ['i686', 'x86_64']
-        arch: ['x86_64']
-        include:
-#          - arch: 'i686'
-#            image: 'quay.io/pypa/manylinux2014_i686'
-          - arch: 'x86_64'
-            image: 'quay.io/pypa/manylinux2014_x86_64'
+        arch: ['i686', 'x86_64']
 
     env:
       FORCE_32_BIT: ${{ matrix.arch == 'i686' && 1 || 0}}
@@ -165,8 +159,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-#        arch: [i686, x86_64]
-        arch: [x86_64]
+        arch: [i686, x86_64]
         python_build: [cp37-*, cp38-*, cp39-*,cp310-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
