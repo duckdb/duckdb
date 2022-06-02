@@ -63,14 +63,21 @@ struct QuantileState {
 	}
 };
 
-struct QuantileNotNull {
-	inline explicit QuantileNotNull(const ValidityMask &mask_p, idx_t bias_p) : mask(mask_p), bias(bias_p) {
+struct QuantileIncluded {
+	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
+	    : fmask(fmask_p), dmask(dmask_p), bias(bias_p) {
 	}
 
 	inline bool operator()(const idx_t &idx) const {
-		return mask.RowIsValid(idx - bias);
+		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx - bias);
 	}
-	const ValidityMask &mask;
+
+	inline bool AllValid() const {
+		return fmask.AllValid() && dmask.AllValid();
+	}
+
+	const ValidityMask &fmask;
+	const ValidityMask &dmask;
 	const idx_t bias;
 };
 
@@ -130,7 +137,7 @@ static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBou
 
 template <class INPUT_TYPE>
 static inline int CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1,
-                             const QuantileNotNull &validity) {
+                             const QuantileIncluded &validity) {
 	D_ASSERT(index);
 
 	// NULLs sort to the end, so if we have inserted a NULL,
@@ -461,12 +468,13 @@ struct QuantileScalarOperation : public QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
+	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileNotNull not_null(dmask, bias);
+		QuantileIncluded included(fmask, dmask, bias);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state->pos;
@@ -486,9 +494,9 @@ struct QuantileScalarOperation : public QuantileOperation {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+			if (included.AllValid() || included(prev.first) == included(prev.second)) {
 				Interpolator<DISCRETE> interp(q, prev_pos);
-				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
 					state->pos = prev_pos;
 				}
@@ -497,9 +505,9 @@ struct QuantileScalarOperation : public QuantileOperation {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		if (!replace && !dmask.AllValid()) {
+		if (!replace && !included.AllValid()) {
 			// Remove the NULLs
-			state->pos = std::partition(index, index + state->pos, not_null) - index;
+			state->pos = std::partition(index, index + state->pos, included) - index;
 		}
 		if (state->pos) {
 			Interpolator<DISCRETE> interp(q, state->pos);
@@ -612,12 +620,13 @@ struct QuantileListOperation : public QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
+	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   Vector &list, idx_t lidx, idx_t bias) {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 
-		QuantileNotNull not_null(dmask, bias);
+		QuantileIncluded included(fmask, dmask, bias);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
@@ -648,11 +657,11 @@ struct QuantileListOperation : public QuantileOperation {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+			if (included.AllValid() || included(prev.first) == included(prev.second)) {
 				for (const auto &q : bind_data->order) {
 					const auto &quantile = bind_data->quantiles[q];
 					Interpolator<DISCRETE> interp(quantile, prev_pos);
-					const auto replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+					const auto replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 					if (replace < 0) {
 						//	Replacement is before this quantile, so the rest will be replaceable too.
 						replaceable.first = MinValue(replaceable.first, interp.FRN);
@@ -672,9 +681,9 @@ struct QuantileListOperation : public QuantileOperation {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		if (replaceable.first >= replaceable.second && !dmask.AllValid()) {
+		if (replaceable.first >= replaceable.second && !included.AllValid()) {
 			// Remove the NULLs
-			state->pos = std::partition(index, index + state->pos, not_null) - index;
+			state->pos = std::partition(index, index + state->pos, included) - index;
 		}
 
 		if (state->pos) {
@@ -971,12 +980,13 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
-	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
+	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
+	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileNotNull not_null(dmask, bias);
+		QuantileIncluded included(fmask, dmask, bias);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state->pos;
@@ -997,7 +1007,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		// the median has changed, the previous order is not correct.
 		// It is probably close, however, and so reuse is helpful.
 		ReuseIndexes(index2, frame, prev);
-		std::partition(index2, index2 + state->pos, not_null);
+		std::partition(index2, index2 + state->pos, included);
 
 		// Find the two positions needed for the median
 		const float q = 0.5;
@@ -1006,10 +1016,10 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
-			//	We can only replace if the number of NULls has not changed
-			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+			//	We can only replace if the number of NULLs has not changed
+			if (included.AllValid() || included(prev.first) == included(prev.second)) {
 				Interpolator<false> interp(q, prev_pos);
-				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
 					state->pos = prev_pos;
 				}
@@ -1018,9 +1028,9 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		if (!replace && !dmask.AllValid()) {
+		if (!replace && !included.AllValid()) {
 			// Remove the NULLs
-			state->pos = std::partition(index, index + state->pos, not_null) - index;
+			state->pos = std::partition(index, index + state->pos, included) - index;
 		}
 
 		if (state->pos) {

@@ -435,6 +435,10 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::INTERVAL: {
 		return py::str("TIMEDELTA");
 	}
+	case LogicalTypeId::USER:
+	case LogicalTypeId::ENUM: {
+		return py::str(type.ToString());
+	}
 	default:
 		throw NotImplementedException("unsupported type: " + type.ToString());
 	}

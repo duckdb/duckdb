@@ -239,5 +239,5 @@ class TestRAPIAggregations(object):
 
     def test_describe(self, duckdb_cursor):
         rel = initialize(duckdb_cursor)
-        assert rel.describe().fetchall() == [('[Min: 1, Max: 2][Has Null: true, Has No Null: true][Approx Unique: 3]', '[Min: 2.10, Max: 3.20][Has Null: true, Has No Null: true][Approx Unique: 3]', '[Min: a, Max: b, Has Unicode: false, Max String Length: 1][Has Null: true, Has No Null: true][Approx Unique: 3]')]
+        assert rel.describe().fetchall() == [('[Min: 1, Max: 2][Has Null: true, Has No Null: true][Approx Unique: 2]', '[Min: 2.10, Max: 3.20][Has Null: true, Has No Null: true][Approx Unique: 2]', '[Min: a, Max: b, Has Unicode: false, Max String Length: 1][Has Null: true, Has No Null: true][Approx Unique: 2]')]
         duckdb_cursor.execute("drop table bla")
