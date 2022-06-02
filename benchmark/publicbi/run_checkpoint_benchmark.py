@@ -51,6 +51,7 @@ def run_checkpoint(subdir, subset, rle_sorting):
 
     # Set sorting PRAGMA and force compression
     # duckdb_conn.execute("pragma force_compression='rle'")
+    duckdb_conn.execute("pragma wal_autocheckpoint='1TB'")
     duckdb_conn.execute(f"pragma force_compression_sorting='{rle_sorting}'")
 
     # Load in the tables and checkpoint
