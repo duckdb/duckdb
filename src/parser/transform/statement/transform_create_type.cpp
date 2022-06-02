@@ -45,21 +45,20 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTypeInfo>();
 	info->name = ReadPgListToString(stmt->typeName)[0];
-	switch (stmt->kind)
-	{
+	switch (stmt->kind) {
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {
 		info->internal = false;
 		idx_t size = 0;
 		auto ordered_array = ReadPgListToVector(stmt->vals, size);
 		info->type = LogicalType::ENUM(info->name, ordered_array, size);
 	} break;
-	
+
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
 		LogicalType target_type = TransformTypeName(stmt->ofType);
 		target_type.SetAlias(info->name);
 		info->type = target_type;
 	} break;
-	
+
 	default:
 		throw InternalException("Unknown kind of new type");
 	}
