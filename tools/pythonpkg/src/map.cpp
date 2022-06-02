@@ -68,7 +68,8 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 }
 
 OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data_p,
-                                                FunctionOperatorData *state_p, DataChunk &input, DataChunk &output) {
+                                                GlobalTableFunctionState *state_p, DataChunk &input,
+                                                DataChunk &output) {
 	py::gil_scoped_acquire acquire;
 
 	if (input.size() == 0) {

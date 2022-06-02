@@ -12,9 +12,9 @@ namespace duckdb {
 
 py::object PythonTableArrowArrayStreamFactory::ProduceScanner(
     py::object &arrow_scanner, py::handle &arrow_obj_handle,
-    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns, TableFilterCollection *filters,
+    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns, TableFilterSet *filters,
     ClientConfig &config) {
-	bool has_filter = filters && filters->table_filters && !filters->table_filters->filters.empty();
+	bool has_filter = filters && !filters->filters.empty();
 	py::list projection_list = py::cast(project_columns.second);
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, project_columns.first, config);
@@ -33,7 +33,7 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(
 }
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
     uintptr_t factory_ptr, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-    TableFilterCollection *filters) {
+    TableFilterSet *filters) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	D_ASSERT(factory->arrow_object);
@@ -223,10 +223,10 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 	}
 }
 
-py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterCollection &filter_collection,
+py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &filter_collection,
                                                                std::unordered_map<idx_t, string> &columns,
                                                                ClientConfig &config) {
-	auto filters_map = &filter_collection.table_filters->filters;
+	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
 	string timezone_config = ClientConfig::ExtractTimezoneFromConfig(config);

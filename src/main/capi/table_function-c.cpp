@@ -53,7 +53,7 @@ struct CTableInternalBindInfo {
 	string error;
 };
 
-struct CTableInitData : public FunctionOperatorData {
+struct CTableInitData : public GlobalTableFunctionState {
 	~CTableInitData() {
 		if (init_data && delete_callback) {
 			delete_callback(init_data);
@@ -68,14 +68,14 @@ struct CTableInitData : public FunctionOperatorData {
 
 struct CTableInternalInitInfo {
 	CTableInternalInitInfo(CTableBindData &bind_data, CTableInitData &init_data, const vector<column_t> &column_ids,
-	                       TableFilterCollection *filters)
+	                       TableFilterSet *filters)
 	    : bind_data(bind_data), init_data(init_data), column_ids(column_ids), filters(filters), success(true) {
 	}
 
 	CTableBindData &bind_data;
 	CTableInitData &init_data;
 	const vector<column_t> &column_ids;
-	TableFilterCollection *filters;
+	TableFilterSet *filters;
 	bool success;
 	string error;
 };
@@ -106,13 +106,11 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	return move(result);
 }
 
-unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                    const vector<column_t> &column_ids,
-                                                    TableFilterCollection *filters) {
-	auto &bind_data = (CTableBindData &)*bind_data_p;
+unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, TableFunctionInitInput &data_p) {
+	auto &bind_data = (CTableBindData &)*data_p.bind_data;
 	auto result = make_unique<CTableInitData>();
 
-	CTableInternalInitInfo init_info(bind_data, *result, column_ids, filters);
+	CTableInternalInitInfo init_info(bind_data, *result, data_p.column_ids, data_p.filters);
 	bind_data.info->init(&init_info);
 	if (!init_info.success) {
 		throw Exception(init_info.error);
@@ -120,10 +118,9 @@ unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, cons
 	return move(result);
 }
 
-void CTableFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
-                    DataChunk &output) {
-	auto &bind_data = (CTableBindData &)*bind_data_p;
-	auto &init_data = (CTableInitData &)*operator_state;
+void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (CTableBindData &)*data_p.bind_data;
+	auto &init_data = (CTableInitData &)*data_p.global_state;
 	CTableInternalFunctionInfo function_info(bind_data, init_data);
 	bind_data.info->function(&function_info, &output);
 	if (!function_info.success) {

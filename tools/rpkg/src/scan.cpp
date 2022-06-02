@@ -42,15 +42,15 @@ struct DataFrameScanFunctionData : public TableFunctionData {
 	vector<RType> rtypes;
 };
 
-struct DataFrameScanState : public FunctionOperatorData {
+struct DataFrameScanState : public GlobalTableFunctionState {
 	DataFrameScanState() : position(0) {
 	}
 
 	idx_t position;
 };
 
-static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	RProtector r;
 	SEXP df((SEXP)input.inputs[0].GetPointer());
 
@@ -119,16 +119,14 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, Tabl
 	return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 }
 
-static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
-                                                            const vector<column_t> &column_ids,
-                                                            TableFilterCollection *filters) {
+static unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContext &context,
+                                                                    TableFunctionInitInput &input) {
 	return make_unique<DataFrameScanState>();
 }
 
-static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (DataFrameScanFunctionData &)*bind_data;
-	auto &state = (DataFrameScanState &)*operator_state;
+static void DataFrameScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DataFrameScanFunctionData &)*data_p.bind_data;
+	auto &state = (DataFrameScanState &)*data_p.global_state;
 	if (state.position >= data.row_count) {
 		return;
 	}
@@ -254,11 +252,13 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 	state.position += this_count;
 }
 
-static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context, const FunctionData *bind_data) {
+static unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context, const FunctionData *bind_data) {
 	auto &data = (DataFrameScanFunctionData &)*bind_data;
 	return make_unique<NodeStatistics>(data.row_count, data.row_count);
 }
 
 DataFrameScanFunction::DataFrameScanFunction()
-    : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, dataframe_scan_function, dataframe_scan_bind,
-                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
+    : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, DataFrameScanFunction, DataFrameScanBind,
+                    DataFrameScanInitGlobal) {
+	cardinality = DataFrameScanCardinality;
+};
