@@ -74,12 +74,6 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
 #    needs: linux-python3-9
-    strategy:
-      matrix:
-        arch: ['i686', 'x86_64']
-
-    env:
-      FORCE_32_BIT: ${{ matrix.arch == 'i686' && 1 || 0}}
 
     steps:
     - name: Install dependencies
@@ -96,11 +90,6 @@ jobs:
         python3 -m pip install awscli
         aws --version
 
-    - name: Install i686 dependencies
-      if: ${{matrix.arch == 'i686'}}
-      run: |
-        yum install -y glibc-devel.i686 libgcc.i686 libstdc++-devel.i686 ncurses-devel.i686
-
       # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
     - name: Download OpenSSL 1.1.1k
       run: |
@@ -109,17 +98,10 @@ jobs:
         cd openssl-1.1.1k
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
 
-    - name: Configure OpenSSL x86_64
-      if: ${{matrix.arch == 'x86_64'}}
+    - name: Configure OpenSSL
       run: |
         cd openssl-1.1.1k
         ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
-
-    - name: Configure OpenSSL i686
-      if: ${{matrix.arch == 'i686'}}
-      run: |
-        cd openssl-1.1.1k
-        ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic -m32 linux-generic32
 
     - name: Build OpenSSL
       run: |
@@ -141,8 +123,7 @@ jobs:
 
     - uses: ./.github/actions/build_extensions
       with:
-        deploy_as: linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
-        force_32_bit: ${{ matrix.arch == 'i686' && 1 || 0}}
+        deploy_as: linux_amd64_gcc4
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         static_link_build: 1
@@ -150,7 +131,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
+        name: python-wheel-centos7-extensions-centos-x86_64
         path: |
           build/release/extension/*/*.duckdb_extension
 
