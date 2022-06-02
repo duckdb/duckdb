@@ -18,9 +18,9 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       table_filters(move(table_filters_p)) {
 }
 
-class TableScanGlobalState : public GlobalSourceState {
+class TableScanGlobalSourceState : public GlobalSourceState {
 public:
-	TableScanGlobalState(ClientContext &context, const PhysicalTableScan &op) {
+	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
 		if (op.function.init_global) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
 			global_state = op.function.init_global(context, input);
@@ -40,9 +40,10 @@ public:
 	}
 };
 
-class TableScanLocalState : public LocalSourceState {
+class TableScanLocalSourceState : public LocalSourceState {
 public:
-	TableScanLocalState(ExecutionContext &context, TableScanGlobalState &gstate, const PhysicalTableScan &op) {
+	TableScanLocalSourceState(ExecutionContext &context, TableScanGlobalSourceState &gstate,
+	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
 			local_state = op.function.init_local(context.client, input, gstate.global_state.get());
@@ -54,25 +55,25 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
                                                                     GlobalSourceState &gstate) const {
-	return make_unique<TableScanLocalState>(context, (TableScanGlobalState &)gstate, *this);
+	return make_unique<TableScanLocalSourceState>(context, (TableScanGlobalSourceState &)gstate, *this);
 }
 
 unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<TableScanGlobalState>(context, *this);
+	return make_unique<TableScanGlobalSourceState>(context, *this);
 }
 
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                 LocalSourceState &lstate) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = (TableScanGlobalState &)gstate_p;
-	auto &state = (TableScanLocalState &)lstate;
+	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
+	auto &state = (TableScanLocalSourceState &)lstate;
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	function.function(context.client, data, chunk);
 }
 
 double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
-	auto &gstate = (TableScanGlobalState &)gstate_p;
+	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
 	if (function.table_scan_progress) {
 		return function.table_scan_progress(context, bind_data.get(), gstate.global_state.get());
 	}
@@ -84,8 +85,8 @@ idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chu
                                        LocalSourceState &lstate) const {
 	D_ASSERT(SupportsBatchIndex());
 	D_ASSERT(function.get_batch_index);
-	auto &gstate = (TableScanGlobalState &)gstate_p;
-	auto &state = (TableScanLocalState &)lstate;
+	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
+	auto &state = (TableScanLocalSourceState &)lstate;
 	return function.get_batch_index(context.client, bind_data.get(), state.local_state.get(),
 	                                gstate.global_state.get());
 }

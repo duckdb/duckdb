@@ -61,6 +61,11 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t batch_index;
 	idx_t file_index;
 	idx_t row_group_index;
+	idx_t max_threads;
+
+	idx_t MaxThreads() const override {
+		return max_threads;
+	}
 };
 
 class ParquetScanFunction {
@@ -268,6 +273,7 @@ public:
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
+		result->max_threads = ParquetScanMaxThreads(context, input.bind_data);
 		return move(result);
 	}
 

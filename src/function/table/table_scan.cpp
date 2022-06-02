@@ -46,8 +46,6 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
-	auto &transaction = Transaction::GetTransaction(context);
-	auto &bind_data = (const TableScanBindData &)*input.bind_data;
 	result->column_ids = input.column_ids;
 	result->scan_state.table_filters = input.filters;
 	TableScanParallelStateNext(context, input.bind_data, result.get(), gstate);

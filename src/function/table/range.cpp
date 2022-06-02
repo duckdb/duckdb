@@ -244,9 +244,9 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range_function.arguments = {LogicalType::BIGINT};
 	generate_series.AddFunction(range_function);
 	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT};
-	range.AddFunction(range_function);
+	generate_series.AddFunction(range_function);
 	range_function.arguments = {LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT};
-	range.AddFunction(range_function);
+	generate_series.AddFunction(range_function);
 	generate_series.AddFunction(TableFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
 	                                          RangeDateTimeFunction, RangeDateTimeBind<true>, RangeDateTimeInit));
 	set.AddFunction(generate_series);
