@@ -1,6 +1,5 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/dl.hpp"
-#include <iostream>
 
 namespace duckdb {
 
