@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/list_aggregate_function.hpp"
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -11,23 +12,6 @@ namespace duckdb {
 
 // FIXME: use a local state for each thread to increase performance?
 // FIXME: benchmark the use of simple_update against using update (if applicable)
-
-struct ListAggregatesBindData : public FunctionData {
-	ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p);
-	~ListAggregatesBindData() override;
-
-	LogicalType stype;
-	unique_ptr<Expression> aggr_expr;
-
-	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<ListAggregatesBindData>(stype, aggr_expr->Copy());
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ListAggregatesBindData &)other_p;
-		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
-	}
-};
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
     : stype(stype_p), aggr_expr(move(aggr_expr_p)) {
@@ -332,35 +316,15 @@ static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector
 	ListAggregatesFunction<DistinctFunctor>(args, state, result);
 }
 
-static void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<UniqueFunctor>(args, state, result);
 }
 
 template <bool IS_AGGR = false>
-static unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                           const LogicalType &list_child_type,
-                                                           AggregateFunction &aggr_function) {
-
-	// create the child expression and its type
-	vector<unique_ptr<Expression>> children;
-	auto expr = make_unique<BoundConstantExpression>(Value(list_child_type));
-	children.push_back(move(expr));
-
-	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, aggr_function, move(children));
-	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
-
-	if (IS_AGGR) {
-		bound_function.return_type = bound_aggr_function->function.return_type;
-	}
-
-	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
-}
-
-template <bool IS_AGGR = false>
-static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;

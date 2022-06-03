@@ -2,10 +2,37 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/list_aggregate_function.hpp"
+#include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 
 namespace duckdb {
+
+static void CheckForKeyUniqueness(DataChunk &args, ExpressionState &state) {
+	// Create a copy of the arguments
+	auto types = args.GetTypes();
+	if (types.empty() || ListType::GetChildType(types[0]).id() == LogicalType::SQLNULL) {
+		return;
+	}
+
+	auto arg_data = FlatVector::GetData<list_entry_t>(args.data[0]);
+
+	DataChunk keys;
+	keys.Initialize(args.GetTypes());
+	args.Copy(keys);
+
+	// Split the copy to separate the keys
+	DataChunk remaining_columns;
+	keys.Split(remaining_columns, 1);
+
+	Vector unique_result(LogicalType::UBIGINT, args.size());
+	ListUniqueFunction(keys, state, unique_result);
+	auto unique_keys = FlatVector::GetValue<uint64_t>(unique_result, 0);
+	if (unique_keys != arg_data->length) {
+		throw InvalidInputException("Map keys have to be unique!");
+	}
+}
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
@@ -17,6 +44,8 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 	}
+
+	CheckForKeyUniqueness(args, state);
 
 	auto &child_entries = StructVector::GetEntries(result);
 	D_ASSERT(child_entries.size() == 2);
@@ -74,8 +103,14 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	}
 
 	//! this is more for completeness reasons
+	auto key_type = ListType::GetChildType(child_types[0].second);
 	bound_function.return_type = LogicalType::MAP(move(child_types));
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	if (arguments.empty() || key_type.id() == LogicalTypeId::SQLNULL) {
+		return make_unique<VariableReturnBindData>(bound_function.return_type);
+	}
+	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(key_type);
+	bound_function.arguments.push_back(key_type);
+	return ListAggregatesBindFunction(context, bound_function, key_type, aggr_function);
 }
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {
