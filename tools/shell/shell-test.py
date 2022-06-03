@@ -51,6 +51,16 @@ test('select \'asdf\' as a;', out='asdf')
 
 test('select * from range(10000);', out='9999')
 
+import_basic_csv_table = tf()
+print("col_1,col_2\n1,2\n10,20",  file=open(import_basic_csv_table, 'w'))
+# test create missing table with import
+test("""
+.mode csv
+.import "%s" test_table
+SELECT * FROM test_table;
+""" % import_basic_csv_table, out="col_1,col_2\n1,2\n10,20"
+)
+
 # test pragma
 test("""
 .mode csv
