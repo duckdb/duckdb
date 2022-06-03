@@ -174,6 +174,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				    "DECIMAL converted type can only be set for value of Type::(FIXED_LEN_)BYTE_ARRAY/INT32/INT64");
 			}
 		case ConvertedType::UTF8:
+		case ConvertedType::ENUM:
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
 			case Type::FIXED_LEN_BYTE_ARRAY:
@@ -193,7 +194,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 		case ConvertedType::MAP:
 		case ConvertedType::MAP_KEY_VALUE:
 		case ConvertedType::LIST:
-		case ConvertedType::ENUM:
 		case ConvertedType::JSON:
 		case ConvertedType::BSON:
 		default:

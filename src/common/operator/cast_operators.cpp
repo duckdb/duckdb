@@ -816,7 +816,7 @@ struct IntegerCastOperation {
 		if (dbl_res < NumericLimits<result_t>::Minimum() || dbl_res > NumericLimits<result_t>::Maximum()) {
 			return false;
 		}
-		state.result = (result_t)dbl_res;
+		state.result = (result_t)std::nearbyint(dbl_res);
 		return true;
 	}
 
