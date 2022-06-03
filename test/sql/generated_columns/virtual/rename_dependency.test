@@ -11,7 +11,7 @@ CREATE TABLE unit (
 	amount_sold INTEGER,
 	total_profit AS (price * amount_sold),
 	profit_total AS (total_profit),
-	sold_amount AS (amount_sold)
+	sold_amount AS (5 + 3)
 );
 
 statement ok
@@ -32,4 +32,4 @@ ALTER TABLE unit DROP COLUMN value;
 query IIIII
 SELECT * FROM unit
 ----
-5	4	20	20	4
+5	4	20	20	8
