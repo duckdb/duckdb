@@ -109,13 +109,13 @@ function _table_init_function_generic(info::duckdb_init_info, init_fun::Function
 end
 
 function _table_init_function(info::duckdb_init_info)
-	main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
-	_table_init_function_generic(info, main_function.init_func)
+    main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
+    return _table_init_function_generic(info, main_function.init_func)
 end
 
 function _table_local_init_function(info::duckdb_init_info)
-	main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
-	_table_init_function_generic(info, main_function.init_local_func)
+    main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
+    return _table_init_function_generic(info, main_function.init_local_func)
 end
 
 function get_bind_info(info::InitInfo, ::Type{T})::T where {T}
@@ -127,7 +127,7 @@ function get_extra_data(info::InitInfo)
 end
 
 function set_max_threads(info::InitInfo, max_threads)
-	duckdb_init_set_max_threads(info.handle, max_threads)
+    return duckdb_init_set_max_threads(info.handle, max_threads)
 end
 
 function get_projected_columns(info::InitInfo)::Vector{Int64}
@@ -137,6 +137,10 @@ function get_projected_columns(info::InitInfo)::Vector{Int64}
         push!(result, duckdb_init_get_column_index(info.handle, i))
     end
     return result
+end
+
+function _empty_init_info(info::DuckDB.InitInfo)
+    return missing
 end
 
 #=
@@ -241,12 +245,24 @@ function create_table_function(
     parameters::Vector{LogicalType},
     bind_func::Function,
     init_func::Function,
-    init_local_func::Function,
     main_func::Function,
     extra_data::Any = missing,
-    projection_pushdown::Bool = false
+    projection_pushdown::Bool = false,
+    init_local_func::Union{Missing, Function} = missing
 )
-    fun = TableFunction(name, parameters, bind_func, init_func, init_local_func, main_func, extra_data, projection_pushdown)
+    if init_local_func === missing
+        init_local_func = _empty_init_info
+    end
+    fun = TableFunction(
+        name,
+        parameters,
+        bind_func,
+        init_func,
+        init_local_func,
+        main_func,
+        extra_data,
+        projection_pushdown
+    )
     if duckdb_register_table_function(con.handle, fun.handle) != DuckDBSuccess
         throw(QueryException(string("Failed to register table function \"", name, "\"")))
     end
@@ -260,10 +276,10 @@ function create_table_function(
     parameters::Vector{DataType},
     bind_func::Function,
     init_func::Function,
-    init_local_func::Function,
     main_func::Function,
     extra_data::Any = missing,
-    projection_pushdown::Bool = false
+    projection_pushdown::Bool = false,
+    init_local_func::Union{Missing, Function} = missing
 )
     parameter_types::Vector{LogicalType} = Vector()
     for parameter_type in parameters
@@ -275,10 +291,10 @@ function create_table_function(
         parameter_types,
         bind_func,
         init_func,
-        init_local_func,
         main_func,
         extra_data,
-        projection_pushdown
+        projection_pushdown,
+        init_local_func
     )
 end
 
@@ -288,10 +304,10 @@ function create_table_function(
     parameters::Vector{LogicalType},
     bind_func::Function,
     init_func::Function,
-    init_local_func::Function,
     main_func::Function,
     extra_data::Any = missing,
-    projection_pushdown::Bool = false
+    projection_pushdown::Bool = false,
+    init_local_func::Union{Missing, Function} = missing
 )
     return create_table_function(
         db.main_connection,
@@ -299,10 +315,10 @@ function create_table_function(
         parameters,
         bind_func,
         init_func,
-        init_local_func,
         main_func,
         extra_data,
-        projection_pushdown
+        projection_pushdown,
+        init_local_func
     )
 end
 
@@ -312,10 +328,10 @@ function create_table_function(
     parameters::Vector{DataType},
     bind_func::Function,
     init_func::Function,
-    init_local_func::Function,
     main_func::Function,
     extra_data::Any = missing,
-    projection_pushdown::Bool = false
+    projection_pushdown::Bool = false,
+    init_local_func::Union{Missing, Function} = missing
 )
     return create_table_function(
         db.main_connection,
@@ -323,9 +339,9 @@ function create_table_function(
         parameters,
         bind_func,
         init_func,
-        init_local_func,
         main_func,
         extra_data,
-        projection_pushdown
+        projection_pushdown,
+        init_local_func
     )
 end
