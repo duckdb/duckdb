@@ -130,7 +130,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-centos7-extensions-manylinux-x86_64
+        name: manylinux-extensions-x86_64
         path: |
           build/release/extension/*/*.duckdb_extension
 
@@ -172,7 +172,7 @@ jobs:
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: python-wheel-centos7-extensions-manylinux-x86_64
+        name: manylinux-extensions-x86_64
         path: tools/pythonpkg
 
     - name: List extensions to be tested
