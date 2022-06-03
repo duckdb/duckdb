@@ -65,9 +65,14 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.version }}
+
       - name: Build DuckDB
         run: |
-            make
+            BUILD_TPCH=1 make
 
       - name: Run Tests
         run: |

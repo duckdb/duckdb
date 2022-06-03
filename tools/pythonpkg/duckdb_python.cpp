@@ -5,7 +5,6 @@
 #include "duckdb/common/vector.hpp"
 
 #include "duckdb_python/array_wrapper.hpp"
-#include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"

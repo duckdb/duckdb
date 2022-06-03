@@ -181,7 +181,7 @@ void StructColumnData::UpdateColumn(Transaction &transaction, const vector<colum
 
 unique_ptr<BaseStatistics> StructColumnData::GetUpdateStatistics() {
 	// check if any child column has updates
-	auto stats = BaseStatistics::CreateEmpty(type);
+	auto stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
 	auto &struct_stats = (StructStatistics &)*stats;
 	stats->validity_stats = validity.GetUpdateStatistics();
 	for (idx_t i = 0; i < sub_columns.size(); i++) {

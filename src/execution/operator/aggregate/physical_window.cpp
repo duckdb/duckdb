@@ -901,6 +901,25 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		}
 	}
 
+	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
+	ValidityMask filter_mask;
+	vector<validity_t> filter_bits;
+	if (wexpr->filter_expr) {
+		// 	Start with all invalid and set the ones that pass
+		filter_bits.resize(ValidityMask::ValidityMaskSize(input.Count()), 0);
+		filter_mask.Initialize(filter_bits.data());
+		ExpressionExecutor filter_execution(*wexpr->filter_expr);
+		SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+		idx_t base_idx = 0;
+		for (auto &chunk : input.Chunks()) {
+			const auto filtered = filter_execution.SelectExpression(*chunk, true_sel);
+			for (idx_t f = 0; f < filtered; ++f) {
+				filter_mask.SetValid(base_idx + true_sel[f]);
+			}
+			base_idx += chunk->size();
+		}
+	}
+
 	// evaluate boundaries if present. Parser has checked boundary types.
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr) {
@@ -954,7 +973,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 	if (wexpr->aggregate) {
 		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection, mode);
+		                                              &payload_collection, filter_mask, mode);
 	}
 
 	WindowBoundariesState bounds(wexpr);

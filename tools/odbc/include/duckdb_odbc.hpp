@@ -118,6 +118,7 @@ public:
 	unique_ptr<QueryResult> res;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
+	SQLULEN retrieve_data = SQL_RD_ON;
 	SQLULEN *rows_fetched_ptr;
 
 	// fetcher

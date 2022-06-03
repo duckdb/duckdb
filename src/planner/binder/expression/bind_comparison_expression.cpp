@@ -123,8 +123,10 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	// now obtain the result type of the input types
 	auto input_type = BoundComparisonExpression::BindComparison(left_sql_type, right_sql_type);
 	// add casts (if necessary)
-	left.expr = BoundCastExpression::AddCastToType(move(left.expr), input_type);
-	right.expr = BoundCastExpression::AddCastToType(move(right.expr), input_type);
+	left.expr = BoundCastExpression::AddCastToType(move(left.expr), input_type, input_type.id() == LogicalTypeId::ENUM);
+	right.expr =
+	    BoundCastExpression::AddCastToType(move(right.expr), input_type, input_type.id() == LogicalTypeId::ENUM);
+
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
 		auto collation = StringType::GetCollation(input_type);

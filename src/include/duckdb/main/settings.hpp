@@ -51,6 +51,15 @@ struct DebugForceExternal {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DebugForceNoCrossProduct {
+	static constexpr const char *Name = "debug_force_no_cross_product";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: Force disable cross product generation when hyper graph isn't connected, used for testing";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DebugManyFreeListBlocks {
 	static constexpr const char *Name = "debug_many_free_list_blocks";
 	static constexpr const char *Description = "DEBUG SETTING: add additional blocks to the free list";
@@ -169,6 +178,16 @@ struct LogQueryPathSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct MaximumExpressionDepthSetting {
+	static constexpr const char *Name = "max_expression_depth";
+	static constexpr const char *Description =
+	    "The maximum expression depth limit in the parser. WARNING: increasing this setting and using very deep "
+	    "expressions might lead to stack overflow errors.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct MaximumMemorySetting {
 	static constexpr const char *Name = "max_memory";
 	static constexpr const char *Description = "The maximum memory of the system (e.g. 1GB)";
@@ -191,6 +210,16 @@ struct PreserveIdentifierCase {
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PreserveInsertionOrder {
+	static constexpr const char *Name = "preserve_insertion_order";
+	static constexpr const char *Description =
+	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
+	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
 

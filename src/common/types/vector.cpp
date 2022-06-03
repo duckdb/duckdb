@@ -1133,7 +1133,6 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 }
 
 void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
-	D_ASSERT(position < count);
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
@@ -1181,7 +1180,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
+			ConstantVector::Reference(*target_entries[i], *source_entries[i], struct_index, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;

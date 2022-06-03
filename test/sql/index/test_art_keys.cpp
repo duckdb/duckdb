@@ -229,9 +229,9 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 			current_value *= 2;
 		}
 		std::sort(values.begin(), values.end());
-		uint32_t current_encoded = EncodeFloat(values[0]);
+		uint32_t current_encoded = Radix::EncodeFloat(values[0]);
 		for (idx_t i = 1; i < values.size(); i++) {
-			uint32_t next_encoded = EncodeFloat(values[i]);
+			uint32_t next_encoded = Radix::EncodeFloat(values[i]);
 			if (!(next_encoded > current_encoded)) {
 				printf("Failure in Key::EncodeFloat!\n");
 				printf(
@@ -258,9 +258,9 @@ TEST_CASE("Test correct functioning of art EncodeFloat/EncodeDouble", "[art-enc]
 			current_value *= 2;
 		}
 		std::sort(values.begin(), values.end());
-		uint64_t current_encoded = EncodeDouble(values[0]);
+		uint64_t current_encoded = Radix::EncodeDouble(values[0]);
 		for (idx_t i = 1; i < values.size(); i++) {
-			uint64_t next_encoded = EncodeDouble(values[i]);
+			uint64_t next_encoded = Radix::EncodeDouble(values[i]);
 			if (!(next_encoded > current_encoded)) {
 				cout << "Failure in Key::EncodeDouble!" << std::endl;
 				cout << "Generated value for key " << values[i - 1] << " (=> %" << current_encoded

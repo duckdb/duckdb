@@ -115,3 +115,16 @@ SELECT d FROM range(TIMESTAMP '1993-01-01 00:00:00', TIMESTAMP '1992-01-01 00:00
 # composite interval with negative types not supported
 statement error
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH' - INTERVAL '1 HOUR') tbl(d)
+
+# Infinities will overflow or cause infinite loops (PG behaviour!) so we ban them
+statement error
+SELECT COUNT(*) FROM generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+
+statement error
+SELECT COUNT(*) FROM range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
+
+statement error
+SELECT COUNT(*) FROM generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');
+
+statement error
+SELECT COUNT(*) FROM range('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');

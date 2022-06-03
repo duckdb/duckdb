@@ -133,24 +133,38 @@ def run_shell_command(cmd):
 def extract_issue(body, nr):
     try:
         splits = body.split(middle)
-        sql = splits[0].lstrip(header)
-        error = splits[1].rstrip(footer)
+        sql = splits[0][len(header):]
+        error = splits[1][:-len(footer)]
         return (sql, error)
     except:
         print(f"Failed to extract SQL/error message from issue {nr}")
         print(body)
         return None
 
+def is_internal_error(error):
+    if 'differs from original result' in error:
+        return True
+    if 'INTERNAL' in error:
+        return True
+    if 'signed integer overflow' in error:
+        return True
+    if 'Sanitizer' in error or 'sanitizer' in error:
+        return True
+    if 'runtime error' in error:
+        return True
+    return False
 
 def test_reproducibility(issue, current_errors):
     extract = extract_issue(issue['body'], issue['number'])
     if extract is None:
         # failed extract: leave the issue as-is
         return True
-    sql = extract[0]
+    sql = extract[0] + ';'
     error = extract[1]
     (stdout, stderr, returncode) = run_shell_command(sql)
     if returncode == 0:
+        return False
+    if not is_internal_error(stderr):
         return False
     # issue is still reproducible
     current_errors[error] = issue
@@ -221,6 +235,9 @@ print(stdout)
 print("==============  STDERR  =================")
 print(stderr)
 print("==========================================")
+if not is_internal_error(stderr):
+    print("Failed to reproduce the internal error with a single command")
+    exit(0)
 
 error_msg = reduce_sql.sanitize_error(stderr)
 

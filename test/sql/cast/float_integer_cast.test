@@ -1,0 +1,46 @@
+# name: test/sql/cast/float_integer_cast.test
+# description: Statistical rounding in float => int casts
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+# PG uses statistical ("Banker's") rounding for floating point => integer
+
+foreach src FLOAT DOUBLE
+
+foreach dst TINYINT SMALLINT INTEGER BIGINT HUGEINT
+
+query I
+select cast(0.5::${src} as ${dst}) as x;
+----
+0
+
+query I
+select cast(0.55::${src} as ${dst}) as x;
+----
+1
+
+query I
+select cast(1.5::${src} as ${dst}) as x;
+----
+2
+
+query I
+select cast(-0.5::${src} as ${dst}) as x;
+----
+0
+
+query I
+select cast(-0.55::${src} as ${dst}) as x;
+----
+-1
+
+query I
+select cast(-1.5::${src} as ${dst}) as x;
+----
+-2
+
+endloop
+
+endloop

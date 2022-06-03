@@ -19,6 +19,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "LIMIT";
 	case PhysicalOperatorType::LIMIT_PERCENT:
 		return "LIMIT_PERCENT";
+	case PhysicalOperatorType::STREAMING_LIMIT:
+		return "STREAMING_LIMIT";
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		return "RESERVOIR_SAMPLE";
 	case PhysicalOperatorType::STREAMING_SAMPLE:
@@ -117,6 +119,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "INOUT_FUNCTION";
 	case PhysicalOperatorType::CREATE_TYPE:
 		return "CREATE_TYPE";
+	case PhysicalOperatorType::RESULT_COLLECTOR:
+		return "RESULT_COLLECTOR";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}
