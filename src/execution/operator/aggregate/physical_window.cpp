@@ -280,6 +280,52 @@ static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx
 	return l;
 }
 
+static void PrepareInputExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &output,
+                                    ExpressionExecutor &executor, DataChunk &chunk) {
+	if (expr_count == 0) {
+		return;
+	}
+
+	vector<LogicalType> types;
+	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
+		types.push_back(exprs[expr_idx]->return_type);
+		executor.AddExpression(*exprs[expr_idx]);
+	}
+
+	if (!types.empty()) {
+		chunk.Initialize(types);
+	}
+}
+
+static void PrepareInputExpression(Expression *expr, ChunkCollection &output, ExpressionExecutor &executor,
+                                   DataChunk &chunk) {
+	PrepareInputExpressions(&expr, 1, output, executor, chunk);
+}
+
+struct WindowInputExpression {
+	explicit WindowInputExpression(Expression *expr_p) : expr(expr_p), scalar(false) {
+		if (expr) {
+			PrepareInputExpression(expr, collection, executor, chunk);
+			scalar = expr->IsScalar();
+		}
+	}
+
+	void Execute(DataChunk &input_chunk) {
+		if (expr && (!scalar || collection.Count() == 0)) {
+			chunk.Reset();
+			executor.Execute(input_chunk, chunk);
+			chunk.Verify();
+			collection.Append(chunk);
+		}
+	}
+
+	Expression *expr;
+	bool scalar;
+	ChunkCollection collection;
+	ExpressionExecutor executor;
+	DataChunk chunk;
+};
+
 static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowExpression *wexpr, ChunkCollection &input,
                                        ChunkCollection &over, ChunkCollection *hashes, const hash_t hash_bin,
                                        const hash_t hash_mask) {
@@ -598,10 +644,9 @@ struct OperationCompare : public std::function<bool(T, T)> {
 
 template <typename T, typename OP, bool FROM>
 static idx_t FindTypedRangeBound(ChunkCollection &over, const idx_t order_col, const idx_t order_begin,
-                                 const idx_t order_end, ChunkCollection &boundary, const idx_t boundary_col,
-                                 const idx_t boundary_row) {
-	D_ASSERT(!CellIsNull(boundary, boundary_col, boundary_row));
-	const auto val = GetCell<T>(boundary, boundary_col, boundary_row);
+                                 const idx_t order_end, ChunkCollection &boundary, const idx_t boundary_row) {
+	D_ASSERT(!CellIsNull(boundary, 0, boundary_row));
+	const auto val = GetCell<T>(boundary, 0, boundary_row);
 
 	OperationCompare<T, OP> comp;
 	ChunkCollectionIterator<T> begin(over, order_col, order_begin);
@@ -615,50 +660,37 @@ static idx_t FindTypedRangeBound(ChunkCollection &over, const idx_t order_col, c
 
 template <typename OP, bool FROM>
 static idx_t FindRangeBound(ChunkCollection &over, const idx_t order_col, const idx_t order_begin,
-                            const idx_t order_end, ChunkCollection &boundary, const idx_t boundary_col,
-                            const idx_t expr_idx) {
+                            const idx_t order_end, ChunkCollection &boundary, const idx_t expr_idx) {
 	const auto &over_types = over.Types();
 	D_ASSERT(over_types.size() > order_col);
-	D_ASSERT(boundary.Types().size() > boundary_col);
-	D_ASSERT(boundary.Types()[boundary_col] == over_types[order_col]);
+	D_ASSERT(boundary.Types().size() == 1);
+	D_ASSERT(boundary.Types()[0] == over_types[order_col]);
 
 	switch (over_types[order_col].InternalType()) {
 	case PhysicalType::INT8:
-		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                             expr_idx);
+		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::INT16:
-		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                              expr_idx);
+		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::INT32:
-		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                              expr_idx);
+		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::INT64:
-		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                              expr_idx);
+		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::UINT8:
-		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                              expr_idx);
+		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::UINT16:
-		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                               expr_idx);
+		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::UINT32:
-		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                               expr_idx);
+		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::UINT64:
-		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                               expr_idx);
+		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::INT128:
-		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                                expr_idx);
+		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::FLOAT:
-		return FindTypedRangeBound<float, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                            expr_idx);
+		return FindTypedRangeBound<float, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::DOUBLE:
-		return FindTypedRangeBound<double, OP, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                             expr_idx);
+		return FindTypedRangeBound<double, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case PhysicalType::INTERVAL:
-		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_col, order_begin, order_end, boundary,
-		                                                 boundary_col, expr_idx);
+		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	default:
 		throw InternalException("Unsupported column type for RANGE");
 	}
@@ -667,23 +699,21 @@ static idx_t FindRangeBound(ChunkCollection &over, const idx_t order_col, const 
 template <bool FROM>
 static idx_t FindOrderedRangeBound(ChunkCollection &over, const idx_t order_col, const OrderType range_sense,
                                    const idx_t order_begin, const idx_t order_end, ChunkCollection &boundary,
-                                   const idx_t boundary_col, const idx_t expr_idx) {
+                                   const idx_t expr_idx) {
 	switch (range_sense) {
 	case OrderType::ASCENDING:
-		return FindRangeBound<LessThan, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                      expr_idx);
+		return FindRangeBound<LessThan, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	case OrderType::DESCENDING:
-		return FindRangeBound<GreaterThan, FROM>(over, order_col, order_begin, order_end, boundary, boundary_col,
-		                                         expr_idx);
+		return FindRangeBound<GreaterThan, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
 	default:
 		throw InternalException("Unsupported ORDER BY sense for RANGE");
 	}
 }
 
 static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t input_size, const idx_t row_idx,
-                                   ChunkCollection &over_collection, ChunkCollection &payload_collection,
-                                   const size_t boundary_start_idx, const size_t boundary_end_idx,
-                                   const ValidityMask &partition_mask, const ValidityMask &order_mask) {
+                                   ChunkCollection &over_collection, ChunkCollection &boundary_start_collection,
+                                   ChunkCollection &boundary_end_collection, const ValidityMask &partition_mask,
+                                   const ValidityMask &order_mask) {
 
 	// RANGE sorting parameters
 	const auto order_col = bounds.partition_count;
@@ -761,34 +791,33 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		bounds.window_start = (int64_t)row_idx - GetCell<int64_t>(payload_collection, boundary_start_idx,
-		                                                          bounds.scalar_start ? 0 : row_idx);
+		bounds.window_start =
+		    (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0, bounds.scalar_start ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		bounds.window_start =
-		    row_idx + GetCell<int64_t>(payload_collection, boundary_start_idx, bounds.scalar_start ? 0 : row_idx);
+		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, bounds.scalar_start ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		const auto expr_idx = bounds.scalar_start ? 0 : row_idx;
-		if (CellIsNull(payload_collection, boundary_start_idx, expr_idx)) {
+		if (CellIsNull(boundary_start_collection, 0, expr_idx)) {
 			bounds.window_start = bounds.peer_start;
 		} else {
 			bounds.window_start =
 			    FindOrderedRangeBound<true>(over_collection, order_col, bounds.range_sense, bounds.valid_start, row_idx,
-			                                payload_collection, boundary_start_idx, expr_idx);
+			                                boundary_start_collection, expr_idx);
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
 		const auto expr_idx = bounds.scalar_start ? 0 : row_idx;
-		if (CellIsNull(payload_collection, boundary_start_idx, expr_idx)) {
+		if (CellIsNull(boundary_start_collection, 0, expr_idx)) {
 			bounds.window_start = bounds.peer_start;
 		} else {
-			bounds.window_start =
-			    FindOrderedRangeBound<true>(over_collection, order_col, bounds.range_sense, row_idx, bounds.valid_end,
-			                                payload_collection, boundary_start_idx, expr_idx);
+			bounds.window_start = FindOrderedRangeBound<true>(over_collection, order_col, bounds.range_sense, row_idx,
+			                                                  bounds.valid_end, boundary_start_collection, expr_idx);
 		}
 		break;
 	}
@@ -807,32 +836,30 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		bounds.window_end = (int64_t)row_idx -
-		                    GetCell<int64_t>(payload_collection, boundary_end_idx, bounds.scalar_end ? 0 : row_idx) + 1;
+		bounds.window_end =
+		    (int64_t)row_idx - GetCell<int64_t>(boundary_end_collection, 0, bounds.scalar_end ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		bounds.window_end =
-		    row_idx + GetCell<int64_t>(payload_collection, boundary_end_idx, bounds.scalar_end ? 0 : row_idx) + 1;
+		bounds.window_end = row_idx + GetCell<int64_t>(boundary_end_collection, 0, bounds.scalar_end ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		const auto expr_idx = bounds.scalar_end ? 0 : row_idx;
-		if (CellIsNull(payload_collection, boundary_end_idx, expr_idx)) {
+		if (CellIsNull(boundary_end_collection, 0, expr_idx)) {
 			bounds.window_end = bounds.peer_end;
 		} else {
 			bounds.window_end =
 			    FindOrderedRangeBound<false>(over_collection, order_col, bounds.range_sense, bounds.valid_start,
-			                                 row_idx, payload_collection, boundary_end_idx, expr_idx);
+			                                 row_idx, boundary_end_collection, expr_idx);
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
 		const auto expr_idx = bounds.scalar_end ? 0 : row_idx;
-		if (CellIsNull(payload_collection, boundary_end_idx, expr_idx)) {
+		if (CellIsNull(boundary_end_collection, 0, expr_idx)) {
 			bounds.window_end = bounds.peer_end;
 		} else {
-			bounds.window_end =
-			    FindOrderedRangeBound<false>(over_collection, order_col, bounds.range_sense, row_idx, bounds.valid_end,
-			                                 payload_collection, boundary_end_idx, expr_idx);
+			bounds.window_end = FindOrderedRangeBound<false>(over_collection, order_col, bounds.range_sense, row_idx,
+			                                                 bounds.valid_end, boundary_end_collection, expr_idx);
 		}
 		break;
 	}
@@ -865,49 +892,29 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 	// TODO we could evaluate those expressions in parallel
 
+	// Single pass over the input to produce the payload columns.
+	// Vectorisation for the win...
+
 	// evaluate inner expressions of window functions, could be more complex
+	ChunkCollection payload_collection;
 	vector<Expression *> exprs;
 	for (auto &child : wexpr->children) {
 		exprs.push_back(child.get());
 	}
-
-	const auto leadlag_offset_idx = exprs.size();
-	if (wexpr->offset_expr) {
-		exprs.push_back(wexpr->offset_expr.get());
-	}
-
-	const auto leadlag_default_idx = exprs.size();
-	if (wexpr->default_expr) {
-		exprs.push_back(wexpr->default_expr.get());
-	}
-
-	// evaluate boundaries if present. Parser has checked boundary types.
-	const auto boundary_start_idx = exprs.size();
-	if (wexpr->start_expr) {
-		exprs.push_back(wexpr->start_expr.get());
-	}
-
-	const auto boundary_end_idx = exprs.size();
-	if (wexpr->end_expr) {
-		exprs.push_back(wexpr->end_expr.get());
-	}
-
-	// Single pass over the input to produce the payload columns.
-	// Vectorisation for the win...
-	ChunkCollection payload_collection;
-	vector<LogicalType> payload_types;
+	// TODO: child may be a scalar, don't need to materialize the whole collection then
 	ExpressionExecutor payload_executor;
-	for (auto expr : exprs) {
-		payload_types.push_back(expr->return_type);
-		payload_executor.AddExpression(*expr);
-	}
+	DataChunk payload_chunk;
+	PrepareInputExpressions(exprs.data(), exprs.size(), payload_collection, payload_executor, payload_chunk);
+
+	WindowInputExpression leadlag_offset(wexpr->offset_expr.get());
+	WindowInputExpression leadlag_default(wexpr->default_expr.get());
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 	ValidityMask filter_mask;
 	vector<validity_t> filter_bits;
-	idx_t filter_idx = 0;
 	ExpressionExecutor filter_executor;
 	SelectionVector filter_sel;
+	idx_t filter_idx = 0;
 	if (wexpr->filter_expr) {
 		// 	Start with all invalid and set the ones that pass
 		filter_bits.resize(ValidityMask::ValidityMaskSize(input.Count()), 0);
@@ -916,10 +923,12 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
-	DataChunk payload_chunk;
-	if (!payload_types.empty()) {
-		payload_chunk.Initialize(payload_types);
-	}
+	// evaluate boundaries if present. Parser has checked boundary types.
+	WindowInputExpression boundary_start(wexpr->start_expr.get());
+	WindowInputExpression boundary_end(wexpr->end_expr.get());
+
+	// Single pass over the input to produce the payload columns.
+	// Vectorisation for the win...
 	for (auto &input_chunk : input.Chunks()) {
 		if (!exprs.empty()) {
 			payload_chunk.Reset();
@@ -928,6 +937,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			payload_collection.Append(payload_chunk);
 		}
 
+		leadlag_offset.Execute(*input_chunk);
+		leadlag_default.Execute(*input_chunk);
+
 		if (wexpr->filter_expr) {
 			const auto filtered = filter_executor.SelectExpression(*input_chunk, filter_sel);
 			for (idx_t f = 0; f < filtered; ++f) {
@@ -935,6 +947,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			filter_idx += input_chunk->size();
 		}
+
+		boundary_start.Execute(*input_chunk);
+		boundary_end.Execute(*input_chunk);
 	}
 
 	// Set up a validity mask for IGNORE NULLS
@@ -978,7 +993,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
 	if (wexpr->aggregate) {
-		segment_tree = make_unique<WindowSegmentTree>(*wexpr, &payload_collection, filter_mask, mode);
+		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
+		                                              &payload_collection, filter_mask, mode);
 	}
 
 	WindowBoundariesState bounds(wexpr);
@@ -999,8 +1015,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		auto &result = output_chunk.data[0];
 
 		// special case, OVER (), aggregate over everything
-		UpdateWindowBoundaries(bounds, input.Count(), row_idx, over, payload_collection, boundary_start_idx,
-		                       boundary_end_idx, partition_mask, order_mask);
+		UpdateWindowBoundaries(bounds, input.Count(), row_idx, over, boundary_start.collection, boundary_end.collection,
+		                       partition_mask, order_mask);
 		if (WindowNeedsRank(wexpr)) {
 			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
 				dense_rank = 1;
@@ -1090,8 +1106,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		case ExpressionType::WINDOW_LAG: {
 			int64_t offset = 1;
 			if (wexpr->offset_expr) {
-				const auto offset_row = wexpr->offset_expr->IsScalar() ? 0 : row_idx;
-				offset = GetCell<int64_t>(payload_collection, leadlag_offset_idx, offset_row);
+				offset = GetCell<int64_t>(leadlag_offset.collection, 0, wexpr->offset_expr->IsScalar() ? 0 : row_idx);
 			}
 			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
@@ -1115,7 +1130,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				payload_collection.CopyCell(0, val_idx, result, output_offset);
 			} else if (wexpr->default_expr) {
 				const auto source_row = wexpr->default_expr->IsScalar() ? 0 : row_idx;
-				payload_collection.CopyCell(leadlag_default_idx, source_row, result, output_offset);
+				leadlag_default.collection.CopyCell(0, source_row, result, output_offset);
 			} else {
 				FlatVector::SetNull(result, output_offset, true);
 			}
@@ -1134,7 +1149,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		case ExpressionType::WINDOW_NTH_VALUE: {
-			D_ASSERT(payload_collection.ColumnCount() >= 2);
+			D_ASSERT(payload_collection.ColumnCount() == 2);
 			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 			// returns NULL if there is no such row.
 			if (CellIsNull(payload_collection, 1, row_idx)) {

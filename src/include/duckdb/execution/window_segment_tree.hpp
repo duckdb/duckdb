@@ -15,14 +15,12 @@
 
 namespace duckdb {
 
-class BoundWindowExpression;
-
 class WindowSegmentTree {
 public:
 	using FrameBounds = std::pair<idx_t, idx_t>;
 
-	WindowSegmentTree(BoundWindowExpression &wexpr, ChunkCollection *input, const ValidityMask &filter_mask,
-	                  WindowAggregationMode mode);
+	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, const LogicalType &result_type,
+	                  ChunkCollection *input, const ValidityMask &filter_mask, WindowAggregationMode mode);
 	~WindowSegmentTree();
 
 	//! First row contains the result.
@@ -65,8 +63,6 @@ private:
 	FrameBounds active;
 	//! Reused result state container for the window functions
 	Vector statev;
-	//! Data chunk for building large window API inputs
-	DataChunk left;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unique_ptr<data_t[]> levels_flat_native;
