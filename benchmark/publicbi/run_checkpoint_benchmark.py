@@ -59,7 +59,7 @@ def run_checkpoint(subdir, subset, rle_sorting):
     duckdb_conn.execute("CHECKPOINT;")
 
     # Get amount of used blocks
-    total_blocks = duckdb_conn.execute(f"select used_blocks from pragma_database_size();").fetchone()
+    total_blocks = duckdb_conn.execute(f"select used_blocks from pragma_database_size();").fetchone()[0]
 
     # Close to checkpoint and get size
     duckdb_conn.close()
