@@ -914,7 +914,6 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	vector<validity_t> filter_bits;
 	ExpressionExecutor filter_executor;
 	SelectionVector filter_sel;
-	idx_t filter_idx = 0;
 	if (wexpr->filter_expr) {
 		// 	Start with all invalid and set the ones that pass
 		filter_bits.resize(ValidityMask::ValidityMaskSize(input.Count()), 0);
@@ -927,14 +926,53 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	WindowInputExpression boundary_start(wexpr->start_expr.get());
 	WindowInputExpression boundary_end(wexpr->end_expr.get());
 
+	// Set up a validity mask for IGNORE NULLS
+	ValidityMask ignore_nulls;
+	bool check_nulls = false;
+	if (wexpr->ignore_nulls) {
+		switch (wexpr->type) {
+		case ExpressionType::WINDOW_LEAD:
+		case ExpressionType::WINDOW_LAG:
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_LAST_VALUE:
+		case ExpressionType::WINDOW_NTH_VALUE:
+			check_nulls = true;
+			break;
+		default:
+			break;
+		}
+	}
+
 	// Single pass over the input to produce the payload columns.
 	// Vectorisation for the win...
+	idx_t input_idx = 0;
 	for (auto &input_chunk : input.Chunks()) {
+		const auto count = input_chunk->size();
+
 		if (!exprs.empty()) {
 			payload_chunk.Reset();
 			payload_executor.Execute(*input_chunk, payload_chunk);
 			payload_chunk.Verify();
 			payload_collection.Append(payload_chunk);
+
+			// process payload chunks while they are still piping hot
+			if (check_nulls) {
+				VectorData vdata;
+				payload_chunk.data[0].Orrify(count, vdata);
+				if (!vdata.validity.AllValid()) {
+					//	Lazily materialise the contents when we find the first NULL
+					if (ignore_nulls.AllValid()) {
+						ignore_nulls.Initialize(payload_collection.Count());
+					}
+					// Write to the current position
+					// Chunks in a collection are full, so we don't have to worry about raggedness
+					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(input_idx);
+					auto src = vdata.validity.GetData();
+					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
+						*dst++ = *src++;
+					}
+				}
+			}
 		}
 
 		leadlag_offset.Execute(*input_chunk);
@@ -943,49 +981,14 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		if (wexpr->filter_expr) {
 			const auto filtered = filter_executor.SelectExpression(*input_chunk, filter_sel);
 			for (idx_t f = 0; f < filtered; ++f) {
-				filter_mask.SetValid(filter_idx + filter_sel[f]);
+				filter_mask.SetValid(input_idx + filter_sel[f]);
 			}
-			filter_idx += input_chunk->size();
 		}
 
 		boundary_start.Execute(*input_chunk);
 		boundary_end.Execute(*input_chunk);
-	}
 
-	// Set up a validity mask for IGNORE NULLS
-	ValidityMask ignore_nulls;
-	if (wexpr->ignore_nulls) {
-		switch (wexpr->type) {
-		case ExpressionType::WINDOW_LEAD:
-		case ExpressionType::WINDOW_LAG:
-		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_LAST_VALUE:
-		case ExpressionType::WINDOW_NTH_VALUE: {
-			idx_t pos = 0;
-			for (auto &chunk : payload_collection.Chunks()) {
-				const auto count = chunk->size();
-				VectorData vdata;
-				chunk->data[0].Orrify(count, vdata);
-				if (!vdata.validity.AllValid()) {
-					//	Lazily materialise the contents when we find the first NULL
-					if (ignore_nulls.AllValid()) {
-						ignore_nulls.Initialize(payload_collection.Count());
-					}
-					// Write to the current position
-					// Chunks in a collection are full, so we don't have to worry about raggedness
-					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(pos);
-					auto src = vdata.validity.GetData();
-					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
-						*dst++ = *src++;
-					}
-				}
-				pos += count;
-			}
-			break;
-		}
-		default:
-			break;
-		}
+		input_idx += count;
 	}
 
 	// build a segment tree for frame-adhering aggregates
