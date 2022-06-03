@@ -36,8 +36,8 @@ struct ListAggregatesBindData : public FunctionData {
 
 template <bool IS_AGGR = false>
 unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_function,
-                                                           const LogicalType &list_child_type,
-                                                           AggregateFunction &aggr_function) {
+                                                    const LogicalType &list_child_type,
+                                                    AggregateFunction &aggr_function) {
 
 	// create the child expression and its type
 	vector<unique_ptr<Expression>> children;
@@ -54,4 +54,4 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Scal
 	return make_unique<ListAggregatesBindData>(bound_function.return_type, move(bound_aggr_function));
 }
 
-} //namespace duckdb
+} // namespace duckdb

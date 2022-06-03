@@ -42,6 +42,25 @@ SELECT MAP(a, b) FROM tbl;
 {5=test, 7=string}
 {6=foo, 3=bar}
 
+# Check unique exception with columns
+statement ok
+INSERT INTO tbl VALUES (ARRAY[5,7], ARRAY['also_test', 'also_string'])
+
+# Unique between rows, should work
+query I
+SELECT MAP(a, b) FROM tbl;
+----
+{5=test, 7=string}
+{6=foo, 3=bar}
+{5=also_test, 7=also_string}
+
+statement ok
+INSERT INTO tbl VALUES (ARRAY[7,5,7], ARRAY['a', 'b', 'c'])
+
+# Keys are not unique for one of the rows
+statement error
+SELECT MAP(a, b) FROM tbl;
+
 # Lists with different size are FORBIDDEN
 statement error
 select MAP(LIST_VALUE(10),LIST_VALUE())

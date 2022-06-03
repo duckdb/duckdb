@@ -28,9 +28,12 @@ static void CheckForKeyUniqueness(DataChunk &args, ExpressionState &state) {
 
 	Vector unique_result(LogicalType::UBIGINT, args.size());
 	ListUniqueFunction(keys, state, unique_result);
-	auto unique_keys = FlatVector::GetValue<uint64_t>(unique_result, 0);
-	if (unique_keys != arg_data->length) {
-		throw InvalidInputException("Map keys have to be unique!");
+	for (idx_t i = 0; i < args.size(); i++) {
+		auto keys_length = arg_data[i].length;
+		auto unique_keys = FlatVector::GetValue<uint64_t>(unique_result, i);
+		if (unique_keys != keys_length) {
+			throw InvalidInputException("Map keys have to be unique!");
+		}
 	}
 }
 
