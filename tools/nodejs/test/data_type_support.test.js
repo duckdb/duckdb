@@ -21,7 +21,7 @@ describe("data type support", function () {
     });
   });
   it("supports INTERVAL values", function (done) {
-    db.prepare(`SELECT 
+    db.prepare(`SELECT
     INTERVAL 1 MINUTE as minutes,
     INTERVAL 5 DAY as days,
     INTERVAL 4 MONTH as months,
@@ -31,6 +31,27 @@ describe("data type support", function () {
       assert.deepEqual(row.days, { months: 0, days: 5, micros: 0});
       assert.deepEqual(row.months, {months: 4, days: 0, micros: 0});
       assert.deepEqual(row.combined, {months: 4, days: 5, micros: 60 * 1000 * 1000});
+      done();
+    });
+  });
+  it("supports DATE values", function (done) {
+    db.prepare(`SELECT '2021-01-01'::DATE as dt;`).each((err, row) => {
+      assert(err === null);
+      assert.deepEqual(row.dt, new Date(Date.UTC(2021, 0, 1)));
+      done();
+    });
+  });
+  it("supports TIMESTAMP values", function (done) {
+    db.prepare(`SELECT '2021-01-01T00:00:00'::TIMESTAMP as ts;`).each((err, row) => {
+      assert(err === null);
+      assert.deepEqual(row.ts, new Date(Date.UTC(2021, 0, 1)));
+      done();
+    });
+  });
+  it("supports TIMESTAMP WITH TIME ZONE values", function (done) {
+    db.prepare(`SELECT '2021-01-01T00:00:00Z'::TIMESTAMPTZ as tstz;`).each((err, row) => {
+      assert(err === null);
+      assert.deepEqual(row.tstz, new Date(Date.UTC(2021, 0, 1)));
       done();
     });
   });
