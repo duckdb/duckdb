@@ -171,20 +171,21 @@ void RLESort::CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tupl
                                      RLESortOption option) {
 	switch (option) {
 	case RLESortOption::CARDINALITY_BELOW_FIVE_HUNDRED:
-		CardinalityBelowFiveHundred(logs, cardinalities);
+		CardinalityBelowTenPercent(logs, cardinalities);
 		break;
 	default:
 		throw InternalException("Unrecognized sorting option");
 	}
 }
 
-void RLESort::CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
+void RLESort::CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
 	// Get the cardinality counts and sort them from low to high
 	for (idx_t i = 0; i < logs.size(); i++) {
+		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-		//		if (current_count < 500) {
-		cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
-		//		}
+		if (current_count < 10000) {
+			cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
+		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }

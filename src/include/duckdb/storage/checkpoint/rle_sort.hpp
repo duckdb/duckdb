@@ -66,7 +66,7 @@ private:
 	                            RLESortOption option);
 
 	// Retrieve all columns with a cardinality < 500, sorted from lowest to highest cardinality
-	void CardinalityBelowFiveHundred(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities);
+	void CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities);
 
 	// Filter out key columns which will not be sorted on
 	void FilterKeyColumns();
