@@ -1,101 +1,101 @@
 c_customer_id|c_salutation|c_first_name|c_last_name|c_preferred_cust_flag|c_birth_day|c_birth_month|c_birth_year|c_birth_country|c_login|c_email_address|c_last_review_date_sk|ctr_total_return
 AAAAAAAAABKDAAAA|Mr.|Michael|Luster|N|28|5|1946|BARBADOS|(empty)|Michael.Luster@kHle2S7j.edu|2452373|47.38
-AAAAAAAAADMABAAA|Sir|Rory|Smiley|N|9|8|1989|MONGOLIA|(empty)|Rory.Smiley@xRmNvF3BSborAXB.com|2452636|30.08
+AAAAAAAAADMABAAA|Sir|Rory|Smiley|N|9|8|1989|MONGOLIA|(empty)|Rory.Smiley@xRmNvF3BSborAXB.com|2452636|30.09
 AAAAAAAAAEKBBAAA|Dr.|Loretta|Bridges|N|25|5|1958|SAN MARINO|(empty)|Loretta.Bridges@UXaK1eg3Dcfo.edu|2452429|22.50
-AAAAAAAAAGAMAAAA|Miss|Bertie|Thomas|N|3|6|1985|GAMBIA|(empty)|Bertie.Thomas@NtGlbntfTYS.org|2452361|14.18
-AAAAAAAAAHIKAAAA|Mr.|Antwan|Ward|Y|21|1|1947|ESTONIA|(empty)|Antwan.Ward@Ixq56KHO9.org|2452524|25.17
-AAAAAAAAAJKGBAAA|Miss|Anna|Anderson|Y|5|5|1966|BELIZE|(empty)|Anna.Anderson@7.com|2452416|14.73
+AAAAAAAAAGAMAAAA|Miss|Bertie|Thomas|N|3|6|1985|GAMBIA|(empty)|Bertie.Thomas@NtGlbntfTYS.org|2452361|14.19
+AAAAAAAAAHIKAAAA|Mr.|Antwan|Ward|Y|21|1|1947|ESTONIA|(empty)|Antwan.Ward@Ixq56KHO9.org|2452524|25.18
+AAAAAAAAAJKGBAAA|Miss|Anna|Anderson|Y|5|5|1966|BELIZE|(empty)|Anna.Anderson@7.com|2452416|14.74
 AAAAAAAAANNNAAAA|Ms.|Cindy|Julian|N|4|8|1982|UGANDA|(empty)|Cindy.Julian@ChEB5eyUCBe.org|2452368|17.79
-AAAAAAAAAPKEAAAA|Mr.|Glenn|Valles|Y|28|6|1955|ALBANIA|(empty)|Glenn.Valles@Cj2vbPbx1xLdB.edu|2452371|34.65
+AAAAAAAAAPKEAAAA|Mr.|Glenn|Valles|Y|28|6|1955|ALBANIA|(empty)|Glenn.Valles@Cj2vbPbx1xLdB.edu|2452371|34.66
 AAAAAAAABADCAAAA|Mr.|Blake|Burke|Y|16|1|1951|HONG KONG|(empty)|Blake.Burke@lh8H1dAIXH.org|2452606|27.04
-AAAAAAAABDJABAAA|Mr.|Kevin|Franks|Y|6|2|1961|BULGARIA|(empty)|Kevin.Franks@iGE1sQRQGtQbamvdP.org|2452597|29.05
-AAAAAAAABEIEBAAA|Sir|Elmer|James|Y|16|4|1988|BELGIUM|(empty)|Elmer.James@F1.com|2452429|19.68
-AAAAAAAABIKAAAAA|Dr.|Ted|Griffin|Y|13|8|1974|UNITED KINGDOM|(empty)|Ted.Griffin@gLKPKl8cyF0l42ylb3.com|2452421|25.70
-AAAAAAAABKDGAAAA|Mr.|Michael|Sanchez|Y|11|2|1970|EQUATORIAL GUINEA|(empty)|Michael.Sanchez@DjMMbvMBEyvRSZV.com|2452451|32.65
-AAAAAAAABMIKAAAA|Sir|Brandon|Cox|Y|19|8|1938|HONG KONG|(empty)|Brandon.Cox@OF7btjVyXeMhFT.org|2452395|19.07
+AAAAAAAABDJABAAA|Mr.|Kevin|Franks|Y|6|2|1961|BULGARIA|(empty)|Kevin.Franks@iGE1sQRQGtQbamvdP.org|2452597|29.06
+AAAAAAAABEIEBAAA|Sir|Elmer|James|Y|16|4|1988|BELGIUM|(empty)|Elmer.James@F1.com|2452429|19.69
+AAAAAAAABIKAAAAA|Dr.|Ted|Griffin|Y|13|8|1974|UNITED KINGDOM|(empty)|Ted.Griffin@gLKPKl8cyF0l42ylb3.com|2452421|25.71
+AAAAAAAABKDGAAAA|Mr.|Michael|Sanchez|Y|11|2|1970|EQUATORIAL GUINEA|(empty)|Michael.Sanchez@DjMMbvMBEyvRSZV.com|2452451|32.66
+AAAAAAAABMIKAAAA|Sir|Brandon|Cox|Y|19|8|1938|HONG KONG|(empty)|Brandon.Cox@OF7btjVyXeMhFT.org|2452395|19.08
 AAAAAAAABMLBAAAA|Ms.|Rosemary|Montano|N|4|4|1924|ISRAEL|(empty)|Rosemary.Montano@AtUPB5OVRdqC9D.com|2452414|16.66
 AAAAAAAABOBGAAAA|Mr.|Kevin|Ferrell|Y|4|8|1971|RUSSIAN FEDERATION|(empty)|Kevin.Ferrell@Csy.com|2452490|16.02
 AAAAAAAABOOCAAAA|Mrs.|Regina|Jenkins|Y|13|9|1955|CYPRUS|(empty)|Regina.Jenkins@nRUUGdD4fHhO.org|2452335|36.56
-AAAAAAAABPAHAAAA|Mrs.|Tamika|King|N|18|6|1925|PERU|(empty)|Tamika.King@VHgBlGGOcnSl.edu|2452459|19.89
-AAAAAAAABPMFBAAA|Dr.|David|Carpenter|N|23|11|1956|BOUVET ISLAND|(empty)|David.Carpenter@Esuy0KvlddbFfsE.edu|2452372|14.93
+AAAAAAAABPAHAAAA|Mrs.|Tamika|King|N|18|6|1925|PERU|(empty)|Tamika.King@VHgBlGGOcnSl.edu|2452459|19.90
+AAAAAAAABPMFBAAA|Dr.|David|Carpenter|N|23|11|1956|BOUVET ISLAND|(empty)|David.Carpenter@Esuy0KvlddbFfsE.edu|2452372|14.94
 AAAAAAAACAAABAAA|Miss|Wilma|Thomas|N|17|9|1972|HONDURAS|(empty)|Wilma.Thomas@rYcd4ngxaOMkmYr.edu|2452538|20.42
-AAAAAAAACBOBAAAA|Sir|Douglas|Robertson|N|24|11|1937|HAITI|(empty)|Douglas.Robertson@9815MMcaFa51KG.edu|2452420|61.55
+AAAAAAAACBOBAAAA|Sir|Douglas|Robertson|N|24|11|1937|HAITI|(empty)|Douglas.Robertson@9815MMcaFa51KG.edu|2452420|61.56
 AAAAAAAACCHLAAAA|Dr.|Matthew|Villanueva|N|14|9|1952|ANGUILLA|(empty)|Matthew.Villanueva@XVxD9jI18.com|2452451|24.08
-AAAAAAAACDHDBAAA|Sir|Joseph|Nguyen|Y|10|8|1971|PUERTO RICO|(empty)|Joseph.Nguyen@MTmo4cvId3Q7nGXSJ.org|2452369|48.59
+AAAAAAAACDHDBAAA|Sir|Joseph|Nguyen|Y|10|8|1971|PUERTO RICO|(empty)|Joseph.Nguyen@MTmo4cvId3Q7nGXSJ.org|2452369|48.60
 AAAAAAAACECCAAAA|Dr.|Silvia|Delarosa|Y|20|10|1962|CHRISTMAS ISLAND|(empty)|Silvia.Delarosa@f2cKXd2.edu|2452418|23.54
-AAAAAAAACGILAAAA|Sir|Nolan|Mosley|N|20|3|1980|KENYA|(empty)|Nolan.Mosley@5E.org|2452317|22.51
-AAAAAAAACIENAAAA|Miss|Ann|Camacho|N|29|4|1948|HAITI|(empty)|Ann.Camacho@qjFI.com|2452494|38.35
-AAAAAAAACJNAAAAA|Miss|Amanda|Jenkins|Y|11|8|1992|NEW CALEDONIA|(empty)|Amanda.Jenkins@RYY0.edu|2452328|71.12
-AAAAAAAACKBABAAA|Mrs.|Melba|Murray|Y|4|5|1972|GAMBIA|(empty)|Melba.Murray@t.com|2452566|29.18
-AAAAAAAACKIAAAAA|Dr.|Gus|Daniels|Y|10|1|1959|MYANMAR|(empty)|Gus.Daniels@tnsylH6LVcoNigpT.edu|2452442|28.03
+AAAAAAAACGILAAAA|Sir|Nolan|Mosley|N|20|3|1980|KENYA|(empty)|Nolan.Mosley@5E.org|2452317|22.52
+AAAAAAAACIENAAAA|Miss|Ann|Camacho|N|29|4|1948|HAITI|(empty)|Ann.Camacho@qjFI.com|2452494|38.36
+AAAAAAAACJNAAAAA|Miss|Amanda|Jenkins|Y|11|8|1992|NEW CALEDONIA|(empty)|Amanda.Jenkins@RYY0.edu|2452328|71.13
+AAAAAAAACKBABAAA|Mrs.|Melba|Murray|Y|4|5|1972|GAMBIA|(empty)|Melba.Murray@t.com|2452566|29.19
+AAAAAAAACKIAAAAA|Dr.|Gus|Daniels|Y|10|1|1959|MYANMAR|(empty)|Gus.Daniels@tnsylH6LVcoNigpT.edu|2452442|28.04
 AAAAAAAACKPEBAAA|Ms.|Deborah|Guzman|N|2|7|1991|ALGERIA|(empty)|Deborah.Guzman@nZ00nLTOiyf.edu|2452400|24.36
 AAAAAAAACLLHAAAA|Sir|Mark|Ortiz|N|22|11|1948|MALI|(empty)|Mark.Ortiz@LE04hhytdHH.edu|2452509|29.71
 AAAAAAAACNBBBAAA|Sir|Harry|Fredericks|N|30|7|1956|WESTERN SAHARA|(empty)|Harry.Fredericks@X.edu|2452414|16.80
-AAAAAAAACNNIAAAA|Dr.|Catherine|Hamilton|Y|21|11|1931|UGANDA|(empty)|Catherine.Hamilton@RQNQ76hUfhG.org|2452640|19.29
+AAAAAAAACNNIAAAA|Dr.|Catherine|Hamilton|Y|21|11|1931|UGANDA|(empty)|Catherine.Hamilton@RQNQ76hUfhG.org|2452640|19.30
 AAAAAAAADAEABAAA|Miss|Inez|Johnson|N|3|5|1944|THAILAND|(empty)|Inez.Johnson@4HYYhxzPb8teEBCJM.com|2452339|23.18
-AAAAAAAADDANAAAA|Dr.|Marlene|Berger|Y|12|2|1947|FAROE ISLANDS|(empty)|Marlene.Berger@YZZV.org|2452555|43.44
-AAAAAAAADEBFAAAA|Dr.|Lance|Smith|N|19|7|1987|NIUE|(empty)|Lance.Smith@QJq6ZJL.org|2452540|19.58
+AAAAAAAADDANAAAA|Dr.|Marlene|Berger|Y|12|2|1947|FAROE ISLANDS|(empty)|Marlene.Berger@YZZV.org|2452555|43.45
+AAAAAAAADEBFAAAA|Dr.|Lance|Smith|N|19|7|1987|NIUE|(empty)|Lance.Smith@QJq6ZJL.org|2452540|19.59
 AAAAAAAADFIMAAAA|Mr.|Joel|Patino|N|15|10|1943|ICELAND|(empty)|Joel.Patino@PDiG3QgFrc.org|2452476|18.33
 AAAAAAAADNHPAAAA|Mr.|John|Mathews|Y|23|2|1925|NICARAGUA|(empty)|John.Mathews@UOtpEd.edu|2452543|44.67
-AAAAAAAADNLBAAAA|Sir|William|Windsor|N|13|11|1957|EGYPT|(empty)|William.Windsor@hSEQd7xxYEtlDxSuO.org|2452423|88.92
+AAAAAAAADNLBAAAA|Sir|William|Windsor|N|13|11|1957|EGYPT|(empty)|William.Windsor@hSEQd7xxYEtlDxSuO.org|2452423|88.93
 AAAAAAAAEAFJAAAA|Mr.|Gregory|Quigley|N|7|2|1945|LIECHTENSTEIN|(empty)|Gregory.Quigley@igDNe2KaaZYCqc9.org|2452585|75.94
 AAAAAAAAEGJKAAAA|Sir|Jeffery|Butler|N|6|3|1942|PORTUGAL|(empty)|Jeffery.Butler@gjnBrG.com|2452333|44.83
 AAAAAAAAEHKDAAAA|Ms.|Mabel|Higgins|N|17|2|1972|GUATEMALA|(empty)|Mabel.Higgins@7L5jA1Ab.edu|2452414|50.03
-AAAAAAAAEIBAAAAA|Sir|Kelly|Lee|N|5|1|1939|MONACO|(empty)|Kelly.Lee@6sQsIKA.org|2452394|31.74
-AAAAAAAAEJOCAAAA|Mrs.|Beverley|Bishop|Y|28|2|1977|BHUTAN|(empty)|Beverley.Bishop@fy.com|2452443|15.14
+AAAAAAAAEIBAAAAA|Sir|Kelly|Lee|N|5|1|1939|MONACO|(empty)|Kelly.Lee@6sQsIKA.org|2452394|31.75
+AAAAAAAAEJOCAAAA|Mrs.|Beverley|Bishop|Y|28|2|1977|BHUTAN|(empty)|Beverley.Bishop@fy.com|2452443|15.15
 AAAAAAAAEKADBAAA|Mrs.|Deborah|Tan|N|4|5|1948|GIBRALTAR|(empty)|Deborah.Tan@oAK81iT.edu|2452423|33.42
 AAAAAAAAEKBNAAAA|Dr.|Frank|Downs|N|12|1|1958|TAJIKISTAN|(empty)|Frank.Downs@J2DP.org|2452633|54.46
 AAAAAAAAELNPAAAA|Ms.|Michelle|Paige|N|10|8|1962|JAMAICA|(empty)|Michelle.Paige@9qK.com|2452336|18.32
-AAAAAAAAENNEAAAA|Sir|Jerry|Benjamin|N|29|7|1976|LUXEMBOURG|(empty)|Jerry.Benjamin@Elp47E8Ia5O.com|2452567|19.05
-AAAAAAAAEPGFBAAA|Dr.|Denise|Johnson|Y|31|8|1958|MAURITIUS|(empty)|Denise.Johnson@UfHBn02Va.com|2452381|20.63
+AAAAAAAAENNEAAAA|Sir|Jerry|Benjamin|N|29|7|1976|LUXEMBOURG|(empty)|Jerry.Benjamin@Elp47E8Ia5O.com|2452567|19.06
+AAAAAAAAEPGFBAAA|Dr.|Denise|Johnson|Y|31|8|1958|MAURITIUS|(empty)|Denise.Johnson@UfHBn02Va.com|2452381|20.64
 AAAAAAAAFAACBAAA|Mrs.|Nella|Watson|Y|16|3|1978|WESTERN SAHARA|(empty)|Nella.Watson@reTaRAGxI7.com|2452415|21.03
 AAAAAAAAFDAEAAAA|Miss|Judy|Caro|Y|21|7|1931|NAURU|(empty)|Judy.Caro@YNTDmyDfMBc.org|2452311|34.74
-AAAAAAAAFFHGBAAA|Mrs.|Gwen|Rouse|N|24|8|1927|SURINAME|(empty)|Gwen.Rouse@Rs3hZOm.edu|2452512|17.32
-AAAAAAAAFFNCBAAA|Mr.|Martin|White|Y|14|1|1981|GHANA|(empty)|Martin.White@xF.org|2452459|118.84
+AAAAAAAAFFHGBAAA|Mrs.|Gwen|Rouse|N|24|8|1927|SURINAME|(empty)|Gwen.Rouse@Rs3hZOm.edu|2452512|17.33
+AAAAAAAAFFNCBAAA|Mr.|Martin|White|Y|14|1|1981|GHANA|(empty)|Martin.White@xF.org|2452459|118.85
 AAAAAAAAFJPIAAAA|Dr.|Ardell|Fisher|Y|2|2|1964|MALDIVES|(empty)|Ardell.Fisher@KrN7K.edu|2452607|19.02
 AAAAAAAAGBMCBAAA|Dr.|William|Mccall|N|22|10|1961|KUWAIT|(empty)|William.Mccall@gpoocaHj8ScbcX.edu|2452511|16.89
-AAAAAAAAGFECAAAA|Dr.|Pablo|Hubbard|N|28|6|1932|ESTONIA|(empty)|Pablo.Hubbard@1z5fQdqQuDRJl8FopG.edu|2452501|24.19
-AAAAAAAAGGAGBAAA|Dr.|Min|Paulsen|N|16|7|1975|RÉUNION|(empty)|Min.Paulsen@jiZ2mZgEo.edu|2452539|18.32
+AAAAAAAAGFECAAAA|Dr.|Pablo|Hubbard|N|28|6|1932|ESTONIA|(empty)|Pablo.Hubbard@1z5fQdqQuDRJl8FopG.edu|2452501|24.20
+AAAAAAAAGGAGBAAA|Dr.|Min|Paulsen|N|16|7|1975|RÉUNION|(empty)|Min.Paulsen@jiZ2mZgEo.edu|2452539|18.33
 AAAAAAAAGIAKAAAA|Ms.|Karen|Brown|Y|5|5|1934|SENEGAL|(empty)|Karen.Brown@80antD.edu|2452317|23.50
 AAAAAAAAGIFEAAAA|Dr.|Brian|Macdonald|Y|12|1|1946|MARSHALL ISLANDS|(empty)|Brian.Macdonald@Yy2Umf.edu|2452514|16.47
-AAAAAAAAGIFHBAAA|Sir|Joe|Jackson|Y|31|10|1969|FRENCH POLYNESIA|(empty)|Joe.Jackson@eHmBJ4QqjNKJypF.com|2452534|60.05
-AAAAAAAAGKICBAAA|Sir|James|Anthony|N|25|7|1957|BOUVET ISLAND|(empty)|James.Anthony@XKoCgT00ycNMY0m.org|2452322|19.93
+AAAAAAAAGIFHBAAA|Sir|Joe|Jackson|Y|31|10|1969|FRENCH POLYNESIA|(empty)|Joe.Jackson@eHmBJ4QqjNKJypF.com|2452534|60.06
+AAAAAAAAGKICBAAA|Sir|James|Anthony|N|25|7|1957|BOUVET ISLAND|(empty)|James.Anthony@XKoCgT00ycNMY0m.org|2452322|19.94
 AAAAAAAAGKKDAAAA|Mrs.|Karen|Mason|N|1|3|1975|SOUTH AFRICA|(empty)|Karen.Mason@oYcjhjG.edu|2452531|42.13
-AAAAAAAAGLBIAAAA|Sir|Michael|Conn|Y|1|5|1977|LEBANON|(empty)|Michael.Conn@FGOT4CD1KhrP3.edu|2452582|20.42
-AAAAAAAAGNFPAAAA|Dr.|Jessica|Hudson|N|6|3|1964|SWEDEN|(empty)|Jessica.Hudson@8.org|2452592|78.76
-AAAAAAAAGOMCBAAA|Miss|Catherine|Caro|Y|25|11|1942|HUNGARY|(empty)|Catherine.Caro@TJgh.edu|2452356|30.75
+AAAAAAAAGLBIAAAA|Sir|Michael|Conn|Y|1|5|1977|LEBANON|(empty)|Michael.Conn@FGOT4CD1KhrP3.edu|2452582|20.43
+AAAAAAAAGNFPAAAA|Dr.|Jessica|Hudson|N|6|3|1964|SWEDEN|(empty)|Jessica.Hudson@8.org|2452592|78.77
+AAAAAAAAGOMCBAAA|Miss|Catherine|Caro|Y|25|11|1942|HUNGARY|(empty)|Catherine.Caro@TJgh.edu|2452356|30.76
 AAAAAAAAHEGEBAAA|Mr.|Emery|Miller|Y|15|9|1939|KIRIBATI|(empty)|Emery.Miller@Hya.org|2452616|20.14
 AAAAAAAAHGABAAAA|Sir|Tommie|Rodriguez|N|13|2|1948|MALAWI|(empty)|Tommie.Rodriguez@lYZHBRD3aUUfu.org|2452443|20.67
-AAAAAAAAHGJHBAAA|Sir|Scott|Jackson|Y|17|3|1964|SEYCHELLES|(empty)|Scott.Jackson@Vb4ptPa.org|2452376|41.64
+AAAAAAAAHGJHBAAA|Sir|Scott|Jackson|Y|17|3|1964|SEYCHELLES|(empty)|Scott.Jackson@Vb4ptPa.org|2452376|41.65
 AAAAAAAAHIBJAAAA|Dr.|Lily|Baker|N|6|4|1952|MALAWI|(empty)|Lily.Baker@oPX12I9iMgeUZ.org|2452397|48.98
-AAAAAAAAHIBJAAAA|Dr.|Lily|Baker|N|6|4|1952|MALAWI|(empty)|Lily.Baker@oPX12I9iMgeUZ.org|2452397|71.58
-AAAAAAAAHIHDAAAA|Miss|Adrienne|Edwards|N|26|3|1976|BELARUS|(empty)|Adrienne.Edwards@tAxcsF3mPGBa.org|2452480|29.09
-AAAAAAAAHKBBAAAA|Ms.|Linda|Crawford|N|13|2|1924|KIRIBATI|(empty)|Linda.Crawford@xOf5kYDZapQmj.org|2452598|53.18
-AAAAAAAAHMBJAAAA|Dr.|Susan|Kelly|N|6|2|1932|GUINEA|(empty)|Susan.Kelly@eIEoIUCAHKPAZF.com|2452415|24.81
+AAAAAAAAHIBJAAAA|Dr.|Lily|Baker|N|6|4|1952|MALAWI|(empty)|Lily.Baker@oPX12I9iMgeUZ.org|2452397|71.59
+AAAAAAAAHIHDAAAA|Miss|Adrienne|Edwards|N|26|3|1976|BELARUS|(empty)|Adrienne.Edwards@tAxcsF3mPGBa.org|2452480|29.10
+AAAAAAAAHKBBAAAA|Ms.|Linda|Crawford|N|13|2|1924|KIRIBATI|(empty)|Linda.Crawford@xOf5kYDZapQmj.org|2452598|53.19
+AAAAAAAAHMBJAAAA|Dr.|Susan|Kelly|N|6|2|1932|GUINEA|(empty)|Susan.Kelly@eIEoIUCAHKPAZF.com|2452415|24.82
 AAAAAAAAHMJNAAAA|Sir|Ryan|Baptiste|Y|4|7|1952|DENMARK|(empty)|Ryan.Baptiste@tSsPxdJl.com|2452467|27.00
-AAAAAAAAHNNNAAAA|Mr.|Michael|Alford|N|5|10|1982|ROMANIA|(empty)|Michael.Alford@gQfxuhjjd2q.com|2452298|48.33
-AAAAAAAAIAOAAAAA|Ms.|Deborah|Jackson|Y|10|2|1946|CANADA|(empty)|Deborah.Jackson@gY0v6JrddC8Z.com|2452578|36.27
-AAAAAAAAIBGJAAAA|Dr.|Angela|Wells|Y|3|1|1942|ARGENTINA|(empty)|Angela.Wells@XH1JhO9ozvMSj3.edu|2452454|19.51
-AAAAAAAAICPIAAAA|Sir|Richard|Thompson|N|14|12|1990|UNITED KINGDOM|(empty)|Richard.Thompson@D5m46t1.com|2452312|61.65
+AAAAAAAAHNNNAAAA|Mr.|Michael|Alford|N|5|10|1982|ROMANIA|(empty)|Michael.Alford@gQfxuhjjd2q.com|2452298|48.34
+AAAAAAAAIAOAAAAA|Ms.|Deborah|Jackson|Y|10|2|1946|CANADA|(empty)|Deborah.Jackson@gY0v6JrddC8Z.com|2452578|36.28
+AAAAAAAAIBGJAAAA|Dr.|Angela|Wells|Y|3|1|1942|ARGENTINA|(empty)|Angela.Wells@XH1JhO9ozvMSj3.edu|2452454|19.52
+AAAAAAAAICPIAAAA|Sir|Richard|Thompson|N|14|12|1990|UNITED KINGDOM|(empty)|Richard.Thompson@D5m46t1.com|2452312|61.66
 AAAAAAAAIDFEAAAA|Mr.|Tony|Messer|Y|10|6|1924|SRI LANKA|(empty)|Tony.Messer@k.edu|2452309|21.36
 AAAAAAAAIECMAAAA|Dr.|Juana|Wagner|N|2|10|1950|TRINIDAD AND TOBAGO|(empty)|Juana.Wagner@xfBBhRVjVgVgoY.edu|2452322|40.04
 AAAAAAAAIEHGAAAA|Mrs.|Sharon|Mays|Y|5|8|1962|ESTONIA|(empty)|Sharon.Mays@CLyHp2obU3A.org|2452636|60.35
 AAAAAAAAIELMAAAA|Miss|Francie|Gordon|N|19|10|1929|VENEZUELA|(empty)|Francie.Gordon@tVIlZ3.org|2452423|58.57
-AAAAAAAAIFGABAAA|Miss|Tracie|Crum|Y|27|2|1933|ISLE OF MAN|(empty)|Tracie.Crum@GtXbgfR8.org|2452631|85.94
-AAAAAAAAIHALAAAA|Mrs.|Catherine|Scott|N|26|6|1937|YEMEN|(empty)|Catherine.Scott@akhjf7mMNfhZGl.org|2452303|30.17
+AAAAAAAAIFGABAAA|Miss|Tracie|Crum|Y|27|2|1933|ISLE OF MAN|(empty)|Tracie.Crum@GtXbgfR8.org|2452631|85.95
+AAAAAAAAIHALAAAA|Mrs.|Catherine|Scott|N|26|6|1937|YEMEN|(empty)|Catherine.Scott@akhjf7mMNfhZGl.org|2452303|30.18
 AAAAAAAAIHBPAAAA|Miss|Martha|Mitchell|Y|30|11|1932|KIRIBATI|(empty)|Martha.Mitchell@0Uh.edu|2452353|19.11
 AAAAAAAAIHJDAAAA|Dr.|James|Jackson|Y|25|8|1957|MONTENEGRO|(empty)|James.Jackson@p.com|2452408|18.55
 AAAAAAAAIIFNAAAA|Sir|Foster|Harness|N|27|11|1966|EL SALVADOR|(empty)|Foster.Harness@6.edu|2452312|88.73
-AAAAAAAAIIODAAAA|Dr.|Nellie|Moore|Y|11|3|1977|BULGARIA|(empty)|Nellie.Moore@xkhqVhk5E9nXszC.edu|2452310|19.25
-AAAAAAAAIJLPAAAA|Sir|Jonathan|Watson|N|22|3|1930|GEORGIA|(empty)|Jonathan.Watson@NUM3AzmvDR2pZKT.com|2452614|24.23
-AAAAAAAAIKFGAAAA|Ms.|Claudia|Rivera|N|3|8|1966|NEW CALEDONIA|(empty)|Claudia.Rivera@nlnf5taGZIcSPU.org|2452527|29.42
+AAAAAAAAIIODAAAA|Dr.|Nellie|Moore|Y|11|3|1977|BULGARIA|(empty)|Nellie.Moore@xkhqVhk5E9nXszC.edu|2452310|19.26
+AAAAAAAAIJLPAAAA|Sir|Jonathan|Watson|N|22|3|1930|GEORGIA|(empty)|Jonathan.Watson@NUM3AzmvDR2pZKT.com|2452614|24.24
+AAAAAAAAIKFGAAAA|Ms.|Claudia|Rivera|N|3|8|1966|NEW CALEDONIA|(empty)|Claudia.Rivera@nlnf5taGZIcSPU.org|2452527|29.43
 AAAAAAAAINFFAAAA|Dr.|Ruth|Dailey|N|12|7|1924|DJIBOUTI|(empty)|Ruth.Dailey@s9PpQ.org|2452316|32.94
 AAAAAAAAINNJAAAA|Miss|Michelle|Chen|N|2|3|1924|LIECHTENSTEIN|(empty)|Michelle.Chen@2.com|2452529|99.28
-AAAAAAAAIOCCAAAA|Dr.|James|Johnson|N|25|11|1930|COSTA RICA|(empty)|James.Johnson@RUsXaM.com|2452513|33.15
-AAAAAAAAIOECBAAA|Dr.|Ira|Luther|Y|4|2|1954|YEMEN|(empty)|Ira.Luther@Ym4iUs5yxS34f.org|2452337|46.32
+AAAAAAAAIOCCAAAA|Dr.|James|Johnson|N|25|11|1930|COSTA RICA|(empty)|James.Johnson@RUsXaM.com|2452513|33.16
+AAAAAAAAIOECBAAA|Dr.|Ira|Luther|Y|4|2|1954|YEMEN|(empty)|Ira.Luther@Ym4iUs5yxS34f.org|2452337|46.33
 AAAAAAAAIOIGAAAA|Mrs.|Jacqueline|Thomas|Y|1|10|1931|GERMANY|(empty)|Jacqueline.Thomas@phbUiJs3bDLouyy.edu|2452445|27.12
 AAAAAAAAIPICAAAA|Sir|Elliott|Reed|Y|2|5|1981|SWAZILAND|(empty)|Elliott.Reed@MspB.com|2452621|16.28
 AAAAAAAAJAKDBAAA|Ms.|Rhoda|Hall|Y|26|8|1928|AUSTRALIA|(empty)|Rhoda.Hall@Y.edu|2452333|38.30
-AAAAAAAAJCNHBAAA|Mrs.|Angela|Gibbs|Y|19|10|1982|MACAO|(empty)|Angela.Gibbs@1FU.org|2452581|23.57
+AAAAAAAAJCNHBAAA|Mrs.|Angela|Gibbs|Y|19|10|1982|MACAO|(empty)|Angela.Gibbs@1FU.org|2452581|23.58
 AAAAAAAAJDJCAAAA|Dr.|Megan|Jones|Y|26|6|1959|SWITZERLAND|(empty)|Megan.Jones@b.org|2452573|17.98
-AAAAAAAAJJGLAAAA|Dr.|Boyd|Rawlings|N|8|10|1940|SOLOMON ISLANDS|(empty)|Boyd.Rawlings@k0BIcyO.com|2452403|22.36
+AAAAAAAAJJGLAAAA|Dr.|Boyd|Rawlings|N|8|10|1940|SOLOMON ISLANDS|(empty)|Boyd.Rawlings@k0BIcyO.com|2452403|22.37

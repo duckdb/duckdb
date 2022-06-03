@@ -1,0 +1,14 @@
+# name: test/sql/copy/parquet/enum_converted_type.test
+# description: Test enum converted type
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIIII
+select * from 'data/parquet-testing/enum.parquet';
+----
+1	0	t1	test_span	1612550512340953	500000	[{'key': service_name, 'v_type': STRING, 'v_str': test_service, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': http_method, 'v_type': STRING, 'v_str': POST, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': method, 'v_type': STRING, 'v_str': callbacks.flannel, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': boolean, 'v_type': BOOL, 'v_str': , 'v_bool': True, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': int, 'v_type': INT64, 'v_str': , 'v_bool': False, 'v_int64': 1000, 'v_float64': 1001.200000, 'v_binary': }, {'key': float, 'v_type': FLOAT64, 'v_str': , 'v_bool': False, 'v_int64': 1000, 'v_float64': 1001.200000, 'v_binary': }, {'key': binary, 'v_type': BINARY, 'v_str': ignored, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': binaryTagValue}, {'key': type, 'v_type': STRING, 'v_str': msg_type, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }]
+2	1	t1	test_span	1612550512340954	500001	[{'key': service_name, 'v_type': STRING, 'v_str': test_service, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': http_method, 'v_type': STRING, 'v_str': POST, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': method, 'v_type': STRING, 'v_str': callbacks.flannel, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': boolean, 'v_type': BOOL, 'v_str': , 'v_bool': True, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }, {'key': int, 'v_type': INT64, 'v_str': , 'v_bool': False, 'v_int64': 1000, 'v_float64': 1001.200000, 'v_binary': }, {'key': float, 'v_type': FLOAT64, 'v_str': , 'v_bool': False, 'v_int64': 1000, 'v_float64': 1001.200000, 'v_binary': }, {'key': binary, 'v_type': BINARY, 'v_str': ignored, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': binaryTagValue}, {'key': type, 'v_type': STRING, 'v_str': msg_type, 'v_bool': False, 'v_int64': 0, 'v_float64': 0.000000, 'v_binary': }]

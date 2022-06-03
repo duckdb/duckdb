@@ -195,28 +195,32 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 	auto df_columns = py::list(original_df.attr("columns"));
 
 	for (auto &column_name_py : df_columns) {
-		const string column_name = py::str(column_name_py);
-		name_map[column_name] = 1;
+		string column_name = py::str(column_name_py);
+		// put it all lower_case
+		auto column_name_low = StringUtil::Lower(column_name);
+		name_map[column_name_low] = 1;
 	}
-
 	for (auto &column_name_py : df_columns) {
 		const string column_name = py::str(column_name_py);
-		if (columns_seen.find(column_name) == columns_seen.end()) {
+		auto column_name_low = StringUtil::Lower(column_name);
+		if (columns_seen.find(column_name_low) == columns_seen.end()) {
 			// `column_name` has not been seen before -> It isn't a duplicate
 			column_name_list.append(column_name);
-			columns_seen.insert(column_name);
+			columns_seen.insert(column_name_low);
 		} else {
 			// `column_name` already seen. Deduplicate by with suffix _{x} where x starts at the repetition number of
 			// `column_name` If `column_name_{x}` already exists in `name_map`, increment x and try again.
-			string new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
-			while (name_map.find(new_column_name) != name_map.end()) {
+			string new_column_name = column_name + "_" + std::to_string(name_map[column_name_low]);
+			auto new_column_name_low = StringUtil::Lower(new_column_name);
+			while (name_map.find(new_column_name_low) != name_map.end()) {
 				// This name is already here due to a previous definition
-				name_map[column_name]++;
-				new_column_name = column_name + "_" + std::to_string(name_map[column_name]);
+				name_map[column_name_low]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[column_name_low]);
+				new_column_name_low = StringUtil::Lower(new_column_name);
 			}
 			column_name_list.append(new_column_name);
-			columns_seen.insert(new_column_name);
-			name_map[new_column_name]++;
+			columns_seen.insert(new_column_name_low);
+			name_map[column_name_low]++;
 		}
 	}
 
