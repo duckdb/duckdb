@@ -1,11 +1,12 @@
 name: "Build Extensions"
 description: "Build, test and deploy the in-tree DuckDB extensions"
 inputs:
+  # Test config
   run_tests:
-    description: 'Tests to run after build'
+    description: 'Run extension tests after build'
     default: 1
 
-  # Note: pass S3 secrets to this action when setting deploy_as
+  # Deploy config
   deploy_as:
     description: 'Binary name for deploy step'
     default: ''
@@ -16,6 +17,7 @@ inputs:
     description: 'S3 key secret'
     default: ''
 
+  # Build config
   force_32_bit:
     description: 'Force the 32 bit build'
     default: 0

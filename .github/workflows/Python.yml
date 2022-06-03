@@ -68,9 +68,8 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
-   # All extensions uploaded by this job will be loaded by the test_extensions.py test during the linux-python3 job.
-   centos7-extensions:
-    name: CentOS 7 Extensions
+   manylinux-extensions:
+    name: DuckDB Extensions built on manylinux image
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
 #    needs: linux-python3-9
@@ -131,7 +130,7 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-centos7-extensions-centos-x86_64
+        name: python-wheel-centos7-extensions-manylinux-x86_64
         path: |
           build/release/extension/*/*.duckdb_extension
 
@@ -149,7 +148,7 @@ jobs:
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
-    needs: centos7-extensions
+    needs: manylinux-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
@@ -171,8 +170,9 @@ jobs:
       run: pip install cibuildwheel twine
 
     - uses: actions/download-artifact@v3
+      if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
+        name: python-wheel-centos7-extensions-manylinux-x86_64
         path: tools/pythonpkg
 
     - name: List extensions to be tested
@@ -194,12 +194,6 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
         ls wheelhouse
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: wheels-debug-${{ matrix.arch }}
-        path: |
-          tools/pythonpkg/wheelhouse/*.whl
 
     - name: Deploy
       run: |
