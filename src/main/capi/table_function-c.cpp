@@ -133,7 +133,8 @@ unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, 
 	return move(result);
 }
 
-unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ClientContext &context, TableFunctionInitInput &data_p) {
+unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ClientContext &context, TableFunctionInitInput &data_p,
+                                                            GlobalTableFunctionState *gstate) {
 	auto &bind_data = (CTableBindData &)*data_p.bind_data;
 	auto result = make_unique<CTableLocalInitData>();
 	if (!bind_data.info->local_init) {
@@ -166,7 +167,7 @@ void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChun
 //===--------------------------------------------------------------------===//
 duckdb_table_function duckdb_create_table_function() {
 	auto function = new duckdb::TableFunction("", {}, duckdb::CTableFunction, duckdb::CTableFunctionBind,
-	                                          duckdb::CTableFunctionInit);
+	                                          duckdb::CTableFunctionInit, duckdb::CTableFunctionLocalInit);
 	function->function_info = duckdb::make_shared<duckdb::CTableFunctionInfo>();
 	return function;
 }

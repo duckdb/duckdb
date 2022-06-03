@@ -135,38 +135,74 @@ function df_bind_function(info::DuckDB.BindInfo)
     return DFBindInfo(df, input_columns, scan_types, result_types, scan_functions)
 end
 
-mutable struct DFInitInfo
+mutable struct DFGlobalInfo
     pos::Int64
     columns::Vector{Int64}
+    global_lock::ReentrantLock
 
-    function DFInitInfo(columns)
-        return new(0, columns)
+    function DFGlobalInfo(columns)
+        return new(0, columns, ReentrantLock())
     end
 end
 
-function df_init_function(info::DuckDB.InitInfo)
-    return DFInitInfo(DuckDB.get_projected_columns(info))
+mutable struct DFLocalInfo
+	current_pos::Int64
+	end_pos::Int64
+
+    function DFLocalInfo()
+        return new(0, 0)
+    end
+end
+
+function df_global_init_function(info::DuckDB.InitInfo)
+	# figure out the maximum number of threads to launch from the DF size
+	bind_info = DuckDB.get_bind_info(info, DFBindInfo)
+    row_count = size(bind_info.df, 1)
+    row_group_size = DuckDB.VECTOR_SIZE * 100
+    max_threads::Int64 = ceil(row_count / row_group_size)
+	DuckDB.set_max_threads(info, max_threads);
+    return DFGlobalInfo(DuckDB.get_projected_columns(info))
+end
+
+function df_local_init_function(info::DuckDB.InitInfo)
+    return DFLocalInfo()
 end
 
 function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     bind_info = DuckDB.get_bind_info(info, DFBindInfo)
-    init_info = DuckDB.get_init_info(info, DFInitInfo)
+    global_info = DuckDB.get_init_info(info, DFGlobalInfo)
+    local_info = DuckDB.get_local_info(info, DFLocalInfo)
 
-    row_count = size(bind_info.df, 1)
+	if local_info.current_pos >= local_info.end_pos
+		# ran out of data to scan in the local info: fetch new rows from the global state (if any)
+		# we can in increments of 100 vectors
+		lock(global_info.global_lock)
+		row_count = size(bind_info.df, 1)
+		local_info.current_pos = global_info.pos
+		total_scan_amount = DuckDB.VECTOR_SIZE * 100
+		if local_info.current_pos + total_scan_amount >= row_count
+			total_scan_amount = row_count - local_info.current_pos
+		end
+		local_info.end_pos = local_info.current_pos + total_scan_amount
+		global_info.pos += total_scan_amount
+		unlock(global_info.global_lock)
+	end
     scan_count::Int64 = DuckDB.VECTOR_SIZE
-    if init_info.pos + scan_count >= row_count
-        scan_count = row_count - init_info.pos
+    current_row::Int64 = local_info.current_pos
+    if current_row + scan_count >= local_info.end_pos
+        scan_count = local_info.end_pos - current_row
     end
+    local_info.current_pos += scan_count
 
     result_idx::Int64 = 1
-    for col_idx in init_info.columns
+    for col_idx in global_info.columns
         if col_idx == 0
             result_idx += 1
             continue
         end
         bind_info.scan_functions[col_idx](
             bind_info.input_columns[col_idx],
-            init_info.pos,
+            current_row,
             col_idx,
             result_idx,
             scan_count,
@@ -176,7 +212,6 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
         )
         result_idx += 1
     end
-    init_info.pos += scan_count
     DuckDB.set_size(output, scan_count)
     return
 end
@@ -206,7 +241,8 @@ function _add_data_frame_scan(db::DB)
         "julia_df_scan",
         [String],
         df_bind_function,
-        df_init_function,
+        df_global_init_function,
+        df_local_init_function,
         df_scan_function,
         db.handle.registered_objects,
         true
