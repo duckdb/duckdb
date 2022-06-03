@@ -137,35 +137,36 @@ end
 
 mutable struct DFGlobalInfo
     pos::Int64
-    columns::Vector{Int64}
     global_lock::ReentrantLock
 
-    function DFGlobalInfo(columns)
-        return new(0, columns, ReentrantLock())
+    function DFGlobalInfo()
+        return new(0, ReentrantLock())
     end
 end
 
 mutable struct DFLocalInfo
+    columns::Vector{Int64}
     current_pos::Int64
     end_pos::Int64
 
-    function DFLocalInfo()
-        return new(0, 0)
+    function DFLocalInfo(columns)
+        return new(columns, 0, 0)
     end
 end
 
+const ROW_GROUP_SIZE = DuckDB.VECTOR_SIZE * 100
+
 function df_global_init_function(info::DuckDB.InitInfo)
-    # figure out the maximum number of threads to launch from the DF size
     bind_info = DuckDB.get_bind_info(info, DFBindInfo)
-    row_count = size(bind_info.df, 1)
-    row_group_size = DuckDB.VECTOR_SIZE * 100
-    max_threads::Int64 = ceil(row_count / row_group_size)
+    # figure out the maximum number of threads to launch from the DF size
+    row_count::Int64 = size(bind_info.df, 1)
+    max_threads::Int64 = ceil(row_count / DuckDB.ROW_GROUP_SIZE)
     DuckDB.set_max_threads(info, max_threads)
-    return DFGlobalInfo(DuckDB.get_projected_columns(info))
+    return DFGlobalInfo()
 end
 
 function df_local_init_function(info::DuckDB.InitInfo)
-    return DFLocalInfo()
+    return DFLocalInfo(DuckDB.get_projected_columns(info))
 end
 
 function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
@@ -177,9 +178,9 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
         # ran out of data to scan in the local info: fetch new rows from the global state (if any)
         # we can in increments of 100 vectors
         lock(global_info.global_lock)
-        row_count = size(bind_info.df, 1)
+        row_count::Int64 = size(bind_info.df, 1)
         local_info.current_pos = global_info.pos
-        total_scan_amount = DuckDB.VECTOR_SIZE * 100
+        total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
         if local_info.current_pos + total_scan_amount >= row_count
             total_scan_amount = row_count - local_info.current_pos
         end
@@ -195,7 +196,7 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     local_info.current_pos += scan_count
 
     result_idx::Int64 = 1
-    for col_idx in global_info.columns
+    for col_idx::Int64 in local_info.columns
         if col_idx == 0
             result_idx += 1
             continue
