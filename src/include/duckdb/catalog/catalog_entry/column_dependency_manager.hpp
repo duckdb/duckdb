@@ -24,11 +24,10 @@ public:
 	DUCKDB_API ~ColumnDependencyManager();
 	DUCKDB_API ColumnDependencyManager(ColumnDependencyManager &&other) = default;
 	DUCKDB_API ColumnDependencyManager(const ColumnDependencyManager &other) = delete;
-	ColumnDependencyManager &operator=(const ColumnDependencyManager &other);
 
 public:
 	//! Get the bind order that ensures dependencies are resolved before dependents are
-	stack<column_t> GetBindOrder();
+	stack<column_t> GetBindOrder(const vector<ColumnDefinition> &columns);
 
 	//! Adds a connection between the dependent and its dependencies
 	void AddGeneratedColumn(column_t index, const vector<column_t> &indices, bool root = true);

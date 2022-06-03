@@ -177,7 +177,6 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Constraints transform
 	//===--------------------------------------------------------------------===//
-	unique_ptr<ParsedExpression> TransformGeneratedExpression(duckdb_libpgquery::PGListCell *cell);
 	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell *cell);
 
 	unique_ptr<Constraint> TransformConstraint(duckdb_libpgquery::PGListCell *cell, ColumnDefinition &column,

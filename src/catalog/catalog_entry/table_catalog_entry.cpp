@@ -4,7 +4,6 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -12,7 +11,6 @@
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
 #include "duckdb/planner/constraints/bound_check_constraint.hpp"
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -22,14 +20,8 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder/alter_binder.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 
-#include <algorithm>
+#include "duckdb/common/algorithm.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -268,20 +260,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
-}
-
-vector<column_t> ConvertNamesToIndices(const vector<string> &names, const case_insensitive_map_t<column_t> &name_map) {
-	vector<column_t> indices;
-
-	for (auto &name : names) {
-		auto entry = name_map.find(name);
-		if (entry == name_map.end()) {
-			throw InvalidInputException("Referenced column \"%s\" is not part of the table", name);
-		}
-		auto index = entry->second;
-		indices.push_back(index);
-	}
-	return indices;
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, AddColumnInfo &info) {
@@ -528,11 +506,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 		bound_columns.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	}
 
-	if (columns[change_idx].Generated()) {
-		auto result =
-		    make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
-		return move(result);
-	}
 	auto new_storage =
 	    make_shared<DataTable>(context, *storage, change_idx, info.target_type, move(bound_columns), *bound_expression);
 	auto result =

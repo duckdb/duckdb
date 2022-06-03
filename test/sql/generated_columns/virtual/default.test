@@ -27,7 +27,7 @@ statement error
 CREATE TABLE unit2 (
 	price INTEGER,
 	amount_sold INTEGER,
-	total_profit INTEGER DEFAULT 1 GENERATED ALWAYS AS (price * amount_sold) VIRTUAL
+	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL DEFAULT 1
 );
 
 # Table doesnt exist

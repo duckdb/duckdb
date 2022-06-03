@@ -80,9 +80,6 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED:
 		throw InvalidInputException("Can not create a STORED generated column!");
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
-		if (column.Generated()) {
-			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.Name());
-		}
 		column.SetDefaultValue(TransformExpression(constraint->raw_expr));
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_COMPRESSION:

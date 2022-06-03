@@ -27,13 +27,6 @@ unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::P
 	return expr;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformGeneratedExpression(duckdb_libpgquery::PGListCell *cell) {
-	auto constraint = reinterpret_cast<duckdb_libpgquery::PGConstraint *>(cell->data.ptr_value);
-	D_ASSERT(constraint);
-	D_ASSERT(constraint->contype == duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL);
-	return TransformExpression(constraint->raw_expr);
-}
-
 unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery::PGNode *node) {
 	if (!node) {
 		return nullptr;

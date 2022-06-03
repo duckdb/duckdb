@@ -11,13 +11,6 @@ ColumnDependencyManager::ColumnDependencyManager() {
 ColumnDependencyManager::~ColumnDependencyManager() {
 }
 
-ColumnDependencyManager &ColumnDependencyManager::operator=(const ColumnDependencyManager &other) {
-	dependencies_map = other.dependencies_map;
-	dependents_map = other.dependents_map;
-	deleted_columns = other.deleted_columns;
-	return *this;
-}
-
 void ColumnDependencyManager::AddGeneratedColumn(const ColumnDefinition &column,
                                                  const case_insensitive_map_t<column_t> &name_map) {
 	D_ASSERT(column.Generated());
@@ -223,7 +216,7 @@ vector<column_t> ColumnDependencyManager::CleanupInternals(column_t column_amoun
 	return new_indices;
 }
 
-stack<column_t> ColumnDependencyManager::GetBindOrder() {
+stack<column_t> ColumnDependencyManager::GetBindOrder(const vector<ColumnDefinition> &columns) {
 	stack<column_t> bind_order;
 	queue<column_t> to_visit;
 	unordered_set<column_t> visited;
@@ -255,6 +248,20 @@ stack<column_t> ColumnDependencyManager::GetBindOrder() {
 		for (auto &dependency : direct_dependencies[column]) {
 			to_visit.push(dependency);
 		}
+	}
+
+	// Add generated columns that have no dependencies, but still might need to have their type resolved
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto &col = columns[i];
+		// Not a generated column
+		if (!col.Generated()) {
+			continue;
+		}
+		// Already added to the bind_order stack
+		if (visited.count(i)) {
+			continue;
+		}
+		bind_order.push(i);
 	}
 
 	return bind_order;

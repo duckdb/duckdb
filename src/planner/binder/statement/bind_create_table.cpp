@@ -206,7 +206,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 	auto table_binding = binder->bind_context.GetBinding(base.table, ignore);
 	D_ASSERT(table_binding && ignore.empty());
 
-	auto bind_order = info.column_dependency_manager.GetBindOrder();
+	auto bind_order = info.column_dependency_manager.GetBindOrder(base.columns);
 	unordered_set<column_t> bound_indices;
 
 	while (!bind_order.empty()) {
@@ -221,15 +221,11 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 		if (bound_indices.count(i)) {
 			continue;
 		}
-		if (!col.Generated()) {
-			continue;
-		}
+		D_ASSERT(col.Generated());
 		auto expression = col.GeneratedExpression().Copy();
 
 		auto bound_expression = expr_binder.Bind(expression);
-		if (!bound_expression) {
-			throw BinderException("Could not resolve the expression of generated column \"%s\"", col.Name());
-		}
+		D_ASSERT(bound_expression);
 		D_ASSERT(!bound_expression->HasSubquery());
 		if (col.Type().id() == LogicalTypeId::ANY) {
 			// Do this before changing the type, so we know it's the first time the type is set
@@ -240,6 +236,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 			string ignore;
 			table_binding->types[i] = col.Type();
 		}
+		bound_indices.insert(i);
 	}
 }
 

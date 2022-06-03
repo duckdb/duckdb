@@ -219,16 +219,6 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 			}
 			break;
 		}
-		case ConstraintType::FOREIGN_KEY: {
-			auto &constraint = (ForeignKeyConstraint &)*constr;
-			// Can't/dont have to check foreign keys?
-			for (auto &key : constraint.pk_columns) {
-				if (generated_columns.count(key)) {
-					return true;
-				}
-			}
-			break;
-		}
 		case ConstraintType::NOT_NULL: {
 			auto &constraint = (NotNullConstraint &)*constr;
 			auto index = constraint.index;
@@ -251,6 +241,10 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 					return true;
 				}
 			}
+			break;
+		}
+		case ConstraintType::FOREIGN_KEY: {
+			// If it contained a generated column, an exception would have been thrown inside AddDataTableIndex earlier
 			break;
 		}
 		default: {

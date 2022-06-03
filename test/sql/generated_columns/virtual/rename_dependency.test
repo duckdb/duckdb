@@ -10,7 +10,8 @@ CREATE TABLE unit (
 	price INTEGER,
 	amount_sold INTEGER,
 	total_profit AS (price * amount_sold),
-	profit_total AS (total_profit)
+	profit_total AS (total_profit),
+	sold_amount AS (amount_sold)
 );
 
 statement ok
@@ -28,7 +29,7 @@ ALTER TABLE unit RENAME COLUMN price TO value
 statement error
 ALTER TABLE unit DROP COLUMN value;
 
-query IIII
+query IIIII
 SELECT * FROM unit
 ----
-5	4	20	20
+5	4	20	20	4

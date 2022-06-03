@@ -59,6 +59,25 @@ CREATE TABLE tbl (
 );
 
 statement ok
+CREATE TABLE tbl4 (
+	price INTEGER,
+	dependency AS (price),
+	depth1 AS (dependency),
+	depth2 AS (price * dependency),
+	depth3 AS (depth1 * depth2 * dependency),
+	depth4 aS ((dependency * depth3) + depth1),
+	depth5 AS (depth4 - (depth3 + depth2) + (dependency * depth1))
+);
+
+statement ok
+INSERT INTO tbl4 VALUES (5);
+
+query IIIIIII
+SELECT * FROM tbl4;
+----
+5	5	5	25	625	3130	2505
+
+statement ok
 INSERT INTO tbl VALUES (5);
 
 query III

@@ -34,11 +34,9 @@
 #include "duckdb/planner/constraints/bound_foreign_key_constraint.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 
-#include <algorithm>
+#include "duckdb/common/algorithm.hpp"
 #include <sstream>
 
 namespace duckdb {
