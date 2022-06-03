@@ -121,6 +121,109 @@ static duckdb::Value bind_parameter(const Napi::Value source) {
 	return duckdb::Value();
 }
 
+static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::LogicalTypeId id) {
+	Napi::Value value;
+	// set up a new Napi::Object for some data types, e.g. INTERVAL
+	Napi::Object object_value;
+
+	bool is_object_value {false};
+
+	// TODO templateroo here
+	switch (id) {
+	case duckdb::LogicalTypeId::BOOLEAN: {
+		value = Napi::Boolean::New(env, duckdb::BooleanValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::INTEGER: {
+		value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::FLOAT: {
+		value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::DOUBLE: {
+		value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::BIGINT: {
+		value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::HUGEINT: {
+		value = Napi::Number::New(env, dval.GetValue<double>());
+	} break;
+	case duckdb::LogicalTypeId::INTERVAL: {
+		auto interval = duckdb::IntervalValue::Get(dval);
+		is_object_value = true;
+		object_value = Napi::Object::New(env);
+		object_value.Set("months", interval.months);
+		object_value.Set("days", interval.days);
+		object_value.Set("micros", interval.micros);
+	} break;
+#if (NAPI_VERSION > 4)
+	case duckdb::LogicalTypeId::DATE: {
+		const auto scale = duckdb::Interval::SECS_PER_DAY * duckdb::Interval::MSECS_PER_SEC;
+		value = Napi::Date::New(env, double(dval.GetValue<int32_t>() * scale));
+	} break;
+	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ: {
+		value = Napi::Date::New(env, double(dval.GetValue<int64_t>() / duckdb::Interval::MICROS_PER_MSEC));
+	} break;
+#endif
+	case duckdb::LogicalTypeId::VARCHAR: {
+		value = Napi::String::New(env, duckdb::StringValue::Get(dval));
+	} break;
+	case duckdb::LogicalTypeId::BLOB: {
+		auto &blob = duckdb::StringValue::Get(dval);
+		value = Napi::Buffer<char>::Copy(env, blob.c_str(), blob.length());
+	} break;
+	case duckdb::LogicalTypeId::SQLNULL: {
+		value = env.Null();
+	} break;
+	case duckdb::LogicalTypeId::LIST: {
+		auto child_type = duckdb::ListType::GetChildType(dval.type());
+		auto &child_values = duckdb::ListValue::GetChildren(dval);
+		is_object_value = true;
+		object_value = Napi::Array::New(env);
+		for (duckdb::idx_t child_idx = 0; child_idx < child_values.size(); child_idx++) {
+			auto child_value = child_values.at(child_idx);
+			object_value.Set(child_idx, convert_col_val(env, child_value, child_type.id()));
+		}
+	} break;
+	case duckdb::LogicalTypeId::STRUCT: {
+		auto &child_types = duckdb::StructType::GetChildTypes(dval.type());
+		auto &child_values = duckdb::StructValue::GetChildren(dval);
+		is_object_value = true;
+		object_value = Napi::Object::New(env);
+		for (duckdb::idx_t child_idx = 0; child_idx < child_values.size(); child_idx++) {
+			auto child_value = child_values.at(child_idx);
+			auto child_type = child_types.at(child_idx);
+			object_value.Set(child_type.first, convert_col_val(env, child_value, child_type.second.id()));
+		}
+	} break;
+	case duckdb::LogicalTypeId::MAP: {
+		auto key_type = duckdb::MapType::KeyType(dval.type());
+		auto value_type = duckdb::MapType::ValueType(dval.type());
+		auto &child_values = duckdb::StructValue::GetChildren(dval);
+		is_object_value = true;
+		object_value = Napi::Array::New(env);
+		auto keys_value = Napi::Array::New(env);
+		auto values_value = Napi::Array::New(env);
+		duckdb::idx_t key_idx = 0;
+		duckdb::idx_t value_idx = 1;
+		object_value.Set(key_idx, convert_col_val(env, child_values[key_idx], key_type.id()));
+		object_value.Set(value_idx, convert_col_val(env, child_values[value_idx], value_type.id()));
+	} break;
+	default:
+		Napi::Error::New(env, "Data type is not supported " + dval.type().ToString()).ThrowAsJavaScriptException();
+		return env.Null();
+	}
+
+	if (is_object_value == true) {
+		return object_value;
+	} else {
+		return value;
+	}
+
+	return value;
+}
+
 static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names, duckdb::DataChunk &chunk) {
 	Napi::EscapableHandleScope scope(env);
 	std::vector<Napi::String> node_names;
@@ -134,76 +237,13 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 		Napi::Object row_result = Napi::Object::New(env);
 
 		for (duckdb::idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-			Napi::Value value;
-			// set up a new Napi::Object for some data types, e.g. INTERVAL
-			Napi::Object object_value;
-
-			bool is_object_value {false};
-
-			auto dval = chunk.GetValue(col_idx, row_idx);
+			duckdb::Value dval = chunk.GetValue(col_idx, row_idx);
 			if (dval.IsNull()) {
 				row_result.Set(node_names[col_idx], env.Null());
 				continue;
 			}
 
-			// TODO templateroo here
-			switch (chunk.data[col_idx].GetType().id()) {
-			case duckdb::LogicalTypeId::BOOLEAN: {
-				value = Napi::Boolean::New(env, duckdb::BooleanValue::Get(dval));
-			} break;
-			case duckdb::LogicalTypeId::INTEGER: {
-				value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
-			} break;
-			case duckdb::LogicalTypeId::FLOAT: {
-				value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
-			} break;
-			case duckdb::LogicalTypeId::DOUBLE: {
-				value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
-			} break;
-			case duckdb::LogicalTypeId::BIGINT: {
-				value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
-			} break;
-			case duckdb::LogicalTypeId::HUGEINT: {
-				value = Napi::Number::New(env, dval.GetValue<double>());
-			} break;
-			case duckdb::LogicalTypeId::INTERVAL: {
-				auto interval = duckdb::IntervalValue::Get(dval);
-				is_object_value = true;
-				object_value = Napi::Object::New(env);
-				object_value.Set("months", interval.months);
-				object_value.Set("days", interval.days);
-				object_value.Set("micros", interval.micros);
-			} break;
-#if (NAPI_VERSION > 4)
-			case duckdb::LogicalTypeId::DATE: {
-				const auto scale = duckdb::Interval::SECS_PER_DAY * duckdb::Interval::MSECS_PER_SEC;
-				value = Napi::Date::New(env, double(dval.GetValue<int32_t>() * scale));
-			} break;
-			case duckdb::LogicalTypeId::TIMESTAMP:
-			case duckdb::LogicalTypeId::TIMESTAMP_TZ: {
-				value = Napi::Date::New(env, double(dval.GetValue<int64_t>() / duckdb::Interval::MICROS_PER_MSEC));
-			} break;
-#endif
-			case duckdb::LogicalTypeId::VARCHAR: {
-				value = Napi::String::New(env, duckdb::StringValue::Get(dval));
-			} break;
-			case duckdb::LogicalTypeId::BLOB: {
-				auto &blob = duckdb::StringValue::Get(dval);
-				value = Napi::Buffer<char>::Copy(env, blob.c_str(), blob.length());
-			} break;
-			case duckdb::LogicalTypeId::SQLNULL: {
-				value = env.Null();
-			} break;
-			default:
-				Napi::Error::New(env, "Data type is not supported " + dval.type().ToString())
-				    .ThrowAsJavaScriptException();
-				return env.Null();
-			}
-			if (is_object_value == true) {
-				row_result.Set(node_names[col_idx], object_value);
-			} else {
-				row_result.Set(node_names[col_idx], value);
-			}
+			row_result.Set(node_names[col_idx], convert_col_val(env, dval, chunk.data[col_idx].GetType().id()));
 		}
 		result.Set(row_idx, row_result);
 	}

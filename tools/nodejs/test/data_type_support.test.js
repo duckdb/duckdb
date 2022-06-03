@@ -25,12 +25,46 @@ describe("data type support", function () {
     INTERVAL 1 MINUTE as minutes,
     INTERVAL 5 DAY as days,
     INTERVAL 4 MONTH as months,
-    INTERVAL 4 MONTH + INTERVAL 5 DAY + INTERVAL 1 MINUTE as combined;`).each((err, row) => {
+    INTERVAL 4 MONTH + INTERVAL 5 DAY + INTERVAL 1 MINUTE as combined;`
+    ).each((err, row) => {
       assert(err === null);
-      assert.deepEqual(row.minutes, { months: 0, days: 0, micros: 60 * 1000 * 1000});
-      assert.deepEqual(row.days, { months: 0, days: 5, micros: 0});
-      assert.deepEqual(row.months, {months: 4, days: 0, micros: 0});
-      assert.deepEqual(row.combined, {months: 4, days: 5, micros: 60 * 1000 * 1000});
+      assert.deepEqual(row.minutes, {
+        months: 0,
+        days: 0,
+        micros: 60 * 1000 * 1000,
+      });
+      assert.deepEqual(row.days, { months: 0, days: 5, micros: 0 });
+      assert.deepEqual(row.months, { months: 4, days: 0, micros: 0 });
+      assert.deepEqual(row.combined, {
+        months: 4,
+        days: 5,
+        micros: 60 * 1000 * 1000,
+      });
+      done();
+    });
+  });
+  it("supports STRUCT values", function (done) {
+    db.prepare(`SELECT {'x': 1, 'y': 2, 'z': {'a': 'b'}} as struct`).each(
+      (err, row) => {
+        assert.deepEqual(row.struct, { x: 1, y: 2, z: { a: "b" } });
+        done();
+      }
+    );
+  });
+
+  it("supports LIST values", function (done) {
+    db.prepare(`SELECT ['duck', 'duck', 'goose'] as list`).each((err, row) => {
+      assert.deepEqual(row.list, ["duck", "duck", "goose"]);
+      done();
+    });
+  });
+
+  it("supports MAP values", function (done) {
+    db.prepare(`SELECT [[100, 200], ['a', 'b']] as map`).each((err, row) => {
+      assert.deepEqual(row.map, [
+        [100, 200],
+        ["a", "b"],
+      ]);
       done();
     });
   });
