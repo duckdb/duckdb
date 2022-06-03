@@ -182,15 +182,13 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expre
 void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
 	D_ASSERT(Generated());
 	// First time the type is set, add a cast around the expression
-	if (this->type.id() == LogicalTypeId::ANY) {
-		generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(generated_expression));
-		return;
-	}
+	D_ASSERT(this->type.id() == LogicalTypeId::ANY);
+	generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(generated_expression));
 	// Every generated expression should be wrapped in a cast on creation
-	//D_ASSERT(generated_expression->type == ExpressionType::OPERATOR_CAST);
-	//auto &cast_expr = (CastExpression &)*generated_expression;
-	//auto base_expr = move(cast_expr.child);
-	//generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(base_expr));
+	// D_ASSERT(generated_expression->type == ExpressionType::OPERATOR_CAST);
+	// auto &cast_expr = (CastExpression &)*generated_expression;
+	// auto base_expr = move(cast_expr.child);
+	// generated_expression = make_unique_base<ParsedExpression, CastExpression>(type, move(base_expr));
 }
 
 const ParsedExpression &ColumnDefinition::GeneratedExpression() const {
