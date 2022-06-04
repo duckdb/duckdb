@@ -18,9 +18,9 @@ public class DuckDBNative {
 			if (os_arch_detect.equals("x86_64") || os_arch_detect.equals("amd64")) {
 				os_arch = "amd64";
 			}
-            if (os_arch_detect.equals("aarch64") || os_arch_detect.equals("arm64")) {
-                os_arch = "arm64";
-            }
+			if (os_arch_detect.equals("aarch64") || os_arch_detect.equals("arm64")) {
+				os_arch = "arm64";
+			}
 			// TODO 32 bit gunk
 
 			if (os_name_detect.startsWith("windows")) {
@@ -77,18 +77,21 @@ public class DuckDBNative {
 
 	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref);
 
-	
 	// returns res_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params);
-
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
 	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref);
-	
+
+	protected static native void duckdb_jdbc_arrow_schema(ByteBuffer appender_ref, long arrow_schema);
+
+	protected static native void duckdb_jdbc_arrow_fetch(ByteBuffer appender_ref, long arrow_array);
+
 	protected static native int duckdb_jdbc_fetch_size();
 
-	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name);
+	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name,
+			byte[] table_name);
 
 	protected static native void duckdb_jdbc_appender_begin_row(ByteBuffer appender_ref);
 

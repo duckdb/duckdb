@@ -772,3 +772,29 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 		env->ThrowNew(J_SQLException, e.what());
 	}
 }
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1schema(JNIEnv *env, jclass,
+                                                                                jobject res_ref_buf,
+                                                                                jlong arrow_schema_address) {
+
+	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+	if (!res_ref || !res_ref->res || !res_ref->res->success) {
+		env->ThrowNew(J_SQLException, "Invalid result set");
+	}
+
+	auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*res_ref->res);
+	auto arrow_schema = (ArrowSchema *)arrow_schema_address;
+	duckdb::QueryResult::ToArrowSchema(arrow_schema, res_ref->res->types, res_ref->res->names, timezone_config);
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1fetch(JNIEnv *env, jclass, jobject res_ref_buf,
+                                                                               jlong arrow_array_address) {
+
+	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+	if (!res_ref || !res_ref->res || !res_ref->res->success) {
+		env->ThrowNew(J_SQLException, "Invalid result set");
+	}
+	auto arrow_array = (ArrowArray *)arrow_array_address;
+	auto chunk = res_ref->res->Fetch();
+	chunk->ToArrowArray(arrow_array);
+}
