@@ -38,12 +38,17 @@ struct PandasScanLocalState : public LocalTableFunctionState {
 };
 
 struct PandasScanGlobalState : public GlobalTableFunctionState {
-	PandasScanGlobalState() : position(0), batch_index(0) {
+	PandasScanGlobalState(idx_t max_threads) : position(0), batch_index(0), max_threads(max_threads) {
 	}
 
 	std::mutex lock;
 	idx_t position;
 	idx_t batch_index;
+	idx_t max_threads;
+
+	idx_t MaxThreads() const override {
+		return max_threads;
+	}
 };
 
 PandasScanFunction::PandasScanFunction()
@@ -79,7 +84,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 
 unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
                                                                               TableFunctionInitInput &input) {
-	return make_unique<PandasScanGlobalState>();
+	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
 }
 
 unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ClientContext &context,
