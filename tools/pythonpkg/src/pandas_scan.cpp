@@ -87,9 +87,7 @@ unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(Clie
                                                                             GlobalTableFunctionState *gstate) {
 	auto result = make_unique<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
-	if (!PandasScanParallelStateNext(context, input.bind_data, result.get(), gstate)) {
-		return nullptr;
-	}
+	PandasScanParallelStateNext(context, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
