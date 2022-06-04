@@ -25,15 +25,18 @@ public:
 	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                               vector<LogicalType> &return_types, vector<string> &names);
 
-	static unique_ptr<GlobalTableFunctionState> PandasScanInitGlobal(ClientContext &context, TableFunctionInitInput &input);
-	static unique_ptr<LocalTableFunctionState> PandasScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate);
+	static unique_ptr<GlobalTableFunctionState> PandasScanInitGlobal(ClientContext &context,
+	                                                                 TableFunctionInitInput &input);
+	static unique_ptr<LocalTableFunctionState>
+	PandasScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate);
 
 	static idx_t PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
 
 	static bool PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	                                        LocalTableFunctionState *lstate, GlobalTableFunctionState *gstate);
 
-	static double PandasProgress(ClientContext &context, const FunctionData *bind_data_p, const GlobalTableFunctionState *gstate);
+	static double PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
+	                             const GlobalTableFunctionState *gstate);
 
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed

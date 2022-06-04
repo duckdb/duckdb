@@ -22,7 +22,8 @@ public:
 	static unique_ptr<FunctionData> MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names);
 
-	static OperatorResultType MapFunctionExec(ClientContext &context, TableFunctionInput &data, DataChunk &input, DataChunk &output);
+	static OperatorResultType MapFunctionExec(ClientContext &context, TableFunctionInput &data, DataChunk &input,
+	                                          DataChunk &output);
 };
 
 } // namespace duckdb

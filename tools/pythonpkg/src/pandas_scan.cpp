@@ -47,7 +47,8 @@ struct PandasScanGlobalState : public GlobalTableFunctionState {
 };
 
 PandasScanFunction::PandasScanFunction()
-    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal, PandasScanInitLocal) {
+    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal,
+                    PandasScanInitLocal) {
 	get_batch_index = PandasScanGetBatchIndex;
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
@@ -55,7 +56,8 @@ PandasScanFunction::PandasScanFunction()
 }
 
 idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-                                                  LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+                                                  LocalTableFunctionState *local_state,
+                                                  GlobalTableFunctionState *global_state) {
 	auto &data = (PandasScanLocalState &)*local_state;
 	return data.batch_index;
 }
@@ -75,11 +77,14 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 }
 
-unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
+                                                                              TableFunctionInitInput &input) {
 	return make_unique<PandasScanGlobalState>();
 }
 
-unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate) {
+unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ClientContext &context,
+                                                                            TableFunctionInitInput &input,
+                                                                            GlobalTableFunctionState *gstate) {
 	auto result = make_unique<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
 	if (!PandasScanParallelStateNext(context, input.bind_data, result.get(), gstate)) {
@@ -97,7 +102,8 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 }
 
 bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                                     LocalTableFunctionState *lstate, GlobalTableFunctionState *gstate) {
+                                                     LocalTableFunctionState *lstate,
+                                                     GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	auto &parallel_state = (PandasScanGlobalState &)*gstate;
 	auto &state = (PandasScanLocalState &)*lstate;
@@ -116,7 +122,8 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 	return true;
 }
 
-double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p, const GlobalTableFunctionState *gstate) {
+double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
+                                          const GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	if (bind_data.row_count == 0) {
 		return 100;
