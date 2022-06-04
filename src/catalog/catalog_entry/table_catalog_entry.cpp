@@ -14,7 +14,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/binder.hpp"
-
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
