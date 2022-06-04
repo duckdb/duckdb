@@ -79,7 +79,6 @@ public:
 		table_function.table_scan_progress = ParquetProgress;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
-		table_function.supports_batch_index = true;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		set.AddFunction(table_function);

@@ -67,8 +67,7 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
-OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data_p,
-                                                GlobalTableFunctionState *state_p, DataChunk &input,
+OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, TableFunctionInput &data_p, DataChunk &input,
                                                 DataChunk &output) {
 	py::gil_scoped_acquire acquire;
 
@@ -76,7 +75,7 @@ OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, const Fu
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*bind_data_p;
+	auto &data = (MapFunctionData &)*data_p.bind_data;
 
 	D_ASSERT(input.GetTypes() == data.in_types);
 	NumpyResultConversion conversion(data.in_types, input.size());

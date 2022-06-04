@@ -327,7 +327,6 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 				get.function.table_scan_progress = nullptr;
 				get.function.get_batch_index = nullptr;
 				get.function.filter_pushdown = false;
-				get.function.supports_batch_index = false;
 			} else {
 				bind_data.result_ids.clear();
 			}
@@ -356,7 +355,6 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_batch_index = TableScanGetBatchIndex;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
-	scan_function.supports_batch_index = true;
 	return scan_function;
 }
 

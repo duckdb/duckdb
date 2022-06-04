@@ -17,7 +17,7 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
     : SimpleNamedParameterFunction(move(name), move(arguments)), bind(bind), init_global(init_global),
       init_local(init_local), function(function), in_out_function(nullptr), statistics(nullptr), dependency(nullptr),
       cardinality(nullptr), pushdown_complex_filter(nullptr), to_string(nullptr), table_scan_progress(nullptr),
-      projection_pushdown(false), filter_pushdown(false), supports_batch_index(false) {
+      projection_pushdown(false), filter_pushdown(false) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function,

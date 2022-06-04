@@ -156,8 +156,6 @@ public:
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
-	//! Whether or not the table function supports fetching of a batch index
-	bool supports_batch_index;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 };
