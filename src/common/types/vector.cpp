@@ -764,7 +764,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	default:
 		Normalify(count);
-		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
+		data.sel = FlatVector::IncrementalSelectionVector();
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
