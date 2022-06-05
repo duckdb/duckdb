@@ -8,7 +8,7 @@ import time
 threads = None
 verbose = False
 out_file = None
-nruns = 5
+nruns = 10
 TPCH_NQUERIES = 22
 
 for arg in sys.argv:
