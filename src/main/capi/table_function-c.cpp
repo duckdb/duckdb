@@ -138,7 +138,7 @@ unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ClientContext &conte
 	auto &bind_data = (CTableBindData &)*data_p.bind_data;
 	auto result = make_unique<CTableLocalInitData>();
 	if (!bind_data.info->local_init) {
-		return result;
+		return move(result);
 	}
 
 	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);

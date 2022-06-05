@@ -1,6 +1,6 @@
 using DataFrames
 
-mutable struct DFBindInfo
+struct DFBindInfo
     df::DataFrame
     input_columns::Vector
     scan_types::Vector{Type}
@@ -59,7 +59,7 @@ function value_to_duckdb(val::T) where {T}
 end
 
 function df_scan_column(
-    input_column::Vector{DF_TYPE},
+    input_column::AbstractVector{DF_TYPE},
     df_offset::Int64,
     col_idx::Int64,
     result_idx::Int64,
@@ -72,16 +72,17 @@ function df_scan_column(
     result_array::Vector{DUCK_TYPE} = DuckDB.get_array(vector, DUCK_TYPE)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
-        if input_column[df_offset + i] === missing
+    	val = getindex(input_column, df_offset + i)
+        if val === missing
             DuckDB.setinvalid(validity, i)
         else
-            result_array[i] = value_to_duckdb(input_column[df_offset + i])
+            result_array[i] = value_to_duckdb(val)
         end
     end
 end
 
 function df_scan_string_column(
-    input_column::Vector{DF_TYPE},
+    input_column::AbstractVector{DF_TYPE},
     df_offset::Int64,
     col_idx::Int64,
     result_idx::Int64,
@@ -93,10 +94,11 @@ function df_scan_string_column(
     vector::Vec = DuckDB.get_vector(output, result_idx)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
-        if input_column[df_offset + i] === missing
+    	val = getindex(input_column, df_offset + i)
+        if val === missing
             DuckDB.setinvalid(validity, i)
         else
-            DuckDB.assign_string_element(vector, i, input_column[df_offset + i])
+            DuckDB.assign_string_element(vector, i, val)
         end
     end
 end
@@ -154,8 +156,6 @@ mutable struct DFLocalInfo
     end
 end
 
-const ROW_GROUP_SIZE = DuckDB.VECTOR_SIZE * 100
-
 function df_global_init_function(info::DuckDB.InitInfo)
     bind_info = DuckDB.get_bind_info(info, DFBindInfo)
     # figure out the maximum number of threads to launch from the DF size
@@ -166,7 +166,8 @@ function df_global_init_function(info::DuckDB.InitInfo)
 end
 
 function df_local_init_function(info::DuckDB.InitInfo)
-    return DFLocalInfo(DuckDB.get_projected_columns(info))
+	columns = DuckDB.get_projected_columns(info)
+    return DFLocalInfo(columns)
 end
 
 function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)

@@ -82,7 +82,7 @@ end
 // Table Function Init
 //===--------------------------------------------------------------------===//
 =#
-mutable struct InitInfo
+struct InitInfo
     handle::duckdb_init_info
     main_function::Any
 
@@ -148,7 +148,7 @@ end
 // Main Table Function
 //===--------------------------------------------------------------------===//
 =#
-mutable struct FunctionInfo
+struct FunctionInfo
     handle::duckdb_function_info
     main_function::Any
 
