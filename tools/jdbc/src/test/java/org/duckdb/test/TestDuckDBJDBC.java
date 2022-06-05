@@ -159,6 +159,22 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_execute_exception() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+	
+		stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE t (id INT, b UUID)");
+		stmt.execute("INSERT INTO t VALUES (1, uuid())");
+		
+		try {
+			ResultSet rs = stmt.executeQuery("SELECT * FROM t");
+			rs.next();
+			fail();
+		} catch (SQLException e) {
+		}
+	}
+
 	public static void test_autocommit_off() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();

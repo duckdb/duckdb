@@ -18,20 +18,20 @@ TEST_CASE("Test Pending Query API", "[api]") {
 
 		// cannot fetch twice from the same pending query
 		REQUIRE_THROWS(pending_query->Execute());
-		REQUIRE_THROWS(pending_query->Execute(true));
+		REQUIRE_THROWS(pending_query->Execute());
 
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
 	SECTION("Streaming result") {
-		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)");
+		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)", true);
 		REQUIRE(pending_query->success);
-		auto result = pending_query->Execute(true);
+		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
 
 		// cannot fetch twice from the same pending query
-		REQUIRE_THROWS(pending_query->Execute(true));
+		REQUIRE_THROWS(pending_query->Execute());
 		REQUIRE_THROWS(pending_query->Execute());
 
 		// query the connection as normal after
@@ -39,15 +39,15 @@ TEST_CASE("Test Pending Query API", "[api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 	}
 	SECTION("Execute tasks") {
-		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)");
+		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)", true);
 		while (pending_query->ExecuteTask() == PendingExecutionResult::RESULT_NOT_READY)
 			;
 		REQUIRE(pending_query->success);
-		auto result = pending_query->Execute(true);
+		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
 
 		// cannot fetch twice from the same pending query
-		REQUIRE_THROWS(pending_query->Execute(true));
+		REQUIRE_THROWS(pending_query->Execute());
 
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
@@ -55,14 +55,14 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	}
 	SECTION("Create pending query while another pending query exists") {
 		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)");
-		auto pending_query2 = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)");
+		auto pending_query2 = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)", true);
 
 		// first pending query is now closed
 		REQUIRE_THROWS(pending_query->ExecuteTask());
 		REQUIRE_THROWS(pending_query->Execute());
 
 		// we can execute the second one
-		auto result = pending_query2->Execute(true);
+		auto result = pending_query2->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
 
 		// query the connection as normal after
@@ -95,10 +95,10 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	SECTION("Runtime error in pending query (streaming)") {
 		// this succeeds initially
 		auto pending_query =
-		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)");
+		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)", true);
 		REQUIRE(pending_query->success);
 		// still succeeds...
-		auto result = pending_query->Execute(true);
+		auto result = pending_query->Execute();
 		REQUIRE(result->success);
 		auto chunk = result->Fetch();
 		REQUIRE(!chunk);
@@ -161,7 +161,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 
 		// cannot fetch twice from the same pending query
 		REQUIRE_THROWS(pending_query->Execute());
-		REQUIRE_THROWS(pending_query->Execute(true));
+		REQUIRE_THROWS(pending_query->Execute());
 
 		// we can use the prepared query again, however
 		pending_query = prepare->PendingQuery(500000);
@@ -172,7 +172,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 
 		// cannot fetch twice from the same pending query
 		REQUIRE_THROWS(pending_query->Execute());
-		REQUIRE_THROWS(pending_query->Execute(true));
+		REQUIRE_THROWS(pending_query->Execute());
 	}
 	SECTION("Error during prepare") {
 		auto prepare = con.Prepare("SELECT SUM(i+X) FROM range(1000000) tbl(i) WHERE i>=$1");
@@ -181,13 +181,15 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		REQUIRE_THROWS(prepare->PendingQuery(0));
 	}
 	SECTION("Error during execution") {
+		vector<Value> parameters;
 		auto prepared = con.Prepare("SELECT concat(SUM(i)::varchar, CASE WHEN SUM(i) IS NULL THEN 0 ELSE 'hello' "
 		                            "END)::INT FROM range(1000000) tbl(i) WHERE i>$1");
 		// this succeeds initially
-		auto pending_query = prepared->PendingQuery(0);
+		parameters = {Value::INTEGER(0)};
+		auto pending_query = prepared->PendingQuery(parameters, true);
 		REQUIRE(pending_query->success);
 		// still succeeds...
-		auto result = pending_query->Execute(true);
+		auto result = pending_query->Execute();
 		REQUIRE(result->success);
 		//! fail!
 		auto chunk = result->Fetch();
@@ -199,10 +201,11 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
 
 		// if we change the parameter this works
-		pending_query = prepared->PendingQuery(2000000);
+		parameters = {Value::INTEGER(2000000)};
+		pending_query = prepared->PendingQuery(parameters, true);
 		REQUIRE(pending_query->success);
 		// still succeeds...
-		result = pending_query->Execute(true);
+		result = pending_query->Execute();
 		REQUIRE(result->success);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(0)}));
 	}

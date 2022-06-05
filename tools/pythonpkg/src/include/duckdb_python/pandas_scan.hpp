@@ -11,6 +11,8 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "duckdb_python/pybind_wrapper.hpp"
+
 namespace duckdb {
 
 struct PandasScanFunction : public TableFunction {
@@ -53,6 +55,12 @@ public:
 	                                   ParallelState *parallel_state_p);
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
+
+	static idx_t PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                                     FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+
+	// Helper function that transform pandas df names to make them work with our binder
+	static py::object PandasReplaceCopiedNames(const py::object &original_df);
 };
 
 } // namespace duckdb

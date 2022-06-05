@@ -50,6 +50,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 	shared_ptr<ParquetReader> reader;
 	ParquetReaderScanState scan_state;
 	bool is_parallel;
+	idx_t batch_index;
 	idx_t file_index;
 	vector<column_t> column_ids;
 	TableFilterSet *table_filters;
@@ -58,6 +59,7 @@ struct ParquetReadOperatorData : public FunctionOperatorData {
 struct ParquetReadParallelState : public ParallelState {
 	mutex lock;
 	shared_ptr<ParquetReader> current_reader;
+	idx_t batch_index;
 	idx_t file_index;
 	idx_t row_group_index;
 };
@@ -74,14 +76,11 @@ public:
 		                  ParquetInitParallelState, ParquetScanFuncParallel, ParquetScanParallelInit,
 		                  ParquetParallelStateNext, true, true, ParquetProgress);
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		table_function.get_batch_index = ParquetScanGetBatchIndex;
+		table_function.supports_batch_index = true;
 		set.AddFunction(table_function);
-		table_function = TableFunction({LogicalType::LIST(LogicalType::VARCHAR)}, ParquetScanImplementation,
-		                               ParquetScanBindList, ParquetScanInit, /* statistics */ ParquetScanStats,
-		                               /* cleanup */ nullptr,
-		                               /* dependency */ nullptr, ParquetCardinality,
-		                               /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr,
-		                               ParquetScanMaxThreads, ParquetInitParallelState, ParquetScanFuncParallel,
-		                               ParquetScanParallelInit, ParquetParallelStateNext, true, true, ParquetProgress);
+		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
+		table_function.bind = ParquetScanBindList;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		set.AddFunction(table_function);
 		return set;
@@ -280,11 +279,18 @@ public:
 		auto result = make_unique<ParquetReadOperatorData>();
 		result->column_ids = column_ids;
 		result->is_parallel = true;
+		result->batch_index = 0;
 		result->table_filters = filters->table_filters;
 		if (!ParquetParallelStateNext(context, bind_data_p, result.get(), parallel_state_p)) {
 			return nullptr;
 		}
 		return move(result);
+	}
+
+	static idx_t ParquetScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                                      FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+		auto &data = (ParquetReadOperatorData &)*operator_state;
+		return data.batch_index;
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
@@ -343,6 +349,7 @@ public:
 		result->current_reader = bind_data.initial_reader;
 		result->row_group_index = 0;
 		result->file_index = 0;
+		result->batch_index = 0;
 		return move(result);
 	}
 
@@ -362,6 +369,8 @@ public:
 			vector<idx_t> group_indexes {parallel_state.row_group_index};
 			scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
 			                                 scan_data.table_filters);
+			scan_data.batch_index = parallel_state.batch_index++;
+			scan_data.file_index = parallel_state.file_index;
 			parallel_state.row_group_index++;
 			return true;
 		} else {
@@ -381,6 +390,8 @@ public:
 				vector<idx_t> group_indexes {0};
 				scan_data.reader->InitializeScan(scan_data.scan_state, scan_data.column_ids, group_indexes,
 				                                 scan_data.table_filters);
+				scan_data.batch_index = parallel_state.batch_index++;
+				scan_data.file_index = parallel_state.file_index;
 				parallel_state.row_group_index = 1;
 				return true;
 			}

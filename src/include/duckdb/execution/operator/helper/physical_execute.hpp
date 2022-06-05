@@ -20,6 +20,12 @@ public:
 	PhysicalOperator *plan;
 	unique_ptr<PhysicalOperator> owned_plan;
 	shared_ptr<PreparedStatementData> prepared;
+
+public:
+	vector<PhysicalOperator *> GetChildren() const override;
+
+public:
+	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 };
 
 } // namespace duckdb

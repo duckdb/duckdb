@@ -1,0 +1,19 @@
+# name: benchmark/micro/filter/parallel_complex_filter.benchmark
+# description: Benchmark of parallel complex filter limit computation
+# group: [filter]
+
+name Parallel Complex Filter
+group micro
+subgroup filter
+
+load
+CREATE TABLE integers AS SELECT * FROM range(100000000) tbl(i);
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 17797934;
+
+run
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)
+
+result I
+337
+948247
+17797934
