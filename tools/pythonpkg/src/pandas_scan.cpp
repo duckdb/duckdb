@@ -38,7 +38,7 @@ struct PandasScanLocalState : public LocalTableFunctionState {
 };
 
 struct PandasScanGlobalState : public GlobalTableFunctionState {
-	PandasScanGlobalState(idx_t max_threads) : position(0), batch_index(0), max_threads(max_threads) {
+	explicit PandasScanGlobalState(idx_t max_threads) : position(0), batch_index(0), max_threads(max_threads) {
 	}
 
 	std::mutex lock;
