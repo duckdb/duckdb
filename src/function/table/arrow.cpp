@@ -285,18 +285,25 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Clien
 	auto result = make_unique<ArrowScanLocalState>(move(current_chunk));
 	result->column_ids = input.column_ids;
 	result->filters = input.filters;
-	ArrowScanParallelStateNext(context, input.bind_data, *result, global_state);
+	if (!ArrowScanParallelStateNext(context, input.bind_data, *result, global_state)) {
+		return nullptr;
+	}
 	return move(result);
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	if (!data_p.local_state) {
+		return;
+	}
 	auto &data = (ArrowScanFunctionData &)*data_p.bind_data;
 	auto &state = (ArrowScanLocalState &)*data_p.local_state;
 	auto &global_state = (ArrowScanGlobalState &)*data_p.global_state;
 
 	//! Out of tuples in this chunk
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
-		ArrowScanParallelStateNext(context, data_p.bind_data, state, global_state);
+		if (!ArrowScanParallelStateNext(context, data_p.bind_data, state, global_state)) {
+			return;
+		}
 	}
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
