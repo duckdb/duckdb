@@ -1,0 +1,20 @@
+# name: test/issues/fuzz/argminmax_strings.test
+# description: Issue #3373: heap-use-after-free at string_type.hpp:76:10
+# group: [fuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE i_class_id AS
+	SELECT
+		LIST(i_category_id::integer) AS i_category_id,
+		LIST(i_category_id::VARCHAR) AS channel,
+		LIST([i_category_id]) AS sum_sales,
+		LIST({'a': i_category_id}) AS number_sales
+	FROM range(1, 6, 1) t1(i_category_id);
+
+query II
+select argmin(i_category_id,i_category_id), argmax(i_category_id,i_category_id) from i_class_id;
+----
+[1, 2, 3, 4, 5]	[1, 2, 3, 4, 5]

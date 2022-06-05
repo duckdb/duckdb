@@ -196,7 +196,7 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 		auto struct_buffer = make_unique<VectorStructBuffer>(type, capacity);
 		auxiliary = move(struct_buffer);
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_unique<VectorListBuffer>(type);
+		auto list_buffer = make_unique<VectorListBuffer>(type, capacity);
 		auxiliary = move(list_buffer);
 	}
 	auto type_size = GetTypeIdSize(internal_type);
@@ -614,7 +614,7 @@ void Vector::Normalify(idx_t count) {
 		break;
 	case VectorType::DICTIONARY_VECTOR: {
 		// create a new flat vector of this type
-		Vector other(GetType());
+		Vector other(GetType(), count);
 		// now copy the data of this vector to the other vector, removing the selection vector in the process
 		VectorOperations::Copy(*this, other, count, 0, 0);
 		// create a reference to the data in the other vector
@@ -1131,7 +1131,6 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 }
 
 void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
-	D_ASSERT(position < count);
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
@@ -1179,7 +1178,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
+			ConstantVector::Reference(*target_entries[i], *source_entries[i], struct_index, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;

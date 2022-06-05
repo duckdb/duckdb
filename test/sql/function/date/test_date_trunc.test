@@ -21,6 +21,7 @@ INSERT INTO dates VALUES
 
 statement ok
 INSERT INTO timestamps VALUES
+	('-infinity', 'year'),
 	('1992-02-02 02:02:03', 'millennium'),
 	('1992-02-02 02:02:03', 'century'),
 	('1992-02-02 02:02:03', 'decade'),
@@ -33,7 +34,9 @@ INSERT INTO timestamps VALUES
 	('1992-02-02 02:02:03', 'minute'),
 	('1992-02-02 02:02:03', 'second'),
 	('1992-02-02 02:02:03', 'milliseconds'),
-	('1992-02-02 02:02:03', 'microseconds');
+	('1992-02-02 02:02:03', 'microseconds'),
+	('infinity', 'month'),
+;
 
 # test date_trunc with different combinations of constant/non-constant columns on both dates and timestamps
 query T
@@ -105,6 +108,7 @@ SELECT date_trunc('minute', TIMESTAMP '1992-02-02 04:03:02') FROM timestamps LIM
 query T
 SELECT date_trunc(s, d) FROM timestamps;
 ----
+-infinity
 1000-01-01 00:00:00
 1900-01-01 00:00:00
 1990-01-01 00:00:00
@@ -118,11 +122,13 @@ SELECT date_trunc(s, d) FROM timestamps;
 1992-02-02 02:02:03
 1992-02-02 02:02:03
 1992-02-02 02:02:03
+infinity
 
 # Redo previous test but with casting to date first
 query T
 SELECT date_trunc(s, CAST(d as DATE)) FROM timestamps;
 ----
+-infinity
 1000-01-01 00:00:00
 1900-01-01 00:00:00
 1990-01-01 00:00:00
@@ -136,6 +142,7 @@ SELECT date_trunc(s, CAST(d as DATE)) FROM timestamps;
 1992-02-02 00:00:00
 1992-02-02 00:00:00
 1992-02-02 00:00:00
+infinity
 
 # Test week operator special cases
 query T

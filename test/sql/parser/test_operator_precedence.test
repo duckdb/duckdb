@@ -1,0 +1,73 @@
+# name: test/sql/parser/test_operator_precedence.test
+# description: Test operator precedence
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+# basic arithmetic precedence
+query I
+SELECT 2*3+1
+----
+7
+
+query I
+SELECT 1+2*3
+----
+7
+
+# ** precedence (issue 3561)
+query I
+SELECT 2^2 + 1;
+----
+5
+
+query I
+SELECT 2**2 + 1;
+----
+5
+
+query I
+SELECT 1+2**2;
+----
+5
+
+query I
+SELECT 1+2^2;
+----
+5
+
+query I
+SELECT 2**4 / 2;
+----
+8
+
+query I
+SELECT 2**(4 / 2);
+----
+4
+
+query I
+SELECT 16/2**4;
+----
+1
+
+query I
+SELECT (16/2)**4;
+----
+4096
+
+query I
+SELECT 2**3**2;
+----
+64
+
+query I
+SELECT 2^3**2;
+----
+64
+
+query I
+SELECT 2**3^2;
+----
+64

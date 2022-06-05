@@ -8,7 +8,7 @@ public:
 	JSONCreateFunctionData(unordered_map<string, unique_ptr<Vector>> const_struct_names)
 	    : const_struct_names(move(const_struct_names)) {
 	}
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		// Have to do this because we can't implicitly copy Vector
 		unordered_map<string, unique_ptr<Vector>> map_copy;
 		for (const auto &kv : const_struct_names) {
@@ -16,6 +16,9 @@ public:
 			map_copy[kv.first] = make_unique<Vector>(Value(kv.first));
 		}
 		return make_unique<JSONCreateFunctionData>(move(map_copy));
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 
 public:

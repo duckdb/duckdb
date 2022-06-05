@@ -33,6 +33,9 @@ public:
 	}
 
 public:
+	//! Convert the query node to a string
+	string ToString() const override;
+
 	bool Equals(const QueryNode *other) const override;
 	//! Create a copy of this SelectNode
 	unique_ptr<QueryNode> Copy() const override;

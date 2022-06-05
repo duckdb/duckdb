@@ -5,6 +5,8 @@
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 struct MakeDateOperator {

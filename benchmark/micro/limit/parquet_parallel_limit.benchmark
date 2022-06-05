@@ -1,0 +1,24 @@
+# name: benchmark/micro/limit/parquet_parallel_limit.benchmark
+# description: Benchmark of parallel limit computation
+# group: [limit]
+
+name Parallel Limit (Parquet)
+group micro
+subgroup limit
+
+require parquet
+
+load
+CREATE TABLE tmp_integers AS SELECT * FROM range(100000000) tbl(i);
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 17797934 UNION ALL SELECT 99999998 UNION ALL SELECT 99999999;
+COPY tmp_integers TO '${BENCHMARK_DIR}/integers.parquet';
+CREATE VIEW integers AS SELECT * FROM '${BENCHMARK_DIR}/integers.parquet';
+
+run
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table) LIMIT 4
+
+result I
+337
+948247
+17797934
+99999998

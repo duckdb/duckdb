@@ -3,6 +3,7 @@
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/function/table_macro_function.hpp"
 
 #include "duckdb/function/scalar_macro_function.hpp"
 
@@ -54,7 +55,7 @@ static DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_get_viewdef", {"oid", nullptr}, "(select sql from duckdb_views() v where v.view_oid=oid)"},
 	{"pg_catalog", "pg_get_constraintdef", {"constraint_oid", "pretty_bool", nullptr}, "(select constraint_text from duckdb_constraints() d_constraint where d_constraint.table_oid=constraint_oid/1000000 and d_constraint.constraint_index=constraint_oid%1000000)"},
 	{"pg_catalog", "pg_get_expr", {"pg_node_tree", "relation_oid", nullptr}, "pg_node_tree"},
-	{"pg_catalog", "format_pg_type", {"type_name", nullptr}, "case when type_name='FLOAT' then 'real' when type_name='DOUBLE' then 'double precision' when type_name='DECIMAL' then 'numeric' when type_name='VARCHAR' then 'character varying' when type_name='BLOB' then 'bytea' when type_name='TIMESTAMP' then 'timestamp without time zone' when type_name='TIME' then 'time without time zone' else lower(type_name) end"},
+	{"pg_catalog", "format_pg_type", {"type_name", nullptr}, "case when logical_type='FLOAT' then 'real' when logical_type='DOUBLE' then 'double precision' when logical_type='DECIMAL' then 'numeric' when logical_type='VARCHAR' then 'character varying' when logical_type='BLOB' then 'bytea' when logical_type='TIMESTAMP' then 'timestamp without time zone' when logical_type='TIME' then 'time without time zone' else lower(logical_type) end"},
 	{"pg_catalog", "format_type", {"type_oid", "typemod", nullptr}, "(select format_pg_type(type_name) from duckdb_types() t where t.type_oid=type_oid) || case when typemod>0 then concat('(', typemod/1000, ',', typemod%1000, ')') else '' end"},
 
 	{"pg_catalog", "pg_has_role", {"user", "role", "privilege", nullptr}, "true"},  //boolean  //does user have privilege for role
@@ -131,14 +132,9 @@ static DefaultMacro internal_macros[] = {
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
-unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(DefaultMacro &default_macro) {
-	// parse the expression
-	auto expressions = Parser::ParseExpressionList(default_macro.macro);
-	D_ASSERT(expressions.size() == 1);
-
-	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro, unique_ptr<MacroFunction> function) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
-		result->parameters.push_back(
+		function->parameters.push_back(
 		    make_unique<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 
@@ -147,8 +143,30 @@ unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(De
 	bind_info->name = default_macro.name;
 	bind_info->temporary = true;
 	bind_info->internal = true;
-	bind_info->function = move(result);
+	bind_info->type = function->type == MacroType::TABLE_MACRO ? CatalogType::TABLE_MACRO_ENTRY : CatalogType::MACRO_ENTRY;
+	bind_info->function = move(function);
 	return bind_info;
+
+}
+
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalMacroInfo(DefaultMacro &default_macro) {
+	// parse the expression
+	auto expressions = Parser::ParseExpressionList(default_macro.macro);
+	D_ASSERT(expressions.size() == 1);
+
+	auto result = make_unique<ScalarMacroFunction>(move(expressions[0]));
+	return CreateInternalTableMacroInfo(default_macro, move(result));
+}
+
+unique_ptr<CreateMacroInfo> DefaultFunctionGenerator::CreateInternalTableMacroInfo(DefaultMacro &default_macro) {
+	Parser parser;
+	parser.ParseQuery(default_macro.macro);
+	D_ASSERT(parser.statements.size() == 1);
+	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
+
+	auto &select = (SelectStatement &) *parser.statements[0];
+	auto result = make_unique<TableMacroFunction>(move(select.node));
+	return CreateInternalTableMacroInfo(default_macro, move(result));
 }
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &input_schema, const string &input_name) {

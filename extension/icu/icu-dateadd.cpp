@@ -88,7 +88,7 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 
 	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
 	// and if the µs are out of order, then there must be an extra ms.
-	if (start_micros > (idx_t) end_micros) {
+	if (start_micros > (idx_t)end_micros) {
 		end_date.value -= Interval::MICROS_PER_MSEC;
 		end_micros += Interval::MICROS_PER_MSEC;
 	}
@@ -120,7 +120,7 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 
 	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
 	// and if the µs are out of order, then there must be an extra ms.
-	if (start_micros > (idx_t) end_micros) {
+	if (start_micros > (idx_t)end_micros) {
 		end_date.value -= Interval::MICROS_PER_MSEC;
 		end_micros += Interval::MICROS_PER_MSEC;
 	}
@@ -178,7 +178,7 @@ struct ICUDateAdd : public ICUDateFunc {
 	template <typename TA, typename TB, typename TR, typename OP>
 	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
 	                                                   const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>,false, false, Bind);
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, TR, OP>, false, false, Bind);
 	}
 
 	template <typename TA, typename TB, typename OP>

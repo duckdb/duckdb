@@ -11,6 +11,8 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "duckdb_python/pybind_wrapper.hpp"
+
 namespace duckdb {
 
 struct PandasScanFunction : public TableFunction {
@@ -46,13 +48,19 @@ public:
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 	static void PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-	                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output);
+	                           FunctionOperatorData *operator_state, DataChunk &output);
 
 	static void PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-	                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output,
+	                                   FunctionOperatorData *operator_state, DataChunk &output,
 	                                   ParallelState *parallel_state_p);
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
+
+	static idx_t PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                                     FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+
+	// Helper function that transform pandas df names to make them work with our binder
+	static py::object PandasReplaceCopiedNames(const py::object &original_df);
 };
 
 } // namespace duckdb

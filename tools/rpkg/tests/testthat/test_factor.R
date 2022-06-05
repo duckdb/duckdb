@@ -72,3 +72,13 @@ test_that("single value factors round trip correctly, issue 2627", {
   df1$year <- as.character(df1$year)
   expect_identical(df1, df2)
 })
+
+
+test_that("huge-cardinality factors do not cause strange crashes, issue 3639", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  set.seed(123)
+  df <- data.frame(col1 = factor(sample(5000, 10^6, replace=TRUE)))
+  duckdb_register(con, "df", df)
+})

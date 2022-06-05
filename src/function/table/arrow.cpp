@@ -154,8 +154,48 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		idx_t fixed_size = std::stoi(parameters);
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		return LogicalType::BLOB;
+	} else if (format[0] == 't' && format[1] == 's') {
+		// Timestamp with Timezone
+		if (format[2] == 'n') {
+			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
+		} else if (format[2] == 'u') {
+			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
+		} else if (format[2] == 'm') {
+			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+		} else if (format[2] == 's') {
+			arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
+		} else {
+			throw NotImplementedException(" Timestamptz precision of not accepted");
+		}
+		// TODO right now we just get the UTC value. We probably want to support this properly in the future
+		return LogicalType::TIMESTAMP_TZ;
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
+	}
+}
+
+// Renames repeated columns and case sensitive columns
+void RenameArrowColumns(vector<string> &names) {
+	unordered_map<string, idx_t> name_map;
+	for (auto &column_name : names) {
+		// put it all lower_case
+		auto low_column_name = StringUtil::Lower(column_name);
+		if (name_map.find(low_column_name) == name_map.end()) {
+			// Name does not exist yet
+			name_map[low_column_name]++;
+		} else {
+			// Name already exists, we add _x where x is the repetition number
+			string new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
+			auto new_column_name_low = StringUtil::Lower(new_column_name);
+			while (name_map.find(new_column_name_low) != name_map.end()) {
+				// This name is already here due to a previous definition
+				name_map[low_column_name]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[low_column_name]);
+				new_column_name_low = StringUtil::Lower(new_column_name);
+			}
+			column_name = new_column_name;
+			name_map[new_column_name_low]++;
+		}
 	}
 }
 
@@ -202,6 +242,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		}
 		names.push_back(name);
 	}
+	RenameArrowColumns(names);
 	return move(res);
 }
 
@@ -511,7 +552,25 @@ void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_stat
 			continue;
 		}
 		if (!TryMultiplyOperator::Operation((int64_t)src_ptr[row], conversion, tgt_ptr[row].micros)) {
-			throw ConversionException("Could not convert Interval to Microsecond");
+			throw ConversionException("Could not convert Time to Microsecond");
+		}
+	}
+}
+
+void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, int64_t nested_offset,
+                           idx_t size, int64_t conversion) {
+	auto tgt_ptr = (timestamp_t *)FlatVector::GetData(vector);
+	auto &validity_mask = FlatVector::Validity(vector);
+	auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+	if (nested_offset != -1) {
+		src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+	}
+	for (idx_t row = 0; row < size; row++) {
+		if (!validity_mask.RowIsValid(row)) {
+			continue;
+		}
+		if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].value)) {
+			throw ConversionException("Could not convert TimestampTZ to Microsecond");
 		}
 	}
 }
@@ -676,6 +735,37 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		break;
 	}
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
+		switch (precision) {
+		case ArrowDateTimeType::SECONDS: {
+			TimestampTZConversion(vector, array, scan_state, nested_offset, size, 1000000);
+			break;
+		}
+		case ArrowDateTimeType::MILLISECONDS: {
+			TimestampTZConversion(vector, array, scan_state, nested_offset, size, 1000);
+			break;
+		}
+		case ArrowDateTimeType::MICROSECONDS: {
+			DirectConversion(vector, array, scan_state, nested_offset);
+			break;
+		}
+		case ArrowDateTimeType::NANOSECONDS: {
+			auto tgt_ptr = (timestamp_t *)FlatVector::GetData(vector);
+			auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			if (nested_offset != -1) {
+				src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+			}
+			for (idx_t row = 0; row < size; row++) {
+				tgt_ptr[row].value = src_ptr[row] / 1000;
+			}
+			break;
+		}
+		default:
+			throw std::runtime_error("Unsupported precision for TimestampTZ Type ");
+		}
+		break;
+	}
 	case LogicalTypeId::INTERVAL: {
 		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
 		switch (precision) {
@@ -799,6 +889,14 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto &struct_validity_mask = FlatVector::Validity(vector);
 		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
 			SetValidityMask(*child_entries[type_idx], *array.children[type_idx], scan_state, size, nested_offset);
+			if (!struct_validity_mask.AllValid()) {
+				auto &child_validity_mark = FlatVector::Validity(*child_entries[type_idx]);
+				for (idx_t i = 0; i < size; i++) {
+					if (!struct_validity_mask.RowIsValid(i)) {
+						child_validity_mark.SetInvalid(i);
+					}
+				}
+			}
 			ColumnArrowToDuckDB(*child_entries[type_idx], *array.children[type_idx], scan_state, size,
 			                    arrow_convert_data, col_idx, arrow_convert_idx, nested_offset, &struct_validity_mask);
 		}
@@ -985,7 +1083,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
-                                           FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+                                           FunctionOperatorData *operator_state, DataChunk &output) {
 
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
@@ -1010,8 +1108,8 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 }
 
 void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const FunctionData *bind_data,
-                                                   FunctionOperatorData *operator_state, DataChunk *input,
-                                                   DataChunk &output, ParallelState *parallel_state_p) {
+                                                   FunctionOperatorData *operator_state, DataChunk &output,
+                                                   ParallelState *parallel_state_p) {
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
 	//! Out of tuples in this chunk

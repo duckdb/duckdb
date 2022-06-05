@@ -37,13 +37,8 @@ public:
 	//! The result types of the transaction
 	vector<LogicalType> types;
 
-	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
-	bool read_only;
-	//! Whether or not the statement requires a valid transaction. Almost all statements require this, with the
-	//! exception of
-	bool requires_valid_transaction;
-	//! Whether or not the result can be streamed to the client
-	bool allow_stream_result;
+	//! The statement properties
+	StatementProperties properties;
 
 	//! The catalog version of when the prepared statement was bound
 	//! If this version is lower than the current catalog version, we have to rebind the prepared statement
