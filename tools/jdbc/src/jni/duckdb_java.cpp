@@ -272,7 +272,17 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	}
 
 	auto query = byte_array_to_string(env, query_j);
-	auto statements = conn_ref->ExtractStatements(query.c_str());
+
+	// invalid sql raises a parse exception
+	// need to be caught and thrown via JNI
+	vector<unique_ptr<SQLStatement>> statements;
+	try {
+		statements = conn_ref->ExtractStatements(query.c_str());
+	} catch (const std::exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return nullptr;
+	}
+
 	if (statements.empty()) {
 		env->ThrowNew(J_SQLException, "No statements to execute.");
 		return nullptr;
