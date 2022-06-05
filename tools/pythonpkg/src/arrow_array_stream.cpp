@@ -110,6 +110,18 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 	}
+	case LogicalTypeId::TIMESTAMP_MS: {
+		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
+		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("ms")));
+	}
+	case LogicalTypeId::TIMESTAMP_NS: {
+		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
+		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("ns")));
+	}
+	case LogicalTypeId::TIMESTAMP_SEC: {
+		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
+		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("s")));
+	}
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
 		return dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us", py::arg("tz") = timezone_config)));

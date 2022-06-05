@@ -88,7 +88,7 @@ struct ArrowScanGlobalState : public GlobalTableFunctionState {
 	bool ready = false;
 	idx_t max_threads = 1;
 
-	DUCKDB_API virtual idx_t MaxThreads() const {
+	idx_t MaxThreads() const override {
 		return max_threads;
 	}
 };
