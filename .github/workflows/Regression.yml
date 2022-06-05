@@ -111,7 +111,7 @@ jobs:
         python scripts/regression_test_python.py --threads=2 --out-file=new.csv
 
     - name: Cleanup New Version
-      run:
+      run: |
         cd tools/pythonpkg
         ./clean.sh
         cd ../..
