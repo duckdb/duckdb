@@ -72,7 +72,7 @@ function df_scan_column(
     result_array::Vector{DUCK_TYPE} = DuckDB.get_array(vector, DUCK_TYPE)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
-    	val = getindex(input_column, df_offset + i)
+        val = getindex(input_column, df_offset + i)
         if val === missing
             DuckDB.setinvalid(validity, i)
         else
@@ -94,7 +94,7 @@ function df_scan_string_column(
     vector::Vec = DuckDB.get_vector(output, result_idx)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
-    	val = getindex(input_column, df_offset + i)
+        val = getindex(input_column, df_offset + i)
         if val === missing
             DuckDB.setinvalid(validity, i)
         else
@@ -166,7 +166,7 @@ function df_global_init_function(info::DuckDB.InitInfo)
 end
 
 function df_local_init_function(info::DuckDB.InitInfo)
-	columns = DuckDB.get_projected_columns(info)
+    columns = DuckDB.get_projected_columns(info)
     return DFLocalInfo(columns)
 end
 
