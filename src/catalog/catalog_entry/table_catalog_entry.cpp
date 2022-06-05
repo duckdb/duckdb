@@ -16,6 +16,8 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -155,6 +157,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 		auto foreign_key_constraint_info = (AlterForeignKeyInfo *)table_info;
 		return SetForeignKeyConstraint(context, *foreign_key_constraint_info);
+	}
+	case AlterTableType::SET_NOT_NULL: {
+		auto set_not_null_info = (SetNotNullInfo *)table_info;
+		return SetNotNull(context, *set_not_null_info);
+	}
+	case AlterTableType::DROP_NOT_NULL: {
+		auto drop_not_null_info = (DropNotNullInfo *)table_info;
+		return DropNotNull(context, *drop_not_null_info);
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
@@ -369,6 +379,113 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
+	/*
+	 * Steps	Desc		Required
+	 * 1.	Get create_info.	Y
+	 * 2. 	Get column index.	Y
+	 * 3.	Get constraints.	Y
+	 * 4.	Check idempotence. If not_null already.	Y
+	 * 5.	Check eligebility. If contains null value. Y
+	 * 6.	Bind create info.	Y
+	 * 7.	Make TableCatalogEntry.	Y
+	 *
+	 */
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	// columns
+	vector<column_t> column_ids;
+	// types
+	vector<LogicalType> types;
+
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+		column_ids.push_back(i);
+		types.push_back(columns[i].type);
+	}
+
+	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	bool has_not_null = false;
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		if(constraint->type == ConstraintType::NOT_NULL){
+			auto &not_null = (NotNullConstraint&)*constraint;
+			if(not_null.index == not_null_idx){
+				has_not_null = true;
+			}
+		}
+		create_info->constraints.push_back(move(constraint));
+	}
+	// If this column has NULL value, throw exception
+	if (!has_not_null) {
+		//check!
+		//vector<column_t> column_ids{not_null_idx};
+		// Transaction
+		auto &transaction = Transaction::GetTransaction(context);
+
+		// result
+		DataChunk result;
+		result.Initialize(types);
+
+		// filter
+		TableFilterSet table_filters;
+		table_filters.PushFilter(not_null_idx, make_unique<IsNullFilter>());
+		//table_filters.PushFilter(0, make_unique<IsNotNullFilter>());
+
+		// state
+		TableScanState state;
+
+		storage->InitializeScan(transaction, state, column_ids, &table_filters);
+		storage->Scan(transaction, result, state, column_ids);
+
+		if(result.size()){
+			throw CatalogException("Error: Constraint Error: Constraint Error: NOT NULL constraint failed: %s.%s", storage->info->table, columns[not_null_idx].name); 
+		}
+		// Able to set, add constraint
+		create_info->constraints.push_back(make_unique<NotNullConstraint>(not_null_idx));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
+	/*
+	 * Steps	Desc		Required
+	 * 1. 	Get column index. 	?
+	 * 2.	Get create_info.	Y
+	 * 3.	Get constraints.	Y
+	 * 4.	Bind create info.	Y
+	 * 5.	Make TableCatalogEntry.	Y
+	 * 
+	 */
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+	}
+
+	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		// Get NOT_NULL constraint.
+		// If for this column
+		// For drop not null, skip this one.
+		if(constraint->type == ConstraintType::NOT_NULL){
+			auto &not_null = (NotNullConstraint&)*constraint;
+			if(not_null.index == not_null_idx){
+				continue;
+			}
+		}
 		create_info->constraints.push_back(move(constraint));
 	}
 

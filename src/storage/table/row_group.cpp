@@ -87,6 +87,9 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 
 bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
+	state.row_group = nullptr;
+	state.vector_index = 0;
+
 	if (state.parent.table_filters) {
 		if (!CheckZonemap(*state.parent.table_filters, column_ids)) {
 			return false;

@@ -267,7 +267,7 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 }
 
 template <bool IS_NULL>
-static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t approved_tuple_count, ValidityMask &mask) {
+static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t &approved_tuple_count, ValidityMask &mask) {
 	if (mask.AllValid()) {
 		// no NULL values
 		if (IS_NULL) {
@@ -285,6 +285,7 @@ static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t approved_tuple_c
 			}
 		}
 		sel.Initialize(result_sel);
+		approved_tuple_count = result_count;
 		return result_count;
 	}
 }
