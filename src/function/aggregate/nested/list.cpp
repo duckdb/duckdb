@@ -1,7 +1,7 @@
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -42,7 +42,9 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
-			state->list_vector = new Vector(list_vector_type);
+			// NOTE: any number bigger than 1 can cause DuckDB to run out of memory for specific queries
+			// consisting of millions of groups in the group by and complex (nested) vectors
+			state->list_vector = new Vector(list_vector_type, 1);
 		}
 		ListVector::Append(*state->list_vector, input, i + 1, i);
 	}
@@ -61,7 +63,10 @@ static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *b
 			continue;
 		}
 		if (!combined_ptr[i]->list_vector) {
-			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType());
+			// NOTE: initializing this with a capacity of ListVector::GetListSize(*state->list_vector) causes
+			// DuckDB to run out of memory for multiple threads with millions of groups in the group by and complex
+			// (nested) vectors
+			combined_ptr[i]->list_vector = new Vector(state->list_vector->GetType(), 1);
 		}
 		ListVector::Append(*combined_ptr[i]->list_vector, ListVector::GetEntry(*state->list_vector),
 		                   ListVector::GetListSize(*state->list_vector));
@@ -76,6 +81,7 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	auto &mask = FlatVector::Validity(result);
+	auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -86,22 +92,14 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 			continue;
 		}
 
-		auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 		auto &state_lv = *state->list_vector;
 		auto state_lv_count = ListVector::GetListSize(state_lv);
 		list_struct_data[rid].length = state_lv_count;
 		list_struct_data[rid].offset = total_len;
 		total_len += state_lv_count;
-	}
 
-	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
-		if (!state->list_vector) {
-			continue;
-		}
-		auto &list_vec = *state->list_vector;
-		auto &list_vec_to_append = ListVector::GetEntry(list_vec);
-		ListVector::Append(result, list_vec_to_append, ListVector::GetListSize(list_vec));
+		auto &list_vec_to_append = ListVector::GetEntry(state_lv);
+		ListVector::Append(result, list_vec_to_append, state_lv_count);
 	}
 }
 
