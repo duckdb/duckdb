@@ -41,9 +41,9 @@
 
 #include <google/protobuf/port_def.inc>
 
+namespace duckdb {
 namespace google {
 namespace protobuf {
-
 
 template class PROTOBUF_EXPORT_TEMPLATE_DEFINE RepeatedField<bool>;
 template class PROTOBUF_EXPORT_TEMPLATE_DEFINE RepeatedField<int32_t>;
@@ -54,7 +54,7 @@ template class PROTOBUF_EXPORT_TEMPLATE_DEFINE RepeatedField<float>;
 template class PROTOBUF_EXPORT_TEMPLATE_DEFINE RepeatedField<double>;
 template class PROTOBUF_EXPORT_TEMPLATE_DEFINE RepeatedPtrField<std::string>;
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>

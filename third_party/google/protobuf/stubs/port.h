@@ -122,7 +122,7 @@
 #else
 #error "Protobuf requires at least C++11."
 #endif
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 
@@ -407,7 +407,7 @@ class BigEndian {
 
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_STUBS_PORT_H_

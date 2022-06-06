@@ -173,14 +173,16 @@
 #if defined(PROTOBUF_NAMESPACE) || defined(PROTOBUF_NAMESPACE_ID)
 #error PROTOBUF_NAMESPACE or PROTOBUF_NAMESPACE_ID was previously defined
 #endif
-#define PROTOBUF_NAMESPACE "google::protobuf"
-#define PROTOBUF_NAMESPACE_ID google::protobuf
+#define PROTOBUF_NAMESPACE "duckdb::google::protobuf"
+#define PROTOBUF_NAMESPACE_ID duckdb::google::protobuf
 #define PROTOBUF_NAMESPACE_OPEN \
+  namespace duckdb {            \
   namespace google {            \
   namespace protobuf {
 #define PROTOBUF_NAMESPACE_CLOSE \
   } /* namespace protobuf */     \
-  } /* namespace google */
+  } /* namespace google */       \
+  } /* namespace duckdb */
 
 #ifdef PROTOBUF_ALWAYS_INLINE
 #error PROTOBUF_ALWAYS_INLINE was previously defined
@@ -676,10 +678,10 @@
 #endif
 
 #define PROTOBUF_TC_PARAM_DECL                                 \
-  ::google::protobuf::MessageLite *msg, const char *ptr,                 \
-      ::google::protobuf::internal::ParseContext *ctx,                   \
-      const ::google::protobuf::internal::TcParseTableBase *table,       \
-      uint64_t hasbits, ::google::protobuf::internal::TcFieldData data
+  duckdb::google::protobuf::MessageLite *msg, const char *ptr,                 \
+      duckdb::google::protobuf::internal::ParseContext *ctx,                   \
+      const duckdb::google::protobuf::internal::TcParseTableBase *table,       \
+      uint64_t hasbits, duckdb::google::protobuf::internal::TcFieldData data
 
 #ifdef PROTOBUF_UNUSED
 #error PROTOBUF_UNUSED was previously defined

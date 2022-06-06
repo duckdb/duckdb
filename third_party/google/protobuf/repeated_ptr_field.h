@@ -72,7 +72,7 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 
@@ -2008,7 +2008,7 @@ extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE
 
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_REPEATED_PTR_FIELD_H__

@@ -60,7 +60,7 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 class Arena;
@@ -77,7 +77,9 @@ class FieldSkipper;  // wire_format_lite.h
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
+}
 
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -1554,7 +1556,7 @@ void LinkExtensionReflection(
 
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_EXTENSION_SET_H__

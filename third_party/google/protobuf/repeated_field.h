@@ -73,7 +73,7 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 
@@ -484,7 +484,7 @@ class RepeatedField final {
   using FastAdder = FastAdderImpl<>;
 
   friend class TestRepeatedFieldHelper;
-  friend class ::google::protobuf::internal::ParseContext;
+  friend class duckdb::google::protobuf::internal::ParseContext;
 };
 
 namespace internal {
@@ -1051,7 +1051,7 @@ extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<double>;
 
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_REPEATED_FIELD_H__

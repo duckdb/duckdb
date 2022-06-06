@@ -68,7 +68,7 @@
 
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -1909,7 +1909,7 @@ bool ParseMessageSetItemImpl(io::CodedInputStream* input, MS ms) {
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_WIRE_FORMAT_LITE_H__
