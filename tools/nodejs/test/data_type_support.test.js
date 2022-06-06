@@ -89,4 +89,17 @@ describe("data type support", function () {
       done();
     });
   });
+  it("supports DECIMAL values", function (done) {
+    db.run("CREATE TABLE decimal_table (d DECIMAL(24, 6))");
+    const stmt = db.prepare("INSERT INTO decimal_table VALUES (?)");
+    const values = [0, -1, 23534642362547.543463];
+    values.forEach((d) => {
+      stmt.run(d);
+    });
+    db.prepare("SELECT d from decimal_table;").all((err, res) => {
+      assert(err === null);
+      assert(res.every((v, i) => v.d === values[i]));
+      done();
+    });
+  });
 });

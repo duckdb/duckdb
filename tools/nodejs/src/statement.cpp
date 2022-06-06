@@ -148,6 +148,9 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 	case duckdb::LogicalTypeId::HUGEINT: {
 		value = Napi::Number::New(env, dval.GetValue<double>());
 	} break;
+	case duckdb::LogicalTypeId::DECIMAL: {
+		value = Napi::Number::New(env, dval.GetValue<double>());
+	} break;
 	case duckdb::LogicalTypeId::INTERVAL: {
 		auto interval = duckdb::IntervalValue::Get(dval);
 		is_object_value = true;
