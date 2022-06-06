@@ -180,7 +180,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
-	LogLine("name\trun\tnruns\ttiming");
+	LogLine("name\trun\ttiming");
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}

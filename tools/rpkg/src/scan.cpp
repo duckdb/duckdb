@@ -56,12 +56,20 @@ struct DataFrameScanBindData : public TableFunctionData {
 	bool experimental;
 };
 
-struct DataFrameParallelState : public ParallelState {
+struct DataFrameGlobalState : public GlobalTableFunctionState {
+	DataFrameGlobalState(idx_t max_threads) : max_threads(max_threads) {
+	}
+
 	mutex lock;
-	idx_t row_group_index = 0;
+	idx_t position = 0;
+	idx_t max_threads;
+
+	idx_t MaxThreads() const override {
+		return max_threads;
+	}
 };
 
-struct DataFrameOperatorData : public FunctionOperatorData {
+struct DataFrameLocalState : public LocalTableFunctionState {
 	bool done = false;
 	vector<column_t> column_ids;
 	idx_t position;
@@ -69,8 +77,8 @@ struct DataFrameOperatorData : public FunctionOperatorData {
 	idx_t count;
 };
 
-static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<string> &names) {
 	data_frame df((SEXP)input.inputs[0].GetPointer());
 
 	auto experimental = get_bool_param(input.named_parameters, "experimental", false);
@@ -156,27 +164,50 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, Tabl
 	return make_unique<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
 }
 
-static void dataframe_scan_init_internal(ClientContext &context, const DataFrameScanBindData *bind_data,
-                                         DataFrameOperatorData *operator_state, idx_t offset, idx_t count) {
-	D_ASSERT(bind_data);
-	D_ASSERT(operator_state);
-
-	operator_state->position = 0;
-	operator_state->offset = offset;
-	operator_state->count = count;
-	operator_state->done = false;
-}
-
-static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data_p,
-                                                            const vector<column_t> &column_ids,
-                                                            TableFilterCollection *filters) {
+static idx_t DataFrameScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	D_ASSERT(bind_data_p);
 	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
-	auto operator_data = make_unique<DataFrameOperatorData>();
+	if (!bind_data->experimental) {
+		return 1;
+	}
+	return ceil((double)bind_data->row_count / bind_data->rows_per_task);
+}
 
-	operator_data->column_ids = column_ids;
-	dataframe_scan_init_internal(context, bind_data, operator_data.get(), 0, bind_data->row_count);
-	return move(operator_data);
+static unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContext &context,
+                                                                    TableFunctionInitInput &input) {
+	auto result = make_unique<DataFrameGlobalState>(DataFrameScanMaxThreads(context, input.bind_data));
+	result->position = 0;
+	return move(result);
+}
+
+static bool DataFrameScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
+                                           DataFrameLocalState &local_state, DataFrameGlobalState &global_state) {
+	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
+
+	lock_guard<mutex> parallel_lock(global_state.lock);
+	if (global_state.position >= bind_data->row_count) {
+		return false;
+	}
+	auto offset = global_state.position;
+	auto count = MinValue<idx_t>(bind_data->rows_per_task, bind_data->row_count - offset);
+	local_state.position = 0;
+	local_state.offset = offset;
+	local_state.count = count;
+	local_state.done = false;
+	global_state.position += bind_data->rows_per_task;
+	return true;
+}
+
+static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+                                                                  GlobalTableFunctionState *global_state) {
+	auto &gstate = (DataFrameGlobalState &)*global_state;
+	auto result = make_unique<DataFrameLocalState>();
+
+	result->column_ids = input.column_ids;
+	if (!DataFrameScanParallelStateNext(context, input.bind_data, *result, gstate)) {
+		result->done = true;
+	}
+	return move(result);
 }
 
 struct DedupPointerEnumType {
@@ -188,14 +219,16 @@ struct DedupPointerEnumType {
 	}
 };
 
-static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_data_p, DataChunk &output) {
-	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
-	auto &operator_data = (DataFrameOperatorData &)*operator_data_p;
+static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto &bind_data = (DataFrameScanBindData &)*data.bind_data;
+	auto &operator_data = (DataFrameLocalState &)*data.local_state;
+	auto &gstate = (DataFrameGlobalState &)*data.global_state;
 	if (operator_data.position >= operator_data.count) {
-		return;
+		if (!DataFrameScanParallelStateNext(context, data.bind_data, operator_data, gstate)) {
+			return;
+		}
 	}
-	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, operator_data.count - operator_data.position);
+	idx_t this_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, operator_data.count - operator_data.position);
 	output.SetCardinality(this_count);
 
 	auto sexp_offset = operator_data.offset + operator_data.position;
@@ -334,69 +367,20 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 	operator_data.position += this_count;
 }
 
-static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &context, const FunctionData *bind_data_p) {
+static unique_ptr<NodeStatistics> DataFrameScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (DataFrameScanBindData &)*bind_data_p;
 	return make_unique<NodeStatistics>(bind_data.row_count, bind_data.row_count);
 }
 
-static string dataframe_scan_tostring(const FunctionData *bind_data_p) {
+static string DataFrameScanToString(const FunctionData *bind_data_p) {
 	return "data.frame";
 }
 
-static idx_t dataframe_scan_max_threads(ClientContext &context, const FunctionData *bind_data_p) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
-	if (!bind_data->experimental) {
-		return 1;
-	}
-	return ceil((double)bind_data->row_count / bind_data->rows_per_task);
-}
-
-static unique_ptr<ParallelState> dataframe_scan_init_parallel_state(ClientContext &context, const FunctionData *,
-                                                                    const vector<column_t> &column_ids,
-                                                                    TableFilterCollection *) {
-	auto result = make_unique<DataFrameParallelState>();
-	result->row_group_index = 0;
-	return move(result);
-}
-
-static bool dataframe_scan_parallel_next(ClientContext &context, const FunctionData *bind_data_p,
-                                         FunctionOperatorData *operator_data_p, ParallelState *parallel_state_p) {
-	D_ASSERT(bind_data_p);
-	D_ASSERT(operator_data_p);
-	D_ASSERT(parallel_state_p);
-
-	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
-	auto operator_data = (DataFrameOperatorData *)operator_data_p;
-	auto &parallel_state = (DataFrameParallelState &)*parallel_state_p;
-
-	lock_guard<mutex> parallel_lock(parallel_state.lock);
-
-	if (parallel_state.row_group_index < ceil((double)bind_data->row_count / bind_data->rows_per_task)) {
-		auto offset = parallel_state.row_group_index * bind_data->rows_per_task;
-		auto count = std::min(bind_data->rows_per_task, bind_data->row_count - offset);
-		dataframe_scan_init_internal(context, bind_data, operator_data, offset, count);
-		parallel_state.row_group_index++;
-		return true;
-	}
-	return false;
-}
-
-static unique_ptr<FunctionOperatorData>
-dataframe_scan_parallel_init(ClientContext &context, const FunctionData *bind_data_p, ParallelState *parallel_state_p,
-                             const vector<column_t> &column_ids, TableFilterCollection *) {
-	auto operator_data = make_unique<DataFrameOperatorData>();
-	operator_data->column_ids = column_ids;
-	if (!dataframe_scan_parallel_next(context, bind_data_p, operator_data.get(), parallel_state_p)) {
-		operator_data->done = true;
-	}
-	return move(operator_data);
-}
-
 DataFrameScanFunction::DataFrameScanFunction()
-    : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, dataframe_scan_function, dataframe_scan_bind,
-                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality, nullptr,
-                    dataframe_scan_tostring, dataframe_scan_max_threads, dataframe_scan_init_parallel_state, nullptr,
-                    dataframe_scan_parallel_init, dataframe_scan_parallel_next, true, false, nullptr) {
+    : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, DataFrameScanFunc, DataFrameScanBind,
+                    DataFrameScanInitGlobal, DataFrameScanInitLocal) {
+	cardinality = DataFrameScanCardinality;
+	to_string = DataFrameScanToString;
 	named_parameters["experimental"] = LogicalType::BOOLEAN;
-};
+	projection_pushdown = true;
+}

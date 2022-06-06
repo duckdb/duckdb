@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-struct DuckDBFunctionsData : public FunctionOperatorData {
+struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	DuckDBFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
@@ -71,9 +71,7 @@ static void ExtractFunctionsFromSchema(ClientContext &context, SchemaCatalogEntr
 	            [&](CatalogEntry *entry) { result.entries.push_back(entry); });
 }
 
-unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBFunctionsData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -442,9 +440,8 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
-void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (DuckDBFunctionsData &)*operator_state;
+void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBFunctionsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
