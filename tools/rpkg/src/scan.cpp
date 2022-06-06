@@ -70,7 +70,6 @@ struct DataFrameGlobalState : public GlobalTableFunctionState {
 };
 
 struct DataFrameLocalState : public LocalTableFunctionState {
-	bool done = false;
 	vector<column_t> column_ids;
 	idx_t position;
 	idx_t offset;
@@ -182,19 +181,22 @@ static unique_ptr<GlobalTableFunctionState> DataFrameScanInitGlobal(ClientContex
 
 static bool DataFrameScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                            DataFrameLocalState &local_state, DataFrameGlobalState &global_state) {
-	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
+	auto &bind_data = (const DataFrameScanBindData &)*bind_data_p;
 
 	lock_guard<mutex> parallel_lock(global_state.lock);
-	if (global_state.position >= bind_data->row_count) {
+	if (global_state.position >= bind_data.row_count) {
+		local_state.position = 0;
+		local_state.offset = 0;
+		local_state.count = 0;
 		return false;
 	}
 	auto offset = global_state.position;
-	auto count = MinValue<idx_t>(bind_data->rows_per_task, bind_data->row_count - offset);
+	auto count = MinValue<idx_t>(bind_data.rows_per_task, bind_data.row_count - offset);
 	local_state.position = 0;
 	local_state.offset = offset;
 	local_state.count = count;
-	local_state.done = false;
-	global_state.position += bind_data->rows_per_task;
+
+	global_state.position += bind_data.rows_per_task;
 	return true;
 }
 
@@ -204,9 +206,7 @@ static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ClientContext 
 	auto result = make_unique<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
-	if (!DataFrameScanParallelStateNext(context, input.bind_data, *result, gstate)) {
-		result->done = true;
-	}
+	DataFrameScanParallelStateNext(context, input.bind_data, *result, gstate);
 	return move(result);
 }
 
