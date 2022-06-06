@@ -18,8 +18,8 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
- python-debug-linux:
-    name: Python Debug - Linux (64 Bit)
+ python-debug-mac:
+    name: Python Address Sanitizer (Mac Os)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     env:
@@ -27,10 +27,7 @@ jobs:
       BUILD_PYTHON: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      CIBW_BUILD: 'cp39-manylinux_x86_64'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-      PYTEST_TIMEOUT: '600'
+      DUCKDEBUG: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -48,18 +45,20 @@ jobs:
 
     - name: Install Python 3.9
       run: |
-        wget https://www.python.org/ftp/python/3.9.9/Python-3.9.9.tgz
-        tar xvf Python-3.9.9.tgz
-        cd Python-3.9.9
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install --with-pydebug  
+        wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
+        tar xvf v3.9.12.zip
+        rm v3.9.12.zip
+        cd cpython-3.9.12
+        mkdir debug-build
+        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=pwd/debug-build --with-openssl=/opt/homebrew/opt/openssl@3/
         make -j
         make install
-        python3.9 --version
-        python3.9 -m pip install pip
-        python3.9 -m pip install requests
-        python3.9 -m pip install cibuildwheel
-        python3.9 -m pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "requests>=2.26" "pyarrow==7.0"
+        export PATH=pwd/debug-build/bin/:$PATH
+        python3 -m pip install numpy
+        python3 -m pip install pandas
+        python3 -m pip install arrow
+        python3 -m pip install pytest
+        python3 -m pip install psutil
 
     - name: Install CMake
       run: |
@@ -70,7 +69,7 @@ jobs:
     - name: Build
       run: |
         cd tools/pythonpkg
-        python3.9 setup.py install
+        python3 setup.py install
 
     - name: Run Tests
-      run: python3.9 -m pytest {project}/tests/fast
+      run: python3 -m pytest {project}/tests/fast
