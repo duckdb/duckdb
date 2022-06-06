@@ -34,7 +34,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Install Python 3.9
+    - name: Run Python with sanitizer on
       run: |
         brew install openssl
         export OPENSSL_ROOT_DIR=`brew --prefix openssl`
@@ -52,11 +52,6 @@ jobs:
         python3 -m pip install arrow
         python3 -m pip install pytest
         python3 -m pip install psutil
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
+        cd ../tools/pythonpkg
         python3 setup.py install
-
-    - name: Run Tests
-      run: python3 -m pytest {project}/tests/fast
+        python3 -m pytest {project}/tests/fast
