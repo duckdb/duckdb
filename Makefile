@@ -258,8 +258,4 @@ sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
 
 clangd:
-	mkdir -p ./build/clangd && \
-	cd ./build/clangd && \
-	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} ../.. && \
-	cd ../.. && \
-	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json
+	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} -B build/clangd .
