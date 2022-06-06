@@ -51,20 +51,9 @@ describe("data type support", function () {
       }
     );
   });
-
   it("supports LIST values", function (done) {
     db.prepare(`SELECT ['duck', 'duck', 'goose'] as list`).each((err, row) => {
       assert.deepEqual(row.list, ["duck", "duck", "goose"]);
-      done();
-    });
-  });
-
-  it("supports MAP values", function (done) {
-    db.prepare(`SELECT [[100, 200], ['a', 'b']] as map`).each((err, row) => {
-      assert.deepEqual(row.map, [
-        [100, 200],
-        ["a", "b"],
-      ]);
       done();
     });
   });
