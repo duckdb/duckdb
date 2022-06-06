@@ -42,6 +42,18 @@ jobs:
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libffi-dev
 
+    - name: Install OpenSSL
+      run: |
+        mkdir -p build/openssl
+        cd build/openssl
+        mkdir sources build
+        curl https://www.openssl.org/source/openssl-3.0.1.tar.gz | tar xv -C sources --strip-components 1
+        export OPENSSL_ROOT_DIR=`pwd`/build
+        cd sources
+        export CC="clang -arch x86_64 -arch arm64"
+        perl ./Configure --prefix=$OPENSSL_ROOT_DIR darwin64-x86_64-cc no-asm
+        make -j
+        make install_sw
 
     - name: Install Python 3.9
       run: |
@@ -50,7 +62,7 @@ jobs:
         rm v3.9.12.zip
         cd cpython-3.9.12
         mkdir debug-build
-        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=${GITHUB_WORKSPACE}/debug-build --with-openssl=/opt/homebrew/opt/openssl@3/
+        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=${GITHUB_WORKSPACE}/debug-build --with-openssl=${GITHUB_WORKSPACE}/build/openssl/build
         make -j
         make install
         export PATH=${GITHUB_WORKSPACE}/debug-build/bin/:$PATH
