@@ -1,162 +1,162 @@
-name: NodeJS
-on:
-  push:
-    paths-ignore:
-      - '**.md'
-  pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'data/**'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/NodeJS.yml'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
-  cancel-in-progress: true
-
-defaults:
-  run:
-    shell: bash
-
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
-
-jobs:
-   linux-nodejs:
-    name: node.js Linux
-    runs-on: ubuntu-20.04
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install requirements
-      run: |
-        sudo apt-get update -y -qq
-        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-
-    - name: Build extensions
-      run: |
-        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
-
-    - name: Setup
-      run: ./scripts/node_version.sh upload
-
-    - name: Node 10
-      run: ./scripts/node_build.sh 10
-
-    - name: Node 12
-      if: github.ref == 'refs/heads/master'
-      run: ./scripts/node_build.sh 12
-
-    - name: Node 14
-      if: github.ref == 'refs/heads/master'
-      run: ./scripts/node_build.sh 14
-
-    - name: Node 15
-      if: github.ref == 'refs/heads/master'
-      run: ./scripts/node_build.sh 15
-
-    - name: Node 17
-      run: ./scripts/node_build.sh 17
-
-   osx-nodejs:
-      if: github.ref == 'refs/heads/master'
-      name: node.js OSX
-      runs-on: macos-latest
-      needs: linux-nodejs
-      steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Build extensions
-        run: |
-          brew install openssl ninja
-          export OPENSSL_ROOT_DIR=`brew --prefix openssl`
-          echo $OPENSSL_ROOT_DIR
-          GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
-
-      - name: Setup
-        run: ./scripts/node_version.sh
-
-      - name: Node 10
-        run: ./scripts/node_build.sh 10
-
-      - name: Node 12
-        if: github.ref == 'refs/heads/master'
-        run: ./scripts/node_build.sh 12
-
-      - name: Node 14
-        if: github.ref == 'refs/heads/master'
-        run: ./scripts/node_build.sh 14
-
-      - name: Node 15
-        if: github.ref == 'refs/heads/master'
-        run: ./scripts/node_build.sh 15
-
-      - name: Node 17
-        run: ./scripts/node_build.sh 17
-
-   win-nodejs:
-     name: node.js Windows
-     runs-on: windows-latest
-     needs: linux-nodejs
-
-     strategy:
-       matrix:
-         node: [ '10', '12', '14', '15' ]
-         isMaster:
-            - ${{ github.ref == 'refs/heads/master' }}
-         exclude:
-           - isMaster: false
-             node: 12
-           - isMaster: false
-             node: 14
-
-     steps:
-       - uses: actions/setup-python@v2
-         with:
-           python-version: '3.8'
-
-       - uses: actions/checkout@v2
-         with:
-           fetch-depth: 0
-
-       - name: Setup Node
-         uses: actions/setup-node@v2
-         with:
-           node-version: ${{ matrix.node }}
-
-       - name: Versions
-         run: |
-           systeminfo
-           node -v
-           npm -v
-
-       - name: Windows Build Tools
-         run: |
-           choco install python visualstudio2019-workload-vctools -y
-           npm config set msvs_version 2019
-
-       - name: Node Version
-         run: ./scripts/node_version.sh
-
-       - name: Node
-         run: ./scripts/node_build_win.sh
+#name: NodeJS
+#on:
+#  push:
+#    paths-ignore:
+#      - '**.md'
+#  pull_request:
+#    paths-ignore:
+#      - '**.md'
+#      - 'data/**'
+#      - 'examples/**'
+#      - 'test/**'
+#      - 'tools/juliapkg/**'
+#      - 'tools/pythonpkg/**'
+#      - 'tools/rpkg/**'
+#      - '.github/workflows/**'
+#      - '!.github/workflows/NodeJS.yml'
+#
+#concurrency:
+#  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+#  cancel-in-progress: true
+#
+#defaults:
+#  run:
+#    shell: bash
+#
+#env:
+#  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+#  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+#  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+#  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+#  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+#
+#jobs:
+#   linux-nodejs:
+#    name: node.js Linux
+#    runs-on: ubuntu-20.04
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install requirements
+#      run: |
+#        sudo apt-get update -y -qq
+#        sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
+#
+#    - name: Install CMake
+#      run: |
+#        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+#        chmod +x cmake-3.21.3-linux-x86_64.sh
+#        sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+#
+#    - name: Build extensions
+#      run: |
+#        GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+#
+#    - name: Setup
+#      run: ./scripts/node_version.sh upload
+#
+#    - name: Node 10
+#      run: ./scripts/node_build.sh 10
+#
+#    - name: Node 12
+#      if: github.ref == 'refs/heads/master'
+#      run: ./scripts/node_build.sh 12
+#
+#    - name: Node 14
+#      if: github.ref == 'refs/heads/master'
+#      run: ./scripts/node_build.sh 14
+#
+#    - name: Node 15
+#      if: github.ref == 'refs/heads/master'
+#      run: ./scripts/node_build.sh 15
+#
+#    - name: Node 17
+#      run: ./scripts/node_build.sh 17
+#
+#   osx-nodejs:
+#      if: github.ref == 'refs/heads/master'
+#      name: node.js OSX
+#      runs-on: macos-latest
+#      needs: linux-nodejs
+#      steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Build extensions
+#        run: |
+#          brew install openssl ninja
+#          export OPENSSL_ROOT_DIR=`brew --prefix openssl`
+#          echo $OPENSSL_ROOT_DIR
+#          GEN=ninja DISABLE_MAIN_DUCKDB_LIBRARY=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+#
+#      - name: Setup
+#        run: ./scripts/node_version.sh
+#
+#      - name: Node 10
+#        run: ./scripts/node_build.sh 10
+#
+#      - name: Node 12
+#        if: github.ref == 'refs/heads/master'
+#        run: ./scripts/node_build.sh 12
+#
+#      - name: Node 14
+#        if: github.ref == 'refs/heads/master'
+#        run: ./scripts/node_build.sh 14
+#
+#      - name: Node 15
+#        if: github.ref == 'refs/heads/master'
+#        run: ./scripts/node_build.sh 15
+#
+#      - name: Node 17
+#        run: ./scripts/node_build.sh 17
+#
+#   win-nodejs:
+#     name: node.js Windows
+#     runs-on: windows-latest
+#     needs: linux-nodejs
+#
+#     strategy:
+#       matrix:
+#         node: [ '10', '12', '14', '15' ]
+#         isMaster:
+#            - ${{ github.ref == 'refs/heads/master' }}
+#         exclude:
+#           - isMaster: false
+#             node: 12
+#           - isMaster: false
+#             node: 14
+#
+#     steps:
+#       - uses: actions/setup-python@v2
+#         with:
+#           python-version: '3.8'
+#
+#       - uses: actions/checkout@v2
+#         with:
+#           fetch-depth: 0
+#
+#       - name: Setup Node
+#         uses: actions/setup-node@v2
+#         with:
+#           node-version: ${{ matrix.node }}
+#
+#       - name: Versions
+#         run: |
+#           systeminfo
+#           node -v
+#           npm -v
+#
+#       - name: Windows Build Tools
+#         run: |
+#           choco install python visualstudio2019-workload-vctools -y
+#           npm config set msvs_version 2019
+#
+#       - name: Node Version
+#         run: ./scripts/node_version.sh
+#
+#       - name: Node
+#         run: ./scripts/node_build_win.sh
