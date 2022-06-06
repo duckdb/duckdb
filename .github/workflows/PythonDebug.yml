@@ -20,8 +20,7 @@ env:
 jobs:
  python-debug-mac:
     name: Python Address Sanitizer (Mac Os)
-    runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    runs-on: macos-latest
     env:
       GEN: ninja
       BUILD_PYTHON: 1
