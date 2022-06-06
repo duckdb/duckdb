@@ -12,8 +12,8 @@ struct VectorMetaData {
 	//! The number of entries present in this vector
 	uint16_t count;
 
-	//! Child of this vector (used only for lists and structs)
-	idx_t child_data = DConstants::INVALID_INDEX;
+	//! Child data of this vector (used only for lists and structs)
+	vector<idx_t> child_data;
 	//! Next vector entry (in case there is more data - used only in case of children of lists)
 	idx_t next_data = DConstants::INVALID_INDEX;
 };
@@ -225,10 +225,18 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	auto type_size = GetTypeIdSize(internal_type);
 	auto &vdata = vector_data[vector_index];
 	if (internal_type == PhysicalType::LIST) {
+		D_ASSERT(vdata.child_data.size() == 1);
 		// list: copy child
 		auto &child_vector = ListVector::GetEntry(result);
-		auto child_count = InitializeVector(state, vdata.child_data, child_vector);
+		auto child_count = InitializeVector(state, vdata.child_data[0], child_vector);
 		ListVector::SetListSize(result, child_count);
+	} else if (internal_type == PhysicalType::STRUCT) {
+		auto &struct_types = StructType::GetChildTypes(vector_type);
+		D_ASSERT(vdata.child_data.size() == struct_types.size());
+		auto &child_vectors = StructVector::GetEntries(result);
+		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
+			InitializeVector(state, vdata.child_data[child_idx], *child_vectors[child_idx]);
+		}
 	}
 
 	auto base_ptr = state.handles[vdata.block_id]->Ptr() + vdata.offset;
@@ -260,7 +268,9 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 		auto &current_vdata = vector_data[next_index];
 		base_ptr = state.handles[current_vdata.block_id]->Ptr() + current_vdata.offset;
 		validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
-		memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
+		if (type_size > 0) {
+			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
+		}
 		// FIXME: copy validity
 		current_offset += current_vdata.count;
 		next_index = current_vdata.next_data;
@@ -378,12 +388,13 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 	VectorData child_vector_data;
 	child_vector.Orrify(child_list_size, child_vector_data);
 
-	if (vdata_list[meta_data.vector_data_index].child_data == DConstants::INVALID_INDEX) {
-		vdata_list[meta_data.vector_data_index].child_data =
-		    meta_data.segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+	if (vdata_list[meta_data.vector_data_index].child_data.empty()) {
+		auto child_index = meta_data.segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+		vdata_list[meta_data.vector_data_index].child_data.push_back(child_index);
 	}
+	D_ASSERT(vdata_list[meta_data.vector_data_index].child_data.size() == 1);
 	auto &child_function = meta_data.copy_function.child_functions[0];
-	idx_t child_index = vdata_list[meta_data.vector_data_index].child_data;
+	idx_t child_index = vdata_list[meta_data.vector_data_index].child_data[0];
 
 	idx_t remaining = child_list_size;
 	idx_t current_list_size = 0;
@@ -412,23 +423,41 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
-                              idx_t source_offset, idx_t copy_count) {
+                          idx_t source_offset, idx_t copy_count) {
+	auto &vdata_list = meta_data.segment.vector_data;
 	// copy the NULL values for the main struct vector
 	auto &append_state = meta_data.state;
 	auto &vector_data = meta_data.GetVectorMetaData();
 	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
 	         append_state.current_chunk_state.handles.end());
 	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
-	auto validity_data = (validity_t *) base_ptr;
+	auto validity_data = (validity_t *)base_ptr;
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 
+	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
-	if (vector_data.child_data == DConstants::INVALID_INDEX) {
-
+	if (vdata_list[meta_data.vector_data_index].child_data.empty()) {
+		// no child vectors yet, allocate them
+		vdata_list[meta_data.vector_data_index].child_data.reserve(child_types.size());
+		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+			auto child_index =
+			    meta_data.segment.AllocateVector(child_types[child_idx].second, meta_data.chunk_data, meta_data.state);
+			vdata_list[meta_data.vector_data_index].child_data.push_back(child_index);
+		}
 	}
+	auto &child_vectors = StructVector::GetEntries(source);
+	D_ASSERT(vdata_list[meta_data.vector_data_index].child_data.size() == child_types.size());
+	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+		auto &child_function = meta_data.copy_function.child_functions[child_idx];
+		auto child_index = vdata_list[meta_data.vector_data_index].child_data[child_idx];
+		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
+		VectorData child_data;
+		child_vectors[child_idx]->Orrify(copy_count, child_data);
+
+		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], source_offset, copy_count);
+	}
 }
-
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
 	ColumnDataCopyFunction result;
@@ -476,7 +505,7 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	case PhysicalType::STRUCT: {
 		function = ColumnDataCopyStruct;
 		auto &child_types = StructType::GetChildTypes(type);
-		for(auto &kv : child_types) {
+		for (auto &kv : child_types) {
 			result.child_functions.push_back(GetCopyFunction(kv.second));
 		}
 		break;
@@ -494,11 +523,25 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 	return result;
 }
 
+static bool IsComplexType(const LogicalType &type) {
+	switch (type.InternalType()) {
+	case PhysicalType::STRUCT:
+		return true;
+	case PhysicalType::LIST:
+		return IsComplexType(ListType::GetChildType(type));
+	default:
+		return false;
+	};
+}
+
 void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input) {
 	D_ASSERT(types == input.GetTypes());
 
 	auto &segment = segments.back();
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
+		if (IsComplexType(input.data[vector_idx].GetType())) {
+			input.data[vector_idx].Normalify(input.size());
+		}
 		input.data[vector_idx].Orrify(input.size(), state.vector_data[vector_idx]);
 	}
 
