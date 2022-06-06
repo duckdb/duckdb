@@ -69,7 +69,7 @@ class MapIterator;
 
 // MapKey is an union type for representing any possible
 // map key.
-class PROTOBUF_EXPORT MapKey {
+class  MapKey {
 public:
 	MapKey() : type_() {
 	}
@@ -327,7 +327,7 @@ class MapFieldAccessor;
 // This class provides access to map field using reflection, which is the same
 // as those provided for RepeatedPtrField<Message>. It is used for internal
 // reflection implementation only. Users should never use this directly.
-class PROTOBUF_EXPORT MapFieldBase {
+class  MapFieldBase {
 public:
 	MapFieldBase() : arena_(nullptr), repeated_field_(nullptr), state_(STATE_MODIFIED_MAP) {
 	}
@@ -640,7 +640,7 @@ struct MapEntryToMapField<MapEntry<T, Key, Value, kKeyFieldType, kValueFieldType
 	typedef MapField<T, Key, Value, kKeyFieldType, kValueFieldType> MapFieldType;
 };
 
-class PROTOBUF_EXPORT DynamicMapField : public TypeDefinedMapFieldBase<MapKey, MapValueRef> {
+class  DynamicMapField : public TypeDefinedMapFieldBase<MapKey, MapValueRef> {
 public:
 	explicit DynamicMapField(const Message *default_entry);
 	DynamicMapField(const Message *default_entry, Arena *arena);
@@ -682,7 +682,7 @@ private:
 
 // MapValueConstRef points to a map value. Users can NOT modify
 // the map value.
-class PROTOBUF_EXPORT MapValueConstRef {
+class  MapValueConstRef {
 public:
 	MapValueConstRef() : data_(nullptr), type_() {
 	}
@@ -769,7 +769,7 @@ private:
 
 // MapValueRef points to a map value. Users are able to modify
 // the map value.
-class PROTOBUF_EXPORT MapValueRef final : public MapValueConstRef {
+class  MapValueRef final : public MapValueConstRef {
 public:
 	MapValueRef() {
 	}
@@ -845,7 +845,7 @@ private:
 
 #undef TYPE_CHECK
 
-class PROTOBUF_EXPORT MapIterator {
+class  MapIterator {
 public:
 	MapIterator(Message *message, const FieldDescriptor *field) {
 		const Reflection *reflection = message->GetReflection();

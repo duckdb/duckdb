@@ -78,7 +78,7 @@ namespace internal {
 // non-reflection based routines.
 //
 // This class is really a namespace that contains only static methods
-class PROTOBUF_EXPORT WireFormat {
+class  WireFormat {
 public:
 	// Given a field return its WireType
 	static inline WireFormatLite::WireType WireTypeForField(const FieldDescriptor *field);
@@ -270,7 +270,7 @@ private:
 };
 
 // Subclass of FieldSkipper which saves skipped fields to an UnknownFieldSet.
-class PROTOBUF_EXPORT UnknownFieldSetFieldSkipper : public FieldSkipper {
+class  UnknownFieldSetFieldSkipper : public FieldSkipper {
 public:
 	UnknownFieldSetFieldSkipper(UnknownFieldSet *unknown_fields) : unknown_fields_(unknown_fields) {
 	}
@@ -346,7 +346,6 @@ inline size_t ComputeUnknownMessageSetItemsSize(const UnknownFieldSet &unknown_f
 }
 
 // Compute the size of the UnknownFieldSet on the wire.
-PROTOBUF_EXPORT
 size_t ComputeUnknownFieldsSize(const InternalMetadata &metadata, size_t size, CachedSize *cached_size);
 
 size_t MapKeyDataOnlyByteSize(const FieldDescriptor *field, const MapKey &value);

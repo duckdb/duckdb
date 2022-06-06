@@ -407,46 +407,6 @@
                          reinterpret_cast<const char*>(16))
 #endif
 
-#ifdef PROTOBUF_EXPORT
-#error PROTOBUF_EXPORT was previously defined
-#endif
-
-#if defined(PROTOBUF_USE_DLLS) && defined(_MSC_VER)
-# if defined(LIBPROTOBUF_EXPORTS)
-#  define PROTOBUF_EXPORT __declspec(dllexport)
-#  define PROTOBUF_EXPORT_TEMPLATE_DECLARE
-#  define PROTOBUF_EXPORT_TEMPLATE_DEFINE __declspec(dllexport)
-# else
-#  define PROTOBUF_EXPORT __declspec(dllimport)
-#  define PROTOBUF_EXPORT_TEMPLATE_DECLARE
-#  define PROTOBUF_EXPORT_TEMPLATE_DEFINE __declspec(dllimport)
-# endif  // defined(LIBPROTOBUF_EXPORTS)
-#elif defined(PROTOBUF_USE_DLLS) && defined(LIBPROTOBUF_EXPORTS)
-# define PROTOBUF_EXPORT __attribute__((visibility("default")))
-# define PROTOBUF_EXPORT_TEMPLATE_DECLARE __attribute__((visibility("default")))
-# define PROTOBUF_EXPORT_TEMPLATE_DEFINE
-#else
-# define PROTOBUF_EXPORT
-# define PROTOBUF_EXPORT_TEMPLATE_DECLARE
-# define PROTOBUF_EXPORT_TEMPLATE_DEFINE
-#endif
-
-#ifdef PROTOC_EXPORT
-#error PROTOC_EXPORT was previously defined
-#endif
-
-#if defined(PROTOBUF_USE_DLLS) && defined(_MSC_VER)
-# if defined(LIBPROTOC_EXPORTS)
-#  define PROTOC_EXPORT __declspec(dllexport)
-# else
-#  define PROTOC_EXPORT __declspec(dllimport)
-# endif  // defined(LIBPROTOC_EXPORTS)
-#elif defined(PROTOBUF_USE_DLLS) && defined(LIBPROTOBUF_EXPORTS)
-# define PROTOC_EXPORT __attribute__((visibility("default")))
-#else
-# define PROTOC_EXPORT
-#endif
-
 #if defined(PROTOBUF_PREDICT_TRUE) || defined(PROTOBUF_PREDICT_FALSE)
 #error PROTOBUF_PREDICT_(TRUE|FALSE) was previously defined
 #endif

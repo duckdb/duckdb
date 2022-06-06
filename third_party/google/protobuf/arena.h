@@ -235,7 +235,7 @@ private:
 // well as protobuf container types like RepeatedPtrField and Map. The protocol
 // is internal to protobuf and is not guaranteed to be stable. Non-proto types
 // should not rely on this protocol.
-class PROTOBUF_EXPORT PROTOBUF_ALIGNAS(8) Arena final {
+class  PROTOBUF_ALIGNAS(8) Arena final {
 public:
 	// Default constructor with sensible default options, tuned for average
 	// use-cases.

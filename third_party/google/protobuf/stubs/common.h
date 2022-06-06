@@ -102,10 +102,10 @@ static const int kMinHeaderVersionForProtoc = 3019000;
 
 // Verifies that the headers and libraries are compatible.  Use the macro
 // below to call this.
-void PROTOBUF_EXPORT VerifyVersion(int headerVersion, int minLibraryVersion, const char *filename);
+void  VerifyVersion(int headerVersion, int minLibraryVersion, const char *filename);
 
 // Converts a numeric version number to a string.
-std::string PROTOBUF_EXPORT VersionString(int version);
+std::string  VersionString(int version);
 
 } // namespace internal
 
@@ -123,14 +123,14 @@ namespace internal {
 
 // Checks if the buffer contains structurally-valid UTF-8.  Implemented in
 // structurally_valid.cc.
-PROTOBUF_EXPORT bool IsStructurallyValidUTF8(const char *buf, int len);
+ bool IsStructurallyValidUTF8(const char *buf, int len);
 
 inline bool IsStructurallyValidUTF8(StringPiece str) {
 	return IsStructurallyValidUTF8(str.data(), static_cast<int>(str.length()));
 }
 
 // Returns initial number of bytes of structurally valid UTF-8.
-PROTOBUF_EXPORT int UTF8SpnStructurallyValid(StringPiece str);
+ int UTF8SpnStructurallyValid(StringPiece str);
 
 // Coerce UTF-8 byte string in src_str to be
 // a structurally-valid equal-length string by selectively
@@ -144,13 +144,13 @@ PROTOBUF_EXPORT int UTF8SpnStructurallyValid(StringPiece str);
 //
 // Optimized for: all structurally valid and no byte copying is done.
 //
-PROTOBUF_EXPORT char *UTF8CoerceToStructurallyValid(StringPiece str, char *dst, char replace_char);
+ char *UTF8CoerceToStructurallyValid(StringPiece str, char *dst, char replace_char);
 
 } // namespace internal
 
 // This lives in message_lite.h now, but we leave this here for any users that
 // #include common.h and not message_lite.h.
-PROTOBUF_EXPORT void ShutdownProtobufLibrary();
+ void ShutdownProtobufLibrary();
 
 namespace internal {
 

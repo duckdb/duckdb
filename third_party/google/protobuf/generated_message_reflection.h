@@ -308,7 +308,7 @@ struct MigrationSchema {
 // This struct tries to reduce unnecessary padding.
 // The num_xxx might not be close to their respective pointer, but this saves
 // padding.
-struct PROTOBUF_EXPORT DescriptorTable {
+struct  DescriptorTable {
 	mutable bool is_initialized;
 	bool is_eager;
 	int size; // of serialized descriptor
@@ -339,20 +339,20 @@ enum {
 // the descriptor objects.  It also constructs the reflection objects.  It is
 // called the first time anyone calls descriptor() or GetReflection() on one of
 // the types defined in the file.  AssignDescriptors() is thread-safe.
-void PROTOBUF_EXPORT AssignDescriptors(const DescriptorTable *table, bool eager = false);
+void  AssignDescriptors(const DescriptorTable *table, bool eager = false);
 
 // Overload used to implement GetMetadataStatic in the generated code.
 // See comments in compiler/cpp/internal/file.cc as to why.
 // It takes a `Metadata` and returns it to allow for tail calls and reduce
 // binary size.
-Metadata PROTOBUF_EXPORT AssignDescriptors(const DescriptorTable *(*table)(), internal::once_flag *once,
+Metadata  AssignDescriptors(const DescriptorTable *(*table)(), internal::once_flag *once,
                                            const Metadata &metadata);
 
 // These cannot be in lite so we put them in the reflection.
-PROTOBUF_EXPORT void UnknownFieldSetSerializer(const uint8_t *base, uint32_t offset, uint32_t tag, uint32_t has_offset,
+ void UnknownFieldSetSerializer(const uint8_t *base, uint32_t offset, uint32_t tag, uint32_t has_offset,
                                                io::CodedOutputStream *output);
 
-struct PROTOBUF_EXPORT AddDescriptorsRunner {
+struct  AddDescriptorsRunner {
 	explicit AddDescriptorsRunner(const DescriptorTable *table);
 };
 

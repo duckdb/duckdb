@@ -54,7 +54,7 @@ namespace internal {
 // An implementation of MessageLite that treats all data as unknown. This type
 // acts as a placeholder for an implicit weak field in the case where the true
 // message type does not get linked into the binary.
-class PROTOBUF_EXPORT ImplicitWeakMessage : public MessageLite {
+class  ImplicitWeakMessage : public MessageLite {
 public:
 	ImplicitWeakMessage() {
 	}

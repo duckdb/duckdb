@@ -191,7 +191,7 @@ class ZeroCopyOutputStream; // zero_copy_stream.h
 // failure occurs, the CodedInputStream is broken and is no longer useful.
 // After a failure, callers also should assume writes to "out" args may have
 // occurred, though nothing useful can be determined from those writes.
-class PROTOBUF_EXPORT CodedInputStream {
+class  CodedInputStream {
 public:
 	// Create a CodedInputStream that reads from the given ZeroCopyInputStream.
 	explicit CodedInputStream(ZeroCopyInputStream *input);
@@ -658,7 +658,7 @@ private:
 // the user of the class and is an explicit parameter in the methods. Careful
 // use of this class, ie. keep ptr a local variable, eliminates the need to
 // for the compiler to sync the ptr value between register and memory.
-class PROTOBUF_EXPORT EpsCopyOutputStream {
+class  EpsCopyOutputStream {
 public:
 	enum { kSlopBytes = 16 };
 
@@ -1036,7 +1036,7 @@ inline uint8_t *EpsCopyOutputStream::WriteRawLittleEndian<8>(const void *data, i
 //   }
 //
 //   delete coded_output;
-class PROTOBUF_EXPORT CodedOutputStream {
+class  CodedOutputStream {
 public:
 	// Create an CodedOutputStream that writes to the given ZeroCopyOutputStream.
 	explicit CodedOutputStream(ZeroCopyOutputStream *stream) : CodedOutputStream(stream, true) {

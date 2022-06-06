@@ -124,7 +124,7 @@ class ZeroCopyOutputStream;
 
 // Abstract interface similar to an input stream but designed to minimize
 // copying.
-class PROTOBUF_EXPORT ZeroCopyInputStream {
+class  ZeroCopyInputStream {
 public:
 	ZeroCopyInputStream() {
 	}
@@ -182,7 +182,7 @@ private:
 
 // Abstract interface similar to an output stream but designed to minimize
 // copying.
-class PROTOBUF_EXPORT ZeroCopyOutputStream {
+class  ZeroCopyOutputStream {
 public:
 	ZeroCopyOutputStream() {
 	}

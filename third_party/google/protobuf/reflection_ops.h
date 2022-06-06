@@ -60,7 +60,7 @@ namespace internal {
 // the Message interface.
 //
 // This class is really a namespace that contains only static methods.
-class PROTOBUF_EXPORT ReflectionOps {
+class  ReflectionOps {
 public:
 	static void Copy(const Message &from, Message *to);
 	static void Merge(const Message &from, Message *to);

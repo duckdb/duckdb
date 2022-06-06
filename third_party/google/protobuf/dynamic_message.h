@@ -79,7 +79,7 @@ class DescriptorPool; // descriptor.h
 // encapsulates this "cache".  All DynamicMessages of the same type created
 // from the same factory will share the same support data.  Any Descriptors
 // used with a particular factory must outlive the factory.
-class PROTOBUF_EXPORT DynamicMessageFactory : public MessageFactory {
+class  DynamicMessageFactory : public MessageFactory {
 public:
 	// Construct a DynamicMessageFactory that will search for extensions in
 	// the DescriptorPool in which the extendee is defined.
@@ -140,7 +140,7 @@ private:
 };
 
 // Helper for computing a sorted list of map entries via reflection.
-class PROTOBUF_EXPORT DynamicMapSorter {
+class  DynamicMapSorter {
 public:
 	static std::vector<const Message *> Sort(const Message &message, int map_size, const Reflection *reflection,
 	                                         const FieldDescriptor *field) {
@@ -165,7 +165,7 @@ public:
 	}
 
 private:
-	class PROTOBUF_EXPORT MapEntryMessageComparator {
+	class  MapEntryMessageComparator {
 	public:
 		explicit MapEntryMessageComparator(const Descriptor *descriptor) : field_(descriptor->field(0)) {
 		}

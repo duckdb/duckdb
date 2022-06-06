@@ -78,7 +78,7 @@ namespace internal {
 // std::mutex does not work on Windows XP SP2 with the latest VC++ libraries,
 // because it utilizes the Concurrency Runtime that is only supported on Windows
 // XP SP3 and above.
-class PROTOBUF_EXPORT CriticalSectionLock {
+class  CriticalSectionLock {
 public:
 	CriticalSectionLock() {
 		InitializeCriticalSection(&critical_section_);
@@ -132,7 +132,7 @@ private:
 // Mutex is a natural type to wrap. As both google and other organization have
 // specialized mutexes. gRPC also provides an injection mechanism for custom
 // mutexes.
-class GOOGLE_PROTOBUF_CAPABILITY("mutex") PROTOBUF_EXPORT WrappedMutex {
+class GOOGLE_PROTOBUF_CAPABILITY("mutex")  WrappedMutex {
 public:
 #if defined(__QNX__)
 	constexpr WrappedMutex() = default;
@@ -164,7 +164,7 @@ private:
 using Mutex = WrappedMutex;
 
 // MutexLock(mu) acquires mu when constructed and releases it when destroyed.
-class GOOGLE_PROTOBUF_SCOPED_CAPABILITY PROTOBUF_EXPORT MutexLock {
+class GOOGLE_PROTOBUF_SCOPED_CAPABILITY  MutexLock {
 public:
 	explicit MutexLock(Mutex *mu) GOOGLE_PROTOBUF_ACQUIRE(mu) : mu_(mu) {
 		this->mu_->Lock();
@@ -183,7 +183,7 @@ typedef MutexLock ReaderMutexLock;
 typedef MutexLock WriterMutexLock;
 
 // MutexLockMaybe is like MutexLock, but is a no-op when mu is nullptr.
-class PROTOBUF_EXPORT MutexLockMaybe {
+class  MutexLockMaybe {
 public:
 	explicit MutexLockMaybe(Mutex *mu) : mu_(mu) {
 		if (this->mu_ != nullptr) {

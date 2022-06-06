@@ -64,7 +64,7 @@ typedef int ColumnNumber;
 // Abstract interface for an object which collects the errors that occur
 // during parsing.  A typical implementation might simply print the errors
 // to stdout.
-class PROTOBUF_EXPORT ErrorCollector {
+class  ErrorCollector {
 public:
 	inline ErrorCollector() {
 	}
@@ -91,7 +91,7 @@ private:
 // precise descriptions.  Whitespace and comments are skipped.  By default,
 // C- and C++-style comments are recognized, but other styles can be used by
 // calling set_comment_style().
-class PROTOBUF_EXPORT Tokenizer {
+class  Tokenizer {
 public:
 	// Construct a Tokenizer that reads and tokenizes text from the given
 	// input stream and writes errors to the given error_collector.

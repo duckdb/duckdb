@@ -148,7 +148,7 @@ private:
 
 } // namespace internal
 
-PROTOBUF_EXPORT std::string Substitute(const std::string &format,
+ std::string Substitute(const std::string &format,
                                        const internal::SubstituteArg &arg0 = internal::SubstituteArg(),
                                        const internal::SubstituteArg &arg1 = internal::SubstituteArg(),
                                        const internal::SubstituteArg &arg2 = internal::SubstituteArg(),
@@ -160,7 +160,7 @@ PROTOBUF_EXPORT std::string Substitute(const std::string &format,
                                        const internal::SubstituteArg &arg8 = internal::SubstituteArg(),
                                        const internal::SubstituteArg &arg9 = internal::SubstituteArg());
 
-PROTOBUF_EXPORT void SubstituteAndAppend(std::string *output, const char *format,
+ void SubstituteAndAppend(std::string *output, const char *format,
                                          const internal::SubstituteArg &arg0 = internal::SubstituteArg(),
                                          const internal::SubstituteArg &arg1 = internal::SubstituteArg(),
                                          const internal::SubstituteArg &arg2 = internal::SubstituteArg(),

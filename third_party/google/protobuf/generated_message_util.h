@@ -87,16 +87,16 @@ inline To DownCast(From &f) {
 // This fastpath inlines a single branch instead of having to make the
 // InitProtobufDefaults function call.
 // It also generates less inlined code than a function-scope static initializer.
-PROTOBUF_EXPORT extern std::atomic<bool> init_protobuf_defaults_state;
-PROTOBUF_EXPORT void InitProtobufDefaultsSlow();
-PROTOBUF_EXPORT inline void InitProtobufDefaults() {
+ extern std::atomic<bool> init_protobuf_defaults_state;
+ void InitProtobufDefaultsSlow();
+ inline void InitProtobufDefaults() {
 	if (PROTOBUF_PREDICT_FALSE(!init_protobuf_defaults_state.load(std::memory_order_acquire))) {
 		InitProtobufDefaultsSlow();
 	}
 }
 
 // This used by proto1
-PROTOBUF_EXPORT inline const std::string &GetEmptyString() {
+ inline const std::string &GetEmptyString() {
 	InitProtobufDefaults();
 	return GetEmptyStringAlreadyInited();
 }
@@ -141,17 +141,17 @@ inline bool IsOneofPresent(const void *base, uint32_t offset, uint32_t tag) {
 typedef void (*SpecialSerializer)(const uint8_t *base, uint32_t offset, uint32_t tag, uint32_t has_offset,
                                   io::CodedOutputStream *output);
 
-PROTOBUF_EXPORT void ExtensionSerializer(const MessageLite *extendee, const uint8_t *ptr, uint32_t offset, uint32_t tag,
+ void ExtensionSerializer(const MessageLite *extendee, const uint8_t *ptr, uint32_t offset, uint32_t tag,
                                          uint32_t has_offset, io::CodedOutputStream *output);
-PROTOBUF_EXPORT void UnknownFieldSerializerLite(const uint8_t *base, uint32_t offset, uint32_t tag, uint32_t has_offset,
+ void UnknownFieldSerializerLite(const uint8_t *base, uint32_t offset, uint32_t tag, uint32_t has_offset,
                                                 io::CodedOutputStream *output);
 
-PROTOBUF_EXPORT MessageLite *DuplicateIfNonNullInternal(MessageLite *message);
-PROTOBUF_EXPORT MessageLite *GetOwnedMessageInternal(Arena *message_arena, MessageLite *submessage,
+ MessageLite *DuplicateIfNonNullInternal(MessageLite *message);
+ MessageLite *GetOwnedMessageInternal(Arena *message_arena, MessageLite *submessage,
                                                      Arena *submessage_arena);
-PROTOBUF_EXPORT void GenericSwap(MessageLite *m1, MessageLite *m2);
+ void GenericSwap(MessageLite *m1, MessageLite *m2);
 // We specialize GenericSwap for non-lite messages to benefit from reflection.
-PROTOBUF_EXPORT void GenericSwap(Message *m1, Message *m2);
+ void GenericSwap(Message *m1, Message *m2);
 
 template <typename T>
 T *DuplicateIfNonNull(T *message) {
@@ -170,7 +170,7 @@ T *GetOwnedMessage(Arena *message_arena, T *submessage, Arena *submessage_arena)
 
 // Hide atomic from the public header and allow easy change to regular int
 // on platforms where the atomic might have a perf impact.
-class PROTOBUF_EXPORT CachedSize {
+class  CachedSize {
 public:
 	int Get() const {
 		return size_.load(std::memory_order_relaxed);
@@ -183,8 +183,8 @@ private:
 	std::atomic<int> size_ {0};
 };
 
-PROTOBUF_EXPORT void DestroyMessage(const void *message);
-PROTOBUF_EXPORT void DestroyString(const void *s);
+ void DestroyMessage(const void *message);
+ void DestroyString(const void *s);
 // Destroy (not delete) the message
 inline void OnShutdownDestroyMessage(const void *ptr) {
 	OnShutdownRun(DestroyMessage, ptr);

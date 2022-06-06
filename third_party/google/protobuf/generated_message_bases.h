@@ -50,7 +50,7 @@ namespace internal {
 
 // To save code size, protos without any fields are derived from ZeroFieldsBase
 // rather than Message.
-class PROTOBUF_EXPORT ZeroFieldsBase : public Message {
+class  ZeroFieldsBase : public Message {
 public:
 	PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
 	bool IsInitialized() const final {

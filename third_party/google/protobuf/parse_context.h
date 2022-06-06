@@ -60,8 +60,8 @@ class MessageFactory;
 namespace internal {
 
 // Template code below needs to know about the existence of these functions.
-PROTOBUF_EXPORT void WriteVarint(uint32_t num, uint64_t val, std::string *s);
-PROTOBUF_EXPORT void WriteLengthDelimited(uint32_t num, StringPiece val, std::string *s);
+ void WriteVarint(uint32_t num, uint64_t val, std::string *s);
+ void WriteLengthDelimited(uint32_t num, StringPiece val, std::string *s);
 // Inline because it is just forwarding to s->WriteVarint
 inline void WriteVarint(uint32_t num, uint64_t val, UnknownFieldSet *s);
 inline void WriteLengthDelimited(uint32_t num, StringPiece val, UnknownFieldSet *s);
@@ -103,7 +103,7 @@ inline void WriteLengthDelimited(uint32_t num, StringPiece val, UnknownFieldSet 
 // the middle of reading primitive values. Hence there is no need to store and
 // load the current position.
 
-class PROTOBUF_EXPORT EpsCopyInputStream {
+class  EpsCopyInputStream {
 public:
 	enum { kSlopBytes = 16, kMaxCordBytesToCopy = 512 };
 
@@ -383,7 +383,7 @@ private:
 // importantly it contains the input stream, but also recursion depth and also
 // stores the end group tag, in case a parser ended on a endgroup, to verify
 // matching start/end group tags.
-class PROTOBUF_EXPORT ParseContext : public EpsCopyInputStream {
+class  ParseContext : public EpsCopyInputStream {
 public:
 	struct Data {
 		const DescriptorPool *pool = nullptr;
@@ -525,9 +525,9 @@ T UnalignedLoad(const char *p) {
 	return res;
 }
 
-PROTOBUF_EXPORT
+
 std::pair<const char *, uint32_t> VarintParseSlow32(const char *p, uint32_t res);
-PROTOBUF_EXPORT
+
 std::pair<const char *, uint64_t> VarintParseSlow64(const char *p, uint32_t res);
 
 inline const char *VarintParseSlow(const char *p, uint32_t res, uint32_t *out) {
@@ -562,7 +562,7 @@ PROTOBUF_NODISCARD const char *VarintParse(const char *p, T *out) {
 // Used for tags, could read up to 5 bytes which must be available.
 // Caller must ensure its safe to call.
 
-PROTOBUF_EXPORT
+
 std::pair<const char *, uint32_t> ReadTagFallback(const char *p, uint32_t res);
 
 // Same as ParseVarint but only accept 5 bytes at most.
@@ -628,7 +628,7 @@ inline const char *ParseBigVarint(const char *p, uint64_t *out) {
 	return nullptr;
 }
 
-PROTOBUF_EXPORT
+
 std::pair<const char *, int32_t> ReadSizeFallback(const char *p, uint32_t first);
 // Used for tags, could read up to 5 bytes which must be available. Additionally
 // it makes sure the unsigned value fits a int32_t, otherwise returns nullptr.
@@ -802,7 +802,7 @@ const char *EpsCopyInputStream::ReadPackedVarint(const char *ptr, Add add) {
 }
 
 // Helper for verification of utf8
-PROTOBUF_EXPORT
+
 bool VerifyUTF8(StringPiece s, const char *field_name);
 
 inline bool VerifyUTF8(const std::string *s, const char *field_name) {
@@ -810,7 +810,7 @@ inline bool VerifyUTF8(const std::string *s, const char *field_name) {
 }
 
 // All the string parsers with or without UTF checking and for all CTypes.
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *InlineGreedyStringParser(std::string *s, const char *ptr,
+ PROTOBUF_NODISCARD const char *InlineGreedyStringParser(std::string *s, const char *ptr,
                                                                         ParseContext *ctx);
 
 template <typename T>
@@ -878,13 +878,13 @@ PROTOBUF_NODISCARD const char *WireFormatParser(T &field_parser, const char *ptr
 // corresponding field
 
 // These are packed varints
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedInt32Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedUInt32Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedInt64Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedUInt64Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedSInt32Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedSInt64Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedEnumParser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedInt32Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedUInt32Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedInt64Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedUInt64Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedSInt32Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedSInt64Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedEnumParser(void *object, const char *ptr, ParseContext *ctx);
 
 template <typename T>
 PROTOBUF_NODISCARD const char *PackedEnumParser(void *object, const char *ptr, ParseContext *ctx, bool (*is_valid)(int),
@@ -911,21 +911,21 @@ PROTOBUF_NODISCARD const char *PackedEnumParserArg(void *object, const char *ptr
 	});
 }
 
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedBoolParser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedFixed32Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedSFixed32Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedFixed64Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedSFixed64Parser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedFloatParser(void *object, const char *ptr, ParseContext *ctx);
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *PackedDoubleParser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedBoolParser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedFixed32Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedSFixed32Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedFixed64Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedSFixed64Parser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedFloatParser(void *object, const char *ptr, ParseContext *ctx);
+ PROTOBUF_NODISCARD const char *PackedDoubleParser(void *object, const char *ptr, ParseContext *ctx);
 
 // This is the only recursive parser.
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *UnknownGroupLiteParse(std::string *unknown, const char *ptr,
+ PROTOBUF_NODISCARD const char *UnknownGroupLiteParse(std::string *unknown, const char *ptr,
                                                                      ParseContext *ctx);
 // This is a helper to for the UnknownGroupLiteParse but is actually also
 // useful in the generated code. It uses overload on std::string* vs
 // UnknownFieldSet* to make the generated code isomorphic between full and lite.
-PROTOBUF_EXPORT PROTOBUF_NODISCARD const char *UnknownFieldParse(uint32_t tag, std::string *unknown, const char *ptr,
+ PROTOBUF_NODISCARD const char *UnknownFieldParse(uint32_t tag, std::string *unknown, const char *ptr,
                                                                  ParseContext *ctx);
 
 } // namespace internal

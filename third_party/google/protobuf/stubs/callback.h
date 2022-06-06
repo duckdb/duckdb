@@ -70,7 +70,7 @@ namespace protobuf {
 //   std::string my_str;
 //   NewCallback(&Foo, my_str);  // WON'T WORK:  Can't use references.
 // However, correctly-typed pointers will work just fine.
-class PROTOBUF_EXPORT Closure {
+class  Closure {
 public:
 	Closure() {
 	}
@@ -97,7 +97,7 @@ private:
 };
 
 template <typename R, typename A1>
-class PROTOBUF_EXPORT ResultCallback1 {
+class  ResultCallback1 {
 public:
 	ResultCallback1() {
 	}
@@ -111,7 +111,7 @@ private:
 };
 
 template <typename R, typename A1, typename A2>
-class PROTOBUF_EXPORT ResultCallback2 {
+class  ResultCallback2 {
 public:
 	ResultCallback2() {
 	}
@@ -126,7 +126,7 @@ private:
 
 namespace internal {
 
-class PROTOBUF_EXPORT FunctionClosure0 : public Closure {
+class  FunctionClosure0 : public Closure {
 public:
 	typedef void (*FunctionType)();
 
@@ -571,7 +571,7 @@ NewPermanentCallback(T *object, R (T::*function)(P1, P2, P3, P4, P5, P6, A1, A2)
 
 // A function which does nothing.  Useful for creating no-op callbacks, e.g.:
 //   Closure* nothing = NewCallback(&DoNothing);
-void PROTOBUF_EXPORT DoNothing();
+void  DoNothing();
 
 } // namespace protobuf
 } // namespace google

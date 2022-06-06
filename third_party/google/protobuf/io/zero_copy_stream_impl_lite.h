@@ -64,7 +64,7 @@ namespace io {
 // ===================================================================
 
 // A ZeroCopyInputStream backed by an in-memory array of bytes.
-class PROTOBUF_EXPORT ArrayInputStream : public ZeroCopyInputStream {
+class  ArrayInputStream : public ZeroCopyInputStream {
 public:
 	// Create an InputStream that returns the bytes pointed to by "data".
 	// "data" remains the property of the caller but must remain valid until
@@ -97,7 +97,7 @@ private:
 // ===================================================================
 
 // A ZeroCopyOutputStream backed by an in-memory array of bytes.
-class PROTOBUF_EXPORT ArrayOutputStream : public ZeroCopyOutputStream {
+class  ArrayOutputStream : public ZeroCopyOutputStream {
 public:
 	// Create an OutputStream that writes to the bytes pointed to by "data".
 	// "data" remains the property of the caller but must remain valid until
@@ -129,7 +129,7 @@ private:
 // ===================================================================
 
 // A ZeroCopyOutputStream which appends bytes to a string.
-class PROTOBUF_EXPORT StringOutputStream : public ZeroCopyOutputStream {
+class  StringOutputStream : public ZeroCopyOutputStream {
 public:
 	// Create a StringOutputStream which appends bytes to the given string.
 	// The string remains property of the caller, but it is mutated in arbitrary
@@ -173,7 +173,7 @@ private:
 // CopyingInputStream implementations should avoid buffering if possible.
 // CopyingInputStreamAdaptor does its own buffering and will read data
 // in large blocks.
-class PROTOBUF_EXPORT CopyingInputStream {
+class  CopyingInputStream {
 public:
 	virtual ~CopyingInputStream() {
 	}
@@ -200,7 +200,7 @@ public:
 // If you want to read from file descriptors or C++ istreams, this is
 // already implemented for you:  use FileInputStream or IstreamInputStream
 // respectively.
-class PROTOBUF_EXPORT CopyingInputStreamAdaptor : public ZeroCopyInputStream {
+class  CopyingInputStreamAdaptor : public ZeroCopyInputStream {
 public:
 	// Creates a stream that reads from the given CopyingInputStream.
 	// If a block_size is given, it specifies the number of bytes that
@@ -269,7 +269,7 @@ private:
 // CopyingOutputStream implementations should avoid buffering if possible.
 // CopyingOutputStreamAdaptor does its own buffering and will write data
 // in large blocks.
-class PROTOBUF_EXPORT CopyingOutputStream {
+class  CopyingOutputStream {
 public:
 	virtual ~CopyingOutputStream() {
 	}
@@ -286,7 +286,7 @@ public:
 // If you want to write to file descriptors or C++ ostreams, this is
 // already implemented for you:  use FileOutputStream or OstreamOutputStream
 // respectively.
-class PROTOBUF_EXPORT CopyingOutputStreamAdaptor : public ZeroCopyOutputStream {
+class  CopyingOutputStreamAdaptor : public ZeroCopyOutputStream {
 public:
 	// Creates a stream that writes to the given Unix file descriptor.
 	// If a block_size is given, it specifies the size of the buffers
@@ -351,7 +351,7 @@ private:
 
 // A ZeroCopyInputStream which wraps some other stream and limits it to
 // a particular byte count.
-class PROTOBUF_EXPORT LimitingInputStream : public ZeroCopyInputStream {
+class  LimitingInputStream : public ZeroCopyInputStream {
 public:
 	LimitingInputStream(ZeroCopyInputStream *input, int64_t limit);
 	~LimitingInputStream() override;

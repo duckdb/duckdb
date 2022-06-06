@@ -63,7 +63,7 @@ enum class StatusCode : int {
 	kDataLoss = 15,
 };
 
-class PROTOBUF_EXPORT Status {
+class  Status {
 public:
 	// Creates a "successful" status.
 	Status();
@@ -104,29 +104,29 @@ private:
 
 // Returns an OK status, equivalent to a default constructed instance. Prefer
 // usage of `OkStatus()` when constructing such an OK status.
-PROTOBUF_EXPORT Status OkStatus();
+ Status OkStatus();
 
 // Prints a human-readable representation of 'x' to 'os'.
-PROTOBUF_EXPORT std::ostream &operator<<(std::ostream &os, const Status &x);
+ std::ostream &operator<<(std::ostream &os, const Status &x);
 
 // These convenience functions return `true` if a given status matches the
 // `StatusCode` error code of its associated function.
-PROTOBUF_EXPORT bool IsAborted(const Status &status);
-PROTOBUF_EXPORT bool IsAlreadyExists(const Status &status);
-PROTOBUF_EXPORT bool IsCancelled(const Status &status);
-PROTOBUF_EXPORT bool IsDataLoss(const Status &status);
-PROTOBUF_EXPORT bool IsDeadlineExceeded(const Status &status);
-PROTOBUF_EXPORT bool IsFailedPrecondition(const Status &status);
-PROTOBUF_EXPORT bool IsInternal(const Status &status);
-PROTOBUF_EXPORT bool IsInvalidArgument(const Status &status);
-PROTOBUF_EXPORT bool IsNotFound(const Status &status);
-PROTOBUF_EXPORT bool IsOutOfRange(const Status &status);
-PROTOBUF_EXPORT bool IsPermissionDenied(const Status &status);
-PROTOBUF_EXPORT bool IsResourceExhausted(const Status &status);
-PROTOBUF_EXPORT bool IsUnauthenticated(const Status &status);
-PROTOBUF_EXPORT bool IsUnavailable(const Status &status);
-PROTOBUF_EXPORT bool IsUnimplemented(const Status &status);
-PROTOBUF_EXPORT bool IsUnknown(const Status &status);
+ bool IsAborted(const Status &status);
+ bool IsAlreadyExists(const Status &status);
+ bool IsCancelled(const Status &status);
+ bool IsDataLoss(const Status &status);
+ bool IsDeadlineExceeded(const Status &status);
+ bool IsFailedPrecondition(const Status &status);
+ bool IsInternal(const Status &status);
+ bool IsInvalidArgument(const Status &status);
+ bool IsNotFound(const Status &status);
+ bool IsOutOfRange(const Status &status);
+ bool IsPermissionDenied(const Status &status);
+ bool IsResourceExhausted(const Status &status);
+ bool IsUnauthenticated(const Status &status);
+ bool IsUnavailable(const Status &status);
+ bool IsUnimplemented(const Status &status);
+ bool IsUnknown(const Status &status);
 
 // These convenience functions create an `Status` object with an error code as
 // indicated by the associated function name, using the error message passed in
@@ -135,22 +135,22 @@ PROTOBUF_EXPORT bool IsUnknown(const Status &status);
 // These functions are intentionally named `*Error` rather than `*Status` to
 // match the names from Abseil:
 // https://github.com/abseil/abseil-cpp/blob/2e9532cc6c701a8323d0cffb468999ab804095ab/absl/status/status.h#L716
-PROTOBUF_EXPORT Status AbortedError(StringPiece message);
-PROTOBUF_EXPORT Status AlreadyExistsError(StringPiece message);
-PROTOBUF_EXPORT Status CancelledError(StringPiece message);
-PROTOBUF_EXPORT Status DataLossError(StringPiece message);
-PROTOBUF_EXPORT Status DeadlineExceededError(StringPiece message);
-PROTOBUF_EXPORT Status FailedPreconditionError(StringPiece message);
-PROTOBUF_EXPORT Status InternalError(StringPiece message);
-PROTOBUF_EXPORT Status InvalidArgumentError(StringPiece message);
-PROTOBUF_EXPORT Status NotFoundError(StringPiece message);
-PROTOBUF_EXPORT Status OutOfRangeError(StringPiece message);
-PROTOBUF_EXPORT Status PermissionDeniedError(StringPiece message);
-PROTOBUF_EXPORT Status ResourceExhaustedError(StringPiece message);
-PROTOBUF_EXPORT Status UnauthenticatedError(StringPiece message);
-PROTOBUF_EXPORT Status UnavailableError(StringPiece message);
-PROTOBUF_EXPORT Status UnimplementedError(StringPiece message);
-PROTOBUF_EXPORT Status UnknownError(StringPiece message);
+ Status AbortedError(StringPiece message);
+ Status AlreadyExistsError(StringPiece message);
+ Status CancelledError(StringPiece message);
+ Status DataLossError(StringPiece message);
+ Status DeadlineExceededError(StringPiece message);
+ Status FailedPreconditionError(StringPiece message);
+ Status InternalError(StringPiece message);
+ Status InvalidArgumentError(StringPiece message);
+ Status NotFoundError(StringPiece message);
+ Status OutOfRangeError(StringPiece message);
+ Status PermissionDeniedError(StringPiece message);
+ Status ResourceExhaustedError(StringPiece message);
+ Status UnauthenticatedError(StringPiece message);
+ Status UnavailableError(StringPiece message);
+ Status UnimplementedError(StringPiece message);
+ Status UnknownError(StringPiece message);
 
 } // namespace status_internal
 

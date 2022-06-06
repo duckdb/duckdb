@@ -160,7 +160,7 @@ namespace google {
 namespace protobuf {
 namespace stringpiece_internal {
 
-class PROTOBUF_EXPORT StringPiece {
+class  StringPiece {
 public:
 	using traits_type = std::char_traits<char>;
 	using value_type = char;

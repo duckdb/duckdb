@@ -88,23 +88,6 @@
 #include <byteswap.h>  // IWYU pragma: export
 #endif
 
-// Legacy: some users reference these (internal-only) macros even though we
-// don't need them any more.
-#if defined(_MSC_VER) && defined(PROTOBUF_USE_DLLS)
-  #ifdef LIBPROTOBUF_EXPORTS
-    #define LIBPROTOBUF_EXPORT __declspec(dllexport)
-  #else
-    #define LIBPROTOBUF_EXPORT __declspec(dllimport)
-  #endif
-  #ifdef LIBPROTOC_EXPORTS
-    #define LIBPROTOC_EXPORT   __declspec(dllexport)
-  #else
-    #define LIBPROTOC_EXPORT   __declspec(dllimport)
-  #endif
-#else
-  #define LIBPROTOBUF_EXPORT
-  #define LIBPROTOC_EXPORT
-#endif
 
 #define PROTOBUF_RUNTIME_DEPRECATED(message) PROTOBUF_DEPRECATED_MSG(message)
 #define GOOGLE_PROTOBUF_RUNTIME_DEPRECATED(message) \
@@ -347,7 +330,7 @@ class Bits {
 
 // ===================================================================
 // from google3/util/endian/endian.h
-PROTOBUF_EXPORT uint32 ghtonl(uint32 x);
+ uint32 ghtonl(uint32 x);
 
 class BigEndian {
  public:

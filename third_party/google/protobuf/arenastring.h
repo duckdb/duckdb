@@ -58,7 +58,7 @@ class SwapFieldHelper;
 
 // Lazy string instance to support string fields with non-empty default.
 // These are initialized on the first call to .get().
-class PROTOBUF_EXPORT LazyString {
+class  LazyString {
 public:
 	// We explicitly make LazyString an aggregate so that MSVC can do constant
 	// initialization on it without marking it `constexpr`.
@@ -187,7 +187,7 @@ static_assert(std::is_trivial<TaggedPtr<std::string>>::value, "TaggedPtr must be
 // static class field, and compare ptr_ to the default value, we end up with a
 // single "cmp %reg, GLOBAL" in the resulting machine code. (Note that this also
 // requires the String tag to be 0 so we can avoid the mask before comparing.)
-struct PROTOBUF_EXPORT ArenaStringPtr {
+struct  ArenaStringPtr {
 	ArenaStringPtr() = default;
 	explicit constexpr ArenaStringPtr(const ExplicitlyConstructed<std::string> *default_value)
 	    : tagged_ptr_(default_value) {

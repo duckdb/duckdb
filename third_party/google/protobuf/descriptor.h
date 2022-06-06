@@ -74,7 +74,7 @@
 #endif  // TYPE_BOOL
 
 #ifdef SWIG
-#define PROTOBUF_EXPORT
+#define 
 #endif
 
 namespace duckdb {
@@ -181,7 +181,7 @@ struct DebugStringOptions {
 // Must be instantiated as mutable in a descriptor.
 namespace internal {
 
-class PROTOBUF_EXPORT LazyDescriptor {
+class  LazyDescriptor {
 public:
 	// Init function to be called at init time of a descriptor containing
 	// a LazyDescriptor.
@@ -221,7 +221,7 @@ private:
 	internal::once_flag *once_;
 };
 
-class PROTOBUF_EXPORT SymbolBase {
+class  SymbolBase {
 private:
 	friend class google::protobuf::Symbol;
 	uint8_t symbol_type_;
@@ -232,7 +232,7 @@ private:
 // intermediate base to do so.
 // See BuildEnumValue for details.
 template <int N>
-class PROTOBUF_EXPORT SymbolBaseN : public SymbolBase {};
+class  SymbolBaseN : public SymbolBase {};
 
 } // namespace internal
 
@@ -241,7 +241,7 @@ class PROTOBUF_EXPORT SymbolBaseN : public SymbolBase {};
 // Message::GetDescriptor().  Generated message classes also have a
 // static method called descriptor() which returns the type's descriptor.
 // Use DescriptorPool to construct your own descriptors.
-class PROTOBUF_EXPORT Descriptor : private internal::SymbolBase {
+class  Descriptor : private internal::SymbolBase {
 public:
 	typedef DescriptorProto Proto;
 
@@ -601,7 +601,7 @@ private:
 // - Given a DescriptorPool, call DescriptorPool::FindExtensionByNumber() or
 //   DescriptorPool::FindExtensionByPrintableName().
 // Use DescriptorPool to construct your own descriptors.
-class PROTOBUF_EXPORT FieldDescriptor : private internal::SymbolBase {
+class  FieldDescriptor : private internal::SymbolBase {
 public:
 	typedef FieldDescriptorProto Proto;
 
@@ -975,7 +975,7 @@ private:
 };
 
 // Describes a oneof defined in a message type.
-class PROTOBUF_EXPORT OneofDescriptor : private internal::SymbolBase {
+class  OneofDescriptor : private internal::SymbolBase {
 public:
 	typedef OneofDescriptorProto Proto;
 
@@ -1056,7 +1056,7 @@ private:
 // Describes an enum type defined in a .proto file.  To get the EnumDescriptor
 // for a generated enum type, call TypeName_descriptor().  Use DescriptorPool
 // to construct your own descriptors.
-class PROTOBUF_EXPORT EnumDescriptor : private internal::SymbolBase {
+class  EnumDescriptor : private internal::SymbolBase {
 public:
 	typedef EnumDescriptorProto Proto;
 
@@ -1225,7 +1225,7 @@ private:
 // for its type, then use EnumDescriptor::FindValueByName() or
 // EnumDescriptor::FindValueByNumber().  Use DescriptorPool to construct
 // your own descriptors.
-class PROTOBUF_EXPORT EnumValueDescriptor : private internal::SymbolBaseN<0>, private internal::SymbolBaseN<1> {
+class  EnumValueDescriptor : private internal::SymbolBaseN<0>, private internal::SymbolBaseN<1> {
 public:
 	typedef EnumValueDescriptorProto Proto;
 
@@ -1304,7 +1304,7 @@ private:
 
 // Describes an RPC service. Use DescriptorPool to construct your own
 // descriptors.
-class PROTOBUF_EXPORT ServiceDescriptor : private internal::SymbolBase {
+class  ServiceDescriptor : private internal::SymbolBase {
 public:
 	typedef ServiceDescriptorProto Proto;
 
@@ -1386,7 +1386,7 @@ private:
 // a service, first get its ServiceDescriptor, then call
 // ServiceDescriptor::FindMethodByName().  Use DescriptorPool to construct your
 // own descriptors.
-class PROTOBUF_EXPORT MethodDescriptor : private internal::SymbolBase {
+class  MethodDescriptor : private internal::SymbolBase {
 public:
 	typedef MethodDescriptorProto Proto;
 
@@ -1472,7 +1472,7 @@ private:
 // Describes a whole .proto file.  To get the FileDescriptor for a compiled-in
 // file, get the descriptor for something defined in that file and call
 // descriptor->file().  Use DescriptorPool to construct your own descriptors.
-class PROTOBUF_EXPORT FileDescriptor {
+class  FileDescriptor {
 public:
 	typedef FileDescriptorProto Proto;
 
@@ -1613,7 +1613,7 @@ private:
 	const DescriptorPool *pool_;
 
 	// Data required to do lazy initialization.
-	struct PROTOBUF_EXPORT LazyInitData {
+	struct  LazyInitData {
 #ifndef SWIG
 		internal::once_flag once;
 #endif
@@ -1699,7 +1699,7 @@ private:
 //
 // You can also search for descriptors within a DescriptorPool by name, and
 // extensions by number.
-class PROTOBUF_EXPORT DescriptorPool {
+class  DescriptorPool {
 public:
 	// Create a normal, empty DescriptorPool.
 	DescriptorPool();
@@ -1785,7 +1785,7 @@ public:
 	// When converting a FileDescriptorProto to a FileDescriptor, various
 	// errors might be detected in the input.  The caller may handle these
 	// programmatically by implementing an ErrorCollector.
-	class PROTOBUF_EXPORT ErrorCollector {
+	class  ErrorCollector {
 	public:
 		inline ErrorCollector() {
 		}

@@ -1041,13 +1041,13 @@ internal::RepeatedFieldBackInsertIterator<T> RepeatedFieldBackInserter(
 }
 
 // Extern declarations of common instantiations to reduce library bloat.
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<bool>;
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<int32_t>;
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<uint32_t>;
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<int64_t>;
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<uint64_t>;
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<float>;
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE RepeatedField<double>;
+extern template class  RepeatedField<bool>;
+extern template class  RepeatedField<int32_t>;
+extern template class  RepeatedField<uint32_t>;
+extern template class  RepeatedField<int64_t>;
+extern template class  RepeatedField<uint64_t>;
+extern template class  RepeatedField<float>;
+extern template class  RepeatedField<double>;
 
 }  // namespace protobuf
 }  // namespace google

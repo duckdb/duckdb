@@ -133,13 +133,13 @@ inline int ToIntSize(size_t size) {
 
 // Default empty string object. Don't use this directly. Instead, call
 // GetEmptyString() to get the reference.
-PROTOBUF_EXPORT extern ExplicitlyConstructed<std::string> fixed_address_empty_string;
+ extern ExplicitlyConstructed<std::string> fixed_address_empty_string;
 
-PROTOBUF_EXPORT constexpr const std::string &GetEmptyStringAlreadyInited() {
+ constexpr const std::string &GetEmptyStringAlreadyInited() {
 	return fixed_address_empty_string.get();
 }
 
-PROTOBUF_EXPORT size_t StringSpaceUsedExcludingSelfLong(const std::string &str);
+ size_t StringSpaceUsedExcludingSelfLong(const std::string &str);
 
 } // namespace internal
 
@@ -169,7 +169,7 @@ PROTOBUF_EXPORT size_t StringSpaceUsedExcludingSelfLong(const std::string &str);
 //
 // Users must not derive from this class. Only the protocol compiler and
 // the internal library are allowed to create subclasses.
-class PROTOBUF_EXPORT MessageLite {
+class  MessageLite {
 public:
 	constexpr MessageLite() {
 	}
@@ -559,14 +559,14 @@ bool MessageLite::ParseFrom(const T &input) {
 // any other part of the protocol buffers library after
 // ShutdownProtobufLibrary() has been called. Furthermore this call is not
 // thread safe, user needs to synchronize multiple calls.
-PROTOBUF_EXPORT void ShutdownProtobufLibrary();
+ void ShutdownProtobufLibrary();
 
 namespace internal {
 
 // Register a function to be called when ShutdownProtocolBuffers() is called.
-PROTOBUF_EXPORT void OnShutdown(void (*func)());
+ void OnShutdown(void (*func)());
 // Run an arbitrary function on an arg
-PROTOBUF_EXPORT void OnShutdownRun(void (*f)(const void *), const void *arg);
+ void OnShutdownRun(void (*f)(const void *), const void *arg);
 
 template <typename T>
 T *OnShutdownDelete(T *p) {

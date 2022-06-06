@@ -33,7 +33,6 @@
 #include <google/protobuf/unknown_field_set.h>
 // @@protoc_insertion_point(includes)
 #include <google/protobuf/port_def.inc>
-#define PROTOBUF_INTERNAL_EXPORT_google_2fprotobuf_2fany_2eproto PROTOBUF_EXPORT
 PROTOBUF_NAMESPACE_OPEN
 namespace internal {
 class AnyMetadata;
@@ -41,7 +40,7 @@ class AnyMetadata;
 PROTOBUF_NAMESPACE_CLOSE
 
 // Internal implementation detail -- do not use these members.
-struct PROTOBUF_EXPORT TableStruct_google_2fprotobuf_2fany_2eproto {
+struct  TableStruct_google_2fprotobuf_2fany_2eproto {
 	static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTableField entries[] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
 	static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField
 	    aux[] PROTOBUF_SECTION_VARIABLE(protodesc_cold);
@@ -50,22 +49,22 @@ struct PROTOBUF_EXPORT TableStruct_google_2fprotobuf_2fany_2eproto {
 	static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
 	static const uint32_t offsets[];
 };
-PROTOBUF_EXPORT extern const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable
+ extern const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable
     descriptor_table_google_2fprotobuf_2fany_2eproto;
 PROTOBUF_NAMESPACE_OPEN
 class Any;
 struct AnyDefaultTypeInternal;
-PROTOBUF_EXPORT extern AnyDefaultTypeInternal _Any_default_instance_;
+ extern AnyDefaultTypeInternal _Any_default_instance_;
 PROTOBUF_NAMESPACE_CLOSE
 PROTOBUF_NAMESPACE_OPEN
 template <>
-PROTOBUF_EXPORT Any *Arena::CreateMaybeMessage<::PROTOBUF_NAMESPACE_ID::Any>(Arena *);
+ Any *Arena::CreateMaybeMessage<::PROTOBUF_NAMESPACE_ID::Any>(Arena *);
 PROTOBUF_NAMESPACE_CLOSE
 PROTOBUF_NAMESPACE_OPEN
 
 // ===================================================================
 
-class PROTOBUF_EXPORT Any final
+class  Any final
     : public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:google.protobuf.Any) */ {
 public:
 	inline Any() : Any(nullptr) {

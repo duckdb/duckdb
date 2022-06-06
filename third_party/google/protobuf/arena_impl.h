@@ -59,7 +59,7 @@ inline constexpr size_t AlignUpTo8(size_t n) {
 using LifecycleIdAtomic = uint64_t;
 
 // MetricsCollector collects stats for a particular arena.
-class PROTOBUF_EXPORT ArenaMetricsCollector {
+class  ArenaMetricsCollector {
 public:
 	ArenaMetricsCollector(bool record_allocs) : record_allocs_(record_allocs) {
 	}
@@ -201,7 +201,7 @@ private:
 // It delagetes the actual memory allocation back to ThreadSafeArena, which
 // contains the information on block growth policy and backing memory allocation
 // used.
-class PROTOBUF_EXPORT SerialArena {
+class  SerialArena {
 public:
 	struct Memory {
 		void *ptr;
@@ -360,7 +360,7 @@ struct MessageOwned {
 // in turn would be templates, which will/cannot happen. However separating
 // the memory allocation part from the cruft of the API users expect we can
 // use #ifdef the select the best implementation based on hardware / OS.
-class PROTOBUF_EXPORT ThreadSafeArena {
+class  ThreadSafeArena {
 public:
 	ThreadSafeArena() {
 		Init();

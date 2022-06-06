@@ -72,7 +72,7 @@ namespace internal {
 // Helper for EnumType_Parse functions: try to parse the string 'name' as
 // an enum name of the given type, returning true and filling in value on
 // success, or returning false and leaving value unchanged on failure.
-PROTOBUF_EXPORT bool ParseNamedEnum(const EnumDescriptor *descriptor, ConstStringParam name, int *value);
+ bool ParseNamedEnum(const EnumDescriptor *descriptor, ConstStringParam name, int *value);
 
 template <typename EnumType>
 bool ParseNamedEnum(const EnumDescriptor *descriptor, ConstStringParam name, EnumType *value) {
@@ -86,7 +86,7 @@ bool ParseNamedEnum(const EnumDescriptor *descriptor, ConstStringParam name, Enu
 // Just a wrapper around printing the name of a value. The main point of this
 // function is not to be inlined, so that you can do this without including
 // descriptor.h.
-PROTOBUF_EXPORT const std::string &NameOfEnum(const EnumDescriptor *descriptor, int value);
+ const std::string &NameOfEnum(const EnumDescriptor *descriptor, int value);
 
 } // namespace internal
 } // namespace protobuf

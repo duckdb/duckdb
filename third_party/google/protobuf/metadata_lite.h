@@ -225,11 +225,11 @@ private:
 // String Template specializations.
 
 template <>
-PROTOBUF_EXPORT void InternalMetadata::DoClear<std::string>();
+ void InternalMetadata::DoClear<std::string>();
 template <>
-PROTOBUF_EXPORT void InternalMetadata::DoMergeFrom<std::string>(const std::string &other);
+ void InternalMetadata::DoMergeFrom<std::string>(const std::string &other);
 template <>
-PROTOBUF_EXPORT void InternalMetadata::DoSwap<std::string>(std::string *other);
+ void InternalMetadata::DoSwap<std::string>(std::string *other);
 
 // This helper RAII class is needed to efficiently parse unknown fields. We
 // should only call mutable_unknown_fields if there are actual unknown fields.
@@ -239,7 +239,7 @@ PROTOBUF_EXPORT void InternalMetadata::DoSwap<std::string>(std::string *other);
 // LiteUnknownFieldSetter setter(&_internal_metadata_);
 // StringOutputStream stream(setter.buffer());
 // guarantees that the string is only swapped after stream is destroyed.
-class PROTOBUF_EXPORT LiteUnknownFieldSetter {
+class  LiteUnknownFieldSetter {
 public:
 	explicit LiteUnknownFieldSetter(InternalMetadata *metadata) : metadata_(metadata) {
 		if (metadata->have_unknown_fields()) {

@@ -67,7 +67,7 @@ class ErrorCollector; // tokenizer.h
 // debugging and human editing of messages.
 //
 // This class is really a namespace that contains only static methods.
-class PROTOBUF_EXPORT TextFormat {
+class  TextFormat {
 public:
 	// Outputs a textual representation of the given message to the given
 	// output stream. Returns false if printing fails.
@@ -94,7 +94,7 @@ public:
 	static void PrintFieldValueToString(const Message &message, const FieldDescriptor *field, int index,
 	                                    std::string *output);
 
-	class PROTOBUF_EXPORT BaseTextGenerator {
+	class  BaseTextGenerator {
 	public:
 		virtual ~BaseTextGenerator();
 
@@ -124,7 +124,7 @@ public:
 	// string representation.
 	// You can derive from this FastFieldValuePrinter if you want to have fields
 	// to be printed in a different way and register it at the Printer.
-	class PROTOBUF_EXPORT FastFieldValuePrinter {
+	class  FastFieldValuePrinter {
 	public:
 		FastFieldValuePrinter();
 		virtual ~FastFieldValuePrinter();
@@ -160,7 +160,7 @@ public:
 	};
 
 	// Deprecated: please use FastFieldValuePrinter instead.
-	class PROTOBUF_EXPORT FieldValuePrinter {
+	class  FieldValuePrinter {
 	public:
 		FieldValuePrinter();
 		virtual ~FieldValuePrinter();
@@ -186,7 +186,7 @@ public:
 		GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(FieldValuePrinter);
 	};
 
-	class PROTOBUF_EXPORT MessagePrinter {
+	class  MessagePrinter {
 	public:
 		MessagePrinter() {
 		}
@@ -200,7 +200,7 @@ public:
 
 	// Interface that Printers or Parsers can use to find extensions, or types
 	// referenced in Any messages.
-	class PROTOBUF_EXPORT Finder {
+	class  Finder {
 	public:
 		virtual ~Finder();
 
@@ -229,7 +229,7 @@ public:
 
 	// Class for those users which require more fine-grained control over how
 	// a protobuffer message is printed out.
-	class PROTOBUF_EXPORT Printer {
+	class  Printer {
 	public:
 		Printer();
 
@@ -484,7 +484,7 @@ public:
 
 	// Data structure which is populated with the locations of each field
 	// value parsed from the text.
-	class PROTOBUF_EXPORT ParseInfoTree {
+	class  ParseInfoTree {
 	public:
 		ParseInfoTree() = default;
 		ParseInfoTree(const ParseInfoTree &) = delete;
@@ -529,7 +529,7 @@ public:
 	};
 
 	// For more control over parsing, use this class.
-	class PROTOBUF_EXPORT Parser {
+	class  Parser {
 	public:
 		Parser();
 		~Parser();

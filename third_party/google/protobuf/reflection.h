@@ -327,7 +327,7 @@ namespace internal {
 //
 // You can map from T to the actual type using RefTypeTraits:
 //   typedef RefTypeTraits<T>::AccessorValueType ActualType;
-class PROTOBUF_EXPORT RepeatedFieldAccessor {
+class  RepeatedFieldAccessor {
 public:
 	// Typedefs for clarity.
 	typedef void Field;

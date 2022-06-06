@@ -106,7 +106,7 @@ namespace internal {
 // SetAllocated, Rvalue Set, and Swap with a non-donated string.
 //
 // For more details of the donating states transitions, go/pd-inlined-string.
-class PROTOBUF_EXPORT InlinedStringField {
+class  InlinedStringField {
 public:
 	InlinedStringField() {
 		Init();

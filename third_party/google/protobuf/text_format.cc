@@ -86,7 +86,7 @@ inline bool IsOctNumber(const std::string &str) {
 
 namespace internal {
 // Controls insertion of DEBUG_STRING_SILENT_MARKER.
-PROTOBUF_EXPORT std::atomic<bool> enable_debug_text_format_marker;
+ std::atomic<bool> enable_debug_text_format_marker;
 } // namespace internal
 
 std::string Message::DebugString() const {

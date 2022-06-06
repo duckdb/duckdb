@@ -80,7 +80,7 @@ enum ProcessingTypes {
 
 static_assert(TYPE_MAP < kRepeatedMask, "Invalid enum");
 
-struct PROTOBUF_EXPORT FieldMetadata {
+struct  FieldMetadata {
 	uint32_t offset; // offset of this field in the struct
 	uint32_t tag;    // field * 8 + wire_type
 	// byte offset * 8 + bit_offset;
@@ -239,7 +239,7 @@ struct SerializationTable {
 	const FieldMetadata *field_table;
 };
 
-PROTOBUF_EXPORT void SerializeInternal(const uint8_t *base, const FieldMetadata *table, int32_t num_fields,
+ void SerializeInternal(const uint8_t *base, const FieldMetadata *table, int32_t num_fields,
                                        io::CodedOutputStream *output);
 
 inline void TableSerialize(const MessageLite &msg, const SerializationTable *table, io::CodedOutputStream *output) {
@@ -255,7 +255,7 @@ inline void TableSerialize(const MessageLite &msg, const SerializationTable *tab
 	SerializeInternal(base, field_table + 1, num_fields, output);
 }
 
-PROTOBUF_EXPORT uint8_t *SerializeInternalToArray(const uint8_t *base, const FieldMetadata *table, int32_t num_fields,
+ uint8_t *SerializeInternalToArray(const uint8_t *base, const FieldMetadata *table, int32_t num_fields,
                                                   bool is_deterministic, uint8_t *buffer);
 
 inline uint8_t *TableSerializeToArray(const MessageLite &msg, const SerializationTable *table, bool is_deterministic,

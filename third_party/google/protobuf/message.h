@@ -233,7 +233,7 @@ bool CreateUnknownEnumValues(const FieldDescriptor *field);
 //
 // Users must not derive from this class. Only the protocol compiler and
 // the internal library are allowed to create subclasses.
-class PROTOBUF_EXPORT Message : public MessageLite {
+class  Message : public MessageLite {
 public:
 	constexpr Message() {
 	}
@@ -452,7 +452,7 @@ class MutableRepeatedFieldRef;
 // double the message's memory footprint, probably worse.  Allocating the
 // objects on-demand, on the other hand, would be expensive and prone to
 // memory leaks.  So, instead we ended up with this flat interface.
-class PROTOBUF_EXPORT Reflection final {
+class  Reflection final {
 public:
 	// Get the UnknownFieldSet for the message.  This contains fields which
 	// were seen when the Message was parsed but were not recognized according
@@ -1116,7 +1116,7 @@ private:
 };
 
 // Abstract interface for a factory for message objects.
-class PROTOBUF_EXPORT MessageFactory {
+class  MessageFactory {
 public:
 	inline MessageFactory() {
 	}
@@ -1179,11 +1179,11 @@ private:
 
 #define DECLARE_GET_REPEATED_FIELD(TYPE)                           \
   template <>                                                      \
-  PROTOBUF_EXPORT const RepeatedField<TYPE> &Reflection::GetRepeatedFieldInternal<TYPE>(                      \
+   const RepeatedField<TYPE> &Reflection::GetRepeatedFieldInternal<TYPE>(                      \
       const Message &message, const FieldDescriptor *field) const; \
                                                                    \
   template <>                                                      \
-  PROTOBUF_EXPORT RepeatedField<TYPE> *Reflection::MutableRepeatedFieldInternal<TYPE>(                  \
+   RepeatedField<TYPE> *Reflection::MutableRepeatedFieldInternal<TYPE>(                  \
       Message * message, const FieldDescriptor *field) const;
 
 DECLARE_GET_REPEATED_FIELD(int32_t)

@@ -61,13 +61,13 @@ struct EnumEntry {
 };
 
 // Looks up a numeric enum value given the string name.
-PROTOBUF_EXPORT bool LookUpEnumValue(const EnumEntry *enums, size_t size, StringPiece name, int *value);
+ bool LookUpEnumValue(const EnumEntry *enums, size_t size, StringPiece name, int *value);
 
 // Looks up an enum name given the numeric value.
-PROTOBUF_EXPORT int LookUpEnumName(const EnumEntry *enums, const int *sorted_indices, size_t size, int value);
+ int LookUpEnumName(const EnumEntry *enums, const int *sorted_indices, size_t size, int value);
 
 // Initializes the list of enum names in std::string form.
-PROTOBUF_EXPORT bool InitializeEnumStrings(const EnumEntry *enums, const int *sorted_indices, size_t size,
+ bool InitializeEnumStrings(const EnumEntry *enums, const int *sorted_indices, size_t size,
                                            internal::ExplicitlyConstructed<std::string> *enum_strings);
 
 } // namespace internal

@@ -285,7 +285,7 @@ size_t MapValueSpaceUsedExcludingSelfLong(const T& message) {
 }
 
 constexpr size_t kGlobalEmptyTableSize = 1;
-PROTOBUF_EXPORT extern void* const kGlobalEmptyTable[kGlobalEmptyTableSize];
+ extern void* const kGlobalEmptyTable[kGlobalEmptyTableSize];
 
 // Space used for the table, trees, and nodes.
 // Does not include the indirect space used. Eg the data of a std::string.

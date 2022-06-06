@@ -142,7 +142,7 @@ struct ExtensionInfo {
 
 // Abstract interface for an object which looks up extension definitions.  Used
 // when parsing.
-class PROTOBUF_EXPORT ExtensionFinder {
+class  ExtensionFinder {
  public:
   virtual ~ExtensionFinder();
 
@@ -152,7 +152,7 @@ class PROTOBUF_EXPORT ExtensionFinder {
 
 // Implementation of ExtensionFinder which finds extensions defined in .proto
 // files which have been compiled into the binary.
-class PROTOBUF_EXPORT GeneratedExtensionFinder : public ExtensionFinder {
+class  GeneratedExtensionFinder : public ExtensionFinder {
  public:
   explicit GeneratedExtensionFinder(const MessageLite* extendee)
       : extendee_(extendee) {}
@@ -182,7 +182,7 @@ class MessageSetFieldSkipper;
 // ExtensionSet.  When parsing, if a tag number is encountered which is
 // inside one of the message type's extension ranges, the tag is passed
 // off to the ExtensionSet for parsing.  Etc.
-class PROTOBUF_EXPORT ExtensionSet {
+class  ExtensionSet {
  public:
   constexpr ExtensionSet();
   explicit ExtensionSet(Arena* arena);
@@ -573,7 +573,7 @@ class PROTOBUF_EXPORT ExtensionSet {
                                   uint8_t* target,
                                   io::EpsCopyOutputStream* stream) const;
   // Interface of a lazily parsed singular message extension.
-  class PROTOBUF_EXPORT LazyMessageExtension {
+  class  LazyMessageExtension {
    public:
     LazyMessageExtension() {}
     virtual ~LazyMessageExtension() {}
@@ -1064,7 +1064,7 @@ class RepeatedPrimitiveTypeTraits {
   }
 };
 
-class PROTOBUF_EXPORT RepeatedPrimitiveDefaults {
+class  RepeatedPrimitiveDefaults {
  private:
   template <typename Type>
   friend class RepeatedPrimitiveTypeTraits;
@@ -1157,7 +1157,7 @@ PROTOBUF_DEFINE_PRIMITIVE_TYPE(bool, Bool)
 // StringTypeTraits
 
 // Strings support both Set() and Mutable().
-class PROTOBUF_EXPORT StringTypeTraits {
+class  StringTypeTraits {
  public:
   typedef const std::string& ConstType;
   typedef std::string* MutableType;
@@ -1186,7 +1186,7 @@ class PROTOBUF_EXPORT StringTypeTraits {
   }
 };
 
-class PROTOBUF_EXPORT RepeatedStringTypeTraits {
+class  RepeatedStringTypeTraits {
  public:
   typedef const std::string& ConstType;
   typedef std::string* MutableType;

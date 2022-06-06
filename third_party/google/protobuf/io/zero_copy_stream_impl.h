@@ -62,7 +62,7 @@ namespace io {
 // The latter will introduce an extra layer of buffering, harming performance.
 // Also, it's conceivable that FileInputStream could someday be enhanced
 // to use zero-copy file descriptors on OSs which support them.
-class PROTOBUF_EXPORT FileInputStream : public ZeroCopyInputStream {
+class  FileInputStream : public ZeroCopyInputStream {
 public:
 	// Creates a stream that reads from the given Unix file descriptor.
 	// If a block_size is given, it specifies the number of bytes that
@@ -99,7 +99,7 @@ public:
 	int64_t ByteCount() const override;
 
 private:
-	class PROTOBUF_EXPORT CopyingFileInputStream : public CopyingInputStream {
+	class  CopyingFileInputStream : public CopyingInputStream {
 	public:
 		CopyingFileInputStream(int file_descriptor);
 		~CopyingFileInputStream() override;
@@ -147,7 +147,7 @@ private:
 // harming performance.  Also, it's conceivable that FileOutputStream could
 // someday be enhanced to use zero-copy file descriptors on OSs which
 // support them.
-class PROTOBUF_EXPORT FileOutputStream : public CopyingOutputStreamAdaptor {
+class  FileOutputStream : public CopyingOutputStreamAdaptor {
 public:
 	// Creates a stream that writes to the given Unix file descriptor.
 	// If a block_size is given, it specifies the size of the buffers
@@ -180,7 +180,7 @@ public:
 	}
 
 private:
-	class PROTOBUF_EXPORT CopyingFileOutputStream : public CopyingOutputStream {
+	class  CopyingFileOutputStream : public CopyingOutputStream {
 	public:
 		CopyingFileOutputStream(int file_descriptor);
 		~CopyingFileOutputStream() override;
@@ -219,7 +219,7 @@ private:
 //
 // Note that for reading files (or anything represented by a file descriptor),
 // FileInputStream is more efficient.
-class PROTOBUF_EXPORT IstreamInputStream : public ZeroCopyInputStream {
+class  IstreamInputStream : public ZeroCopyInputStream {
 public:
 	// Creates a stream that reads from the given C++ istream.
 	// If a block_size is given, it specifies the number of bytes that
@@ -234,7 +234,7 @@ public:
 	int64_t ByteCount() const override;
 
 private:
-	class PROTOBUF_EXPORT CopyingIstreamInputStream : public CopyingInputStream {
+	class  CopyingIstreamInputStream : public CopyingInputStream {
 	public:
 		CopyingIstreamInputStream(std::istream *input);
 		~CopyingIstreamInputStream() override;
@@ -262,7 +262,7 @@ private:
 //
 // Note that for writing files (or anything represented by a file descriptor),
 // FileOutputStream is more efficient.
-class PROTOBUF_EXPORT OstreamOutputStream : public ZeroCopyOutputStream {
+class  OstreamOutputStream : public ZeroCopyOutputStream {
 public:
 	// Creates a stream that writes to the given C++ ostream.
 	// If a block_size is given, it specifies the size of the buffers
@@ -277,7 +277,7 @@ public:
 	int64_t ByteCount() const override;
 
 private:
-	class PROTOBUF_EXPORT CopyingOstreamOutputStream : public CopyingOutputStream {
+	class  CopyingOstreamOutputStream : public CopyingOutputStream {
 	public:
 		CopyingOstreamOutputStream(std::ostream *output);
 		~CopyingOstreamOutputStream() override;
@@ -307,7 +307,7 @@ private:
 // ConcatenatingInputStream may do odd things.  It is suggested that you do
 // not use ConcatenatingInputStream on streams that might produce read errors
 // other than end-of-stream.
-class PROTOBUF_EXPORT ConcatenatingInputStream : public ZeroCopyInputStream {
+class  ConcatenatingInputStream : public ZeroCopyInputStream {
 public:
 	// All streams passed in as well as the array itself must remain valid
 	// until the ConcatenatingInputStream is destroyed.
