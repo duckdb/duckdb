@@ -766,7 +766,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	default:
 		Normalify(count);
-		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
+		data.sel = FlatVector::IncrementalSelectionVector();
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -961,8 +961,7 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::UTFVerify(idx_t count) {
-	SelectionVector owned_sel;
-	auto flat_sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	auto flat_sel = FlatVector::IncrementalSelectionVector();
 
 	UTFVerify(*flat_sel, count);
 }
@@ -1080,8 +1079,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Verify(idx_t count) {
-	SelectionVector owned_sel;
-	auto flat_sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	auto flat_sel = FlatVector::IncrementalSelectionVector();
 	Verify(*flat_sel, count);
 }
 
@@ -1108,17 +1106,6 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 			ConstantVector::SetNull(*entry, is_null);
 		}
 	}
-}
-
-const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
-	if (count <= STANDARD_VECTOR_SIZE) {
-		return FlatVector::IncrementalSelectionVector();
-	}
-	owned_sel.Initialize(count);
-	for (idx_t i = 0; i < count; i++) {
-		owned_sel.set_index(i, i);
-	}
-	return &owned_sel;
 }
 
 const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, SelectionVector &owned_sel) {
