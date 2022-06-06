@@ -54,4 +54,4 @@ jobs:
         python3 -m pip install psutil
         cd ../tools/pythonpkg
         python3 setup.py install
-        python3 -m pytest {project}/tests/fast
+        python3 -m pytest tests/fast
