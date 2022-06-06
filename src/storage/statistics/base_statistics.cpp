@@ -196,8 +196,7 @@ void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 }
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) const {
-	SelectionVector owned_sel;
-	auto sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	auto sel = FlatVector::IncrementalSelectionVector();
 	Verify(vector, *sel, count);
 }
 

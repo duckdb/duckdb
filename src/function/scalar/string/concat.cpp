@@ -206,8 +206,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 			return;
 		}
 		// no null values
-		SelectionVector owned_sel;
-		auto sel = FlatVector::IncrementalSelectionVector(args.size(), owned_sel);
+		auto sel = FlatVector::IncrementalSelectionVector();
 		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, *sel, args.size(), result);
 		return;
 	}
