@@ -111,10 +111,10 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 			// TODO What about factors that use numeric?
 			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
 			strings levels = GET_LEVELS(coldata);
-			// TODO not use SetValue here
 			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
+			auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
 			for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
-				duckdb_levels.SetValue(level_idx, (string)levels[level_idx]);
+				levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, (string)levels[level_idx]);
 			}
 			duckdb_col_type = LogicalType::ENUM(df_names[col_idx], duckdb_levels, levels.size());
 			break;
