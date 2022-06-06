@@ -46,7 +46,7 @@ jobs:
     - name: Install Python 3.9
       run: |
         wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
-        tar xvf v3.9.12.zip
+        unzip v3.9.12.zip
         rm v3.9.12.zip
         cd cpython-3.9.12
         mkdir debug-build
