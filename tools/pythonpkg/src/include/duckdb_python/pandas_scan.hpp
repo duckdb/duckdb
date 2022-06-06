@@ -25,39 +25,27 @@ public:
 	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                               vector<LogicalType> &return_types, vector<string> &names);
 
-	static unique_ptr<FunctionOperatorData> PandasScanInit(ClientContext &context, const FunctionData *bind_data_p,
-	                                                       const vector<column_t> &column_ids,
-	                                                       TableFilterCollection *filters);
+	static unique_ptr<GlobalTableFunctionState> PandasScanInitGlobal(ClientContext &context,
+	                                                                 TableFunctionInitInput &input);
+	static unique_ptr<LocalTableFunctionState>
+	PandasScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate);
 
 	static idx_t PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
 
-	static unique_ptr<ParallelState> PandasScanInitParallelState(ClientContext &context,
-	                                                             const FunctionData *bind_data_p,
-	                                                             const vector<column_t> &column_ids,
-	                                                             TableFilterCollection *filters);
-
-	static unique_ptr<FunctionOperatorData>
-	PandasScanParallelInit(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,
-	                       const vector<column_t> &column_ids, TableFilterCollection *filters);
-
 	static bool PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-	                                        FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+	                                        LocalTableFunctionState *lstate, GlobalTableFunctionState *gstate);
 
-	static double PandasProgress(ClientContext &context, const FunctionData *bind_data_p);
+	static double PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
+	                             const GlobalTableFunctionState *gstate);
 
 	//! The main pandas scan function: note that this can be called in parallel without the GIL
 	//! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
-	static void PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-	                           FunctionOperatorData *operator_state, DataChunk &output);
-
-	static void PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-	                                   FunctionOperatorData *operator_state, DataChunk &output,
-	                                   ParallelState *parallel_state_p);
+	static void PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output);
 
 	static unique_ptr<NodeStatistics> PandasScanCardinality(ClientContext &context, const FunctionData *bind_data);
 
 	static idx_t PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                                     FunctionOperatorData *operator_state, ParallelState *parallel_state_p);
+	                                     LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
 
 	// Helper function that transform pandas df names to make them work with our binder
 	static py::object PandasReplaceCopiedNames(const py::object &original_df);

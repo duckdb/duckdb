@@ -305,6 +305,7 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 	state.transaction_local_data = false;
 	// figure out the max row we can scan for both the regular and the transaction-local storage
 	state.max_row = total_rows;
+	state.vector_index = 0;
 	state.local_state.max_index = 0;
 	auto &transaction = Transaction::GetTransaction(context);
 	transaction.storage.InitializeScan(this, state.local_state, nullptr);
@@ -320,13 +321,19 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 			max_row = state.current_row_group->start +
 			          MinValue<idx_t>(state.current_row_group->count,
 			                          STANDARD_VECTOR_SIZE * state.vector_index + STANDARD_VECTOR_SIZE);
+			D_ASSERT(vector_index * STANDARD_VECTOR_SIZE < state.current_row_group->count);
 		} else {
 			vector_index = 0;
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
 		max_row = MinValue<idx_t>(max_row, state.max_row);
-		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
-		                                             state.current_row_group, vector_index, max_row);
+		bool need_to_scan;
+		if (state.current_row_group->count == 0) {
+			need_to_scan = false;
+		} else {
+			need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
+			                                        state.current_row_group, vector_index, max_row);
+		}
 		if (ClientConfig::GetConfig(context).verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
