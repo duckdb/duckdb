@@ -14,6 +14,12 @@ ALTER TABLE test ALTER COLUMN j SET NOT NULL
 
 statement error 
 INSERT INTO test VALUES (3, NULL)
+# SET again
+statement ok
+ALTER TABLE test ALTER COLUMN j SET NOT NULL
+
+statement error 
+INSERT INTO test VALUES (3, NULL)
 
 query II
 SELECT * FROM test

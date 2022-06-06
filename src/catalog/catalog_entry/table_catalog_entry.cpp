@@ -391,17 +391,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
-	/*
-	 * Steps	Desc		Required
-	 * 1.	Get create_info.	Y
-	 * 2. 	Get column index.	Y
-	 * 3.	Get constraints.	Y
-	 * 4.	Check idempotence. If not_null already.	Y
-	 * 5.	Check eligebility. If contains null value. Y
-	 * 6.	Bind create info.	Y
-	 * 7.	Make TableCatalogEntry.	Y
-	 *
-	 */
+	
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	// columns
 	vector<column_t> column_ids;
@@ -411,6 +401,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		create_info->columns.push_back(move(copy));
+		// has to push all to avoid CheckZonemap() error
 		column_ids.push_back(i);
 		types.push_back(columns[i].type);
 	}
@@ -430,7 +421,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	// If this column has NULL value, throw exception
 	if (!has_not_null) {
 		//check!
-		//vector<column_t> column_ids{not_null_idx};
 		// Transaction
 		auto &transaction = Transaction::GetTransaction(context);
 
@@ -441,7 +431,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		// filter
 		TableFilterSet table_filters;
 		table_filters.PushFilter(not_null_idx, make_unique<IsNullFilter>());
-		//table_filters.PushFilter(0, make_unique<IsNotNullFilter>());
 
 		// state
 		TableScanState state;
@@ -450,7 +439,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		storage->Scan(transaction, result, state, column_ids);
 
 		if(result.size()){
-			throw CatalogException("Error: Constraint Error: Constraint Error: NOT NULL constraint failed: %s.%s", storage->info->table, columns[not_null_idx].name); 
+			throw CatalogException("NOT NULL constraint failed: %s.%s", storage->info->table, columns[not_null_idx].name); 
 		}
 		// Able to set, add constraint
 		create_info->constraints.push_back(make_unique<NotNullConstraint>(not_null_idx));
@@ -462,15 +451,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
-	/*
-	 * Steps	Desc		Required
-	 * 1. 	Get column index. 	?
-	 * 2.	Get create_info.	Y
-	 * 3.	Get constraints.	Y
-	 * 4.	Bind create info.	Y
-	 * 5.	Make TableCatalogEntry.	Y
-	 * 
-	 */
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
@@ -480,9 +460,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, 
 	idx_t not_null_idx = GetColumnIndex(info.column_name);
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
-		// Get NOT_NULL constraint.
-		// If for this column
-		// For drop not null, skip this one.
+		// Skip/drop not_null
 		if(constraint->type == ConstraintType::NOT_NULL){
 			auto &not_null = (NotNullConstraint&)*constraint;
 			if(not_null.index == not_null_idx){
