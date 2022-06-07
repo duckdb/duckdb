@@ -106,6 +106,13 @@ struct DataTableInfo {
 	}
 };
 
+struct ColumnStatistics {
+	ColumnStatistics(unique_ptr<BaseStatistics> stats_p) : stats(move(stats_p)) {
+	}
+
+	unique_ptr<BaseStatistics> stats;
+};
+
 struct ParallelTableScanState {
 	RowGroup *current_row_group;
 	idx_t vector_index;
@@ -244,6 +251,8 @@ private:
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type);
 
+	shared_ptr<ColumnStatistics> CreateEmptyStats(const LogicalType &type);
+
 private:
 	//! Lock for appending entries to the table
 	mutex append_lock;
@@ -252,7 +261,7 @@ private:
 	//! The segment trees holding the various row_groups of the table
 	shared_ptr<SegmentTree> row_groups;
 	//! Column statistics
-	vector<unique_ptr<BaseStatistics>> column_stats;
+	vector<shared_ptr<ColumnStatistics>> column_stats;
 	//! The statistics lock
 	mutex stats_lock;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version

@@ -20,6 +20,11 @@
 
 namespace duckdb {
 
+shared_ptr<ColumnStatistics> DataTable::CreateEmptyStats(const LogicalType &type) {
+	auto col_stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
+	return make_shared<ColumnStatistics>(move(col_stats));
+}
+
 DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table,
                      vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
@@ -36,7 +41,10 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 			}
 			row_groups->AppendSegment(move(new_row_group));
 		}
-		column_stats = move(data->column_stats);
+		column_stats.reserve(data->column_stats.size());
+		for (auto &stats : data->column_stats) {
+			column_stats.push_back(make_shared<ColumnStatistics>(move(stats)));
+		}
 		if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 			throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
 		} // LCOV_EXCL_STOP
@@ -46,7 +54,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 
 		AppendRowGroup(0);
 		for (auto &type : types) {
-			column_stats.push_back(BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS));
+			column_stats.push_back(CreateEmptyStats(type));
 		}
 	} else {
 		D_ASSERT(column_stats.size() == types.size());
@@ -74,9 +82,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 	// set up the statistics
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
-		column_stats.push_back(parent.column_stats[i]->Copy());
+		column_stats.push_back(parent.column_stats[i]);
 	}
-	column_stats.push_back(BaseStatistics::CreateEmpty(new_column_type, StatisticsType::GLOBAL_STATS));
+	column_stats.push_back(CreateEmptyStats(new_column_type));
 
 	// add the column definitions from this DataTable
 	column_definitions.emplace_back(new_column.Copy());
@@ -99,7 +107,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AddColumn(context, new_column, executor, default_value, result);
 		// merge in the statistics
-		column_stats[new_column_idx]->Merge(*new_row_group->GetStatistics(new_column_idx));
+		column_stats[new_column_idx]->stats->Merge(*new_row_group->GetStatistics(new_column_idx));
 
 		row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();
@@ -135,7 +143,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	// erase the stats from this DataTable
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		if (i != removed_column) {
-			column_stats.push_back(parent.column_stats[i]->Copy());
+			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
 
@@ -185,10 +193,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// the column that had its type changed will have the new statistics computed during conversion
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
 		if (i == changed_idx) {
-			column_stats.push_back(
-			    BaseStatistics::CreateEmpty(column_definitions[i].type, StatisticsType::GLOBAL_STATS));
+			column_stats.push_back(CreateEmptyStats(column_definitions[i].type));
 		} else {
-			column_stats.push_back(parent.column_stats[i]->Copy());
+			column_stats.push_back(parent.column_stats[i]);
 		}
 	}
 
@@ -219,7 +226,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	while (current_row_group) {
 		auto new_row_group =
 		    current_row_group->AlterType(context, target_type, changed_idx, executor, scan_state, scan_chunk);
-		column_stats[changed_idx]->Merge(*new_row_group->GetStatistics(changed_idx));
+		column_stats[changed_idx]->stats->Merge(*new_row_group->GetStatistics(changed_idx));
 		row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();
 	}
@@ -681,7 +688,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 			// merge the stats
 			lock_guard<mutex> stats_guard(stats_lock);
 			for (idx_t i = 0; i < column_definitions.size(); i++) {
-				column_stats[i]->Merge(*current_row_group->GetStatistics(i));
+				column_stats[i]->stats->Merge(*current_row_group->GetStatistics(i));
 			}
 		}
 		state.remaining_append_count -= append_count;
@@ -715,7 +722,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 		if (type == PhysicalType::LIST || type == PhysicalType::STRUCT) {
 			continue;
 		}
-		column_stats[col_idx]->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
+		column_stats[col_idx]->stats->UpdateDistinctStatistics(chunk.data[col_idx], chunk.size());
 	}
 }
 
@@ -1159,7 +1166,7 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 		lock_guard<mutex> stats_guard(stats_lock);
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto column_id = column_ids[i];
-			column_stats[column_id]->Merge(*row_group->GetStatistics(column_id));
+			column_stats[column_id]->stats->Merge(*row_group->GetStatistics(column_id));
 		}
 	} while (pos < count);
 }
@@ -1192,7 +1199,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 	row_group->UpdateColumn(transaction, updates, row_ids, column_path);
 
 	lock_guard<mutex> stats_guard(stats_lock);
-	column_stats[primary_column_idx]->Merge(*row_group->GetStatistics(primary_column_idx));
+	column_stats[primary_column_idx]->stats->Merge(*row_group->GetStatistics(primary_column_idx));
 }
 
 //===--------------------------------------------------------------------===//
@@ -1276,7 +1283,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 		return nullptr;
 	}
 	lock_guard<mutex> stats_guard(stats_lock);
-	return column_stats[column_id]->Copy();
+	return column_stats[column_id]->stats->Copy();
 }
 
 //===--------------------------------------------------------------------===//
@@ -1287,7 +1294,7 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	vector<unique_ptr<BaseStatistics>> global_stats;
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		global_stats.push_back(column_stats[i]->Copy());
+		global_stats.push_back(column_stats[i]->stats->Copy());
 	}
 
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();

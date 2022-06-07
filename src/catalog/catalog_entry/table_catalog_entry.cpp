@@ -76,10 +76,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
       bound_constraints(move(info->bound_constraints)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
+	this->name_map = move(info->name_map);
+#ifdef DEBUG
 	for (idx_t i = 0; i < columns.size(); i++) {
-		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
-		name_map[columns[i].name] = i;
+		D_ASSERT(name_map[columns[i].name] == i);
 	}
+#endif
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
