@@ -93,7 +93,7 @@ public:
 	static unique_ptr<DuckDBPyRelation> FilterDf(const py::object &df, const string &expr,
 	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	unique_ptr<DuckDBPyRelation> Limit(int64_t n);
+	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 
 	static unique_ptr<DuckDBPyRelation> LimitDF(const py::object &df, int64_t n,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
