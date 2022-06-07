@@ -23,6 +23,7 @@ class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
+class StandardEntry;
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
