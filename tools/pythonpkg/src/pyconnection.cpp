@@ -89,6 +89,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("check_same_thread", &DuckDBPyConnection::CheckSameThread,
+	         "Set flags that decides is different threads can use the same connection/cursor", py::arg("check_thread"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
 	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
@@ -386,6 +388,10 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	return connection->GetTableNames(query);
 }
 
+void DuckDBPyConnection::CheckSameThread(const bool check_thread) {
+	this->check_same_thread = check_thread;
+}
+
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
 	temporary_views.erase(name);
@@ -436,6 +442,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared<DuckDBPyConnection>(thread_id);
 	res->database = database;
 	res->connection = connection;
+	res->check_same_thread = check_same_thread;
 	cursors.push_back(res);
 	return res;
 }
