@@ -1,39 +1,27 @@
-# Julia C-API wrapper for DuckDB
 
-## Installation
+#### Installing the Package
 
-```julia
-pkg> add DuckDB
 
-julia> using DuckDB
+#### Formatting
+The format script must be run when changing anything. This can be done by running the following command from within the root directory of the project:
+
+```bash
+julia tools/juliapkg/scripts/format.jl
 ```
 
-## Basics
+#### Testing
 
-```julia
-db = DuckDB.open(":memory:")
+You can run the tests using the `test.sh` script:
 
-con = DuckDB.connect(db)
-
-res = DuckDB.execute(con,"CREATE TABLE integers(date DATE, jcol INTEGER);")
-
-res = DuckDB.execute(con,"INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);")
-
-res = DuckDB.execute(con, "SELECT * FROM integers;")
-
-df = DuckDB.toDataFrame(res)
-
-# or
-
-df = DuckDB.toDataFrame(con, "SELECT * FROM integers;")
-
-res = DuckDB.execute(con, "COPY (SELECT * FROM intergers) TO 'test.parquet' (FORMAT 'parquet');")
-
-res = DuckDB.execute(con, "SELECT * FROM 'test.parquet';")
-
-DuckDB.appendDataFrame(df, con, "integers")
-
-DuckDB.disconnect(con)
-
-DuckDB.close(db)
 ```
+./test.sh
+```
+
+Specific test files can be run by adding the name of the file as an argument:
+
+```
+./test.sh test_connection.jl
+```
+
+#### Original Julia Connector
+Credits to kimmolinna for the [original DuckDB Julia connector](https://github.com/kimmolinna/DuckDB.jl).
