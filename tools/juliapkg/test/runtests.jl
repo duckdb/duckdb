@@ -1,39 +1,41 @@
-using DataFrames
-using DuckDB
-using Test
-using Dates
-using FixedPointDecimals
-using UUIDs
+import DuckDB
+con = DuckDB.connect(":memory:")
 
-test_files = [
-    "test_appender.jl",
-    "test_basic_queries.jl",
-    "test_config.jl",
-    "test_connection.jl",
-    "test_df_scan.jl",
-    "test_prepare.jl",
-    "test_transaction.jl",
-    "test_sqlite.jl",
-    "test_replacement_scan.jl",
-    "test_table_function.jl",
-    "test_old_interface.jl",
-    "test_all_types.jl",
-    "test_decimals.jl",
-    "test_threading.jl",
-    "test_tpch.jl"
-]
+res = DuckDB.execute(con,"CREATE TABLE interval(interval INTERVAL);")
+res = DuckDB.execute(con,"""
+INSERT INTO interval VALUES 
+(INTERVAL 5 HOUR),
+(INTERVAL 12 MONTH),
+(INTERVAL 12 MICROSECOND),
+(INTERVAL 1 YEAR);
+""")
+res = DuckDB.execute(con,"SELECT * FROM interval;")
+res = DuckDB.toDataFrame(res)
 
-if size(ARGS)[1] > 0
-    filtered_test_files = []
-    for test_file in test_files
-        if test_file == ARGS[1]
-            push!(filtered_test_files, test_file)
-        end
-    end
-    test_files = filtered_test_files
-end
 
-for fname in test_files
-    println(fname)
-    include(fname)
-end
+res = DuckDB.execute(con,"CREATE TABLE timestamp(timestamp TIMESTAMP, data HUGEINT);")
+res = DuckDB.execute(con,"""
+    INSERT INTO timestamp VALUES 
+    ('2021-09-27 11:30:00.000', -170141183460469231731687303715884105727),
+    ('2021-09-28 12:30:00.000', 0),
+    ('2021-09-29 13:30:00.000', 170141183460469231731687303715884105727);
+    """)
+res = DuckDB.execute(con,"SELECT * FROM timestamp;")
+res = DuckDB.toDataFrame(res)
+    
+res = DuckDB.execute(con,"CREATE TABLE timestamp(timestamp TIMESTAMP , data INTEGER);")
+res = DuckDB.execute(con,"INSERT INTO timestamp VALUES ('2021-09-27 11:30:00.000', 4), ('2021-09-28 12:30:00.000', 6), ('2021-09-29 13:30:00.000', 8);")
+res = DuckDB.execute(con,"SELECT * FROM timestamp;")
+res = DuckDB.toDataFrame(res)
+
+res = DuckDB.execute(con, "CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER);")
+res = DuckDB.execute(con, "INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2);")
+res = DuckDB.execute(con, "SELECT * FROM items;")
+res = DuckDB.toDataFrame(res)
+
+res = DuckDB.execute(con,"CREATE TABLE integers(date DATE, data INTEGER);")
+res = DuckDB.execute(con,"INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);")
+res = DuckDB.execute(con,"SELECT * FROM integers;")
+res = DuckDB.toDataFrame(res)
+
+DuckDB.disconnect(con)
