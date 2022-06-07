@@ -339,6 +339,15 @@ static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::TIMESTAMP_TZ:
 		// date to timestamp
 		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCast>(source, result, count, error_message);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampNS>(source, result, count,
+		                                                                            error_message);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampSec>(source, result, count,
+		                                                                             error_message);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampMS>(source, result, count,
+		                                                                            error_message);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

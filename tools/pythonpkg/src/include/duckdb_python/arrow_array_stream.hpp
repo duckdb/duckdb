@@ -28,7 +28,7 @@ public:
 	//! Produces an Arrow Scanner, should be only called once when initializing Scan States
 	static unique_ptr<ArrowArrayStreamWrapper>
 	Produce(uintptr_t factory, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-	        TableFilterCollection *filters = nullptr);
+	        TableFilterSet *filters = nullptr);
 
 	//! Get the schema of the arrow object
 	static void GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema);
@@ -39,12 +39,12 @@ public:
 	ClientConfig &config;
 
 private:
-	//! We transform a TableFilterCollection to an Arrow Expression Object
-	static py::object TransformFilter(TableFilterCollection &filters, std::unordered_map<idx_t, string> &columns,
+	//! We transform a TableFilterSet to an Arrow Expression Object
+	static py::object TransformFilter(TableFilterSet &filters, std::unordered_map<idx_t, string> &columns,
 	                                  ClientConfig &config);
 
 	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
 	                                 std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-	                                 TableFilterCollection *filters, ClientConfig &config);
+	                                 TableFilterSet *filters, ClientConfig &config);
 };
 } // namespace duckdb

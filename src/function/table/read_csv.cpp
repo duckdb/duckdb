@@ -87,17 +87,19 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	return move(result);
 }
 
-struct ReadCSVOperatorData : public FunctionOperatorData {
+struct ReadCSVOperatorData : public GlobalTableFunctionState {
 	//! The CSV reader
 	unique_ptr<BufferedCSVReader> csv_reader;
 	//! The index of the next file to read (i.e. current file + 1)
 	idx_t file_index;
+	//! Total File Size
+	idx_t file_size;
+	//! How many bytes were read up to this point
+	atomic<idx_t> bytes_read;
 };
 
-static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                    const vector<column_t> &column_ids,
-                                                    TableFilterCollection *filters) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
+static unique_ptr<GlobalTableFunctionState> ReadCSVInit(ClientContext &context, TableFunctionInitInput &input) {
+	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {
 		result->csv_reader = move(bind_data.initial_reader);
@@ -105,8 +107,7 @@ static unique_ptr<FunctionOperatorData> ReadCSVInit(ClientContext &context, cons
 		bind_data.options.file_path = bind_data.files[0];
 		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
 	}
-	bind_data.bytes_read = 0;
-	bind_data.file_size = result->csv_reader->GetFileSize();
+	result->file_size = result->csv_reader->GetFileSize();
 	result->file_index = 1;
 	return move(result);
 }
@@ -117,13 +118,12 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 	return ReadCSVBind(context, input, return_types, names);
 }
 
-static void ReadCSVFunction(ClientContext &context, const FunctionData *bind_data_p,
-                            FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
-	auto &data = (ReadCSVOperatorData &)*operator_state;
+static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
+	auto &data = (ReadCSVOperatorData &)*data_p.global_state;
 	do {
 		data.csv_reader->ParseCSV(output);
-		bind_data.bytes_read = data.csv_reader->bytes_in_chunk;
+		data.bytes_read = data.csv_reader->bytes_in_chunk;
 		if (output.size() == 0 && data.file_index < bind_data.files.size()) {
 			// exhausted this file, but we have more files we can read
 			// open the next file and increment the counter
@@ -164,12 +164,13 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 }
 
-double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
-	if (bind_data.file_size == 0) {
+double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
+                         const GlobalTableFunctionState *global_state) {
+	auto &data = (const ReadCSVOperatorData &)*global_state;
+	if (data.file_size == 0) {
 		return 100;
 	}
-	auto percentage = (bind_data.bytes_read * 100.0) / bind_data.file_size;
+	auto percentage = (data.bytes_read * 100.0) / data.file_size;
 	return percentage;
 }
 

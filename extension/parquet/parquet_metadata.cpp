@@ -21,7 +21,7 @@ public:
 	}
 };
 
-struct ParquetMetaDataOperatorData : public FunctionOperatorData {
+struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
 	idx_t file_index;
 	ChunkCollection collection;
 
@@ -415,10 +415,8 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFuncti
 }
 
 template <bool SCHEMA>
-unique_ptr<FunctionOperatorData> ParquetMetaDataInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
-	auto &bind_data = (ParquetMetaDataBindData &)*bind_data_p;
+unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
+	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
 	D_ASSERT(!bind_data.files.empty());
 
 	auto result = make_unique<ParquetMetaDataOperatorData>();
@@ -432,10 +430,9 @@ unique_ptr<FunctionOperatorData> ParquetMetaDataInit(ClientContext &context, con
 }
 
 template <bool SCHEMA>
-void ParquetMetaDataImplementation(ClientContext &context, const FunctionData *bind_data_p,
-                                   FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (ParquetMetaDataOperatorData &)*operator_state;
-	auto &bind_data = (ParquetMetaDataBindData &)*bind_data_p;
+void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ParquetMetaDataOperatorData &)*data_p.global_state;
+	auto &bind_data = (ParquetMetaDataBindData &)*data_p.bind_data;
 	while (true) {
 		auto chunk = data.collection.Fetch();
 		if (!chunk) {
@@ -462,20 +459,12 @@ void ParquetMetaDataImplementation(ClientContext &context, const FunctionData *b
 
 ParquetMetaDataFunction::ParquetMetaDataFunction()
     : TableFunction("parquet_metadata", {LogicalType::VARCHAR}, ParquetMetaDataImplementation<false>,
-                    ParquetMetaDataBind<false>, ParquetMetaDataInit<false>, /* statistics */ nullptr,
-                    /* cleanup */ nullptr,
-                    /* dependency */ nullptr, nullptr,
-                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, nullptr, nullptr, nullptr, nullptr,
-                    nullptr, false, false, nullptr) {
+                    ParquetMetaDataBind<false>, ParquetMetaDataInit<false>) {
 }
 
 ParquetSchemaFunction::ParquetSchemaFunction()
     : TableFunction("parquet_schema", {LogicalType::VARCHAR}, ParquetMetaDataImplementation<true>,
-                    ParquetMetaDataBind<true>, ParquetMetaDataInit<true>, /* statistics */ nullptr,
-                    /* cleanup */ nullptr,
-                    /* dependency */ nullptr, nullptr,
-                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, nullptr, nullptr, nullptr, nullptr,
-                    nullptr, false, false, nullptr) {
+                    ParquetMetaDataBind<true>, ParquetMetaDataInit<true>) {
 }
 
 } // namespace duckdb
