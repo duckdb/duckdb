@@ -50,6 +50,8 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
                 data = Dates.epochms2datetime.((data./1000).+62167219200000)
             elseif type == DUCKDB_TYPE_INTERVAL
                 data = map(x -> Dates.CompoundPeriod(Dates.Month(x.months),Dates.Day(x.days),Dates.Microsecond(x.micros)),data)
+            elseif type == DUCKDB_TYPE_HUGEINT
+                data = map(x -> x.upper == 0 ? x.lower::UInt64 : x, data)
             elseif type == DUCKDB_TYPE_VARCHAR
                 data = unsafe_string.(data)
             end   
