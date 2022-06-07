@@ -4,13 +4,28 @@ include("api.jl")
 include("consts.jl")
 
 """
-    toDataFrame(result)
+    toDataFrame(connection::Ref{Ptr{Cvoid}},query::String)::DataFrame
+
+Creates a DataFrame from a SQL query within a connection.
+
+* `connection`: The connection to perform the query in.
+* `query`: The SQL query to run.
+* returns: the abstract dataframe
+
+"""
+function toDataFrame(connection::Ref{Ptr{Cvoid}},query::String)::DataFrame
+    res =  execute(connection,query)::Ref{duckdb_result}
+     return toDataFrame(res) 
+end
+"""
+    toDataFrame(result::Ref{duckdb_result})::DataFrame
+
 Creates a DataFrame from the full result
 * `result`: the full result from `execute`
 * returns: the abstract dataframe
 
 """
-function toDataFrame(result)
+function toDataFrame(result::Ref{duckdb_result})::DataFrame
     columns=unsafe_wrap(Array{duckdb_column},result[].columns,Int64(result[].column_count));
     df = DataFrame();
     for i in 1:Int64(result[].column_count)
@@ -22,7 +37,7 @@ function toDataFrame(result)
         else
             mask = unsafe_wrap(Array,columns[i].nullmask,rows)
             data = unsafe_wrap(Array,Ptr{DUCKDB_TYPES[type]}(columns[i].data),rows)
-            bmask=reinterpret(Bool,mask)
+            bmask = reinterpret(Bool,mask)
 
             if 0!=sum(mask)
                 data = data[.!bmask]
@@ -76,36 +91,38 @@ end
 connect() = connect(":memory:")
 
 """
+    connect(path)
 Creates a new database or opens an existing database file stored at the the given path. If no path is given a new in-memory database is created instead.
-* path: Path to the database file on disk or :memory: to open an in-memory database.
+* `path`: Path to the database file on disk or `:memory:` to open an in-memory database.
 * returns: a connection handle
 
 """
-function connect(file)
+function connect(path::String)::Ref{Ptr{Cvoid}}
     database = Ref{Ptr{Cvoid}}()
     connection = Ref{Ptr{Cvoid}}()
-    duckdb_open(file,database)
+    duckdb_open(path,database)
     duckdb_connect(database,connection)
     return connection
 end
 
 """
-Executes a SQL query within a connection and returns the full (materialized) result. If the query fails to execute, DuckDBError is returned and the error message can be retrieved by calling duckdb_result_error.
+    execute(connection,query) 
+
+Executes a SQL query within a connection and returns the full (materialized) result. If the query fails to execute, `DuckDBError` is returned and the error message can be retrieved by calling `duckdb_result_error`.
 
 Note that after running duckdb_query, duckdb_destroy_result must be called on the result object even if the query fails, otherwise the error stored within the result will not be freed correctly.
-* connection: The connection to perform the query in.
-* query: The SQL query to run.
+* `connection`: The connection to perform the query in.
+* `query`: The SQL query to run.
 * returns: the full result pointer
 
 """
-function execute(connection,query) 
+function execute(connection::Ref{Ptr{Cvoid}},query::String)::Ref{duckdb_result} 
     result = Ref{duckdb_result}()
     duckdb_query(connection,query,result)
-    if result[].error_message==Ptr{UInt8}(0)
-        return result
-    else
-        return unsafe_string(result[].error_message)
+    if result[].error_message!=Ptr{UInt8}(0)
+        print(unsafe_string(result[].error_message))
     end
+    return result
 end
 
 end # module

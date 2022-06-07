@@ -1,6 +1,6 @@
 # Julia C-API wrapper for DuckDB
 ## Installation
-pkg> add https://github.com/kimmolinna/julia-duckdb
+pkg> add https://github.com/kimmolinna/DuckDB.jl
 
 julia> import DuckDB
 
