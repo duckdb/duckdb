@@ -304,28 +304,23 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// value have not been seen yet
 			idx_t new_group_count =
 			    distinct_hashes[aggr_idx]->FindOrCreateGroups(probe_chunk, dummy_addresses, new_groups);
-
-			// now fix up the payload and addresses accordingly by creating
-			// a selection vector
 			if (new_group_count > 0) {
+				// now fix up the payload and addresses accordingly by creating
+				// a selection vector
+				DataChunk distinct_payload;
+				distinct_payload.Initialize(payload.GetTypes());
+				distinct_payload.Slice(payload, new_groups, new_group_count);
+				distinct_payload.Verify();
+
+				Vector distinct_addresses(addresses, new_groups, new_group_count);
+				distinct_addresses.Verify(new_group_count);
+
 				if (aggr.filter) {
-					Vector distinct_addresses(addresses, new_groups, new_group_count);
-					DataChunk distinct_payload;
-					auto pay_types = payload.GetTypes();
-					distinct_payload.Initialize(pay_types);
-					distinct_payload.Slice(payload, new_groups, new_group_count);
-					distinct_addresses.Verify(new_group_count);
 					distinct_addresses.Normalify(new_group_count);
 					RowOperations::UpdateFilteredStates(aggr, distinct_addresses, distinct_payload, payload_idx);
 				} else {
-					Vector distinct_addresses(addresses, new_groups, new_group_count);
-					for (idx_t i = 0; i < aggr.child_count; i++) {
-						payload.data[payload_idx + i].Slice(new_groups, new_group_count);
-						payload.data[payload_idx + i].Verify(new_group_count);
-					}
-					distinct_addresses.Verify(new_group_count);
-
-					RowOperations::UpdateStates(aggr, distinct_addresses, payload, payload_idx, new_group_count);
+					RowOperations::UpdateStates(aggr, distinct_addresses, distinct_payload, payload_idx,
+					                            new_group_count);
 				}
 			}
 		} else if (aggr.filter) {

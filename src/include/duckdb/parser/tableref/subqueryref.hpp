@@ -23,6 +23,7 @@ public:
 	vector<string> column_name_alias;
 
 public:
+	string ToString() const override;
 	bool Equals(const TableRef *other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;

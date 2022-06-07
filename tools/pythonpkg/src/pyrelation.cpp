@@ -141,8 +141,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(py::object df, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df));
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const py::object &df, DuckDBPyConnection *conn) {
+	return conn->FromDF(df);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBPyConnection *conn) {
@@ -193,8 +193,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Project(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Project(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const py::object &df, const string &expr,
+                                                         DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Project(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
@@ -205,32 +206,35 @@ py::str DuckDBPyRelation::GetAlias() {
 	return py::str(string(rel->GetAlias()));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->SetAlias(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(const py::object &df, const string &expr,
+                                                       DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->SetAlias(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Filter(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Filter(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const py::object &df, const string &expr,
+                                                        DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Filter(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n) {
 	return make_unique<DuckDBPyRelation>(rel->Limit(n));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(py::object df, int64_t n, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Limit(n);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const py::object &df, int64_t n, DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Limit(n);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Order(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(py::object df, const string &expr, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Order(expr);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::OrderDf(const py::object &df, const string &expr,
+                                                       DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Order(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
@@ -391,17 +395,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns
 	return GenericWindowFunction("min", aggr_columns);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,
-                                                           DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Aggregate(expr, groups);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(const py::object &df, const string &expr,
+                                                           const string &groups, DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Aggregate(expr, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_unique<DuckDBPyRelation>(rel->Distinct());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(py::object df, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Distinct();
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DistinctDF(const py::object &df, DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Distinct();
 }
 
 py::object DuckDBPyRelation::ToDF() {
@@ -495,19 +499,25 @@ void DuckDBPyRelation::WriteCsv(const string &file) {
 	rel->WriteCSV(file);
 }
 
-void DuckDBPyRelation::WriteCsvDF(py::object df, const string &file, DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->WriteCsv(file);
+void DuckDBPyRelation::WriteCsvDF(const py::object &df, const string &file, DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->WriteCsv(file);
 }
 
 // should this return a rel with the new view?
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
 	rel->CreateView(view_name, replace);
+	// We need to pass ownership of any Python Object Dependencies to the connection
+	auto all_dependencies = rel->GetAllDependencies();
+	rel->context.GetContext()->external_dependencies[view_name] = move(all_dependencies);
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto res = make_unique<DuckDBPyResult>();
-	res->result = rel->Query(view_name, sql_query);
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Query(view_name, sql_query);
+	}
 	if (!res->result->success) {
 		throw std::runtime_error(res->result->error);
 	}
@@ -526,9 +536,9 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 	return res;
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string &view_name, const string &sql_query,
-                                                     DuckDBPyConnection *conn) {
-	return conn->FromDF(std::move(df))->Query(view_name, sql_query);
+unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(const py::object &df, const string &view_name,
+                                                     const string &sql_query, DuckDBPyConnection *conn) {
+	return conn->FromDF(df)->Query(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
@@ -539,7 +549,7 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	} else {
 		//! Schema defined, we try to insert into it.
 		rel->Insert(parsed_info.schema, parsed_info.name);
-	};
+	}
 }
 
 void DuckDBPyRelation::Insert(py::object params) {

@@ -1,4 +1,5 @@
 #include "capi_tester.hpp"
+#include "duckdb.h"
 
 using namespace duckdb;
 using namespace std;
@@ -358,7 +359,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->Fetch<uint64_t>(7, 1) == 0);
 	REQUIRE(result->Fetch<float>(8, 1) == 0);
 	REQUIRE(result->Fetch<double>(9, 1) == 0);
-	REQUIRE(result->Fetch<string>(10, 1) == "");
+	REQUIRE(result->Fetch<string>(10, 1).empty());
 
 	blob = duckdb_value_blob(&result->InternalResult(), 11, 1);
 	REQUIRE(blob.size == 0);
@@ -387,4 +388,43 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	hugeint = duckdb_double_to_hugeint(NAN);
 	REQUIRE(hugeint.lower == 0);
 	REQUIRE(hugeint.upper == 0);
+}
+
+TEST_CASE("Test append timestamp in C API", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+	duckdb_state status;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE TABLE test (t timestamp)");
+	duckdb_appender appender;
+
+	status = duckdb_appender_create(tester.connection, nullptr, "test", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	status = duckdb_appender_begin_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	// status = duckdb_append_timestamp(appender, duckdb_timestamp{1649519797544000});
+	status = duckdb_append_varchar(appender, "2022-04-09 15:56:37.544");
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_flush(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_close(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_appender_destroy(&appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	result = tester.Query("SELECT * FROM test");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<string>(0, 0) == "2022-04-09 15:56:37.544");
 }

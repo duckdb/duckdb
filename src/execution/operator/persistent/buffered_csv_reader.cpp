@@ -22,6 +22,108 @@
 
 namespace duckdb {
 
+static bool ParseBoolean(const Value &value, const string &loption);
+
+static bool ParseBoolean(const vector<Value> &set, const string &loption) {
+	if (set.empty()) {
+		// no option specified: default to true
+		return true;
+	}
+	if (set.size() > 1) {
+		throw BinderException("\"%s\" expects a single argument as a boolean value (e.g. TRUE or 1)", loption);
+	}
+	return ParseBoolean(set[0], loption);
+}
+
+static bool ParseBoolean(const Value &value, const string &loption) {
+
+	if (value.type().id() == LogicalTypeId::LIST) {
+		auto &children = ListValue::GetChildren(value);
+		return ParseBoolean(children, loption);
+	}
+	if (value.type() == LogicalType::FLOAT || value.type() == LogicalType::DOUBLE ||
+	    value.type().id() == LogicalTypeId::DECIMAL) {
+		throw BinderException("\"%s\" expects a boolean value (e.g. TRUE or 1)", loption);
+	}
+	return BooleanValue::Get(value.CastAs(LogicalType::BOOLEAN));
+}
+
+static string ParseString(const Value &value, const string &loption) {
+	if (value.type().id() == LogicalTypeId::LIST) {
+		auto &children = ListValue::GetChildren(value);
+		if (children.size() != 1) {
+			throw BinderException("\"%s\" expects a single argument as a string value", loption);
+		}
+		return ParseString(children[0], loption);
+	}
+	if (value.type().id() != LogicalTypeId::VARCHAR) {
+		throw BinderException("\"%s\" expects a string argument!", loption);
+	}
+	return value.GetValue<string>();
+}
+
+static int64_t ParseInteger(const Value &value, const string &loption) {
+	if (value.type().id() == LogicalTypeId::LIST) {
+		auto &children = ListValue::GetChildren(value);
+		if (children.size() != 1) {
+			// no option specified or multiple options specified
+			throw BinderException("\"%s\" expects a single argument as an integer value", loption);
+		}
+		return ParseInteger(children[0], loption);
+	}
+	return value.GetValue<int64_t>();
+}
+
+static vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const string &loption) {
+	vector<bool> result;
+
+	if (set.empty()) {
+		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
+	}
+	// list of options: parse the list
+	unordered_map<string, bool> option_map;
+	for (idx_t i = 0; i < set.size(); i++) {
+		option_map[set[i].ToString()] = false;
+	}
+	result.resize(names.size(), false);
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto entry = option_map.find(names[i]);
+		if (entry != option_map.end()) {
+			result[i] = true;
+			entry->second = true;
+		}
+	}
+	for (auto &entry : option_map) {
+		if (!entry.second) {
+			throw BinderException("\"%s\" expected to find %s, but it was not found in the table", loption,
+			                      entry.first.c_str());
+		}
+	}
+	return result;
+}
+
+static vector<bool> ParseColumnList(const Value &value, vector<string> &names, const string &loption) {
+	vector<bool> result;
+
+	// Only accept a list of arguments
+	if (value.type().id() != LogicalTypeId::LIST) {
+		// Support a single argument if it's '*'
+		if (value.type().id() == LogicalTypeId::VARCHAR && value.GetValue<string>() == "*") {
+			result.resize(names.size(), true);
+			return result;
+		}
+		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
+	}
+	auto &children = ListValue::GetChildren(value);
+	// accept '*' as single argument
+	if (children.size() == 1 && children[0].type().id() == LogicalTypeId::VARCHAR &&
+	    children[0].GetValue<string>() == "*") {
+		result.resize(names.size(), true);
+		return result;
+	}
+	return ParseColumnList(children, names, loption);
+}
+
 struct CSVFileHandle {
 public:
 	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(move(file_handle_p)) {
@@ -145,8 +247,121 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
 	if (input.empty()) {
-		throw BinderException("DELIM or SEP must not be empty");
+		this->delimiter = string("\0", 1);
 	}
+}
+
+void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value &value,
+                                             vector<string> &expected_names) {
+	if (SetBaseOption(loption, value)) {
+		return;
+	}
+	if (loption == "auto_detect") {
+		auto_detect = ParseBoolean(value, loption);
+	} else if (loption == "sample_size") {
+		int64_t sample_size = ParseInteger(value, loption);
+		if (sample_size < 1 && sample_size != -1) {
+			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
+		}
+		if (sample_size == -1) {
+			sample_chunks = std::numeric_limits<uint64_t>::max();
+			sample_chunk_size = STANDARD_VECTOR_SIZE;
+		} else if (sample_size <= STANDARD_VECTOR_SIZE) {
+			sample_chunk_size = sample_size;
+			sample_chunks = 1;
+		} else {
+			sample_chunk_size = STANDARD_VECTOR_SIZE;
+			sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
+		}
+	} else if (loption == "skip") {
+		skip_rows = ParseInteger(value, loption);
+	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
+		maximum_line_size = ParseInteger(value, loption);
+	} else if (loption == "sample_chunk_size") {
+		sample_chunk_size = ParseInteger(value, loption);
+		if (sample_chunk_size > STANDARD_VECTOR_SIZE) {
+			throw BinderException(
+			    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
+			    STANDARD_VECTOR_SIZE);
+		} else if (sample_chunk_size < 1) {
+			throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
+		}
+	} else if (loption == "sample_chunks") {
+		sample_chunks = ParseInteger(value, loption);
+		if (sample_chunks < 1) {
+			throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
+		}
+	} else if (loption == "force_not_null") {
+		force_not_null = ParseColumnList(value, expected_names, loption);
+	} else if (loption == "date_format" || loption == "dateformat") {
+		string format = ParseString(value, loption);
+		auto &date_format = this->date_format[LogicalTypeId::DATE];
+		string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		date_format.format_specifier = format;
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+		}
+		has_format[LogicalTypeId::DATE] = true;
+	} else if (loption == "timestamp_format" || loption == "timestampformat") {
+		string format = ParseString(value, loption);
+		auto &timestamp_format = date_format[LogicalTypeId::TIMESTAMP];
+		string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
+		timestamp_format.format_specifier = format;
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
+		}
+		has_format[LogicalTypeId::TIMESTAMP] = true;
+	} else if (loption == "escape") {
+		escape = ParseString(value, loption);
+		has_escape = true;
+	} else if (loption == "ignore_errors") {
+		ignore_errors = ParseBoolean(value, loption);
+	} else {
+		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
+	}
+}
+
+void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value &value) {
+	if (SetBaseOption(loption, value)) {
+		return;
+	}
+
+	if (loption == "force_quote") {
+		force_quote = ParseColumnList(value, names, loption);
+	} else {
+		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
+	}
+}
+
+bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value &value) {
+	// Make sure this function was only called after the option was turned into lowercase
+	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));
+
+	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
+		SetDelimiter(ParseString(value, loption));
+	} else if (loption == "quote") {
+		quote = ParseString(value, loption);
+		has_quote = true;
+	} else if (loption == "escape") {
+		escape = ParseString(value, loption);
+		has_escape = true;
+	} else if (loption == "header") {
+		header = ParseBoolean(value, loption);
+		has_header = true;
+	} else if (loption == "null" || loption == "nullstr") {
+		null_str = ParseString(value, loption);
+	} else if (loption == "encoding") {
+		auto encoding = StringUtil::Lower(ParseString(value, loption));
+		if (encoding != "utf8" && encoding != "utf-8") {
+			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
+		}
+	} else if (loption == "compression") {
+		compression = FileCompressionTypeFromString(ParseString(value, loption));
+	} else {
+		// unrecognized option in base CSV
+		return false;
+	}
+	return true;
 }
 
 std::string BufferedCSVReaderOptions::ToString() const {
@@ -156,7 +371,7 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       ", HEADER=" + std::to_string(header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-	       ", ALL_VARCHAR=" + std::to_string(all_varchar);
+	       ", IGNORE_ERRORS=" + std::to_string(ignore_errors) + ", ALL_VARCHAR=" + std::to_string(all_varchar);
 }
 
 static string GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
@@ -1619,9 +1834,14 @@ void BufferedCSVReader::AddValue(char *str_val, idx_t length, idx_t &column, vec
 		return;
 	}
 	if (column >= sql_types.size()) {
-		throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
-		                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
-		                            options.ToString());
+		if (options.ignore_errors) {
+			error_column_overflow = true;
+			return;
+		} else {
+			throw InvalidInputException("Error on line %s: expected %lld values per row, but got more. (%s)",
+			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(),
+			                            options.ToString());
+		}
 	}
 
 	// insert the line number into the chunk
@@ -1673,10 +1893,23 @@ bool BufferedCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column) {
 		}
 	}
 
+	// Error forwarded by 'ignore_errors' - originally encountered in 'AddValue'
+	if (error_column_overflow) {
+		D_ASSERT(options.ignore_errors);
+		error_column_overflow = false;
+		column = 0;
+		return false;
+	}
+
 	if (column < sql_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
-		throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
-		                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
-		                            options.ToString());
+		if (options.ignore_errors) {
+			column = 0;
+			return false;
+		} else {
+			throw InvalidInputException("Error on line %s: expected %lld values per row, but got %d. (%s)",
+			                            GetLineNumberStr(linenr, linenr_estimated).c_str(), sql_types.size(), column,
+			                            options.ToString());
+		}
 	}
 
 	if (mode == ParserMode::SNIFFING_DIALECT) {
@@ -1710,6 +1943,9 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 	if (parse_chunk.size() == 0) {
 		return;
 	}
+
+	bool conversion_error_ignored = false;
+
 	// convert the columns in the parsed chunk to the types of the table
 	insert_chunk.SetCardinality(parse_chunk);
 	for (idx_t col_idx = 0; col_idx < sql_types.size(); col_idx++) {
@@ -1751,26 +1987,56 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
 				                                    parse_chunk.size(), &error_message);
 			}
-			if (!success) {
-				string col_name = to_string(col_idx);
-				if (col_idx < col_names.size()) {
-					col_name = "\"" + col_names[col_idx] + "\"";
-				}
+			if (success) {
+				continue;
+			}
+			if (options.ignore_errors) {
+				conversion_error_ignored = true;
+				continue;
+			}
+			string col_name = to_string(col_idx);
+			if (col_idx < col_names.size()) {
+				col_name = "\"" + col_names[col_idx] + "\"";
+			}
 
-				if (options.auto_detect) {
-					throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
-					                            "options: %s. Consider either increasing the sample size "
-					                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
-					                            "or skipping column conversion (ALL_VARCHAR=1)",
-					                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
-					                            options.ToString());
-				} else {
-					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
-					                            error_message, linenr - parse_chunk.size(), linenr, col_name,
-					                            options.ToString());
-				}
+			if (options.auto_detect) {
+				throw InvalidInputException("%s in column %s, between line %llu and %llu. Parser "
+				                            "options: %s. Consider either increasing the sample size "
+				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
+				                            "or skipping column conversion (ALL_VARCHAR=1)",
+				                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
+				                            options.ToString());
+			} else {
+				throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
+				                            error_message, linenr - parse_chunk.size(), linenr, col_name,
+				                            options.ToString());
 			}
 		}
+	}
+	if (conversion_error_ignored) {
+		D_ASSERT(options.ignore_errors);
+		SelectionVector succesful_rows;
+		succesful_rows.Initialize(parse_chunk.size());
+		idx_t sel_size = 0;
+
+		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+			bool failed = false;
+			for (idx_t column_idx = 0; column_idx < sql_types.size(); column_idx++) {
+
+				auto &inserted_column = insert_chunk.data[column_idx];
+				auto &parsed_column = parse_chunk.data[column_idx];
+
+				bool was_already_null = FlatVector::IsNull(parsed_column, row_idx);
+				if (!was_already_null && FlatVector::IsNull(inserted_column, row_idx)) {
+					failed = true;
+					break;
+				}
+			}
+			if (!failed) {
+				succesful_rows.set_index(sel_size++, row_idx);
+			}
+		}
+		insert_chunk.Slice(succesful_rows, sel_size);
 	}
 	parse_chunk.Reset();
 }

@@ -13,10 +13,11 @@
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
-struct DuckDBFunctionsData : public FunctionOperatorData {
+struct DuckDBFunctionsData : public GlobalTableFunctionState {
 	DuckDBFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
@@ -54,6 +55,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("macro_definition");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("has_side_effects");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
 	return nullptr;
 }
 
@@ -67,9 +71,7 @@ static void ExtractFunctionsFromSchema(ClientContext &context, SchemaCatalogEntr
 	            [&](CatalogEntry *entry) { result.entries.push_back(entry); });
 }
 
-unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBFunctionsData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -77,7 +79,7 @@ unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, con
 	for (auto &schema : schemas) {
 		ExtractFunctionsFromSchema(context, *schema, *result);
 	};
-	ExtractFunctionsFromSchema(context, *context.temporary_objects, *result);
+	ExtractFunctionsFromSchema(context, *ClientData::Get(context).temporary_objects, *result);
 
 	std::sort(result->entries.begin(), result->entries.end(),
 	          [&](CatalogEntry *a, CatalogEntry *b) { return (int)a->type < (int)b->type; });
@@ -126,6 +128,10 @@ struct ScalarFunctionExtractor {
 	static Value GetMacroDefinition(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
+
+	static Value HasSideEffects(ScalarFunctionCatalogEntry &entry, idx_t offset) {
+		return Value::BOOLEAN(entry.functions[offset].has_side_effects);
+	}
 };
 
 struct AggregateFunctionExtractor {
@@ -169,6 +175,10 @@ struct AggregateFunctionExtractor {
 
 	static Value GetMacroDefinition(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
+	}
+
+	static Value HasSideEffects(AggregateFunctionCatalogEntry &entry, idx_t offset) {
+		return Value::BOOLEAN(entry.functions[offset].has_side_effects);
 	}
 };
 
@@ -218,10 +228,12 @@ struct MacroExtractor {
 	}
 
 	static Value GetMacroDefinition(ScalarMacroCatalogEntry &entry, idx_t offset) {
-		if (entry.function->type == MacroType::SCALAR_MACRO) {
-			auto &func = (ScalarMacroFunction &)*entry.function;
-			return func.expression->ToString();
-		}
+		D_ASSERT(entry.function->type == MacroType::SCALAR_MACRO);
+		auto &func = (ScalarMacroFunction &)*entry.function;
+		return func.expression->ToString();
+	}
+
+	static Value HasSideEffects(ScalarMacroCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -278,6 +290,10 @@ struct TableMacroExtractor {
 		}
 		return Value();
 	}
+
+	static Value HasSideEffects(TableMacroCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
 };
 
 struct TableFunctionExtractor {
@@ -326,6 +342,10 @@ struct TableFunctionExtractor {
 	}
 
 	static Value GetMacroDefinition(TableFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
+
+	static Value HasSideEffects(TableFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
 };
@@ -378,6 +398,10 @@ struct PragmaFunctionExtractor {
 	static Value GetMacroDefinition(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		return Value();
 	}
+
+	static Value HasSideEffects(PragmaFunctionCatalogEntry &entry, idx_t offset) {
+		return Value();
+	}
 };
 
 template <class T, class OP>
@@ -410,12 +434,14 @@ bool ExtractFunctionData(StandardEntry *entry, idx_t function_idx, DataChunk &ou
 	// macro_definition, LogicalType::VARCHAR
 	output.SetValue(8, output_offset, OP::GetMacroDefinition(function, function_idx));
 
+	// has_side_effects, LogicalType::BOOLEAN
+	output.SetValue(9, output_offset, OP::HasSideEffects(function, function_idx));
+
 	return function_idx + 1 == OP::FunctionCount(function);
 }
 
-void DuckDBFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                             FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBFunctionsData &)*operator_state;
+void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBFunctionsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

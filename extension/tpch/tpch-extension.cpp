@@ -46,9 +46,8 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 	return move(result);
 }
 
-static void DbgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
-	auto &data = (DBGenFunctionData &)*bind_data;
+static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DBGenFunctionData &)*data_p.bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -58,14 +57,13 @@ static void DbgenFunction(ClientContext &context, const FunctionData *bind_data,
 	data.finished = true;
 }
 
-struct TPCHData : public FunctionOperatorData {
+struct TPCHData : public GlobalTableFunctionState {
 	TPCHData() : offset(0) {
 	}
 	idx_t offset;
 };
 
-unique_ptr<FunctionOperatorData> TPCHInit(ClientContext &context, const FunctionData *bind_data,
-                                          const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TPCHData>();
 	return move(result);
 }
@@ -81,9 +79,8 @@ static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunct
 	return nullptr;
 }
 
-static void TPCHQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                              FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (TPCHData &)*operator_state;
+static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TPCHData &)*data_p.global_state;
 	idx_t tpch_queries = 22;
 	if (data.offset >= tpch_queries) {
 		// finished returning values
@@ -116,9 +113,8 @@ static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, Tabl
 	return nullptr;
 }
 
-static void TPCHQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (TPCHData &)*operator_state;
+static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TPCHData &)*data_p.global_state;
 	idx_t tpch_queries = 22;
 	vector<double> scale_factors {0.01, 0.1, 1};
 	idx_t total_answers = tpch_queries * scale_factors.size();

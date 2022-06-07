@@ -35,9 +35,8 @@ shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serializ
 	return transformer_s2d.TransformPlan();
 }
 
-static void ToSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
-	auto &data = (ToSubstraitFunctionData &)*bind_data;
+static void ToSubFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ToSubstraitFunctionData &)*data_p.bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -54,9 +53,10 @@ static void ToSubFunction(ClientContext &context, const FunctionData *bind_data,
 		auto actual_result = new_conn.Query(data.query);
 		auto sub_relation = SubstraitPlanToDuckDBRel(new_conn, serialized);
 		auto substrait_result = sub_relation->Execute();
+		substrait_result->names = actual_result->names;
 		if (!actual_result->Equals(*substrait_result)) {
-			query_plan->Print();
-			sub_relation->Print();
+			//			query_plan->Print();
+			//			sub_relation->Print();
 			throw InternalException("The query result of DuckDB's query plan does not match Substrait");
 		}
 	}
@@ -83,9 +83,8 @@ static unique_ptr<FunctionData> FromSubstraitBind(ClientContext &context, TableF
 	return move(result);
 }
 
-static void FromSubFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                            DataChunk *input, DataChunk &output) {
-	auto &data = (FromSubstraitFunctionData &)*bind_data;
+static void FromSubFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (FromSubstraitFunctionData &)*data_p.bind_data;
 	if (!data.res) {
 		data.res = data.plan->Execute();
 	}

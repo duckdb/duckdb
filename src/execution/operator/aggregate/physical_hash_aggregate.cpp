@@ -35,8 +35,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)),
-      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)), all_combinable(true),
-      any_distinct(false) {
+      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
@@ -67,7 +66,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
-			all_combinable = false;
+			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 		}
 		aggregates.push_back(move(expr));
 	}
@@ -162,6 +161,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = (BoundReferenceExpression &)*child_expr;
+			D_ASSERT(bound_ref_expr.index < input.data.size());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
 		}
 	}
@@ -170,6 +170,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		if (aggr.filter) {
 			auto it = filter_indexes.find(aggr.filter.get());
 			D_ASSERT(it != filter_indexes.end());
+			D_ASSERT(it->second < input.data.size());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
 		}
 	}

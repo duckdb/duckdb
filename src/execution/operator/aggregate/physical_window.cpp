@@ -337,10 +337,10 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 
 	// fuse input and sort collection into one
 	// (sorting columns are not decoded, and we need them later)
-	ChunkCollection payload;
-	payload.Fuse(input);
-	payload.Fuse(over);
-	auto payload_types = payload.Types();
+	auto payload_types = input.Types();
+	payload_types.insert(payload_types.end(), over.Types().begin(), over.Types().end());
+	DataChunk payload_chunk;
+	payload_chunk.InitializeEmpty(payload_types);
 
 	// initialise partitioning memory
 	// to minimise copying, we fill up a chunk and then sink it.
@@ -366,8 +366,15 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 	// sink collection chunks into row format
 	const idx_t chunk_count = over.ChunkCount();
 	for (idx_t i = 0; i < chunk_count; i++) {
+		auto &input_chunk = *input.Chunks()[i];
+		for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
+			payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
+		}
 		auto &over_chunk = *over.Chunks()[i];
-		auto &payload_chunk = *payload.Chunks()[i];
+		for (idx_t col_idx = 0; col_idx < over_chunk.ColumnCount(); ++col_idx) {
+			payload_chunk.data[input_chunk.ColumnCount() + col_idx].Reference(over_chunk.data[col_idx]);
+		}
+		payload_chunk.SetCardinality(input_chunk);
 
 		// Extract the hash partition, if any
 		if (hashes) {
@@ -894,6 +901,25 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		}
 	}
 
+	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
+	ValidityMask filter_mask;
+	vector<validity_t> filter_bits;
+	if (wexpr->filter_expr) {
+		// 	Start with all invalid and set the ones that pass
+		filter_bits.resize(ValidityMask::ValidityMaskSize(input.Count()), 0);
+		filter_mask.Initialize(filter_bits.data());
+		ExpressionExecutor filter_execution(*wexpr->filter_expr);
+		SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+		idx_t base_idx = 0;
+		for (auto &chunk : input.Chunks()) {
+			const auto filtered = filter_execution.SelectExpression(*chunk, true_sel);
+			for (idx_t f = 0; f < filtered; ++f) {
+				filter_mask.SetValid(base_idx + true_sel[f]);
+			}
+			base_idx += chunk->size();
+		}
+	}
+
 	// evaluate boundaries if present. Parser has checked boundary types.
 	ChunkCollection boundary_start_collection;
 	if (wexpr->start_expr) {
@@ -947,7 +973,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 	if (wexpr->aggregate) {
 		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection, mode);
+		                                              &payload_collection, filter_mask, mode);
 	}
 
 	WindowBoundariesState bounds(wexpr);

@@ -5,13 +5,14 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
-struct DuckDBTablesData : public FunctionOperatorData {
+struct DuckDBTablesData : public GlobalTableFunctionState {
 	DuckDBTablesData() : offset(0) {
 	}
 
@@ -60,8 +61,7 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, TableFu
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBTablesInit(ClientContext &context, const FunctionData *bind_data,
-                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBTablesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBTablesData>();
 
 	// scan all the schemas for tables and collect themand collect them
@@ -71,8 +71,8 @@ unique_ptr<FunctionOperatorData> DuckDBTablesInit(ClientContext &context, const 
 	};
 
 	// check the temp schema as well
-	context.temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
+	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
 
@@ -98,9 +98,8 @@ static idx_t CheckConstraintCount(TableCatalogEntry &table) {
 	return check_count;
 }
 
-void DuckDBTablesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
-	auto &data = (DuckDBTablesData &)*operator_state;
+void DuckDBTablesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBTablesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

@@ -4,6 +4,24 @@ duckdb_logical_type duckdb_create_logical_type(duckdb_type type) {
 	return new duckdb::LogicalType(duckdb::ConvertCTypeToCPP(type));
 }
 
+duckdb_logical_type duckdb_create_list_type(duckdb_logical_type type) {
+	if (!type) {
+		return nullptr;
+	}
+	duckdb::LogicalType *ltype = new duckdb::LogicalType;
+	*ltype = duckdb::LogicalType::LIST(*(duckdb::LogicalType *)type);
+	return ltype;
+}
+
+duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_logical_type value_type) {
+	if (!key_type || !value_type) {
+		return nullptr;
+	}
+	duckdb::LogicalType *mtype = new duckdb::LogicalType;
+	*mtype = duckdb::LogicalType::MAP(*(duckdb::LogicalType *)key_type, *(duckdb::LogicalType *)value_type);
+	return mtype;
+}
+
 duckdb_logical_type duckdb_create_decimal_type(uint8_t width, uint8_t scale) {
 	return new duckdb::LogicalType(duckdb::LogicalType::DECIMAL(width, scale));
 }
@@ -121,6 +139,28 @@ duckdb_logical_type duckdb_list_type_child_type(duckdb_logical_type type) {
 		return nullptr;
 	}
 	return new duckdb::LogicalType(duckdb::ListType::GetChildType(ltype));
+}
+
+duckdb_logical_type duckdb_map_type_key_type(duckdb_logical_type type) {
+	if (!type) {
+		return nullptr;
+	}
+	auto &mtype = *((duckdb::LogicalType *)type);
+	if (mtype.id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return new duckdb::LogicalType(duckdb::MapType::KeyType(mtype));
+}
+
+duckdb_logical_type duckdb_map_type_value_type(duckdb_logical_type type) {
+	if (!type) {
+		return nullptr;
+	}
+	auto &mtype = *((duckdb::LogicalType *)type);
+	if (mtype.id() != duckdb::LogicalTypeId::MAP) {
+		return nullptr;
+	}
+	return new duckdb::LogicalType(duckdb::MapType::ValueType(mtype));
 }
 
 idx_t duckdb_struct_type_child_count(duckdb_logical_type type) {

@@ -72,7 +72,8 @@ void StrfTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifi
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
 
-idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time) {
+idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time, int32_t utc_offset,
+                                         const char *tz_name) {
 	switch (specifier) {
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
 		return Date::DAY_NAMES[Date::ExtractISODayOfTheWeek(date) % 7].GetSize();
@@ -89,9 +90,12 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return len;
 	}
 	case StrTimeSpecifier::UTC_OFFSET:
-		// +00
-		return 3;
+		// ±HH or ±HH:MM
+		return (utc_offset % 60) ? 6 : 3;
 	case StrTimeSpecifier::TZ_NAME:
+		if (tz_name) {
+			return strlen(tz_name);
+		}
 		// empty for now
 		return 0;
 	case StrTimeSpecifier::HOUR_24_DECIMAL:
@@ -136,11 +140,11 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 }
 
 //! Returns the total length of the date formatted by this format specifier
-idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time) {
+idx_t StrfTimeFormat::GetLength(date_t date, dtime_t time, int32_t utc_offset, const char *tz_name) {
 	idx_t size = constant_size;
 	if (!var_length_specifiers.empty()) {
 		for (auto &specifier : var_length_specifiers) {
-			size += GetSpecifierLength(specifier, date, time);
+			size += GetSpecifierLength(specifier, date, time, utc_offset, tz_name);
 		}
 	}
 	return size;
@@ -253,8 +257,9 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 	return target;
 }
 
-char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], char *target) {
-	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec
+char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
+                                             char *target) {
+	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] msec, [7] utc
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 		target = WritePadded2(target, data[2]);
@@ -317,13 +322,24 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	case StrTimeSpecifier::MILLISECOND_PADDED:
 		target = WritePadded3(target, data[6] / 1000);
 		break;
-	case StrTimeSpecifier::UTC_OFFSET:
-		*target++ = '+';
-		*target++ = '0';
-		*target++ = '0';
+	case StrTimeSpecifier::UTC_OFFSET: {
+		*target++ = (data[7] < 0) ? '-' : '+';
+
+		auto offset = abs(data[7]);
+		auto offset_hours = offset / Interval::MINS_PER_HOUR;
+		auto offset_minutes = offset % Interval::MINS_PER_HOUR;
+		target = WritePadded2(target, offset_hours);
+		if (offset_minutes) {
+			*target++ = ':';
+			target = WritePadded2(target, offset_minutes);
+		}
 		break;
+	}
 	case StrTimeSpecifier::TZ_NAME:
-		// always empty for now, FIXME when we have timestamp with tz
+		if (tz_name) {
+			strcpy(target, tz_name);
+			target += strlen(tz_name);
+		}
 		break;
 	case StrTimeSpecifier::DAY_OF_MONTH: {
 		target = Write2(target, data[2] % 100);
@@ -363,7 +379,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 	return target;
 }
 
-void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
+void StrfTimeFormat::FormatString(date_t date, int32_t data[8], const char *tz_name, char *target) {
 	D_ASSERT(specifiers.size() + 1 == literals.size());
 	idx_t i;
 	for (i = 0; i < specifiers.size(); i++) {
@@ -374,7 +390,7 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
 		if (is_date_specifier[i]) {
 			target = WriteDateSpecifier(specifiers[i], date, target);
 		} else {
-			target = WriteStandardSpecifier(specifiers[i], data, target);
+			target = WriteStandardSpecifier(specifiers[i], data, tz_name, target);
 		}
 	}
 	// copy the final literal into the target
@@ -382,11 +398,12 @@ void StrfTimeFormat::FormatString(date_t date, int32_t data[7], char *target) {
 }
 
 void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
-	int32_t data[7]; // year, month, day, hour, min, sec, msec
+	int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
 	Date::Convert(date, data[0], data[1], data[2]);
 	Time::Convert(time, data[3], data[4], data[5], data[6]);
+	data[7] = 0;
 
-	FormatString(date, data, target);
+	FormatString(date, data, nullptr, target);
 }
 
 string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
@@ -396,7 +413,7 @@ string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
 	auto date = Timestamp::GetDate(timestamp);
 	auto time = Timestamp::GetTime(timestamp);
 
-	auto len = format.GetLength(date, time);
+	auto len = format.GetLength(date, time, 0, nullptr);
 	auto result = unique_ptr<char[]>(new char[len]);
 	format.FormatString(date, time, result.get());
 	return string(result.get(), len);
@@ -572,13 +589,20 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 }
 
 struct StrfTimeBindData : public FunctionData {
-	explicit StrfTimeBindData(StrfTimeFormat format) : format(move(format)) {
+	explicit StrfTimeBindData(StrfTimeFormat format_p, string format_string_p)
+	    : format(move(format_p)), format_string(move(format_string_p)) {
 	}
 
 	StrfTimeFormat format;
+	string format_string;
 
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StrfTimeBindData>(format);
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<StrfTimeBindData>(format, format_string);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const StrfTimeBindData &)other_p;
+		return format_string == other.format_string;
 	}
 };
 
@@ -589,15 +613,15 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 		throw InvalidInputException("strftime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[REVERSED ? 0 : 1]);
+	auto format_string = options_str.GetValue<string>();
 	StrfTimeFormat format;
 	if (!options_str.IsNull()) {
-		auto format_string = options_str.GetValue<string>();
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
 	}
-	return make_unique<StrfTimeBindData>(format);
+	return make_unique<StrfTimeBindData>(format, format_string);
 }
 
 template <bool REVERSED>
@@ -610,14 +634,20 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::Execute<date_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input) {
-		dtime_t time(0);
-		idx_t len = info.format.GetLength(input, time);
-		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(input, time, target.GetDataWriteable());
-		target.Finalize();
-		return target;
-	});
+	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(
+	    args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input, ValidityMask &mask, idx_t idx) {
+		    if (Date::IsFinite(input)) {
+			    dtime_t time(0);
+			    idx_t len = info.format.GetLength(input, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    info.format.FormatString(input, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+	    });
 }
 
 template <bool REVERSED>
@@ -631,17 +661,22 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		return;
 	}
 
-	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(),
-	                                              [&](timestamp_t input) {
-		                                              date_t date;
-		                                              dtime_t time;
-		                                              Timestamp::Convert(input, date, time);
-		                                              idx_t len = info.format.GetLength(date, time);
-		                                              string_t target = StringVector::EmptyString(result, len);
-		                                              info.format.FormatString(date, time, target.GetDataWriteable());
-		                                              target.Finalize();
-		                                              return target;
-	                                              });
+	UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
+	    args.data[REVERSED ? 1 : 0], result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+		    if (Timestamp::IsFinite(input)) {
+			    date_t date;
+			    dtime_t time;
+			    Timestamp::Convert(input, date, time);
+			    idx_t len = info.format.GetLength(date, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    info.format.FormatString(date, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+	    });
 }
 
 void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -744,6 +779,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	result_data[4] = 0;
 	result_data[5] = 0;
 	result_data[6] = 0;
+	result_data[7] = 0;
 
 	auto data = str.GetDataUnsafe();
 	idx_t size = str.GetSize();
@@ -763,13 +799,30 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 
 	for (idx_t i = 0;; i++) {
 		// first compare the literal
-		if (literals[i].size() > (size - pos) || memcmp(data + pos, literals[i].c_str(), literals[i].size()) != 0) {
+		const auto &literal = literals[i];
+		for (size_t l = 0; l < literal.size();) {
+			// Match runs of spaces to runs of spaces.
+			if (StringUtil::CharacterIsSpace(literal[l])) {
+				if (!StringUtil::CharacterIsSpace(data[pos])) {
+					error_message = "Space does not match, expected " + literals[i];
+					error_position = pos;
+					return false;
+				}
+				for (++pos; pos < size && StringUtil::CharacterIsSpace(data[pos]); ++pos) {
+					continue;
+				}
+				for (++l; l < literal.size() && StringUtil::CharacterIsSpace(literal[l]); ++l) {
+					continue;
+				}
+				continue;
+			}
 			// literal does not match
-			error_message = "Literal does not match, expected " + literals[i];
-			error_position = pos;
-			return false;
+			if (data[pos++] != literal[l++]) {
+				error_message = "Literal does not match, expected " + literal;
+				error_position = pos;
+				return false;
+			}
 		}
-		pos += literals[i].size();
 		if (i == specifiers.size()) {
 			break;
 		}
@@ -1016,8 +1069,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					error_position = pos;
 					return false;
 				}
-				result_data[3] -= hour_offset;
-				result_data[4] -= minute_offset;
+				result_data[7] = hour_offset * Interval::MINS_PER_HOUR + minute_offset;
 				break;
 			}
 			case StrTimeSpecifier::TZ_NAME: {
@@ -1025,11 +1077,20 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				while (pos < size && StringUtil::CharacterIsSpace(data[pos])) {
 					pos++;
 				}
+				const auto tz_begin = data + pos;
 				// stop when we encounter a space or the end of the string
 				while (pos < size && !StringUtil::CharacterIsSpace(data[pos])) {
 					pos++;
 				}
-				// FIXME: actually use the timestamp...
+				const auto tz_end = data + pos;
+				// Can't fully validate without a list - caller's responsibility.
+				// But tz must not be empty.
+				if (tz_end == tz_begin) {
+					error_message = "Empty Time Zone name";
+					error_position = tz_begin - data;
+					return false;
+				}
+				result.tz.assign(tz_begin, tz_end);
 				break;
 			}
 			default:
@@ -1102,13 +1163,20 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 }
 
 struct StrpTimeBindData : public FunctionData {
-	explicit StrpTimeBindData(StrpTimeFormat format) : format(move(format)) {
+	explicit StrpTimeBindData(StrpTimeFormat format_p, string format_string_p)
+	    : format(move(format_p)), format_string(move(format_string_p)) {
 	}
 
 	StrpTimeFormat format;
+	string format_string;
 
-	unique_ptr<FunctionData> Copy() override {
-		return make_unique<StrpTimeBindData>(format);
+	unique_ptr<FunctionData> Copy() const override {
+		return make_unique<StrpTimeBindData>(format, format_string);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = (const StrpTimeBindData &)other_p;
+		return format_string == other.format_string;
 	}
 };
 
@@ -1118,16 +1186,19 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 		throw InvalidInputException("strptime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
+	string format_string = options_str.ToString();
 	StrpTimeFormat format;
 	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
-		string format_string = options_str.ToString();
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {
 			throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
 		}
+		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
+			bound_function.return_type = LogicalType::TIMESTAMP_TZ;
+		}
 	}
-	return make_unique<StrpTimeBindData>(format);
+	return make_unique<StrpTimeBindData>(format, format_string);
 }
 
 StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, const string &text) {
@@ -1157,7 +1228,9 @@ date_t StrpTimeFormat::ParseResult::ToDate() {
 
 timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 	date_t date = Date::FromDate(data[0], data[1], data[2]);
-	dtime_t time = Time::FromTime(data[3], data[4], data[5], data[6]);
+	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
+	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
+	dtime_t time = Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
 	return Timestamp::FromDatetime(date, time);
 }
 

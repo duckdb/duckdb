@@ -1,5 +1,6 @@
 #include "duckdb/common/types.hpp"
 
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -244,9 +245,9 @@ string TypeIdToString(PhysicalType type) {
 	case PhysicalType::INTERVAL:
 		return "INTERVAL";
 	case PhysicalType::STRUCT:
-		return "STRUCT<?>";
+		return "STRUCT";
 	case PhysicalType::LIST:
-		return "LIST<?>";
+		return "LIST";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -414,11 +415,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::VALIDITY:
 		return "VALIDITY";
 	case LogicalTypeId::STRUCT:
-		return "STRUCT<?>";
+		return "STRUCT";
 	case LogicalTypeId::LIST:
-		return "LIST<?>";
+		return "LIST";
 	case LogicalTypeId::MAP:
-		return "MAP<?>";
+		return "MAP";
 	case LogicalTypeId::HASH:
 		return "HASH";
 	case LogicalTypeId::POINTER:
@@ -432,7 +433,7 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::ENUM:
 		return "ENUM";
 	case LogicalTypeId::AGGREGATE_STATE:
-		return "AGGREGATE_STATE<?>";
+		return "AGGREGATE_STATE";
 	case LogicalTypeId::USER:
 		return "USER";
 	case LogicalTypeId::JSON:
@@ -505,74 +506,13 @@ string LogicalType::ToString() const {
 // LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
-	auto lower_str = StringUtil::Lower(str);
-	// Transform column type
-	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
-	    lower_str == "integral" || lower_str == "int32") {
-		return LogicalTypeId::INTEGER;
-	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
-	           lower_str == "char" || lower_str == "nvarchar") {
-		return LogicalTypeId::VARCHAR;
-	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
-		return LogicalTypeId::BLOB;
-	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long" ||
-	           lower_str == "oid") {
-		return LogicalTypeId::BIGINT;
-	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
-		return LogicalTypeId::SMALLINT;
-	} else if (lower_str == "timestamp" || lower_str == "datetime" || lower_str == "timestamp_us") {
-		return LogicalTypeId::TIMESTAMP;
-	} else if (lower_str == "timestamp_ms") {
-		return LogicalTypeId::TIMESTAMP_MS;
-	} else if (lower_str == "timestamp_ns") {
-		return LogicalTypeId::TIMESTAMP_NS;
-	} else if (lower_str == "timestamp_s") {
-		return LogicalTypeId::TIMESTAMP_SEC;
-	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
-		return LogicalTypeId::BOOLEAN;
-	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
-		return LogicalTypeId::DECIMAL;
-	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return LogicalTypeId::FLOAT;
-	} else if (lower_str == "double" || lower_str == "float8") {
-		return LogicalTypeId::DOUBLE;
-	} else if (lower_str == "tinyint" || lower_str == "int1") {
-		return LogicalTypeId::TINYINT;
-	} else if (lower_str == "date") {
-		return LogicalTypeId::DATE;
-	} else if (lower_str == "time") {
-		return LogicalTypeId::TIME;
-	} else if (lower_str == "interval") {
-		return LogicalTypeId::INTERVAL;
-	} else if (lower_str == "hugeint" || lower_str == "int128") {
-		return LogicalTypeId::HUGEINT;
-	} else if (lower_str == "uuid" || lower_str == "guid") {
-		return LogicalTypeId::UUID;
-	} else if (lower_str == "struct" || lower_str == "row") {
-		return LogicalTypeId::STRUCT;
-	} else if (lower_str == "map") {
-		return LogicalTypeId::MAP;
-	} else if (lower_str == "utinyint" || lower_str == "uint8") {
-		return LogicalTypeId::UTINYINT;
-	} else if (lower_str == "usmallint" || lower_str == "uint16") {
-		return LogicalTypeId::USMALLINT;
-	} else if (lower_str == "uinteger" || lower_str == "uint32") {
-		return LogicalTypeId::UINTEGER;
-	} else if (lower_str == "ubigint" || lower_str == "uint64") {
-		return LogicalTypeId::UBIGINT;
-	} else if (lower_str == "timestamptz") {
-		return LogicalTypeId::TIMESTAMP_TZ;
-	} else if (lower_str == "timetz") {
-		return LogicalTypeId::TIME_TZ;
-	} else if (lower_str == "json") {
-		return LogicalTypeId::JSON;
-	} else if (lower_str == "null") {
-		return LogicalTypeId::SQLNULL;
-	} else {
+	auto type = DefaultTypeGenerator::GetDefaultType(str);
+	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
-		return LogicalTypeId::USER;
+		type = LogicalTypeId::USER;
 	}
+	return type;
 }
 
 LogicalType TransformStringToLogicalType(const string &str) {

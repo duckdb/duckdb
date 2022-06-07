@@ -42,7 +42,7 @@ struct DataFrameScanFunctionData : public TableFunctionData {
 	vector<RType> rtypes;
 };
 
-struct DataFrameScanState : public FunctionOperatorData {
+struct DataFrameScanState : public GlobalTableFunctionState {
 	DataFrameScanState() : position(0) {
 	}
 
@@ -79,8 +79,10 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, Tabl
 			auto levels = r.Protect(GET_LEVELS(coldata));
 			idx_t size = LENGTH(levels);
 			Vector duckdb_levels(LogicalType::VARCHAR, size);
+			auto str_ptr = FlatVector::GetData<string_t>(duckdb_levels);
 			for (idx_t level_idx = 0; level_idx < size; level_idx++) {
-				duckdb_levels.SetValue(level_idx, string(CHAR(STRING_ELT(levels, level_idx))));
+				auto csexp = STRING_ELT(levels, level_idx);
+				str_ptr[level_idx] = StringVector::AddStringOrBlob(duckdb_levels, CHAR(csexp), LENGTH(csexp));
 			}
 			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels, size);
 			break;
@@ -117,16 +119,13 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, Tabl
 	return make_unique<DataFrameScanFunctionData>(df, row_count, rtypes);
 }
 
-static unique_ptr<FunctionOperatorData> dataframe_scan_init(ClientContext &context, const FunctionData *bind_data,
-                                                            const vector<column_t> &column_ids,
-                                                            TableFilterCollection *filters) {
+static unique_ptr<GlobalTableFunctionState> dataframe_scan_init(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<DataFrameScanState>();
 }
 
-static void dataframe_scan_function(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (DataFrameScanFunctionData &)*bind_data;
-	auto &state = (DataFrameScanState &)*operator_state;
+static void dataframe_scan_function(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+	auto &data = (DataFrameScanFunctionData &)*input.bind_data;
+	auto &state = (DataFrameScanState &)*input.global_state;
 	if (state.position >= data.row_count) {
 		return;
 	}
@@ -259,4 +258,6 @@ static unique_ptr<NodeStatistics> dataframe_scan_cardinality(ClientContext &cont
 
 DataFrameScanFunction::DataFrameScanFunction()
     : TableFunction("r_dataframe_scan", {LogicalType::POINTER}, dataframe_scan_function, dataframe_scan_bind,
-                    dataframe_scan_init, nullptr, nullptr, nullptr, dataframe_scan_cardinality) {};
+                    dataframe_scan_init) {
+	cardinality = dataframe_scan_cardinality;
+};

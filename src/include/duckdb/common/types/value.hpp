@@ -147,7 +147,7 @@ public:
 	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified child-type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
-	//! Creat a map value from a (key, value) pair
+	//! Create a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
@@ -240,6 +240,8 @@ public:
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
 	DUCKDB_API static bool ValuesAreEqual(const Value &result_value, const Value &value);
+	//! Returns true if the values are not distinct from each other, following SQL semantics for NOT DISTINCT FROM.
+	DUCKDB_API static bool NotDistinctFrom(const Value &lvalue, const Value &rvalue);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
@@ -452,6 +454,8 @@ template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
 template <>
 DUCKDB_API interval_t Value::GetValue() const;
+template <>
+DUCKDB_API Value Value::GetValue() const;
 
 template <>
 DUCKDB_API bool Value::GetValueUnsafe() const;
@@ -530,5 +534,9 @@ template <>
 DUCKDB_API bool Value::IsFinite(float input);
 template <>
 DUCKDB_API bool Value::IsFinite(double input);
+template <>
+DUCKDB_API bool Value::IsFinite(date_t input);
+template <>
+DUCKDB_API bool Value::IsFinite(timestamp_t input);
 
 } // namespace duckdb

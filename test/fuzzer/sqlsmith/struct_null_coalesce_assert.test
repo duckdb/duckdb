@@ -1,0 +1,18 @@
+# name: test/fuzzer/sqlsmith/struct_null_coalesce_assert.test
+# description: Assertion trigger in coalesce with null structs
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE struct_tbl("struct" STRUCT(a INTEGER, b VARCHAR));
+
+query I
+SELECT CAST(COALESCE(CAST(NULL AS STRUCT(a INTEGER, b VARCHAR)), CAST(NULL AS STRUCT(a INTEGER, b VARCHAR))) AS STRUCT(a INTEGER, b VARCHAR))
+----
+NULL
+
+statement ok
+INSERT INTO struct_tbl (VALUES (CAST(COALESCE(CAST(NULL AS STRUCT(a INTEGER, b VARCHAR)), CAST(NULL AS STRUCT(a INTEGER, b VARCHAR))) AS STRUCT(a INTEGER, b VARCHAR))));
+

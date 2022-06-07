@@ -3,6 +3,37 @@
 
 namespace duckdb {
 
+string SetOperationNode::ToString() const {
+	string result;
+	result = CTEToString();
+	result += "(" + left->ToString() + ") ";
+	bool is_distinct = false;
+	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
+		if (modifiers[modifier_idx]->type == ResultModifierType::DISTINCT_MODIFIER) {
+			is_distinct = true;
+			break;
+		}
+	}
+
+	switch (setop_type) {
+	case SetOperationType::UNION:
+		result += is_distinct ? "UNION" : "UNION ALL";
+		break;
+	case SetOperationType::EXCEPT:
+		D_ASSERT(is_distinct);
+		result += "EXCEPT";
+		break;
+	case SetOperationType::INTERSECT:
+		D_ASSERT(is_distinct);
+		result += "INTERSECT";
+		break;
+	default:
+		throw InternalException("Unsupported set operation type");
+	}
+	result += " (" + right->ToString() + ")";
+	return result + ResultModifiersToString();
+}
+
 bool SetOperationNode::Equals(const QueryNode *other_p) const {
 	if (!QueryNode::Equals(other_p)) {
 		return false;

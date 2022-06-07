@@ -6,8 +6,8 @@
 namespace duckdb {
 
 MapFunction::MapFunction()
-    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, MapFunctionExec,
-                    MapFunctionBind) {
+    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, nullptr, MapFunctionBind) {
+	in_out_function = MapFunctionExec;
 }
 
 struct MapFunctionData : public TableFunctionData {
@@ -67,20 +67,19 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
-void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-
+OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, TableFunctionInput &data_p, DataChunk &input,
+                                                DataChunk &output) {
 	py::gil_scoped_acquire acquire;
 
-	if (input->size() == 0) {
-		return;
+	if (input.size() == 0) {
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*bind_data;
+	auto &data = (MapFunctionData &)*data_p.bind_data;
 
-	D_ASSERT(input->GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input->size());
-	conversion.Append(*input);
+	D_ASSERT(input.GetTypes() == data.in_types);
+	NumpyResultConversion conversion(data.in_types, input.size());
+	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 
@@ -116,6 +115,7 @@ void MapFunction::MapFunctionExec(ClientContext &context, const FunctionData *bi
 		                                output.data[col_idx]);
 	}
 	output.SetCardinality(row_count);
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb
