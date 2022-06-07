@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -1213,6 +1214,35 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 		return false;
 	}
 	result = Timestamp::GetEpochSeconds(result);
+	return true;
+}
+
+template <>
+bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	if (!TryMultiplyOperator::Operation(result.value, Interval::NANOS_PER_MICRO, result.value)) {
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result.value /= Interval::MICROS_PER_MSEC;
+	return true;
+}
+
+template <>
+bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result.value /= Interval::MICROS_PER_MSEC * Interval::MSECS_PER_SEC;
 	return true;
 }
 

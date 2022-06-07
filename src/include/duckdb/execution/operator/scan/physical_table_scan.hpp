@@ -53,7 +53,7 @@ public:
 	}
 
 	bool SupportsBatchIndex() const override {
-		return function.supports_batch_index;
+		return function.get_batch_index != nullptr;
 	}
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
