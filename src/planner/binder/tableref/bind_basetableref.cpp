@@ -13,7 +13,6 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -140,9 +139,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}
-		auto schema = view_catalog_entry->schema->name;
 		bind_context.AddSubquery(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                         *bound_subquery.subquery, schema);
+		                         *bound_subquery.subquery);
 		return bound_child;
 	}
 	default:

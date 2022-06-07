@@ -397,10 +397,9 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 	return result;
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
-                              const string &schema) {
+void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types, schema);
+	AddGenericBinding(index, alias, names, subquery.types);
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
@@ -409,14 +408,13 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 }
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
-                                    const vector<LogicalType> &types, const string &schema) {
-	AddBinding(alias, make_unique<Binding>(alias, types, names, index, schema));
+                                    const vector<LogicalType> &types) {
+	AddBinding(alias, make_unique<Binding>(alias, types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	string schema = "";
-	auto binding = make_shared<Binding>(alias, types, names, index, schema);
+	auto binding = make_shared<Binding>(alias, types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

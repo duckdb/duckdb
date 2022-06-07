@@ -9,13 +9,11 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
-Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index,
-                 const string &schema)
-    : schema(schema), alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
+Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<string> colnames, idx_t index)
+    : alias(alias), index(index), types(move(coltypes)), names(move(colnames)) {
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
@@ -74,11 +72,7 @@ TableCatalogEntry *Binding::GetTableEntry() {
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
                            idx_t index, bool add_row_id)
-    : Binding(alias, move(types_p), move(names_p), index, ""), get(get) {
-	auto entry = GetTableEntry();
-	if (entry && entry->schema) {
-		this->schema = (entry->schema)->name;
-	}
+    : Binding(alias, move(types_p), move(names_p), index), get(get) {
 	if (add_row_id) {
 		if (name_map.find("rowid") == name_map.end()) {
 			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
@@ -133,7 +127,7 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 }
 
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), -1, ""), macro_name(move(macro_name_p)) {
+    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), -1), macro_name(move(macro_name_p)) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

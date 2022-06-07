@@ -323,9 +323,11 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 		return false;
 	}
 	if (!schema_name.empty()) {
-		auto binding_schema = binding->schema;
-		// Might need to fetch the catalog entry after all, to get the actual name of the table, not just the alias..
-		if (binding_schema != schema_name || binding->alias != table_name) {
+		auto table_entry = binding->GetTableEntry();
+		if (!table_entry) {
+			return false;
+		}
+		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
 			return false;
 		}
 	}
