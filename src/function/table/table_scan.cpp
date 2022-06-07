@@ -54,9 +54,9 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
-	auto& bind_data = (TableScanBindData&)*input.bind_data;
+	auto &bind_data = (TableScanBindData &)*input.bind_data;
 	result->column_ids = input.column_ids;
-	for (auto& col : result->column_ids) {
+	for (auto &col : result->column_ids) {
 		auto storage_idx = GetStorageIndex(*bind_data.table, col);
 		col = storage_idx;
 	}
