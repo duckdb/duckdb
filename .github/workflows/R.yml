@@ -106,11 +106,26 @@ jobs:
         _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
+    - name: Print R log (1)
+      # Print logs now only if success, for the case of failure there's another identical step below.
+      if: ${{ success() }}
+      run: |
+        ls -R /tmp/duckdb.Rcheck
+        cat /tmp/duckdb.Rcheck/00check.log
+        find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
+
     - name: Valgrind
       run: |
         cd tools/rpkg
         export NOT_CRAN='false'
         R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
+
+    - name: Print R log (2)
+      if: ${{ always() }}
+      run: |
+        ls -R /tmp/duckdb.Rcheck
+        cat /tmp/duckdb.Rcheck/00check.log
+        find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
 
     - name: Coverage
       env:
@@ -119,13 +134,6 @@ jobs:
         pkgload::load_all("tools/rpkg")
         cov <- covr::codecov("tools/rpkg", relative_path = ".")
       shell: Rscript {0}
-
-    - name: Print R log on failure
-      if: ${{ failure() }}
-      run: |
-        ls -R /tmp/duckdb.Rcheck
-        cat /tmp/duckdb.Rcheck/00check.log
-        cat /tmp/duckdb.Rcheck/tests/testthat.Rout.fail
 
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
