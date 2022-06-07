@@ -23,11 +23,7 @@ jobs:
     runs-on: macos-latest
     env:
       GEN: ninja
-      BUILD_PYTHON: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
       DUCKDEBUG: 1
-      STATIC_OPENSSL: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -36,6 +32,7 @@ jobs:
 
     - name: Run Python with sanitizer on
       run: |
+        export DUCKDEBUG=1
         brew install openssl
         export OPENSSL_ROOT_DIR=`brew --prefix openssl`
         wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
