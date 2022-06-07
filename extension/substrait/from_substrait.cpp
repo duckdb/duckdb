@@ -148,7 +148,7 @@ LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_ty
 		return LogicalType(LogicalTypeId::BIGINT);
 	} else if (s_type.has_date()) {
 		return LogicalType(LogicalTypeId::DATE);
-	} else if (s_type.has_varchar()) {
+	} else if (s_type.has_varchar() || s_type.has_string()) {
 		return LogicalType(LogicalTypeId::VARCHAR);
 	} else if (s_type.has_fp64()) {
 		return LogicalType(LogicalTypeId::DOUBLE);
@@ -170,7 +170,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformInExpr(const substrait:
 	vector<unique_ptr<ParsedExpression>> values;
 	values.emplace_back(TransformExpr(substrait_in.value()));
 
-	for (idx_t i = 0; i < substrait_in.options_size(); i++) {
+	for (idx_t i = 0; i < (idx_t) substrait_in.options_size(); i++) {
 		values.emplace_back(TransformExpr(substrait_in.options(i)));
 	}
 

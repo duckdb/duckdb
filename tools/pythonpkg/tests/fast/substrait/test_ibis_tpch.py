@@ -77,7 +77,8 @@ def test_ibis_to_duck_substrait(duckdb_cursor):
     skip.append(7)
     # can't compile
     skip.append(8)
-    # INTERNAL Error: Substrait type not yet supported
+    # Scalar Function with name extractyear does not exist!
+    # (function should be extract with option YEAR) 
     skip.append(9)
     # Result does not match
     skip.append(11)
