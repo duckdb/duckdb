@@ -70,12 +70,12 @@ StandardEntry *Binding::GetStandardEntry() {
 	return nullptr;
 }
 
-EntryBinding::EntryBinding(const string& alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index, StandardEntry& entry)
-	: Binding(alias, move(types_p), move(names_p), index), entry(entry) {
-
+EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
+                           StandardEntry &entry)
+    : Binding(alias, move(types_p), move(names_p), index), entry(entry) {
 }
 
-StandardEntry* EntryBinding::GetStandardEntry() {
+StandardEntry *EntryBinding::GetStandardEntry() {
 	return &this->entry;
 }
 

@@ -50,10 +50,12 @@ public:
 
 struct EntryBinding : public Binding {
 public:
-	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index, StandardEntry& entry);
-	StandardEntry& entry;
+	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
+	             StandardEntry &entry);
+	StandardEntry &entry;
+
 public:
-	StandardEntry* GetStandardEntry() override;
+	StandardEntry *GetStandardEntry() override;
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
