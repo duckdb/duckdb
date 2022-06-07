@@ -98,6 +98,10 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader) {
 		return SetDefaultInfo::Deserialize(reader, schema, table);
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT:
 		return AlterForeignKeyInfo::Deserialize(reader, schema, table);
+	case AlterTableType::SET_NOT_NULL:
+		return SetNotNullInfo::Deserialize(reader, schema, table);
+	case AlterTableType::DROP_NOT_NULL:
+		return DropNotNullInfo::Deserialize(reader, schema, table);
 	default:
 		throw SerializationException("Unknown alter table type for deserialization!");
 	}

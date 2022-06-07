@@ -4,6 +4,9 @@
 # Happy path
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 
 statement ok
