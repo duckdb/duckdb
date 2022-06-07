@@ -20,11 +20,6 @@
 
 namespace duckdb {
 
-shared_ptr<ColumnStatistics> DataTable::CreateEmptyStats(const LogicalType &type) {
-	auto col_stats = BaseStatistics::CreateEmpty(type, StatisticsType::GLOBAL_STATS);
-	return make_shared<ColumnStatistics>(move(col_stats));
-}
-
 DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table,
                      vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
     : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
@@ -54,7 +49,7 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 
 		AppendRowGroup(0);
 		for (auto &type : types) {
-			column_stats.push_back(CreateEmptyStats(type));
+			column_stats.push_back(ColumnStatistics::CreateEmptyStats(type));
 		}
 	} else {
 		D_ASSERT(column_stats.size() == types.size());
@@ -84,7 +79,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		column_stats.push_back(parent.column_stats[i]);
 	}
-	column_stats.push_back(CreateEmptyStats(new_column_type));
+	column_stats.push_back(ColumnStatistics::CreateEmptyStats(new_column_type));
 
 	// add the column definitions from this DataTable
 	column_definitions.emplace_back(new_column.Copy());
@@ -193,7 +188,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// the column that had its type changed will have the new statistics computed during conversion
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
 		if (i == changed_idx) {
-			column_stats.push_back(CreateEmptyStats(column_definitions[i].type));
+			column_stats.push_back(ColumnStatistics::CreateEmptyStats(column_definitions[i].type));
 		} else {
 			column_stats.push_back(parent.column_stats[i]);
 		}

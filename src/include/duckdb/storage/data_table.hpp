@@ -18,6 +18,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/storage/statistics/column_statistics.hpp"
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -104,13 +105,6 @@ struct DataTableInfo {
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
 	}
-};
-
-struct ColumnStatistics {
-	ColumnStatistics(unique_ptr<BaseStatistics> stats_p) : stats(move(stats_p)) {
-	}
-
-	unique_ptr<BaseStatistics> stats;
 };
 
 struct ParallelTableScanState {
@@ -250,8 +244,6 @@ private:
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
 	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type);
-
-	shared_ptr<ColumnStatistics> CreateEmptyStats(const LogicalType &type);
 
 private:
 	//! Lock for appending entries to the table
