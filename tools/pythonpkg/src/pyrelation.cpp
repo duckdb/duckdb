@@ -3,6 +3,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/vector_conversion.hpp"
 
 namespace duckdb {
 
@@ -601,6 +602,10 @@ py::list DuckDBPyRelation::ColumnTypes() {
 		res.append(col.type.ToString());
 	}
 	return res;
+}
+
+void DuckDBPyRelation::AnalyzeDF(const py::object &df) {
+	VectorConversion::Analyze(df);
 }
 
 } // namespace duckdb
