@@ -62,7 +62,8 @@
 #pragma warning(default : 4214)
 #endif
 
-#define TEXT_POOL_SIZE (300 * 1024 * 1024) /* 300MiB */
+// This was changed from the default (300MiB) to speedup initialization.
+#define TEXT_POOL_SIZE (1 * 1024 * 1024) /* 1MiB */
 
 #include "dbgen/dss.h"
 #include "dbgen/dsstypes.h"
