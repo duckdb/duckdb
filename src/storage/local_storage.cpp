@@ -19,16 +19,18 @@ LocalTableStorage::~LocalTableStorage() {
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *table_filters) {
+	state.table_filters = table_filters;
+	state.chunk_index = 0;
 	if (collection.ChunkCount() == 0) {
 		// nothing to scan
+		state.max_index = 0;
+		state.last_chunk_count = 0;
 		return;
 	}
 	state.SetStorage(shared_from_this());
 
-	state.chunk_index = 0;
 	state.max_index = collection.ChunkCount() - 1;
 	state.last_chunk_count = collection.Chunks().back()->size();
-	state.table_filters = table_filters;
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
