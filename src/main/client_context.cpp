@@ -660,6 +660,9 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending_query = PendingQuery(move(statement), allow_stream_result);
+	if (!pending_query->success) {
+		return make_unique<MaterializedQueryResult>(pending_query->error);
+	}
 	return pending_query->Execute();
 }
 

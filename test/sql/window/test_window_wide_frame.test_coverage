@@ -1,5 +1,5 @@
 # name: test/sql/window/test_window_wide_frame.test_coverage
-# description: Test date truncate functionality
+# description: Test wide temporal range frames
 # group: [window]
 
 statement ok
@@ -24,4 +24,4 @@ window w as (order by timestamp asc range between interval 55 seconds preceding 
 order by 3 desc
 limit 1;
 ----
-2020-10-15 16:58:11	50.000000	3391
+2020-10-15 16:58:11	50.000000	3394

@@ -21,7 +21,7 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	CatalogEntry *entry;
 };
 
-struct PragmaTableOperatorData : public FunctionOperatorData {
+struct PragmaTableOperatorData : public GlobalTableFunctionState {
 	PragmaTableOperatorData() : offset(0) {
 	}
 	idx_t offset;
@@ -55,9 +55,7 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 
-unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
@@ -155,10 +153,9 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 	data.offset = next;
 }
 
-static void PragmaTableInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
-	auto &state = (PragmaTableOperatorData &)*operator_state;
+static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
+	auto &state = (PragmaTableOperatorData &)*data_p.global_state;
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
 		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);

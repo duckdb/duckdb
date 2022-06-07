@@ -514,7 +514,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto res = make_unique<DuckDBPyResult>();
-	res->result = rel->Query(view_name, sql_query);
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Query(view_name, sql_query);
+	}
 	if (!res->result->success) {
 		throw std::runtime_error(res->result->error);
 	}

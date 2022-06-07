@@ -338,7 +338,7 @@ static bool TemplatedOptimumList(Vector &left, idx_t lidx, idx_t lcount, Vector 
 	ridx = rvdata.sel->get_index(ridx);
 
 	lcount = ListVector::GetListSize(left);
-	rcount = ListVector::GetListSize(left);
+	rcount = ListVector::GetListSize(right);
 
 	// DISTINCT semantics are in effect for nested types
 	auto lnull = !lvdata.validity.RowIsValid(lidx);

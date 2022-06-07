@@ -3,7 +3,6 @@ import duckdb
 import pandas as pd
 
 class TestMultipleColumnsSameName(object):
-
     def test_multiple_columns_with_same_name(self, duckdb_cursor):
         df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 6, 7, 8], 'd': [9, 10, 11, 12]})
         df = df.rename(columns={ df.columns[1]: "a" })
@@ -83,3 +82,10 @@ class TestMultipleColumnsSameName(object):
 
         assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
 
+    def test_case_insensitive(self, duckdb_cursor):
+        df = pd.DataFrame({'A_1': [1, 2, 3, 4],  'a_1': [9, 10, 11, 12]})
+        con = duckdb.connect()
+        con.register('df_view', df)
+        assert con.execute("DESCRIBE df_view;").fetchall() == [('A_1', 'BIGINT', 'YES', None, None, None), ('a_1_1', 'BIGINT', 'YES', None, None, None)]
+        assert con.execute("select a_1 from df_view;").fetchall() == [(1,), (2,), (3,), (4,)]
+        assert con.execute("select a_1_1 from df_view;").fetchall() == [(9,), (10,), (11,), (12,)]
