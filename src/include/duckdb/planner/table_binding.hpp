@@ -13,6 +13,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -24,11 +25,16 @@ class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
 
+enum class BindingType { BASE, TABLE, MACRO };
+
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
+	Binding(BindingType binding_type, const string &alias, vector<LogicalType> types, vector<string> names,
+	        idx_t index);
 	virtual ~Binding() = default;
 
+	//! The type of Binding
+	BindingType binding_type;
 	//! The alias of the binding
 	string alias;
 	//! The table index of the binding
@@ -58,6 +64,7 @@ struct TableBinding : public Binding {
 	LogicalGet &get;
 
 public:
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 	TableCatalogEntry *GetTableEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;

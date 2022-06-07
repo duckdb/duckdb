@@ -519,7 +519,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].type;
+	return Parser::ParseColumnList("dummy " + str)[0].Type();
 }
 
 bool LogicalType::IsIntegral() const {
