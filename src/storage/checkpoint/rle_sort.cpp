@@ -38,8 +38,10 @@ RowGroupSortBindData::~RowGroupSortBindData() {
 
 RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionType> table_compression)
     : row_group(row_group), data_table(data_table), old_count(row_group.count) {
-	// Reorder columns to optimize RLE Compression - We skip if the table has indexes or is empty
-	if (row_group.db.config.force_compression_sorting && row_group.count != 0 && row_group.table_info.indexes.Empty()) {
+	// Reorder columns to optimize RLE Compression - We skip if the table has indexes, is empty or has a large amount
+	// of columns
+	if (row_group.db.config.force_compression_sorting && row_group.count != 0 && row_group.table_info.indexes.Empty(),
+	    row_group.columns.size() < 20) {
 		// collect logical types by iterating the columns
 		for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
 			auto &column = row_group.columns[column_idx];
