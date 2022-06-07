@@ -196,7 +196,7 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 		auto struct_buffer = make_unique<VectorStructBuffer>(type, capacity);
 		auxiliary = move(struct_buffer);
 	} else if (internal_type == PhysicalType::LIST) {
-		auto list_buffer = make_unique<VectorListBuffer>(type);
+		auto list_buffer = make_unique<VectorListBuffer>(type, capacity);
 		auxiliary = move(list_buffer);
 	}
 	auto type_size = GetTypeIdSize(internal_type);
@@ -764,7 +764,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	default:
 		Normalify(count);
-		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
+		data.sel = FlatVector::IncrementalSelectionVector();
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -959,8 +959,7 @@ void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::UTFVerify(idx_t count) {
-	SelectionVector owned_sel;
-	auto flat_sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	auto flat_sel = FlatVector::IncrementalSelectionVector();
 
 	UTFVerify(*flat_sel, count);
 }
@@ -1078,8 +1077,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Verify(idx_t count) {
-	SelectionVector owned_sel;
-	auto flat_sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+	auto flat_sel = FlatVector::IncrementalSelectionVector();
 	Verify(*flat_sel, count);
 }
 
@@ -1108,17 +1106,6 @@ void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	}
 }
 
-const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
-	if (count <= STANDARD_VECTOR_SIZE) {
-		return FlatVector::IncrementalSelectionVector();
-	}
-	owned_sel.Initialize(count);
-	for (idx_t i = 0; i < count; i++) {
-		owned_sel.set_index(i, i);
-	}
-	return &owned_sel;
-}
-
 const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, SelectionVector &owned_sel) {
 	if (count <= STANDARD_VECTOR_SIZE) {
 		return ConstantVector::ZeroSelectionVector();
@@ -1131,7 +1118,6 @@ const SelectionVector *ConstantVector::ZeroSelectionVector(idx_t count, Selectio
 }
 
 void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, idx_t count) {
-	D_ASSERT(position < count);
 	auto &source_type = source.GetType();
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
@@ -1179,7 +1165,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
+			ConstantVector::Reference(*target_entries[i], *source_entries[i], struct_index, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;

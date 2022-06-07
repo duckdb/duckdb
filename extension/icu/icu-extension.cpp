@@ -150,7 +150,7 @@ static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
-struct ICUTimeZoneData : public FunctionOperatorData {
+struct ICUTimeZoneData : public GlobalTableFunctionState {
 	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
 		UErrorCode status = U_ZERO_ERROR;
 		std::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
@@ -175,21 +175,12 @@ static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-static unique_ptr<FunctionOperatorData> ICUTimeZoneInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+static unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<ICUTimeZoneData>();
 }
 
-static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state) {
-	auto &data = (ICUTimeZoneData &)*operator_state;
-	(void)data.tzs.reset();
-}
-
-static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (ICUTimeZoneData &)*operator_state;
+static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ICUTimeZoneData &)*data_p.global_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
 		UErrorCode status = U_ZERO_ERROR;
@@ -234,7 +225,7 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 	output.SetCardinality(index);
 }
 
-struct ICUCalendarData : public FunctionOperatorData {
+struct ICUCalendarData : public GlobalTableFunctionState {
 	ICUCalendarData() {
 		// All calendars are available in all locales
 		UErrorCode status = U_ZERO_ERROR;
@@ -252,15 +243,12 @@ static unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-static unique_ptr<FunctionOperatorData> ICUCalendarInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+static unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<ICUCalendarData>();
 }
 
-static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (ICUCalendarData &)*operator_state;
+static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ICUCalendarData &)*data_p.global_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {
@@ -281,12 +269,6 @@ static void ICUCalendarFunction(ClientContext &context, const FunctionData *bind
 		++index;
 	}
 	output.SetCardinality(index);
-}
-
-static void ICUCalendarCleanup(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state) {
-	auto &data = (ICUCalendarData &)*operator_state;
-	(void)data.calendars.reset();
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
@@ -340,8 +322,7 @@ void ICUExtension::Load(DuckDB &db) {
 	tz->getID(tz_id).toUTF8String(tz_string);
 	config.set_variables["TimeZone"] = Value(tz_string);
 
-	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit, nullptr,
-	                       ICUTimeZoneCleanup);
+	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
 	catalog.CreateTableFunction(*con.context, &tz_names_info);
 
@@ -358,8 +339,7 @@ void ICUExtension::Load(DuckDB &db) {
 	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
 	config.set_variables["Calendar"] = Value(cal->getType());
 
-	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit, nullptr,
-	                        ICUCalendarCleanup);
+	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(move(cal_names));
 	catalog.CreateTableFunction(*con.context, &cal_names_info);
 
