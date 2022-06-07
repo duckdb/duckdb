@@ -20,11 +20,9 @@ NULL
 {1=3, 2=4}
 NULL
 
-query T
+# Nested types as KEYs of a MAP are not currently supported
+statement error
 SELECT MAP(LIST_VALUE({'i':1,'j':2},NULL),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}))
-----
-{{'i': 1, 'j': 2}={'i': 1, 'j': 2}, NULL={'i': 3, 'j': 4}}
-
 
 query T
 SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a
