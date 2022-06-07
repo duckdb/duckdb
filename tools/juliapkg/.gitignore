@@ -24,3 +24,5 @@ docs/site/
 Manifest.toml
 
 .vscode/
+test_dataframe.csv
+test_parquet.parquet
