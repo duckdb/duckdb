@@ -271,6 +271,7 @@ static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t &approved_tuple_
 	if (mask.AllValid()) {
 		// no NULL values
 		if (IS_NULL) {
+			approved_tuple_count = 0;
 			return 0;
 		} else {
 			return approved_tuple_count;
