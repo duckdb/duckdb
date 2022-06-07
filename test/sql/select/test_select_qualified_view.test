@@ -14,6 +14,7 @@ create table s.a as select 'hello' as col1;
 statement ok
 create view s.b as select * from s.a;
 
+# This is the problem mentioned in issue #3724
 statement ok
 select s.b.col1 from s.b;
 

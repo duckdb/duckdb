@@ -83,12 +83,13 @@ public:
 	void AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
 	                      const vector<LogicalType> &types, LogicalGet &get);
 	//! Adds a subquery with a given alias to the BindContext.
-	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery);
+	void AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
+	                 const string &schema = "");
 	//! Adds a subquery with a given alias to the BindContext.
 	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
-	                       const vector<LogicalType> &types);
+	                       const vector<LogicalType> &types, const string &schema = "");
 
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.

@@ -26,9 +26,12 @@ class BoundTableFunction;
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
+	Binding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
+	        const string &schema = "");
 	virtual ~Binding() = default;
 
+	//! The (optional) schema this binding belongs to
+	string schema;
 	//! The alias of the binding
 	string alias;
 	//! The table index of the binding
