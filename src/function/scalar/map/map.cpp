@@ -9,6 +9,42 @@
 
 namespace duckdb {
 
+bool KeyListIsEmpty(list_entry_t *data, idx_t rows) {
+	for (idx_t i = 0; i < rows; i++) {
+		auto size = data[i].length;
+		if (size != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void CheckKeyValidity(DataChunk &args) {
+	auto types = args.GetTypes();
+	if (types.empty()) {
+		return;
+	}
+	auto key_type = ListType::GetChildType(types[0]).id();
+	auto &array = args.data[0];
+	auto arg_data = FlatVector::GetData<list_entry_t>(array);
+	auto &entries = ListVector::GetEntry(array);
+	if (key_type == LogicalTypeId::SQLNULL) {
+		if (KeyListIsEmpty(arg_data, args.size())) {
+			return;
+		}
+		// The entire key list is NULL for one (or more) of the rows: (ARRAY[NULL, NULL, NULL])
+		throw InvalidInputException("Map keys can not be NULL");
+	}
+
+	VectorData list_data;
+	auto count = ListVector::GetListSize(array);
+	args.data[0].Orrify(args.size(), list_data);
+	auto validity = FlatVector::Validity(entries);
+	if (!validity.CheckAllValid(count)) {
+		throw InvalidInputException("Map keys can not be NULL");
+	}
+}
+
 static void CheckForKeyUniqueness(DataChunk &args, ExpressionState &state) {
 	// Create a copy of the arguments
 	auto types = args.GetTypes();
@@ -47,6 +83,8 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 		}
 	}
+
+	CheckKeyValidity(args);
 
 	CheckForKeyUniqueness(args, state);
 

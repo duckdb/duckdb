@@ -2,8 +2,21 @@
 # description: Test basic functionality of maps
 # group: [map]
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
+
+# All keys are NULL
+statement error
+select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
+
+# Some keys are NULL
+statement error
+select MAP(LIST_VALUE(1,NULL,3), LIST_VALUE(6,5,4))
+
+query I
+select MAP(LIST_VALUE(1,2,3), LIST_VALUE(6,NULL,4))
+----
+{1=6, 2=NULL, 3=4}
 
 query I
 select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7))
