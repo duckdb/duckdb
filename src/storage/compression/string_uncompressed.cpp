@@ -1,4 +1,6 @@
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "miniz_wrapper.hpp"
 
 namespace duckdb {
 
@@ -260,17 +262,18 @@ string_t UncompressedStringStorage::ReadString(ColumnSegment &segment, Vector &r
 		auto block_handle = buffer_manager.RegisterBlock(block);
 		auto handle = buffer_manager.Pin(block_handle);
 
-		uint32_t length = Load<uint32_t>(handle->node->buffer + offset);
-		uint32_t remaining = length;
-		offset += sizeof(uint32_t);
+		// read header
+		uint32_t compressed_size = Load<uint32_t>(handle->node->buffer + offset);
+		uint32_t uncompressed_size = Load<uint32_t>(handle->node->buffer + offset + sizeof(uint32_t));
+		uint32_t remaining = compressed_size;
+		offset += sizeof(2 * sizeof(uint32_t));
 
-		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, length + sizeof(uint32_t));
+		// allocate a buffer to store the compressed string
+		// TODO: profile this to check if we need to reuse buffer
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, compressed_size);
 		auto target_handle = buffer_manager.Allocate(alloc_size);
 		auto target_ptr = target_handle->node->buffer;
-		// write the length in this block as well
-		Store<uint32_t>(length, target_ptr);
-		target_ptr += sizeof(uint32_t);
+
 		// now append the string to the single buffer
 		while (remaining > 0) {
 			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
@@ -288,8 +291,16 @@ string_t UncompressedStringStorage::ReadString(ColumnSegment &segment, Vector &r
 			}
 		}
 
-		auto final_buffer = target_handle->node->buffer;
-		StringVector::AddHandle(result, move(target_handle));
+		// overflow strings on disk are gzipped, decompress here
+		auto decompressed_target_handle = buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size + sizeof(uint32_t)));
+		auto decompressed_target_ptr = decompressed_target_handle->node->buffer;
+		Store<uint32_t>(uncompressed_size, decompressed_target_ptr);
+		decompressed_target_ptr += sizeof(uint32_t);
+		MiniZStream s;
+		s.Decompress((const char *)target_handle->node->buffer, compressed_size, (char *)decompressed_target_ptr, uncompressed_size);
+
+		auto final_buffer = decompressed_target_handle->node->buffer;
+		StringVector::AddHandle(result, move(decompressed_target_handle));
 		return ReadString(final_buffer, 0);
 	} else {
 		// read the overflow string from memory
