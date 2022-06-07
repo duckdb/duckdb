@@ -5,6 +5,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -168,6 +169,23 @@ SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &
                                     DataChunk &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalExport::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	// EXPORT has an optional child
+	// we only need to schedule child pipelines if there is a child
+	state.SetPipelineSource(current, this);
+	if (children.empty()) {
+		return;
+	}
+	PhysicalOperator::BuildPipelines(executor, current, state);
+}
+
+vector<const PhysicalOperator *> PhysicalExport::GetSources() const {
+	return {this};
 }
 
 } // namespace duckdb
