@@ -78,6 +78,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	// add lower case aliases
 	this->name_map = move(info->name_map);
 #ifdef DEBUG
+	D_ASSERT(name_map.size() == columns.size());
 	for (idx_t i = 0; i < columns.size(); i++) {
 		D_ASSERT(name_map[columns[i].name] == i);
 	}
