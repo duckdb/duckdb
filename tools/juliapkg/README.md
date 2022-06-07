@@ -21,16 +21,17 @@ res = DuckDB.execute(con,"INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-
 
 res = DuckDB.execute(con, "SELECT * FROM integers;")
 
-DuckDB.toDataFrame(res)
-
+df = DuckDB.toDataFrame(res)
 
 # or
 
-DuckDB.toDataFrame(con, "SELECT * FROM integers;")
+df = DuckDB.toDataFrame(con, "SELECT * FROM integers;")
 
 res = DuckDB.execute(con, "COPY (SELECT * FROM intergers) TO 'test.parquet' (FORMAT 'parquet');")
 
 res = DuckDB.execute(con, "SELECT * FROM 'test.parquet';")
+
+DuckDB.appendDataFrame(df, con, "integers")
 
 DuckDB.disconnect(con)
 

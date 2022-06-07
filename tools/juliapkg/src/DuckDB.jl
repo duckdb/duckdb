@@ -32,8 +32,7 @@ Creates a DataFrame from the full result
 
 """
 function toDataFrame(result::Ref{duckdb_result})::DataFrame
-    columns =
-        unsafe_wrap(Array{duckdb_column}, result[].columns, Int64(result[].column_count))
+    columns = unsafe_wrap(Array{duckdb_column}, result[].columns, Int64(result[].column_count))
     df = DataFrame()
     for i = 1:Int64(result[].column_count)
         rows = Int64(result[].row_count)
@@ -49,7 +48,11 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
             if 0 != sum(mask)
                 data = data[.!bmask]
             end
-            if type == DUCKDB_TYPE_DATE
+
+            # Format the different datatypes for DataFrame
+            if type == DUCKDB_TYPE_BOOLEAN
+                data = Bool.(data)
+            elseif type == DUCKDB_TYPE_DATE
                 data = Dates.epochdays2date.(data .+ 719528)
             elseif type == DUCKDB_TYPE_TIME
                 data = Dates.Time.(Dates.Nanosecond.(data .* 1000))
@@ -69,7 +72,6 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
             elseif type == DUCKDB_TYPE_VARCHAR
                 data = unsafe_string.(data)
             end
-
 
             if 0 != sum(mask)
                 fulldata = Array{Union{Missing,eltype(data)}}(missing, rows)
@@ -163,6 +165,146 @@ end
 duckdb_errmsg(handle) = unsafe_string(handle[].error_message)
 duckdbexception(handle::DBHandle) = DuckDBException(duckdb_errmsg(handle))
 duckdberror(handle::DBHandle) = throw(duckdbexception(handle))
+
+"""
+    appender_create(connection, table, schema)
+
+Creates appender object used to append new entries to an existing table
+
+* `connection`: The connection to create the appender for
+* `table`: Name of the table to append to
+* `schema`: Name of the schema of the table to append to, optional argument that defaults to "main"
+* returns: The appender object
+"""
+function appender_create(connection::Ref{Ptr{Cvoid}}, table::String, schema::String="main")
+    appender = Ref{Ptr{Cvoid}}()
+    duckdb_appender_create(connection, schema, table, appender)
+    return appender
+end
+
+"""
+    appendDataFrame(df, connection, table, schema)
+
+Appends DataFrame df to a table in database.
+Note that the datatype and order of the columns have to be consistent with the layout of the table.
+The column names of the dataframe are irrelevant as the data in the dataframe will be stored with column names of the table in the database.
+The datatypes currently supported by the appender are: Int, Float32, Float64, String, Dates.Time, Dates.Date, Missing
+
+* `df`: Dataframe that will be appended to the table
+* `connection`: Connection to the database the dataframe will be appended to
+* `table`: Name of the table the data is to be appended to
+* `schema`: Name of the schema of the table to append to, optional argument that defaults to "main"
+"""
+function appendDataFrame(df::DataFrame, connection::Ref{Ptr{Cvoid}}, table::String, schema::String="main")
+    # Determine the type of each column
+    dftypes = eltype.(eachcol(df))
+
+    # Create a vector holding the right appender functions
+    appender_function_vector= Vector{Function}(undef, ncol(df))
+    for (pos, dtype) in enumerate(dftypes)
+        appender_function_vector[pos] = _appender_function(dtype)
+    end
+
+    # Create the appender
+    appender = appender_create(connection, table, schema)
+    # Append the data to the table
+    for row in eachrow(df)
+
+        # For each value in the row apply the right appender function
+        for (index, element) in enumerate(row)
+            appender_function_vector[index](appender, element)
+        end
+
+        # End the appender row
+        duckdb_appender_end_row(appender)
+    end
+
+    # After all rows have been added to the appender flush them to the table and destroy the appender
+    duckdb_appender_destroy(appender)
+end
+
+"""
+    _appender_function(dtype)
+
+Returns the correct appender function for the respective data type to append the data to a table
+* `dtpye`: Datatype of data to be appended
+"""
+function _appender_function(dtype::DataType)
+    if dtype == Bool
+        return duckdb_append_bool
+    elseif dtype == Int8
+        return duckdb_append_int8
+    elseif dtype == Int16
+        return duckdb_append_int16
+    elseif dtype == Int32
+        return duckdb_append_int32
+    elseif dtype == Int64
+        return duckdb_append_int64
+    elseif dtype == UInt8
+        return duckdb_append_uint8
+    elseif dtype == UInt16
+        return duckdb_append_uint16
+    elseif dtype == UInt32
+        return duckdb_append_uint32
+    elseif dtype == UInt64
+        return duckdb_append_uint64
+    elseif dtype == Float32
+        return duckdb_append_float
+    elseif dtype == Float64
+        return duckdb_append_double
+    elseif dtype == Dates.Date
+        return duckdb_append_date
+    elseif dtype == Dates.Time
+        return duckdb_append_time
+    elseif dtype == String
+        return duckdb_append_varchar
+    else
+        throw("Unsupported datatype $dtype datatype encountered. Supported types are: Int, Float32, Float64, String, Dates.Time, Dates.Date, Missing")
+    end
+end
+
+_appender_function(dtype::Union) = return _union_appender
+
+"""
+    _union_appender
+
+Appender function that can be used to append dataframe columns with union datatypes Union{T, Missing} to the database table
+* `appender`: Appender object used to append the values to the table
+* `value`: Value that is to be appended to the table
+"""
+function _union_appender(appender, value)
+    value_type = typeof(value)
+    if value_type == Missing
+        return duckdb_append_null(appender)
+    else
+        return _appender_function(value_type)(appender, value)
+    end
+end
+
+"""
+    duckdb_append_date(appender, value)
+
+Appender function that converts the Dates.Date format back to the stored date format in DuckDB and appends it to the table
+* `appender`: Appender object used to append the values to the table
+* `value`: Value that is to be appended to the table
+"""
+function duckdb_append_date(appender::Ref{Ptr{Cvoid}}, value::Dates.Date)
+    converted_value = Dates.date2epochdays(value) - 719528
+    duckdb_append_date(appender, converted_value)
+end
+
+"""
+    duckdb_append_time(appender, value)
+
+Appender function that converts the Dates.Time format back to the stored time format in DuckDB and appends it to the table
+* `appender`: Appender object used to append the values to the table
+* `value`: Value that is to be appended to the table
+"""
+function duckdb_append_time(appender::Ref{Ptr{Cvoid}}, value::Dates.Time)
+    converted_value = hour(value) * 60 * 60 * 1000 * 1000 + minute(value) * 60 * 1000 * 1000 + second(value) * 1000 * 1000 + millisecond(value) * 1000 + microsecond(value)
+    duckdb_append_time(appender, converted_value)
+end
+
 
 """
     `DuckDB.DB()` => in-memory DuckDB database
