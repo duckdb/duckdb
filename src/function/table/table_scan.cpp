@@ -358,7 +358,7 @@ TableFunction TableScanFunction::GetFunction() {
 	return scan_function;
 }
 
-TableCatalogEntry *TableScanFunction::GetTableEntry(const TableFunction &function, const FunctionData *bind_data_p) {
+TableCatalogEntry *TableScanFunction::GetStandardEntry(const TableFunction &function, const FunctionData *bind_data_p) {
 	if (function.function != TableScanFunc || !bind_data_p) {
 		return nullptr;
 	}

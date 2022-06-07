@@ -66,8 +66,17 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
-TableCatalogEntry *Binding::GetTableEntry() {
+StandardEntry *Binding::GetStandardEntry() {
 	return nullptr;
+}
+
+EntryBinding::EntryBinding(const string& alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index, StandardEntry& entry)
+	: Binding(alias, move(types_p), move(names_p), index), entry(entry) {
+
+}
+
+StandardEntry* EntryBinding::GetStandardEntry() {
+	return &this->entry;
 }
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
@@ -118,7 +127,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
-TableCatalogEntry *TableBinding::GetTableEntry() {
+StandardEntry *TableBinding::GetStandardEntry() {
 	return get.GetTable();
 }
 

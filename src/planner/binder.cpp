@@ -323,7 +323,7 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 		return false;
 	}
 	if (!schema_name.empty()) {
-		auto table_entry = binding->GetTableEntry();
+		auto table_entry = binding->GetStandardEntry();
 		if (!table_entry) {
 			return false;
 		}

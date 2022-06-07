@@ -108,7 +108,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	}
 	if (colref.column_names.size() == 2) {
 		// "schema_name.table_name"
-		auto table_entry = binding->GetTableEntry();
+		auto table_entry = binding->GetStandardEntry();
 		if (!table_entry) {
 			return nullptr;
 		}
