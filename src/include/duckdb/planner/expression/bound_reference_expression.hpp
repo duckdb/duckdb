@@ -16,10 +16,10 @@ namespace duckdb {
 class BoundReferenceExpression : public Expression {
 public:
 	BoundReferenceExpression(string alias, LogicalType type, idx_t index);
-	BoundReferenceExpression(LogicalType type, idx_t index);
+	BoundReferenceExpression(LogicalType type, storage_t index);
 
 	//! Index used to access data in the chunks
-	idx_t index;
+	storage_t index;
 
 public:
 	bool IsScalar() const override {

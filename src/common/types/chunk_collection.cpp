@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -9,7 +10,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <queue>
 
 namespace duckdb {
 
