@@ -42,6 +42,8 @@ static void ToSubFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	}
 	output.SetCardinality(1);
 	auto new_conn = Connection(*context.db);
+	// We might want to disable the optimizer of our new connection
+	new_conn.context->config.enable_optimizer = context.config.enable_optimizer;
 	auto query_plan = new_conn.context->ExtractPlan(data.query);
 	DuckDBToSubstrait transformer_d2s(*query_plan);
 	auto serialized = transformer_d2s.SerializeToString();
