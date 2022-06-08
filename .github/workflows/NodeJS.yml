@@ -104,7 +104,7 @@ jobs:
           brew install openssl ninja
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`
           echo $OPENSSL_ROOT_DIR
-          GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
+          GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
       - name: Setup
         run: ./scripts/node_version.sh
