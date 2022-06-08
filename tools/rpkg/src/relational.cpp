@@ -52,7 +52,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	return make_external<ConstantExpression>("duckdb_expr", RApiTypes::SexpToValue(val, 0));
 }
 
-// TODO how do we create the different expression types from the API? different functions?
 [[cpp11::register]] SEXP rapi_expr_function(std::string name, list args) {
 	if (name.size() == 0) {
 		stop("expr_function: Zero length name");
@@ -83,9 +82,9 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	}
 
 	named_parameter_map_t other_params;
-	// other_params["experimental"] = Value::BOOLEAN(true);
+	//other_params["experimental"] = Value::BOOLEAN(true);
 	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)
-	               ->Alias("dataframe_" + to_string(rand()));
+	               ->Alias("dataframe_" + to_string((uintptr_t)(SEXP)df));
 	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", move(rel)));
 	res.attr("df") = df;
 	return res;

@@ -113,8 +113,9 @@ rel_project <- rapi_rel_project
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
+#' DBI::dbExecute(con, 'CREATE MACRO greater_than(a, b) AS a > b')
 #' rel <- rel_from_df(con, mtcars)
-#' rel2 <- rel_filter(rel, list(expr_function(">", list(expr_reference("cyl"), expr_constant("6")))))
+#' rel2 <- rel_filter(rel, list(expr_function("greater_than", list(expr_reference("cyl"), expr_constant("6")))))
 rel_filter <- rapi_rel_filter
 
 #' Lazily aggregate a DuckDB relation object
