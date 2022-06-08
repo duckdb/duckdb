@@ -249,7 +249,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_names(duckdb::rel_extptr_t rel) {
 	auto ret = writable::strings();
 	for (auto &col : rel->rel->Columns()) {
-		ret.push_back(col.name);
+		ret.push_back(col.Name());
 	}
 	return (ret);
 }
