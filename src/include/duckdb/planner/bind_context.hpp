@@ -58,6 +58,8 @@ public:
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
 	BindResult BindColumn(PositionalReferenceExpression &ref, idx_t depth);
 
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
+
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &table_name, const string &column_name);
 	unique_ptr<ParsedExpression> CreateColumnReference(const string &schema_name, const string &table_name,
 	                                                   const string &column_name);

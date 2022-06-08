@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
 
@@ -175,26 +176,28 @@ unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, string sch
 //===--------------------------------------------------------------------===//
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
-RemoveColumnInfo::RemoveColumnInfo(string schema_p, string table_p, string removed_column, bool if_exists)
-    : AlterTableInfo(AlterTableType::REMOVE_COLUMN, move(schema_p), move(table_p)),
-      removed_column(move(removed_column)), if_exists(if_exists) {
+RemoveColumnInfo::RemoveColumnInfo(string schema, string table, string removed_column, bool if_exists, bool cascade)
+    : AlterTableInfo(AlterTableType::REMOVE_COLUMN, move(schema), move(table)), removed_column(move(removed_column)),
+      if_exists(if_exists), cascade(cascade) {
 }
 RemoveColumnInfo::~RemoveColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
-	return make_unique_base<AlterInfo, RemoveColumnInfo>(schema, name, removed_column, if_exists);
+	return make_unique_base<AlterInfo, RemoveColumnInfo>(schema, name, removed_column, if_exists, cascade);
 }
 
 void RemoveColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteString(removed_column);
 	writer.WriteField<bool>(if_exists);
+	writer.WriteField<bool>(cascade);
 }
 
 unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(FieldReader &reader, string schema, string table) {
 	auto new_name = reader.ReadRequired<string>();
 	auto if_exists = reader.ReadRequired<bool>();
-	return make_unique<RemoveColumnInfo>(move(schema), move(table), new_name, if_exists);
+	auto cascade = reader.ReadRequired<bool>();
+	return make_unique<RemoveColumnInfo>(move(schema), move(table), new_name, if_exists, cascade);
 }
 
 //===--------------------------------------------------------------------===//

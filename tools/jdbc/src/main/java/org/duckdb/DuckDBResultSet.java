@@ -44,7 +44,7 @@ public class DuckDBResultSet implements ResultSet {
 	private boolean finished = false;
 	private boolean was_null;
 
-	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref) {
+	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref) throws SQLException {
 		this.stmt = stmt;
 		this.result_ref = result_ref;
 		this.meta = meta;

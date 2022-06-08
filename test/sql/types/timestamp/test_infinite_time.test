@@ -270,3 +270,21 @@ SELECT dt + '12:34:56'::TIME FROM specials
 infinity
 -infinity
 1970-01-01 12:34:56
+
+# Is(Infinite)
+
+query III
+SELECT isfinite(ts), isfinite(tstz), isfinite(dt)
+FROM specials;
+----
+0	0	0
+0	0	0
+1	1	1
+
+query III
+SELECT isinf(ts), isinf(tstz), isinf(dt)
+FROM specials;
+----
+1	1	1
+1	1	1
+0	0	0
