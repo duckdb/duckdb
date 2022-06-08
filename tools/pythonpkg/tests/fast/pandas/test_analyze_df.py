@@ -21,6 +21,12 @@ class TestAnalyzeDF(object):
         df = pd.DataFrame({0: [datetime.date(1992, 7, 30), datetime.date(1992, 7, 31)]})
         check_analyze_result(df,'<M8[ns]')
 
+    def test_analyze_string(self, duckdb_cursor):
+        data = ['hello', 'these', 'are', 'all', 'strings', 'also bigger strings that span multiple words']
+        df = pd.DataFrame({0: data})
+        max_string_size = max(data, key=len)
+        check_analyze_result(df,'S' + str(len(max_string_size)))
+
     def test_analyze_object(self, duckdb_cursor):
         df = pd.DataFrame({0: [datetime.date(1992, 7, 30), "bla"]})
         check_analyze_result(df,'O')

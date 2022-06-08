@@ -503,8 +503,12 @@ static void ConvertSingleColumn(py::handle df, idx_t col_idx) {
 	}
 
 	if (column_type == "date") {
-		set_fun(df_columns[col_idx], column.attr("astype")('M', py::arg("copy") = false));
-	} else {
+		set_fun(df_columns[col_idx], column.attr("astype")("M", py::arg("copy") = false));
+	}
+	else if (column_type == "str") {
+		set_fun(df_columns[col_idx], column.attr("astype")("S", py::arg("copy") = false));
+	}
+	else {
 		throw std::runtime_error(column_type);
 	}
 }
