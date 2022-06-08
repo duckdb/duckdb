@@ -19,28 +19,31 @@ env:
 
 jobs:
  python-debug-mac:
-    name: Python Address Sanitizer (Mac Os)
-    runs-on: macos-latest
+    name: Python Address Sanitizer (Linux)
+    runs-on: ubuntu-latest
     env:
       GEN: ninja
+      STATIC_OPENSSL: 1
       DUCKDEBUG: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
+        python: 0
 
     - name: Run Python with sanitizer on
       run: |
         export DUCKDEBUG=1
-        brew install openssl
-        export OPENSSL_ROOT_DIR=`brew --prefix openssl`
         wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
         unzip v3.9.12.zip
         rm v3.9.12.zip
         cd cpython-3.9.12
         mkdir debug-build
-        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=${GITHUB_WORKSPACE}/debug-build --with-openssl=${OPENSSL_ROOT_DIR}
+        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=${GITHUB_WORKSPACE}/debug-build --with-openssl=/usr/local/ssl
         make -j
         make install
         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install numpy
