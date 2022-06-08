@@ -30,13 +30,3 @@ EXPLAIN SELECT regexp_matches(s, 'a') FROM test
 query I nosort regexconstantsinglechar
 EXPLAIN SELECT contains(s, 'a') FROM test
 ----
-
-#
-## contains optimization: /.*a.*/ -> contains(aaa)
-#query I nosort regexconstantdotstar
-#EXPLAIN SELECT regexp_matches(s, '.*a.*') FROM test
-#----
-#
-#query I nosort regexconstantdotstar
-#EXPLAIN SELECT contains(s, 'a') FROM test
-#----

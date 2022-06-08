@@ -47,7 +47,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		auto contains = make_unique<BoundFunctionExpression>(root->return_type, ContainsFun::GetFunction(),
 		                                                     move(root->children), nullptr);
 
-		contains->children[1] = make_unique<BoundConstantExpression>(Value(move(patt_str)));
+		contains->children[1] = make_unique<BoundConstantExpression>(Value(patt_str));
 		return contains;
 	}
 	return nullptr;
