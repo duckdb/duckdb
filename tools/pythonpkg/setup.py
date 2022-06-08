@@ -56,7 +56,6 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 
 lib_name = 'duckdb'
-extension_name = '_duckdb_extension'
 
 extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel', 'substrait']
 
@@ -127,7 +126,7 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
-toolchain_args.append('-DDUCKDB_PYTHON_EXTENSION_NAME='+ extension_name)
+toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME='+lib_name)
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
@@ -174,15 +173,15 @@ if len(existing_duckdb_dir) == 0:
         # copy all source files to the current directory
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
-        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, extension_name), extensions, False, unity_build, extension_name)
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, lib_name), extensions, False, unity_build)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()
 
-        original_sources = [os.path.join(extension_name, x) for x in original_sources]
+        original_sources = [os.path.join(lib_name, x) for x in original_sources]
 
-        duckdb_includes = [os.path.join(extension_name, x) for x in include_list]
-        duckdb_includes += [extension_name]
+        duckdb_includes = [os.path.join(lib_name, x) for x in include_list]
+        duckdb_includes += [lib_name]
 
         # gather the include files
         import amalgamation
@@ -210,7 +209,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension(extension_name,
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -227,7 +226,7 @@ else:
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension(extension_name,
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -283,8 +282,7 @@ setup(
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
-        'duckdb-stubs',
-        'duckdb'
+        'duckdb-stubs'
     ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],

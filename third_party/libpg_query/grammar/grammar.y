@@ -49,6 +49,7 @@
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
