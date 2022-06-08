@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
+#include <iostream>
 
 namespace duckdb {
 
@@ -212,7 +213,7 @@ static unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet *set, NeighborInfo *i
 		expected_cardinality = MaxValue(left->cardinality, right->cardinality);
 	}
 	// cost is expected_cardinality plus the cost of the previous plans
-	idx_t cost = expected_cardinality;
+	idx_t cost = expected_cardinality + left->cost + right->cost;
 	return make_unique<JoinNode>(set, info, left, right, expected_cardinality, cost);
 }
 
@@ -228,6 +229,9 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	if (entry == plans.end() || new_plan->cost < entry->second->cost) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
+		auto l = new_plan->left ? new_plan->left->set->ToString() : "";
+		auto r = new_plan->right ? new_plan->right->set->ToString() : "";
+		std::cout << new_plan->set->ToString() << " = " << l << " + " << r << std::endl;
 		plans[new_set] = move(new_plan);
 		return result;
 	}

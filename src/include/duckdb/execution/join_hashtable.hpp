@@ -220,8 +220,9 @@ public:
 	void Partition(JoinHashTable &global_ht);
 	//! TODO
 	void PinPartitions();
-	//! TODO
-	unique_ptr<ScanStructure> ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht);
+	//! Probe whatever we can, sink the rest into a thread-local HT
+	unique_ptr<ScanStructure> ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
+	                                       DataChunk &sink_keys, DataChunk &sink_payload);
 
 private:
 	//! Merges histogram into this one

@@ -58,6 +58,8 @@ public:
 
 	//! Whether we are doing an external join
 	bool external;
+	//! Memory usage per thread (if we exceed threshold we spill)
+	idx_t memory_per_thread;
 	//! Hash tables built by each thread
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
 };
@@ -126,7 +128,12 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	// for perfect hash join
 	state->perfect_join_executor =
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
+	// for external hash join
 	state->external = ClientConfig::GetConfig(context).force_external;
+	// Memory usage per thread scales with max mem / num threads, we spill at 60%
+	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	state->memory_per_thread = double(max_memory / num_threads) * 0.6;
 	return move(state);
 }
 
@@ -171,6 +178,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		lstate.build_chunk.SetCardinality(input.size());
 		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	}
+
+	// TODO swizzle and spill if exceeds mem limit
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -243,6 +252,12 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
+	//! Local sink state for external join
+	unique_ptr<HashJoinLocalState> local_sink;
+	//! DataChunks for sinking data into local_sink for external join
+	DataChunk sink_keys;
+	DataChunk sink_payload;
+
 public:
 	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op, &probe_executor, "probe_executor", 0);
@@ -272,6 +287,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;
 	}
+
 	if (sink.perfect_join_executor) {
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
 	}
@@ -297,7 +313,15 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	state.probe_executor.Execute(input, state.join_keys);
 
 	// perform the actual probe
-	state.scan_structure = sink.hash_table->Probe(state.join_keys);
+	if (sink.external) {
+		if (!state.local_sink->initialized) {
+			state.local_sink->Initialize(sink);
+		}
+		state.scan_structure = sink.hash_table->ProbeAndSink(state.join_keys, input, *state.local_sink->hash_table,
+		                                                     state.sink_keys, state.sink_payload);
+	} else {
+		state.scan_structure = sink.hash_table->Probe(state.join_keys);
+	}
 	state.scan_structure->Next(state.join_keys, input, chunk);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }

@@ -1092,7 +1092,8 @@ void JoinHashTable::PinPartitions() {
 	}
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht) {
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
+                                                      DataChunk &sink_keys, DataChunk &sink_payload) {
 	D_ASSERT(Count() > 0); // should be handled before
 	D_ASSERT(finalized);
 
@@ -1125,14 +1126,12 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk
 	auto false_count = keys.size() - true_count;
 
 	// sink non-matching stuff into HT for later
-	DataChunk sink_keys;
-	DataChunk sink_payload;
 	sink_keys.Reference(keys);
 	sink_payload.Reference(payload);
 	sink_keys.Slice(false_sel, false_count);
 	sink_payload.Slice(false_sel, false_count);
 	local_ht.Build(sink_keys, sink_payload);
-
+	
 	// only probe the matching stuff
 	ss->count = true_count;
 	current_sel = &true_sel;
