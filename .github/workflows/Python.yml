@@ -69,7 +69,7 @@ jobs:
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    manylinux-extensions:
-    name: DuckDB Extensions built on manylinux image
+    name: DuckDB Extensions (gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
