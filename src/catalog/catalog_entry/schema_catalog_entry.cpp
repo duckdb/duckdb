@@ -36,7 +36,7 @@
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 
-#include <algorithm>
+#include "duckdb/common/algorithm.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -130,10 +130,12 @@ CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeI
 CatalogEntry *SchemaCatalogEntry::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto table = make_unique<TableCatalogEntry>(catalog, this, info);
 	table->storage->info->cardinality = table->storage->GetTotalRows();
+
 	CatalogEntry *entry = AddEntry(context, move(table), info->Base().on_conflict, info->dependencies);
 	if (!entry) {
 		return nullptr;
 	}
+
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(entry, AlterForeignKeyType::AFT_ADD, fk_arrays);

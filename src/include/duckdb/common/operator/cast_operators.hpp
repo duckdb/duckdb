@@ -529,6 +529,13 @@ DUCKDB_API bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &res
 template <>
 DUCKDB_API bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool strict);
 
+template <>
+DUCKDB_API bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict);
+
 //===--------------------------------------------------------------------===//
 // Non-Standard Timestamps -> string/standard timestamp
 //===--------------------------------------------------------------------===//

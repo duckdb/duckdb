@@ -256,9 +256,8 @@ static idx_t DistinctSelectConstant(Vector &left, Vector &right, const Selection
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                             SelectionVector *true_sel, SelectionVector *false_sel) {
-	SelectionVector owned_sel;
 	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+		sel = FlatVector::IncrementalSelectionVector();
 	}
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
@@ -692,9 +691,8 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVe
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
 	// and then scatter the output selections when we are done.
-	SelectionVector owned_sel;
 	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+		sel = FlatVector::IncrementalSelectionVector();
 	}
 
 	// Make buffered selections for progressive comparisons

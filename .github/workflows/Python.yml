@@ -68,55 +68,26 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
-   # All extensions uploaded by this job will be loaded by the test_extensions.py test during the linux-python3 job.
-   centos7-extensions:
-    name: CentOS 7 Extensions
+   manylinux-extensions:
+    name: DuckDB Extensions built on manylinux image
     runs-on: ubuntu-latest
-    container: centos:7
+    container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
-    strategy:
-      matrix:
-        arch: ['i686', 'x86_64']
-    env:
-      DISABLE_MAIN_DUCKDB_LIBRARY: 1
-      BUILD_HTTPFS: 1
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
-      STATIC_OPENSSL: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
-      DISABLE_BUILTIN_EXTENSIONS: 1
-      FORCE_32_BIT: ${{ matrix.arch == 'i686' && 1 || 0}}
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
     - name: Install dependencies
       run: |
-        yum install -y gcc gcc-c++ git cmake make
+        yum install -y gcc gcc-c++ cmake make
         yum install -y epel-release
         yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+        yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+        yum install -y git
+        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker
 
     - name: Install AWS CLI
       run: |
         python3 -m pip install awscli
         aws --version
-
-    - name: Install i686 dependencies
-      if: ${{matrix.arch == 'i686'}}
-      run: |
-        yum install -y glibc-devel.i686 libgcc.i686 libstdc++-devel.i686 ncurses-devel.i686
 
       # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
     - name: Download OpenSSL 1.1.1k
@@ -126,17 +97,10 @@ jobs:
         cd openssl-1.1.1k
         find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
 
-    - name: Configure OpenSSL x86_64
-      if: ${{matrix.arch == 'x86_64'}}
+    - name: Configure OpenSSL
       run: |
         cd openssl-1.1.1k
         ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
-
-    - name: Configure OpenSSL i686
-      if: ${{matrix.arch == 'i686'}}
-      run: |
-        cd openssl-1.1.1k
-        ./Configure --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic -m32 linux-generic32
 
     - name: Build OpenSSL
       run: |
@@ -144,28 +108,31 @@ jobs:
         make
         make install
 
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
     - name: Version Check
       run: |
         cmake --version
         ldd --version ldd
+        ls -al
+        pwd
+        echo "$USER"
 
-    - name: Build
-      run: make
+    - uses: ./.github/actions/build_extensions
+      with:
+        deploy_as: linux_amd64_gcc4
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
+        static_link_build: 1
+        treat_warn_as_error: 0
 
     - uses: actions/upload-artifact@v2
       with:
-        name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
+        name: manylinux-extensions-x86_64
         path: |
           build/release/extension/*/*.duckdb_extension
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh linux_${{matrix.arch == 'i686' && 'i686' || 'amd64'}}_gcc4
-          ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
-        fi
 
    linux-python3:
     name: Python 3 Linux
@@ -181,7 +148,7 @@ jobs:
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
-    needs: centos7-extensions
+    needs: manylinux-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
@@ -203,13 +170,14 @@ jobs:
       run: pip install cibuildwheel twine
 
     - uses: actions/download-artifact@v3
+      if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: python-wheel-centos7-extensions-centos-${{ matrix.arch }}
+        name: manylinux-extensions-x86_64
         path: tools/pythonpkg
 
     - name: List extensions to be tested
       run: |
-        find tools/pythonpkg -maxdepth 1 -type f -name "*.duckdb_extension"
+        find tools/pythonpkg -maxdepth 2 -type f -name "*.duckdb_extension"
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

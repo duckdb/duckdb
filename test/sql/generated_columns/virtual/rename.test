@@ -1,0 +1,29 @@
+# name: test/sql/generated_columns/virtual/rename.test
+# description: Test renaming a generated column
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold)
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+query I
+SELECT total_profit FROM unit
+----
+20
+
+statement ok
+ALTER TABLE unit RENAME COLUMN total_profit TO profit_total
+
+query I
+SELECT profit_total FROM unit
+----
+20

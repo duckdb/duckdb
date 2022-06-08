@@ -40,15 +40,17 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	} else {
+		// see if it's a column
 		string table_name = binder.bind_context.GetMatchingBinding(column_name);
-		if (table_name.empty()) {
-			auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-			error_message =
-			    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
-			return nullptr;
+		if (!table_name.empty()) {
+			return binder.bind_context.CreateColumnReference(table_name, column_name);
 		}
-		return binder.bind_context.CreateColumnReference(table_name, column_name);
+		// it's not, find candidates and error
+		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
+		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
+		error_message =
+		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
+		return nullptr;
 	}
 }
 
@@ -146,7 +148,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// -> part1 is a table, part2 is a column
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
-		// first check if part1 is a table
+		// first check if part1 is a table, and part2 is a standard column
 		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
@@ -217,12 +219,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (!expr) {
 		return BindResult(binder.FormatError(colref_p, error_message));
 	}
+	//! Generated column returns generated expression
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		return BindExpression(&expr, depth);
 	}
 	auto &colref = (ColumnRefExpression &)*expr;
-	D_ASSERT(colref.column_names.size() == 2 || colref.column_names.size() == 3);
-	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
+	D_ASSERT(colref.IsQualified());
+	auto &table_name = colref.GetTableName();
+
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	// if it was a macro parameter, let macro_binding bind it to the argument

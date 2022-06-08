@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-struct DuckDBColumnsData : public FunctionOperatorData {
+struct DuckDBColumnsData : public GlobalTableFunctionState {
 	DuckDBColumnsData() : offset(0), column_offset(0) {
 	}
 
@@ -71,8 +71,7 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBColumnsInit(ClientContext &context, const FunctionData *bind_data,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
@@ -86,8 +85,6 @@ unique_ptr<FunctionOperatorData> DuckDBColumnsInit(ClientContext &context, const
 	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
 	return move(result);
 }
-
-namespace { // anonymous namespace for the ColumnHelper classes for working with tables/views
 
 class ColumnHelper {
 public:
@@ -124,14 +121,14 @@ public:
 		return entry->columns.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->columns[col].name;
+		return entry->columns[col].Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->columns[col].type;
+		return entry->columns[col].Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		if (entry->columns[col].default_value) {
-			return Value(entry->columns[col].default_value->ToString());
+		if (entry->columns[col].DefaultValue()) {
+			return Value(entry->columns[col].DefaultValue()->ToString());
 		}
 		return Value();
 	}
@@ -278,11 +275,8 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 	}
 }
 
-} // anonymous namespace
-
-void DuckDBColumnsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk &output) {
-	auto &data = (DuckDBColumnsData &)*operator_state;
+void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBColumnsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
