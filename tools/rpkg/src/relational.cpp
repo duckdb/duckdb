@@ -3,6 +3,8 @@
 #include "typesr.hpp"
 #include "rapi.hpp"
 
+#include "R_ext/Random.h"
+
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -83,8 +85,10 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 	named_parameter_map_t other_params;
 	// other_params["experimental"] = Value::BOOLEAN(true);
-	auto rel = con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)
-	               ->Alias("dataframe_" + to_string((uintptr_t)(SEXP)df));
+	auto alias = StringUtil::Format("dataframe_%d_%d", (uintptr_t)(SEXP)df,
+	                                (int32_t)(NumericLimits<int32_t>::Maximum() * unif_rand()));
+	auto rel =
+	    con->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)(SEXP)df)}, other_params)->Alias(alias);
 	auto res = sexp(make_external<RelationWrapper>("duckdb_relation", move(rel)));
 	res.attr("df") = df;
 	return res;
