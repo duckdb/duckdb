@@ -79,10 +79,13 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
       column_dependency_manager(move(info->column_dependency_manager)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
+	this->name_map = move(info->name_map);
+#ifdef DEBUG
+	D_ASSERT(name_map.size() == columns.size());
 	for (idx_t i = 0; i < columns.size(); i++) {
-		D_ASSERT(name_map.find(columns[i].Name()) == name_map.end());
-		name_map[columns[i].Name()] = i;
+		D_ASSERT(name_map[columns[i].Name()] == i);
 	}
+#endif
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
 		name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;

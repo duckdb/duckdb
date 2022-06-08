@@ -297,7 +297,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Generated()) {
 			continue;
 		}
-		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
+		if (column.Type().id() == LogicalTypeId::VARCHAR) {
+			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
+		}
 		BindLogicalType(context, column.TypeMutable());
 		if (column.Type().id() == LogicalTypeId::ENUM) {
 			// We add a catalog dependency
