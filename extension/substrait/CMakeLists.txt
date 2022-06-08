@@ -55,22 +55,22 @@ set(PROTOBUF_SOURCES
     ../../third_party/google/protobuf/stubs/strutil.cc
     ../../third_party/google/protobuf/stubs/substitute.cc)
 
-#set(SUBSTRAIT_SOURCES
-#    ../../third_party/substrait/substrait/algebra.pb.cc
-#    ../../third_party/substrait/substrait/capabilities.pb.cc
-#    ../../third_party/substrait/substrait/function.pb.cc
-#    ../../third_party/substrait/substrait/parameterized_types.pb.cc
-#    ../../third_party/substrait/substrait/plan.pb.cc
-#    ../../third_party/substrait/substrait/type.pb.cc
-#    ../../third_party/substrait/substrait/type_expressions.pb.cc
-#    ../../third_party/substrait/substrait/extensions/extensions.pb.cc)
-#
-#set(ALL_SOURCES to_substrait.cpp from_substrait.cpp substrait-extension.cpp
-#                ${SUBSTRAIT_SOURCES} ${PROTOBUF_SOURCES})
+set(SUBSTRAIT_SOURCES
+    ../../third_party/substrait/substrait/algebra.pb.cc
+    ../../third_party/substrait/substrait/capabilities.pb.cc
+    ../../third_party/substrait/substrait/function.pb.cc
+    ../../third_party/substrait/substrait/parameterized_types.pb.cc
+    ../../third_party/substrait/substrait/plan.pb.cc
+    ../../third_party/substrait/substrait/type.pb.cc
+    ../../third_party/substrait/substrait/type_expressions.pb.cc
+    ../../third_party/substrait/substrait/extensions/extensions.pb.cc)
 
-add_library(substrait_extension STATIC substrait-extension.cpp ${PROTOBUF_SOURCES})
+set(ALL_SOURCES to_substrait.cpp from_substrait.cpp substrait-extension.cpp
+                ${SUBSTRAIT_SOURCES} ${PROTOBUF_SOURCES})
 
-build_loadable_extension(substrait substrait-extension.cpp ${PROTOBUF_SOURCES})
+add_library(substrait_extension STATIC ${ALL_SOURCES})
+
+build_loadable_extension(substrait ${ALL_SOURCES})
 
 install(
   TARGETS substrait_extension

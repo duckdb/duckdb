@@ -57,6 +57,9 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
+  substrait:
+    description: 'Build Substrait'
+    default: 1
 
 runs:
   using: "composite"
