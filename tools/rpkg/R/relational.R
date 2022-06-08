@@ -150,9 +150,10 @@ rel_order <- rapi_rel_order
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
+#' DBI::dbExecute(con, 'CREATE MACRO equals(a, b) AS a = b')
 #' left <- rel_from_df(con, mtcars)
 #' right <- rel_from_df(con, mtcars)
-#' cond <- list(expr_function("==", list(expr_reference("cyl", left), expr_reference("cyl", right))))
+#' cond <- list(expr_function("equals", list(expr_reference("cyl", left), expr_reference("cyl", right))))
 #' rel2 <- rel_inner_join(left, right, cond)
 rel_inner_join <- rapi_rel_inner_join
 
