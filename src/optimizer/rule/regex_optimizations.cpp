@@ -48,7 +48,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		                                                     move(root->children), nullptr);
 
 		contains->children[1] = make_unique<BoundConstantExpression>(Value(patt_str));
-		return contains;
+		return move(contains);
 	}
 	return nullptr;
 }
