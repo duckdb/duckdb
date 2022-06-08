@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_common_types
   OBJECT
+  batched_chunk_collection.cpp
   blob.cpp
   cast_helpers.cpp
   chunk_collection.cpp

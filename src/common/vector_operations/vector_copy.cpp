@@ -251,8 +251,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 		break;
 	}
 	case VectorType::FLAT_VECTOR: {
-		SelectionVector owned_sel;
-		auto sel = FlatVector::IncrementalSelectionVector(source_count, owned_sel);
+		auto sel = FlatVector::IncrementalSelectionVector();
 		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
 		break;
 	}
@@ -262,8 +261,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 		Vector flattened(source.GetType());
 		VectorOperations::GenerateSequence(flattened, source_count, start, increment);
 
-		SelectionVector owned_sel;
-		auto sel = FlatVector::IncrementalSelectionVector(source_count, owned_sel);
+		auto sel = FlatVector::IncrementalSelectionVector();
 		VectorOperations::Copy(flattened, target, *sel, source_count, source_offset, target_offset);
 		break;
 	}

@@ -68,6 +68,8 @@ typedef idx_t transaction_t;
 
 //! Type used for column identifiers
 typedef idx_t column_t;
+//! Type used for storage (column) identifiers
+typedef idx_t storage_t;
 //! Special value used to signify the ROW ID of a table
 extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 

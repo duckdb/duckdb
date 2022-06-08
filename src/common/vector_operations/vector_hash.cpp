@@ -63,6 +63,7 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	input.Normalify(count);
 	auto &children = StructVector::GetEntries(input);
 
 	D_ASSERT(!children.empty());

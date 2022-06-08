@@ -96,25 +96,6 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     needs: linux-release-64
-    env:
-      GEN: ninja
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_HTTPFS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
-      STATIC_OPENSSL: 1
-      DISABLE_BUILTIN_EXTENSIONS: 1
-      OPENSSL_ROOT_DIR: /usr/local/ssl
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
 
     steps:
     - uses: actions/checkout@v3
@@ -124,19 +105,13 @@ jobs:
       with:
         openssl: 1
 
-    - name: Build
-      run: |
-        make
-        rm build/release/src/libduckdb*
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh linux_amd64
-          ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
-        fi
+    - uses: ./.github/actions/build_extensions
+      with:
+        post_install: rm build/release/src/libduckdb*
+        deploy_as: linux_amd64
+        static_link_build: 1
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
 
  linux-release-32:
     name: Linux (32 Bit)

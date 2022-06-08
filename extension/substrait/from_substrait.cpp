@@ -170,7 +170,7 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformInExpr(const substrait:
 	vector<unique_ptr<ParsedExpression>> values;
 	values.emplace_back(TransformExpr(substrait_in.value()));
 
-	for (idx_t i = 0; i < (idx_t) substrait_in.options_size(); i++) {
+	for (idx_t i = 0; i < (idx_t)substrait_in.options_size(); i++) {
 		values.emplace_back(TransformExpr(substrait_in.options(i)));
 	}
 

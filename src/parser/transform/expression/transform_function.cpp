@@ -110,6 +110,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto lowercase_name = StringUtil::Lower(function_name);
 
 	if (root->over) {
+		const auto win_fun_type = WindowToExpressionType(lowercase_name);
+		if (win_fun_type == ExpressionType::INVALID) {
+			throw InternalException("Unknown/unsupported window function");
+		}
+
 		if (root->agg_distinct) {
 			throw ParserException("DISTINCT is not implemented for window functions!");
 		}
@@ -118,16 +123,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("ORDER BY is not implemented for window functions!");
 		}
 
-		if (root->agg_filter) {
-			throw ParserException("FILTER is not implemented for window functions!");
+		if (win_fun_type != ExpressionType::WINDOW_AGGREGATE && root->agg_filter) {
+			throw ParserException("FILTER is not implemented for non-aggregate window functions!");
 		}
 		if (root->export_state) {
 			throw ParserException("EXPORT_STATE is not supported for window functions!");
-		}
-
-		const auto win_fun_type = WindowToExpressionType(lowercase_name);
-		if (win_fun_type == ExpressionType::INVALID) {
-			throw InternalException("Unknown/unsupported window function");
 		}
 
 		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && root->agg_ignore_nulls) {
@@ -136,6 +136,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		auto expr = make_unique<WindowExpression>(win_fun_type, schema, lowercase_name);
 		expr->ignore_nulls = root->agg_ignore_nulls;
+
+		if (root->agg_filter) {
+			auto filter_expr = TransformExpression(root->agg_filter);
+			expr->filter_expr = move(filter_expr);
+		}
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;

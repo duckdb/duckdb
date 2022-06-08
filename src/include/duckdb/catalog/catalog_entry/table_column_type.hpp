@@ -1,18 +1,17 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parallel/parallel_state.hpp
+// duckdb/catalog/catalog_entry/table_column_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/common/constants.hpp"
+
 namespace duckdb {
 
-struct ParallelState {
-	virtual ~ParallelState() {
-	}
-};
+enum class TableColumnType : uint8_t { STANDARD = 0, GENERATED = 1 };
 
 } // namespace duckdb

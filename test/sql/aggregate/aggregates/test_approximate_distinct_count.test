@@ -99,3 +99,13 @@ SELECT COUNT(t),approx_count_distinct(t) from names
 ----
 8	3
 
+statement ok
+create table customers (cname varchar)
+
+statement ok
+insert into customers values ('Customer#000000001'), ('Customer#000000002'), ('Customer#000000003'), ('Customer#000000004')
+
+query T
+select approx_count_distinct(cname) from customers
+----
+4
