@@ -19,7 +19,7 @@ Lazily filter a DuckDB relation object
 }
 \examples{
 con <- DBI::dbConnect(duckdb())
-DBI::dbExecute(con, 'CREATE MACRO greater_than(a, b) AS a > b')
+DBI::dbExecute(con, 'CREATE MACRO gt(a, b) AS a > b')
 rel <- rel_from_df(con, mtcars)
-rel2 <- rel_filter(rel, list(expr_function("greater_than", list(expr_reference("cyl"), expr_constant("6")))))
+rel2 <- rel_filter(rel, list(expr_function("gt", list(expr_reference("cyl"), expr_constant("6")))))
 }

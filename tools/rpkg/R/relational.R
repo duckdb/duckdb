@@ -113,9 +113,9 @@ rel_project <- rapi_rel_project
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, 'CREATE MACRO greater_than(a, b) AS a > b')
+#' DBI::dbExecute(con, 'CREATE MACRO gt(a, b) AS a > b')
 #' rel <- rel_from_df(con, mtcars)
-#' rel2 <- rel_filter(rel, list(expr_function("greater_than", list(expr_reference("cyl"), expr_constant("6")))))
+#' rel2 <- rel_filter(rel, list(expr_function("gt", list(expr_reference("cyl"), expr_constant("6")))))
 rel_filter <- rapi_rel_filter
 
 #' Lazily aggregate a DuckDB relation object
@@ -150,10 +150,10 @@ rel_order <- rapi_rel_order
 #' @export
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbExecute(con, 'CREATE MACRO equals(a, b) AS a = b')
+#' DBI::dbExecute(con, 'CREATE MACRO eq(a, b) AS a = b')
 #' left <- rel_from_df(con, mtcars)
 #' right <- rel_from_df(con, mtcars)
-#' cond <- list(expr_function("equals", list(expr_reference("cyl", left), expr_reference("cyl", right))))
+#' cond <- list(expr_function("eq", list(expr_reference("cyl", left), expr_reference("cyl", right))))
 #' rel2 <- rel_inner_join(left, right, cond)
 rel_inner_join <- rapi_rel_inner_join
 
