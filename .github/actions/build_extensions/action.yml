@@ -106,7 +106,7 @@ runs:
         fi
 
     - name: Test
-      if: inputs.run_tests
+      if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
