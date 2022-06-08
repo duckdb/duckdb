@@ -19,7 +19,7 @@ string LogicalGet::GetName() const {
 }
 
 TableCatalogEntry *LogicalGet::GetTable() const {
-	return TableScanFunction::GetStandardEntry(function, bind_data.get());
+	return TableScanFunction::GetTableEntry(function, bind_data.get());
 }
 
 string LogicalGet::ParamsToString() const {

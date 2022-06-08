@@ -39,7 +39,7 @@ public:
 //! The table scan function represents a sequential scan over one of DuckDB's base tables.
 struct TableScanFunction {
 	static TableFunction GetFunction();
-	static TableCatalogEntry *GetStandardEntry(const TableFunction &function, const FunctionData *bind_data);
+	static TableCatalogEntry *GetTableEntry(const TableFunction &function, const FunctionData *bind_data);
 };
 
 } // namespace duckdb
