@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-struct TestAllTypesData : public FunctionOperatorData {
+struct TestAllTypesData : public GlobalTableFunctionState {
 	TestAllTypesData() : offset(0) {
 	}
 
@@ -209,8 +209,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TestAllTypesData>();
 	auto test_types = GetTestTypes();
 	// 3 rows: min, max and NULL
@@ -224,9 +223,8 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 	return move(result);
 }
 
-void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk &output) {
-	auto &data = (TestAllTypesData &)*operator_state;
+void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TestAllTypesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

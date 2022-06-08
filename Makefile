@@ -57,6 +57,9 @@ endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
 endif
+ifeq (${EXTENSION_STATIC_BUILD}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DEXTENSION_STATIC_BUILD=1
+endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDISABLE_BUILTIN_EXTENSIONS=1
 endif
@@ -245,7 +248,7 @@ format-master:
 	python3 scripts/format.py master --fix --noconfirm
 
 third_party/sqllogictest:
-	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
 
 third_party/imdb/data:
 	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data

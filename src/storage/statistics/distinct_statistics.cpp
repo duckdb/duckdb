@@ -3,6 +3,8 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include <math.h>
+
 namespace duckdb {
 
 DistinctStatistics::DistinctStatistics()
@@ -63,7 +65,7 @@ void DistinctStatistics::Update(VectorData &vdata, const LogicalType &type, idx_
 		return;
 	}
 	total_count += count;
-	count = MaxValue<idx_t>(idx_t(SAMPLE_RATE * double(count)), 1);
+	count = MinValue<idx_t>(idx_t(SAMPLE_RATE * MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count)), count);
 	sample_count += count;
 
 	uint64_t indices[STANDARD_VECTOR_SIZE];
@@ -81,12 +83,17 @@ idx_t DistinctStatistics::GetCount() const {
 	if (sample_count == 0 || total_count == 0) {
 		return 0;
 	}
-	// Estimate HLL count because we use sampling
-	double hll_count = log->Count();
-	double unique_proportion = hll_count / double(sample_count);
-	double actual_sample_rate = double(sample_count) / double(total_count);
-	double multiplier = double(1) + unique_proportion * (double(1) / actual_sample_rate - double(1));
-	return idx_t(multiplier * hll_count);
+
+	double u = MinValue<idx_t>(log->Count(), sample_count);
+	double s = sample_count;
+	double n = total_count;
+
+	// Assume this proportion of the the sampled values occurred only once
+	double u1 = pow(u / s, 2) * u;
+
+	// Estimate total uniques using Good Turing Estimation
+	idx_t estimate = u + u1 / s * (n - s);
+	return MinValue<idx_t>(estimate, total_count);
 }
 
 } // namespace duckdb

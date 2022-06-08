@@ -11,3 +11,8 @@ test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_E
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"
 test-command = "python -m pytest {project}/tests/fast"
+
+# For 32 bit we don't build extensions
+[[tool.cibuildwheel.overrides]]
+select = "*i686*"
+test-command = "python -m pytest {project}/tests/fast"

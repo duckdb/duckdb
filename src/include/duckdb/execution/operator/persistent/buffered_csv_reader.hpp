@@ -14,9 +14,9 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <sstream>
-#include <queue>
 
 namespace duckdb {
 struct CopyInfo;

@@ -1,0 +1,48 @@
+# name: test/sql/generated_columns/virtual/alter_table.test
+# description: Test generated columns added through ALTER TABLE query
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+# Cant create a column with a duplicate name
+statement error
+CREATE TABLE unit (price INTEGER, amount_sold INTEGER);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+# Function doesnt exist
+statement error
+ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(non_existant_function() * price) VIRTUAL;
+
+# Adding a generated column after table creation is not supported yet
+statement error
+ALTER TABLE unit ADD COLUMN profit_total BOOLEAN GENERATED ALWAYS AS(price) VIRTUAL;
+
+# Expression contains a subquery
+statement error
+ALTER TABLE unit ADD COLUMN total_profit BOOLEAN GENERATED ALWAYS AS((SELECT 1)) VIRTUAL;
+
+statement error
+ALTER TABLE unit ADD COLUMN total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL;
+
+# Cant add to a generated column
+statement error
+INSERT INTO unit (total_profit) VALUES (1)
+
+# Only 2 real columns exist in the table
+statement error
+INSERT INTO unit VALUES (1,1,1)
+
+statement ok
+INSERT INTO unit VALUES (0,1)
+
+query II
+SELECT * FROM unit
+----
+5	4
+0	1

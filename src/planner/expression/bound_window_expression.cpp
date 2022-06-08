@@ -40,6 +40,11 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
 			return false;
 		}
 	}
+	// check if the filter expressions are equivalent
+	if (!Expression::Equals(filter_expr.get(), other->filter_expr.get())) {
+		return false;
+	}
+
 	// check if the framing expressions are equivalent
 	if (!Expression::Equals(start_expr.get(), other->start_expr.get()) ||
 	    !Expression::Equals(end_expr.get(), other->end_expr.get()) ||
@@ -103,6 +108,8 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	for (auto &o : orders) {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
+
+	new_window->filter_expr = filter_expr ? filter_expr->Copy() : nullptr;
 
 	new_window->start = start;
 	new_window->end = end;

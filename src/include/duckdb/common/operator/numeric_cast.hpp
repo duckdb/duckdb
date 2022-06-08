@@ -11,6 +11,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/value.hpp"
+#include <cmath>
 
 namespace duckdb {
 
@@ -69,8 +70,19 @@ bool TryCastWithOverflowCheckFloat(SRC value, T &result, SRC min, SRC max) {
 	if (!(value >= min && value < max)) {
 		return false;
 	}
-	result = T(value);
+	// PG FLOAT => INT casts use statistical rounding.
+	result = std::nearbyint(value);
 	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, int8_t &result) {
+	return TryCastWithOverflowCheckFloat<float, int8_t>(value, result, -128.0f, 128.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, int16_t &result) {
+	return TryCastWithOverflowCheckFloat<float, int16_t>(value, result, -32768.0f, 32768.0f);
 }
 
 template <>
@@ -82,6 +94,21 @@ template <>
 bool TryCastWithOverflowCheck(float value, int64_t &result) {
 	return TryCastWithOverflowCheckFloat<float, int64_t>(value, result, -9223372036854775808.0f,
 	                                                     9223372036854775808.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, int8_t &result) {
+	return TryCastWithOverflowCheckFloat<double, int8_t>(value, result, -128.0, 128.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, int16_t &result) {
+	return TryCastWithOverflowCheckFloat<double, int16_t>(value, result, -32768.0, 32768.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, int32_t &result) {
+	return TryCastWithOverflowCheckFloat<double, int32_t>(value, result, -2147483648.0, 2147483648.0);
 }
 
 template <>
@@ -309,12 +336,12 @@ bool TryCastWithOverflowCheck(uint64_t value, hugeint_t &result) {
 
 template <>
 bool TryCastWithOverflowCheck(float value, hugeint_t &result) {
-	return Hugeint::TryConvert(value, result);
+	return Hugeint::TryConvert(std::nearbyintf(value), result);
 }
 
 template <>
 bool TryCastWithOverflowCheck(double value, hugeint_t &result) {
-	return Hugeint::TryConvert(value, result);
+	return Hugeint::TryConvert(std::nearbyint(value), result);
 }
 
 template <>

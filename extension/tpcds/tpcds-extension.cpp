@@ -48,9 +48,8 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	return move(result);
 }
 
-static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                           DataChunk &output) {
-	auto &data = (DSDGenFunctionData &)*bind_data;
+static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DSDGenFunctionData &)*data_p.bind_data;
 	if (data.finished) {
 		return;
 	}
@@ -60,14 +59,13 @@ static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data
 	data.finished = true;
 }
 
-struct TPCDSData : public FunctionOperatorData {
+struct TPCDSData : public GlobalTableFunctionState {
 	TPCDSData() : offset(0) {
 	}
 	idx_t offset;
 };
 
-unique_ptr<FunctionOperatorData> TPCDSInit(ClientContext &context, const FunctionData *bind_data,
-                                           const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TPCDSData>();
 	return move(result);
 }
@@ -83,9 +81,8 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunc
 	return nullptr;
 }
 
-static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
-                               FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (TPCDSData &)*operator_state;
+static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TPCDSData &)*data_p.global_state;
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	if (data.offset >= tpcds_queries) {
 		// finished returning values
@@ -118,9 +115,8 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, Tab
 	return nullptr;
 }
 
-static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
-                                     FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (TPCDSData &)*operator_state;
+static void TPCDSQueryAnswerFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TPCDSData &)*data_p.global_state;
 	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	vector<double> scale_factors {1, 10};
 	idx_t total_answers = tpcds_queries * scale_factors.size();

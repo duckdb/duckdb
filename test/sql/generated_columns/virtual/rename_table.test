@@ -1,0 +1,24 @@
+# name: test/sql/generated_columns/virtual/rename_table.test
+# description: Test generated columns after renaming a table
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	total_profit AS (price * amount_sold)	
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4)
+
+statement ok
+ALTER TABLE unit RENAME TO not_unit;
+
+query III
+SELECT * FROM not_unit;
+----
+5	4	20
