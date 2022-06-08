@@ -21,6 +21,7 @@ jobs:
  python-debug-mac:
     name: Python Address Sanitizer (Linux)
     runs-on: ubuntu-latest
+    container: ubuntu:16.04
     env:
       GEN: ninja
       STATIC_OPENSSL: 1
