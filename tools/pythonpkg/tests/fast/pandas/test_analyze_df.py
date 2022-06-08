@@ -2,20 +2,27 @@ import pandas as pd
 import duckdb
 import datetime
 import numpy as np
+import pytest
 
 def check_analyze_result(df, output_type):
     assert df[0].dtype == np.dtype('O')
     duckdb.analyze_df(df)
     assert df[0].dtype == np.dtype(output_type)
+    duckdb.default_connection.execute("select * from df").fetchall()
 
 class TestAnalyzeDF(object):
 
+    def test_empty_dataframe(self, duckdb_cursor):
+        df = pd.DataFrame({'A' : []})
+        with pytest.raises(Exception, match="Empty dataframe can not be analyzed"):
+            duckdb.analyze_df(df)
+
     def test_analyze_date(self, duckdb_cursor):
-        df = pd.DataFrame([[datetime.date(1992, 7, 30), datetime.date(1992, 7, 31)]])
+        df = pd.DataFrame({0: [datetime.date(1992, 7, 30), datetime.date(1992, 7, 31)]})
         check_analyze_result(df,'<M8[ns]')
 
     def test_analyze_object(self, duckdb_cursor):
-        df = pd.DataFrame([[datetime.date(1992, 7, 30), "bla"]])
+        df = pd.DataFrame({0: [datetime.date(1992, 7, 30), "bla"]})
         check_analyze_result(df,'O')
         
     # if (col_type == "bool") {

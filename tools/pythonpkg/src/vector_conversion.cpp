@@ -471,43 +471,64 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 // raw data (void)
 //test
 
-void VectorConversion::Analyze(py::handle df) {
+static bool MeetsConversionRequirements(const string& type, pybind11::object& column, idx_t rows) {
+	if (type == "object") {
+		// Can't change
+		return false;
+	}
+	for (size_t i = 1; i < rows; i++) {
+		string other = py::str(column.attr("__getitem__")(i).get_type().attr("__name__"));
+		if (type != other) {
+			// Not all the same type
+			return false;
+		}
+	}
+	return true;
+}
+
+static void ConvertSingleColumn(py::handle df, idx_t col_idx) {
 	auto df_columns = py::list(df.attr("columns"));
 	auto df_types = py::list(df.attr("dtypes"));
 	auto get_fun = df.attr("__getitem__");
 	auto set_fun = df.attr("__setitem__");
+
+	// We gotta check if all the types of the column are the same, if yes we can change it
+	auto column = get_fun(df_columns[col_idx]);
+
+	idx_t rows = py::len(column);
+	D_ASSERT(rows > 0);
+	string column_type = py::str(column.attr("__getitem__")(0).get_type().attr("__name__"));
+	if (!MeetsConversionRequirements(column_type, column, rows)) {
+		return;
+	}
+
+	if (column_type == "date") {
+		set_fun(df_columns[col_idx], column.attr("astype")('M', py::arg("copy") = false));
+	} else {
+		throw std::runtime_error(column_type);
+	}
+}
+
+void VectorConversion::Analyze(py::handle df) {
+	auto df_columns = py::list(df.attr("columns"));
+	auto df_types = py::list(df.attr("dtypes"));
+	auto empty = py::bool_(df.attr("empty"));
+	auto get_fun = df.attr("__getitem__");
+	auto set_fun = df.attr("__setitem__");
+
+	if (empty) {
+		throw std::runtime_error("Empty dataframe can not be analyzed");
+	}
 
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
 		throw std::runtime_error("Need a DataFrame with at least one column");
 	}
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		auto col_type = string(py::str(df_types[col_idx]));
-		if (col_type == "object") {
-			// We gotta check if all the types of the column are the same, if yes we can change it
-			auto column = get_fun(df_columns[col_idx]);
-			auto numpy_col = py::array(column.attr("to_numpy")());
-
-			idx_t row_count = py::len(column);
-			D_ASSERT(row_count > 0);
-			string object_type = py::str(column.attr("__getitem__")(0).get_type().attr("__name__"));
-			if (object_type == "object") {
-				// Can't change
-				continue;
-			}
-			for (size_t i = 1; i < row_count; i++) {
-				string next_object_type = py::str(column.attr("__getitem__")(i).get_type().attr("__name__"));
-				if (object_type != next_object_type) {
-					// Can't change
-					continue;
-				}
-			}
-			// Ha, maybe we can baptize - wolololo -  this column
-			if (object_type == "date") {
-				set_fun(df_columns[col_idx], column.attr("astype")('M', py::arg("copy") = false));
-			} else {
-				throw std::runtime_error(object_type);
-			}
+		if (col_type != "object") {
+			continue;
 		}
+		ConvertSingleColumn(df, col_idx);
 	}
 }
 } // namespace duckdb
