@@ -77,7 +77,7 @@ StandardEntry *Binding::GetStandardEntry() {
 
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
                            StandardEntry &entry)
-    : Binding(alias, move(types_p), move(names_p), index), entry(entry) {
+    : Binding(BindingType::ENTRY, alias, move(types_p), move(names_p), index), entry(entry) {
 }
 
 StandardEntry *EntryBinding::GetStandardEntry() {
@@ -106,14 +106,17 @@ static void BakeTableName(ParsedExpression &expr, const string &table_name) {
 }
 
 unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &column_name) {
-	auto table_catalog_entry = GetTableEntry();
-	D_ASSERT(table_catalog_entry); // Should only be called on a TableBinding
+	auto catalog_entry = GetStandardEntry();
+	D_ASSERT(catalog_entry); // Should only be called on a TableBinding
+
+	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
+	auto table_entry = (TableCatalogEntry *)catalog_entry;
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_catalog_entry->columns[column_index].Generated());
+	D_ASSERT(table_entry->columns[column_index].Generated());
 	// Get a copy of the generated column
-	auto expression = table_catalog_entry->columns[column_index].GeneratedExpression().Copy();
+	auto expression = table_entry->columns[column_index].GeneratedExpression().Copy();
 	BakeTableName(*expression, alias);
 	return (expression);
 }
@@ -127,10 +130,13 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		return BindResult(ColumnNotFoundError(column_name));
 	}
 #ifdef DEBUG
-	auto entry = GetTableEntry();
+	auto entry = GetStandardEntry();
+	D_ASSERT(entry);
+	D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
+	auto table_entry = (TableCatalogEntry *)entry;
 	//! Either there is no table, or the columns category has to be standard
 	if (column_index != COLUMN_IDENTIFIER_ROW_ID) {
-		D_ASSERT(!entry || entry->columns[column_index].Category() == TableColumnType::STANDARD);
+		D_ASSERT(!entry || table_entry->columns[column_index].Category() == TableColumnType::STANDARD);
 	}
 #endif /* DEBUG */
 	// fetch the type of the column

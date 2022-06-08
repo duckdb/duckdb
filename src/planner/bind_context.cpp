@@ -14,6 +14,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 
 #include <algorithm>
 
@@ -181,13 +182,15 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 		return false;
 	}
 	auto table_binding = (TableBinding *)binding;
-	auto table_entry = table_binding->GetTableEntry();
-	if (!table_entry) {
+	auto catalog_entry = table_binding->GetStandardEntry();
+	if (!catalog_entry) {
 		return false;
 	}
 	if (index == COLUMN_IDENTIFIER_ROW_ID) {
 		return false;
 	}
+	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
+	auto table_entry = (TableCatalogEntry *)catalog_entry;
 	D_ASSERT(table_entry->columns.size() >= index);
 	return table_entry->columns[index].Generated();
 }
