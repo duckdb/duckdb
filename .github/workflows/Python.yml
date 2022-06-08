@@ -325,7 +325,7 @@ jobs:
           python-version: '3.7'
 
       - name: Install
-        run: pip install numpy pytest pandas mypy psutil
+        run: pip install numpy pytest pandas mypy psutil google-cloud-storage
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
