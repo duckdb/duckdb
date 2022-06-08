@@ -194,6 +194,10 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// anything can be cast to ANY type for no cost
 		return 0;
 	}
+	if (to.id() == LogicalTypeId::LAMBDA) {
+		// anything can be cast to LAMBDA type for no cost (LAMBDA can be ANY)
+		return 0;
+	}
 	if (from.id() == LogicalTypeId::SQLNULL) {
 		// NULL expression can be cast to anything
 		return TargetTypeCost(to);

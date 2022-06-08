@@ -29,16 +29,11 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
 
-		// scalar function with a lambda function
-		if (function.function_name == "list_transform" || function.function_name == "array_transform" ||
-		    function.function_name == "list_apply" || function.function_name == "array_apply") {
-			return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
-		} else if (function.function_name == "list_filter" || function.function_name == "array_filter") {
-			return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 1);
-		} else if (function.function_name == "list_reduce" || function.function_name == "array_reduce") {
-			// FIXME: not yet implemented
-			// return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth, 2);
-			throw BinderException(function.function_name + " is not yet implemented!");
+		// check for lambda parameters
+		for (auto &child : function.children) {
+			if (child->expression_class == ExpressionClass::LAMBDA) {
+				return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
+			}
 		}
 
 		// other scalar function
@@ -78,6 +73,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		D_ASSERT(child.expr);
 		children.push_back(move(child.expr));
 	}
+
+	// TODO: move iterate children (renamed) here, have function in bind_lambda.cpp
+
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
@@ -87,7 +85,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 }
 
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry *func,
-                                                idx_t depth, idx_t lambda_params_count) {
+                                                idx_t depth) {
 
 	// bind the children of the function expression
 	string error;
@@ -101,7 +99,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the list parameter
 	BindChild(function.children[0], depth, error);
-	D_ASSERT(error.empty());
+	if (!error.empty()) {
+		return BindResult(error);
+	}
 
 	// get the logical type of the children of the list
 	auto &list_child = (BoundExpression &)*function.children[0];
@@ -118,7 +118,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the lambda parameter
 	auto &lambda_expr = (LambdaExpression &)*function.children[1];
-	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, lambda_params_count, list_child_type);
+	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
 
 	if (bind_lambda_result.HasError()) {
 		error = bind_lambda_result.error;

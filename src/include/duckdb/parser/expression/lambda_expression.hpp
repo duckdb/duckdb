@@ -19,7 +19,10 @@ namespace duckdb {
 //! Lambda expressions are written in the form of "params -> expr", e.g. "x -> x + 1"
 class LambdaExpression : public ParsedExpression {
 public:
-	LambdaExpression(vector<unique_ptr<ParsedExpression>> params, unique_ptr<ParsedExpression> expr);
+	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
+
+	// we need the context to determine if this is a list of column references or an expression (for JSON)
+	unique_ptr<ParsedExpression> lhs;
 
 	vector<unique_ptr<ParsedExpression>> params;
 	unique_ptr<ParsedExpression> expr;

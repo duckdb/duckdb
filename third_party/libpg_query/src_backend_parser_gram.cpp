@@ -21734,7 +21734,7 @@ yyreduce:
 #line 1940 "third_party/libpg_query/grammar/statements/select.y"
     {
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
-				n->lhs = list_make1((yyvsp[(1) - (3)].node));
+				n->lhs = (yyvsp[(1) - (3)].node);
 				n->rhs = (yyvsp[(3) - (3)].node);
 				n->location = (yylsp[(2) - (3)]);
 				(yyval.node) = (PGNode *) n;

@@ -5,33 +5,40 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+CREATE TABLE incorrect_test (i integer);
+
 foreach func_name list_transform list_filter
 
-# Error: Binder Error: Invalid lambda expression!
+# invalid lambda expression
 statement error
 SELECT ${func_name}(NULL, NULL)
 
-#Error: Binder Error: Invalid lambda expression!
+# no reference for column x found
 statement error
 SELECT ${func_name}(NULL, x)
 
-# Error: Binder Error: Referenced column "y" not found in FROM clause!
+# invalid lambda expression
+statement error
+SELECT ${func_name}(NULL, i) FROM incorrect_test
+
+# no reference for column y found
 statement error
 SELECT ${func_name}(NULL, x -> y)
 
-# Error: Binder Error: Invalid number of arguments, expected two (list, lambda expression)!
+# no matching function
 statement error
 SELECT ${func_name}([1])
 
-# Error: Binder Error: Invalid lambda expression!
+# invalid lambda expression
 statement error
 SELECT ${func_name}([1], NULL)
 
-# Error: Binder Error:  Invalid LIST argument to list_transform/list_filter!
+# no matching function
 statement error
 SELECT ${func_name}(1, x -> x + 1)
 
-# Error: Binder Error: No function matches the given name and argument types '+(INTEGER[], INTEGER)'.
+# no matching function
 statement error
 SELECT ${func_name}([[1]], x -> x + 1)
 
@@ -74,3 +81,15 @@ CREATE TABLE l_filter_test (l integer[])
 
 statement error
 SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
+
+statement error
+SELECT list_transform([1, 2], (x, y) -> x + y)
+
+statement error
+SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
+
+statement error
+SELECT list_filter([1, 2], (x, y) -> x >= y)
+
+statement error
+SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)

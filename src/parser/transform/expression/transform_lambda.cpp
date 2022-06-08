@@ -9,8 +9,7 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 	D_ASSERT(node->lhs);
 	D_ASSERT(node->rhs);
 
-	vector<unique_ptr<ParsedExpression>> lhs;
-	TransformExpressionList(*node->lhs, lhs);
+	auto lhs = TransformExpression(node->lhs);
 
 	auto rhs = TransformExpression(node->rhs);
 	return make_unique<LambdaExpression>(move(lhs), move(rhs));

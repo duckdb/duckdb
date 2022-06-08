@@ -49,7 +49,7 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
                                    vector<idx_t> &lists_len, idx_t &curr_original_list_len, DataChunk &input_chunk) {
 
 	idx_t true_count = 0;
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
+	SelectionVector true_sel(elem_cnt);
 	auto lambda_values = FlatVector::GetData<bool>(lambda_vector);
 	auto &lambda_validity = FlatVector::Validity(lambda_vector);
 
@@ -192,6 +192,11 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 		lists_len.reserve(count);
 	}
 
+	DataChunk input_chunk;
+	DataChunk lambda_chunk;
+	input_chunk.InitializeEmpty(types);
+	lambda_chunk.Initialize(result_types);
+
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t elem_cnt = 0;
 	idx_t offset = 0;
@@ -200,13 +205,12 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto lists_index = lists_data.sel->get_index(row_idx);
 		const auto &list_entry = list_entries[lists_index];
 
-		if (!IS_TRANSFORM) {
-			lists_len.push_back(list_entry.length);
-		}
-
 		// set the result to NULL for this row
 		if (!lists_data.validity.RowIsValid(lists_index)) {
 			result_validity.SetInvalid(row_idx);
+			if (!IS_TRANSFORM) {
+				lists_len.push_back(0);
+			}
 			continue;
 		}
 
@@ -215,6 +219,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 			result_entries[row_idx].offset = offset;
 			result_entries[row_idx].length = list_entry.length;
 			offset += list_entry.length;
+		} else {
+			lists_len.push_back(list_entry.length);
 		}
 
 		// empty list, nothing to execute
@@ -233,11 +239,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 			// reached STANDARD_VECTOR_SIZE elements
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
 
-				DataChunk input_chunk;
-				DataChunk lambda_chunk;
-				input_chunk.InitializeEmpty(types);
-				lambda_chunk.Initialize(result_types);
-
+				lambda_chunk.Reset();
 				ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk,
 				                  child_vector, args, expr_executor);
 
@@ -265,11 +267,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	DataChunk input_chunk;
-	DataChunk lambda_chunk;
-	input_chunk.InitializeEmpty(types);
-	lambda_chunk.Initialize(result_types);
-
+	lambda_chunk.Reset();
 	ExecuteExpression(types, result_types, elem_cnt, sel, sel_vectors, input_chunk, lambda_chunk, child_vector, args,
 	                  expr_executor);
 	auto &lambda_vector = lambda_chunk.data[0];
@@ -351,6 +349,9 @@ static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Ex
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
+	// TODO: count the occurrences of columns bound to the list argument, if more than one, throw exception
+	// TODO: also throw an exception if the lambda expression is NULL
+
 	// remove the lambda function
 	auto lambda_expr = move(arguments.back());
 	arguments.pop_back();
@@ -396,8 +397,9 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 
 ScalarFunction ListTransformFun::GetFunction() {
 	// the return type is a list of ANY, because it is the return value of the rhs of the lambda expression
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::LIST(LogicalType::ANY),
-	                      ListTransformFunction, false, false, ListTransformBind, nullptr);
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
+	                      LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false, false, ListTransformBind,
+	                      nullptr);
 }
 
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
@@ -406,8 +408,9 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 
 ScalarFunction ListFilterFun::GetFunction() {
 	// the return type is a list of ANY, because it is the return value of the rhs of the lambda expression
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::LIST(LogicalType::ANY),
-	                      ListFilterFunction, false, false, ListFilterBind, nullptr);
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
+	                      LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false, false, ListFilterBind,
+	                      nullptr);
 }
 
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {

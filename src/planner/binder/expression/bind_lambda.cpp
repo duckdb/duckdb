@@ -8,20 +8,32 @@
 
 namespace duckdb {
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const idx_t lambda_params_count,
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
                                             const LogicalType &list_child_type) {
 
 	string error;
 
-	if (lambda_params_count != 0) {
+	if (is_lambda) {
 
-		if (expr.params.size() != lambda_params_count) {
-			// FIXME: there are still parsing issues with two (or more) parameters, this should be investigated when
-			// implementing the list_reduce
+		D_ASSERT(expr.lhs);
+
+		if (expr.lhs->expression_class != ExpressionClass::FUNCTION &&
+		    expr.lhs->expression_class != ExpressionClass::COLUMN_REF) {
 			throw BinderException(
-			    "Invalid number of left-hand side parameters for this lambda function (params -> expr). "
-			    "Expected " +
-			    std::to_string(lambda_params_count) + ", got " + std::to_string(expr.params.size()) + ".");
+			    "Invalid parameter list! Parameters must be comma-separated column names, e.g. x or (x, y).");
+		}
+
+		// move the lambda parameters to the params vector
+		if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
+			expr.params.push_back(move(expr.lhs));
+		} else {
+			auto &func_expr = (FunctionExpression &)*expr.lhs;
+			for (idx_t i = 0; i < func_expr.children.size(); i++) {
+				expr.params.push_back(move(func_expr.children[i]));
+			}
+		}
+		if (expr.params.empty()) {
+			throw BinderException("No parameters provided!");
 		}
 
 		// create dummy columns for the lambda parameters (lhs)
@@ -49,7 +61,6 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// base table alias
 		auto params_alias = StringUtil::Join(params_strings, ", ");
 		if (params_strings.size() > 1) {
-			// FIXME: list_reduce tests should cover this
 			params_alias = "(" + params_alias + ")";
 		}
 
@@ -80,6 +91,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		return result;
 	}
 
+	// this is for binding macros
 	D_ASSERT(expr.params.size() == 1);
 	auto lhs_expr = expr.params[0]->Copy();
 	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.expr));
