@@ -298,7 +298,7 @@ alter_table_cmd:
 				}
 			/*
 			 * ALTER TABLE <name> ALTER [COLUMN] <colname> [SET DATA] TYPE <typename>
-			 *		[ USING <expression> ]
+			 *		[ USING <expression> ] [RESTRICT|CASCADE]
 			 */
 			| ALTER opt_column ColId opt_set_data TYPE_P Typename opt_collate_clause alter_using
 				{

@@ -358,6 +358,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 template <class T>
 bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
+	column_ids.reserve(table.column_definitions.size());
 	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		column_ids.push_back(i);
 	}
@@ -445,7 +446,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	auto new_storage = move(entry->second);
 
 	// now add the new column filled with the default value to all chunks
-	auto new_column_type = new_column.type;
+	const auto &new_column_type = new_column.Type();
 	ExpressionExecutor executor;
 	DataChunk dummy_chunk;
 	if (default_value) {
