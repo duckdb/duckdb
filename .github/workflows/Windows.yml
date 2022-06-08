@@ -205,21 +205,7 @@ jobs:
  win-extensions-64:
    name: Windows Extensions (64-bit)
    runs-on: windows-latest
-   needs: win-release-64
-   env:
-     BUILD_VISUALIZER: 1
-     BUILD_ICU: 1
-     BUILD_TPCH: 1
-     BUILD_TPCDS: 1
-     BUILD_FTS: 1
-     BUILD_HTTPFS: 1
-     BUILD_JSON: 1
-     BUILD_EXCEL: 1
-     STATIC_OPENSSL: 1
-     BUILD_SUBSTRAIT_EXTENSION: 1
-     AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-     AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-     AWS_DEFAULT_REGION: us-east-1
+#   needs: win-release-64
    steps:
      - uses: actions/checkout@v3
        with:
@@ -233,21 +219,11 @@ jobs:
        run: |
          choco install openssl -y --force
 
-     - name: Build
-       run: |
-         make
-         rm build/release/src/Release/duckdb*
-
-     - name: Uninstall OpenSSL
-       run: |
-         choco uninstall openssl -y --force
-
-     - name: Deploy
-       run: |
-         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-           pip install awscli
-           ./scripts/extension-upload.sh windows_amd64
-           ./scripts/extension-upload-test.sh
-         else
-           ./scripts/extension-upload-test.sh local
-         fi
+     - uses: ./.github/actions/build_extensions
+       with:
+         deploy_as: windows_amd64
+         post_install: choco uninstall openssl -y --force
+         treat_warn_as_error: 0
+         static_link_build: 1
+         s3_id: ${{ secrets.S3_ID }}
+         s3_key: ${{ secrets.S3_KEY }}
