@@ -61,44 +61,6 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 	for (auto arg : args) {
 		children.push_back(expr_extptr_t(arg)->Copy());
 	}
-	if (name == "as.integer") {
-		return make_external<CastExpression>("duckdb_expr", LogicalType::INTEGER, move(children[0]));
-	} else if (name == "as.Date") {
-		return make_external<CastExpression>("duckdb_expr", LogicalType::DATE, move(children[0]));
-	} else if (name == "ifelse") {
-		auto res = make_external<CaseExpression>("duckdb_expr");
-		CaseCheck check;
-		check.when_expr = move(children[0]);
-		check.then_expr = move(children[1]);
-		res->case_checks.push_back(move(check));
-		res->else_expr = move(children[2]);
-		return res;
-	} else if (name == "grepl") {
-		// TODO check argument types, quite ghetto this
-		// TODO maybe we can support r-style regexes directly with RE2
-		auto like_str = StringValue::Get(((ConstantExpression *)children[0].get())->value);
-		like_str = StringUtil::Replace(like_str, ".*", "%");
-		like_str = StringUtil::Replace(like_str, "$", "");
-
-		children[0] = move(children[1]);
-		children[1] = make_unique<ConstantExpression>(like_str);
-		return make_external<FunctionExpression>("duckdb_expr", "~~", move(children));
-	}
-	auto operator_type = OperatorToExpressionType(name);
-	if (operator_type != ExpressionType::INVALID && children.size() == 2) {
-		return make_external<ComparisonExpression>("duckdb_expr", operator_type, move(children[0]), move(children[1]));
-	} else if (name == "||" || name == "|") {
-		return make_external<ConjunctionExpression>("duckdb_expr", ExpressionType::CONJUNCTION_OR, move(children[0]),
-		                                            move(children[1]));
-	} else if (name == "&&" || name == "&") {
-		return make_external<ConjunctionExpression>("duckdb_expr", ExpressionType::CONJUNCTION_AND, move(children[0]),
-		                                            move(children[1]));
-	}
-	if (name == "mean") {
-		name = "avg";
-	} else if (name == "n") {
-		name = "count_star";
-	}
 	return make_external<FunctionExpression>("duckdb_expr", name, move(children));
 }
 
