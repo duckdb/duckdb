@@ -469,6 +469,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 //'V'
 //
 // raw data (void)
+//test
 
 void VectorConversion::Analyze(py::handle df) {
 	auto df_columns = py::list(df.attr("columns"));
