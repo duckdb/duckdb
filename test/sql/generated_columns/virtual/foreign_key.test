@@ -1,0 +1,68 @@
+# name: test/sql/generated_columns/virtual/foreign_key.test
+# description: Test generated columns with the FOREIGN KEY constraint
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+#Create an ordinary table
+statement ok
+CREATE TABLE tbl1 (
+	a INTEGER UNIQUE,
+);
+
+#Generated column references a foreign key directly
+statement error
+CREATE TABLE tbl2 (
+	a INTEGER,
+	b AS (a) REFERENCES tbl1.a,
+);
+
+#Creating a foreign key constraint on a generated column
+statement error
+CREATE TABLE tbl2 (
+	a INTEGER,
+	b AS (a),
+	FOREIGN KEY (b) REFERENCES tbl1 (a)
+);
+
+# Referencing a generated column is not supported because in order to do that
+# you have to create a UNIQUE/PRIMARY KEY constraint on a generated column first - which isn't supported (yet)
+
+##Create a table
+#statement ok
+#CREATE TABLE tbl2 (
+#	price INTEGER,
+#	also_price AS (price) UNIQUE
+#);
+
+#Can not reference a generated column as foreign key
+statement error
+CREATE TABLE tbl3 (
+	a INTEGER,
+	FOREIGN KEY (a) REFERENCES tbl2 (also_price)
+);
+
+#Show that normal uses of FOREIGN_KEY constraint work mixed with generated columns
+statement ok
+CREATE TABLE a (
+	a_gen1 AS (a_reg),
+	a_gen2 AS (a_reg),
+	a_reg INTEGER,
+	PRIMARY KEY (a_reg)
+);
+
+statement ok
+CREATE TABLE b (
+	gen1 AS (price),
+	gen2 AS (price),
+	price INTEGER,
+	FOREIGN KEY (price) REFERENCES a (a_reg)
+);
+
+statement ok
+INSERT INTO a VALUES (5);
+
+# Violates primary key constraint
+statement error
+INSERT INTO a VALUES (5);

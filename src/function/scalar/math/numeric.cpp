@@ -754,12 +754,28 @@ struct IsInfiniteOperator {
 	}
 };
 
+template <>
+bool IsInfiniteOperator::Operation(date_t input) {
+	return !Value::IsFinite(input);
+}
+
+template <>
+bool IsInfiniteOperator::Operation(timestamp_t input) {
+	return !Value::IsFinite(input);
+}
+
 void IsInfiniteFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("isinf");
 	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<float, bool, IsInfiniteOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<double, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<date_t, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsInfiniteOperator>));
 	set.AddFunction(funcs);
 }
 
@@ -779,6 +795,12 @@ void IsFiniteFun::RegisterFunction(BuiltinFunctions &set) {
 	                                 ScalarFunction::UnaryFunction<float, bool, IsFiniteOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<double, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<date_t, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsFiniteOperator>));
 	set.AddFunction(funcs);
 }
 
