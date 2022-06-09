@@ -323,11 +323,11 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 		return false;
 	}
 	if (!schema_name.empty()) {
-		auto table_entry = binding->GetTableEntry();
-		if (!table_entry) {
+		auto catalog_entry = binding->GetStandardEntry();
+		if (!catalog_entry) {
 			return false;
 		}
-		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
 			return false;
 		}
 	}
