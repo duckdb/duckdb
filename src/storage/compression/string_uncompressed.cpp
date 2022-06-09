@@ -82,7 +82,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
 
 	for (idx_t i = 0; i < scan_count; i++) {
-		int16_t string_length = base_data[start + i] - previous_offset;
+		int16_t string_length = base_data[start + i] - std::abs(previous_offset);
 		result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, base_data[start + i], string_length);
 		previous_offset = base_data[start + i];
 	}
@@ -340,16 +340,12 @@ string_t UncompressedStringStorage::ReadStringWithLength(data_ptr_t target, int3
 }
 
 void UncompressedStringStorage::WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset) {
-	uint16_t length = BIG_STRING_MARKER;
-	memcpy(target, &length, sizeof(uint16_t));
-	target += sizeof(uint16_t);
 	memcpy(target, &block_id, sizeof(block_id_t));
 	target += sizeof(block_id_t);
 	memcpy(target, &offset, sizeof(int32_t));
 }
 
 void UncompressedStringStorage::ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset) {
-	target += sizeof(uint16_t);
 	memcpy(&block_id, target, sizeof(block_id_t));
 	target += sizeof(block_id_t);
 	memcpy(&offset, target, sizeof(int32_t));
