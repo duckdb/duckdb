@@ -10,37 +10,35 @@ CREATE TABLE incorrect_test (i integer);
 
 foreach func_name list_transform list_filter
 
-# invalid lambda expression
 statement error
 SELECT ${func_name}(NULL, NULL)
 
-# no reference for column x found
 statement error
 SELECT ${func_name}(NULL, x)
 
-# invalid lambda expression
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test
 
-# no reference for column y found
 statement error
 SELECT ${func_name}(NULL, x -> y)
 
-# no matching function
 statement error
 SELECT ${func_name}([1])
 
-# invalid lambda expression
 statement error
 SELECT ${func_name}([1], NULL)
 
-# no matching function
 statement error
 SELECT ${func_name}(1, x -> x + 1)
 
-# no matching function
 statement error
 SELECT ${func_name}([[1]], x -> x + 1)
+
+statement error
+SELECT ${func_name}(1, 1)
+
+statement error
+SELECT ${func_name}([True], x -> x, x -> x)
 
 endloop
 
@@ -48,11 +46,9 @@ endloop
 statement ok
 CREATE TABLE l_test (l integer[])
 
-# Error: Binder Error: Invalid parameter name 'l_test.l': must be unqualified
 statement error
 SELECT l, list_transform(l, l -> l + 1) FROM l_test
 
-# Error: Binder Error: Referenced column "zz" not found in FROM clause!
 statement error
 select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
 
@@ -60,16 +56,12 @@ select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tb
 statement error
 select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 
-# Error: Binder Error: No function matches the given name and argument types
 statement error
 select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
 
-# lhs of lambda must be an unqualified column name
-# Error: Binder Error: Parameter must be a column name.
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 
-# Error: Binder Error: Invalid parameter name 'a.x': must be unqualified
 statement error
 select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
 

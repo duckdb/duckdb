@@ -94,8 +94,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	}
 
 	// this is for binding macros
-	D_ASSERT(expr.params.size() == 1);
-	auto lhs_expr = expr.params[0]->Copy();
+	auto lhs_expr = expr.lhs->Copy();
 	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.expr));
 	return BindExpression(arrow_expr, depth);
 }
@@ -122,10 +121,6 @@ void ExpressionBinder::TransformLambdaExprChild(unique_ptr<Expression> &original
 	} else {
 		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
 		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type, arguments.size());
-
-		// TODO: these can be set by iterating the arguments vector in the specific bind
-		// bound_function.arguments.push_back(original->return_type);
-
 		arguments.push_back(move(original));
 	}
 }

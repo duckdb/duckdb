@@ -287,11 +287,20 @@ static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &
 	ListLambdaFunction<false>(args, state, result);
 }
 
+template <int64_t LAMBDA_PARAM_CNT>
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
-	// TODO: count the occurrences of columns bound to the list argument, if more than one, throw exception
-	// TODO: also throw an exception if the lambda expression is NULL
+	// this is pretty ugly, but I did not come up with a better way to ensure the correct number of
+	// lhs lambda parameters, and to ensure that the lambda expression is not NULL
+	idx_t num_params = 0;
+	if (!arguments[arguments.size() - 1]->alias.empty()) {
+		num_params = stoi(arguments[arguments.size() - 1]->alias);
+	}
+	if (num_params != LAMBDA_PARAM_CNT) {
+		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name + " expects " +
+		                      to_string(LAMBDA_PARAM_CNT) + " parameter(s).");
+	}
 
 	// remove the lambda function
 	auto lambda_expr = move(arguments.back());
@@ -317,20 +326,24 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 
 	// at least the list column and the lambda function
-	D_ASSERT(arguments.size() >= 2);
+	if (arguments.size() < 2) {
+		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
+	}
 
 	bound_function.return_type = LogicalType::LIST(arguments[arguments.size() - 1]->return_type);
-	return ListLambdaBind(context, bound_function, arguments);
+	return ListLambdaBind<1>(context, bound_function, arguments);
 }
 
 static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
 	// at least the list column and the lambda function
-	D_ASSERT(arguments.size() >= 2);
+	if (arguments.size() < 2) {
+		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
+	}
 
 	bound_function.return_type = arguments[0]->return_type;
-	return ListLambdaBind(context, bound_function, arguments);
+	return ListLambdaBind<1>(context, bound_function, arguments);
 }
 
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {

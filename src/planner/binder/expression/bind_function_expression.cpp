@@ -117,8 +117,6 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// bind the lambda parameter
 	auto &lambda_expr = (LambdaExpression &)*function.children[1];
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
-
-	// TODO
 	idx_t num_params = lambda_expr.params.size();
 
 	if (bind_lambda_result.HasError()) {
@@ -157,8 +155,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	IterateLambdaExprChildren(children, list_child_type, bound_lambda_expr);
 	children.push_back(move(bound_lambda_expr));
 
-	// TODO: somehow get the number of parameters into the specific function binding, maybe even make a const value
-	// expression out of it?
+	// the alias of the lambda expression contains the number of lambda parameters
+	// NOTE: this is super hacky
+	children[children.size() - 1]->alias = to_string(num_params);
 
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
