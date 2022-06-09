@@ -1439,7 +1439,7 @@ The error message should not be freed. It will be de-allocated when `duckdb_appe
 DUCKDB_API const char *duckdb_appender_error(duckdb_appender appender);
 """
 function duckdb_appender_error(appender)
-    return ccall((:duckdb_appender_error, libduckdb), Ptr{UInt8}, (Ptr{Cvoid},), appender)
+    return ccall((:duckdb_appender_error, libduckdb), Ptr{UInt8}, (Ptr{Cvoid},), appender[])
 end
 
 """
@@ -1455,7 +1455,7 @@ are done with the appender.
 DUCKDB_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
 """
 function duckdb_appender_flush(appender)
-    return ccall((:duckdb_appender_flush, libduckdb), Int32, (Ptr{Cvoid},), appender)
+    return ccall((:duckdb_appender_flush, libduckdb), Int32, (Ptr{Cvoid},), appender[])
 end
 
 """
@@ -1469,7 +1469,7 @@ This is generally not necessary. Call `duckdb_appender_destroy` instead.
 DUCKDB_API duckdb_state duckdb_appender_close(duckdb_appender appender);
 """
 function duckdb_appender_close(appender)
-    return ccall((:duckdb_appender_close, libduckdb), Int32, (Ptr{Cvoid},), appender)
+    return ccall((:duckdb_appender_close, libduckdb), Int32, (Ptr{Cvoid},), appender[])
 end
 
 """
@@ -1491,7 +1491,7 @@ A nop function, provided for backwards compatibility reasons. Does nothing. Only
 DUCKDB_API duckdb_state duckdb_appender_begin_row(duckdb_appender appender);
 """
 function duckdb_appender_begin_row(appender)
-    return ccall((:duckdb_appender_begin_row, libduckdb), Int32, (Ptr{Cvoid},), appender)
+    return ccall((:duckdb_appender_begin_row, libduckdb), Int32, (Ptr{Cvoid},), appender[])
 end
 
 """
@@ -1503,7 +1503,7 @@ Finish the current row of appends. After end_row is called, the next row can be 
 DUCKDB_API duckdb_state duckdb_appender_end_row(duckdb_appender appender);
 """
 function duckdb_appender_end_row(appender)
-    return ccall((:duckdb_appender_end_row, libduckdb), Int32, (Ptr{Cvoid},), appender)
+    return ccall((:duckdb_appender_end_row, libduckdb), Int32, (Ptr{Cvoid},), appender[])
 end
 
 """
@@ -1516,7 +1516,7 @@ function duckdb_append_bool(appender, value)
         (:duckdb_append_bool, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1531,7 +1531,7 @@ function duckdb_append_int8(appender, value)
         (:duckdb_append_int8, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int16),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1546,7 +1546,7 @@ function duckdb_append_int16(appender, value)
         (:duckdb_append_int16, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int16),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1561,7 +1561,7 @@ function duckdb_append_int32(appender, value)
         (:duckdb_append_int16, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1576,7 +1576,7 @@ function duckdb_append_int64(appender, value)
         (:duckdb_append_int64, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int64),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1591,7 +1591,7 @@ function duckdb_append_hugeint(appender, value)
         (:duckdb_append_hugeint, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int64),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1606,7 +1606,7 @@ function duckdb_append_uint8(appender, value)
         (:duckdb_append_uint8, libduckdb),
         Int32,
         (Ptr{Cvoid}, UInt16),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1621,7 +1621,7 @@ function duckdb_append_uint16(appender, value)
         (:duckdb_append_uint16, libduckdb),
         Int32,
         (Ptr{Cvoid}, UInt16),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1636,7 +1636,7 @@ function duckdb_append_uint32(appender, value)
         (:duckdb_append_uint32, libduckdb),
         Int32,
         (Ptr{Cvoid}, UInt32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1651,7 +1651,7 @@ function duckdb_append_uint64(appender, value)
         (:duckdb_append_uint64, libduckdb),
         Int32,
         (Ptr{Cvoid}, UInt64),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1666,7 +1666,7 @@ function duckdb_append_float(appender, value)
         (:duckdb_append_float, libduckdb),
         Int32,
         (Ptr{Cvoid}, Float32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1681,7 +1681,7 @@ function duckdb_append_double(appender, value)
         (:duckdb_append_double, libduckdb),
         Int32,
         (Ptr{Cvoid}, Float64),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1696,7 +1696,7 @@ function duckdb_append_date(appender, value)
         (:duckdb_append_date, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1711,7 +1711,7 @@ function duckdb_append_time(appender, value)
         (:duckdb_append_time, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1726,7 +1726,7 @@ function duckdb_append_timestamp(appender, value)
         (:duckdb_append_timestamp, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1741,7 +1741,7 @@ function duckdb_append_interval(appender, value)
         (:duckdb_append_interval, libduckdb),
         Int32,
         (Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1756,7 +1756,7 @@ function duckdb_append_varchar(appender, value)
         (:duckdb_append_varchar, libduckdb),
         Int32,
         (Ptr{Cvoid}, Ptr{UInt8}),
-        appender,
+        appender[],
         value,
     )
 end
@@ -1771,7 +1771,7 @@ function duckdb_append_varchar_length(appender, value, length)
         (:duckdb_append_varchar_length, libduckdb),
         Int32,
         (Ptr{Cvoid}, Ptr{UInt8}, Int32),
-        appender,
+        appender[],
         value,
         length,
     )
@@ -1787,7 +1787,7 @@ function duckdb_append_blob(appender, data, length)
         (:duckdb_append_blob, libduckdb),
         Int32,
         (Ptr{Cvoid}, Ptr{Cvoid}, Int32),
-        appender,
+        appender[],
         data,
         length,
     )
@@ -1799,7 +1799,7 @@ Append a NULL value to the appender (of any type).
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 """
 function duckdb_append_null(appender)
-    return ccall((:duckdb_append_null, libduckdb), Int32, (Ptr{Cvoid},), appender)
+    return ccall((:duckdb_append_null, libduckdb), Int32, (Ptr{Cvoid},), appender[])
 end
 
 #=
