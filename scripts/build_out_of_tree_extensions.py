@@ -10,15 +10,11 @@ import sys
 
 parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for DuckDB')
 
-
-parser.add_argument('--include', action='store',
-                    help='Include folder for DuckDB', default="../src/include")
-
-parser.add_argument('--library', action='store',
-                    help='Location of DuckDB Library', default="../build/release/src")
-
 parser.add_argument('--extensions', action='store',
                     help='CSV file with DuckDB extensions to build', default=".github/workflows/extensions.csv")
+
+parser.add_argument('--build', action='store',
+                    help='Build directory', default="build/release")
 
 parser.add_argument('--output', action='store',
                     help='Folder to store the created extensions', required=True)
@@ -62,13 +58,13 @@ for task in tasks:
     os.chdir(clonedir)
     exec('git checkout %s' % (task['commit']))
     os.chdir(basedir)
-    builddir = task['name'] + "_build"
-    exec('cmake -S %s -B %s -DDUCKDB_INCLUDE_FOLDER=%s -DDUCKDB_LIBRARY_FOLDER=%s' % (clonedir, builddir, args.include, args.library))
-    exec('cmake --build %s' % (builddir))
-
-    for path in pathlib.Path(builddir).rglob('*.duckdb_extension'):
+    exec('cmake -S . -DEXTERNAL_EXTENSION_DIRECTORY=%s -B %s ' % (clonedir, args.build))
+    exec('cmake --build %s --parallel' % (args.build))
+    outpath = pathlib.Path(args.build, 'external_extension_build')
+    for path in outpath.rglob('*.duckdb_extension'):
         res_path = os.path.join(args.output, path.name)
         shutil.copyfile(path, res_path)
         print(res_path)
+    shutil.rmtree(outpath)
 
 print("done")

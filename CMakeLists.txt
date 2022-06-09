@@ -799,3 +799,8 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
 endif()
 
 endif()
+
+# build out-of-tree extensions on demand
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
+endif()
