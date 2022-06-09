@@ -15,7 +15,6 @@
 
 namespace duckdb {
 
-class ColumnStatistics;
 class DataTable;
 struct CreateViewInfo;
 

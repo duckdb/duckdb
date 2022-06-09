@@ -10,5 +10,5 @@ if [ ! -f "../../scripts/amalgamation.py" ]; then
 	exit 1
 fi
 
-(cd ../.. && python scripts/amalgamation.py --extended --source=tools/nodejs/src/duckdb.cpp --header=tools/nodejs/src/duckdb.hpp)
-(cd ../.. && python scripts/parquet_amalgamation.py && cp src/amalgamation/parquet-amalgamation* tools/nodejs/src/)
+(cd ../.. && python3 scripts/amalgamation.py --extended --source=tools/nodejs/src/duckdb.cpp --header=tools/nodejs/src/duckdb.hpp)
+(cd ../.. && python3 scripts/parquet_amalgamation.py && cp src/amalgamation/parquet-amalgamation* tools/nodejs/src/)

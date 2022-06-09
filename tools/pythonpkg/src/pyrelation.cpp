@@ -106,8 +106,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "in join_condition. Types supported are 'inner' and 'left'",
 	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
-	    .def("limit", &DuckDBPyRelation::Limit, "Only retrieve the first n rows from this relation object",
-	         py::arg("n"))
+	    .def("limit", &DuckDBPyRelation::Limit,
+	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
+	         py::arg("offset") = 0)
 	    .def("query", &DuckDBPyRelation::Query,
 	         "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation "
 	         "object",
@@ -220,8 +221,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterDf(const py::object &df, co
 	return conn->FromDF(df)->Filter(expr);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n) {
-	return make_unique<DuckDBPyRelation>(rel->Limit(n));
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Limit(int64_t n, int64_t offset) {
+	return make_unique<DuckDBPyRelation>(rel->Limit(n, offset));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LimitDF(const py::object &df, int64_t n, DuckDBPyConnection *conn) {
@@ -247,7 +248,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	string columns;
 	for (auto &column_rel : rel->Columns()) {
-		columns += column_rel.name + ",";
+		columns += column_rel.Name() + ",";
 	}
 	columns.erase(columns.size() - 1, columns.size());
 	auto expr = GenerateExpressionList("stats", columns);
@@ -590,7 +591,7 @@ py::str DuckDBPyRelation::Type() {
 py::list DuckDBPyRelation::Columns() {
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.name);
+		res.append(col.Name());
 	}
 	return res;
 }
@@ -598,7 +599,7 @@ py::list DuckDBPyRelation::Columns() {
 py::list DuckDBPyRelation::ColumnTypes() {
 	py::list res;
 	for (auto &col : rel->Columns()) {
-		res.append(col.type.ToString());
+		res.append(col.Type().ToString());
 	}
 	return res;
 }

@@ -1,0 +1,48 @@
+# name: test/sql/generated_columns/virtual/casting.test
+# description: Test generated column behavior when casting is involved
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+# Create a table with a generated column, that contains a CAST
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	total_price AS ((price)::DATE)
+);
+
+# Insert value(s) into the column(s)
+# Because of the silently generated CHECK constraint, this insert fails
+# '(Error: Conversion Error: Unimplemented type for cast (INTEGER -> DATE))'
+statement error
+INSERT INTO tbl VALUES (5);
+
+# Test with multiple different generated columns
+statement ok
+CREATE TABLE a (
+	gen_x AS (x),
+	gen_y AS (y),
+	x TEXT,
+	y INTEGER
+);
+
+statement ok
+INSERT INTO a VALUES ('hello', 42)
+
+# TEXT -> TEXT: OK
+statement ok
+SELECT * FROM a;
+
+# Change type to BOOLEAN
+# Not supported yet
+statement error
+ALTER TABLE a ALTER COLUMN gen_x TYPE BOOLEAN;
+
+## TEXT -> BOOLEAN: KO
+#statement error
+#SELECT * FROM a;
+
+## TEXT -> BOOLEAN: KO
+#statement error
+#INSERT INTO a VALUES ('hello', 42)
