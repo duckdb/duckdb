@@ -1,7 +1,0 @@
-{
-    "extensions": [
-        "julialang.language-julia"
-        ],
-        "runArgs": ["--privileged"],
-        "dockerFile": "Dockerfile"
-}
