@@ -332,7 +332,7 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 	} else if (col_type == "string") {
 		duckdb_col_type = LogicalType::VARCHAR;
 		pandas_type = PandasType::VARCHAR;
-	} else if (col_type == "timedelta64[ns]") {
+	} else if (col_type == "timedelta64[ns]" || col_type == "timedelta64") {
 		duckdb_col_type = LogicalType::INTERVAL;
 		pandas_type = PandasType::INTERVAL;
 	} else {
@@ -526,7 +526,8 @@ static void ConvertSingleColumn(py::handle df, idx_t col_idx) {
 	} else if (column_type == "complex") {
 		set_fun(df_columns[col_idx], column.attr("astype")("D", py::arg("copy") = false));
 	} else if (column_type == "bytes") {
-		set_fun(df_columns[col_idx], column.attr("astype")("S", py::arg("copy") = false));
+		// These are essentially just fixed-size strings, so it's fine if they stay object
+		return;
 	} else if (column_type == "timedelta") {
 		set_fun(df_columns[col_idx], column.attr("astype")("m", py::arg("copy") = false));
 	} else {

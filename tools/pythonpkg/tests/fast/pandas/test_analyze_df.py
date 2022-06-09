@@ -70,9 +70,8 @@ class TestAnalyzeDF(object):
     def test_analyze_bytes(self, duckdb_cursor):
         data = [bytes('test', 'utf-8')]
         df = create_generic_dataframe(data)
-        with pytest.raises(Exception):
-            # Unsupported python type 'S4'
-            check_analyze_result(df, 'S')
+        # These can just be treated as strings
+        check_analyze_result(df, 'O')
 
     def test_analyze_clongdouble(self, duckdb_cursor):
         data = [np.clongdouble(234234234.2341234)]
