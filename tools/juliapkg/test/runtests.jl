@@ -1,6 +1,10 @@
 import DuckDB
 con = DuckDB.connect(":memory:")
 
+res = DuckDB.execute(con,"CREATE TABLE huge(id INTEGER,data HUGE);")
+res = DuckDB.execute(con,"INSERT INTO huge VALUES (1,), (2, 1761718171), (3, 171661889178);")
+res = DuckDB.toDataFrame(con,"SELECT * FROM huge")
+
 res = DuckDB.execute(con,"CREATE TABLE interval(interval INTERVAL);")
 res = DuckDB.execute(con,"""
 INSERT INTO interval VALUES 
