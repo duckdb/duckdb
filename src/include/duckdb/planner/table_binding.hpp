@@ -26,7 +26,7 @@ class TableFunctionCatalogEntry;
 class BoundTableFunction;
 class StandardEntry;
 
-enum class BindingType { BASE, TABLE, MACRO, ENTRY };
+enum class BindingType { BASE, TABLE, MACRO, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {

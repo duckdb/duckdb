@@ -77,7 +77,7 @@ StandardEntry *Binding::GetStandardEntry() {
 
 EntryBinding::EntryBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, idx_t index,
                            StandardEntry &entry)
-    : Binding(BindingType::ENTRY, alias, move(types_p), move(names_p), index), entry(entry) {
+    : Binding(BindingType::CATALOG_ENTRY, alias, move(types_p), move(names_p), index), entry(entry) {
 }
 
 StandardEntry *EntryBinding::GetStandardEntry() {
