@@ -36,7 +36,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	compressed_size = s.MaxCompressedLength(uncompressed_size);
 	auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 	s.Compress((const char *)string.GetDataUnsafe(), uncompressed_size, (char *)compressed_buf.get(), &compressed_size);
-	string_t compressed_string((const char*)compressed_buf.get(), compressed_size);
+	string_t compressed_string((const char *)compressed_buf.get(), compressed_size);
 
 	// store sizes
 	Store<uint32_t>(compressed_size, handle->node->buffer + offset);

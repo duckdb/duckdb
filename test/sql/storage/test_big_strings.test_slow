@@ -1,6 +1,6 @@
 # name: test/sql/storage/test_big_strings.test_slow
 # description: Test the overflow string mechanism for uncompressed storage, notably the GZIP-ing
-# group: [dictionary]
+# group: [storage]
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db

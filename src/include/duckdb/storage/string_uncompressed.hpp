@@ -85,7 +85,7 @@ public:
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
 				if (target_idx > 0) {
-					result_data[target_idx] = result_data[target_idx-1];
+					result_data[target_idx] = result_data[target_idx - 1];
 				} else {
 					result_data[target_idx] = 0;
 				}

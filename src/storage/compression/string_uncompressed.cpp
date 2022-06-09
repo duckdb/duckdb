@@ -83,7 +83,8 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 
 	for (idx_t i = 0; i < scan_count; i++) {
 		int16_t string_length = base_data[start + i] - std::abs(previous_offset);
-		result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, base_data[start + i], string_length);
+		result_data[result_offset + i] =
+		    FetchStringFromDict(segment, dict, result, baseptr, base_data[start + i], string_length);
 		previous_offset = base_data[start + i];
 	}
 }
@@ -125,7 +126,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 		// edge case where this is the first string in the dict
 		string_length = dict_offset;
 	} else {
-		string_length = dict_offset - base_data[row_id-1];
+		string_length = dict_offset - base_data[row_id - 1];
 	}
 	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, string_length);
 }
@@ -262,7 +263,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 }
 
 string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block,
-                                               int32_t offset) {
+                                                       int32_t offset) {
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < Storage::BLOCK_SIZE);
 
@@ -304,12 +305,14 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		}
 
 		// overflow strings on disk are gzipped, decompress here
-		auto decompressed_target_handle = buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size + sizeof(uint32_t)));
+		auto decompressed_target_handle =
+		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size + sizeof(uint32_t)));
 		auto decompressed_target_ptr = decompressed_target_handle->node->buffer;
 		Store<uint32_t>(uncompressed_size, decompressed_target_ptr);
 		decompressed_target_ptr += sizeof(uint32_t);
 		MiniZStream s;
-		s.Decompress((const char *)target_handle->node->buffer, compressed_size, (char *)decompressed_target_ptr, uncompressed_size);
+		s.Decompress((const char *)target_handle->node->buffer, compressed_size, (char *)decompressed_target_ptr,
+		             uncompressed_size);
 
 		auto final_buffer = decompressed_target_handle->node->buffer;
 		StringVector::AddHandle(result, move(decompressed_target_handle));
@@ -356,7 +359,7 @@ string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionar
 	D_ASSERT(dict_offset >= -1 * Storage::BLOCK_SIZE && dict_offset <= Storage::BLOCK_SIZE);
 	if (dict_offset < 0) {
 		string_location_t result;
-		ReadStringMarker(baseptr + dict.end - (-1*dict_offset), result.block_id, result.offset);
+		ReadStringMarker(baseptr + dict.end - (-1 * dict_offset), result.block_id, result.offset);
 		return result;
 	} else {
 		return string_location_t(INVALID_BLOCK, dict_offset);
@@ -364,7 +367,8 @@ string_location_t UncompressedStringStorage::FetchStringLocation(StringDictionar
 }
 
 string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
-                                                        Vector &result, data_ptr_t baseptr, int32_t dict_offset, uint16_t string_length) {
+                                                        Vector &result, data_ptr_t baseptr, int32_t dict_offset,
+                                                        uint16_t string_length) {
 	// fetch base data
 	D_ASSERT(dict_offset <= Storage::BLOCK_SIZE);
 	string_location_t location = FetchStringLocation(dict, baseptr, dict_offset);
@@ -372,7 +376,8 @@ string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, 
 }
 
 string_t UncompressedStringStorage::FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-                                                data_ptr_t baseptr, string_location_t location, uint16_t string_length) {
+                                                data_ptr_t baseptr, string_location_t location,
+                                                uint16_t string_length) {
 	if (location.block_id != INVALID_BLOCK) {
 		// big string marker: read from separate block
 		return ReadOverflowString(segment, result, location.block_id, location.offset);
