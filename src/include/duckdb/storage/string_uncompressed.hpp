@@ -87,7 +87,7 @@ public:
 				if (target_idx > 0) {
 					result_data[target_idx] = result_data[target_idx-1];
 				} else {
-					result_data[target_idx] = dictionary.end;
+					result_data[target_idx] = 0;
 				}
 			} else {
 				auto end = handle->node->buffer + dictionary.end;
