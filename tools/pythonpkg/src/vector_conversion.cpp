@@ -517,8 +517,18 @@ static void ConvertSingleColumn(py::handle df, idx_t col_idx) {
 		set_fun(df_columns[col_idx], column.attr("astype")("i", py::arg("copy") = false));
 	} else if (column_type == "bool") {
 		set_fun(df_columns[col_idx], column.attr("astype")("?", py::arg("copy") = false));
+	} else if (column_type == "float") {
+		set_fun(df_columns[col_idx], column.attr("astype")("f", py::arg("copy") = false));
+	} else if (column_type == "clongdouble") {
+		set_fun(df_columns[col_idx], column.attr("astype")("G", py::arg("copy") = false));
+	} else if (column_type == "longdouble") {
+		set_fun(df_columns[col_idx], column.attr("astype")("g", py::arg("copy") = false));
+	} else if (column_type == "complex") {
+		set_fun(df_columns[col_idx], column.attr("astype")("D", py::arg("copy") = false));
 	} else if (column_type == "bytes") {
-		set_fun(df_columns[col_idx], column.attr("astype")("U", py::arg("copy") = false));
+		set_fun(df_columns[col_idx], column.attr("astype")("S", py::arg("copy") = false));
+	} else if (column_type == "timedelta") {
+		set_fun(df_columns[col_idx], column.attr("astype")("m", py::arg("copy") = false));
 	} else {
 		throw std::runtime_error(column_type);
 	}

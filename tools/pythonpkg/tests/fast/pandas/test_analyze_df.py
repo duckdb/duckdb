@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 
 def check_analyze_result(df, output_type):
-    assert df[0].dtype == np.dtype('O')
+    assert df[0].dtype.char == np.dtype('O')
     duckdb.analyze_df(df)
-    assert df[0].dtype == np.dtype(output_type)
+    assert df[0].dtype.char == np.dtype(output_type).char
     duckdb.default_connection.execute("select * from df").fetchall()
 
 def create_generic_dataframe(data):
@@ -49,11 +49,49 @@ class TestAnalyzeDF(object):
         df = create_generic_dataframe(data)
         check_analyze_result(df, '?')
 
+    def test_analyze_float(self, duckdb_cursor):
+        data = [4.2, 3.1, 1.0, 5.0, 234234.01, -234234.01]
+        df = create_generic_dataframe(data)
+        check_analyze_result(df, 'f')
+
+    def test_analyze_complex(self, duckdb_cursor):
+        data = [complex(0.5, 2.5)]
+        df = create_generic_dataframe(data)
+        with pytest.raises(Exception):
+            # Unsupported python type 'complex128'
+            check_analyze_result(df, 'D')
+
     def test_analyze_byte_unsigned(self, duckdb_cursor):
         data = bytearray([5,4,3])
         df = create_generic_dataframe(data)
         # As far as python is concerned, these are ints
         check_analyze_result(df, 'i')
+
+    def test_analyze_bytes(self, duckdb_cursor):
+        data = [bytes('test', 'utf-8')]
+        df = create_generic_dataframe(data)
+        with pytest.raises(Exception):
+            # Unsupported python type 'S4'
+            check_analyze_result(df, 'S')
+
+    def test_analyze_clongdouble(self, duckdb_cursor):
+        data = [np.clongdouble(234234234.2341234)]
+        df = create_generic_dataframe(data)
+        with pytest.raises(Exception):
+            # Unsupported python type 'complex128'
+            check_analyze_result(df, 'G')
+
+    def test_analyze_longdouble(self, duckdb_cursor):
+        data = [np.longdouble(234234234.2341234)]
+        df = create_generic_dataframe(data)
+        check_analyze_result(df, 'g')
+
+    def test_analyze_timedelta(self, duckdb_cursor):
+        data = [datetime.timedelta(days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0, hours=0, weeks=0)]
+        df = create_generic_dataframe(data)
+        with pytest.raises(Exception):
+            # TypeError: Cannot cast datetime.timedelta object from metadata [W] to  according to the rule 'same_kind'
+            check_analyze_result(df, 'm')
 
     def test_analyze_object(self, duckdb_cursor):
         data = [datetime.date(1992, 7, 30), "bla"]
