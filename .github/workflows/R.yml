@@ -110,7 +110,6 @@ jobs:
       # Print logs now only if success, for the case of failure there's another identical step below.
       if: ${{ success() }}
       run: |
-        ls -R /tmp/duckdb.Rcheck
         cat /tmp/duckdb.Rcheck/00check.log
         find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
 
@@ -120,10 +119,14 @@ jobs:
         export NOT_CRAN='false'
         R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
-    - name: Print R log (2)
+    - name: Print check directory tree
       if: ${{ always() }}
       run: |
         ls -R /tmp/duckdb.Rcheck
+
+    - name: Print R log (2)
+      if: ${{ always() }}
+      run: |
         cat /tmp/duckdb.Rcheck/00check.log
         find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
 
