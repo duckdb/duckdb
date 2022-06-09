@@ -1,3 +1,6 @@
+# name: test/sql/storage/compression/rle_sorted/rle_sort_cardinality500.test
+# group: [rle_sorted]
+
 ## name: test/sql/storage/compression/rle_sorted/rle_sort_cardinality500.test
 ## description: Test if cardinalities above 500 are not included as key columns
 ## group: [rle_sorted]

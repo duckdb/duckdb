@@ -3,6 +3,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint/rle_sort_options.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -157,7 +158,7 @@ void RLESort::ScanColumnsToHLL(vector<HyperLogLog> &logs) {
 		DataChunk result;
 		result.Initialize(payload_column_types);
 		row_group.ScanCommitted(scan_state.row_group_scan_state, result,
-		                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+		                        TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED_CHECKPOINT);
 		result.Normalify();
 		// Add each key column to the HLL
 		for (idx_t i = 0; i < key_column_ids.size(); i++) {
