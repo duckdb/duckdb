@@ -17,7 +17,7 @@ MacroFunction::MacroFunction(MacroType type) : type(type) {
 }
 
 string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &name, FunctionExpression &function_expr,
-                                        vector<unique_ptr<ParsedExpression>> &positionals,
+                                        vector<unique_ptr<ParsedExpression>> *positionals,
                                         unordered_map<string, unique_ptr<ParsedExpression>> &defaults) {
 
 	// separate positional and default arguments
@@ -34,14 +34,14 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 			return "Positional parameters cannot come after parameters with a default value!";
 		} else {
 			// positional argument
-			positionals.push_back(move(arg));
+			positionals->push_back(move(arg));
 		}
 	}
 
 	// validate if the right number of arguments was supplied
 	string error;
 	auto &parameters = macro_def.parameters;
-	if (parameters.size() != positionals.size()) {
+	if (parameters.size() != positionals->size()) {
 		error = StringUtil::Format(
 		    "Macro function '%s(%s)' requires ", name,
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
@@ -50,8 +50,8 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 		error += parameters.size() == 1 ? "a single positional argument"
 		                                : StringUtil::Format("%i positional arguments", parameters.size());
 		error += ", but ";
-		error += positionals.size() == 1 ? "a single positional argument was"
-		                                 : StringUtil::Format("%i positional arguments were", positionals.size());
+		error += positionals->size() == 1 ? "a single positional argument was"
+		                                  : StringUtil::Format("%i positional arguments were", positionals->size());
 		error += " provided.";
 		return error;
 	}

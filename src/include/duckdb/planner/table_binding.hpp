@@ -25,7 +25,7 @@ class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
 
-enum class BindingType { BASE, TABLE, MACRO, LAMBDA };
+enum class BindingType { BASE, TABLE, DUMMY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
@@ -70,39 +70,24 @@ public:
 	string ColumnNotFoundError(const string &column_name) const override;
 };
 
-//! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
-//! Params/Arguments.
-struct MacroBinding : public Binding {
-	static constexpr const char *MACRO_NAME = "0_macro_parameters";
+//! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
+//! parameters.
+struct DummyBinding : public Binding {
+	static constexpr const char *DUMMY_NAME = "__duckdb__internal_dummy_binding";
 
 public:
-	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
+	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
 
 	//! Arguments
-	vector<unique_ptr<ParsedExpression>> arguments;
-	//! The name of the macro
-	string macro_name;
+	vector<unique_ptr<ParsedExpression>> *arguments;
+	//! The name of the dummy binding
+	string dummy_name;
 
 public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 
 	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
-};
-
-//! LambdaBinding is like the Binding, except the alias and index are set by default. Used for binding lambda
-//! params/arguments.
-struct LambdaBinding : public Binding {
-	static constexpr const char *LAMBDA_NAME = "__duckdb__internal_lambda_";
-
-public:
-	LambdaBinding(vector<LogicalType> types_p, vector<string> names_p, string lambda_name);
-
-	//! The name of the lambda
-	string lambda_name;
-
-public:
-	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
 };
 
 } // namespace duckdb

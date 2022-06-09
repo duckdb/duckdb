@@ -65,11 +65,11 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		}
 
 		// create a lambda binding and push it to the lambda bindings vector
-		vector<LambdaBinding> local_bindings;
+		vector<DummyBinding> local_bindings;
 		if (!lambda_bindings) {
 			lambda_bindings = &local_bindings;
 		}
-		LambdaBinding new_lambda_binding(column_types, column_names, params_alias);
+		DummyBinding new_lambda_binding(column_types, column_names, params_alias);
 		lambda_bindings->push_back(new_lambda_binding);
 
 		// bind the parameter expressions

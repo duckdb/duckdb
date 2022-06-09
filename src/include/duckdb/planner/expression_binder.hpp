@@ -27,8 +27,7 @@ class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
 
-struct MacroBinding;
-struct LambdaBinding;
+struct DummyBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
@@ -60,8 +59,8 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
-	MacroBinding *macro_binding;
-	vector<LambdaBinding> *lambda_bindings = nullptr;
+	DummyBinding *macro_binding;
+	vector<DummyBinding> *lambda_bindings = nullptr;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
