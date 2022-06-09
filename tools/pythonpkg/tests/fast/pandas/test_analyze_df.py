@@ -24,8 +24,20 @@ class TestAnalyzeDF(object):
     def test_analyze_string(self, duckdb_cursor):
         data = ['hello', 'these', 'are', 'all', 'strings', 'also bigger strings that span multiple words']
         df = pd.DataFrame({0: data})
-        max_string_size = max(data, key=len)
-        check_analyze_result(df,'S' + str(len(max_string_size)))
+        #max_string_size = max(data, key=len)
+        check_analyze_result(df,'O')
+
+    def test_analyze_int(self, duckdb_cursor):
+        data = [5, -12, -256, 255, 123]
+        df = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+        check_analyze_result(df, 'i')
+
+    def test_analyze_hugeint(self, duckdb_cursor):
+        data = [12345123451234512345]
+        with pytest.raises(Exception):
+            df = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+            # Too big to cast to int
+            check_analyze_result(df, 'i')
 
     def test_analyze_object(self, duckdb_cursor):
         df = pd.DataFrame({0: [datetime.date(1992, 7, 30), "bla"]})
