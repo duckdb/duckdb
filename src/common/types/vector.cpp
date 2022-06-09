@@ -466,8 +466,10 @@ Value Vector::GetValue(idx_t index) const {
 			return Value::ENUM(((uint16_t *)data)[index], GetType());
 		case PhysicalType::UINT32:
 			return Value::ENUM(((uint32_t *)data)[index], GetType());
+		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+			return Value::ENUM(((uint64_t *)data)[index], GetType());
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 	}
 	case LogicalTypeId::HASH:
