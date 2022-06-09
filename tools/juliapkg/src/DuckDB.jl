@@ -7,7 +7,7 @@ export DBInterface
 include("api.jl")
 include("consts.jl")
 
-const DBHandle = Ref{Ptr{Cvoid}}   # DuckDB DB connection handle
+const DBHandle = Ref{Ptr{Cvoid}}    # DuckDB DB connection handle (DB.Interface)
 
 """
     toDataFrame(connection::Ref{Ptr{Cvoid}},query::String)::DataFrame
@@ -82,14 +82,20 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
     end
     return df
 end
-"""
-    disconnect(connection)
-Closes the specified connection and de-allocates all memory allocated for that connection.
-* `connection`: The connection to close.
 
 """
-function disconnect(connection)
-    return duckdb_disconnect(connection)
+	open(path, out_database)
+
+Creates a new database or opens an existing database file stored at the the given path.
+If no path is given a new in-memory database is created instead.
+
+* `path`: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
+* returns: `database`: The result database object.
+"""
+function open(path::String)::Ref{Ptr{Cvoid}}
+    database = Ref{Ptr{Cvoid}}()
+    duckdb_open(path,database)
+    return database
 end
 
 """
@@ -101,10 +107,10 @@ Note that failing to call duckdb_close (in case of e.g. a program crash) will no
 
 """
 function close(database)
-    return duckdb_close(database)
+    duckdb_close(database)
 end
 
-connect() = connect(":memory:")
+open() = open(":memory:")
 
 """
     connect(path)
@@ -113,13 +119,22 @@ Creates a new database or opens an existing database file stored at the the give
 * returns: a connection handle
 
 """
-function connect(path::String)::Ref{Ptr{Cvoid}}
-    database = Ref{Ptr{Cvoid}}()
+function connect(database)::Ref{Ptr{Cvoid}}
     connection = Ref{Ptr{Cvoid}}()
-    duckdb_open(path, database)
     duckdb_connect(database, connection)
     return connection
 end
+
+"""
+    disconnect(connection)
+Closes the specified connection and de-allocates all memory allocated for that connection.
+* `connection`: The connection to close.
+
+"""
+function disconnect(connection)
+    duckdb_disconnect(connection)
+end
+
 
 """
     execute(connection, query)
@@ -179,7 +194,8 @@ mutable struct DB <: DBInterface.Connection
         f = String(isempty(f) ? f : expanduser(f))
 
         try
-            handle = connect(f)
+            dbhandle = open(f)
+            handle = connect(dbhandle)
 
             db = new(f, handle)
             finalizer(_close, db)

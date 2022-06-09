@@ -1,7 +1,7 @@
 name = "DuckDB"
 uuid = "d2f5444f-75bc-4fdf-ac35-56f514c445e1"
 authors = ["Kimmo Linna <kimmo.linna@gmail.com>"]
-version = "0.2.7"
+version = "0.2.8"
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
