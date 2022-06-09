@@ -129,10 +129,6 @@ jobs:
      name: MingW (64 Bit)
      runs-on: windows-latest
      needs: win-release-64
-     defaults:
-       shell: bash
-       run:
-         shell: msys2 {0}
      steps:
        - uses: actions/checkout@v3
        - uses: msys2/setup-msys2@v2
@@ -143,17 +139,17 @@ jobs:
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
-         shell: bash
+         shell: msys2 {0}
          run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
 
        - name: Build
-         shell: bash
+         shell: msys2 {0}
          run: |
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
            cmake --build . --config Release
 
        - name: Test
-         shell: bash
+         shell: msys2 {0}
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
