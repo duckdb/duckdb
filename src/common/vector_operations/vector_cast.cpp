@@ -339,6 +339,15 @@ static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::TIMESTAMP_TZ:
 		// date to timestamp
 		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCast>(source, result, count, error_message);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampNS>(source, result, count,
+		                                                                            error_message);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampSec>(source, result, count,
+		                                                                             error_message);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampMS>(source, result, count,
+		                                                                            error_message);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
@@ -425,13 +434,9 @@ static bool TimestampTzCastSwitch(Vector &source, Vector &result, idx_t count, s
 		// timestamp with time zone to varchar
 		VectorStringCast<timestamp_t, duckdb::StringCastTZ>(source, result, count);
 		break;
-	case LogicalTypeId::DATE:
-		// timestamp with time zone to date
-		UnaryExecutor::Execute<timestamp_t, date_t, duckdb::Cast>(source, result, count);
-		break;
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
-		// timestamp with time zone to time
+		// timestamp with time zone to time with time zone.
+		// TODO: set the offset to +00
 		UnaryExecutor::Execute<timestamp_t, dtime_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -606,8 +611,8 @@ static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *
 }
 
 template <class SRC_TYPE, class RES_TYPE>
-void FillEnum(Vector &source, Vector &result, idx_t count) {
-
+bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
+	bool all_converted = true;
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
@@ -635,25 +640,29 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 		auto key = EnumType::GetPos(res_enum_type, str);
 		if (key == -1) {
 			// key doesn't exist on result enum
-			result_mask.SetInvalid(i);
+			if (!error_message) {
+				result_data[i] = HandleVectorCastError::Operation<RES_TYPE>(
+				    CastExceptionText<SRC_TYPE, RES_TYPE>(source_data[src_idx]), result_mask, i, error_message,
+				    all_converted);
+			} else {
+				result_mask.SetInvalid(i);
+			}
 			continue;
 		}
 		result_data[i] = key;
 	}
+	return all_converted;
 }
 
 template <class SRC_TYPE>
-void FillEnumResultTemplate(Vector &source, Vector &result, idx_t count) {
+bool FillEnumResultTemplate(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::UINT8:
-		FillEnum<SRC_TYPE, uint8_t>(source, result, count);
-		break;
+		return FillEnum<SRC_TYPE, uint8_t>(source, result, count, error_message);
 	case PhysicalType::UINT16:
-		FillEnum<SRC_TYPE, uint16_t>(source, result, count);
-		break;
+		return FillEnum<SRC_TYPE, uint16_t>(source, result, count, error_message);
 	case PhysicalType::UINT32:
-		FillEnum<SRC_TYPE, uint32_t>(source, result, count);
-		break;
+		return FillEnum<SRC_TYPE, uint32_t>(source, result, count, error_message);
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}
@@ -669,6 +678,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
 	auto res_vec_ptr = FlatVector::GetData<string_t>(result);
 
+	// TODO remove value api from this loop
 	for (idx_t i = 0; i < count; i++) {
 		auto src_val = source.GetValue(i);
 		if (src_val.IsNull()) {
@@ -687,8 +697,14 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 		case PhysicalType::UINT32:
 			enum_idx = UIntegerValue::Get(src_val);
 			break;
+		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		{
+			res_vec_ptr[i] = (const char *)UBigIntValue::Get(src_val);
+			continue;
+		}
+
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		res_vec_ptr[i] = str_vec_ptr[enum_idx];
 	}
@@ -701,18 +717,14 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		// This means they are both ENUMs, but of different types.
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
-			FillEnumResultTemplate<uint8_t>(source, result, count);
-			break;
+			return FillEnumResultTemplate<uint8_t>(source, result, count, error_message);
 		case PhysicalType::UINT16:
-			FillEnumResultTemplate<uint16_t>(source, result, count);
-			break;
+			return FillEnumResultTemplate<uint16_t>(source, result, count, error_message);
 		case PhysicalType::UINT32:
-			FillEnumResultTemplate<uint32_t>(source, result, count);
-			break;
+			return FillEnumResultTemplate<uint32_t>(source, result, count, error_message);
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-		break;
 	}
 	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR: {

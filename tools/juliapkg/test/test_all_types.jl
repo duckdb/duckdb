@@ -1,3 +1,4 @@
+
 # test_all_types.jl
 
 
@@ -41,7 +42,7 @@
     @test isequal(df.small_enum, ["DUCK_DUCK_ENUM", "GOOSE", missing])
     @test isequal(df.medium_enum, ["enum_0", "enum_299", missing])
     @test isequal(df.large_enum, ["enum_0", "enum_69999", missing])
-    @test isequal(df.date, [Dates.Date(-5877641, 6, 23), Dates.Date(5881580, 7, 11), missing])
+    @test isequal(df.date, [Dates.Date(-5877641, 6, 25), Dates.Date(5881580, 7, 10), missing])
     @test isequal(df.time, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
     @test isequal(df.time_tz, [Dates.Time(0, 0, 0), Dates.Time(23, 59, 59, 999, 999), missing])
     @test isequal(
@@ -114,6 +115,48 @@
     @test isequal(df.uuid, [UUID(1), UUID(UInt128(340282366920938463463374607431768211455)), missing])
     @test isequal(df.int_array, [[], [42, 999, missing, missing, -42], missing])
     @test isequal(df.double_array, [[], [42, NaN, Inf, -Inf, missing, -42], missing])
+    @test isequal(
+        df.date_array,
+        [
+            [],
+            [
+                Dates.Date(1970, 1, 1),
+                Dates.Date(5881580, 7, 11),
+                Dates.Date(-5877641, 6, 24),
+                missing,
+                Dates.Date(2022, 5, 12)
+            ],
+            missing
+        ]
+    )
+    @test isequal(
+        df.timestamp_array,
+        [
+            [],
+            [
+                Dates.DateTime(1970, 1, 1),
+                Dates.DateTime(294247, 1, 10, 4, 0, 54, 775),
+                Dates.DateTime(-290308, 12, 21, 19, 59, 5, 225),
+                missing,
+                Dates.DateTime(2022, 5, 12, 16, 23, 45)
+            ],
+            missing
+        ]
+    )
+    @test isequal(
+        df.timestamptz_array,
+        [
+            [],
+            [
+                Dates.DateTime(1970, 1, 1),
+                Dates.DateTime(294247, 1, 10, 4, 0, 54, 775),
+                Dates.DateTime(-290308, 12, 21, 19, 59, 5, 225),
+                missing,
+                Dates.DateTime(2022, 05, 12, 23, 23, 45)
+            ],
+            missing
+        ]
+    )
     @test isequal(df.varchar_array, [[], ["🦆🦆🦆🦆🦆🦆", "goose", missing, ""], missing])
     @test isequal(
         df.nested_int_array,

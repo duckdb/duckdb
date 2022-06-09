@@ -1,5 +1,5 @@
 name: CIFuzz
-on: [pull_request]
+on: [push]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -7,6 +7,8 @@ concurrency:
 
 jobs:
   Fuzzing:
+    name: OSSFuzz
+    if: github.repository == 'duckdb/duckdb'
     runs-on: ubuntu-latest
     steps:
     - name: Build Fuzzers
@@ -27,3 +29,31 @@ jobs:
       with:
         name: artifacts
         path: ./out/artifacts
+
+  sqlsmith-fuzzing:
+    name: SQLSmith Fuzzing
+    if: github.repository == 'duckdb/duckdb'
+    runs-on: ubuntu-latest
+    env:
+      BUILD_SQLSMITH: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      GEN: ninja
+      FUZZEROFDUCKSKEY: ${{ secrets.FUZZEROFDUCKSKEY }}
+
+    steps:
+      - name: Dependencies
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Build
+        run: |
+            make debug
+
+      - name: Fuzz
+        run: |
+            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb

@@ -4,7 +4,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 
 #include <utility>
 
@@ -19,98 +18,77 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       table_filters(move(table_filters_p)) {
 }
 
-class TableScanGlobalState : public GlobalSourceState {
+class TableScanGlobalSourceState : public GlobalSourceState {
 public:
-	TableScanGlobalState(ClientContext &context, const PhysicalTableScan &op) {
-		if (!op.function.max_threads || !op.function.init_parallel_state) {
-			// table function cannot be parallelized
-			return;
-		}
-		// table function can be parallelized
-		// check how many threads we can have
-		max_threads = op.function.max_threads(context, op.bind_data.get());
-		if (max_threads <= 1) {
-			return;
-		}
-		if (op.function.init_parallel_state) {
-			TableFilterCollection collection(op.table_filters.get());
-			parallel_state = op.function.init_parallel_state(context, op.bind_data.get(), op.column_ids, &collection);
+	TableScanGlobalSourceState(ClientContext &context, const PhysicalTableScan &op) {
+		if (op.function.init_global) {
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
+			global_state = op.function.init_global(context, input);
+			if (global_state) {
+				max_threads = global_state->MaxThreads();
+			}
+		} else {
+			max_threads = 1;
 		}
 	}
 
 	idx_t max_threads = 0;
-	unique_ptr<ParallelState> parallel_state;
+	unique_ptr<GlobalTableFunctionState> global_state;
 
 	idx_t MaxThreads() override {
 		return max_threads;
 	}
 };
 
-class TableScanLocalState : public LocalSourceState {
+class TableScanLocalSourceState : public LocalSourceState {
 public:
-	TableScanLocalState(ExecutionContext &context, TableScanGlobalState &gstate, const PhysicalTableScan &op) {
-		TableFilterCollection filters(op.table_filters.get());
-		if (gstate.parallel_state) {
-			// parallel scan init
-			operator_data = op.function.parallel_init(context.client, op.bind_data.get(), gstate.parallel_state.get(),
-			                                          op.column_ids, &filters);
-		} else if (op.function.init) {
-			// sequential scan init
-			operator_data = op.function.init(context.client, op.bind_data.get(), op.column_ids, &filters);
+	TableScanLocalSourceState(ExecutionContext &context, TableScanGlobalSourceState &gstate,
+	                          const PhysicalTableScan &op) {
+		if (op.function.init_local) {
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.table_filters.get());
+			local_state = op.function.init_local(context.client, input, gstate.global_state.get());
 		}
 	}
 
-	unique_ptr<FunctionOperatorData> operator_data;
+	unique_ptr<LocalTableFunctionState> local_state;
 };
 
 unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
                                                                     GlobalSourceState &gstate) const {
-	return make_unique<TableScanLocalState>(context, (TableScanGlobalState &)gstate, *this);
+	return make_unique<TableScanLocalSourceState>(context, (TableScanGlobalSourceState &)gstate, *this);
 }
 
 unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<TableScanGlobalState>(context, *this);
+	return make_unique<TableScanGlobalSourceState>(context, *this);
 }
 
 void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                 LocalSourceState &lstate) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = (TableScanGlobalState &)gstate_p;
-	auto &state = (TableScanLocalState &)lstate;
+	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
+	auto &state = (TableScanLocalSourceState &)lstate;
 
-	if (!gstate.parallel_state) {
-		// sequential scan
-		function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
-		if (chunk.size() != 0) {
-			return;
-		}
-	} else {
-		// parallel scan
-		do {
-			if (function.parallel_function) {
-				function.parallel_function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk,
-				                           gstate.parallel_state.get());
-			} else {
-				function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
-			}
+	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	function.function(context.client, data, chunk);
+}
 
-			if (chunk.size() == 0) {
-				D_ASSERT(function.parallel_state_next);
-				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(),
-				                                 gstate.parallel_state.get())) {
-					continue;
-				} else {
-					break;
-				}
-			} else {
-				return;
-			}
-		} while (true);
+double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
+	if (function.table_scan_progress) {
+		return function.table_scan_progress(context, bind_data.get(), gstate.global_state.get());
 	}
-	D_ASSERT(chunk.size() == 0);
-	if (function.cleanup) {
-		function.cleanup(context.client, bind_data.get(), state.operator_data.get());
-	}
+	// if table_scan_progress is not implemented we don't support this function yet in the progress bar
+	return -1;
+}
+
+idx_t PhysicalTableScan::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                       LocalSourceState &lstate) const {
+	D_ASSERT(SupportsBatchIndex());
+	D_ASSERT(function.get_batch_index);
+	auto &gstate = (TableScanGlobalSourceState &)gstate_p;
+	auto &state = (TableScanLocalSourceState &)lstate;
+	return function.get_batch_index(context.client, bind_data.get(), state.local_state.get(),
+	                                gstate.global_state.get());
 }
 
 string PhysicalTableScan::GetName() const {

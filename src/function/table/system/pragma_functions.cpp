@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-struct PragmaFunctionsData : public FunctionOperatorData {
+struct PragmaFunctionsData : public GlobalTableFunctionState {
 	PragmaFunctionsData() : offset(0), offset_in_entry(0) {
 	}
 
@@ -41,9 +41,7 @@ static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, Tabl
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<PragmaFunctionsData>();
 
 	Catalog::GetCatalog(context).schemas->Scan(context, [&](CatalogEntry *entry) {
@@ -74,9 +72,8 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 	count++;
 }
 
-static void PragmaFunctionsFunction(ClientContext &context, const FunctionData *bind_data,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (PragmaFunctionsData &)*operator_state;
+static void PragmaFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaFunctionsData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

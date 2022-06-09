@@ -1,0 +1,67 @@
+# name: test/optimizer/join_reorder_optimizer.test
+# description: Make sure we can emit a vaild join order by DPhyp if hypergraph is connected
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t1(c1 int, c2 int, c3 int, c4 int)
+
+statement ok
+INSERT INTO t1 VALUES (1, 1, 1, 1)
+
+statement ok
+INSERT INTO t1 VALUES (1, 1, 1, 1)
+
+statement ok
+CREATE TABLE t2 AS SELECT * FROM t1
+
+statement ok
+INSERT INTO t2 VALUES (1, 1, 1, 1)
+
+statement ok
+CREATE TABLE t3 AS SELECT * FROM t2
+
+statement ok
+INSERT INTO t2 VALUES (1, 1, 1, 1)
+
+statement ok
+CREATE TABLE t4 AS SELECT * FROM t3
+
+statement ok
+INSERT INTO t2 VALUES (1, 1, 1, 1)
+
+statement ok
+PRAGMA debug_force_no_cross_product=true
+
+statement ok
+EXPLAIN 
+SELECT 
+  COUNT(*) 
+FROM 
+  t1, t2, t3, t4 
+WHERE 
+  t1.c1 = t2.c1 AND 
+  t2.c2 = t3.c2 AND 
+  t3.c3 = t4.c3
+
+statement ok
+EXPLAIN 
+SELECT 
+  COUNT(*) 
+FROM 
+  t1, t2, t3, t4 
+WHERE 
+  t1.c1 = t2.c1 AND 
+  t2.c2 = t3.c2 AND 
+  t3.c3 = t4.c3 AND 
+  t4.c4 = t1.c4
+
+statement ok
+EXPLAIN 
+SELECT 
+  COUNT(*) 
+FROM 
+  t1, t2, t3, t4 
+WHERE 
+  t1.c1 = t2.c1 AND 
+  t2.c2 = t3.c2 AND 
+  t1.c1 + t2.c2 + t3.c3= 3 * t4.c4

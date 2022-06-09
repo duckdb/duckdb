@@ -199,4 +199,19 @@ OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChu
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
+//===--------------------------------------------------------------------===//
+// Pipeline Construction
+//===--------------------------------------------------------------------===//
+void PhysicalIndexJoin::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+	// index join: we only continue into the LHS
+	// the right side is probed by the index join
+	// so we don't need to do anything in the pipeline with this child
+	state.AddPipelineOperator(current, this);
+	children[0]->BuildPipelines(executor, current, state);
+}
+
+vector<const PhysicalOperator *> PhysicalIndexJoin::GetSources() const {
+	return children[0]->GetSources();
+}
+
 } // namespace duckdb

@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-void BaseExpression::Print() {
+void BaseExpression::Print() const {
 	Printer::Print(ToString());
 }
 

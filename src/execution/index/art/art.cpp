@@ -15,7 +15,7 @@ ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>
     : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
-	is_little_endian = IsLittleEndian();
+	is_little_endian = Radix::IsLittleEndian();
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -899,7 +899,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		case VerifyExistenceType::APPEND_FK: {
 			// found node no exists in tree
 			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" no exist in referenced table";
+			    "violates foreign key constraint because key \"" + key_name + "\" does not exist in referenced table";
 			break;
 		}
 		case VerifyExistenceType::DELETE_FK: {

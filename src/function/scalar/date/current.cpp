@@ -15,8 +15,12 @@ struct CurrentBindData : public FunctionData {
 	explicit CurrentBindData(ClientContext &context) : context(context) {
 	}
 
-	unique_ptr<FunctionData> Copy() override {
+	unique_ptr<FunctionData> Copy() const override {
 		return make_unique<CurrentBindData>(context);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		return true;
 	}
 };
 

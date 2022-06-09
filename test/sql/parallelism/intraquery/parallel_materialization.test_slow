@@ -1,0 +1,81 @@
+# name: test/sql/parallelism/intraquery/parallel_materialization.test_slow
+# description: Test parallel materialization of results
+# group: [intraquery]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 4779793;
+
+statement ok
+INSERT INTO integers SELECT * FROM range(2500000)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO integers SELECT * FROM range(2500000, 5000000) tbl(i);
+
+# run these tests twice - once with transaction local data and once without
+loop i 0 2
+
+# IN-clause (semi join)
+query I
+SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+337
+948247
+1779793
+4779793
+
+# explicit join
+query I
+SELECT * FROM integers JOIN other_table USING(i)
+----
+337
+948247
+1779793
+4779793
+
+# simple WHERE clause
+query I
+SELECT * FROM integers WHERE i > 337 AND i < 340
+----
+338
+339
+
+# IN-clause
+query I
+SELECT * FROM integers WHERE i IN (337, 948247, 1779793, 4779793, 99999999999999)
+----
+337
+948247
+1779793
+4779793
+
+# more complex where clause
+query I
+SELECT * FROM integers WHERE i=337 OR (i+i>1896494 AND i+i<= 1896498) OR (i*2=9559586)
+----
+337
+948248
+948249
+4779793
+
+statement ok
+COMMIT
+
+statement ok
+BEGIN TRANSACTION
+
+endloop

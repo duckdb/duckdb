@@ -19,16 +19,18 @@ LocalTableStorage::~LocalTableStorage() {
 }
 
 void LocalTableStorage::InitializeScan(LocalScanState &state, TableFilterSet *table_filters) {
+	state.table_filters = table_filters;
+	state.chunk_index = 0;
 	if (collection.ChunkCount() == 0) {
 		// nothing to scan
+		state.max_index = 0;
+		state.last_chunk_count = 0;
 		return;
 	}
 	state.SetStorage(shared_from_this());
 
-	state.chunk_index = 0;
 	state.max_index = collection.ChunkCount() - 1;
 	state.last_chunk_count = collection.Chunks().back()->size();
-	state.table_filters = table_filters;
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
@@ -302,14 +304,26 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	case PhysicalType::INT8:
 		TemplatedUpdateLoop<int8_t>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::UINT8:
+		TemplatedUpdateLoop<uint8_t>(data, updates, row_ids, count, base_index);
+		break;
 	case PhysicalType::INT16:
 		TemplatedUpdateLoop<int16_t>(data, updates, row_ids, count, base_index);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedUpdateLoop<uint16_t>(data, updates, row_ids, count, base_index);
 		break;
 	case PhysicalType::INT32:
 		TemplatedUpdateLoop<int32_t>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::UINT32:
+		TemplatedUpdateLoop<uint32_t>(data, updates, row_ids, count, base_index);
+		break;
 	case PhysicalType::INT64:
 		TemplatedUpdateLoop<int64_t>(data, updates, row_ids, count, base_index);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedUpdateLoop<uint64_t>(data, updates, row_ids, count, base_index);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedUpdateLoop<float>(data, updates, row_ids, count, base_index);
@@ -344,6 +358,7 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 template <class T>
 bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
+	column_ids.reserve(table.column_definitions.size());
 	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		column_ids.push_back(i);
 	}
@@ -431,7 +446,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	auto new_storage = move(entry->second);
 
 	// now add the new column filled with the default value to all chunks
-	auto new_column_type = new_column.type;
+	const auto &new_column_type = new_column.Type();
 	ExpressionExecutor executor;
 	DataChunk dummy_chunk;
 	if (default_value) {

@@ -13,6 +13,7 @@
 #include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <limits>
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ class Value;
 class TypeCatalogEntry;
 class Vector;
 //! Type used to represent dates (days since 1970-01-01)
-struct date_t {
+struct date_t { // NOLINT
 	int32_t days;
 
 	date_t() = default;
@@ -46,10 +47,15 @@ struct date_t {
 	// in-place operators
 	inline date_t &operator+=(const int32_t &days) {this->days += days; return *this;};
 	inline date_t &operator-=(const int32_t &days) {this->days -= days; return *this;};
+
+	// special values
+	static inline date_t infinity() {return date_t(std::numeric_limits<int32_t>::max()); } // NOLINT
+	static inline date_t ninfinity() {return date_t(-std::numeric_limits<int32_t>::max()); } // NOLINT
+	static inline date_t epoch() {return date_t(0); } // NOLINT
 };
 
 //! Type used to represent time (microseconds)
-struct dtime_t {
+struct dtime_t { // NOLINT
     int64_t micros;
 
 	dtime_t() = default;
@@ -80,10 +86,13 @@ struct dtime_t {
 	inline dtime_t &operator+=(const int64_t &micros) {this->micros += micros; return *this;};
 	inline dtime_t &operator-=(const int64_t &micros) {this->micros -= micros; return *this;};
 	inline dtime_t &operator+=(const dtime_t &other) {this->micros += other.micros; return *this;};
+
+	// special values
+	static inline dtime_t allballs() {return dtime_t(0); } // NOLINT
 };
 
 //! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
-struct timestamp_t {
+struct timestamp_t { // NOLINT
     int64_t value;
 
 	timestamp_t() = default;
@@ -108,6 +117,11 @@ struct timestamp_t {
 	// in-place operators
 	inline timestamp_t &operator+=(const int64_t &value) {this->value += value; return *this;};
 	inline timestamp_t &operator-=(const int64_t &value) {this->value -= value; return *this;};
+
+	// special values
+	static inline timestamp_t infinity() {return timestamp_t(std::numeric_limits<int64_t>::max()); } // NOLINT
+	static inline timestamp_t ninfinity() {return timestamp_t(-std::numeric_limits<int64_t>::max()); } // NOLINT
+	static inline timestamp_t epoch() {return timestamp_t(0); } // NOLINT
 };
 
 struct interval_t {
@@ -481,6 +495,7 @@ public:
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
+	DUCKDB_API static LogicalType DEDUP_POINTER_ENUM(); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
@@ -515,7 +530,7 @@ struct EnumType{
 	DUCKDB_API static const string GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
-	DUCKDB_API static PhysicalType GetPhysicalType(idx_t size);
+	DUCKDB_API static PhysicalType GetPhysicalType(const LogicalType &type);
 };
 
 struct StructType {

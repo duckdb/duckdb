@@ -1,0 +1,290 @@
+# name: test/sql/types/timestamp/test_infinite_time.test
+# description: Extract timestamp function
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+#
+# Special date and time values from
+# https://www.postgresql.org/docs/14/datatype-datetime.html#DATATYPE-DATETIME-SPECIAL-TABLE
+#
+
+# Case insensitivity
+foreach datatype TIMESTAMP TIMESTAMPTZ DATE
+
+foreach str infinity Infinity INFINITY inFinIty
+
+# PG displays numeric infinities in Titlecase but temporal infinities in lowercase
+query II
+SELECT '${str}'::${datatype}, '-${str}'::${datatype};
+----
+infinity	-infinity
+
+endloop
+
+endloop
+
+# No trailing non-spaces!
+foreach datatype TIMESTAMP TIMESTAMPTZ DATE
+
+foreach special infinity -infinity epoch
+
+statement error
+SELECT '${special} 00:00:00'::${datatype};
+
+endloop
+
+endloop
+
+# Table insertion
+statement ok
+CREATE TABLE specials (ts TIMESTAMP, tstz TIMESTAMPTZ, dt DATE);
+
+statement ok
+INSERT INTO specials VALUES
+	('infinity'::TIMESTAMP, 'infinity'::TIMESTAMPTZ, 'infinity'::DATE),
+	('-infinity'::TIMESTAMP, '-infinity'::TIMESTAMPTZ, '-infinity'::DATE),
+	('epoch'::TIMESTAMP, 'epoch'::TIMESTAMPTZ, 'epoch'::DATE),
+;
+
+query III
+SELECT * FROM specials;
+----
+infinity	infinity	infinity
+-infinity	-infinity	-infinity
+1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
+
+#
+# Comparisons
+#
+
+# TIMESTAMP
+query IIIIIIII
+SELECT lhs.ts, rhs.ts,
+	lhs.ts < rhs.ts, lhs.ts <= rhs.ts,
+	lhs.ts = rhs.ts, lhs.ts <> rhs.ts,
+	lhs.ts >= rhs.ts, lhs.ts > rhs.ts,
+FROM specials lhs, specials rhs
+ORDER BY 1, 2
+----
+-infinity	-infinity	False	True	True	False	True	False
+-infinity	1970-01-01 00:00:00	True	True	False	True	False	False
+-infinity	infinity	True	True	False	True	False	False
+1970-01-01 00:00:00	-infinity	False	False	False	True	True	True
+1970-01-01 00:00:00	1970-01-01 00:00:00	False	True	True	False	True	False
+1970-01-01 00:00:00	infinity	True	True	False	True	False	False
+infinity	-infinity	False	False	False	True	True	True
+infinity	1970-01-01 00:00:00	False	False	False	True	True	True
+infinity	infinity	False	True	True	False	True	False
+
+# TIMESTAMPTZ
+query IIIIIIII
+SELECT lhs.tstz, rhs.tstz,
+	lhs.tstz < rhs.tstz, lhs.tstz <= rhs.tstz,
+	lhs.tstz = rhs.tstz, lhs.tstz <> rhs.tstz,
+	lhs.tstz >= rhs.tstz, lhs.tstz > rhs.tstz,
+FROM specials lhs, specials rhs
+ORDER BY 1, 2
+----
+-infinity	-infinity	False	True	True	False	True	False
+-infinity	1970-01-01 00:00:00+00	True	True	False	True	False	False
+-infinity	infinity	True	True	False	True	False	False
+1970-01-01 00:00:00+00	-infinity	False	False	False	True	True	True
+1970-01-01 00:00:00+00	1970-01-01 00:00:00+00	False	True	True	False	True	False
+1970-01-01 00:00:00+00	infinity	True	True	False	True	False	False
+infinity	-infinity	False	False	False	True	True	True
+infinity	1970-01-01 00:00:00+00	False	False	False	True	True	True
+infinity	infinity	False	True	True	False	True	False
+
+# DATE
+query IIIIIIII
+SELECT lhs.dt, rhs.dt,
+	lhs.dt < rhs.dt, lhs.dt <= rhs.dt,
+	lhs.dt = rhs.dt, lhs.dt <> rhs.dt,
+	lhs.dt >= rhs.dt, lhs.dt > rhs.dt,
+FROM specials lhs, specials rhs
+ORDER BY 1, 2
+----
+-infinity	-infinity	False	True	True	False	True	False
+-infinity	1970-01-01	True	True	False	True	False	False
+-infinity	infinity	True	True	False	True	False	False
+1970-01-01	-infinity	False	False	False	True	True	True
+1970-01-01	1970-01-01	False	True	True	False	True	False
+1970-01-01	infinity	True	True	False	True	False	False
+infinity	-infinity	False	False	False	True	True	True
+infinity	1970-01-01	False	False	False	True	True	True
+infinity	infinity	False	True	True	False	True	False
+
+#
+# Aggregates
+#
+query IIIIII
+SELECT MIN(ts), MAX(ts), MIN(tstz), MAX(tstz), MIN(dt), MAX(dt)
+FROM specials;
+----
+-infinity	infinity	-infinity	infinity	-infinity	infinity
+
+query III
+SELECT MEDIAN(ts), MEDIAN(tstz), MEDIAN(dt)
+FROM specials;
+----
+1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01 00:00:00
+
+query III
+SELECT MODE(ts), MODE(tstz), MODE(dt)
+FROM specials;
+----
+-infinity	-infinity	-infinity
+
+query III
+SELECT MODE(ts), MODE(tstz), MODE(dt)
+FROM specials;
+----
+-infinity	-infinity	-infinity
+
+query III
+SELECT APPROX_COUNT_DISTINCT(ts), APPROX_COUNT_DISTINCT(tstz), APPROX_COUNT_DISTINCT(dt)
+FROM specials;
+----
+3	3	3
+
+query III
+SELECT ARBITRARY(ts), FIRST(ts), LAST(ts)
+FROM specials;
+----
+infinity	infinity	1970-01-01 00:00:00
+
+query III
+SELECT ARBITRARY(tstz), FIRST(tstz), LAST(tstz)
+FROM specials;
+----
+infinity	infinity	1970-01-01 00:00:00+00
+
+query III
+SELECT ARBITRARY(dt), FIRST(dt), LAST(dt)
+FROM specials;
+----
+infinity	infinity	1970-01-01
+
+foreach arg ts tstz dt
+
+foreach val ts tstz dt
+
+query II
+SELECT ARG_MIN(${arg}, ${val}), ARG_MAX(${arg}, ${val}) FROM specials;
+----
+-infinity	infinity
+
+endloop
+
+endloop
+
+query III
+SELECT HISTOGRAM(ts), HISTOGRAM(tstz), HISTOGRAM(dt)
+FROM specials;
+----
+{-infinity=1, 1970-01-01 00:00:00=1, infinity=1}	{-infinity=1, 1970-01-01 00:00:00+00=1, infinity=1}	{-infinity=1, 1970-01-01=1, infinity=1}
+
+query III
+SELECT QUANTILE_DISC(ts, 0.34), QUANTILE_DISC(tstz, 0.34), QUANTILE_DISC(dt, 0.34)
+FROM specials;
+----
+-infinity	-infinity	-infinity
+
+query III
+SELECT QUANTILE_DISC(ts, [0.0, 0.5, 1.0]), QUANTILE_DISC(tstz, [0.0, 0.5, 1.0]), QUANTILE_DISC(dt, [0.0, 0.5, 1.0])
+FROM specials;
+----
+[-infinity, 1970-01-01 00:00:00, infinity]	[-infinity, 1970-01-01 00:00:00+00, infinity]	[-infinity, 1970-01-01, infinity]
+
+query III
+SELECT QUANTILE_CONT(ts, 0.25), QUANTILE_CONT(tstz, 0.25), QUANTILE_CONT(dt, 0.25)
+FROM specials;
+----
+144170-06-28 (BC) 09:59:32.612096	144170-06-28 (BC) 09:59:32.612096+00	144170-06-28 (BC) 09:59:32.612096
+
+query III
+SELECT QUANTILE_CONT(ts, [0.25, 0.5, 0.75]), QUANTILE_CONT(tstz, [0.25, 0.5, 0.75]), QUANTILE_CONT(dt, [0.25, 0.5, 0.75])
+FROM specials;
+----
+[144170-06-28 (BC) 09:59:32.612096, 1970-01-01 00:00:00, 148108-07-06 14:00:27.387904]
+[144170-06-28 (BC) 09:59:32.612096+00, 1970-01-01 00:00:00+00, 148108-07-06 14:00:27.387904+00]
+[144170-06-28 (BC) 09:59:32.612096, 1970-01-01 00:00:00, 148108-07-06 14:00:27.387904]
+
+
+query III
+SELECT MAD(ts), MAD(tstz), MAD(dt)
+FROM specials;
+----
+106751991 days 04:00:54.775807	106751991 days 04:00:54.775807	106751991 days 04:00:54.775807
+
+# Treated as physical type
+query III
+SELECT ENTROPY(ts), ENTROPY(tstz), ENTROPY(dt) FROM specials;
+----
+1.584963	1.584963	1.584963
+
+#
+# Arithmetic
+#
+
+foreach datatype TIMESTAMP DATE
+
+foreach datepart microsecond second minute hour day month year
+
+query I
+SELECT 'infinity'::${datatype} + INTERVAL (1) ${datepart};
+----
+infinity
+
+query I
+SELECT '-infinity'::${datatype} + INTERVAL (1) ${datepart};
+----
+-infinity
+
+query I
+SELECT 'infinity'::${datatype} - INTERVAL (1) ${datepart};
+----
+infinity
+
+query I
+SELECT '-infinity'::${datatype} - INTERVAL (1) ${datepart};
+----
+-infinity
+
+endloop
+
+endloop
+
+query II
+SELECT dt + 1, dt - 1 FROM specials
+----
+infinity	infinity
+-infinity	-infinity
+1970-01-02	1969-12-31
+
+query I
+SELECT dt + '12:34:56'::TIME FROM specials
+----
+infinity
+-infinity
+1970-01-01 12:34:56
+
+# Is(Infinite)
+
+query III
+SELECT isfinite(ts), isfinite(tstz), isfinite(dt)
+FROM specials;
+----
+0	0	0
+0	0	0
+1	1	1
+
+query III
+SELECT isinf(ts), isinf(tstz), isinf(dt)
+FROM specials;
+----
+1	1	1
+1	1	1
+0	0	0

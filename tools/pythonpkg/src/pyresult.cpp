@@ -2,14 +2,14 @@
 
 #include "datetime.h" // from Python
 #include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb_python/array_wrapper.hpp"
 
 namespace duckdb {
 
@@ -229,6 +229,22 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 	}
 }
 
+void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categories) {
+	for (idx_t col_idx = 0; col_idx < result.types.size(); col_idx++) {
+		auto &type = result.types[col_idx];
+		if (type.id() == LogicalTypeId::ENUM) {
+			// It's an ENUM type, in addition to converting the codes we must convert the categories
+			if (categories.find(col_idx) == categories.end()) {
+				auto &categories_list = EnumType::GetValuesInsertOrder(type);
+				auto categories_size = EnumType::GetSize(type);
+				for (idx_t i = 0; i < categories_size; i++) {
+					categories[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
+				}
+			}
+		}
+	}
+}
+
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw std::runtime_error("result closed");
@@ -246,8 +262,9 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
 		for (auto &chunk : materialized.collection.Chunks()) {
-			conversion.Append(*chunk, &categories);
+			conversion.Append(*chunk);
 		}
+		InsertCategory(materialized, categories);
 		materialized.collection.Reset();
 	} else {
 		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
@@ -268,7 +285,8 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				//! finished
 				break;
 			}
-			conversion.Append(*chunk, &categories);
+			conversion.Append(*chunk);
+			InsertCategory(*stream_result, categories);
 		}
 	}
 
@@ -308,13 +326,14 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk,
 	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
-bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
+bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
 	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names);
+	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
 }
@@ -346,7 +365,9 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
-	QueryResult::ToArrowSchema(&schema, result->types, result->names);
+
+	auto timezone_config = QueryResult::GetConfigTimezone(*result);
+	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches = FetchAllArrowChunks(chunk_size);
@@ -411,23 +432,27 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::LIST: {
 		return py::str("list");
 	}
+	case LogicalTypeId::INTERVAL: {
+		return py::str("TIMEDELTA");
+	}
+	case LogicalTypeId::USER:
+	case LogicalTypeId::ENUM: {
+		return py::str(type.ToString());
+	}
 	default:
 		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 
 py::list DuckDBPyResult::Description() {
-	py::list desc(result->names.size());
-	for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
-		py::tuple col_desc(7);
-		col_desc[0] = py::str(result->names[col_idx]);
-		col_desc[1] = GetTypeToPython(result->types[col_idx]);
-		col_desc[2] = py::none();
-		col_desc[3] = py::none();
-		col_desc[4] = py::none();
-		col_desc[5] = py::none();
-		col_desc[6] = py::none();
-		desc[col_idx] = col_desc;
+	const auto names = result->names;
+
+	py::list desc(names.size());
+
+	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+		auto py_name = py::str(names[col_idx]);
+		auto py_type = GetTypeToPython(result->types[col_idx]);
+		desc[col_idx] = py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none());
 	}
 	return desc;
 }

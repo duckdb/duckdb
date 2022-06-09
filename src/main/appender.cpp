@@ -50,7 +50,7 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
 	for (auto &column : description->columns) {
-		types.push_back(column.type);
+		types.push_back(column.Type());
 	}
 	InitializeChunk();
 }
@@ -93,44 +93,74 @@ void BaseAppender::AppendValueInternal(T input) {
 		throw InvalidInputException("Too many appends for chunk!");
 	}
 	auto &col = chunk->data[column];
-	switch (col.GetType().InternalType()) {
-	case PhysicalType::BOOL:
+	switch (col.GetType().id()) {
+	case LogicalTypeId::BOOLEAN:
 		AppendValueInternal<T, bool>(col, input);
 		break;
-	case PhysicalType::UINT8:
+	case LogicalTypeId::UTINYINT:
 		AppendValueInternal<T, uint8_t>(col, input);
 		break;
-	case PhysicalType::INT8:
+	case LogicalTypeId::TINYINT:
 		AppendValueInternal<T, int8_t>(col, input);
 		break;
-	case PhysicalType::UINT16:
+	case LogicalTypeId::USMALLINT:
 		AppendValueInternal<T, uint16_t>(col, input);
 		break;
-	case PhysicalType::INT16:
+	case LogicalTypeId::SMALLINT:
 		AppendValueInternal<T, int16_t>(col, input);
 		break;
-	case PhysicalType::UINT32:
+	case LogicalTypeId::UINTEGER:
 		AppendValueInternal<T, uint32_t>(col, input);
 		break;
-	case PhysicalType::INT32:
+	case LogicalTypeId::INTEGER:
 		AppendValueInternal<T, int32_t>(col, input);
 		break;
-	case PhysicalType::UINT64:
+	case LogicalTypeId::UBIGINT:
 		AppendValueInternal<T, uint64_t>(col, input);
 		break;
-	case PhysicalType::INT64:
+	case LogicalTypeId::BIGINT:
 		AppendValueInternal<T, int64_t>(col, input);
 		break;
-	case PhysicalType::INT128:
+	case LogicalTypeId::HUGEINT:
 		AppendValueInternal<T, hugeint_t>(col, input);
 		break;
-	case PhysicalType::FLOAT:
+	case LogicalTypeId::FLOAT:
 		AppendValueInternal<T, float>(col, input);
 		break;
-	case PhysicalType::DOUBLE:
+	case LogicalTypeId::DOUBLE:
 		AppendValueInternal<T, double>(col, input);
 		break;
-	case PhysicalType::VARCHAR:
+	case LogicalTypeId::DECIMAL:
+		switch (col.GetType().InternalType()) {
+		case PhysicalType::INT8:
+			AppendValueInternal<T, int8_t>(col, input);
+			break;
+		case PhysicalType::INT16:
+			AppendValueInternal<T, int16_t>(col, input);
+			break;
+		case PhysicalType::INT32:
+			AppendValueInternal<T, int32_t>(col, input);
+			break;
+		default:
+			AppendValueInternal<T, int64_t>(col, input);
+			break;
+		}
+		break;
+	case LogicalTypeId::DATE:
+		AppendValueInternal<T, date_t>(col, input);
+		break;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		AppendValueInternal<T, timestamp_t>(col, input);
+		break;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+		AppendValueInternal<T, dtime_t>(col, input);
+		break;
+	case LogicalTypeId::INTERVAL:
+		AppendValueInternal<T, interval_t>(col, input);
+		break;
+	case LogicalTypeId::VARCHAR:
 		FlatVector::GetData<string_t>(col)[chunk->size()] = StringCast::Operation<T>(input, col);
 		break;
 	default:
@@ -216,17 +246,17 @@ void BaseAppender::Append(double value) {
 
 template <>
 void BaseAppender::Append(date_t value) {
-	AppendValueInternal<int32_t>(value.days);
+	AppendValueInternal<date_t>(value);
 }
 
 template <>
 void BaseAppender::Append(dtime_t value) {
-	AppendValueInternal<int64_t>(value.micros);
+	AppendValueInternal<dtime_t>(value);
 }
 
 template <>
 void BaseAppender::Append(timestamp_t value) {
-	AppendValueInternal<int64_t>(value.value);
+	AppendValueInternal<timestamp_t>(value);
 }
 
 template <>

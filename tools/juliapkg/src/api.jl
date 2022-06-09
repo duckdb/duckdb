@@ -1789,6 +1789,22 @@ function duckdb_table_function_set_init(table_func, init_func)
     )
 end
 
+"""
+Sets the thread-local init function of the table function
+
+* table_function: The table function
+* init: The init function
+"""
+function duckdb_table_function_set_local_init(table_func, init_func)
+    return ccall(
+        (:duckdb_table_function_set_local_init, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Ptr{Cvoid}),
+        table_func,
+        init_func
+    )
+end
+
 
 """
 Sets the main function of the table function
@@ -2007,6 +2023,16 @@ function duckdb_init_get_column_index(info, index)
 end
 
 """
+Sets how many threads can process this table function in parallel (default: 1)
+
+* info: The info object
+* max_threads: The maximum amount of threads that can process this table function
+"""
+function duckdb_init_set_max_threads(info, max_threads)
+    return ccall((:duckdb_init_set_max_threads, libduckdb), Cvoid, (duckdb_init_info, UInt64), info, max_threads)
+end
+
+"""
 Report that an error has occurred during init.
 
 * info: The info object
@@ -2045,13 +2071,23 @@ function duckdb_function_get_bind_data(info)
 end
 
 """
-Gets the init data set by `duckdb_bind_set_init_data` during the bind.
+Gets the init data set by `duckdb_init_set_init_data` during the init.
 
 * info: The info object
 * returns: The init data object
 """
 function duckdb_function_get_init_data(info)
     return ccall((:duckdb_function_get_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
+end
+
+"""
+Gets the init data set by `duckdb_init_set_init_data` during the local_init.
+
+* info: The info object
+* returns: The init data object
+"""
+function duckdb_function_get_local_init_data(info)
+    return ccall((:duckdb_function_get_local_init_data, libduckdb), Ptr{Cvoid}, (duckdb_function_info,), info)
 end
 
 """
@@ -2513,3 +2549,18 @@ end
 # function duckdb_destroy_arrow(result)
 #     return ccall((:duckdb_destroy_arrow, libduckdb), Cvoid, (Ptr{Ptr{Cvoid}},), result)
 # end
+
+#=
+//===--------------------------------------------------------------------===//
+// Threading Interface
+//===--------------------------------------------------------------------===//
+=#
+# Execute DuckDB tasks on this thread.
+#
+# Will return after `max_tasks` have been executed, or if there are no more tasks present.
+#
+# * database: The database object to execute tasks for
+# * max_tasks: The maximum amount of tasks to execute
+function duckdb_execute_tasks(handle, max_tasks)
+    return ccall((:duckdb_execute_tasks, libduckdb), Cvoid, (duckdb_database, UInt64), handle, max_tasks)
+end

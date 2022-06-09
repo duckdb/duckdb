@@ -1,5 +1,6 @@
 #include "duckdb/common/types.hpp"
 
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -124,8 +125,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
-		auto size = EnumType::GetSize(*this);
-		return EnumType::GetPhysicalType(size);
+		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
@@ -244,9 +244,9 @@ string TypeIdToString(PhysicalType type) {
 	case PhysicalType::INTERVAL:
 		return "INTERVAL";
 	case PhysicalType::STRUCT:
-		return "STRUCT<?>";
+		return "STRUCT";
 	case PhysicalType::LIST:
-		return "LIST<?>";
+		return "LIST";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -414,11 +414,11 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::VALIDITY:
 		return "VALIDITY";
 	case LogicalTypeId::STRUCT:
-		return "STRUCT<?>";
+		return "STRUCT";
 	case LogicalTypeId::LIST:
-		return "LIST<?>";
+		return "LIST";
 	case LogicalTypeId::MAP:
-		return "MAP<?>";
+		return "MAP";
 	case LogicalTypeId::HASH:
 		return "HASH";
 	case LogicalTypeId::POINTER:
@@ -432,7 +432,7 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 	case LogicalTypeId::ENUM:
 		return "ENUM";
 	case LogicalTypeId::AGGREGATE_STATE:
-		return "AGGREGATE_STATE<?>";
+		return "AGGREGATE_STATE";
 	case LogicalTypeId::USER:
 		return "USER";
 	case LogicalTypeId::JSON:
@@ -505,81 +505,20 @@ string LogicalType::ToString() const {
 // LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalTypeId(const string &str) {
-	auto lower_str = StringUtil::Lower(str);
-	// Transform column type
-	if (lower_str == "int" || lower_str == "int4" || lower_str == "signed" || lower_str == "integer" ||
-	    lower_str == "integral" || lower_str == "int32") {
-		return LogicalTypeId::INTEGER;
-	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
-	           lower_str == "char" || lower_str == "nvarchar") {
-		return LogicalTypeId::VARCHAR;
-	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
-		return LogicalTypeId::BLOB;
-	} else if (lower_str == "int8" || lower_str == "bigint" || lower_str == "int64" || lower_str == "long" ||
-	           lower_str == "oid") {
-		return LogicalTypeId::BIGINT;
-	} else if (lower_str == "int2" || lower_str == "smallint" || lower_str == "short" || lower_str == "int16") {
-		return LogicalTypeId::SMALLINT;
-	} else if (lower_str == "timestamp" || lower_str == "datetime" || lower_str == "timestamp_us") {
-		return LogicalTypeId::TIMESTAMP;
-	} else if (lower_str == "timestamp_ms") {
-		return LogicalTypeId::TIMESTAMP_MS;
-	} else if (lower_str == "timestamp_ns") {
-		return LogicalTypeId::TIMESTAMP_NS;
-	} else if (lower_str == "timestamp_s") {
-		return LogicalTypeId::TIMESTAMP_SEC;
-	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
-		return LogicalTypeId::BOOLEAN;
-	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
-		return LogicalTypeId::DECIMAL;
-	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return LogicalTypeId::FLOAT;
-	} else if (lower_str == "double" || lower_str == "float8") {
-		return LogicalTypeId::DOUBLE;
-	} else if (lower_str == "tinyint" || lower_str == "int1") {
-		return LogicalTypeId::TINYINT;
-	} else if (lower_str == "date") {
-		return LogicalTypeId::DATE;
-	} else if (lower_str == "time") {
-		return LogicalTypeId::TIME;
-	} else if (lower_str == "interval") {
-		return LogicalTypeId::INTERVAL;
-	} else if (lower_str == "hugeint" || lower_str == "int128") {
-		return LogicalTypeId::HUGEINT;
-	} else if (lower_str == "uuid" || lower_str == "guid") {
-		return LogicalTypeId::UUID;
-	} else if (lower_str == "struct" || lower_str == "row") {
-		return LogicalTypeId::STRUCT;
-	} else if (lower_str == "map") {
-		return LogicalTypeId::MAP;
-	} else if (lower_str == "utinyint" || lower_str == "uint8") {
-		return LogicalTypeId::UTINYINT;
-	} else if (lower_str == "usmallint" || lower_str == "uint16") {
-		return LogicalTypeId::USMALLINT;
-	} else if (lower_str == "uinteger" || lower_str == "uint32") {
-		return LogicalTypeId::UINTEGER;
-	} else if (lower_str == "ubigint" || lower_str == "uint64") {
-		return LogicalTypeId::UBIGINT;
-	} else if (lower_str == "timestamptz") {
-		return LogicalTypeId::TIMESTAMP_TZ;
-	} else if (lower_str == "timetz") {
-		return LogicalTypeId::TIME_TZ;
-	} else if (lower_str == "json") {
-		return LogicalTypeId::JSON;
-	} else if (lower_str == "null") {
-		return LogicalTypeId::SQLNULL;
-	} else {
+	auto type = DefaultTypeGenerator::GetDefaultType(str);
+	if (type == LogicalTypeId::INVALID) {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
-		return LogicalTypeId::USER;
+		type = LogicalTypeId::USER;
 	}
+	return type;
 }
 
 LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].type;
+	return Parser::ParseColumnList("dummy " + str)[0].Type();
 }
 
 bool LogicalType::IsIntegral() const {
@@ -1155,14 +1094,22 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
+
+enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1, DEDUP_POINTER = 2 };
+
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size)
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)),
-	      values_insert_order(values_insert_order_p), size(size) {
+	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::VECTOR_DICT),
+	      enum_name(move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
 	}
+	explicit EnumTypeInfo()
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::DEDUP_POINTER),
+	      enum_name("dedup_pointer"), values_insert_order(Vector(LogicalType::VARCHAR)), dict_size(0) {
+	}
+	EnumDictType dict_type;
 	string enum_name;
 	Vector values_insert_order;
-	idx_t size;
+	idx_t dict_size;
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
@@ -1175,16 +1122,22 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-
+		if (dict_type != other.dict_type) {
+			return false;
+		}
+		if (dict_type == EnumDictType::DEDUP_POINTER) {
+			return true;
+		}
+		D_ASSERT(dict_type == EnumDictType::VECTOR_DICT);
 		// We must check if both enums have the same size
-		if (other.size != size) {
+		if (other.dict_size != dict_size) {
 			return false;
 		}
 		auto other_vector_ptr = FlatVector::GetData<string_t>(other.values_insert_order);
 		auto this_vector_ptr = FlatVector::GetData<string_t>(values_insert_order);
 
 		// Now we must check if all strings are the same
-		for (idx_t i = 0; i < size; i++) {
+		for (idx_t i = 0; i < dict_size; i++) {
 			if (!Equals::Operation(other_vector_ptr[i], this_vector_ptr[i])) {
 				return false;
 			}
@@ -1193,9 +1146,12 @@ public:
 	}
 
 	void Serialize(FieldWriter &writer) const override {
-		writer.WriteField<uint32_t>(size);
+		if (dict_type != EnumDictType::VECTOR_DICT) {
+			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
+		}
+		writer.WriteField<uint32_t>(dict_size);
 		writer.WriteString(enum_name);
-		((Vector &)values_insert_order).Serialize(size, writer.GetSerializer());
+		((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
 	}
 };
 
@@ -1224,10 +1180,22 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).enum_name;
 }
 
+static PhysicalType EnumVectorDictType(idx_t size) {
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		return PhysicalType::UINT8;
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		return PhysicalType::UINT16;
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		return PhysicalType::UINT32;
+	} else {
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
+}
+
 LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	auto enum_internal_type = EnumType::GetPhysicalType(size);
+	auto enum_internal_type = EnumVectorDictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
 		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data, size);
@@ -1242,6 +1210,12 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 		throw InternalException("Invalid Physical Type for ENUMs");
 	}
 	// Generate Actual Enum Type
+	return LogicalType(LogicalTypeId::ENUM, info);
+}
+
+LogicalType LogicalType::DEDUP_POINTER_ENUM() { // NOLINT
+	auto info = make_shared<EnumTypeInfo>();
+	D_ASSERT(info->dict_type == EnumDictType::DEDUP_POINTER);
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
@@ -1269,6 +1243,10 @@ int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 
 const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
+	auto &enum_info = ((EnumTypeInfo &)*info);
+	if (enum_info.dict_type == EnumDictType::DEDUP_POINTER) {
+		return (const char *)val.GetValue<uint64_t>();
+	}
 	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
 	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
@@ -1284,7 +1262,7 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).size;
+	return ((EnumTypeInfo &)*info).dict_size;
 }
 
 void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
@@ -1300,16 +1278,17 @@ TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).catalog_entry;
 }
 
-PhysicalType EnumType::GetPhysicalType(idx_t size) {
-	if (size <= NumericLimits<uint8_t>::Maximum()) {
-		return PhysicalType::UINT8;
-	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-		return PhysicalType::UINT16;
-	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-		return PhysicalType::UINT32;
-	} else {
-		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto aux_info = type.AuxInfo();
+	D_ASSERT(aux_info);
+	auto &info = (EnumTypeInfo &)*aux_info;
+
+	if (info.dict_type == EnumDictType::DEDUP_POINTER) {
+		return PhysicalType::UINT64; // for pointer enum types
 	}
+	D_ASSERT(info.dict_type == EnumDictType::VECTOR_DICT);
+	return EnumVectorDictType(info.dict_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1340,7 +1319,7 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 		return UserTypeInfo::Deserialize(reader);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
 		auto enum_size = reader.ReadRequired<uint32_t>();
-		auto enum_internal_type = EnumType::GetPhysicalType(enum_size);
+		auto enum_internal_type = EnumVectorDictType(enum_size);
 		switch (enum_internal_type) {
 		case PhysicalType::UINT8:
 			return EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);

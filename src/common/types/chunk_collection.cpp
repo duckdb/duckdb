@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -9,7 +10,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <queue>
 
 namespace duckdb {
 
@@ -420,7 +420,12 @@ void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t 
 	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
-void ChunkCollection::Print() {
+string ChunkCollection::ToString() const {
+	return chunks.empty() ? "ChunkCollection [ 0 ]"
+	                      : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
+}
+
+void ChunkCollection::Print() const {
 	Printer::Print(ToString());
 }
 
@@ -431,14 +436,39 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	if (ColumnCount() != other.ColumnCount()) {
 		return false;
 	}
-	if (types != other.types) {
-		return false;
-	}
-	// if count is equal amount of chunks should be equal
+	// first try to compare the results as-is
+	bool compare_equals = true;
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 			auto lvalue = GetValue(col_idx, row_idx);
 			auto rvalue = other.GetValue(col_idx, row_idx);
+			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
+				compare_equals = false;
+				break;
+			}
+		}
+		if (!compare_equals) {
+			break;
+		}
+	}
+	if (compare_equals) {
+		return true;
+	}
+	// if the results are not equal,
+	// sort both chunk collections to ensure the comparison is not order insensitive
+	vector<OrderType> desc(ColumnCount(), OrderType::DESCENDING);
+	vector<OrderByNullType> null_order(ColumnCount(), OrderByNullType::NULLS_FIRST);
+	auto this_order = unique_ptr<idx_t[]>(new idx_t[count]);
+	auto other_order = unique_ptr<idx_t[]>(new idx_t[count]);
+	Sort(desc, null_order, this_order.get());
+	other.Sort(desc, null_order, other_order.get());
+
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		auto lrow = this_order[row_idx];
+		auto rrow = other_order[row_idx];
+		for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+			auto lvalue = GetValue(col_idx, lrow);
+			auto rvalue = other.GetValue(col_idx, rrow);
 			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
 				return false;
 			}

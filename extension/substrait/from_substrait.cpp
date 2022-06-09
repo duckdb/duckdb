@@ -13,12 +13,15 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types.hpp"
 
 #include "substrait/plan.pb.h"
 
 namespace duckdb {
 SubstraitToDuckDB::SubstraitToDuckDB(Connection &con_p, string &serialized) : con(con_p) {
-	plan.ParseFromString(serialized);
+	if (!plan.ParseFromString(serialized)) {
+		throw std::runtime_error("Was not possible to convert binary into Substrait plan");
+	}
 	for (auto &sext : plan.extensions()) {
 		if (!sext.has_extension_function()) {
 			continue;
@@ -45,17 +48,24 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformLiteralExpr(const subst
 		dval = Value::DECIMAL(substrait_value, substrait_decimal.precision(), substrait_decimal.scale());
 		break;
 	}
-
 	case substrait::Expression_Literal::LiteralTypeCase::kBoolean: {
 		dval = Value(slit.boolean());
 		break;
 	}
+	case substrait::Expression_Literal::LiteralTypeCase::kI8:
+		dval = Value::TINYINT(slit.i8());
+		break;
 	case substrait::Expression_Literal::LiteralTypeCase::kI32:
 		dval = Value::INTEGER(slit.i32());
 		break;
 	case substrait::Expression_Literal::LiteralTypeCase::kI64:
 		dval = Value::BIGINT(slit.i64());
 		break;
+	case substrait::Expression_Literal::LiteralTypeCase::kDate: {
+		date_t date(slit.date());
+		dval = Value::DATE(date);
+		break;
+	}
 	default:
 		throw InternalException(to_string(slit.literal_type_case()));
 	}
@@ -75,48 +85,39 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	for (auto &sarg : sexpr.scalar_function().args()) {
 		children.push_back(TransformExpr(sarg));
 	}
-
 	// string compare galore
 	// TODO simplify this
 	if (function_name == "and") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(children));
-	} else if (function_name == "cast") {
-		D_ASSERT(children[1]->type == ExpressionType::VALUE_CONSTANT);
-		auto &constant_expr = (ConstantExpression &)*children[1];
-		auto expr = Parser::ParseExpressionList(StringUtil::Format("asdf::%s", constant_expr.value.ToString()));
-		auto &cast = (CastExpression &)*expr[0];
-		return make_unique<CastExpression>(cast.cast_type, move(children[0]));
 	} else if (function_name == "or") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children));
-	} else if (function_name == "lessthan") {
+	} else if (function_name == "lt") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "equal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(children[0]), move(children[1]));
-	} else if (function_name == "notequal") {
+	} else if (function_name == "not_equal") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "lessthanequal") {
+	} else if (function_name == "lte") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthanequal") {
+	} else if (function_name == "gte") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthan") {
+	} else if (function_name == "gt") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "is_not_null") {
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
-	} else if (function_name == "notdistinctfrom") {
+	} else if (function_name == "is_not_distinct_from") {
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(children[0]),
 		                                         move(children[1]));
-	} else if (function_name == "greaterthanorequalto") {
-		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, move(children[0]),
-		                                         move(children[1]));
-	} else if (function_name == "lessthanorequalto") {
-		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]),
-		                                         move(children[1]));
+	} else if (function_name == "between") {
+		// FIXME: ADD between to substrait extension
+		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
 	}
+
 	return make_unique<FunctionExpression>(function_name, move(children));
 }
 
@@ -132,6 +133,49 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformIfThenExpr(const substr
 	dcase->else_expr = TransformExpr(scase.else_());
 	return move(dcase);
 }
+LogicalType SubstraitToDuckDB::SubstraitToDuckType(const ::substrait::Type &s_type) {
+
+	if (s_type.has_bool_()) {
+		return LogicalType(LogicalTypeId::BOOLEAN);
+	} else if (s_type.has_i16()) {
+		return LogicalType(LogicalTypeId::SMALLINT);
+	} else if (s_type.has_i32()) {
+		return LogicalType(LogicalTypeId::INTEGER);
+	} else if (s_type.has_decimal()) {
+		auto &s_decimal_type = s_type.decimal();
+		return LogicalType::DECIMAL(s_decimal_type.precision(), s_decimal_type.scale());
+	} else if (s_type.has_i64()) {
+		return LogicalType(LogicalTypeId::BIGINT);
+	} else if (s_type.has_date()) {
+		return LogicalType(LogicalTypeId::DATE);
+	} else if (s_type.has_varchar() || s_type.has_string()) {
+		return LogicalType(LogicalTypeId::VARCHAR);
+	} else if (s_type.has_fp64()) {
+		return LogicalType(LogicalTypeId::DOUBLE);
+	} else {
+		throw InternalException("Substrait type not yet supported");
+	}
+}
+
+unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformCastExpr(const substrait::Expression &sexpr) {
+	const auto &scast = sexpr.cast();
+	auto cast_type = SubstraitToDuckType(scast.type());
+	auto cast_child = TransformExpr(scast.input());
+	return make_unique<CastExpression>(cast_type, move(cast_child));
+}
+
+unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformInExpr(const substrait::Expression &sexpr) {
+	const auto &substrait_in = sexpr.singular_or_list();
+
+	vector<unique_ptr<ParsedExpression>> values;
+	values.emplace_back(TransformExpr(substrait_in.value()));
+
+	for (idx_t i = 0; i < (idx_t)substrait_in.options_size(); i++) {
+		values.emplace_back(TransformExpr(substrait_in.options(i)));
+	}
+
+	return make_unique<OperatorExpression>(ExpressionType::COMPARE_IN, move(values));
+}
 
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::Expression &sexpr) {
 	switch (sexpr.rex_type_case()) {
@@ -143,6 +187,11 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformExpr(const substrait::E
 		return TransformScalarFunctionExpr(sexpr);
 	case substrait::Expression::RexTypeCase::kIfThen:
 		return TransformIfThenExpr(sexpr);
+	case substrait::Expression::RexTypeCase::kCast:
+		return TransformCastExpr(sexpr);
+	case substrait::Expression::RexTypeCase::kSingularOrList:
+		return TransformInExpr(sexpr);
+	case substrait::Expression::RexTypeCase::kSubquery:
 	default:
 		throw InternalException("Unsupported expression type " + to_string(sexpr.rex_type_case()));
 	}
@@ -220,9 +269,9 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformCrossProductOp(const substrait:
 	                                         TransformOp(sub_cross.right())->Alias("right"));
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformFetchOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformFetchOp(const substrait::Rel &sop) {
 	auto &slimit = sop.fetch();
-	return make_shared<LimitRelation>(TransformOp(slimit.input(), aliases), slimit.count(), slimit.offset());
+	return make_shared<LimitRelation>(TransformOp(slimit.input()), slimit.count(), slimit.offset());
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &sop) {
@@ -230,33 +279,28 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformFilterOp(const substrait::Rel &
 	return make_shared<FilterRelation>(TransformOp(sfilter.input()), TransformExpr(sfilter.condition()));
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformProjectOp(const substrait::Rel &sop) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto &sexpr : sop.project().expressions()) {
 		expressions.push_back(TransformExpr(sexpr));
 	}
-	if (aliases) {
-		return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), *aliases);
-	} else {
-		vector<string> mock_aliases;
-		for (size_t i = 0; i < expressions.size(); i++) {
-			mock_aliases.push_back("expr_" + to_string(i));
-		}
-		return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions),
-		                                       move(mock_aliases));
+
+	vector<string> mock_aliases;
+	for (size_t i = 0; i < expressions.size(); i++) {
+		mock_aliases.push_back("expr_" + to_string(i));
 	}
+	return make_shared<ProjectionRelation>(TransformOp(sop.project().input()), move(expressions), move(mock_aliases));
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Rel &sop) {
 	vector<unique_ptr<ParsedExpression>> groups, expressions;
 
-	if (sop.aggregate().groupings_size() > 1) {
-		throw InternalException("Only single grouping sets are supported for now");
-	}
 	if (sop.aggregate().groupings_size() > 0) {
-		for (auto &sgrpexpr : sop.aggregate().groupings(0).grouping_expressions()) {
-			groups.push_back(TransformExpr(sgrpexpr));
-			expressions.push_back(TransformExpr(sgrpexpr));
+		for (auto &sgrp : sop.aggregate().groupings()) {
+			for (auto &sgrpexpr : sgrp.grouping_expressions()) {
+				groups.push_back(TransformExpr(sgrpexpr));
+				expressions.push_back(TransformExpr(sgrpexpr));
+			}
 		}
 	}
 
@@ -265,8 +309,11 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Re
 		for (auto &sarg : smeas.measure().args()) {
 			children.push_back(TransformExpr(sarg));
 		}
-		expressions.push_back(
-		    make_unique<FunctionExpression>(FindFunction(smeas.measure().function_reference()), move(children)));
+		auto function_name = FindFunction(smeas.measure().function_reference());
+		if (function_name == "count" && children.empty()) {
+			function_name = "count_star";
+		}
+		expressions.push_back(make_unique<FunctionExpression>(function_name, move(children)));
 	}
 
 	return make_shared<AggregateRelation>(TransformOp(sop.aggregate().input()), move(expressions), move(groups));
@@ -301,48 +348,52 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformReadOp(const substrait::Rel &so
 	return scan;
 }
 
-shared_ptr<Relation> SubstraitToDuckDB::TransformSortOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformSortOp(const substrait::Rel &sop) {
 	vector<OrderByNode> order_nodes;
 	for (auto &sordf : sop.sort().sorts()) {
 		order_nodes.push_back(TransformOrder(sordf));
 	}
-	return make_shared<OrderRelation>(TransformOp(sop.sort().input(), aliases), move(order_nodes));
+	return make_shared<OrderRelation>(TransformOp(sop.sort().input()), move(order_nodes));
 }
-shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop, vector<string> *aliases) {
+shared_ptr<Relation> SubstraitToDuckDB::TransformOp(const substrait::Rel &sop) {
 	switch (sop.rel_type_case()) {
 	case substrait::Rel::RelTypeCase::kJoin:
 		return TransformJoinOp(sop);
 	case substrait::Rel::RelTypeCase::kCross:
 		return TransformCrossProductOp(sop);
 	case substrait::Rel::RelTypeCase::kFetch:
-		return TransformFetchOp(sop, aliases);
+		return TransformFetchOp(sop);
 	case substrait::Rel::RelTypeCase::kFilter:
 		return TransformFilterOp(sop);
 	case substrait::Rel::RelTypeCase::kProject:
-		return TransformProjectOp(sop, aliases);
+		return TransformProjectOp(sop);
 	case substrait::Rel::RelTypeCase::kAggregate:
 		return TransformAggregateOp(sop);
 	case substrait::Rel::RelTypeCase::kRead:
 		return TransformReadOp(sop);
 	case substrait::Rel::RelTypeCase::kSort:
-		return TransformSortOp(sop, aliases);
+		return TransformSortOp(sop);
 	default:
 		throw InternalException("Unsupported relation type " + to_string(sop.rel_type_case()));
 	}
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformRootOp(const substrait::RelRoot &sop) {
-	const auto &rel = sop.input();
 	vector<string> aliases;
 	auto column_names = sop.names();
+	vector<unique_ptr<ParsedExpression>> expressions;
+	int id = 1;
 	for (auto &column_name : column_names) {
 		aliases.push_back(column_name);
+		expressions.push_back(make_unique<PositionalReferenceExpression>(id++));
 	}
-	return TransformOp(rel, &aliases);
+	return make_shared<ProjectionRelation>(TransformOp(sop.input()), move(expressions), aliases);
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformPlan() {
-	return TransformRootOp(plan.relations(0).root());
+	D_ASSERT(!plan.relations().empty());
+	auto d_plan = TransformRootOp(plan.relations(0).root());
+	return d_plan;
 }
 
 } // namespace duckdb

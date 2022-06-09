@@ -17,12 +17,13 @@ struct CTableFunctionInfo : public TableFunctionInfo {
 
 	duckdb_table_function_bind_t bind = nullptr;
 	duckdb_table_function_init_t init = nullptr;
+	duckdb_table_function_init_t local_init = nullptr;
 	duckdb_table_function_t function = nullptr;
 	void *extra_info = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
 };
 
-struct CTableBindData : public FunctionData {
+struct CTableBindData : public TableFunctionData {
 	~CTableBindData() {
 		if (bind_data && delete_callback) {
 			delete_callback(bind_data);
@@ -53,7 +54,7 @@ struct CTableInternalBindInfo {
 	string error;
 };
 
-struct CTableInitData : public FunctionOperatorData {
+struct CTableInitData {
 	~CTableInitData() {
 		if (init_data && delete_callback) {
 			delete_callback(init_data);
@@ -64,29 +65,43 @@ struct CTableInitData : public FunctionOperatorData {
 
 	void *init_data = nullptr;
 	duckdb_delete_callback_t delete_callback = nullptr;
+	idx_t max_threads = 1;
+};
+
+struct CTableGlobalInitData : public GlobalTableFunctionState {
+	CTableInitData init_data;
+
+	idx_t MaxThreads() const override {
+		return init_data.max_threads;
+	}
+};
+
+struct CTableLocalInitData : public LocalTableFunctionState {
+	CTableInitData init_data;
 };
 
 struct CTableInternalInitInfo {
 	CTableInternalInitInfo(CTableBindData &bind_data, CTableInitData &init_data, const vector<column_t> &column_ids,
-	                       TableFilterCollection *filters)
+	                       TableFilterSet *filters)
 	    : bind_data(bind_data), init_data(init_data), column_ids(column_ids), filters(filters), success(true) {
 	}
 
 	CTableBindData &bind_data;
 	CTableInitData &init_data;
 	const vector<column_t> &column_ids;
-	TableFilterCollection *filters;
+	TableFilterSet *filters;
 	bool success;
 	string error;
 };
 
 struct CTableInternalFunctionInfo {
-	CTableInternalFunctionInfo(CTableBindData &bind_data, CTableInitData &init_data)
-	    : bind_data(bind_data), init_data(init_data), success(true) {
+	CTableInternalFunctionInfo(CTableBindData &bind_data, CTableInitData &init_data, CTableInitData &local_data)
+	    : bind_data(bind_data), init_data(init_data), local_data(local_data), success(true) {
 	}
 
 	CTableBindData &bind_data;
 	CTableInitData &init_data;
+	CTableInitData &local_data;
 	bool success;
 	string error;
 };
@@ -106,13 +121,11 @@ unique_ptr<FunctionData> CTableFunctionBind(ClientContext &context, TableFunctio
 	return move(result);
 }
 
-unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                    const vector<column_t> &column_ids,
-                                                    TableFilterCollection *filters) {
-	auto &bind_data = (CTableBindData &)*bind_data_p;
-	auto result = make_unique<CTableInitData>();
+unique_ptr<GlobalTableFunctionState> CTableFunctionInit(ClientContext &context, TableFunctionInitInput &data_p) {
+	auto &bind_data = (CTableBindData &)*data_p.bind_data;
+	auto result = make_unique<CTableGlobalInitData>();
 
-	CTableInternalInitInfo init_info(bind_data, *result, column_ids, filters);
+	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);
 	bind_data.info->init(&init_info);
 	if (!init_info.success) {
 		throw Exception(init_info.error);
@@ -120,11 +133,27 @@ unique_ptr<FunctionOperatorData> CTableFunctionInit(ClientContext &context, cons
 	return move(result);
 }
 
-void CTableFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
-                    DataChunk *input, DataChunk &output) {
-	auto &bind_data = (CTableBindData &)*bind_data_p;
-	auto &init_data = (CTableInitData &)*operator_state;
-	CTableInternalFunctionInfo function_info(bind_data, init_data);
+unique_ptr<LocalTableFunctionState> CTableFunctionLocalInit(ClientContext &context, TableFunctionInitInput &data_p,
+                                                            GlobalTableFunctionState *gstate) {
+	auto &bind_data = (CTableBindData &)*data_p.bind_data;
+	auto result = make_unique<CTableLocalInitData>();
+	if (!bind_data.info->local_init) {
+		return move(result);
+	}
+
+	CTableInternalInitInfo init_info(bind_data, result->init_data, data_p.column_ids, data_p.filters);
+	bind_data.info->local_init(&init_info);
+	if (!init_info.success) {
+		throw Exception(init_info.error);
+	}
+	return move(result);
+}
+
+void CTableFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (CTableBindData &)*data_p.bind_data;
+	auto &global_data = (CTableGlobalInitData &)*data_p.global_state;
+	auto &local_data = (CTableLocalInitData &)*data_p.local_state;
+	CTableInternalFunctionInfo function_info(bind_data, global_data.init_data, local_data.init_data);
 	bind_data.info->function(&function_info, &output);
 	if (!function_info.success) {
 		throw Exception(function_info.error);
@@ -138,7 +167,7 @@ void CTableFunction(ClientContext &context, const FunctionData *bind_data_p, Fun
 //===--------------------------------------------------------------------===//
 duckdb_table_function duckdb_create_table_function() {
 	auto function = new duckdb::TableFunction("", {}, duckdb::CTableFunction, duckdb::CTableFunctionBind,
-	                                          duckdb::CTableFunctionInit);
+	                                          duckdb::CTableFunctionInit, duckdb::CTableFunctionLocalInit);
 	function->function_info = duckdb::make_shared<duckdb::CTableFunctionInfo>();
 	return function;
 }
@@ -195,6 +224,15 @@ void duckdb_table_function_set_init(duckdb_table_function function, duckdb_table
 	auto tf = (duckdb::TableFunction *)function;
 	auto info = (duckdb::CTableFunctionInfo *)tf->function_info.get();
 	info->init = init;
+}
+
+void duckdb_table_function_set_local_init(duckdb_table_function function, duckdb_table_function_init_t init) {
+	if (!function || !init) {
+		return;
+	}
+	auto tf = (duckdb::TableFunction *)function;
+	auto info = (duckdb::CTableFunctionInfo *)tf->function_info.get();
+	info->local_init = init;
 }
 
 void duckdb_table_function_set_function(duckdb_table_function table_function, duckdb_table_function_t function) {
@@ -344,6 +382,14 @@ idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index) {
 	return function_info->column_ids[column_index];
 }
 
+void duckdb_init_set_max_threads(duckdb_init_info info, idx_t max_threads) {
+	if (!info) {
+		return;
+	}
+	auto function_info = (duckdb::CTableInternalInitInfo *)info;
+	function_info->init_data.max_threads = max_threads;
+}
+
 //===--------------------------------------------------------------------===//
 // Function Interface
 //===--------------------------------------------------------------------===//
@@ -369,6 +415,14 @@ void *duckdb_function_get_init_data(duckdb_function_info info) {
 	}
 	auto function_info = (duckdb::CTableInternalFunctionInfo *)info;
 	return function_info->init_data.init_data;
+}
+
+void *duckdb_function_get_local_init_data(duckdb_function_info info) {
+	if (!info) {
+		return nullptr;
+	}
+	auto function_info = (duckdb::CTableInternalFunctionInfo *)info;
+	return function_info->local_data.init_data;
 }
 
 void duckdb_function_set_error(duckdb_function_info info, const char *error) {

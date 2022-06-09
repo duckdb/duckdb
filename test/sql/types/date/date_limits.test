@@ -17,18 +17,18 @@ select '2370-01-01'::date
 2370-01-01
 
 query I
-select '5877642-06-23 (BC)'::date
+select '5877642-06-25 (BC)'::date
 ----
-5877642-06-23 (BC)
+5877642-06-25 (BC)
 
 statement error
-select '5877642-06-22 (BC)'::date
+select '5877642-06-24 (BC)'::date
 
 statement error
-select '5877680-06-22 (BC)'::date
+select '5877680-06-23 (BC)'::date
 
 statement error
-select '99999999-06-22 (BC)'::date
+select '99999999-06-23 (BC)'::date
 
 # min date for timestamp micros is -290307
 query I
@@ -44,53 +44,53 @@ select '5877642-06-23 (BC)'::date::timestamp
 
 # date arithmetic
 query I
-select '5877642-06-23 (BC)'::date + 1
+select '5877642-06-25 (BC)'::date + 1
 ----
-5877642-06-24 (BC)
+5877642-06-26 (BC)
 
 statement error
-select '5877642-06-23 (BC)'::date - 1
+select '5877642-06-24 (BC)'::date - 1
 
 statement error
-select '5877642-06-23 (BC)'::date - 365
+select '5877642-06-24 (BC)'::date - 365
 
 statement error
-select '5877642-06-23 (BC)'::date - 2147483647
+select '5877642-06-24 (BC)'::date - 2147483647
 
 # interval arithmetic
 query I
-select '5877642-06-23 (BC)'::date + interval (1) day
+select '5877642-06-25 (BC)'::date + interval (1) day
 ----
-5877642-06-24 (BC)
+5877642-06-26 (BC)
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (1) day
+select '5877642-06-25 (BC)'::date - interval (1) day
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (365) day
+select '5877642-06-25 (BC)'::date - interval (365) day
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (2147483647) day
+select '5877642-06-25 (BC)'::date - interval (2147483647) day
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (9999999999999) second
+select '5877642-06-25 (BC)'::date - interval (9999999999999) second
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (9223372036854775807) microsecond
+select '5877642-06-25 (BC)'::date - interval (9223372036854775807) microsecond
 
 statement error
-select '5877642-06-23 (BC)'::date - interval '1147483647 days 9223372036854775807 microseconds'
+select '5877642-06-25 (BC)'::date - interval '1147483647 days 9223372036854775807 microseconds'
 
 statement error
-select '5877642-06-23 (BC)'::date - interval '2147483647 days 9223372036854775807 microseconds'
+select '5877642-06-25 (BC)'::date - interval '2147483647 days 9223372036854775807 microseconds'
 
 statement error
-select '5877642-06-23 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
+select '5877642-06-25 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
 
 query I
-select '5877642-06-23 (BC)'::date + interval (1) month
+select '5877642-06-25 (BC)'::date + interval (1) month
 ----
-5877642-07-23 (BC)
+5877642-07-25 (BC)
 
 statement error
 select '5877642-06-23 (BC)'::date - interval (1) month
@@ -98,14 +98,14 @@ select '5877642-06-23 (BC)'::date - interval (1) month
 statement error
 select '5877642-06-23 (BC)'::date - interval (2147483647) month
 
-# max date: 5881580-07-11
+# max date: 5881580-07-10
 query I
-select '5881580-07-11'::date
+select '5881580-07-10'::date
 ----
-5881580-07-11
+5881580-07-10
 
 statement error
-select '5881580-07-12'::date
+select '5881580-07-11'::date
 
 statement error
 select '5881580-08-11'::date
@@ -124,58 +124,61 @@ select '294247-12-31'::date::timestamp
 
 # arithmetic
 query I
-select '5881580-07-11'::date - 1
+select '5881580-07-10'::date - 1
 ----
-5881580-07-10
+5881580-07-09
 
 statement error
-select '5881580-07-11'::date + 1
+select '5881580-07-10'::date + 1
 
 statement error
-select '5881580-07-11'::date + 365
+select '5881580-07-10'::date + 365
 
 statement error
-select '5881580-07-11'::date + 2147483647
+select '5881580-07-10'::date + 2147483647
+
+statement error
+SELECT '5877642-06-25 (BC)'::DATE - 1;
 
 # interval arithmetic
 query I
-select '5881580-07-11'::date - interval (1) day
+select '5881580-07-10'::date - interval (1) day
 ----
-5881580-07-10
+5881580-07-09
 
 statement error
-select '5881580-07-11'::date + interval (1) day
+select '5881580-07-10'::date + interval (1) day
 
 statement error
-select '5881580-07-11'::date + interval (365) day
+select '5881580-07-10'::date + interval (365) day
 
 statement error
-select '5881580-07-11'::date + interval (2147483647) day
+select '5881580-07-10'::date + interval (2147483647) day
 
 statement error
-select '5881580-07-11'::date + interval (9999999999999) second
+select '5881580-07-10'::date + interval (9999999999999) second
 
 statement error
-select '5881580-07-11'::date + interval (9223372036854775807) microsecond
+select '5881580-07-10'::date + interval (9223372036854775807) microsecond
 
 statement error
-select '5881580-07-11'::date + interval '1147483647 days 9223372036854775807 microseconds'
+select '5881580-07-10'::date + interval '1147483647 days 9223372036854775807 microseconds'
 
 statement error
-select '5881580-07-11'::date + interval '2147483647 days 9223372036854775807 microseconds'
+select '5881580-07-10'::date + interval '2147483647 days 9223372036854775807 microseconds'
 
 statement error
-select '5881580-07-11'::date + interval '2007483647 days 9223372036854775807 microseconds'
+select '5881580-07-10'::date + interval '2007483647 days 9223372036854775807 microseconds'
 
 statement error
-select '5881580-07-11'::date + interval (1) month
+select '5881580-07-10'::date + interval (1) month
 
 query I
-select '5881580-07-11'::date - interval (1) month
+select '5881580-07-10'::date - interval (1) month
 ----
-5881580-06-11
+5881580-06-10
 
 query I
-select '5881580-07-11'::date - '5877642-06-23 (BC)'::date
+select '5881580-07-10'::date - '5877642-06-25 (BC)'::date
 ----
-4294967295
+4294967292

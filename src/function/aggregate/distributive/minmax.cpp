@@ -112,7 +112,7 @@ struct MinOperation : public NumericMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -135,7 +135,7 @@ struct MaxOperation : public NumericMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -182,7 +182,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -338,7 +338,7 @@ static bool TemplatedOptimumList(Vector &left, idx_t lidx, idx_t lcount, Vector 
 	ridx = rvdata.sel->get_index(ridx);
 
 	lcount = ListVector::GetListSize(left);
-	rcount = ListVector::GetListSize(left);
+	rcount = ListVector::GetListSize(right);
 
 	// DISTINCT semantics are in effect for nested types
 	auto lnull = !lvdata.validity.RowIsValid(lidx);
@@ -442,7 +442,7 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!source.value) {
 			return;
 		} else if (!target->value) {

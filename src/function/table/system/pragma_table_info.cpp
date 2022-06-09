@@ -21,7 +21,7 @@ struct PragmaTableFunctionData : public TableFunctionData {
 	CatalogEntry *entry;
 };
 
-struct PragmaTableOperatorData : public FunctionOperatorData {
+struct PragmaTableOperatorData : public GlobalTableFunctionState {
 	PragmaTableOperatorData() : offset(0) {
 	}
 	idx_t offset;
@@ -55,9 +55,7 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	return make_unique<PragmaTableFunctionData>(entry);
 }
 
-unique_ptr<FunctionOperatorData> PragmaTableInfoInit(ClientContext &context, const FunctionData *bind_data,
-                                                     const vector<column_t> &column_ids,
-                                                     TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<PragmaTableOperatorData>();
 }
 
@@ -102,20 +100,20 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 		bool not_null, pk;
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
-		D_ASSERT(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
-		CheckConstraints(table, column.oid, not_null, pk);
+		D_ASSERT(column.Oid() < (idx_t)NumericLimits<int32_t>::Maximum());
+		CheckConstraints(table, column.Oid(), not_null, pk);
 
 		// return values:
 		// "cid", PhysicalType::INT32
-		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
+		output.SetValue(0, index, Value::INTEGER((int32_t)column.Oid()));
 		// "name", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(column.name));
+		output.SetValue(1, index, Value(column.Name()));
 		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(column.type.ToString()));
+		output.SetValue(2, index, Value(column.Type().ToString()));
 		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(not_null));
 		// "dflt_value", PhysicalType::VARCHAR
-		Value def_value = column.default_value ? Value(column.default_value->ToString()) : Value();
+		Value def_value = column.DefaultValue() ? Value(column.DefaultValue()->ToString()) : Value();
 		output.SetValue(4, index, def_value);
 		// "pk", PhysicalType::BOOL
 		output.SetValue(5, index, Value::BOOLEAN(pk));
@@ -155,10 +153,9 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 	data.offset = next;
 }
 
-static void PragmaTableInfoFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                    FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &)*bind_data_p;
-	auto &state = (PragmaTableOperatorData &)*operator_state;
+static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
+	auto &state = (PragmaTableOperatorData &)*data_p.global_state;
 	switch (bind_data.entry->type) {
 	case CatalogType::TABLE_ENTRY:
 		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);

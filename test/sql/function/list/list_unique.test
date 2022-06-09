@@ -1,0 +1,237 @@
+# name: test/sql/function/list/list_unique.test
+# description: Test the list_unique function
+# group: [list]
+
+# test null or empty
+
+query I
+SELECT list_unique(NULL)
+----
+NULL
+
+query I
+SELECT list_unique([NULL])
+----
+0
+
+query I
+SELECT list_unique([])
+----
+0
+
+query I
+SELECT list_unique([]) WHERE 1 = 0
+----
+
+# test incorrect syntax
+
+statement error
+SELECT list_unique()
+
+statement error
+SELECT list_unique(*)
+
+statement error
+SELECT list_unique([1, 2], 2)
+
+# test incorrect parameter type
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+
+statement error
+SELECT list_unique(NULL::${type})
+
+endloop
+
+# other tests
+
+query I
+SELECT list_unique([1, 1, 2, 2, 2, 3])
+----
+3
+
+query I
+SELECT list_unique([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])
+----
+3
+
+query I
+SELECT list_unique([1, 1, -5, 10, 10, 2])
+----
+4
+
+statement ok
+CREATE TABLE integers (l integer[])
+
+statement ok
+INSERT INTO integers VALUES ([1, 1, 2, 2, 2, 3]), ([1, NULL, 1, NULL])
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+query I
+SELECT list_unique(l) FROM integers
+----
+3
+1
+0
+NULL
+0
+
+# aliases
+
+query I
+SELECT array_unique([1, 2, 2, NULL])
+----
+2
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT list_unique([True, True, False, NULL])
+----
+2
+
+query I
+SELECT list_unique([NULL::BOOLEAN])
+----
+0
+
+# VARCHAR
+query I
+SELECT list_unique(['aa', 'aa', 'cd', NULL, '42'])
+----
+3
+
+query I
+SELECT list_unique([NULL::VARCHAR])
+----
+0
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_unique([1::${type}, NULL, 1::${type}])
+----
+1
+
+query I
+SELECT list_unique([NULL::${type}])
+----
+0
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_unique([1::${type}])
+
+query I
+SELECT list_unique([NULL::${type}])
+----
+0
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_unique(['2021-08-20'::DATE])
+----
+1
+
+# time
+query I
+SELECT list_unique(['14:59:37'::TIME])
+----
+1
+
+# timestamp
+query I
+SELECT list_unique(['2021-08-20'::TIMESTAMP])
+----
+1
+
+# timestamp s
+query I
+SELECT list_unique(['2021-08-20'::TIMESTAMP_S])
+----
+1
+
+# timestamp ms
+query I
+SELECT list_unique(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+----
+1
+
+# timestamp ns
+query I
+SELECT list_unique(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+----
+1
+
+# time with time zone
+query I
+SELECT list_unique(['14:59:37'::TIMETZ])
+----
+1
+
+# timestamp with time zone
+query I
+SELECT list_unique(['2021-08-20'::TIMESTAMPTZ])
+----
+1
+
+# interval
+query I
+SELECT list_unique([INTERVAL 1 YEAR])
+----
+1
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
+
+query I
+SELECT list_unique([NULL::${type}])
+----
+0
+
+endloop
+
+# JSON
+
+query I
+SELECT list_unique(['{a: 1}'::JSON, '{a: 1}'::JSON])
+----
+1
+
+query I
+SELECT list_unique([NULL::JSON])
+----
+0
+
+# enums
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'ok'])
+
+query I
+SELECT list_unique(e) FROM enums
+----
+2
+
+# bug in #3481
+query I
+SELECT list_unique(['a', 'b、c', 'a'])
+----
+2

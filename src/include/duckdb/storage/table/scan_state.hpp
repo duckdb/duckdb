@@ -39,11 +39,11 @@ typedef unordered_map<block_id_t, unique_ptr<BufferHandle>> buffer_handle_set_t;
 
 struct ColumnScanState {
 	//! The column segment that is currently being scanned
-	ColumnSegment *current;
+	ColumnSegment *current = nullptr;
 	//! The current row index of the scan
-	idx_t row_index;
+	idx_t row_index = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
-	idx_t internal_index;
+	idx_t internal_index = 0;
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
@@ -77,10 +77,10 @@ struct LocalScanState {
 		return storage.get();
 	}
 
-	idx_t chunk_index;
-	idx_t max_index;
-	idx_t last_chunk_count;
-	TableFilterSet *table_filters;
+	idx_t chunk_index = 0;
+	idx_t max_index = 0;
+	idx_t last_chunk_count = 0;
+	TableFilterSet *table_filters = nullptr;
 
 private:
 	shared_ptr<LocalTableStorage> storage;
@@ -94,17 +94,13 @@ public:
 	//! The parent scan state
 	TableScanState &parent;
 	//! The current row_group we are scanning
-	RowGroup *row_group;
+	RowGroup *row_group = nullptr;
 	//! The vector index within the row_group
-	idx_t vector_index;
+	idx_t vector_index = 0;
 	//! The maximum row index of this row_group scan
-	idx_t max_row;
+	idx_t max_row = 0;
 	//! Child column scans
 	unique_ptr<ColumnScanState[]> column_scans;
-
-public:
-	//! Move to the next vector, skipping past the current one
-	void NextVector();
 };
 
 class TableScanState {
@@ -114,7 +110,7 @@ public:
 	//! The row_group scan state
 	RowGroupScanState row_group_scan_state;
 	//! The total maximum row index
-	idx_t max_row;
+	idx_t max_row = 0;
 	//! The column identifiers of the scan
 	vector<column_t> column_ids;
 	//! The table filters (if any)
@@ -123,10 +119,6 @@ public:
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! Transaction-local scan state
 	LocalScanState local_state;
-
-public:
-	//! Move to the next vector
-	void NextVector();
 };
 
 class CreateIndexScanState : public TableScanState {

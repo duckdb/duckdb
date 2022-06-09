@@ -16,9 +16,23 @@
 
 namespace duckdb {
 
+struct TernaryLambdaWrapper {
+	template <class FUN, class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUN fun, A_TYPE a, B_TYPE b, C_TYPE c, ValidityMask &mask, idx_t idx) {
+		return fun(a, b, c);
+	}
+};
+
+struct TernaryLambdaWrapperWithNulls {
+	template <class FUN, class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUN fun, A_TYPE a, B_TYPE b, C_TYPE c, ValidityMask &mask, idx_t idx) {
+		return fun(a, b, c, mask, idx);
+	}
+};
+
 struct TernaryExecutor {
 private:
-	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class FUN>
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
 	static inline void ExecuteLoop(A_TYPE *__restrict adata, B_TYPE *__restrict bdata, C_TYPE *__restrict cdata,
 	                               RESULT_TYPE *__restrict result_data, idx_t count, const SelectionVector &asel,
 	                               const SelectionVector &bsel, const SelectionVector &csel, ValidityMask &avalidity,
@@ -30,7 +44,8 @@ private:
 				auto bidx = bsel.get_index(i);
 				auto cidx = csel.get_index(i);
 				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx) && cvalidity.RowIsValid(cidx)) {
-					result_data[i] = fun(adata[aidx], bdata[bidx], cdata[cidx]);
+					result_data[i] = OPWRAPPER::template Operation<FUN, A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
+					    fun, adata[aidx], bdata[bidx], cdata[cidx], result_validity, i);
 				} else {
 					result_validity.SetInvalid(i);
 				}
@@ -40,15 +55,15 @@ private:
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				auto cidx = csel.get_index(i);
-				result_data[i] = fun(adata[aidx], bdata[bidx], cdata[cidx]);
+				result_data[i] = OPWRAPPER::template Operation<FUN, A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
+				    fun, adata[aidx], bdata[bidx], cdata[cidx], result_validity, i);
 			}
 		}
 	}
 
 public:
-	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
-	          class FUN = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
-	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE, class OPWRAPPER, class FUN>
+	static void ExecuteGeneric(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
 		if (a.GetVectorType() == VectorType::CONSTANT_VECTOR && b.GetVectorType() == VectorType::CONSTANT_VECTOR &&
 		    c.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -59,7 +74,9 @@ public:
 				auto bdata = ConstantVector::GetData<B_TYPE>(b);
 				auto cdata = ConstantVector::GetData<C_TYPE>(c);
 				auto result_data = ConstantVector::GetData<RESULT_TYPE>(result);
-				result_data[0] = fun(*adata, *bdata, *cdata);
+				auto &result_validity = ConstantVector::Validity(result);
+				result_data[0] = OPWRAPPER::template Operation<FUN, A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
+				    fun, adata[0], bdata[0], cdata[0], result_validity, 0);
 			}
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -69,11 +86,24 @@ public:
 			b.Orrify(count, bdata);
 			c.Orrify(count, cdata);
 
-			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE>(
+			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data,
 			    FlatVector::GetData<RESULT_TYPE>(result), count, *adata.sel, *bdata.sel, *cdata.sel, adata.validity,
 			    bdata.validity, cdata.validity, FlatVector::Validity(result), fun);
 		}
+	}
+
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
+	          class FUN = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE)>>
+	static void Execute(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
+		ExecuteGeneric<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, TernaryLambdaWrapper, FUN>(a, b, c, result, count, fun);
+	}
+
+	template <class A_TYPE, class B_TYPE, class C_TYPE, class RESULT_TYPE,
+	          class FUN = std::function<RESULT_TYPE(A_TYPE, B_TYPE, C_TYPE, ValidityMask &, idx_t)>>
+	static void ExecuteWithNulls(Vector &a, Vector &b, Vector &c, Vector &result, idx_t count, FUN fun) {
+		ExecuteGeneric<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, TernaryLambdaWrapperWithNulls, FUN>(a, b, c, result, count,
+		                                                                                        fun);
 	}
 
 private:
@@ -145,9 +175,8 @@ public:
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
 	static idx_t Select(Vector &a, Vector &b, Vector &c, const SelectionVector *sel, idx_t count,
 	                    SelectionVector *true_sel, SelectionVector *false_sel) {
-		SelectionVector owned_sel;
 		if (!sel) {
-			sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+			sel = FlatVector::IncrementalSelectionVector();
 		}
 		VectorData adata, bdata, cdata;
 		a.Orrify(count, adata);

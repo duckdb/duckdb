@@ -26,8 +26,8 @@ for arg in sys.argv:
         benchmark_file = arg.replace("--benchmarks=", "")
     elif arg == "--verbose":
         verbose = True
-    elif arg == "--threads=":
-        threads = int(arg.replace("--threads="))
+    elif arg.startswith("--threads="):
+        threads = int(arg.replace("--threads=", ""))
 
 if old_runner is None or new_runner is None or benchmark_file is None:
     print("Expected usage: python3 scripts/regression_test_runner.py --old=/old/benchmark_runner --new=/new/benchmark_runner --benchmarks=/benchmark/list.csv")
@@ -145,3 +145,5 @@ for res in other_results:
     print(f"Old timing: {res[1]}")
     print(f"New timing: {res[2]}")
     print("")
+
+exit(exit_code)
