@@ -1,5 +1,5 @@
 using Test
-using DataFrames,DBInterface
+using DataFrames, DBInterface, CSV
 using DuckDB
 #include("../src/DuckDB.jl")
 
@@ -87,4 +87,14 @@ end
     res = DuckDB.toDataFrame(res)
     @test isa(res, DataFrame)
     DBInterface.close!(db)
+end
+
+@testset "Query CSV and output DataFrame" begin
+    df = DataFrame(a=1:100, b=1:100)
+    CSV.write("test_dataframe.csv", df)
+
+    con = DuckDB.connect(":memory:")
+    df1 = DuckDB.toDataFrame(con, "SELECT * FROM 'test_dataframe.csv';")
+    
+    @test df == df1
 end
