@@ -10,37 +10,54 @@ def check_analyze_result(df, output_type):
     assert df[0].dtype == np.dtype(output_type)
     duckdb.default_connection.execute("select * from df").fetchall()
 
+def create_generic_dataframe(data):
+    return pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+
 class TestAnalyzeDF(object):
 
     def test_empty_dataframe(self, duckdb_cursor):
-        df = pd.DataFrame({'A' : []})
+        data = []
+        df = create_generic_dataframe(data)
         with pytest.raises(Exception, match="Empty dataframe can not be analyzed"):
             duckdb.analyze_df(df)
 
     def test_analyze_date(self, duckdb_cursor):
-        df = pd.DataFrame({0: [datetime.date(1992, 7, 30), datetime.date(1992, 7, 31)]})
+        data = [datetime.date(1992, 7, 30), datetime.date(1992, 7, 31)]
+        df = create_generic_dataframe(data)
         check_analyze_result(df,'<M8[ns]')
 
     def test_analyze_string(self, duckdb_cursor):
         data = ['hello', 'these', 'are', 'all', 'strings', 'also bigger strings that span multiple words']
-        df = pd.DataFrame({0: data})
+        df = create_generic_dataframe(data)
         #max_string_size = max(data, key=len)
         check_analyze_result(df,'O')
 
     def test_analyze_int(self, duckdb_cursor):
         data = [5, -12, -256, 255, 123]
-        df = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+        df = create_generic_dataframe(data)
         check_analyze_result(df, 'i')
 
     def test_analyze_hugeint(self, duckdb_cursor):
         data = [12345123451234512345]
         with pytest.raises(Exception):
-            df = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+            df = create_generic_dataframe(data)
             # Too big to cast to int
             check_analyze_result(df, 'i')
 
+    def test_analyze_bool(self, duckdb_cursor):
+        data = [True, False, True, True]
+        df = create_generic_dataframe(data)
+        check_analyze_result(df, '?')
+
+    def test_analyze_byte_unsigned(self, duckdb_cursor):
+        data = bytearray([5,4,3])
+        df = create_generic_dataframe(data)
+        # As far as python is concerned, these are ints
+        check_analyze_result(df, 'i')
+
     def test_analyze_object(self, duckdb_cursor):
-        df = pd.DataFrame({0: [datetime.date(1992, 7, 30), "bla"]})
+        data = [datetime.date(1992, 7, 30), "bla"]
+        df = create_generic_dataframe(data)
         check_analyze_result(df,'O')
         
     # if (col_type == "bool") {

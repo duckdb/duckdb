@@ -469,13 +469,13 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 //'V'
 //
 // raw data (void)
-//test
+// test
 
-static string GetItemDataType(idx_t index, pybind11::object& col) {
+static string GetItemDataType(idx_t index, pybind11::object &col) {
 	return py::str(col.attr("__getitem__")(index).get_type().attr("__name__"));
 }
 
-static bool MeetsConversionRequirements(const string& type, pybind11::object& column, idx_t rows) {
+static bool MeetsConversionRequirements(const string &type, pybind11::object &column, idx_t rows) {
 
 	if (type == "object") {
 		// Can't change
@@ -510,14 +510,16 @@ static void ConvertSingleColumn(py::handle df, idx_t col_idx) {
 	if (column_type == "date") {
 		set_fun(df_columns[col_idx], column.attr("astype")("M", py::arg("copy") = false));
 	}
-	//pandas uses native python strings, which have to stay 'object'
+	// pandas uses native python strings, which have to stay 'object'
 	else if (column_type == "str") {
 		return;
-	}
-	else if (column_type == "int") {
+	} else if (column_type == "int") {
 		set_fun(df_columns[col_idx], column.attr("astype")("i", py::arg("copy") = false));
-	}
-	else {
+	} else if (column_type == "bool") {
+		set_fun(df_columns[col_idx], column.attr("astype")("?", py::arg("copy") = false));
+	} else if (column_type == "bytes") {
+		set_fun(df_columns[col_idx], column.attr("astype")("U", py::arg("copy") = false));
+	} else {
 		throw std::runtime_error(column_type);
 	}
 }
