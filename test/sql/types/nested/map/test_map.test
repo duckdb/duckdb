@@ -9,6 +9,10 @@
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
 
+# Keys have to be supported by the histogram aggregate functions
+statement error
+SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a
+
 # Some keys are NULL
 statement error
 select MAP(LIST_VALUE(1,NULL,3), LIST_VALUE(6,5,4))
