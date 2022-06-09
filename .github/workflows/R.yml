@@ -121,11 +121,10 @@ jobs:
     - name: Coverage
       env:
         DUCKDB_R_DEBUG: 1
-      shell: bash
+      shell: Rscript {0}
       run: |
         pkgload::load_all("tools/rpkg")
         cov <- covr::codecov("tools/rpkg", relative_path = ".")
-      shell: Rscript {0}
 
     - name: Print R log on failure
       if: ${{ failure() }}
