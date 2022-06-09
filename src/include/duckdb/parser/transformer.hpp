@@ -198,8 +198,6 @@ private:
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
-	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
-	ExpressionType OperatorToExpressionType(const string &op);
 
 	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
 	unique_ptr<ParsedExpression> TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,

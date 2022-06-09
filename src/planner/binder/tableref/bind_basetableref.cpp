@@ -146,8 +146,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}
-		bind_context.AddSubquery(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                         *bound_subquery.subquery);
+		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
+		                     *bound_subquery.subquery, view_catalog_entry);
 		return bound_child;
 	}
 	default:

@@ -14,9 +14,6 @@
 #' x <- tibble(txt = c("why", "video", "cross", "extra", "deal", "authority"))
 #' dbx <- copy_to(con, x, overwrite = TRUE)
 #'
-#' # x %>% filter(grepl("^.[hrx]", txt))
-#' dbx %>% filter(grepl("^.[hrx]", txt))
-#'
 #' # x %>% mutate(a = stringr::str_pad(txt, 10, side = "both", pad = ">"))
 #' dbx %>% mutate(a = str_pad(txt, 10, side = "both", pad = ">"))
 #'

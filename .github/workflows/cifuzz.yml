@@ -44,6 +44,7 @@ jobs:
 
     steps:
       - name: Dependencies
+        shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
       - uses: actions/checkout@v2
@@ -51,9 +52,11 @@ jobs:
           fetch-depth: 0
 
       - name: Build
+        shell: bash
         run: |
             make debug
 
       - name: Fuzz
+        shell: bash
         run: |
             python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb

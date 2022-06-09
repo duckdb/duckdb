@@ -219,9 +219,15 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::BLOB:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
-	case LogicalTypeId::ENUM:
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+	case LogicalTypeId::ENUM: {
+		auto physical_type = type.InternalType();
+		if (physical_type == PhysicalType::UINT64) { // DEDUP_POINTER_ENUM
+			varvalue = r_varvalue.Protect(NEW_STRING(nrows));
+		} else {
+			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+		}
 		break;
+	}
 	default:
 		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
@@ -445,6 +451,22 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 	case LogicalTypeId::ENUM: {
 		auto physical_type = src_vec.GetType().InternalType();
+		auto dummy = NEW_STRING(1);
+		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(dummy) - (data_ptr_t)dummy; // don't tell anyone
+		if (physical_type == PhysicalType::UINT64) {                                 // DEDUP_POINTER_ENUM
+			auto src_ptr = FlatVector::GetData<uint64_t>(src_vec);
+			auto &mask = FlatVector::Validity(src_vec);
+			/* we have to use SET_STRING_ELT here because otherwise those SEXPs dont get referenced */
+			for (size_t row_idx = 0; row_idx < n; row_idx++) {
+				if (!mask.RowIsValid(row_idx)) {
+					SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+				} else {
+					SET_STRING_ELT(dest, dest_offset + row_idx,
+					               (SEXP)((data_ptr_t)src_ptr[row_idx] - sexp_header_size));
+				}
+			}
+			break;
+		}
 
 		switch (physical_type) {
 		case PhysicalType::UINT8:
@@ -488,7 +510,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 }
 
-static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
+SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	if (ncols == 0) {
