@@ -20,6 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 defaults:
+  shell: bash
   run:
     shell: bash
 
@@ -41,11 +42,13 @@ jobs:
         fetch-depth: 0
 
     - name: Install requirements
+      shell: bash
       run: |
         sudo apt-get update -y -qq
         sudo apt-get install -y git ninja-build make gcc-multilib g++-multilib wget libssl-dev
 
     - name: Install CMake
+      shell: bash
       run: |
         wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
         chmod +x cmake-3.21.3-linux-x86_64.sh
@@ -57,31 +60,39 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build extensions
+      shell: bash
       run: |
         GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
     - name: Setup
+      shell: bash
       run: ./scripts/node_version.sh upload
 
     - name: Node 10
+      shell: bash
       run: ./scripts/node_build.sh 10
 
     - name: Node 12
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+      shell: bash
       run: ./scripts/node_build.sh 12
 
     - name: Node 14
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+      shell: bash
       run: ./scripts/node_build.sh 14
 
     - name: Node 15
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+      shell: bash
       run: ./scripts/node_build.sh 15
 
     - name: Node 16
+      shell: bash
       run: ./scripts/node_build.sh 16
 
     - name: Node 17
+      shell: bash
       run: ./scripts/node_build.sh 17
 
    osx-nodejs:
@@ -100,6 +111,7 @@ jobs:
           key: ${{ github.job }}
 
       - name: Build extensions
+        shell: bash
         run: |
           brew install openssl ninja
           export OPENSSL_ROOT_DIR=`brew --prefix openssl`
@@ -107,27 +119,34 @@ jobs:
           GEN=ninja BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 make
 
       - name: Setup
+        shell: bash
         run: ./scripts/node_version.sh
 
       - name: Node 10
+        shell: bash
         run: ./scripts/node_build.sh 10
 
       - name: Node 12
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
         run: ./scripts/node_build.sh 12
 
       - name: Node 14
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
         run: ./scripts/node_build.sh 14
 
       - name: Node 15
         if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+        shell: bash
         run: ./scripts/node_build.sh 15
 
       - name: Node 16
+        shell: bash
         run: ./scripts/node_build.sh 16
 
       - name: Node 17
+        shell: bash
         run: ./scripts/node_build.sh 17
 
    win-nodejs:
@@ -161,17 +180,20 @@ jobs:
            node-version: ${{ matrix.node }}
 
        - name: Versions
+         shell: bash
          run: |
            systeminfo
            node -v
            npm -v
 
        - name: Windows Build Tools
+         shell: bash
          run: |
            choco install python visualstudio2019-workload-vctools -y
            npm config set msvs_version 2019
 
        - name: Node Version
+         shell: bash
          run: ./scripts/node_version.sh
 
        - name: Setup Ccache
@@ -181,4 +203,5 @@ jobs:
            variant: sccache
 
        - name: Node
+         shell: bash
          run: ./scripts/node_build_win.sh

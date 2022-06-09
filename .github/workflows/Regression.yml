@@ -17,6 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 defaults:
+  shell: bash
   run:
     shell: bash
 
@@ -58,6 +59,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
     - name: Setup Ccache
@@ -66,6 +68,7 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: |
         make
         git clone https://github.com/duckdb/duckdb.git --depth=1
@@ -74,6 +77,7 @@ jobs:
         cd ..
 
     - name: Regression Test
+      shell: bash
       run: |
         cp -r benchmark duckdb/
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/${{ matrix.benchmark }}.csv --verbose --threads=2
@@ -96,27 +100,32 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         pip install numpy pytest pandas mypy psutil pyarrow
 
     - name: Build Current Version
+      shell: bash
       run: |
         cd tools/pythonpkg
         python setup.py install --user
         cd ../..
 
     - name: Run New Version
+      shell: bash
       run: |
         python scripts/regression_test_python.py --threads=2 --out-file=new.csv
 
     - name: Cleanup New Version
+      shell: bash
       run: |
         cd tools/pythonpkg
         ./clean.sh
         cd ../..
 
     - name: Build Current
+      shell: bash
       run: |
         git clone https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
@@ -124,9 +133,11 @@ jobs:
         cd ../../..
 
     - name: Run Current Version
+      shell: bash
       run: |
         python scripts/regression_test_python.py --threads=2 --out-file=current.csv
 
     - name: Regression Test
+      shell: bash
       run: |
         python scripts/regression_check.py --old=current.csv --new=new.csv
