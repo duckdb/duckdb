@@ -17,11 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  shell: bash
-  run:
-    shell: bash
-
 jobs:
   format_check:
     name: Julia Format Check
