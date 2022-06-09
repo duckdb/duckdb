@@ -5,6 +5,8 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -96,6 +98,67 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	auto lhs_expr = expr.params[0]->Copy();
 	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.expr));
 	return BindExpression(arrow_expr, depth);
+}
+
+void ExpressionBinder::TransformLambdaExprChild(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
+                                                vector<unique_ptr<Expression>> &arguments,
+                                                LogicalType &list_child_type) {
+
+	// check if the original expression is a lambda parameter
+	bool is_lambda_parameter = false;
+	if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+
+		// determine if this is the lambda parameter
+		auto &bound_col_ref = (BoundColumnRefExpression &)*original;
+		if (bound_col_ref.binding.table_index == DConstants::INVALID_INDEX) {
+			is_lambda_parameter = true;
+		}
+	}
+
+	if (is_lambda_parameter) {
+		// this is a lambda parameter, so the replacement refers to the first argument, which is the list
+		replacement = make_unique<BoundReferenceExpression>(arguments[0]->alias, list_child_type, 0);
+
+	} else {
+		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
+		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type, arguments.size());
+
+		// TODO: these can be set by iterating the arguments vector in the specific bind
+		// bound_function.arguments.push_back(original->return_type);
+
+		arguments.push_back(move(original));
+	}
+}
+
+void ExpressionBinder::IterateLambdaExprChildren(vector<unique_ptr<Expression>> &arguments,
+                                                 LogicalType &list_child_type, unique_ptr<Expression> &expr) {
+
+	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
+		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
+	}
+
+	// these expression classes do not have children, transform them
+	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
+	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
+	    expr->expression_class == ExpressionClass::BOUND_DEFAULT ||
+	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
+	    expr->expression_class == ExpressionClass::BOUND_REF) {
+
+		// move the expr because we are going to replace it
+		auto original = move(expr);
+		unique_ptr<Expression> replacement;
+
+		TransformLambdaExprChild(original, replacement, arguments, list_child_type);
+
+		// replace the expression
+		expr = move(replacement);
+
+	} else {
+		// recursively enumerate the children of the expression
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			IterateLambdaExprChildren(arguments, list_child_type, child);
+		});
+	}
 }
 
 } // namespace duckdb

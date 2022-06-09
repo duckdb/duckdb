@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -73,9 +74,6 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		D_ASSERT(child.expr);
 		children.push_back(move(child.expr));
 	}
-
-	// TODO: move iterate children (renamed) here, have function in bind_lambda.cpp
-
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
@@ -120,6 +118,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &lambda_expr = (LambdaExpression &)*function.children[1];
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
 
+	// TODO
+	idx_t num_params = lambda_expr.params.size();
+
 	if (bind_lambda_result.HasError()) {
 		error = bind_lambda_result.error;
 	} else {
@@ -149,6 +150,16 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		D_ASSERT(child.expr);
 		children.push_back(move(child.expr));
 	}
+
+	// iterate and transform the children of the lambda expression
+	auto bound_lambda_expr = move(children.back());
+	children.pop_back();
+	IterateLambdaExprChildren(children, list_child_type, bound_lambda_expr);
+	children.push_back(move(bound_lambda_expr));
+
+	// TODO: somehow get the number of parameters into the specific function binding, maybe even make a const value
+	// expression out of it?
+
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {

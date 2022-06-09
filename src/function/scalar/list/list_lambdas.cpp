@@ -2,7 +2,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
@@ -288,64 +287,6 @@ static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &
 	ListLambdaFunction<false>(args, state, result);
 }
 
-static void TransformExpression(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
-                                ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
-                                LogicalType &list_child_type) {
-
-	// check if the original expression is a lambda parameter
-	bool is_lambda_parameter = false;
-	if (original->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-
-		// determine if this is the lambda parameter
-		auto &bound_col_ref = (BoundColumnRefExpression &)*original;
-		if (bound_col_ref.binding.table_index == DConstants::INVALID_INDEX) {
-			is_lambda_parameter = true;
-		}
-	}
-
-	if (is_lambda_parameter) {
-		// this is a lambda parameter, so the replacement refers to the first argument, which is the list
-		replacement = make_unique<BoundReferenceExpression>(arguments[0]->alias, list_child_type, 0);
-
-	} else {
-		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
-		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type, arguments.size());
-		bound_function.arguments.push_back(original->return_type);
-		arguments.push_back(move(original));
-	}
-}
-
-static void IterateChildren(ScalarFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
-                            LogicalType &list_child_type, unique_ptr<Expression> &expr) {
-
-	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
-		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
-	}
-
-	// these expression classes do not have children, transform them
-	if (expr->expression_class == ExpressionClass::BOUND_CONSTANT ||
-	    expr->expression_class == ExpressionClass::BOUND_COLUMN_REF ||
-	    expr->expression_class == ExpressionClass::BOUND_DEFAULT ||
-	    expr->expression_class == ExpressionClass::BOUND_PARAMETER ||
-	    expr->expression_class == ExpressionClass::BOUND_REF) {
-
-		// move the expr because we are going to replace it
-		auto original = move(expr);
-		unique_ptr<Expression> replacement;
-
-		TransformExpression(original, replacement, bound_function, arguments, list_child_type);
-
-		// replace the expression
-		expr = move(replacement);
-
-	} else {
-		// recursively enumerate the children of the expression
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			IterateChildren(bound_function, arguments, list_child_type, child);
-		});
-	}
-}
-
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
@@ -355,66 +296,67 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	// remove the lambda function
 	auto lambda_expr = move(arguments.back());
 	arguments.pop_back();
-	bound_function.arguments.pop_back();
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.arguments.push_back(LogicalType::SQLNULL);
 		bound_function.return_type = LogicalType::SQLNULL;
 		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
 
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
-	auto list_child_type = ListType::GetChildType(arguments[0]->return_type);
 
-	// iterate and transform the children of the lambda expression
-	IterateChildren(bound_function, arguments, list_child_type, lambda_expr);
+	// push back the correct return types into the bound_function arguments
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		bound_function.arguments.push_back(arguments[i]->return_type);
+	}
 
-	// now the lambda expression has been modified, put it in the function data to use it during execution
 	return make_unique<ListLambdaBindData>(bound_function.return_type, move(lambda_expr));
 }
 
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 
-	// the list column and the lambda function
-	D_ASSERT(bound_function.arguments.size() == 2);
-	D_ASSERT(arguments.size() == 2);
+	// at least the list column and the lambda function
+	D_ASSERT(arguments.size() >= 2);
 
-	bound_function.return_type = LogicalType::LIST(arguments[1]->return_type);
+	bound_function.return_type = LogicalType::LIST(arguments[arguments.size() - 1]->return_type);
 	return ListLambdaBind(context, bound_function, arguments);
 }
 
 static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
-	// the list column and the lambda function
-	D_ASSERT(bound_function.arguments.size() == 2);
-	D_ASSERT(arguments.size() == 2);
+	// at least the list column and the lambda function
+	D_ASSERT(arguments.size() >= 2);
 
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind(context, bound_function, arguments);
 }
 
-ScalarFunction ListTransformFun::GetFunction() {
-	// the return type is a list of ANY, because it is the return value of the rhs of the lambda expression
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                      LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false, false, ListTransformBind,
-	                      nullptr);
-}
-
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_transform", "array_transform", "list_apply", "array_apply"}, GetFunction());
-}
 
-ScalarFunction ListFilterFun::GetFunction() {
-	// the return type is a list of ANY, because it is the return value of the rhs of the lambda expression
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                      LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false, false, ListFilterBind,
-	                      nullptr);
+	ScalarFunction fun("list_transform", {}, LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false,
+	                   ListTransformBind, nullptr, nullptr);
+	fun.varargs = LogicalType::ANY;
+	set.AddFunction(fun);
+
+	fun.name = "array_transform";
+	set.AddFunction(fun);
+	fun.name = "list_apply";
+	set.AddFunction(fun);
+	fun.name = "array_apply";
+	set.AddFunction(fun);
 }
 
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"list_filter", "array_filter"}, GetFunction());
+
+	ScalarFunction fun("list_filter", {}, LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false,
+	                   ListFilterBind, nullptr, nullptr);
+	fun.varargs = LogicalType::ANY;
+	set.AddFunction(fun);
+
+	fun.name = "array_filter";
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb
