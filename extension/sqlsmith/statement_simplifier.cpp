@@ -149,6 +149,9 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	default:
 		break;
 	}
+	for (auto &modifier : node.modifiers) {
+		Simplify(*modifier);
+	}
 	SimplifyList(node.modifiers);
 }
 
@@ -205,6 +208,23 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	default:
 		break;
 	}
+}
+
+void StatementSimplifier::Simplify(ResultModifier &modifier) {
+	switch (modifier.type) {
+	case ResultModifierType::ORDER_MODIFIER:
+		Simplify((OrderModifier &)modifier);
+		break;
+	default:
+		break;
+	}
+}
+
+void StatementSimplifier::Simplify(OrderModifier &modifier) {
+	for (auto &order : modifier.orders) {
+		SimplifyExpression(order.expression);
+	}
+	SimplifyList(modifier.orders);
 }
 
 void StatementSimplifier::Simplify(SelectStatement &stmt) {

@@ -6,11 +6,11 @@
 namespace duckdb {
 
 string PragmaTableInfo(ClientContext &context, const FunctionParameters &parameters) {
-	return StringUtil::Format("SELECT * FROM pragma_table_info('%s')", parameters.values[0].ToString());
+	return StringUtil::Format("SELECT * FROM pragma_table_info('%s');", parameters.values[0].ToString());
 }
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT name FROM sqlite_master ORDER BY name";
+	return "SELECT name FROM sqlite_master ORDER BY name;";
 }
 
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
@@ -34,27 +34,27 @@ string PragmaAllProfiling(ClientContext &context, const FunctionParameters &para
 }
 
 string PragmaDatabaseList(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_database_list() ORDER BY 1";
+	return "SELECT * FROM pragma_database_list() ORDER BY 1;";
 }
 
 string PragmaCollations(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_collations() ORDER BY 1";
+	return "SELECT * FROM pragma_collations() ORDER BY 1;";
 }
 
 string PragmaFunctionsQuery(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_functions() ORDER BY 1";
+	return "SELECT * FROM pragma_functions() ORDER BY 1;";
 }
 
 string PragmaShow(ClientContext &context, const FunctionParameters &parameters) {
 	// PRAGMA table_info but with some aliases
 	return StringUtil::Format(
 	    "SELECT name AS \"column_name\", type as \"column_type\", CASE WHEN \"notnull\" THEN 'NO' ELSE 'YES' "
-	    "END AS \"null\", NULL AS \"key\", dflt_value AS \"default\", NULL AS \"extra\" FROM pragma_table_info('%s')",
+	    "END AS \"null\", NULL AS \"key\", dflt_value AS \"default\", NULL AS \"extra\" FROM pragma_table_info('%s');",
 	    parameters.values[0].ToString());
 }
 
 string PragmaVersion(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_version()";
+	return "SELECT * FROM pragma_version();";
 }
 
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
@@ -82,11 +82,11 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 }
 
 string PragmaDatabaseSize(ClientContext &context, const FunctionParameters &parameters) {
-	return "SELECT * FROM pragma_database_size()";
+	return "SELECT * FROM pragma_database_size();";
 }
 
 string PragmaStorageInfo(ClientContext &context, const FunctionParameters &parameters) {
-	return StringUtil::Format("SELECT * FROM pragma_storage_info('%s')", parameters.values[0].ToString());
+	return StringUtil::Format("SELECT * FROM pragma_storage_info('%s');", parameters.values[0].ToString());
 }
 
 void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
