@@ -896,7 +896,7 @@ struct MadAccessor {
 
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return AbsOperator::Operation<RESULT_TYPE, RESULT_TYPE>(delta);
+		return TryAbsOperator::Operation<RESULT_TYPE, RESULT_TYPE>(delta);
 	}
 };
 
@@ -911,7 +911,7 @@ struct MadAccessor<hugeint_t, double, double> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = Hugeint::Cast<double>(input) - median;
-		return AbsOperator::Operation<double, double>(delta);
+		return TryAbsOperator::Operation<double, double>(delta);
 	}
 };
 
@@ -927,7 +927,7 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto dt = Cast::Operation<date_t, timestamp_t>(input);
 		const auto delta = dt - median;
-		return Interval::FromMicro(AbsOperator::Operation<int64_t, int64_t>(delta));
+		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
 
@@ -942,7 +942,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return Interval::FromMicro(AbsOperator::Operation<int64_t, int64_t>(delta));
+		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
 
@@ -957,7 +957,7 @@ struct MadAccessor<dtime_t, interval_t, dtime_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return Interval::FromMicro(AbsOperator::Operation<int64_t, int64_t>(delta));
+		return Interval::FromMicro(TryAbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
 
