@@ -183,7 +183,7 @@ public:
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
 	                              int32_t &result_offset);
 	static string_t ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
-	static string_t ReadString(data_ptr_t target, int32_t offset, uint16_t string_length);
+	static string_t ReadString(data_ptr_t target, int32_t offset, uint32_t string_length);
 	static string_t ReadStringWithLength(data_ptr_t target, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
@@ -191,8 +191,8 @@ public:
 	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t baseptr,
 	                                             int32_t dict_offset);
 	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t baseptr, int32_t dict_offset, uint16_t string_length);
+	                                    data_ptr_t baseptr, int32_t dict_offset, uint32_t string_length);
 	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                            data_ptr_t baseptr, string_location_t location, uint16_t string_length);
+	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
 };
 } // namespace duckdb
