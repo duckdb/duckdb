@@ -494,11 +494,11 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		if (!found) {
 			AdjustUserDependency(entry, column, remove);
 		}
-	} else if (!(column.type.GetAlias().empty())) {
-		auto alias = column.type.GetAlias();
+	} else if (!(column.Type().GetAlias().empty())) {
+		auto alias = column.Type().GetAlias();
 		for (auto &old_column : table->columns) {
-			auto old_alias = old_column.type.GetAlias();
-			if (old_column.name == column.name && old_alias != alias) {
+			auto old_alias = old_column.Type().GetAlias();
+			if (old_column.Name() == column.Name() && old_alias != alias) {
 				AdjustUserDependency(entry, column, remove);
 				found = true;
 			}

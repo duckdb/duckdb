@@ -1156,13 +1156,6 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	Vector values_insert_order;
 	idx_t dict_size;
 
-public:
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteField<uint32_t>(size);
-		writer.WriteString(enum_name);
-		((Vector &)values_insert_order).Serialize(size, writer.GetSerializer());
-	}
-
 protected:
 	// Equalities are only used in enums with different catalog entries
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
