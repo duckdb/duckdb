@@ -298,8 +298,8 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 		num_params = stoi(arguments[arguments.size() - 1]->alias);
 	}
 	if (num_params != LAMBDA_PARAM_CNT) {
-		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name + " expects " +
-		                      to_string(LAMBDA_PARAM_CNT) + " parameter(s).");
+		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name +
+		                      " expects " + to_string(LAMBDA_PARAM_CNT) + " parameter(s).");
 	}
 
 	// remove the lambda function

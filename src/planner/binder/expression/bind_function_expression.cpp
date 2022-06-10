@@ -30,10 +30,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
 		// scalar function
 
-		// check for lambda parameters
-		for (auto &child : function.children) {
-			if (child->expression_class == ExpressionClass::LAMBDA) {
-				return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
+		// check for lambda parameters, ignore ->> operator (JSON extension)
+		if (function.function_name != "->>") {
+			for (auto &child : function.children) {
+				if (child->expression_class == ExpressionClass::LAMBDA) {
+					return BindLambdaFunction(function, (ScalarFunctionCatalogEntry *)func, depth);
+				}
 			}
 		}
 
