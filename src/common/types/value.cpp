@@ -618,6 +618,9 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	case PhysicalType::UINT32:
 		result.value_.uinteger = value;
 		break;
+	case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		result.value_.ubigint = value;
+		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
 	}
@@ -1386,8 +1389,10 @@ string Value::ToString() const {
 		case PhysicalType::UINT32:
 			enum_idx = value_.uinteger;
 			break;
+		case PhysicalType::UINT64:
+			return string((const char *)value_.bigint);
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		return values_insert_order.GetValue(enum_idx).ToString();
 	}

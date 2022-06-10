@@ -18,10 +18,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -76,12 +72,14 @@ jobs:
     - name: Install
       env:
         GITHUB_PAT: ${{ github.token }}
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
     - name: Prepare
+      shell: bash
       run: |
         mkdir -p /tmp/duckdb_extensions
         cd tools/rpkg
@@ -94,6 +92,7 @@ jobs:
         path: /tmp/duckdb_extensions
 
     - name: Tests
+      shell: bash
       run: |
         ls /tmp/duckdb_extensions
         cd tools/rpkg
@@ -101,6 +100,7 @@ jobs:
         (cd tests && DUCKDB_R_TEST_EXTENSION_REQUIRED=1 R -f testthat.R)
 
     - name: R CMD check
+      shell: bash
       run: |
         cd tools/rpkg
         _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran -o /tmp duckdb_*.tar.gz
@@ -109,11 +109,13 @@ jobs:
     - name: Print R log (1)
       # Print logs now only if success, for the case of failure there's another identical step below.
       if: ${{ success() }}
+      shell: bash
       run: |
         cat /tmp/duckdb.Rcheck/00check.log
         find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
 
     - name: Valgrind
+      shell: bash
       run: |
         cd tools/rpkg
         export NOT_CRAN='false'
@@ -121,11 +123,13 @@ jobs:
 
     - name: Print check directory tree
       if: ${{ always() }}
+      shell: bash
       run: |
         ls -R /tmp/duckdb.Rcheck
 
     - name: Print R log (2)
       if: ${{ always() }}
+      shell: bash
       run: |
         cat /tmp/duckdb.Rcheck/00check.log
         find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
@@ -133,12 +137,13 @@ jobs:
     - name: Coverage
       env:
         DUCKDB_R_DEBUG: 1
+      shell: Rscript {0}
       run: |
         pkgload::load_all("tools/rpkg")
         cov <- covr::codecov("tools/rpkg", relative_path = ".")
-      shell: Rscript {0}
 
     - name: Deploy
+      shell: bash
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
   rstats-linux-debug:
@@ -166,12 +171,14 @@ jobs:
     - name: Install
       env:
         GITHUB_PAT: ${{ github.token }}
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
     - name: Build
+      shell: bash
       run: |
         cd tools/rpkg
         ./configure
@@ -198,10 +205,12 @@ jobs:
     - uses: r-lib/actions/setup-pandoc@v2
 
     - name: Install
+      shell: bash
       run: |
         R -f tools/rpkg/dependencies.R
 
     - name: Build
+      shell: bash
       run: |
         cd tools/rpkg
         ./configure
@@ -222,6 +231,7 @@ jobs:
         fetch-depth: 0
 
     - name: Run
+      shell: bash
       run: |
         (cd tools/rpkg && ./configure && R CMD build .)
         docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c /duckdb/scripts/r_ubsan.sh
