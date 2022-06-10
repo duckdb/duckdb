@@ -27,6 +27,14 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	vector<column_t> column_ids;
 };
 
+static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
+	if (column_id == DConstants::INVALID_INDEX) {
+		return column_id;
+	}
+	auto &col = table.columns[column_id];
+	return col.StorageOid();
+}
+
 struct TableScanGlobalState : public GlobalTableFunctionState {
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
 		D_ASSERT(bind_data_p);
@@ -46,7 +54,12 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
+	auto &bind_data = (TableScanBindData &)*input.bind_data;
 	result->column_ids = input.column_ids;
+	for (auto &col : result->column_ids) {
+		auto storage_idx = GetStorageIndex(*bind_data.table, col);
+		col = storage_idx;
+	}
 	result->scan_state.table_filters = input.filters;
 	TableScanParallelStateNext(context, input.bind_data, result.get(), gstate);
 	return move(result);
@@ -68,7 +81,8 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
-	return bind_data.table->storage->GetStatistics(context, column_id);
+	auto storage_idx = GetStorageIndex(*bind_data.table, column_id);
+	return bind_data.table->storage->GetStatistics(context, storage_idx);
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

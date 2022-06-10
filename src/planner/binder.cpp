@@ -323,19 +323,20 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 		return false;
 	}
 	if (!schema_name.empty()) {
-		auto table_entry = binding->GetTableEntry();
-		if (!table_entry) {
+		auto catalog_entry = binding->GetStandardEntry();
+		if (!catalog_entry) {
 			return false;
 		}
-		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
 			return false;
 		}
 	}
-	if (!binding->HasMatchingBinding(column_name)) {
+	bool binding_found;
+	binding_found = binding->HasMatchingBinding(column_name);
+	if (!binding_found) {
 		error_message = binding->ColumnNotFoundError(column_name);
-		return false;
 	}
-	return true;
+	return binding_found;
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
@@ -390,8 +391,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	auto binder = Binder::CreateBinder(context);
 
 	for (auto &col : table->columns) {
-		names.push_back(col.name);
-		types.push_back(col.type);
+		names.push_back(col.Name());
+		types.push_back(col.Type());
 	}
 
 	binder->bind_context.AddGenericBinding(update_table_index, table->name, names, types);
