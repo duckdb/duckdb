@@ -71,6 +71,8 @@ err = subprocess.stderr.read()
 subprocess.wait()
 
 if subprocess.returncode == 0:
+	print('--------------------- SQLANCER SUCCESS ----------------------')
+	print('SQLANCER EXITED WITH CODE ' + str(subprocess.returncode))
 	exit(0)
 
 print('--------------------- SQLANCER FAILURE ----------------------')

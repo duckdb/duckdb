@@ -105,4 +105,4 @@ jobs:
       - name: Fuzz
         shell: bash
         run: |
-            python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb
+            python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb --seed=0
