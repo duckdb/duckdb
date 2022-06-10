@@ -91,7 +91,7 @@ runs:
         make
 
     - name: Build External Extensions
-      if: ${{ inputs.oote != 0 }}
+      if: ${{ inputs.out_of_tree_ext != 0 }}
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree

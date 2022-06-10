@@ -156,7 +156,7 @@ jobs:
           treat_warn_as_error: 0
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
-          oote: 1
+          out_of_tree_ext: 1
 
       - name: Deploy
         run: |
