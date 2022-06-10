@@ -103,7 +103,7 @@ jobs:
     - name: R CMD check
       run: |
         cd tools/rpkg
-        _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran -o /tmp duckdb_*.tar.gz
+        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
     - name: Print R log (1)
@@ -117,7 +117,7 @@ jobs:
       run: |
         cd tools/rpkg
         export NOT_CRAN='false'
-        R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
+        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
     - name: Print check directory tree
       if: ${{ always() }}
@@ -208,7 +208,7 @@ jobs:
         R CMD build .
         R CMD INSTALL duckdb_*.tar.gz
         (cd tests && R -f testthat.R)
-        _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
+        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
   rubsan:
