@@ -1,12 +1,15 @@
 #include "duckdb/storage/statistics/validity_statistics.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/field_writer.hpp"
+
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
 ValidityStatistics::ValidityStatistics(bool has_null, bool has_no_null)
-    : BaseStatistics(LogicalType(LogicalTypeId::VALIDITY)), has_null(has_null), has_no_null(has_no_null) {
+    : BaseStatistics(LogicalType(LogicalTypeId::VALIDITY), StatisticsType::LOCAL_STATS), has_null(has_null),
+      has_no_null(has_no_null) {
 }
 
 unique_ptr<BaseStatistics> ValidityStatistics::Combine(const unique_ptr<BaseStatistics> &lstats,
@@ -49,7 +52,7 @@ void ValidityStatistics::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(has_no_null);
 }
 
-unique_ptr<BaseStatistics> ValidityStatistics::Deserialize(FieldReader &reader) {
+unique_ptr<ValidityStatistics> ValidityStatistics::Deserialize(FieldReader &reader) {
 	bool has_null = reader.ReadRequired<bool>();
 	bool has_no_null = reader.ReadRequired<bool>();
 	return make_unique<ValidityStatistics>(has_null, has_no_null);
@@ -80,7 +83,9 @@ void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_
 }
 
 string ValidityStatistics::ToString() const {
-	return has_null ? "[Has Null: true]" : "[Has Null: false]";
+	auto has_n = has_null ? "true" : "false";
+	auto has_n_n = has_no_null ? "true" : "false";
+	return StringUtil::Format("[Has Null: %s, Has No Null: %s]", has_n, has_n_n);
 }
 
 } // namespace duckdb

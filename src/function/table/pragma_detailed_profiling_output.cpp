@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-struct PragmaDetailedProfilingOutputOperatorData : public FunctionOperatorData {
+struct PragmaDetailedProfilingOutputOperatorData : public GlobalTableFunctionState {
 	explicit PragmaDetailedProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
 	}
 	idx_t chunk_index;
@@ -56,10 +56,8 @@ static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext 
 	return make_unique<PragmaDetailedProfilingOutputData>(return_types);
 }
 
-unique_ptr<FunctionOperatorData> PragmaDetailedProfilingOutputInit(ClientContext &context,
-                                                                   const FunctionData *bind_data,
-                                                                   const vector<column_t> &column_ids,
-                                                                   TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaDetailedProfilingOutputInit(ClientContext &context,
+                                                                       TableFunctionInitInput &input) {
 	return make_unique<PragmaDetailedProfilingOutputOperatorData>();
 }
 
@@ -106,10 +104,10 @@ static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, 
 	}
 }
 
-static void PragmaDetailedProfilingOutputFunction(ClientContext &context, const FunctionData *bind_data_p,
-                                                  FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*operator_state;
-	auto &data = (PragmaDetailedProfilingOutputData &)*bind_data_p;
+static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p,
+                                                  DataChunk &output) {
+	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*data_p.global_state;
+	auto &data = (PragmaDetailedProfilingOutputData &)*data_p.bind_data;
 
 	if (!state.initialized) {
 		// create a ChunkCollection

@@ -110,3 +110,8 @@ SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i = 1337) FROM list_extract_test 
 1	NULL
 2	NULL
 3	NULL
+
+# test forcing reallocation of lists
+
+statement ok
+CREATE TABLE test_realloc AS (SELECT range % 4 g, list(range || 'some_string_longer_than_12') l FROM range(500000) GROUP BY range % 4);

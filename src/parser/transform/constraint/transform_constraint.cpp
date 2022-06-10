@@ -70,12 +70,21 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		return make_unique<UniqueConstraint>(index, false);
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
+	case duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL: {
+		if (column.DefaultValue()) {
+			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.Name());
+		}
+		column.SetGeneratedExpression(TransformExpression(constraint->raw_expr));
+		return nullptr;
+	}
+	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED:
+		throw InvalidInputException("Can not create a STORED generated column!");
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
-		column.default_value = TransformExpression(constraint->raw_expr);
+		column.SetDefaultValue(TransformExpression(constraint->raw_expr));
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_COMPRESSION:
-		column.compression_type = CompressionTypeFromString(constraint->compression_name);
-		if (column.compression_type == CompressionType::COMPRESSION_AUTO) {
+		column.SetCompressionType(CompressionTypeFromString(constraint->compression_name));
+		if (column.CompressionType() == CompressionType::COMPRESSION_AUTO) {
 			throw ParserException("Unrecognized option for column compression, expected none, uncompressed, rle, "
 			                      "dictionary, pfor, bitpacking or fsst");
 		}

@@ -1,11 +1,13 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include <cmath>
 #include <limits>
 
 namespace duckdb {
 
-struct TestAllTypesData : public FunctionOperatorData {
+struct TestAllTypesData : public GlobalTableFunctionState {
 	TestAllTypesData() : offset(0) {
 	}
 
@@ -111,6 +113,27 @@ static vector<TestType> GetTestTypes() {
 	     Value::DOUBLE(-std::numeric_limits<double>::infinity()), Value(LogicalType::DOUBLE), Value::DOUBLE(-42)});
 	result.emplace_back(double_list_type, "double_array", empty_double_list, double_list);
 
+	auto date_list_type = LogicalType::LIST(LogicalType::DATE);
+	auto empty_date_list = Value::EMPTYLIST(LogicalType::DATE);
+	auto date_list =
+	    Value::LIST({Value::DATE(date_t()), Value::DATE(date_t::infinity()), Value::DATE(date_t::ninfinity()),
+	                 Value(LogicalType::DATE), Value::DATE(Date::FromString("2022-05-12"))});
+	result.emplace_back(date_list_type, "date_array", empty_date_list, date_list);
+
+	auto timestamp_list_type = LogicalType::LIST(LogicalType::TIMESTAMP);
+	auto empty_timestamp_list = Value::EMPTYLIST(LogicalType::TIMESTAMP);
+	auto timestamp_list = Value::LIST({Value::TIMESTAMP(timestamp_t()), Value::TIMESTAMP(timestamp_t::infinity()),
+	                                   Value::TIMESTAMP(timestamp_t::ninfinity()), Value(LogicalType::TIMESTAMP),
+	                                   Value::TIMESTAMP(Timestamp::FromString("2022-05-12 16:23:45"))});
+	result.emplace_back(timestamp_list_type, "timestamp_array", empty_timestamp_list, timestamp_list);
+
+	auto timestamptz_list_type = LogicalType::LIST(LogicalType::TIMESTAMP_TZ);
+	auto empty_timestamptz_list = Value::EMPTYLIST(LogicalType::TIMESTAMP_TZ);
+	auto timestamptz_list = Value::LIST({Value::TIMESTAMPTZ(timestamp_t()), Value::TIMESTAMPTZ(timestamp_t::infinity()),
+	                                     Value::TIMESTAMPTZ(timestamp_t::ninfinity()), Value(LogicalType::TIMESTAMP_TZ),
+	                                     Value::TIMESTAMPTZ(Timestamp::FromString("2022-05-12 16:23:45-07"))});
+	result.emplace_back(timestamptz_list_type, "timestamptz_array", empty_timestamptz_list, timestamptz_list);
+
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	auto empty_varchar_list = Value::EMPTYLIST(LogicalType::VARCHAR);
 	auto varchar_list =
@@ -186,8 +209,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<TestAllTypesData>();
 	auto test_types = GetTestTypes();
 	// 3 rows: min, max and NULL
@@ -201,9 +223,8 @@ unique_ptr<FunctionOperatorData> TestAllTypesInit(ClientContext &context, const 
 	return move(result);
 }
 
-void TestAllTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk &output) {
-	auto &data = (TestAllTypesData &)*operator_state;
+void TestAllTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (TestAllTypesData &)*data_p.global_state;
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

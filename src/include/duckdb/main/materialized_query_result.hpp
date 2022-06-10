@@ -14,15 +14,22 @@
 
 namespace duckdb {
 
+class ClientContext;
+
 class MaterializedQueryResult : public QueryResult {
 public:
+	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
-	                                   vector<LogicalType> types, vector<string> names);
+	                                   vector<LogicalType> types, vector<string> names,
+	                                   const shared_ptr<ClientContext> &context);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(string error);
 
 	ChunkCollection collection;
+
+	//! The client context this MaterializedQueryResult belongs to
+	std::weak_ptr<ClientContext> context;
 
 public:
 	//! Fetches a DataChunk from the query result.

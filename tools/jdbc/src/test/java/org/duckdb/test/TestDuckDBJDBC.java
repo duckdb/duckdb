@@ -146,6 +146,91 @@ public class TestDuckDBJDBC {
 
 	}
 
+	public static void test_prepare_exception() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+	
+		stmt = conn.createStatement();
+		
+		try {
+			stmt.execute("this is no SQL;");
+			fail();
+		} catch (SQLException e) {
+		}
+	}
+
+	public static void test_execute_exception() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+	
+		stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE t (id INT, b UUID)");
+		stmt.execute("INSERT INTO t VALUES (1, uuid())");
+		
+		try {
+			ResultSet rs = stmt.executeQuery("SELECT * FROM t");
+			rs.next();
+			fail();
+		} catch (SQLException e) {
+		}
+	}
+
+	public static void test_autocommit_off() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs;
+
+		conn.setAutoCommit(false);
+	
+		stmt = conn.createStatement();
+		stmt.execute("CREATE TABLE t (id INT);");
+		conn.commit();
+
+		stmt.execute("INSERT INTO t (id) VALUES (1);");
+		stmt.execute("INSERT INTO t (id) VALUES (2);");
+		stmt.execute("INSERT INTO t (id) VALUES (3);");
+		conn.commit();
+
+		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
+		rs.next();
+		assertEquals(rs.getInt(1), 3);
+		rs.close();
+
+		stmt.execute("INSERT INTO t (id) VALUES (4);");
+		stmt.execute("INSERT INTO t (id) VALUES (5);");
+		conn.rollback();
+
+		// After the rollback both inserts must be reverted
+		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
+		rs.next();
+		assertEquals(rs.getInt(1), 3);
+		
+		stmt.execute("INSERT INTO t (id) VALUES (6);");
+		stmt.execute("INSERT INTO t (id) VALUES (7);");
+		
+		conn.setAutoCommit(true);
+
+		// Turning auto-commit on triggers a commit
+		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
+		rs.next();
+		assertEquals(rs.getInt(1), 5);
+		
+		// This means a rollback must not be possible now
+		try {
+			conn.rollback();
+			fail();
+		} catch (SQLException e) {}
+
+		stmt.execute("INSERT INTO t (id) VALUES (8);");
+		rs = stmt.executeQuery("SELECT COUNT(*) FROM T");
+		rs.next();
+		assertEquals(rs.getInt(1), 6);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_enum() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -235,6 +320,7 @@ public class TestDuckDBJDBC {
 		assertTrue(rs.getString(1).equals("enum290"));
 		assertTrue(rs.getString("e1").equals("enum290"));
 		rs.close();
+		conn.close();
 	}
 
 	public static void test_timestamp_tz() throws Exception {

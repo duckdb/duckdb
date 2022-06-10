@@ -234,7 +234,9 @@ private:
 };
 
 // adapted from https://en.wikibooks.org/wiki/Algorithm_Implementation/Strings/Levenshtein_distance#C++
-idx_t StringUtil::LevenshteinDistance(const string &s1, const string &s2) {
+idx_t StringUtil::LevenshteinDistance(const string &s1_p, const string &s2_p) {
+	auto s1 = StringUtil::Lower(s1_p);
+	auto s2 = StringUtil::Lower(s2_p);
 	idx_t len1 = s1.size();
 	idx_t len2 = s2.size();
 	if (len1 == 0) {

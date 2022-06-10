@@ -58,7 +58,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, types, names);
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context);
 	while (true) {
 		auto chunk = Fetch();
 		if (!chunk || chunk->size() == 0) {

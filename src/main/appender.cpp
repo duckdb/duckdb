@@ -50,7 +50,7 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
 	for (auto &column : description->columns) {
-		types.push_back(column.type);
+		types.push_back(column.Type());
 	}
 	InitializeChunk();
 }

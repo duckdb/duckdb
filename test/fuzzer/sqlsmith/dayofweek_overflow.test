@@ -9,10 +9,10 @@ statement ok
 CREATE TABLE dates(date DATE);
 
 statement ok
-INSERT INTO dates VALUES('5877642-06-23 (BC)');
+INSERT INTO dates VALUES('5877642-06-25 (BC)');
 
 statement ok
-INSERT INTO dates VALUES('5881580-07-11');
+INSERT INTO dates VALUES('5881580-07-10');
 
 statement ok
 SELECT dayofweek(CAST(ref_0.date AS DATE)) AS c9 FROM dates AS ref_0

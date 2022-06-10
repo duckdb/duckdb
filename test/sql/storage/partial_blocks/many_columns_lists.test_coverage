@@ -11,7 +11,7 @@ statement ok
 INSERT INTO lists VALUES ([0, NULL, 0], [1, NULL, 1], [2, NULL, 2], [3, NULL, 3], [4, NULL, 4], [5, NULL, 5], [6, NULL, 6], [7, NULL, 7], [8, NULL, 8], [9, NULL, 9], [10, NULL, 10], [11, NULL, 11], [12, NULL, 12], [13, NULL, 13], [14, NULL, 14], [15, NULL, 15], [16, NULL, 16], [17, NULL, 17], [18, NULL, 18], [19, NULL, 19], [20, NULL, 20], [21, NULL, 21], [22, NULL, 22], [23, NULL, 23], [24, NULL, 24], [25, NULL, 25], [26, NULL, 26], [27, NULL, 27], [28, NULL, 28], [29, NULL, 29], [30, NULL, 30], [31, NULL, 31], [32, NULL, 32], [33, NULL, 33], [34, NULL, 34], [35, NULL, 35], [36, NULL, 36], [37, NULL, 37], [38, NULL, 38], [39, NULL, 39], [40, NULL, 40], [41, NULL, 41], [42, NULL, 42], [43, NULL, 43], [44, NULL, 44], [45, NULL, 45], [46, NULL, 46], [47, NULL, 47], [48, NULL, 48], [49, NULL, 49], [50, NULL, 50], [51, NULL, 51], [52, NULL, 52], [53, NULL, 53], [54, NULL, 54], [55, NULL, 55], [56, NULL, 56], [57, NULL, 57], [58, NULL, 58], [59, NULL, 59], [60, NULL, 60], [61, NULL, 61], [62, NULL, 62], [63, NULL, 63], [64, NULL, 64], [65, NULL, 65], [66, NULL, 66], [67, NULL, 67], [68, NULL, 68], [69, NULL, 69], [70, NULL, 70], [71, NULL, 71], [72, NULL, 72], [73, NULL, 73], [74, NULL, 74], [75, NULL, 75], [76, NULL, 76], [77, NULL, 77], [78, NULL, 78], [79, NULL, 79], [80, NULL, 80], [81, NULL, 81], [82, NULL, 82], [83, NULL, 83], [84, NULL, 84], [85, NULL, 85], [86, NULL, 86], [87, NULL, 87], [88, NULL, 88], [89, NULL, 89], [90, NULL, 90], [91, NULL, 91], [92, NULL, 92], [93, NULL, 93], [94, NULL, 94], [95, NULL, 95], [96, NULL, 96], [97, NULL, 97], [98, NULL, 98], [99, NULL, 99]);
 
 query I
-SELECT total_blocks<10 FROM pragma_database_size()
+SELECT total_blocks<15 FROM pragma_database_size()
 ----
 true
 
@@ -23,10 +23,10 @@ select count(*) from pragma_storage_info('lists') where block_id IS NULL;
 ----
 0
 
-query I
-SELECT total_blocks<10 FROM pragma_database_size()
+query I nosort q0
+SELECT total_blocks FROM pragma_database_size()
 ----
-true
+
 
 loop i 0 100
 
@@ -62,7 +62,7 @@ true	NULL	true
 
 endloop
 
-query I
-SELECT total_blocks<10 FROM pragma_database_size()
+query I nosort q0
+SELECT total_blocks FROM pragma_database_size()
 ----
-true
+

@@ -153,7 +153,8 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		// no potential overflow: replace with non-overflowing operator
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
 	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
 	return move(stats);
 }
@@ -344,6 +345,9 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
+
+	functions.name = "add";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -458,7 +462,8 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 		new_min = Value(expr.return_type);
 		new_max = Value(expr.return_type);
 	}
-	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
 	if (istats.validity_stats) {
 		stats->validity_stats = istats.validity_stats->Copy();
 	}
@@ -560,6 +565,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	// we can negate intervals
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
+	set.AddFunction(functions);
+
+	functions.name = "subtract";
 	set.AddFunction(functions);
 }
 
@@ -693,6 +701,9 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>, true));
 	set.AddFunction(functions);
+
+	functions.name = "multiply";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -813,6 +824,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
 
+	set.AddFunction(functions);
+
+	functions.name = "divide";
 	set.AddFunction(functions);
 }
 

@@ -204,17 +204,29 @@ struct ICUStrftime : public ICUDateFunc {
 				StrfTimeFormat format;
 				ParseFormatSpecifier(*ConstantVector::GetData<string_t>(fmt_arg), format);
 
-				UnaryExecutor::Execute<timestamp_t, string_t>(src_arg, result, args.size(), [&](timestamp_t input) {
-					return Operation(calendar.get(), input, tz_name, format, result);
-				});
+				UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
+				    src_arg, result, args.size(), [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+					    if (Timestamp::IsFinite(input)) {
+						    return Operation(calendar.get(), input, tz_name, format, result);
+					    } else {
+						    mask.SetInvalid(idx);
+						    return string_t();
+					    }
+				    });
 			}
 		} else {
-			BinaryExecutor::Execute<timestamp_t, string_t, string_t>(
-			    src_arg, fmt_arg, result, args.size(), [&](timestamp_t input, string_t format_specifier) {
-				    StrfTimeFormat format;
-				    ParseFormatSpecifier(format_specifier, format);
+			BinaryExecutor::ExecuteWithNulls<timestamp_t, string_t, string_t>(
+			    src_arg, fmt_arg, result, args.size(),
+			    [&](timestamp_t input, string_t format_specifier, ValidityMask &mask, idx_t idx) {
+				    if (Timestamp::IsFinite(input)) {
+					    StrfTimeFormat format;
+					    ParseFormatSpecifier(format_specifier, format);
 
-				    return Operation(calendar.get(), input, tz_name, format, result);
+					    return Operation(calendar.get(), input, tz_name, format, result);
+				    } else {
+					    mask.SetInvalid(idx);
+					    return string_t();
+				    }
 			    });
 		}
 	}

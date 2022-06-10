@@ -8,14 +8,19 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class ClientContext;
+class PhysicalResultCollector;
+class PreparedStatementData;
+
+typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context, PreparedStatementData &data)>
+    get_result_collector_t;
 
 struct ClientConfig {
 	//! If the query profiler is enabled or not.
@@ -51,6 +56,8 @@ struct ClientConfig {
 	bool force_index_join = false;
 	//! Force out-of-core computation for operators that support it, used for testing
 	bool force_external = false;
+	//! Force disable cross product generation when hyper graph isn't connected, used for testing
+	bool force_no_cross_product = false;
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
@@ -61,8 +68,14 @@ struct ClientConfig {
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
 
+	//! Function that is used to create the result collector for a materialized result
+	//! Defaults to PhysicalMaterializedCollector
+	get_result_collector_t result_collector = nullptr;
+
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
+
+	static string ExtractTimezoneFromConfig(ClientConfig &config);
 };
 
 } // namespace duckdb
