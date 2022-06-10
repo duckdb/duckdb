@@ -47,9 +47,9 @@ unique_ptr<TableRef> ValueRelation::GetTableRef() {
 		}
 	} else {
 		for (idx_t i = 0; i < columns.size(); i++) {
-			table_ref->expected_names.push_back(columns[i].name);
-			table_ref->expected_types.push_back(columns[i].type);
-			D_ASSERT(names.size() == 0 || columns[i].name == names[i]);
+			table_ref->expected_names.push_back(columns[i].Name());
+			table_ref->expected_types.push_back(columns[i].Type());
+			D_ASSERT(names.size() == 0 || columns[i].Name() == names[i]);
 		}
 	}
 	// copy the expressions

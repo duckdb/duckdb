@@ -8,3 +8,4 @@ benchmark/micro/cast/cast_string_int.benchmark
 benchmark/micro/cast/cast_timestamp_string.benchmark
 benchmark/micro/limit/parallel_limit.benchmark
 benchmark/micro/filter/parallel_complex_filter.benchmark
+benchmark/micro/catalog/add_column_empty.benchmark

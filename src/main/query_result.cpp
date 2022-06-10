@@ -317,7 +317,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::ENUM: {
-		switch (EnumType::GetPhysicalType(EnumType::GetSize(type))) {
+		// TODO what do we do with pointer enums here?
+		switch (EnumType::GetPhysicalType(type)) {
 		case PhysicalType::UINT8:
 			child.format = "C";
 			break;

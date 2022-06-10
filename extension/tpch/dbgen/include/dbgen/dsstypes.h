@@ -152,3 +152,13 @@ int ld_nation PROTO((code_t * c, int mode));
 int mk_region PROTO((DSS_HUGE i, code_t *c));
 int pr_region PROTO((code_t * c, int mode));
 int ld_region PROTO((code_t * c, int mode));
+
+/* speed seed - advances seeds `skip_count` times */
+long sd_nation(int child, DSS_HUGE skip_count);
+long sd_region(int child, DSS_HUGE skip_coun);
+long sd_order(int child, DSS_HUGE skip_count);
+long sd_line(int child, DSS_HUGE skip_count);
+long sd_supp(int child, DSS_HUGE skip_count);
+long sd_part(int child, DSS_HUGE skip_count);
+long sd_psupp(int child, DSS_HUGE skip_count);
+long sd_cust(int child, DSS_HUGE skip_count);
