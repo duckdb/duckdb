@@ -26,6 +26,7 @@ skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not f
 library("DBI")
 library("duckdb")
 library("dplyr")
+library("arrow")
 
 example_data <- dplyr::tibble(
   int = c(1:3, NA_integer_, 5:10),
