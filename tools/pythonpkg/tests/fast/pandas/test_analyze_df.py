@@ -18,8 +18,7 @@ class TestAnalyzeDF(object):
     def test_empty_dataframe(self, duckdb_cursor):
         data = []
         df = create_generic_dataframe(data)
-        with pytest.raises(Exception, match="Empty dataframe can not be analyzed"):
-            duckdb.analyze_df(df)
+        duckdb.analyze_df(df)
 
     def test_analyze_date(self, duckdb_cursor):
         data = [datetime.date(1992, 7, 30), datetime.date(1992, 7, 31)]
