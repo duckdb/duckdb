@@ -123,7 +123,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 
 	auto dict_offset = base_data[row_id];
 	uint32_t string_length;
-	if ((idx_t)row_id == segment.start) {
+	if ((idx_t)row_id == 0) {
 		// edge case where this is the first string in the dict
 		string_length =  std::abs(dict_offset);
 	} else {
