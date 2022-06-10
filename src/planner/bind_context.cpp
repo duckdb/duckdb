@@ -14,6 +14,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 
 #include <algorithm>
 
@@ -181,13 +182,15 @@ static bool ColumnIsGenerated(Binding *binding, column_t index) {
 		return false;
 	}
 	auto table_binding = (TableBinding *)binding;
-	auto table_entry = table_binding->GetTableEntry();
-	if (!table_entry) {
+	auto catalog_entry = table_binding->GetStandardEntry();
+	if (!catalog_entry) {
 		return false;
 	}
 	if (index == COLUMN_IDENTIFIER_ROW_ID) {
 		return false;
 	}
+	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
+	auto table_entry = (TableCatalogEntry *)catalog_entry;
 	D_ASSERT(table_entry->columns.size() >= index);
 	return table_entry->columns[index].Generated();
 }
@@ -430,6 +433,18 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
+}
+
+void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
+                                  const vector<LogicalType> &types, StandardEntry *entry) {
+	D_ASSERT(entry);
+	AddBinding(alias, make_unique<EntryBinding>(alias, types, names, index, *entry));
+}
+
+void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
+                          ViewCatalogEntry *view) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddEntryBinding(index, alias, names, subquery.types, (StandardEntry *)view);
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {

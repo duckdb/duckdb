@@ -110,12 +110,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 	}
 	if (colref.column_names.size() == 2) {
 		// "schema_name.table_name"
-		auto table_entry = binding->GetTableEntry();
-		if (!table_entry) {
+		auto catalog_entry = binding->GetStandardEntry();
+		if (!catalog_entry) {
 			return nullptr;
 		}
 		auto &schema_name = colref.column_names[0];
-		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
 			return nullptr;
 		}
 	}

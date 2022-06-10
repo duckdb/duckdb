@@ -11,10 +11,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -40,12 +36,15 @@ jobs:
         python-version: '3.7'
 
     - name: Build
+      shell: bash
       run: make debug
 
     - name: Test
+      shell: bash
       run: make unittestci
 
     - name: Amalgamation
+      shell: bash
       run: |
         python scripts/amalgamation.py --extended
         python scripts/parquet_amalgamation.py
@@ -83,23 +82,28 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make
 
     - name: Unit Test
+      shell: bash
       run: make allunit
 
     - name: Tools Tests
+      shell: bash
       run: |
         python tools/shell/shell-test.py build/release/duckdb
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
+      shell: bash
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
         (cd examples/jdbc; make; make maven)
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
@@ -133,6 +137,7 @@ jobs:
           python-version: '3.7'
 
       - name: Install OpenSSL
+        shell: bash
         run: |
           mkdir -p build/openssl
           cd build/openssl
@@ -146,6 +151,7 @@ jobs:
           make install_sw
 
       - name: Get OpenSSL path
+        shell: bash
         run: |
           export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
           echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
@@ -158,6 +164,7 @@ jobs:
           run_tests: 0
 
       - name: Deploy
+        shell: bash
         run: |
           zip -j httpfs.duckdb_extension.zip build/release/extension/httpfs/httpfs.duckdb_extension
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
