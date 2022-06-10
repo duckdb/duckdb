@@ -46,7 +46,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalState : public GlobalSinkState {
 public:
-	HashJoinGlobalState() {
+	HashJoinGlobalState() : finalized(false), next_local_idx(0) {
 	}
 
 	//! Global HT used by the join
@@ -58,8 +58,11 @@ public:
 
 	//! Whether we are doing an external join
 	bool external;
-	//! Memory usage per thread (if we exceed threshold we spill)
-	idx_t memory_per_thread;
+	//! TODO
+	atomic<idx_t> next_local_idx;
+	//! Memory usage per thread during the Sink and Execute phases
+	idx_t sink_memory_per_thread;
+	idx_t execute_memory_per_thread;
 	//! Hash tables built by each thread
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
 };
@@ -130,10 +133,15 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
 	// for external hash join
 	state->external = ClientConfig::GetConfig(context).force_external;
-	// Memory usage per thread scales with max mem / num threads, we spill at 60%
-	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
-	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	state->memory_per_thread = double(max_memory / num_threads) * 0.6;
+	// memory usage per thread scales with max mem / num threads
+	double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+	double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	// during the Sink phase we spill at 60%
+	state->sink_memory_per_thread = max_memory / num_threads * 0.6;
+	// during the Execute phase we are probing and sinking at the same time
+	// at this point we're already doing an external join, and we need to spill the new sink data
+	// we can spill at a much lower percentage, like 10%
+	state->execute_memory_per_thread = max_memory / num_threads * 0.6;
 	return move(state);
 }
 
@@ -179,7 +187,10 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
 	}
 
-	// TODO swizzle and spill if exceeds mem limit
+	// swizzle if we reach memory limit
+	if (lstate.hash_table->SizeInBytes() >= gstate.sink_memory_per_thread) {
+		lstate.hash_table->SwizzleCollectedBlocks();
+	}
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -192,6 +203,8 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 			lstate.hash_table->SwizzleCollectedBlocks();
 		}
 		gstate.local_hash_tables.push_back(move(lstate.hash_table));
+		// TODO some hash tables may be swizzled while others aren't due to race conditions
+		//  need to ensure all of them are swizzled!
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -245,15 +258,25 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
+JoinHashTable *AssignLocalHT(HashJoinGlobalState &sink) {
+	auto local_thread_idx = ++sink.next_local_idx;
+	// TODO need to add if number of threads changes during execution, assert that it doesn't for now
+	D_ASSERT(local_thread_idx < sink.local_hash_tables.size());
+	return sink.local_hash_tables[local_thread_idx].get();
+}
+
 class PhysicalHashJoinState : public OperatorState {
 public:
+	PhysicalHashJoinState() : local_ht(nullptr) {
+	}
+
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
-	//! Local sink state for external join
-	unique_ptr<HashJoinLocalState> local_sink;
+	//! Local ht for external join
+	JoinHashTable *local_ht;
 	//! DataChunks for sinking data into local_sink for external join
 	DataChunk sink_keys;
 	DataChunk sink_payload;
@@ -289,6 +312,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	}
 
 	if (sink.perfect_join_executor) {
+		D_ASSERT(!sink.external);
 		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
 	}
 
@@ -314,11 +338,14 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
-		if (!state.local_sink->initialized) {
-			state.local_sink->Initialize(sink);
+		if (!state.local_ht) {
+			state.local_ht = AssignLocalHT(sink);
 		}
-		state.scan_structure = sink.hash_table->ProbeAndSink(state.join_keys, input, *state.local_sink->hash_table,
-		                                                     state.sink_keys, state.sink_payload);
+		state.scan_structure = sink.hash_table->ProbeAndBuild(state.join_keys, input, *state.local_ht, state.sink_keys,
+		                                                      state.sink_payload);
+		if (state.local_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
+			state.local_ht->SwizzleCollectedBlocks();
+		}
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
@@ -331,12 +358,21 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinScanState : public GlobalSourceState {
 public:
-	explicit HashJoinScanState(const PhysicalHashJoin &op) : op(op) {
+	explicit HashJoinScanState(const PhysicalHashJoin &op) : op(op), local_ht(nullptr) {
+		// need to assign a thread-local HT per thread again: reset atomic
+		auto &sink = (HashJoinGlobalState &)*op.sink_state;
+		sink.next_local_idx = 0;
+		sink.hash_table->finalized = false;
 	}
 
 	const PhysicalHashJoin &op;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
+
+	//! TODO
+	JoinHashTable *local_ht;
+	//! TODO
+	//	atomic<idx_t>
 
 	idx_t MaxThreads() override {
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
@@ -350,10 +386,48 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                LocalSourceState &lstate) const {
-	D_ASSERT(IsRightOuterJoin(join_type));
-	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	auto &state = (HashJoinScanState &)gstate;
+
+	if (sink.external) {
+		if (!state.local_ht) {
+			state.local_ht = AssignLocalHT(sink);
+			state.local_ht->Partition(*sink.hash_table);
+		}
+
+		if (!sink.hash_table->finalized) {
+			sink.hash_table->FinalizeExternal();
+		}
+
+		// TODO
+		//  At this point we've already probed the first partitions, and the probe pipeline is completely finished
+		//  So, each thread has its own thread-local HT, which it should partition first
+		//  After partitioning we should build the pointer table for the next partitions, by grabbing a mutex, e.g.:
+		//  if (!finalized) {
+		//    lock_guard<mutex> flock(finalize_lock);
+		//    // check again
+		//    if (!finalized) {
+		//		Finalize()
+		//    }
+		//  }
+		//  This is fine for the first pass, since no other thread will be using the pointer table
+		//  However, we need to do this multiple times, and we need to make sure that we won't start building the new
+		//  pointer table before the last thread is done with probing it ... How do we do this with just a lock?
+		//  What if we merge the thread-local ProbeAndBuild HT's into a global one, that all of the threads are
+		//  scanning? And then we have an atomic 'scanned_count' that is incremented AFTER We would also need to have a
+		//  'block_idx/entry_idx' like in the PayloadScanner for sorted Data
+		//  ----------------------------
+		//  We need to move the thread-local HT's from the Execute phase to the GlobalSinkState
+		//  Because the Execute OperatorState gets deleted
+		//  However, we don't know during Execute when we're done, the pipeline executor does that
+		//  So, maybe we can re-use the thread-local HT's, and have an atomic index?
+		//  ----------------------------
+		//  NOTE: we can do a ScanFullOuter on the partitions that we've completed, and then deallocate them
+		//  This is better than writing the blocks back to disk again and checking this at the end
+	}
+
+	D_ASSERT(IsRightOuterJoin(join_type));
+	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	sink.hash_table->ScanFullOuter(chunk, state.ht_scan_state);
 }
 

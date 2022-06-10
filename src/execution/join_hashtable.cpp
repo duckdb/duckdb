@@ -855,6 +855,10 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	return key_count;
 }
 
+idx_t JoinHashTable::SizeInBytes() {
+	return block_collection->SizeInBytes() + string_heap->SizeInBytes();
+}
+
 void JoinHashTable::SwizzleCollectedBlocks() {
 	// The main data blocks can just be moved
 	swizzled_block_collection->Merge(*block_collection);
@@ -988,6 +992,18 @@ void JoinHashTable::ReduceHistogram(idx_t avg_string_size) {
 	}
 }
 
+void JoinHashTable::FinalizeExternal() {
+	lock_guard<mutex> flock(finalize_lock);
+	if (finalized) {
+		return;
+	}
+	// TODO Complete partitioning, or perhaps schedule another partitioning round
+	//  for now we just move the data back to the swizzled blocks
+	PinPartitions();
+	UnswizzleBlocks();
+	Finalize();
+}
+
 class PartitionTask : public ExecutorTask {
 public:
 	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
@@ -1030,11 +1046,7 @@ public:
 	}
 
 	void FinishEvent() override {
-		// TODO Complete partitioning, or perhaps schedule another partitioning round
-		//  for now we just move the data back to the swizzled blocks
-		global_ht.PinPartitions();
-		global_ht.UnswizzleBlocks();
-		global_ht.Finalize();
+		global_ht.FinalizeExternal();
 	}
 };
 
@@ -1092,8 +1104,8 @@ void JoinHashTable::PinPartitions() {
 	}
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
-                                                      DataChunk &sink_keys, DataChunk &sink_payload) {
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
+                                                       DataChunk &sink_keys, DataChunk &sink_payload) {
 	D_ASSERT(Count() > 0); // should be handled before
 	D_ASSERT(finalized);
 
@@ -1126,12 +1138,14 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSink(DataChunk &keys, DataChunk
 	auto false_count = keys.size() - true_count;
 
 	// sink non-matching stuff into HT for later
+	sink_keys.Reset();
+	sink_payload.Reset();
 	sink_keys.Reference(keys);
 	sink_payload.Reference(payload);
 	sink_keys.Slice(false_sel, false_count);
 	sink_payload.Slice(false_sel, false_count);
 	local_ht.Build(sink_keys, sink_payload);
-	
+
 	// only probe the matching stuff
 	ss->count = true_count;
 	current_sel = &true_sel;

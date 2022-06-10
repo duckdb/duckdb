@@ -210,6 +210,8 @@ private:
 
 	//! Out of core stuff down here
 public:
+	//! TODO
+	idx_t SizeInBytes();
 	//! Swizzles all blocks in this HT
 	void SwizzleCollectedBlocks();
 	//! Unswizzle blocks in the 'swizzled_...' RowDataCollections
@@ -220,9 +222,11 @@ public:
 	void Partition(JoinHashTable &global_ht);
 	//! TODO
 	void PinPartitions();
+	//! TODO
+	void FinalizeExternal();
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndSink(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
-	                                       DataChunk &sink_keys, DataChunk &sink_payload);
+	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
+	                                        DataChunk &sink_keys, DataChunk &sink_payload);
 
 private:
 	//! Merges histogram into this one
@@ -242,6 +246,9 @@ private:
 	unique_ptr<RowDataCollection> swizzled_block_collection;
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
+
+	//! TODO
+	mutex finalize_lock;
 
 	//! Histogram lock
 	mutex histogram_lock;
