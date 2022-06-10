@@ -82,7 +82,8 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
 
 	for (idx_t i = 0; i < scan_count; i++) {
-		int16_t string_length = base_data[start + i] - std::abs(previous_offset);
+		// std::abs used since offsets can be negative to indicate big strings
+		int16_t string_length = std::abs(base_data[start + i]) - std::abs(previous_offset);
 		result_data[result_offset + i] =
 		    FetchStringFromDict(segment, dict, result, baseptr, base_data[start + i], string_length);
 		previous_offset = base_data[start + i];
@@ -124,9 +125,9 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	int16_t string_length;
 	if ((idx_t)row_id == segment.start) {
 		// edge case where this is the first string in the dict
-		string_length = dict_offset;
+		string_length =  std::abs(dict_offset);
 	} else {
-		string_length = dict_offset - base_data[row_id - 1];
+		string_length =  std::abs(dict_offset) -  std::abs(base_data[row_id - 1]);
 	}
 	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, string_length);
 }
