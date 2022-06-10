@@ -112,10 +112,10 @@ jobs:
         run: |
           pip install numpy
           cd tools/pythonpkg
-          python setup.py install --user
+          python3 setup.py install --user
           cd ../..
 
       - name: Fuzz
         shell: bash
         run: |
-            python scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb --seed=0
+            python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb --seed=0
