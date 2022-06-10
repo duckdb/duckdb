@@ -18,10 +18,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -30,10 +26,33 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
+
+  r-test-extension:
+    name: Extension for R test
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
+
+    - uses: ./.github/actions/build_extensions
+      with:
+        run_tests: 0
+        static_link_build: 1
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: r-test-extensions
+        path: |
+          build/release/extension/*/*.duckdb_extension
+
   rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-
+    needs: r-test-extension
     env:
       LIBARROW_BINARY : 'false'
       ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
@@ -53,30 +72,42 @@ jobs:
     - name: Install
       env:
         GITHUB_PAT: ${{ github.token }}
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
     - name: Prepare
+      shell: bash
       run: |
+        mkdir -p /tmp/duckdb_extensions
         cd tools/rpkg
         ./configure
         R CMD build .
 
+    - uses: actions/download-artifact@v3
+      with:
+        name: r-test-extensions
+        path: /tmp/duckdb_extensions
+
     - name: Tests
+      shell: bash
       run: |
+        ls /tmp/duckdb_extensions
         cd tools/rpkg
         R CMD INSTALL -d duckdb_*.tar.gz
-        (cd tests && R -f testthat.R)
+        (cd tests && DUCKDB_R_TEST_EXTENSION_REQUIRED=1 R -f testthat.R)
 
     - name: R CMD check
+      shell: bash
       run: |
         cd tools/rpkg
         R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
     - name: Valgrind
+      shell: bash
       run: |
         cd tools/rpkg
         export NOT_CRAN='false'
@@ -85,19 +116,21 @@ jobs:
     - name: Coverage
       env:
         DUCKDB_R_DEBUG: 1
+      shell: Rscript {0}
       run: |
         pkgload::load_all("tools/rpkg")
         cov <- covr::codecov("tools/rpkg", relative_path = ".")
-      shell: Rscript {0}
 
     - name: Print R log on failure
       if: ${{ failure() }}
+      shell: bash
       run: |
         ls -R /tmp/duckdb.Rcheck
         cat /tmp/duckdb.Rcheck/00check.log
         cat /tmp/duckdb.Rcheck/tests/testthat.Rout.fail
 
     - name: Deploy
+      shell: bash
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
   rstats-windows:
@@ -119,10 +152,12 @@ jobs:
         r-version: 'devel'
 
     - name: Install
+      shell: bash
       run: |
         R -f tools/rpkg/dependencies.R
 
     - name: Build
+      shell: bash
       run: |
         cd tools/rpkg
         ./configure
@@ -143,12 +178,14 @@ jobs:
         fetch-depth: 0
 
     - name: Run
+      shell: bash
       run: |
         (cd tools/rpkg && ./configure && R CMD build .)
         docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c "mkdir -p ~/.R && echo -e \"PKG_CFLAGS=-fno-sanitize-recover=all\\nPKG_CXXFLAGS=-fno-sanitize-recover=all\" > ~/.R/Makevars && export CMAKE_UNITY_BUILD=OFF ARROW_R_DEV=TRUE LIBARROW_BINARY=true && cd /duckdb/tools/rpkg/ && RDsan -f dependencies.R && RDsan CMD INSTALL duckdb_*.tar.gz && cd tests && UBSAN_OPTIONS=print_stacktrace=1 RDsan -f testthat.R"
 
     - name: Print R log on failure
       if: ${{ failure() }}
+      shell: bash
       run: |
         cat duckdb.Rcheck/00check.log
         cat duckdb.Rcheck/tests/testthat.Rout.fail

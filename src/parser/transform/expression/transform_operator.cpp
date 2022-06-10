@@ -14,23 +14,6 @@
 
 namespace duckdb {
 
-ExpressionType Transformer::OperatorToExpressionType(const string &op) {
-	if (op == "=" || op == "==") {
-		return ExpressionType::COMPARE_EQUAL;
-	} else if (op == "!=" || op == "<>") {
-		return ExpressionType::COMPARE_NOTEQUAL;
-	} else if (op == "<") {
-		return ExpressionType::COMPARE_LESSTHAN;
-	} else if (op == ">") {
-		return ExpressionType::COMPARE_GREATERTHAN;
-	} else if (op == "<=") {
-		return ExpressionType::COMPARE_LESSTHANOREQUALTO;
-	} else if (op == ">=") {
-		return ExpressionType::COMPARE_GREATERTHANOREQUALTO;
-	}
-	return ExpressionType::INVALID;
-}
-
 unique_ptr<ParsedExpression> Transformer::TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child) {
 	const auto schema = DEFAULT_SCHEMA;
 

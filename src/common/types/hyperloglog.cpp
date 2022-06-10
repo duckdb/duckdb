@@ -199,6 +199,8 @@ void TemplatedComputeHashes(VectorData &vdata, const idx_t &count, uint64_t hash
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx)) {
 			hashes[i] = TemplatedHash<T>(data[idx]);
+		} else {
+			hashes[i] = 0;
 		}
 	}
 }

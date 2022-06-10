@@ -22,20 +22,27 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
 			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
+			if (cdef->category == duckdb_libpgquery::COL_GENERATED) {
+				throw ParserException("Adding generated columns after table creation is not supported yet");
+			}
 			auto centry = TransformColumnDefinition(cdef);
+
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, 0);
-					if (constraint) {
-						throw ParserException("Adding columns with constraints not yet supported");
+					if (!constraint) {
+						continue;
 					}
+					throw ParserException("Adding columns with constraints not yet supported");
 				}
 			}
 			result->info = make_unique<AddColumnInfo>(qname.schema, qname.name, move(centry));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {
-			result->info = make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name, command->missing_ok);
+			bool cascade = command->behavior == duckdb_libpgquery::PG_DROP_CASCADE;
+			result->info =
+			    make_unique<RemoveColumnInfo>(qname.schema, qname.name, command->name, command->missing_ok, cascade);
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {
@@ -52,10 +59,10 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 				expr = TransformExpression(cdef->raw_default);
 			} else {
 				auto colref = make_unique<ColumnRefExpression>(command->name);
-				expr = make_unique<CastExpression>(column_definition.type, move(colref));
+				expr = make_unique<CastExpression>(column_definition.Type(), move(colref));
 			}
 			result->info = make_unique<ChangeColumnTypeInfo>(qname.schema, qname.name, command->name,
-			                                                 column_definition.type, move(expr));
+			                                                 column_definition.Type(), move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:

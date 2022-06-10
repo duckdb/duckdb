@@ -105,6 +105,23 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 	return this;
 }
 
+static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
+	PendingExecutionResult execution_result;
+	do {
+		{
+			py::gil_scoped_release release;
+			execution_result = pending_query.ExecuteTask();
+		}
+		if (PyErr_CheckSignals() != 0) {
+			throw std::runtime_error("Query interrupted");
+		}
+	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+		throw std::runtime_error(pending_query.error);
+	}
+	return pending_query.Execute();
+}
+
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
@@ -118,7 +135,6 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		py::gil_scoped_release release;
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
@@ -127,7 +143,9 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto res = connection->Query(move(statements[i]));
+			auto pending_query = connection->PendingQuery(move(statements[i]));
+			auto res = CompletePendingQuery(*pending_query);
+
 			if (!res->success) {
 				throw std::runtime_error(res->error);
 			}
@@ -156,8 +174,9 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			py::gil_scoped_release release;
-			res->result = prep->Execute(args);
+			auto pending_query = prep->PendingQuery(args);
+			res->result = CompletePendingQuery(*pending_query);
+
 			if (!res->result->success) {
 				throw std::runtime_error(res->result->error);
 			}
