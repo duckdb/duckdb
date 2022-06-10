@@ -9,8 +9,9 @@ namespace duckdb {
 // In the case of the FlatVector/ConstantVector, they point towards static regions of memory
 // Hence in this case these cause no problems, as the destructors are non-trivial but effectively nops
 #ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
+// commented out to satisfy R CMD check
+//#pragma clang diagnostic push
+//#pragma clang diagnostic ignored "-Wexit-time-destructors"
 #endif
 
 const SelectionVector *ConstantVector::ZeroSelectionVector() {
@@ -26,7 +27,8 @@ const SelectionVector *FlatVector::IncrementalSelectionVector() {
 const sel_t ConstantVector::ZERO_VECTOR[STANDARD_VECTOR_SIZE] = {0};
 
 #ifdef __clang__
-#pragma clang diagnostic pop
+// commented out to satisfy R CMD check
+//#pragma clang diagnostic pop
 #endif
 
 } // namespace duckdb
