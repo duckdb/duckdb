@@ -110,7 +110,7 @@ jobs:
       - name: Build Python Client
         shell: bash
         run: |
-          pip install numpy
+          pip install requests numpy
           cd tools/pythonpkg
           python3 setup.py install --user
           cd ../..
