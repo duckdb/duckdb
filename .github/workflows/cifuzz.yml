@@ -6,54 +6,103 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  Fuzzing:
-    name: OSSFuzz
-    if: github.repository == 'duckdb/duckdb'
-    runs-on: ubuntu-latest
-    steps:
-    - name: Build Fuzzers
-      id: build
-      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
-      with:
-        oss-fuzz-project-name: 'duckdb'
-        dry-run: false
-    - name: Run Fuzzers
-      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
-      with:
-        oss-fuzz-project-name: 'duckdb'
-        fuzz-seconds: 600
-        dry-run: false
-    - name: Upload Crash
-      uses: actions/upload-artifact@v1
-      if: failure() && steps.build.outcome == 'success'
-      with:
-        name: artifacts
-        path: ./out/artifacts
+#  Fuzzing:
+#    name: OSSFuzz
+#    if: github.repository == 'duckdb/duckdb'
+#    runs-on: ubuntu-latest
+#    steps:
+#    - name: Build Fuzzers
+#      id: build
+#      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
+#      with:
+#        oss-fuzz-project-name: 'duckdb'
+#        dry-run: false
+#    - name: Run Fuzzers
+#      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
+#      with:
+#        oss-fuzz-project-name: 'duckdb'
+#        fuzz-seconds: 600
+#        dry-run: false
+#    - name: Upload Crash
+#      uses: actions/upload-artifact@v1
+#      if: failure() && steps.build.outcome == 'success'
+#      with:
+#        name: artifacts
+#        path: ./out/artifacts
+#
+#  sqlsmith-fuzzing:
+#    name: SQLSmith Fuzzing
+#    runs-on: ubuntu-latest
+#    env:
+#      BUILD_SQLSMITH: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_PARQUET: 1
+#      GEN: ninja
+#      FUZZEROFDUCKSKEY: ${{ secrets.FUZZEROFDUCKSKEY }}
+#
+#    steps:
+#      - name: Dependencies
+#        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+#
+#      - uses: actions/checkout@v3
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Build
+#        run: |
+#            make debug
+#
+#      - name: Fuzz
+#        run: |
+#            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
 
-  sqlsmith-fuzzing:
-    name: SQLSmith Fuzzing
-    if: github.repository == 'duckdb/duckdb'
+  sqlancer-fuzzing:
+    name: SQLancer Fuzzing
     runs-on: ubuntu-latest
     env:
       BUILD_SQLSMITH: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_PARQUET: 1
+      BUILD_JDBC: 1
       GEN: ninja
       FUZZEROFDUCKSKEY: ${{ secrets.FUZZEROFDUCKSKEY }}
 
     steps:
       - name: Dependencies
+        shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Build
+      - name: Build SQLancer
+        shell: bash
         run: |
-            make debug
+          git clone https://github.com/Mytherin/sqlancer
+          cd sqlancer
+          mvn package -q -DskipTests
+          cd ..
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build JDBC Driver
+        shell: bash
+        run: |
+          mkdir -p build/jdbcdebug
+          cd build/jdbcdebug
+          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DENABLE_SANITIZER=FALSE ../..
+          cmake --build .
+          cd ../..
+          cp build/jdbcdebug/tools/jdbc/duckdb_jdbc.jar ./sqlancer/target/lib/duckdb_jdbc-*.jar
+
+      - name: Build Shell
+        shell: bash
+        run: make debug
 
       - name: Fuzz
+        shell: bash
         run: |
-            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
+            python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb
