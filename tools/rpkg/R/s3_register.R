@@ -64,12 +64,24 @@ s3_register <- function(generic, class, method = NULL) {
 
 # From: https://github.com/DyfanJones/noctua/blob/b82113098df6b3a7981cf8ca0c1ae9f2ff408756/R/utils.R#L168-L175
 # get parent pkg function and method
-pkg_method <- function(fun, pkg) {
+pkg_method <- function(fun, pkg, caller_fun = fun, version = NULL) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
-    stop(fun, " requires the ", pkg, " package, please install it first and try again",
+    stop(caller_fun, " requires the ", pkg, " package, please install it first and try again",
       call. = FALSE
     )
   }
+
+  if (!is.null(version)) {
+    spec <- get(".__NAMESPACE__.", asNamespace(pkg))$spec
+    pkg_version <- base::package_version(spec[["version"]])
+    if (pkg_version < version) {
+      stop(caller_fun, " requires the ", pkg, " package in version ", version,
+        ", you have version ", pkg_version, ". Please update it first and try again",
+        call. = FALSE
+      )
+    }
+  }
+
   fun_name <- utils::getFromNamespace(fun, pkg)
   return(fun_name)
 }

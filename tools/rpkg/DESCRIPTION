@@ -57,6 +57,8 @@ Suggests:
     nycflights13,
     testthat,
     tibble,
+    tidyr,
+    tidyselect,
     vctrs,
     withr
 Encoding: UTF-8
