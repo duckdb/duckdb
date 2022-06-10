@@ -105,8 +105,14 @@ jobs:
       - name: Build Shell
         shell: bash
         run: |
+          make debug
+
+      - name: Build Python Client
+        shell: bash
+        run: |
           pip install numpy
-          BUILD_PYTHON=1 make debug
+          cd tools/pythonpkg
+          python setup.py install --user
 
       - name: Fuzz
         shell: bash
