@@ -10,5 +10,5 @@
  */
 #pragma once
 
-void load_dists(void);
+void load_dists(long textBufferSize);
 void cleanup_dists(void);
