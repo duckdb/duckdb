@@ -102,12 +102,18 @@ jobs:
           cd ../..
           cp build/jdbcdebug/tools/jdbc/duckdb_jdbc.jar ./sqlancer/target/lib/duckdb_jdbc-*.jar
 
-      - name: Build Shell & Python Client
+      - name: Build Shell
+        shell: bash
+        run: |
+          make debug
+
+      - name: Build Python Client
         shell: bash
         run: |
           pip install numpy
           cd tools/pythonpkg
           python setup.py install --user
+          cd ../..
 
       - name: Fuzz
         shell: bash
