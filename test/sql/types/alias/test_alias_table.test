@@ -1,0 +1,182 @@
+# name: test/sql/types/alias/test_alias_table.test
+# description: ALIAS types used in table tests
+# group: [alias]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+# Test with non existent alias type
+statement error
+CREATE TABLE person (
+    name text,
+    current_car car
+);
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+query TT
+select * from person
+----
+Moe	happy
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok');
+
+statement ok
+INSERT INTO person VALUES ('Mark', 'sad');
+
+query TT
+select * from person where current_alias = 'sad'
+----
+Mark	sad
+
+query TT
+select * from person where current_alias > 'ok'
+----
+Mark	sad
+
+statement ok
+CREATE TABLE pets (
+    name text,
+    current_alias alias
+);
+
+statement ok
+INSERT INTO pets VALUES ('Anne', 'happy');
+
+statement ok
+INSERT INTO pets VALUES ('Oogie Boogie', 'ok');
+
+#Null Values in the column are allowed
+statement ok
+INSERT INTO pets VALUES ('Mr. Fluffles McFluffingstein', NULL);
+
+query TT
+select * from pets;
+----
+Anne	happy
+Oogie Boogie	ok
+Mr. Fluffles McFluffingstein	NULL
+
+query TT
+select person.name, pets.name from person inner join pets on  (person.current_alias = pets.current_alias)
+----
+Moe	Anne
+Pedro	Oogie Boogie
+
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TABLE pets;
+
+statement ok
+DROP TYPE alias;
+
+# Creating a new table should not
+statement error
+CREATE TABLE aliens (
+    name text,
+    current_alias alias
+);
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TYPE intelligence AS VARCHAR;
+
+statement ok
+CREATE TABLE aliens (
+    name text,
+    current_alias alias
+);
+
+# ALTER TABLE ADD COLUMN with the enum type (see test/sql/alter/add_col/test_add_col.test)
+
+statement ok
+INSERT INTO aliens VALUES ('Alf o Eteimoso', 'happy'), ('Dr Zoidberg', 'sad')
+
+statement ok
+ALTER TABLE aliens ADD COLUMN iq_level intelligence
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+
+statement ok
+INSERT INTO aliens VALUES ('The Borg', 'ok', 'ehh')
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+The Borg	ok	ehh
+
+# ALTER TABLE SET DATA TYPE with the enum type (see test/sql/alter/alter_type/test_alter_type.test)
+statement ok
+ALTER TABLE aliens ALTER current_alias SET DATA TYPE VARCHAR
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+The Borg	ok	ehh
+
+# Comparisons between enum columns with the same enum type
+statement ok
+CREATE TYPE car_brand AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias,
+    last_year_alias alias,
+    car car_brand
+);
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok', 'ok','Seat'), ('Mark', 'sad', 'happy','Fiets');
+
+query IIII
+select * from person where current_alias = last_year_alias
+----
+Pedro	ok	ok	Seat
+
+query IIII
+select * from person where current_alias = 'ok'
+----
+Pedro	ok	ok	Seat
+
+#GROUP BY and ORDER BY on alias, both as keys and in the payload
+statement ok
+INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
+
+query II
+select count(*), current_alias from person group by current_alias
+----
+1	ok
+2	sad
+1	happy
+
+query II
+select name, current_alias from person order by current_alias
+----
+Tim	happy
+Pedro	ok
+Mark	sad
+Diego	sad
