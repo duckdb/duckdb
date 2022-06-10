@@ -1,0 +1,11 @@
+name: "R: Linux UBSAN"
+description: "Run R CMD check on an UBSAN-enabled Docker image"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run
+      shell: bash
+      run: |
+        (cd tools/rpkg && ./configure && R CMD build .)
+        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c /duckdb/scripts/r_ubsan.sh

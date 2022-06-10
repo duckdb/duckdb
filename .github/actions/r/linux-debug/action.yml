@@ -1,0 +1,31 @@
+name: "R: Linux Debug"
+description: "Install in a debugging environment on Linux"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v2
+      with:
+        python-version: "3.7"
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: "devel"
+
+    - name: Install
+      env:
+        GITHUB_PAT: ${{ github.token }}
+      shell: bash
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libcurl4-openssl-dev
+        mkdir -p $HOME/.R
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      env:
+        DUCKDB_R_DEBUG: "1"
+      shell: bash
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD INSTALL .
