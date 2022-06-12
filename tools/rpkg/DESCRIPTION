@@ -55,6 +55,7 @@ Suggests:
     dplyr,
     dbplyr,
     nycflights13,
+    rlang,
     testthat,
     tibble,
     tidyr,
