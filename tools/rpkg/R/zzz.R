@@ -10,6 +10,6 @@
   s3_register("tidyr::nest", "tbl_duckdb_connection")
   s3_register("tidyr::unnest", "tbl_duckdb_connection")
   # https://github.com/tidyverse/tidyr/pull/1372
-  # s3_register("tidyr::pack", "tbl_duckdb_connection")
-  # s3_register("tidyr::unpack", "tbl_duckdb_connection")
+  try(s3_register("tidyr::pack", "tbl_duckdb_connection"), silent = TRUE)
+  try(s3_register("tidyr::unpack", "tbl_duckdb_connection"), silent = TRUE)
 }
