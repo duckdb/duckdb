@@ -93,7 +93,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		return result;
 	}
 
-	// this is for binding macros
+	// this is for binding JSON
 	auto lhs_expr = expr.lhs->Copy();
 	OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.expr));
 	return BindExpression(arrow_expr, depth);
