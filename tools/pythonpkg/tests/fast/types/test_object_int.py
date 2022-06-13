@@ -11,6 +11,7 @@ class TestPandasObjectInteger(object):
                 'int32': pd.Series([None, 1, -1], dtype="Int32"),
                 'int64': pd.Series([None, 1, -1], dtype="Int64")}
         )
+		# These are float64 because pandas would force these to be float64 even if we set them to int8, int16, int32, int64 respectively
         df_expected_res = pd.DataFrame({
                 'int8': np.ma.masked_array([0,1,-1], mask=[True,False,False], dtype='float64'),
                 'int16': np.ma.masked_array([0,1,-1], mask=[True,False,False], dtype='float64'),
@@ -19,4 +20,3 @@ class TestPandasObjectInteger(object):
         )
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         pd.testing.assert_frame_equal(df_expected_res, df_out)
-
