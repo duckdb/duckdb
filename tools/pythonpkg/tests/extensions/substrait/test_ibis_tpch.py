@@ -13,8 +13,8 @@ try:
         )
 
     class TPCHBackend(BaseBackend):  # noqa: D101
-        def __init__(self, fname="", scale_factor=0.1):  # noqa: D107
-            self.con = require('substrait')
+        def __init__(self,duck_con,  fname="", scale_factor=0.1):  # noqa: D107
+            self.con = duck_con
 
             if not fname:
                 self.con.execute(f"CALL dbgen(sf={scale_factor})")
@@ -63,10 +63,12 @@ try:
         assert result.equals(answer)
 except:
     can_run = False
-def test_ibis_to_duck_substrait(duckdb_cursor):
+
+def test_ibis_to_duck_substrait(require):
     if not can_run:
         return
-    duck_con = TPCHBackend(fname="")
+    con = require('substrait')
+    duck_con = TPCHBackend(duck_con=con, fname="")
     # can't compile
     skip = [2]
     # Scalar Function with name any does not exist!
@@ -101,6 +103,7 @@ def test_ibis_to_duck_substrait(duckdb_cursor):
     for i in range(1,23):
         if skip.count(i) > 0:
             continue
+        print(i)
         tpch_execute_ibis_to_duck_query(duck_con,i)
 
 # tpch_execute_ibis_to_duck_query(duck_con,11)
