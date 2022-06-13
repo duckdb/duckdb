@@ -22,6 +22,19 @@
 #endif
 #endif
 
+// duplicate of duckdb/main/winapi.hpp
+#ifndef DUCKDB_EXTENSION_API
+#ifdef _WIN32
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+#define DUCKDB_EXTENSION_API __declspec(dllexport)
+#else
+#define DUCKDB_EXTENSION_API
+#endif
+#else
+#define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
+#endif
+#endif
+
 // duplicate of duckdb/common/constants.hpp
 #ifndef DUCKDB_API_0_3_1
 #define DUCKDB_API_0_3_1 1
