@@ -3434,7 +3434,7 @@ static void yynoreturn yy_fatal_error (const char* msg , yyscan_t yyscanner)
 {
 	struct yyguts_t * yyg = (struct yyguts_t*)yyscanner;
 	(void)yyg;
-	fprintf( stderr, "%s\n", msg );
+	//( stderr, "%s\n", msg );
 	throw std::runtime_error(msg); // YY_EXIT_FAILURE );
 }
 

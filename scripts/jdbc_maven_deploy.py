@@ -39,7 +39,7 @@ pom = '%s/duckdb_jdbc-%s.pom' % (staging_dir, release_version)
 sources_jar = '%s/duckdb_jdbc-%s-sources.jar' % (staging_dir, release_version)
 javadoc_jar = '%s/duckdb_jdbc-%s-javadoc.jar' % (staging_dir, release_version)
 
-combine_builds = ['linux-amd64', 'osx-amd64', 'windows-amd64']
+combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64']
 for build in combine_builds:
 	file_url = '%s/duckdb_jdbc-%s.jar' % (release_prefix, build)
 	# print(file_url)

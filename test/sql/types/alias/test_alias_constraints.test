@@ -1,0 +1,284 @@
+# name: test/sql/types/alias/test_alias_constraints.test
+# description: ALIAS tests on table constraints
+# group: [alias]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+# We can't drop alias because person depends on it
+statement error
+drop type alias
+
+# But if we drop person
+statement ok
+drop table person
+
+# We can drop alias
+statement ok
+drop type alias
+
+# We can recreate all of them again
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+#Cascading drops (i.e. DROP TYPE alias CASCADE)
+statement ok
+DROP TYPE alias CASCADE
+
+#DROP TYPE after we alter the table so the dependency is gone (ALTER)
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+statement ok
+ALTER TABLE person ALTER current_alias SET DATA TYPE VARCHAR
+
+statement ok
+DROP TYPE alias
+
+statement ok
+DROP TABLE person
+
+#DROP TYPE after we alter the table so the dependency is gone (DROP COLUMN)
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+statement ok
+ALTER TABLE person DROP COLUMN current_alias
+
+statement ok
+DROP TYPE alias
+
+statement ok
+DROP TABLE person
+
+#Dependencies introduced by alter statements, i.e. ADD COLUMN with ENUM type
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text
+);
+
+statement ok
+ALTER TABLE person ADD COLUMN current_alias alias
+
+statement error
+DROP TYPE alias
+
+#Dropping the table and type in the same transaction
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE alias
+
+statement ok
+COMMIT;
+
+# Try with two dependencies to the same type ( Delete One column, try do delete type, change type of the other column,
+# delete type, recreate type, add column with type, try to delete type)
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    past_alias alias,
+    current_alias alias
+);
+
+statement ok
+ALTER TABLE person DROP COLUMN current_alias
+
+statement error
+DROP TYPE alias
+
+statement ok
+ALTER TABLE person ALTER past_alias SET DATA TYPE VARCHAR
+
+statement ok
+DROP TYPE alias
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+ALTER TABLE person ADD COLUMN current_alias alias
+
+statement error
+DROP TYPE alias
+
+# Clean-up
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE alias
+
+# Transactions with rollbacks
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+statement ok
+BEGIN TRANSACTION;
+
+
+statement ok
+ALTER TABLE person ALTER current_alias SET DATA TYPE VARCHAR;
+
+statement ok
+ROLLBACK;
+
+#Fails, alias should still be dependent on by the table
+statement error
+DROP TYPE alias;
+
+
+#CLEANUP
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TYPE alias;
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+
+statement ok
+BEGIN TRANSACTION;
+
+
+statement ok
+ALTER TABLE person DROP COLUMN current_alias
+
+statement ok
+ROLLBACK;
+
+#Fails, alias should still be dependent on by the table
+statement error
+DROP TYPE alias;
+
+#CLEANUP
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TYPE alias;
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text );
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ALTER TABLE person ADD COLUMN current_alias alias
+
+statement ok
+ROLLBACK;
+
+statement ok
+DROP TYPE alias;
+
+statement ok
+DROP TABLE person
+
+# Test Column Rename
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias
+);
+
+statement ok
+ALTER TABLE person RENAME COLUMN current_alias TO past_alias
+
+# Check if constraint still there
+statement error
+DROP TYPE alias
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE alias
+
+
+# Test Table Multiple Columns Same Type
+
+statement ok
+CREATE TYPE alias AS VARCHAR;
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_alias alias,
+    past_alias alias
+);
+
+# Check if constraint still there
+statement error
+DROP TYPE alias
+
+statement ok
+ALTER TABLE person DROP COLUMN current_alias
+
+statement error
+DROP TYPE alias
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE alias
