@@ -38,7 +38,6 @@ Allocator &Allocator::operator=(Allocator &&allocator) {
 	return *this;
 }
 
-
 data_ptr_t Allocator::AllocateData(idx_t size) {
 	return allocate_function(private_data.get(), size);
 }
