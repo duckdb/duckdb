@@ -41,7 +41,7 @@ def run_benchmark_file(file, subset):
     return average_run_time
 
 
-def run_checkpoint(subdir, subset, rle_sorting):
+def run_checkpoint(subdir, subset, rle_sorting, load_file):
     if os.path.exists(f'{subdir}/{subset}.db'):
         os.remove(f'{subdir}/{subset}.db')
 
@@ -53,7 +53,7 @@ def run_checkpoint(subdir, subset, rle_sorting):
     duckdb_conn.execute(f"pragma force_compression_sorting='{rle_sorting}'")
 
     # Load in the tables and checkpoint
-    duckdb_conn.execute(open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", "load.sql"), "r").read())
+    duckdb_conn.execute(open(os.path.join(f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/", load_file), "r").read())
     duckdb_conn.execute("CHECKPOINT;")
 
     # Get amount of used blocks
@@ -106,12 +106,12 @@ def run_benchmark():
                     # Checkpoint to a file and check size
                     start_nosort = timer()
                     print(f"Running {subset} checkpoint - no sorting")
-                    block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false')
+                    block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false', load_file="load.sql")
                     end_nosort=timer()
 
                     start_sort = timer()
                     print(f"Running {subset} checkpoint - sorting")
-                    block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true')
+                    block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true', load_file="load.sql")
                     end_sort=timer()
 
                     # Calculate average improvement
@@ -119,6 +119,44 @@ def run_benchmark():
 
                     print("Writing to file")
                     write_to_csv(f"{subset}, {end_nosort-start_nosort}, {block_size_nosort},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort},{file_size_disk_sort}, {average_improvement}", mode="a", time=timestr)
+            except BaseException as err:
+                print("Error occured in", subset, "error:", err)
+
+def run_benchmark_per_table():
+    # Prepare results file
+    if os.path.exists(f'benchmark-results.csv'):
+        os.remove(f'benchmark-results.csv')
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+    write_to_csv("subset, time_nosort, block_size_nosort, filesize_nosort, time_sort, block_size_sort, filesize_sort, size_change", mode="a", time=timestr)
+
+    # Loop through directories to look for the benchmark files
+    for subdir, dirs, files in os.walk(checkpoints_dir):
+        for file in files:
+            subset = os.path.split(subdir)[1]
+            try:
+                if file.endswith('nosorting.benchmark'):
+                    load_files_path = f"{duckdb_root_dir}/benchmark/publicbi/data/{subset}/"
+                    for subdir_load, dirs_load, files_load in os.walk(load_files_path):
+                        for file_load in files_load:
+                            if file_load.endswith("-load.sql"):
+                                table = file_load.split("-")[0]
+                                print(f"Running {file_load}")
+                                # Checkpoint to a file and check size
+                                start_nosort = timer()
+                                print(f"Running {subset} checkpoint - no sorting")
+                                block_size_nosort, file_size_disk_nosort = run_checkpoint(subdir, subset, rle_sorting='false', load_file=file_load)
+                                end_nosort=timer()
+
+                                start_sort = timer()
+                                print(f"Running {subset} checkpoint - sorting")
+                                block_size_sort, file_size_disk_sort = run_checkpoint(subdir, subset, rle_sorting='true', load_file=file_load)
+                                end_sort=timer()
+
+                                # Calculate average improvement
+                                average_improvement = (file_size_disk_nosort - file_size_disk_sort)/file_size_disk_nosort*100
+
+                                print("Writing to file")
+                                write_to_csv(f"{table}, {end_nosort-start_nosort}, {block_size_nosort},{file_size_disk_nosort}, {end_sort-start_sort}, {block_size_sort},{file_size_disk_sort}, {average_improvement}", mode="a", time=timestr)
             except BaseException as err:
                 print("Error occured in", subset, "error:", err)
 
