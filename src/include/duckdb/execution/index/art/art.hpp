@@ -111,9 +111,8 @@ public:
 	bool SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids);
 	//! Search Equal used for Joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
-
-	//! Search Equal used for Joins that do not need to fetch data
-	std::pair<idx_t, idx_t> DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer);
+	//! Serialized the ART
+	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
 
 private:
 	DataChunk expression_result;

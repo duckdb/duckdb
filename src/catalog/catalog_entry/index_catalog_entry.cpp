@@ -30,16 +30,7 @@ string IndexCatalogEntry::ToSQL() {
 	return sql;
 }
 
-std::pair<idx_t, idx_t> IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &writer) {
-	if (index->type != IndexType::ART) {
-		throw NotImplementedException("The implementation of this index serialization does not exist.");
-	}
-	// We first do a DFS on the ART
-	auto art_index = (ART *)index;
-	return art_index->DepthFirstSearchCheckpoint(writer);
-}
-
-void IndexCatalogEntry::SerializeMetadata(duckdb::MetaBlockWriter &serializer) {
+void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
 	// Here we serialize the index metadata in the following order:
 	// schema name, table name, index name, sql, index type, index constraint type, expression list.
 	// column_ids, unbound_expression
@@ -55,7 +46,7 @@ void IndexCatalogEntry::SerializeMetadata(duckdb::MetaBlockWriter &serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateIndexInfo> IndexCatalogEntry::DeserializeMetadata(Deserializer &source) {
+unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source) {
 	// Here we deserialize the index metadata in the following order:
 	// root block, root offset, schema name, table name, index name, sql, index type, index constraint type, expression
 	// list.

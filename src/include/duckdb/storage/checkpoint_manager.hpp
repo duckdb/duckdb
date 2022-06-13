@@ -83,7 +83,7 @@ private:
 	void WriteSequence(SequenceCatalogEntry &table);
 	void WriteMacro(ScalarMacroCatalogEntry &table);
 	void WriteTableMacro(TableMacroCatalogEntry &table);
-	void WriteIndex(IndexCatalogEntry &index);
+	void WriteIndex(IndexCatalogEntry &index_catalog);
 	void WriteType(TypeCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);

@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
@@ -94,6 +95,8 @@ public:
 	bool IsForeign() {
 		return (constraint_type == IndexConstraintType::FOREIGN);
 	}
+	//! Serializes the index and returns the pair of block_id offset positions
+	virtual std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer);
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

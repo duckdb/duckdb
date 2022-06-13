@@ -505,6 +505,14 @@ Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, Foreign
 	return result;
 }
 
+vector<std::pair<idx_t, idx_t>> TableIndexList::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
+	vector<std::pair<idx_t, idx_t>> blocks_info;
+	for (auto &index : indexes) {
+		blocks_info.emplace_back(index->Serialize(writer));
+	}
+	return blocks_info;
+}
+
 static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
                                        bool is_append) {
 	const vector<idx_t> *src_keys_ptr = &bfk.info.fk_keys;
@@ -1352,6 +1360,13 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	for (auto &row_group_pointer : row_group_pointers) {
 		RowGroup::Serialize(row_group_pointer, meta_writer);
 	}
+	// FIXME gotta add these to the main writer
+	//	auto &metadata_writer = writer.GetMetaWriter();
+	//	// Now we serialize indexes
+	//	auto blocks_info = info->indexes.SerializeIndexes(metadata_writer);
+	//	// Write-off block ids and offsets of indexes
+	//	metadata_writer.Write(root_offset.first);
+	//	metadata_writer.Write(root_offset.second);
 	return pointer;
 }
 

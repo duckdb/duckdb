@@ -64,4 +64,8 @@ bool Index::IndexIsUpdated(const vector<column_t> &column_ids) const {
 	return false;
 }
 
+std::pair<idx_t, idx_t> Index::Serialize(duckdb::MetaBlockWriter &writer) {
+	throw NotImplementedException("The implementation of this index serialization does not exist.");
+}
+
 } // namespace duckdb

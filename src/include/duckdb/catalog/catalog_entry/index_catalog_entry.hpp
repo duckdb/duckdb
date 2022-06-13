@@ -31,9 +31,8 @@ public:
 
 public:
 	string ToSQL() override;
-	void SerializeMetadata(duckdb::MetaBlockWriter &serializer);
-	static unique_ptr<CreateIndexInfo> DeserializeMetadata(Deserializer &source);
-	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer);
+	void Serialize(duckdb::MetaBlockWriter &serializer);
+	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

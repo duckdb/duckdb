@@ -511,14 +511,6 @@ void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	result_size = leaf->num_elements;
 }
 
-std::pair<idx_t, idx_t> ART::DepthFirstSearchCheckpoint(duckdb::MetaBlockWriter &writer) {
-	lock_guard<mutex> l(lock);
-	if (tree) {
-		return tree->Serialize(*this, writer);
-	}
-	return {DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
-}
-
 Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 	while (node) {
 		if (node->type == NodeType::NLeaf) {
@@ -932,6 +924,14 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 			throw ConstraintException(exception_msg);
 		}
 	}
+}
+
+std::pair<idx_t, idx_t> ART::Serialize(duckdb::MetaBlockWriter &writer) {
+	lock_guard<mutex> l(lock);
+	if (tree) {
+		return tree->Serialize(*this, writer);
+	}
+	return {DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
 }
 
 } // namespace duckdb

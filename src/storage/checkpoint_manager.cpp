@@ -311,12 +311,11 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-void CheckpointManager::WriteIndex(IndexCatalogEntry &index) {
-	// Write the index data
-	auto root_offset = index.Serialize(*tabledata_writer);
-	// Write the index metadata
+void CheckpointManager::WriteIndex(IndexCatalogEntry &index_catalog) {
+	// Write the index data and metadata
 	// Serialize the necessary meta data for index catalog construction.
-	index.SerializeMetadata(*metadata_writer);
+	auto root_offset = index_catalog.index->Serialize(*tabledata_writer);
+	index_catalog.Serialize(*metadata_writer);
 	// Serialize the Block id and offset of root node
 	metadata_writer->Write(root_offset.first);
 	metadata_writer->Write(root_offset.second);
@@ -325,7 +324,7 @@ void CheckpointManager::WriteIndex(IndexCatalogEntry &index) {
 void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
 
 	// Deserialize the index meta data
-	auto info = IndexCatalogEntry::DeserializeMetadata(reader);
+	auto info = IndexCatalogEntry::Deserialize(reader);
 
 	// Create index in the catalog
 	auto &catalog = Catalog::GetCatalog(db);

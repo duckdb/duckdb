@@ -79,6 +79,9 @@ public:
 
 	Index *FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type);
 
+	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
+	vector<std::pair<idx_t, idx_t>> SerializeIndexes(duckdb::MetaBlockWriter &writer);
+
 private:
 	//! Indexes associated with the current table
 	mutex indexes_lock;
