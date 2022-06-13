@@ -69,9 +69,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("mode", &DuckDBPyRelation::Mode,
 	         "Returns the most frequent value for the aggregate columns. NULL values are ignored.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("abs", &DuckDBPyRelation::Abs,
-	         "Returns the most absolute value for the  aggregate columns. NULL values are ignored.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
+	    .def("abs", &DuckDBPyRelation::Abs, "Returns the absolute value for the specified columns.",
+	         py::arg("aggregation_columns"))
 	    .def("prod", &DuckDBPyRelation::Prod, "Calculates the product of the aggregate column.",
 	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
 	    .def("skew", &DuckDBPyRelation::Skew, "Returns the skewness of the aggregate column.",
@@ -340,8 +339,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const string &aggr_columns, 
 	return GenericAggregator("mode", aggr_columns, groups);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("abs", aggr_columns, groups);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &columns) {
+	auto expr = GenerateExpressionList("abs", columns);
+	return Project(expr);
 }
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Prod(const string &aggr_columns, const string &groups) {
 	return GenericAggregator("product", aggr_columns, groups);
