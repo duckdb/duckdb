@@ -1,5 +1,5 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
@@ -169,17 +169,7 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 
 	const auto &list = arguments[0]->return_type; // change to list
 	const auto &value = arguments[1]->return_type;
-	if (list.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.arguments[1] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-	} else if (list.id() == LogicalTypeId::SQLNULL || value.id() == LogicalTypeId::SQLNULL) {
-		// In case either the list or the value is NULL, return NULL
-		// Similar to behaviour of prestoDB
-		bound_function.arguments[0] = list;
-		bound_function.arguments[1] = value;
-		bound_function.return_type = LogicalTypeId::SQLNULL;
-	} else if (list.id() == LogicalTypeId::UNKNOWN) {
+	if (list.id() == LogicalTypeId::UNKNOWN) {
 		bound_function.return_type = RETURN_TYPE;
 		if (value.id() != LogicalTypeId::UNKNOWN) {
 			// only list is a parameter, cast it to a list of value type

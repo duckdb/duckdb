@@ -2,11 +2,12 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
@@ -488,6 +489,18 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 
 	// found a matching function!
 	auto &bound_function = func.functions[best_function];
+
+	if (bound_function.null_handling == NULL_IN_NULL_OUT) {
+		for (auto &child : children) {
+			if (child->return_type == LogicalTypeId::SQLNULL) {
+				// if any of the arguments of a NULL_IN_NULL_OUT function is NULL, we want to return NULL
+				// we can't return a constant, else we get errors with prepared statements, so we do this instead
+				return make_unique<BoundFunctionExpression>(LogicalType::SQLNULL, bound_function, move(children),
+				                                            nullptr, is_operator);
+			}
+		}
+	}
+
 	return ScalarFunction::BindScalarFunction(context, bound_function, move(children), is_operator, cast_parameters);
 }
 
