@@ -673,14 +673,15 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
 
-  # Resolution of DuckDB symbols in loadable extensions is done in different ways
-  # MacOS:    The -undefined dynamic_lookup signals CLANG to ignore any missing DuckDB symbols. Because on MacOS dlopen
-  #           is called with the RTLD_GLOBAL flag by default, duckdb symbols are available when the extension is loaded.
-  # Linux:    DuckDB needs to be linked statically to each extension because RTLD_LOCAL is the default on linux. The
-  #           EXTENSION_STATIC_BUILD should be set for this.
-  # Windows:  For windows, delay loading could be used to achieve similar behaviour as MacOS, but since this requires
-  #           setting the _declspec header for every function used from an extension, we have also opted for the
-  #           EXTENSION_STATIC_BUILD approach
+  # loadable extension binaries can be built two ways:
+  # 1. EXTENSION_STATIC_BUILD=1
+  #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
+  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the lodable
+  #    extension binaries
+  # 2. EXTENSION_STATIC_BUILD=0
+  #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
+  #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
+  #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
   if (EXTENSION_STATIC_BUILD)
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
       # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
