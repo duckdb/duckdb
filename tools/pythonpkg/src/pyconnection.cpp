@@ -90,7 +90,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
 	    .def("check_same_thread", &DuckDBPyConnection::CheckSameThread,
-	         "Set flags that decides is different threads can use the same connection/cursor", py::arg("check_thread"))
+	         "Set flags that decides if different threads can use the same connection/cursor", py::arg("check_thread"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
 	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,

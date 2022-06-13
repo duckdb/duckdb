@@ -35,11 +35,11 @@ class TestCursorMultithread(object):
                                     args=(duckdb_con,),
                                     name='my_thread_'+str(i)))
 
-        for i in range(thread_count):
-            threads[i].start()
+        for thread in threads:
+            thread.start()
 
-        for i in range(thread_count):
-            threads[i].join()
+        for thread in threads:
+            thread.join()
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
 
@@ -59,11 +59,11 @@ class TestCursorMultithread(object):
                                     args=(cursors[i],),
                                     name='my_thread_'+str(i)))
 
-        for i in range(thread_count):
-            threads[i].start()
+        for thread in threads:
+            thread.start()
 
-        for i in range(thread_count):
-            threads[i].join()
+        for thread in threads:
+            thread.join()
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
 
@@ -81,12 +81,11 @@ class TestCursorMultithread(object):
             threads.append(Thread(target=insert_from_thread_third,
                                     args=(duckdb_con,),
                                     name='my_thread_'+str(i)))
+        for thread in threads:
+            thread.start()
 
-        for i in range(thread_count):
-            threads[i].start()
-
-        for i in range(thread_count):
-            threads[i].join()
+        for thread in threads:
+            thread.join()
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
         duckdb_con.close()
