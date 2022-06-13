@@ -37,6 +37,15 @@ struct RStatement {
 	vector<Value> parameters;
 };
 
+struct RelationWrapper {
+	RelationWrapper(std::shared_ptr<Relation> rel_p) : rel(move(rel_p)) {
+	}
+	shared_ptr<Relation> rel;
+};
+
+typedef cpp11::external_pointer<ParsedExpression> expr_extptr_t;
+typedef cpp11::external_pointer<RelationWrapper> rel_extptr_t;
+
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
 struct RQueryResult {
@@ -90,6 +99,7 @@ struct RStrings {
 	SEXP UTC_str; // Rf_mkString
 	SEXP Date_str;
 	SEXP factor_str;
+	SEXP dataframe_str;
 	SEXP difftime_str;
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
@@ -112,6 +122,8 @@ struct RStrings {
 private:
 	RStrings();
 };
+
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result);
 
 } // namespace duckdb
 

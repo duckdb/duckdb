@@ -8,6 +8,10 @@ if(POLICY CMP0051)
   cmake_policy(SET CMP0051 NEW)
 endif()
 
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -64,7 +68,14 @@ foreach(p LIB BIN INCLUDE CMAKE)
   endif()
 endforeach()
 
-
+# This option allows --gc-sections flag during extension linking to discard any unused functions or data
+if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
+  elseif(WIN32 AND MVSC)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
+  endif()
+endif()
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 
@@ -222,6 +233,9 @@ option(AMALGAMATION_BUILD
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
+option(EXTENSION_STATIC_BUILD
+        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
+        FALSE)
 
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
@@ -658,12 +672,34 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   add_library(${TARGET_NAME} SHARED ${FILES})
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+
+  # Resolution of DuckDB symbols in loadable extensions is done in different ways
+  # MacOS:    The -undefined dynamic_lookup signals CLANG to ignore any missing DuckDB symbols. Because on MacOS dlopen
+  #           is called with the RTLD_GLOBAL flag by default, duckdb symbols are available when the extension is loaded.
+  # Linux:    DuckDB needs to be linked statically to each extension because RTLD_LOCAL is the default on linux. The
+  #           EXTENSION_STATIC_BUILD should be set for this.
+  # Windows:  For windows, delay loading could be used to achieve similar behaviour as MacOS, but since this requires
+  #           setting the _declspec header for every function used from an extension, we have also opted for the
+  #           EXTENSION_STATIC_BUILD approach
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
   endif()
-  if(WIN32)
-    target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+
+  if (EXTENSION_STATIC_BUILD)
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+    elseif (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+    else()
+      error("EXTENSION static build is only intended for Linux and Windows on MVSC")
+    endif()
+  else()
+    if (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+    endif()
   endif()
+
+
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
@@ -762,4 +798,9 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
+endif()
+
+# build out-of-tree extensions on demand
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
 endif()

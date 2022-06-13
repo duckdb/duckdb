@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string>
 
+#define fprintf(...)
+
 #include "pg_definitions.hpp"
 
 #include "nodes/pg_list.hpp"

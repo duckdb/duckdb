@@ -2,9 +2,9 @@
 #include "duckdb/execution/reservoir_sample.hpp"
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <algorithm>
-#include <queue>
 #include <stdlib.h>
 
 namespace duckdb {
