@@ -356,23 +356,24 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class HashJoinScanState : public GlobalSourceState {
+class HashJoinGlobalScanState : public GlobalSourceState {
 public:
-	explicit HashJoinScanState(const PhysicalHashJoin &op) : op(op), local_ht(nullptr) {
-		// need to assign a thread-local HT per thread again: reset atomic
+	explicit HashJoinGlobalScanState(const PhysicalHashJoin &op) : op(op) {
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
-		sink.next_local_idx = 0;
-		sink.hash_table->finalized = false;
+		if (sink.external) {
+			probe_ht = sink.hash_table->CopyEmpty();
+			sink.hash_table->finalized = false;
+			// need to assign a thread-local HT per thread again: reset atomic
+			sink.next_local_idx = 0;
+		}
 	}
 
 	const PhysicalHashJoin &op;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
 
-	//! TODO
-	JoinHashTable *local_ht;
-	//! TODO
-	//	atomic<idx_t>
+	//! Only used for external join: Materialized probe-side data
+	unique_ptr<JoinHashTable> probe_ht;
 
 	idx_t MaxThreads() override {
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
@@ -380,36 +381,44 @@ public:
 	}
 };
 
+class HashJoinLocalScanState : public LocalSourceState {
+public:
+	HashJoinLocalScanState() : initialized(false) {
+	}
+
+	bool initialized;
+};
+
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<HashJoinScanState>(*this);
+	return make_unique<HashJoinGlobalScanState>(*this);
 }
 
-void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                               LocalSourceState &lstate) const {
+unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
+                                                                   GlobalSourceState &gstate) const {
+	return make_unique<HashJoinLocalScanState>();
+}
+
+void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                               LocalSourceState &lstate_p) const {
 	auto &sink = (HashJoinGlobalState &)*sink_state;
-	auto &state = (HashJoinScanState &)gstate;
+	auto &gstate = (HashJoinGlobalScanState &)gstate_p;
+	auto &lstate = (HashJoinLocalScanState &)lstate_p;
 
 	if (sink.external) {
-		if (!state.local_ht) {
-			state.local_ht = AssignLocalHT(sink);
-			state.local_ht->Partition(*sink.hash_table);
+		if (!lstate.initialized) {
+			auto local_ht = AssignLocalHT(sink);
+			local_ht->Partition(*sink.hash_table);
+			gstate.probe_ht->Merge(*local_ht);
 		}
 
 		if (!sink.hash_table->finalized) {
 			sink.hash_table->FinalizeExternal();
 		}
 
+		// TODO When we get here, all data is partitioned, and the next partitioned pointer table has been built
+		//  all probe-side data is in gstate.probe_ht
+
 		// TODO
-		//  At this point we've already probed the first partitions, and the probe pipeline is completely finished
-		//  So, each thread has its own thread-local HT, which it should partition first
-		//  After partitioning we should build the pointer table for the next partitions, by grabbing a mutex, e.g.:
-		//  if (!finalized) {
-		//    lock_guard<mutex> flock(finalize_lock);
-		//    // check again
-		//    if (!finalized) {
-		//		Finalize()
-		//    }
-		//  }
 		//  This is fine for the first pass, since no other thread will be using the pointer table
 		//  However, we need to do this multiple times, and we need to make sure that we won't start building the new
 		//  pointer table before the last thread is done with probing it ... How do we do this with just a lock?
@@ -428,7 +437,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-	sink.hash_table->ScanFullOuter(chunk, state.ht_scan_state);
+	sink.hash_table->ScanFullOuter(chunk, gstate.ht_scan_state);
 }
 
 } // namespace duckdb
