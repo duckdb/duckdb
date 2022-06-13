@@ -18,8 +18,7 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/result_modifier.hpp"
-
-//#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -81,12 +80,10 @@ public:
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
 	vector<BoundParameterExpression *> *parameters;
-	//! Whether or not the bound statement is read-only
-	bool read_only;
-	//! Whether or not the statement requires a valid transaction to run
-	bool requires_valid_transaction;
-	//! Whether or not the statement can be streamed to the client
-	bool allow_stream_result;
+	//! The types of the prepared statement parameters, if any
+	vector<LogicalType> *parameter_types;
+	//! Statement properties
+	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
@@ -186,6 +183,8 @@ private:
 	unordered_set<ViewCatalogEntry *> bound_views;
 
 private:
+	//! Bind the expressions of generated columns to check for errors
+	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a limit value (LIMIT or OFFSET)
@@ -239,9 +238,12 @@ private:
 	unique_ptr<BoundTableRef> Bind(EmptyTableRef &ref);
 	unique_ptr<BoundTableRef> Bind(ExpressionListRef &ref);
 
-	bool BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                            vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                            unique_ptr<BoundSubqueryRef> &subquery, string &error);
+	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
+	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
+	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
+	                                 unique_ptr<BoundSubqueryRef> &subquery, string &error);
+	bool BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 unique_ptr<BoundSubqueryRef> &subquery, string &error);
 
 	unique_ptr<LogicalOperator> CreatePlan(BoundBaseTableRef &ref);
 	unique_ptr<LogicalOperator> CreatePlan(BoundCrossProductRef &ref);

@@ -283,7 +283,7 @@ shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vec
 string Relation::ToString() {
 	string str;
 	str += "---------------------\n";
-	str += "-- Expression Tree --\n";
+	str += "--- Relation Tree ---\n";
 	str += "---------------------\n";
 	str += ToString(0);
 	str += "\n\n";
@@ -292,7 +292,7 @@ string Relation::ToString() {
 	str += "---------------------\n";
 	auto &cols = Columns();
 	for (idx_t i = 0; i < cols.size(); i++) {
-		str += "- " + cols[i].name + " (" + cols[i].type.ToString() + ")\n";
+		str += "- " + cols[i].Name() + " (" + cols[i].Type().ToString() + ")\n";
 	}
 	return str;
 }
@@ -314,6 +314,18 @@ void Relation::Print() {
 
 string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');
+}
+
+vector<shared_ptr<ExternalDependency>> Relation::GetAllDependencies() {
+	vector<shared_ptr<ExternalDependency>> all_dependencies;
+	Relation *cur = this;
+	while (cur) {
+		if (cur->extra_dependencies) {
+			all_dependencies.push_back(cur->extra_dependencies);
+		}
+		cur = ChildRelation();
+	}
+	return all_dependencies;
 }
 
 } // namespace duckdb

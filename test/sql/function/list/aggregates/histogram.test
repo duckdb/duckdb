@@ -55,26 +55,50 @@ SELECT list_histogram(['2021-08-20'::TIMESTAMP])
 ----
 {2021-08-20 00:00:00=1}
 
+# timestamp_s
+query I
+SELECT list_histogram(['2021-08-20'::TIMESTAMP_S])
+----
+{2021-08-20 00:00:00=1}
+
+# timestamp_ms
+query I
+SELECT list_histogram(['2021-08-20'::TIMESTAMP_MS])
+----
+{2021-08-20 00:00:00=1}
+
+# timestamp_ns
+query I
+SELECT list_histogram(['2021-08-20'::TIMESTAMP_NS])
+----
+{2021-08-20 00:00:00=1}
+
 # timestamp with time zone
 query I
 SELECT list_histogram(['2021-08-20'::TIMESTAMPTZ])
 ----
 {2021-08-20 00:00:00+00=1}
 
-mode skip
+# date
+query I
+SELECT list_histogram(['2022-01-02'::DATE])
+----
+{2022-01-02=1}
 
-# FIXME: test cases for the types date, time, timetz, timestamp_s, timestamp_ms, timestamp_ns, interval
-# currently fail due to a bug in the histogram code
-# they should be added once that bug is resolved
+# time
+query I
+SELECT list_histogram(['15:00:07'::TIME])
+----
+{15:00:07=1}
 
-foreach type date time timestamp_s timestamp_ms timestamp_ns timetz
+# timetz
+query I
+SELECT list_histogram(['15:00:07'::TIMETZ])
+----
+{15:00:07+00=1}
 
-statement error
-SELECT list_histogram(['2021-08-20'::${type}])
-
-endloop
-
-statement error
+# interval
+query I
 SELECT list_histogram([INTERVAL 1 YEAR])
-
-mode unskip
+----
+{1 year=1}

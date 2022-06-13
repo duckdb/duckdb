@@ -25,13 +25,13 @@ public:
 
 public:
 	template <class T>
-	static unique_ptr<Key> CreateKey(T element) {
+	static inline unique_ptr<Key> CreateKey(T element) {
 		auto data = Key::CreateData<T>(element);
 		return make_unique<Key>(move(data), sizeof(element));
 	}
 
 	template <class T>
-	static unique_ptr<Key> CreateKey(const Value &element) {
+	static inline unique_ptr<Key> CreateKey(const Value &element) {
 		return CreateKey(element.GetValueUnsafe<T>());
 	}
 
@@ -49,9 +49,9 @@ public:
 
 private:
 	template <class T>
-	static unique_ptr<data_t[]> CreateData(T value) {
+	static inline unique_ptr<data_t[]> CreateData(T value) {
 		auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-		EncodeData<T>(data.get(), value);
+		Radix::EncodeData<T>(data.get(), value);
 		return data;
 	}
 };

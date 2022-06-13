@@ -15,41 +15,41 @@ query I
 SELECT cast(CEIL(n::tinyint) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(CEIL(n::smallint) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(CEIL(n::integer) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(CEIL(n::bigint) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(CEIL(n::float) as bigint) FROM numbers ORDER BY n
@@ -85,41 +85,41 @@ query I
 SELECT cast(FLOOR(n::tinyint) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(FLOOR(n::smallint) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(FLOOR(n::integer) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(FLOOR(n::bigint) as bigint) FROM numbers ORDER BY n
 ----
 NULL
--42
+-43
 -42
 0
 42
-42
+43
 
 query I
 SELECT cast(FLOOR(n::float) as bigint) FROM numbers ORDER BY n

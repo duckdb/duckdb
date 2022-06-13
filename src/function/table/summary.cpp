@@ -21,32 +21,32 @@ static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, Tabl
 	return make_unique<TableFunctionData>();
 }
 
-static void SummaryFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                            DataChunk *input, DataChunk &output) {
-	D_ASSERT(input);
-	output.SetCardinality(input->size());
+static OperatorResultType SummaryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &input,
+                                          DataChunk &output) {
+	output.SetCardinality(input.size());
 
-	for (idx_t row_idx = 0; row_idx < input->size(); row_idx++) {
+	for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 		string summary_val = "[";
 
-		for (idx_t col_idx = 0; col_idx < input->ColumnCount(); col_idx++) {
-			summary_val += input->GetValue(col_idx, row_idx).ToString();
-			if (col_idx < input->ColumnCount() - 1) {
+		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+			summary_val += input.GetValue(col_idx, row_idx).ToString();
+			if (col_idx < input.ColumnCount() - 1) {
 				summary_val += ", ";
 			}
 		}
 		summary_val += "]";
 		output.SetValue(0, row_idx, Value(summary_val));
 	}
-	for (idx_t col_idx = 0; col_idx < input->ColumnCount(); col_idx++) {
-		output.data[col_idx + 1].Reference(input->data[col_idx]);
+	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+		output.data[col_idx + 1].Reference(input.data[col_idx]);
 	}
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 void SummaryTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunctionSet summary("summary");
-	summary.AddFunction(TableFunction({LogicalType::TABLE}, SummaryFunction, SummaryFunctionBind));
-	set.AddFunction(summary);
+	TableFunction summary_function("summary", {LogicalType::TABLE}, nullptr, SummaryFunctionBind);
+	summary_function.in_out_function = SummaryFunction;
+	set.AddFunction(summary_function);
 }
 
 } // namespace duckdb

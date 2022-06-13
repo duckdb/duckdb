@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -15,7 +16,7 @@ static string fts_schema_name(const string &schema, const string &table) {
 
 string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	qname.schema = context.catalog_search_path->GetOrDefault(qname.schema);
+	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
 	auto &catalog = Catalog::GetCatalog(context);
@@ -237,7 +238,7 @@ void check_exists(ClientContext &context, QualifiedName &qname) {
 
 string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(StringValue::Get(parameters.values[0]));
-	qname.schema = context.catalog_search_path->GetOrDefault(qname.schema);
+	qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(qname.schema);
 	check_exists(context, qname);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
@@ -254,7 +255,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 		stopwords = StringValue::Get(stopword_entry->second);
 		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
-			stopwords_qname.schema = context.catalog_search_path->GetOrDefault(stopwords_qname.schema);
+			stopwords_qname.schema = ClientData::Get(context).catalog_search_path->GetOrDefault(stopwords_qname.schema);
 			check_exists(context, stopwords_qname);
 		}
 	}
@@ -298,13 +299,13 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 			// star found - get all columns
 			doc_values.clear();
 			for (auto &cd : table->columns) {
-				if (cd.type == LogicalType::VARCHAR) {
-					doc_values.push_back(cd.name);
+				if (cd.Type() == LogicalType::VARCHAR) {
+					doc_values.push_back(cd.Name());
 				}
 			}
 			break;
 		}
-		if (table->name_map.find(col_name) == table->name_map.end()) {
+		if (!table->ColumnExists(col_name)) {
 			// we check this here because else we we end up with an error halfway the indexing script
 			throw CatalogException("Table '%s.%s' does not have a column named '%s'!", qname.schema, qname.name,
 			                       col_name);

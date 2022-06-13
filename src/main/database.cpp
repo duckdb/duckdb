@@ -126,7 +126,7 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 	    make_unique<StorageManager>(*this, path ? string(path) : string(), config.access_mode == AccessMode::READ_ONLY);
 	catalog = make_unique<Catalog>(*this);
 	transaction_manager = make_unique<TransactionManager>(*this);
-	scheduler = make_unique<TaskScheduler>();
+	scheduler = make_unique<TaskScheduler>(*this);
 	object_cache = make_unique<ObjectCache>();
 	connection_manager = make_unique<ConnectionManager>();
 
@@ -216,6 +216,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.maximum_threads = new_config.maximum_threads;
 	}
+	config.external_threads = new_config.external_threads;
 	config.load_extensions = new_config.load_extensions;
 	config.force_compression = new_config.force_compression;
 	config.allocator = move(new_config.allocator);
@@ -248,6 +249,14 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 }
 void DuckDB::SetExtensionLoaded(const std::string &name) {
 	instance->loaded_extensions.insert(name);
+}
+
+string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
+	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
+		return "UTC";
+	} else {
+		return config.set_variables["TimeZone"].GetValue<std::string>();
+	}
 }
 
 } // namespace duckdb

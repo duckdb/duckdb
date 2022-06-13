@@ -144,13 +144,17 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	});
 	vector<SequenceCatalogEntry *> sequences;
 	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) {
-		D_ASSERT(!entry->internal);
+		if (entry->internal) {
+			return;
+		}
 		sequences.push_back((SequenceCatalogEntry *)entry);
 	});
 
 	vector<TypeCatalogEntry *> custom_types;
 	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
-		D_ASSERT(!entry->internal);
+		if (entry->internal) {
+			return;
+		}
 		custom_types.push_back((TypeCatalogEntry *)entry);
 	});
 
@@ -339,12 +343,12 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	vector<unique_ptr<Expression>> bound_expressions;
 	idx_t key_nr = 0;
 	for (auto &column_id : info->column_ids) {
-		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(table_catalog->columns[column_id].name,
-		                                                                    table_catalog->columns[column_id].type,
+		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(table_catalog->columns[column_id].GetName(),
+		                                                                    table_catalog->columns[column_id].GetType(),
 		                                                                    ColumnBinding(0, column_id)));
 
 		bound_expressions.push_back(
-		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].type, key_nr++));
+		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].GetType(), key_nr++));
 	}
 	auto art = make_unique<ART>(info->column_ids, move(unbound_expressions), info->constraint_type, db, root_block_id,
 	                            root_offset);

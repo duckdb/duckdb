@@ -1,16 +1,23 @@
+import ssl
+import urllib.request
+import json
+import os
+import distutils.version as version
+import http.cookiejar
+import re
+
 # deletes old dev wheels from pypi. evil hack.
+retain_count = 3
 
 pypi_username = "hfmuehleisen"
-
-# gah
-import ssl
+pypi_password = os.getenv("PYPI_PASSWORD", "")
+if pypi_password == "":
+	print(f'need {pypi_username}\' PyPI password in PYPI_PASSWORD env variable')
+	exit(1)
 
 ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
-
-import urllib.request
-import json
 
 url = 'https://pypi.python.org/pypi/duckdb/json'
 req = urllib.request.urlopen(url, context=ctx)
@@ -18,52 +25,48 @@ raw_resp = req.read().decode()
 resp_json =  json.loads(raw_resp)
 
 last_release = resp_json["info"]["version"]
-
-import distutils.version as version
 latest_release_v = version.LooseVersion(last_release)
 
-to_delete = []
-
-# todo ugly double loop
-latest_prerelease = -1
+latest_prereleases = []
 
 def parsever(ele):
 	major = version.LooseVersion('.'.join(ele.split('.')[:3]))
 	dev = int(ele.split('.')[3].replace('dev',''))
 	return (major, dev,)
 
-for ele in resp_json["releases"]:
+# get a list of all pre-releases
+release_list = resp_json["releases"]
+for ele in release_list:
 	if not ".dev" in ele:
 		continue
 
 	(major, dev) = parsever(ele)
 
-	if (major > latest_release_v and dev > latest_prerelease):
-		latest_prerelease = dev
+	if major > latest_release_v:
+		latest_prereleases.append((ele, dev))
 
+# sort the pre-releases
+latest_prereleases = sorted(latest_prereleases, key=lambda x: x[1])
+print("List of pre-releases")
+for prerelease in latest_prereleases:
+	print(prerelease[0])
 
-for ele in resp_json["releases"]:
-	# never delete regular release builds
-	if not ".dev" in ele:
-		continue
+if len(latest_prereleases) <= retain_count:
+	print(f"At most {retain_count} pre-releases - nothing to delete")
+	exit(0)
 
-	(major, dev) = parsever(ele)
+to_delete = latest_prereleases[:len(latest_prereleases) - retain_count]
+if len(to_delete) < 1:
+	raise ValueError("Nothing to delete")
 
-	if (major <= latest_release_v or (major > latest_release_v and dev < latest_prerelease)):
-		to_delete += [ele]
+print("List of to-be-deleted releases")
+for release in to_delete:
+	print(release[0])
 
-
-if (len(to_delete) < 1):
-	raise ValueError("Nothing to do")
-
-import os
-pypi_password = os.getenv("PYPI_PASSWORD", "")
-if pypi_password == "":
-	raise ValueError('need Hannes\' PyPI password in PYPI_PASSWORD')
-
+to_delete = [x[0] for x in to_delete]
+print(to_delete)
 
 # gah2
-import http.cookiejar
 cj = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj), urllib.request.HTTPSHandler(context=ctx, debuglevel = 0))
 
@@ -71,7 +74,6 @@ def call(url, data=None, headers={}):
 	return opener.open(urllib.request.Request(url, data, headers)).read().decode()
 
 
-import re
 csrf_token_re = re.compile(r"name=\"csrf_token\"[^>]+value=\"([^\"]+)\"")
 
 def get_token(url):
@@ -79,8 +81,8 @@ def get_token(url):
 
 
 login_data = urllib.parse.urlencode({
-	"csrf_token" : get_token("https://pypi.org/account/login/"), 
-	"username" : pypi_username, 
+	"csrf_token" : get_token("https://pypi.org/account/login/"),
+	"username" : pypi_username,
 	"password" : pypi_password}).encode()
 login_headers = {
 	"Referer": "https://pypi.org/account/login/"}
@@ -96,10 +98,12 @@ delete_headers = {
 for rev in to_delete:
 	print("Deleting %s" % rev)
 
-	delete_data = urllib.parse.urlencode({
-		"confirm_delete_version" : rev,
-		"csrf_token" : delete_crsf_token
-	}).encode()
-	call("https://pypi.org/manage/project/duckdb/release/%s/" % rev, delete_data, delete_headers)
-
-
+	try:
+		delete_data = urllib.parse.urlencode({
+			"confirm_delete_version" : rev,
+			"csrf_token" : delete_crsf_token
+		}).encode()
+		call("https://pypi.org/manage/project/duckdb/release/%s/" % rev, delete_data, delete_headers)
+	except Exception as e:
+		print(f"Failed to delete {rev}")
+		print(e)

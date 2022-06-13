@@ -20,7 +20,7 @@ void TemplatedRadixScatter(VectorData &vdata, const SelectionVector &sel, idx_t 
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
-				EncodeData<T>(key_locations[i] + 1, source[source_idx]);
+				Radix::EncodeData<T>(key_locations[i] + 1, source[source_idx]);
 				// invert bits if desc
 				if (desc) {
 					for (idx_t s = 1; s < sizeof(T) + 1; s++) {
@@ -38,7 +38,7 @@ void TemplatedRadixScatter(VectorData &vdata, const SelectionVector &sel, idx_t 
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
 			// write value
-			EncodeData<T>(key_locations[i], source[source_idx]);
+			Radix::EncodeData<T>(key_locations[i], source[source_idx]);
 			// invert bits if desc
 			if (desc) {
 				for (idx_t s = 0; s < sizeof(T); s++) {
@@ -65,7 +65,7 @@ void RadixScatterStringVector(VectorData &vdata, const SelectionVector &sel, idx
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
-				EncodeStringDataPrefix(key_locations[i] + 1, source[source_idx], prefix_len);
+				Radix::EncodeStringDataPrefix(key_locations[i] + 1, source[source_idx], prefix_len);
 				// invert bits if desc
 				if (desc) {
 					for (idx_t s = 1; s < prefix_len + 1; s++) {
@@ -83,7 +83,7 @@ void RadixScatterStringVector(VectorData &vdata, const SelectionVector &sel, idx
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
 			// write value
-			EncodeStringDataPrefix(key_locations[i], source[source_idx], prefix_len);
+			Radix::EncodeStringDataPrefix(key_locations[i], source[source_idx], prefix_len);
 			// invert bits if desc
 			if (desc) {
 				for (idx_t s = 0; s < prefix_len; s++) {
@@ -210,7 +210,6 @@ void RadixScatterStructVector(Vector &v, VectorData &vdata, idx_t vcount, const 
 void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
                                  data_ptr_t *key_locations, bool desc, bool has_null, bool nulls_first,
                                  idx_t prefix_len, idx_t width, idx_t offset) {
-
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 	switch (v.GetType().InternalType()) {

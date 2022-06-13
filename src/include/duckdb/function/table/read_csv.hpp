@@ -24,17 +24,13 @@ struct BaseCSVData : public TableFunctionData {
 };
 
 struct WriteCSVData : public BaseCSVData {
-	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
-	    : sql_types(move(sql_types)), names(move(names)) {
+	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names) : sql_types(move(sql_types)) {
 		files.push_back(move(file_path));
+		options.names = move(names);
 	}
 
 	//! The SQL types to write
 	vector<LogicalType> sql_types;
-	//! The column names of the columns to write
-	vector<string> names;
-	//! True, if column with that index must be quoted
-	vector<bool> force_quote;
 	//! The newline string to write
 	string newline = "\n";
 	//! Whether or not we are writing a simple CSV (delimiter, quote and escape are all 1 byte in length)
@@ -46,15 +42,9 @@ struct WriteCSVData : public BaseCSVData {
 struct ReadCSVData : public BaseCSVData {
 	//! The expected SQL types to read
 	vector<LogicalType> sql_types;
-	//! Whether or not to include a file name column
-	bool include_file_name = false;
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
-	//! Total File Size
-	atomic<idx_t> file_size;
-	//! How many bytes were read up to this point
-	atomic<idx_t> bytes_read;
 };
 
 struct CSVCopyFunction {

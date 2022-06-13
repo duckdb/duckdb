@@ -89,6 +89,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
+	         py::arg("query"))
+	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
+	         py::arg("config") = py::dict(), py::arg("check_same_thread") = true)
+	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -98,6 +103,23 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
 	Execute(query, std::move(params), true);
 	return this;
+}
+
+static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
+	PendingExecutionResult execution_result;
+	do {
+		{
+			py::gil_scoped_release release;
+			execution_result = pending_query.ExecuteTask();
+		}
+		if (PyErr_CheckSignals() != 0) {
+			throw std::runtime_error("Query interrupted");
+		}
+	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+		throw std::runtime_error(pending_query.error);
+	}
+	return pending_query.Execute();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
@@ -113,7 +135,6 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		py::gil_scoped_release release;
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
@@ -122,7 +143,9 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto res = connection->Query(move(statements[i]));
+			auto pending_query = connection->PendingQuery(move(statements[i]));
+			auto res = CompletePendingQuery(*pending_query);
+
 			if (!res->success) {
 				throw std::runtime_error(res->error);
 			}
@@ -151,8 +174,9 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			py::gil_scoped_release release;
-			res->result = prep->Execute(args);
+			auto pending_query = prep->PendingQuery(args);
+			res->result = CompletePendingQuery(*pending_query);
+
 			if (!res->result->success) {
 				throw std::runtime_error(res->result->error);
 			}
@@ -178,31 +202,38 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
 	if (py_object_type == "DataFrame") {
+		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(python_object);
 		{
 			py::gil_scoped_release release;
-			connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
-			    ->CreateView(name, true, true);
+			temporary_views[name] = connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)new_df.ptr())})
+			                            ->CreateView(name, true, true);
 		}
 
 		// keep a reference
-		auto object = make_unique<RegisteredObject>(python_object);
-		registered_objects[name] = move(object);
+		vector<shared_ptr<ExternalDependency>> dependencies;
+		dependencies.push_back(make_shared<PythonDependencies>(make_unique<RegisteredObject>(python_object),
+		                                                       make_unique<RegisteredObject>(new_df)));
+		connection->context->external_dependencies[name] = move(dependencies);
 	} else if (IsAcceptedArrowObject(py_object_type)) {
-		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
-
+		auto stream_factory =
+		    make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr(), connection->context->config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
 		{
 			py::gil_scoped_release release;
-			connection
-			    ->TableFunction("arrow_scan",
-			                    {Value::POINTER((uintptr_t)stream_factory.get()),
-			                     Value::POINTER((uintptr_t)stream_factory_produce),
-			                     Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
-			    ->CreateView(name, true, true);
+			temporary_views[name] =
+			    connection
+			        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
+			                                       Value::POINTER((uintptr_t)stream_factory_produce),
+			                                       Value::POINTER((uintptr_t)stream_factory_get_schema),
+			                                       Value::UBIGINT(rows_per_tuple)})
+			        ->CreateView(name, true, true);
 		}
-		auto object = make_unique<RegisteredArrow>(move(stream_factory), move(python_object));
-		registered_objects[name] = move(object);
+		vector<shared_ptr<ExternalDependency>> dependencies;
+		dependencies.push_back(
+		    make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), python_object)));
+		connection->context->external_dependencies[name] = move(dependencies);
 	} else {
 		throw std::runtime_error("Python Object " + py_object_type + " not suitable to be registered as a view");
 	}
@@ -256,6 +287,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
+	// First check our temporary view
+	if (temporary_views.find(vname) != temporary_views.end()) {
+		return make_unique<DuckDBPyRelation>(temporary_views[vname]);
+	}
 	return make_unique<DuckDBPyRelation>(connection->View(vname));
 }
 
@@ -282,15 +317,18 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const py::object &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	string name = "df_" + GenerateRandomName();
-	registered_objects[name] = make_unique<RegisteredObject>(value);
+	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
-	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
+	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
+	auto rel = make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
+	rel->rel->extra_dependencies =
+	    make_unique<PythonDependencies>(make_unique<RegisteredObject>(value), make_unique<RegisteredObject>(new_df));
+	return rel;
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
@@ -318,12 +356,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 		throw std::runtime_error("connection closed");
 	}
 	py::gil_scoped_acquire acquire;
-	string name = "arrow_table_" + GenerateRandomName();
+	string name = "arrow_object_" + GenerateRandomName();
 	auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 	if (!IsAcceptedArrowObject(py_object_type)) {
 		throw std::runtime_error("Python Object Type " + py_object_type + " is not an accepted Arrow Object.");
 	}
-	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr());
+	auto stream_factory =
+	    make_unique<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -335,7 +374,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	                         Value::POINTER((uintptr_t)stream_factory_produce),
 	                         Value::POINTER((uintptr_t)stream_factory_get_schema), Value::UBIGINT(rows_per_tuple)})
 	        ->Alias(name));
-	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), arrow_object);
+	rel->rel->extra_dependencies =
+	    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), arrow_object));
 	return rel;
 }
 
@@ -358,8 +398,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
 }
 
+unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	return connection->GetTableNames(query);
+}
+
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
-	registered_objects.erase(name);
+	connection->context->external_dependencies.erase(name);
+	temporary_views.erase(name);
 	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
@@ -461,7 +509,8 @@ py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) co
 }
 static unique_ptr<TableFunctionRef>
 TryReplacement(py::dict &dict, py::str &table_name,
-               unordered_map<string, unique_ptr<RegisteredObject>> &registered_objects) {
+               unordered_map<string, vector<shared_ptr<ExternalDependency>>> &registered_objects,
+               ClientConfig &config) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -472,14 +521,18 @@ TryReplacement(py::dict &dict, py::str &table_name,
 	vector<unique_ptr<ParsedExpression>> children;
 	if (py_object_type == "DataFrame") {
 		string name = "df_" + GenerateRandomName();
-		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
+		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
 		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
 		// keep a reference
-		auto object = make_unique<RegisteredObject>(entry);
-		registered_objects[name] = move(object);
+		vector<shared_ptr<ExternalDependency>> external_dependency;
+		auto object = make_shared<PythonDependencies>(make_unique<RegisteredObject>(entry),
+		                                              make_unique<RegisteredObject>(new_df));
+		external_dependency.push_back(move(object));
+		registered_objects[name] = move(external_dependency);
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {
 		string name = "arrow_" + GenerateRandomName();
-		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr());
+		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -488,7 +541,10 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
 		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
-		registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), entry);
+		vector<shared_ptr<ExternalDependency>> external_dependency;
+		auto object = make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
+		external_dependency.push_back(move(object));
+		registered_objects[name] = move(external_dependency);
 	} else {
 		throw std::runtime_error("Python Object " + py_object_type + " not suitable for replacement scans");
 	}
@@ -496,7 +552,7 @@ TryReplacement(py::dict &dict, py::str &table_name,
 }
 
 struct ReplacementRegisteredObjects : public ReplacementScanData {
-	unordered_map<string, unique_ptr<RegisteredObject>> *registered_objects;
+	unordered_map<string, vector<shared_ptr<ExternalDependency>>> *registered_objects;
 };
 
 static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
@@ -511,7 +567,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
 		if (local_dict) {
-			auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
+			auto result = TryReplacement(local_dict, py_table_name, *registered_objects, context.config);
 			if (result) {
 				return result;
 			}
@@ -519,7 +575,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
 		if (global_dict) {
-			auto result = TryReplacement(global_dict, py_table_name, *registered_objects);
+			auto result = TryReplacement(global_dict, py_table_name, *registered_objects, context.config);
 			if (result) {
 				return result;
 			}
@@ -533,6 +589,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            const py::dict &config_dict, bool check_same_thread) {
 	auto res = make_shared<DuckDBPyConnection>();
+
 	DBConfig config;
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
@@ -546,15 +603,16 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		}
 		config.SetOption(*config_property, Value(val));
 	}
-	if (config.enable_external_access) {
-		auto extra_data = make_unique<ReplacementRegisteredObjects>();
-		extra_data->registered_objects = &res->registered_objects;
-		config.replacement_scans.emplace_back(ScanReplacement, move(extra_data));
-	}
-
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
 	res->check_same_thread = check_same_thread;
+	if (config.enable_external_access) {
+		DBConfig &cur_config = res->database->instance->config;
+		auto extra_data = make_unique<ReplacementRegisteredObjects>();
+		extra_data->registered_objects = &res->connection->context->external_dependencies;
+		cur_config.replacement_scans.emplace_back(ScanReplacement, move(extra_data));
+	}
+
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);
 
@@ -659,6 +717,18 @@ DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
 	}
 	return default_connection.get();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
+                                                         bool read_only, const py::dict &config,
+                                                         bool check_same_thread) {
+	return self.Connect(database, read_only, config, check_same_thread);
+}
+
+bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+                              const py::object &traceback) {
+	self.Close();
+	return true;
 }
 
 void DuckDBPyConnection::Cleanup() {

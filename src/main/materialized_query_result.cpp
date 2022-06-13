@@ -3,13 +3,11 @@
 
 namespace duckdb {
 
-MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type) {
-}
-
-MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, vector<LogicalType> types,
-                                                 vector<string> names)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, move(types), move(names)) {
+MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
+                                                 vector<LogicalType> types, vector<string> names,
+                                                 const shared_ptr<ClientContext> &context)
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, properties, move(types), move(names)),
+      context(context) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)

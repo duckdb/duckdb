@@ -1,14 +1,16 @@
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/main/client_context.hpp"
+
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -88,6 +90,17 @@ void DebugForceExternal::SetLocal(ClientContext &context, const Value &input) {
 
 Value DebugForceExternal::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_external);
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Force NoCrossProduct
+//===--------------------------------------------------------------------===//
+void DebugForceNoCrossProduct::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_no_cross_product = input.GetValue<bool>();
+}
+
+Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_no_cross_product);
 }
 
 //===--------------------------------------------------------------------===//
@@ -338,6 +351,18 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// External Threads Setting
+//===--------------------------------------------------------------------===//
+void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.external_threads = input.GetValue<int64_t>();
+}
+
+Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(config.external_threads);
+}
+
+//===--------------------------------------------------------------------===//
 // Force Compression
 //===--------------------------------------------------------------------===//
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -362,19 +387,32 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 // Log Query Path
 //===--------------------------------------------------------------------===//
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &client_data = ClientData::Get(context);
 	auto path = input.ToString();
 	if (path.empty()) {
 		// empty path: clean up query writer
-		context.log_query_writer = nullptr;
+		client_data.log_query_writer = nullptr;
 	} else {
-		context.log_query_writer =
+		client_data.log_query_writer =
 		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
-		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, context.file_opener.get());
+		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
 	}
 }
 
 Value LogQueryPathSetting::GetSetting(ClientContext &context) {
-	return context.log_query_writer ? Value(context.log_query_writer->path) : Value();
+	auto &client_data = ClientData::Get(context);
+	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Maximum Expression Depth
+//===--------------------------------------------------------------------===//
+void MaximumExpressionDepthSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).max_expression_depth = input.GetValue<uint64_t>();
+}
+
+Value MaximumExpressionDepthSetting::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).max_expression_depth);
 }
 
 //===--------------------------------------------------------------------===//
@@ -419,6 +457,18 @@ Value PreserveIdentifierCase::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// PreserveInsertionOrder
+//===--------------------------------------------------------------------===//
+void PreserveInsertionOrder::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.preserve_insertion_order = input.GetValue<bool>();
+}
+
+Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.preserve_insertion_order);
+}
+
+//===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
 void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
@@ -426,7 +476,8 @@ void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
 	if (size <= 0) {
 		throw ParserException("Size should be >= 0");
 	}
-	context.query_profiler_history->SetProfilerHistorySize(size);
+	auto &client_data = ClientData::Get(context);
+	client_data.query_profiler_history->SetProfilerHistorySize(size);
 }
 
 Value ProfilerHistorySize::GetSetting(ClientContext &context) {
@@ -489,7 +540,8 @@ Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
-	context.catalog_search_path->Set(parameter, true);
+	auto &client_data = ClientData::Get(context);
+	client_data.catalog_search_path->Set(parameter, true);
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
@@ -501,11 +553,13 @@ Value SchemaSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
-	context.catalog_search_path->Set(parameter, false);
+	auto &client_data = ClientData::Get(context);
+	client_data.catalog_search_path->Set(parameter, false);
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {
-	return Value(StringUtil::Join(context.catalog_search_path->GetSetPaths(), ","));
+	auto &client_data = ClientData::Get(context);
+	return Value(StringUtil::Join(client_data.catalog_search_path->GetSetPaths(), ","));
 }
 
 //===--------------------------------------------------------------------===//

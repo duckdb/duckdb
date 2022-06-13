@@ -37,11 +37,13 @@ public:
 	unique_ptr<Command> top_level_loop;
 	vector<LoopDefinition *> running_loops;
 	bool original_sqlite_test = false;
+	bool output_sql = false;
+	bool enable_verification = false;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
 	// If these error msgs occur a statement that is expected to fail, the test will fail
-	unordered_set<string> always_fail_error_messages = {"Unoptimized Result differs from original result!", "INTERNAL"};
+	unordered_set<string> always_fail_error_messages = {"differs from original result!", "INTERNAL"};
 
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;

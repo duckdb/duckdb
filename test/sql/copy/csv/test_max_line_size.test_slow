@@ -2,20 +2,30 @@
 # description: Test lines that exceed the maximum line size
 # group: [csv]
 
-# generate CSV file with 4 MB string
+# generate CSV file with some long strings some exceeding the maximum line size
 statement ok
-COPY (SELECT 10, REPEAT('a', 4048576), 20) TO '__TEST_DIR__/test.csv'
+CREATE TABLE test_base (a INT, b VARCHAR, c INT);
+
+statement ok
+INSERT INTO test_base VALUES
+    (10, REPEAT('a', 1504857), 20),
+    (10, REPEAT('a', 10485760), 20),
+
+statement ok
+COPY test_base TO '__TEST_DIR__/test.csv'
 
 # value is too big for loading
 statement ok
 CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 
+# Error is thrown when line does not fit maximum lines size: note that it may not always throw for exceeding the line
+# size by a small margin as the calculation is an estimate based on reads before parsing.
 statement error
 COPY test FROM '__TEST_DIR__/test.csv';
 
 # we can override the max line size
 statement ok
-COPY test FROM '__TEST_DIR__/test.csv' (max_line_size 204857600);
+COPY test FROM '__TEST_DIR__/test.csv' (max_line_size 10485770);
 
 # also in the read_csv call
 statement ok

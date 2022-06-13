@@ -1,0 +1,272 @@
+# name: test/sql/function/list/list_distinct.test
+# description: Test the list_distinct function
+# group: [list]
+
+# FIXME: some of these test cases could be improved by using list_sort
+# Currently, they use UNNEST(...) ORDER BY, because unordered maps seem to 'sort'
+# different on Windows and other systems
+
+# test null or empty
+
+query I
+SELECT list_distinct(NULL)
+----
+NULL
+
+query I
+SELECT list_distinct([NULL])
+----
+[]
+
+query I
+SELECT list_distinct([])
+----
+[]
+
+query I
+SELECT list_distinct([]) WHERE 1 = 0
+----
+
+# test incorrect syntax
+
+statement error
+SELECT list_distinct()
+
+statement error
+SELECT list_distinct(*)
+
+statement error
+SELECT list_distinct([1, 2], 2)
+
+# test incorrect parameter type
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+
+statement error
+SELECT list_distinct(NULL::${type})
+
+endloop
+
+# other tests
+
+query I
+SELECT UNNEST(list_distinct([1, 1, 2, 2, 2, 3])) AS l ORDER BY l
+----
+1
+2
+3
+
+query I
+SELECT UNNEST(list_distinct([1, 1, NULL, 2, 2, 2, 3, NULL, NULL])) AS l ORDER BY l
+----
+1
+2
+3
+
+query I
+SELECT UNNEST(list_distinct(list_distinct([1, 1, -5, 10, 10, 2]))) AS l ORDER BY l
+----
+-5
+1
+2
+10
+
+statement ok
+CREATE TABLE integers (l integer[])
+
+statement ok
+INSERT INTO integers VALUES ([1, 1, 1]), ([1, NULL, 1, NULL])
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+query I
+SELECT list_distinct(l) FROM integers
+----
+[1]
+[1]
+[]
+NULL
+[]
+
+# aliases
+
+query I
+SELECT UNNEST(array_distinct([1, 2, 2, NULL])) AS l ORDER BY l
+----
+1
+2
+
+# test all types
+
+# BOOLEAN
+query I
+SELECT UNNEST(list_distinct([True, True, False, NULL])) AS l ORDER BY l
+----
+0
+1
+
+query I
+SELECT list_distinct([NULL::BOOLEAN])
+----
+[]
+
+# VARCHAR
+query I
+SELECT UNNEST(list_distinct(['aa', 'aa', 'cd', NULL, '42'])) AS l ORDER BY l
+----
+42
+aa
+cd
+
+query I
+SELECT list_distinct([NULL::VARCHAR])
+----
+[]
+
+# INTEGER types
+foreach type tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+query I
+SELECT list_distinct([1::${type}, NULL, 1::${type}])
+----
+[1]
+
+query I
+SELECT list_distinct([NULL::${type}])
+----
+[]
+
+endloop
+
+# FLOAT, DOUBLE and DECIMAL types
+
+foreach type float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10)
+
+statement ok
+SELECT list_distinct([1::${type}])
+
+query I
+SELECT list_distinct([NULL::${type}])
+----
+[]
+
+endloop
+
+# TEMPORAL types
+
+# date
+query I
+SELECT list_distinct(['2021-08-20'::DATE])
+----
+[2021-08-20]
+
+# time
+query I
+SELECT list_distinct(['14:59:37'::TIME])
+----
+[14:59:37]
+
+# timestamp
+query I
+SELECT list_distinct(['2021-08-20'::TIMESTAMP])
+----
+[2021-08-20 00:00:00]
+
+# timestamp s
+query I
+SELECT list_distinct(['2021-08-20'::TIMESTAMP_S])
+----
+[2021-08-20 00:00:00]
+
+# timestamp ms
+query I
+SELECT list_distinct(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
+----
+[2021-08-20 00:00:00.123]
+
+# timestamp ns
+query I
+SELECT list_distinct(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
+----
+[2021-08-20 00:00:00.123456]
+
+# time with time zone
+query I
+SELECT list_distinct(['14:59:37'::TIMETZ])
+----
+[14:59:37+00]
+
+# timestamp with time zone
+query I
+SELECT list_distinct(['2021-08-20'::TIMESTAMPTZ])
+----
+[2021-08-20 00:00:00+00]
+
+# interval
+query I
+SELECT list_distinct([INTERVAL 1 YEAR])
+----
+[1 year]
+
+foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
+
+query I
+SELECT list_distinct([NULL::${type}])
+----
+[]
+
+endloop
+
+# JSON
+
+query I
+SELECT list_distinct(['{a: 1}'::JSON, '{a: 1}'::JSON])
+----
+[{a: 1}]
+
+query I
+SELECT list_distinct([NULL::JSON])
+----
+[]
+
+# enums
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'ok'])
+
+query I
+SELECT list_sort(list_distinct(e)) FROM enums
+----
+[ok, happy]
+
+# test WHERE
+
+statement ok
+CREATE TABLE wheretest (name VARCHAR, l INTEGER[]);
+
+statement ok
+INSERT INTO wheretest VALUES ('one1', [2, 3, 3, 4, NULL, 2]), ('one2', [NULL, NULL, 2]), ('two1', [1, 2, 3, 10, 15]),
+	('one3', [2, 3, 4]), ('two2', NULL), ('two3', [10, 11, 12]);
+
+query I
+SELECT name FROM wheretest WHERE name ILIKE 'one%' AND list_unique(list_distinct(l)) > 1;
+----
+one1
+one3
+
+query I
+SELECT name FROM wheretest WHERE name ILIKE 'two%' AND list_unique(list_distinct(l)) > 3;
+----
+two1
+
+# bug in #3481
+query I
+SELECT list_sort(list_distinct(['a', 'b、c', 'a']))
+----
+[a, b、c]

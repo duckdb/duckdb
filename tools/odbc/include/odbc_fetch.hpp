@@ -19,6 +19,7 @@ public:
 	const static SQLRETURN RETURN_FETCH_BEFORE_START = 999;
 
 	SQLULEN cursor_type;
+	SQLULEN cursor_scrollable;
 	SQLLEN row_count;
 
 	struct {
@@ -43,7 +44,8 @@ private:
 
 public:
 	explicit OdbcFetch(OdbcHandleStmt *stmt)
-	    : cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0), stmt_ref(stmt), resultset_end(false) {
+	    : cursor_type(SQL_CURSOR_FORWARD_ONLY), cursor_scrollable(SQL_NONSCROLLABLE), row_count(0), stmt_ref(stmt),
+	      resultset_end(false) {
 		ResetLastFetchedVariableVal();
 	}
 	~OdbcFetch();
@@ -59,6 +61,8 @@ public:
 
 	SQLRETURN FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 
+	SQLRETURN DummyFetch();
+
 	SQLRETURN GetValue(SQLUSMALLINT col_idx, Value &value);
 
 	void ClearChunks();
@@ -71,6 +75,8 @@ public:
 	size_t GetLastFetchedLength();
 
 	bool IsInExecutionState();
+
+	SQLLEN GetRowCount();
 
 private:
 	SQLRETURN ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);

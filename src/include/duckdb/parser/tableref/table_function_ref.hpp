@@ -17,8 +17,7 @@ namespace duckdb {
 //! Represents a Table producing function
 class TableFunctionRef : public TableRef {
 public:
-	TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTION) {
-	}
+	DUCKDB_API TableFunctionRef();
 
 	unique_ptr<ParsedExpression> function;
 	vector<string> column_name_alias;

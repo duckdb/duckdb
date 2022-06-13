@@ -7,9 +7,55 @@ import platform
 import multiprocessing.pool
 
 from setuptools import setup, Extension
+from setuptools.command.build_ext import build_ext as _build_ext
+
+
+class CompilerLauncherMixin:
+    """Add "compiler launchers" to distutils.
+
+    We use this to be able to run the build using "ccache".
+
+    A compiler launcher is a program that is invoked instead of invoking the
+    compiler directly. It is passed the full compiler invocation command line.
+
+    A similar feature exists in CMake, see
+    https://cmake.org/cmake/help/latest/prop_tgt/LANG_COMPILER_LAUNCHER.html.
+    """
+
+    __is_set_up = False
+
+    def build_extensions(self):
+        # Integrate into "build_ext"
+        self.__setup()
+        super().build_extensions()
+
+    def build_libraries(self):
+        # Integrate into "build_clib"
+        self.__setup()
+        super().build_extensions()
+
+    def __setup(self):
+        if self.__is_set_up:
+            return
+        self.__is_set_up = True
+        compiler_launcher = os.getenv("DISTUTILS_C_COMPILER_LAUNCHER")
+        if compiler_launcher:
+
+            def spawn_with_compiler_launcher(cmd):
+                exclude_programs = ("link.exe",)
+                if not cmd[0].endswith(exclude_programs):
+                    cmd = [compiler_launcher] + cmd
+                return original_spawn(cmd)
+
+            original_spawn = self.compiler.spawn
+            self.compiler.spawn = spawn_with_compiler_launcher
+
+
+class build_ext(CompilerLauncherMixin, _build_ext):
+    pass
+
 
 lib_name = 'duckdb'
-extension_name = '_duckdb_extension'
 
 extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel', 'substrait']
 
@@ -80,7 +126,7 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
-toolchain_args.append('-DDUCKDB_PYTHON_EXTENSION_NAME='+ extension_name)
+toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME='+lib_name)
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
@@ -127,16 +173,15 @@ if len(existing_duckdb_dir) == 0:
         # copy all source files to the current directory
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
-
-        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, extension_name), extensions, False, unity_build, extension_name)
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, lib_name), extensions, False, unity_build)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()
 
-        original_sources = [os.path.join(extension_name, x) for x in original_sources]
+        original_sources = [os.path.join(lib_name, x) for x in original_sources]
 
-        duckdb_includes = [os.path.join(extension_name, x) for x in include_list]
-        duckdb_includes += [extension_name]
+        duckdb_includes = [os.path.join(lib_name, x) for x in include_list]
+        duckdb_includes += [lib_name]
 
         # gather the include files
         import amalgamation
@@ -164,7 +209,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension(extension_name,
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -181,7 +226,7 @@ else:
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension(extension_name,
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -237,8 +282,7 @@ setup(
     data_files = data_files,
     packages=[
         'duckdb_query_graph',
-        'duckdb-stubs',
-        'duckdb'
+        'duckdb-stubs'
     ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
@@ -251,5 +295,6 @@ setup(
     ],
     ext_modules = [libduckdb],
     maintainer = "Hannes Muehleisen",
-    maintainer_email = "hannes@cwi.nl"
+    maintainer_email = "hannes@cwi.nl",
+    cmdclass={"build_ext": build_ext},
 )

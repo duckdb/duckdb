@@ -30,3 +30,12 @@ dbBind__duckdb_result <- function(res, params, ...) {
 #' @rdname duckdb_result-class
 #' @export
 setMethod("dbBind", "duckdb_result", dbBind__duckdb_result)
+
+list_to_df <- function(x) {
+  if (is.data.frame(x)) {
+    return(x)
+  }
+  attr(x, "row.names") <- c(NA_integer_, -NROW(x[[1]]))
+  class(x) <- "data.frame"
+  x
+}

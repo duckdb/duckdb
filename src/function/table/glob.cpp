@@ -24,23 +24,20 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFu
 	return move(result);
 }
 
-struct GlobFunctionState : public FunctionOperatorData {
+struct GlobFunctionState : public GlobalTableFunctionState {
 	GlobFunctionState() : current_idx(0) {
 	}
 
 	idx_t current_idx;
 };
 
-static unique_ptr<FunctionOperatorData> GlobFunctionInit(ClientContext &context, const FunctionData *bind_data,
-                                                         const vector<column_t> &column_ids,
-                                                         TableFilterCollection *filters) {
+static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<GlobFunctionState>();
 }
 
-static void GlobFunction(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *state_p,
-                         DataChunk *input, DataChunk &output) {
-	auto &bind_data = (GlobFunctionBindData &)*bind_data_p;
-	auto &state = (GlobFunctionState &)*state_p;
+static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &bind_data = (GlobFunctionBindData &)*data_p.bind_data;
+	auto &state = (GlobFunctionState &)*data_p.global_state;
 
 	idx_t count = 0;
 	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files.size());

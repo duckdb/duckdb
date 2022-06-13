@@ -1,0 +1,50 @@
+# name: test/sql/aggregate/grouping_sets/issue_3730.test
+# description: Issue #3730: Segmentation fault on GROUP BY when using ROLLUP/CUBE + COUNT DISTINCT on Parquet
+# group: [grouping_sets]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE response(id BIGINT, response VARCHAR);;
+
+statement ok
+INSERT INTO response VALUES(1,'yes');
+
+statement ok
+INSERT INTO response VALUES(1,'no');
+
+statement ok
+INSERT INTO response VALUES(1,'yes');
+
+statement ok
+INSERT INTO response VALUES(2,'no');
+
+statement ok
+INSERT INTO response VALUES(2,'no');
+
+
+statement ok
+CREATE TABLE user_pq(id BIGINT, "name" VARCHAR);;
+
+statement ok
+INSERT INTO user_pq VALUES(1,'alice');
+
+statement ok
+INSERT INTO user_pq VALUES(2,'bob');
+
+query III
+SELECT id, response, COUNT(DISTINCT id)
+FROM user_pq
+JOIN response USING (id)
+GROUP BY CUBE (id, response)
+ORDER BY 1 NULLS LAST, 2 NULLS LAST, 3 NULLS LAST
+----
+1	no	1
+1	yes	1
+1	NULL	1
+2	no	1
+2	NULL	1
+NULL	no	2
+NULL	yes	1
+NULL	NULL	2

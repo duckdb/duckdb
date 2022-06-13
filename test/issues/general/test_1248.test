@@ -13,7 +13,7 @@ with test(round) as (
 )
 select test.round
 from
-    (select round from test limit 1) as subselect, 
+    (select round from test limit 1) as subselect,
     test;
 
 query I
@@ -22,7 +22,7 @@ with test(round) as (
 )
 select test.round
 from
-    (select round from test limit 1) as subselect, 
+    (select round from test limit 1) as subselect,
     test;
 ----
 0
@@ -70,6 +70,19 @@ from
 19
 20
 21
+
+query I
+with recursive test(round) as (
+    select 0
+    union all
+    select round+1 from test where round <= 20
+)
+select count(*)
+from
+    (select round from test limit 1) as subselect,
+    test;
+----
+22
 
 query II
 with recursive test(round) as (

@@ -93,7 +93,7 @@ ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerT
 ProducerToken::~ProducerToken() {
 }
 
-TaskScheduler::TaskScheduler() : queue(make_unique<ConcurrentQueue>()) {
+TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db), queue(make_unique<ConcurrentQueue>()) {
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -130,10 +130,30 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout; the timeout allows us to periodically check
-		queue->semaphore.wait(TASK_TIMEOUT_USECS);
+		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
 			task->Execute(TaskExecutionMode::PROCESS_ALL);
 			task.reset();
+		}
+	}
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+#endif
+}
+
+void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
+#ifndef DUCKDB_NO_THREADS
+	unique_ptr<Task> task;
+	for (idx_t i = 0; i < max_tasks; i++) {
+		queue->semaphore.wait(TASK_TIMEOUT_USECS);
+		if (!queue->q.try_dequeue(task)) {
+			return;
+		}
+		try {
+			task->Execute(TaskExecutionMode::PROCESS_ALL);
+			task.reset();
+		} catch (...) {
+			return;
 		}
 	}
 #else
@@ -148,7 +168,8 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 #endif
 
 int32_t TaskScheduler::NumberOfThreads() {
-	return threads.size() + 1;
+	auto &config = DBConfig::GetConfig(db);
+	return threads.size() + config.external_threads + 1;
 }
 
 void TaskScheduler::SetThreads(int32_t n) {
@@ -170,6 +191,20 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		return;
 	}
 	idx_t new_thread_count = n - 1;
+	if (threads.size() > new_thread_count) {
+		// we are reducing the number of threads: clear all threads first
+		for (idx_t i = 0; i < threads.size(); i++) {
+			*markers[i] = false;
+		}
+		queue->semaphore.signal(threads.size());
+		// now join the threads to ensure they are fully stopped before erasing them
+		for (idx_t i = 0; i < threads.size(); i++) {
+			threads[i]->internal_thread->join();
+		}
+		// erase the threads/markers
+		threads.clear();
+		markers.clear();
+	}
 	if (threads.size() < new_thread_count) {
 		// we are increasing the number of threads: launch them and run tasks on them
 		idx_t create_new_threads = new_thread_count - threads.size();
@@ -182,18 +217,6 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 			threads.push_back(move(thread_wrapper));
 			markers.push_back(move(marker));
 		}
-	} else if (threads.size() > new_thread_count) {
-		// we are reducing the number of threads: cancel any threads exceeding new_thread_count
-		for (idx_t i = new_thread_count; i < threads.size(); i++) {
-			*markers[i] = false;
-		}
-		// now join the threads to ensure they are fully stopped before erasing them
-		for (idx_t i = new_thread_count; i < threads.size(); i++) {
-			threads[i]->internal_thread->join();
-		}
-		// erase the threads/markers
-		threads.resize(new_thread_count);
-		markers.resize(new_thread_count);
 	}
 #endif
 }

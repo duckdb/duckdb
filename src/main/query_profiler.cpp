@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include <utility>
 #include <algorithm>
 
@@ -38,7 +39,7 @@ string QueryProfiler::GetSaveLocation() const {
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {
-	return *context.profiler;
+	return *ClientData::Get(context).profiler;
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze) {
@@ -65,6 +66,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::STREAMING_SAMPLE:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::LIMIT_PERCENT:
+	case PhysicalOperatorType::STREAMING_LIMIT:
 	case PhysicalOperatorType::TOP_N:
 	case PhysicalOperatorType::WINDOW:
 	case PhysicalOperatorType::UNNEST:
@@ -568,27 +570,10 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 	node->extra_info = root->ParamsToString();
 	node->depth = depth;
 	tree_map[root] = node.get();
-	for (auto &child : root->children) {
-		auto child_node = CreateTree(child.get(), depth + 1);
+	auto children = root->GetChildren();
+	for (auto &child : children) {
+		auto child_node = CreateTree(child, depth + 1);
 		node->children.push_back(move(child_node));
-	}
-	switch (root->type) {
-	case PhysicalOperatorType::DELIM_JOIN: {
-		auto &delim_join = (PhysicalDelimJoin &)*root;
-		auto child_node = CreateTree((PhysicalOperator *)delim_join.join.get(), depth + 1);
-		node->children.push_back(move(child_node));
-		child_node = CreateTree((PhysicalOperator *)delim_join.distinct.get(), depth + 1);
-		node->children.push_back(move(child_node));
-		break;
-	}
-	case PhysicalOperatorType::EXECUTE: {
-		auto &execute = (PhysicalExecute &)*root;
-		auto child_node = CreateTree((PhysicalOperator *)execute.plan, depth + 1);
-		node->children.push_back(move(child_node));
-		break;
-	}
-	default:
-		break;
 	}
 	return node;
 }

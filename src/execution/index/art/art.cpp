@@ -262,14 +262,14 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 }
 
 bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
-	DataChunk expression_chunk;
-	expression_chunk.Initialize(logical_types);
+	DataChunk expression_result;
+	expression_result.Initialize(logical_types);
 
 	// first resolve the expressions for the index
-	ExecuteExpressions(appended_data, expression_chunk);
+	ExecuteExpressions(appended_data, expression_result);
 
 	// now insert into the index
-	return Insert(lock, expression_chunk, row_identifiers);
+	return Insert(lock, expression_result, row_identifiers);
 }
 
 void ART::VerifyAppend(DataChunk &chunk) {
@@ -916,7 +916,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		case VerifyExistenceType::APPEND_FK: {
 			// found node no exists in tree
 			exception_msg =
-			    "violates foreign key constraint because key \"" + key_name + "\" no exist in referenced table";
+			    "violates foreign key constraint because key \"" + key_name + "\" does not exist in referenced table";
 			break;
 		}
 		case VerifyExistenceType::DELETE_FK: {

@@ -301,13 +301,13 @@ public:
 	}
 
 	template <class STATE_TYPE, class OP>
-	static void Combine(Vector &source, Vector &target, idx_t count) {
+	static void Combine(Vector &source, Vector &target, FunctionData *bind_data, idx_t count) {
 		D_ASSERT(source.GetType().id() == LogicalTypeId::POINTER && target.GetType().id() == LogicalTypeId::POINTER);
 		auto sdata = FlatVector::GetData<const STATE_TYPE *>(source);
 		auto tdata = FlatVector::GetData<STATE_TYPE *>(target);
 
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i]);
+			OP::template Combine<STATE_TYPE, OP>(*sdata[i], tdata[i], bind_data);
 		}
 	}
 
@@ -334,13 +334,13 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector &input, FunctionData *bind_data, data_ptr_t state, const FrameBounds &frame,
-	                        const FrameBounds &prev, Vector &result, idx_t rid, idx_t bias) {
+	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, FunctionData *bind_data, data_ptr_t state,
+	                        const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid, idx_t bias) {
 
 		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
 		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ivalid, bind_data, (STATE *)state, frame, prev,
-		                                                    result, rid, bias);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, bind_data, (STATE *)state, frame,
+		                                                    prev, result, rid, bias);
 	}
 
 	template <class STATE_TYPE, class OP>

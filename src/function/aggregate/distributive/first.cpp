@@ -46,7 +46,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (!target->is_set) {
 			*target = source;
 		}
@@ -97,7 +97,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.is_set && (LAST || !target->is_set)) {
 			SetValue(target, source.value, source.is_null);
 		}
@@ -167,7 +167,7 @@ struct FirstVectorFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		if (source.value && (LAST || !target->value)) {
 			SetValue(target, *source.value, 0);
 		}

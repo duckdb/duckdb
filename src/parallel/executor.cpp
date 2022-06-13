@@ -1,12 +1,8 @@
 #include "duckdb/execution/executor.hpp"
 
-#include "duckdb/execution/operator/helper/physical_execute.hpp"
-#include "duckdb/execution/operator/join/physical_delim_join.hpp"
-#include "duckdb/execution/operator/join/physical_iejoin.hpp"
-#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
-#include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -15,6 +11,8 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
+
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
 #include <algorithm>
 
@@ -256,21 +254,33 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
+void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan) {
+	Reset();
+	owned_plan = move(physical_plan);
+	InitializeInternal(owned_plan.get());
+}
+
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
+	InitializeInternal(plan);
+}
+
+void Executor::InitializeInternal(PhysicalOperator *plan) {
 
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 	{
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		this->profiler = context.profiler;
+		this->profiler = ClientData::Get(context).profiler;
 		profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
 		root_pipeline->sink = nullptr;
-		BuildPipelines(physical_plan, root_pipeline.get());
+
+		PipelineBuildState state;
+		physical_plan->BuildPipelines(*this, *root_pipeline, state);
 
 		this->total_pipelines = pipelines.size();
 
@@ -291,9 +301,6 @@ void Executor::CancelTasks() {
 	vector<weak_ptr<Pipeline>> weak_references;
 	{
 		lock_guard<mutex> elock(executor_lock);
-		if (pipelines.empty()) {
-			return;
-		}
 		weak_references.reserve(pipelines.size());
 		for (auto &pipeline : pipelines) {
 			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
@@ -381,9 +388,8 @@ PendingExecutionResult Executor::ExecuteTask() {
 
 void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
-	delim_join_dependencies.clear();
-	recursive_cte = nullptr;
 	physical_plan = nullptr;
+	owned_plan.reset();
 	root_executor.reset();
 	root_pipelines.clear();
 	root_pipeline_idx = 0;
@@ -422,235 +428,6 @@ void Executor::AddChildPipeline(Pipeline *current) {
 	D_ASSERT(child_dependencies.find(child_pipeline_ptr) == child_dependencies.end());
 	child_dependencies.insert(make_pair(child_pipeline_ptr, move(dependencies)));
 	child_pipelines[current].push_back(move(child_pipeline));
-}
-
-void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
-	D_ASSERT(current);
-	op->op_state.reset();
-	if (op->IsSink()) {
-		// operator is a sink, build a pipeline
-		op->sink_state.reset();
-
-		PhysicalOperator *pipeline_child = nullptr;
-		switch (op->type) {
-		case PhysicalOperatorType::CREATE_TABLE_AS:
-		case PhysicalOperatorType::INSERT:
-		case PhysicalOperatorType::DELETE_OPERATOR:
-		case PhysicalOperatorType::UPDATE:
-		case PhysicalOperatorType::HASH_GROUP_BY:
-		case PhysicalOperatorType::SIMPLE_AGGREGATE:
-		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
-		case PhysicalOperatorType::WINDOW:
-		case PhysicalOperatorType::ORDER_BY:
-		case PhysicalOperatorType::RESERVOIR_SAMPLE:
-		case PhysicalOperatorType::TOP_N:
-		case PhysicalOperatorType::COPY_TO_FILE:
-		case PhysicalOperatorType::LIMIT:
-		case PhysicalOperatorType::LIMIT_PERCENT:
-		case PhysicalOperatorType::EXPLAIN_ANALYZE:
-			D_ASSERT(op->children.size() == 1);
-			// single operator:
-			// the operator becomes the data source of the current pipeline
-			current->source = op;
-			// we create a new pipeline starting from the child
-			pipeline_child = op->children[0].get();
-			break;
-		case PhysicalOperatorType::EXPORT:
-			// EXPORT has an optional child
-			// we only need to schedule child pipelines if there is a child
-			current->source = op;
-			if (op->children.empty()) {
-				return;
-			}
-			D_ASSERT(op->children.size() == 1);
-			pipeline_child = op->children[0].get();
-			break;
-		case PhysicalOperatorType::NESTED_LOOP_JOIN:
-		case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
-		case PhysicalOperatorType::HASH_JOIN:
-		case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
-		case PhysicalOperatorType::CROSS_PRODUCT:
-			// regular join, create a pipeline with RHS source that sinks into this pipeline
-			pipeline_child = op->children[1].get();
-			// on the LHS (probe child), the operator becomes a regular operator
-			current->operators.push_back(op);
-			if (op->IsSource()) {
-				// FULL or RIGHT outer join
-				// schedule a scan of the node as a child pipeline
-				// this scan has to be performed AFTER all the probing has happened
-				if (recursive_cte) {
-					throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
-				}
-				AddChildPipeline(current);
-			}
-			BuildPipelines(op->children[0].get(), current);
-			break;
-		case PhysicalOperatorType::IE_JOIN: {
-			D_ASSERT(op->children.size() == 2);
-			if (recursive_cte) {
-				throw NotImplementedException("IEJoins are not supported in recursive CTEs yet");
-			}
-
-			// Build the LHS
-			auto lhs_pipeline = make_shared<Pipeline>(*this);
-			lhs_pipeline->sink = op;
-			D_ASSERT(op->children[0].get());
-			BuildPipelines(op->children[0].get(), lhs_pipeline.get());
-
-			// Build the RHS
-			auto rhs_pipeline = make_shared<Pipeline>(*this);
-			rhs_pipeline->sink = op;
-			D_ASSERT(op->children[1].get());
-			BuildPipelines(op->children[1].get(), rhs_pipeline.get());
-
-			// RHS => LHS => current
-			current->AddDependency(rhs_pipeline);
-			rhs_pipeline->AddDependency(lhs_pipeline);
-
-			pipelines.emplace_back(move(lhs_pipeline));
-			pipelines.emplace_back(move(rhs_pipeline));
-
-			// Now build both and scan
-			current->source = op;
-			return;
-		}
-		case PhysicalOperatorType::DELIM_JOIN: {
-			// duplicate eliminated join
-			// for delim joins, recurse into the actual join
-			pipeline_child = op->children[0].get();
-			break;
-		}
-		case PhysicalOperatorType::RECURSIVE_CTE: {
-			auto &cte_node = (PhysicalRecursiveCTE &)*op;
-
-			// recursive CTE
-			current->source = op;
-			// the LHS of the recursive CTE is our initial state
-			// we build this pipeline as normal
-			pipeline_child = op->children[0].get();
-			// for the RHS, we gather all pipelines that depend on the recursive cte
-			// these pipelines need to be rerun
-			if (recursive_cte) {
-				throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
-			}
-			recursive_cte = op;
-
-			auto recursive_pipeline = make_shared<Pipeline>(*this);
-			recursive_pipeline->sink = op;
-			op->sink_state.reset();
-			BuildPipelines(op->children[1].get(), recursive_pipeline.get());
-
-			cte_node.pipelines.push_back(move(recursive_pipeline));
-
-			recursive_cte = nullptr;
-			break;
-		}
-		default:
-			throw InternalException("Unimplemented sink type!");
-		}
-		// the current is dependent on this pipeline to complete
-		auto pipeline = make_shared<Pipeline>(*this);
-		pipeline->sink = op;
-		current->AddDependency(pipeline);
-		D_ASSERT(pipeline_child);
-		// recurse into the pipeline child
-		BuildPipelines(pipeline_child, pipeline.get());
-		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
-			// for delim joins, recurse into the actual join
-			// any pipelines in there depend on the main pipeline
-			auto &delim_join = (PhysicalDelimJoin &)*op;
-			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
-			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
-			for (auto &delim_scan : delim_join.delim_scans) {
-				delim_join_dependencies[delim_scan] = pipeline.get();
-			}
-			BuildPipelines(delim_join.join.get(), current);
-		}
-		if (!recursive_cte) {
-			// regular pipeline: schedule it
-			pipelines.push_back(move(pipeline));
-		} else {
-			// CTE pipeline! add it to the CTE pipelines
-			D_ASSERT(recursive_cte);
-			auto &cte = (PhysicalRecursiveCTE &)*recursive_cte;
-			cte.pipelines.push_back(move(pipeline));
-		}
-	} else {
-		// operator is not a sink! recurse in children
-		// first check if there is any additional action we need to do depending on the type
-		switch (op->type) {
-		case PhysicalOperatorType::DELIM_SCAN: {
-			D_ASSERT(op->children.empty());
-			auto entry = delim_join_dependencies.find(op);
-			D_ASSERT(entry != delim_join_dependencies.end());
-			// this chunk scan introduces a dependency to the current pipeline
-			// namely a dependency on the duplicate elimination pipeline to finish
-			auto delim_dependency = entry->second->shared_from_this();
-			D_ASSERT(delim_dependency->sink->type == PhysicalOperatorType::DELIM_JOIN);
-			auto &delim_join = (PhysicalDelimJoin &)*delim_dependency->sink;
-			current->AddDependency(delim_dependency);
-			current->source = (PhysicalOperator *)delim_join.distinct.get();
-			return;
-		}
-		case PhysicalOperatorType::EXECUTE: {
-			// EXECUTE statement: build pipeline on child
-			auto &execute = (PhysicalExecute &)*op;
-			BuildPipelines(execute.plan, current);
-			return;
-		}
-		case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
-			if (!recursive_cte) {
-				throw InternalException("Recursive CTE scan found without recursive CTE node");
-			}
-			break;
-		}
-		case PhysicalOperatorType::INDEX_JOIN: {
-			// index join: we only continue into the LHS
-			// the right side is probed by the index join
-			// so we don't need to do anything in the pipeline with this child
-			current->operators.push_back(op);
-			BuildPipelines(op->children[0].get(), current);
-			return;
-		}
-		case PhysicalOperatorType::UNION: {
-			if (recursive_cte) {
-				throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
-			}
-			auto union_pipeline = make_shared<Pipeline>(*this);
-			auto pipeline_ptr = union_pipeline.get();
-			// set up dependencies for any child pipelines to this union pipeline
-			auto child_entry = child_pipelines.find(current);
-			if (child_entry != child_pipelines.end()) {
-				for (auto &current_child : child_entry->second) {
-					D_ASSERT(child_dependencies.find(current_child.get()) != child_dependencies.end());
-					child_dependencies[current_child.get()].push_back(pipeline_ptr);
-				}
-			}
-			// for the current pipeline, continue building on the LHS
-			union_pipeline->operators = current->operators;
-			BuildPipelines(op->children[0].get(), current);
-			// insert the union pipeline as a union pipeline of the current node
-			union_pipelines[current].push_back(move(union_pipeline));
-
-			// for the union pipeline, build on the RHS
-			pipeline_ptr->sink = current->sink;
-			BuildPipelines(op->children[1].get(), pipeline_ptr);
-			return;
-		}
-		default:
-			break;
-		}
-		if (op->children.empty()) {
-			// source
-			current->source = op;
-		} else {
-			if (op->children.size() != 1) {
-				throw InternalException("Operator not supported yet");
-			}
-			current->operators.push_back(op);
-			BuildPipelines(op->children[0].get(), current);
-		}
-	}
 }
 
 vector<LogicalType> Executor::GetTypes() {
@@ -712,13 +489,36 @@ void Executor::Flush(ThreadContext &tcontext) {
 bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
-	if (!pipelines.empty()) {
-		return pipelines.back()->GetProgress(current_progress);
-	} else {
-		current_progress = -1;
-		return true;
+	vector<double> progress;
+	vector<idx_t> cardinality;
+	idx_t total_cardinality = 0;
+	for (auto &pipeline : pipelines) {
+		double child_percentage;
+		idx_t child_cardinality;
+		if (!pipeline->GetProgress(child_percentage, child_cardinality)) {
+			return false;
+		}
+		progress.push_back(child_percentage);
+		cardinality.push_back(child_cardinality);
+		total_cardinality += child_cardinality;
 	}
+	current_progress = 0;
+	for (size_t i = 0; i < progress.size(); i++) {
+		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
+	}
+	return true;
 } // LCOV_EXCL_STOP
+
+bool Executor::HasResultCollector() {
+	return physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR;
+}
+
+unique_ptr<QueryResult> Executor::GetResult() {
+	D_ASSERT(HasResultCollector());
+	auto &result_collector = (PhysicalResultCollector &)*physical_plan;
+	D_ASSERT(result_collector.sink_state);
+	return result_collector.GetResult(*result_collector.sink_state);
+}
 
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);

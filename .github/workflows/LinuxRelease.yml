@@ -17,10 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -47,56 +43,28 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests
-
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
+      shell: bash
       run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
 
     - name: Test
+      shell: bash
       run: make allunit
 
     - name: Tools Tests
+      shell: bash
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
         python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
+      shell: bash
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
@@ -105,6 +73,7 @@ jobs:
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
     - name: Deploy
+      shell: bash
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
@@ -128,89 +97,23 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     needs: linux-release-64
-    env:
-      GEN: ninja
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_HTTPFS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_SUBSTRAIT_EXTENSION: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
-      STATIC_OPENSSL: 1
-      DISABLE_BUILTIN_EXTENSIONS: 1
-      OPENSSL_ROOT_DIR: /usr/local/ssl
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libffi-dev
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
-
-    - name: Install OpenSSL 1.1.1
-      run: |
-        apt-get install build-essential checkinstall zlib1g-dev -y -qq
-        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-        tar -xf openssl-1.1.1c.tar.gz
-        cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
-        make
-        make install
-        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-        ldconfig -v
-
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+    - uses: ./.github/actions/ubuntu_16_setup
+      with:
+        openssl: 1
 
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-
-    - name: Build
-      run: |
-        make
-        rm build/release/src/libduckdb*
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload.sh linux_amd64
-          ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
-        fi
+    - uses: ./.github/actions/build_extensions
+      with:
+        post_install: rm build/release/src/libduckdb*
+        deploy_as: linux_amd64
+        static_link_build: 1
+        out_of_tree_ext: 1
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
 
  linux-release-32:
     name: Linux (32 Bit)
@@ -221,52 +124,21 @@ jobs:
       GEN: ninja
 
     steps:
-    - name: Install
-      run: |
-        apt-get update -y -qq
-        apt-get install -y -qq software-properties-common
-        add-apt-repository ppa:git-core/ppa
-        apt-get update -y -qq
-        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk zip
-
-    - name: Install Python 3.7
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests
-
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Version Check
-      run: |
-        ldd --version ldd
-        python3.7 --version
-        git --version
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+    - uses: actions/checkout@v3
+    - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
+      shell: bash
       run: |
         mkdir -p build/release
         (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
+      shell: bash
       run: build/release/test/unittest "*"
 
     - name: Deploy
+      shell: bash
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-i386.zip build/release/duckdb
@@ -287,7 +159,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -296,11 +168,18 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: |
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
@@ -310,6 +189,7 @@ jobs:
         file duckdb
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
@@ -324,8 +204,6 @@ jobs:
           duckdb_cli-linux-rpi.zip
 
 
-
-
  old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-18.04
@@ -336,7 +214,7 @@ jobs:
       CXX: g++-4.8
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -345,12 +223,20 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: make release
 
     - name: Test
+      shell: bash
       run: make allunit
 
  release-assert:
@@ -371,17 +257,25 @@ jobs:
       DISABLE_SANITIZER: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: make relassert
 
     - name: Test
+      shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
@@ -395,7 +289,7 @@ jobs:
       CXX: g++-10
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -403,7 +297,13 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Test
+      shell: bash
       run: python scripts/test_vector_sizes.py
 
  linux-wasm-release:
@@ -411,26 +311,37 @@ jobs:
     runs-on: ubuntu-20.04
     needs: linux-release-64
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
     - name: Build Amalgamation
+      shell: bash
       run: python scripts/amalgamation.py
 
     - name: Setup
+      shell: bash
       run: ./scripts/wasm_configure.sh
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build Library Module
+      shell: bash
       run: ./scripts/wasm_build_lib.sh Release
 
     - name: Build Test Module
+      shell: bash
       run: ./scripts/wasm_build_test.sh Release
 
     - name: Test WASM Module
+      shell: bash
       run: node ./test/wasm/hello_wasm_test.js
 
     - name: Package
+      shell: bash
       run: |
         zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
         python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
@@ -447,7 +358,7 @@ jobs:
     needs: linux-release-64
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -455,10 +366,17 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
     - name: Build
+      shell: bash
       run: make
 
     - name: Symbol Leakage Test
+      shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
  linux-httpfs:
@@ -469,9 +387,10 @@ jobs:
       BUILD_VISUALIZER: 1
       BUILD_HTTPFS: 1
       S3_TEST_SERVER_AVAILABLE: 1
+      GEN: ninja
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -479,35 +398,39 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: actions/setup-node@v2
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
       with:
-        node-version: '16'
+        key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make
 
     - name: Start S3/HTTP test server
+      shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        mkdir -p /tmp/s3rver
-        ./scripts/run_s3_test_server.sh &> /tmp/s3rver/access_log.txt &
+        ./scripts/run_s3_test_server.sh
 
     - name: Test
+      shell: bash
       run: make allunit
-
-    - name: Check S3/HTTP server log
-      if: always()
-      run: cat /tmp/s3rver/access_log.txt
 
  amalgamation-tests:
     name: Amalgamation Tests
+    needs: linux-release-64
     runs-on: ubuntu-20.04
     env:
       CC: clang
       CXX: clang++
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -521,6 +444,7 @@ jobs:
         version: "10.0"
 
     - name: Generate Amalgamation
+      shell: bash
       run:  |
           python scripts/amalgamation.py --extended
           python scripts/parquet_amalgamation.py

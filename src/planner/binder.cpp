@@ -22,9 +22,9 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, 
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), read_only(true), requires_valid_transaction(true), allow_stream_result(false),
-      parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
+    : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
+	parameter_types = nullptr;
 	if (parent) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -33,6 +33,7 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
 			parameters = parent->parameters;
+			parameter_types = parent->parameter_types;
 		}
 	}
 }
@@ -322,19 +323,20 @@ bool Binder::HasMatchingBinding(const string &schema_name, const string &table_n
 		return false;
 	}
 	if (!schema_name.empty()) {
-		auto table_entry = binding->GetTableEntry();
-		if (!table_entry) {
+		auto catalog_entry = binding->GetStandardEntry();
+		if (!catalog_entry) {
 			return false;
 		}
-		if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
+		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
 			return false;
 		}
 	}
-	if (!binding->HasMatchingBinding(column_name)) {
+	bool binding_found;
+	binding_found = binding->HasMatchingBinding(column_name);
+	if (!binding_found) {
 		error_message = binding->ColumnNotFoundError(column_name);
-		return false;
 	}
-	return true;
+	return binding_found;
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
@@ -389,8 +391,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	auto binder = Binder::CreateBinder(context);
 
 	for (auto &col : table->columns) {
-		names.push_back(col.name);
-		types.push_back(col.type);
+		names.push_back(col.Name());
+		types.push_back(col.Type());
 	}
 
 	binder->bind_context.AddGenericBinding(update_table_index, table->name, names, types);
@@ -422,7 +424,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	projection->AddChild(move(child_operator));
 	D_ASSERT(result.types.size() == result.names.size());
 	result.plan = move(projection);
-	this->allow_stream_result = true;
+	properties.allow_stream_result = true;
+	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }
 

@@ -19,7 +19,7 @@ struct ProductFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
 		target->val *= source.val;
 		target->empty = target->empty && source.empty;
 	}
