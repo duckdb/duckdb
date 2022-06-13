@@ -89,4 +89,5 @@ class TestCursorMultithread(object):
             threads[i].join()
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
+        duckdb_con.close()
         os.remove('another_test_10.duckdb')
