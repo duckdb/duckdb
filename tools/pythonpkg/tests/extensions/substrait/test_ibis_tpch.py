@@ -67,8 +67,10 @@ except:
 def test_ibis_to_duck_substrait(require):
     if not can_run:
         return
-    con = require('substrait')
-    duck_con = TPCHBackend(duck_con=con, fname="")
+    connection = require('substrait')
+    if connection is None:
+        return
+    duck_con = TPCHBackend(duck_con=connection, fname="")
     # can't compile
     skip = [2]
     # Scalar Function with name any does not exist!
@@ -105,5 +107,3 @@ def test_ibis_to_duck_substrait(require):
             continue
         print(i)
         tpch_execute_ibis_to_duck_query(duck_con,i)
-
-# tpch_execute_ibis_to_duck_query(duck_con,11)
