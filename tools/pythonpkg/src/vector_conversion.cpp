@@ -420,6 +420,10 @@ ExtendedNumpyType GetExtendedNumpyType(T dtype) {
 			return ExtendedNumpyType::PANDA_UINT32;
 		} else if (type_str == "UInt64") {
 			return ExtendedNumpyType::PANDA_UINT64;
+		} else if (type_str == "Float32") {
+			return ExtendedNumpyType::PANDA_FLOAT32;
+		} else if (type_str == "Float64") {
+			return ExtendedNumpyType::PANDA_FLOAT64;
 		} else if (type_str == "string") {
 			return ExtendedNumpyType::PANDA_STRING;
 		} else {
@@ -448,6 +452,9 @@ bool ColumnIsMasked(pybind11::detail::accessor<pybind11::detail::accessor_polici
 	bool masked = py::hasattr(column, "mask");
 	return (masked || type == ExtendedNumpyType::PANDA_INT8 || type == ExtendedNumpyType::PANDA_INT16 ||
 	        type == ExtendedNumpyType::PANDA_INT32 || type == ExtendedNumpyType::PANDA_INT64 ||
+	        type == ExtendedNumpyType::PANDA_UINT8 || type == ExtendedNumpyType::PANDA_UINT16 ||
+	        type == ExtendedNumpyType::PANDA_UINT32 || type == ExtendedNumpyType::PANDA_UINT64 ||
+	        type == ExtendedNumpyType::PANDA_FLOAT32 || type == ExtendedNumpyType::PANDA_FLOAT64 ||
 	        type == ExtendedNumpyType::PANDA_BOOL);
 }
 
