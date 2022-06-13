@@ -14,7 +14,7 @@ try:
 
     class TPCHBackend(BaseBackend):  # noqa: D101
         def __init__(self, fname="", scale_factor=0.1):  # noqa: D107
-            self.con = duckdb.connect(fname)
+            self.con = require('substrait')
 
             if not fname:
                 self.con.execute(f"CALL dbgen(sf={scale_factor})")
