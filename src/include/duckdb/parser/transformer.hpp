@@ -90,8 +90,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateIndex(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateFunctionStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
-	//! Transform a Postgres duckdb_libpgquery::T_PGCreateEnumStmt node into CreateStatement
-	unique_ptr<CreateStatement> TransformCreateEnum(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateType(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
@@ -198,8 +198,6 @@ private:
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
-	// Operator String to ExpressionType (e.g. + => OPERATOR_ADD)
-	ExpressionType OperatorToExpressionType(const string &op);
 
 	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
 	unique_ptr<ParsedExpression> TransformBinaryOperator(const string &op, unique_ptr<ParsedExpression> left,
@@ -268,5 +266,7 @@ private:
 	Transformer &transformer;
 	idx_t stack_usage;
 };
+
+vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list);
 
 } // namespace duckdb

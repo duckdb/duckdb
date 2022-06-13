@@ -57,6 +57,9 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
+  oote:
+    description: 'Build Out-Of-Tree Extensions'
+    default: 0
   substrait:
     description: 'Build Substrait'
     default: 0
@@ -90,6 +93,13 @@ runs:
         git config --global --add safe.directory '*'
         make
 
+    - name: Build External Extensions
+      if: ${{ inputs.out_of_tree_ext != 0 }}
+      shell: bash
+      run: |
+        mkdir -p build/release/extension/out_of_tree
+        python3.7 scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
+
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
       shell: bash
@@ -109,7 +119,7 @@ runs:
         fi
 
     - name: Test
-      if: inputs.run_tests
+      if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}

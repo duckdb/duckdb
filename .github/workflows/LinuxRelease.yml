@@ -17,10 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -53,18 +49,22 @@ jobs:
     - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
+      shell: bash
       run: STATIC_LIBCPP=1 BUILD_ODBC=1 make
 
     - name: Test
+      shell: bash
       run: make allunit
 
     - name: Tools Tests
+      shell: bash
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
         python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
+      shell: bash
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
@@ -73,6 +73,7 @@ jobs:
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
     - name: Deploy
+      shell: bash
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
@@ -110,6 +111,7 @@ jobs:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         static_link_build: 1
+        out_of_tree_ext: 1
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         substrait: 1
@@ -127,14 +129,17 @@ jobs:
     - uses: ./.github/actions/ubuntu_16_setup
 
     - name: Build
+      shell: bash
       run: |
         mkdir -p build/release
         (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
+      shell: bash
       run: build/release/test/unittest "*"
 
     - name: Deploy
+      shell: bash
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-i386.zip build/release/duckdb
@@ -164,6 +169,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: |
         sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
         git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
@@ -174,6 +180,7 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: |
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
@@ -183,6 +190,7 @@ jobs:
         file duckdb
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
@@ -216,6 +224,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
 
     - name: Setup Ccache
@@ -224,9 +233,11 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make release
 
     - name: Test
+      shell: bash
       run: make allunit
 
  release-assert:
@@ -252,6 +263,7 @@ jobs:
         fetch-depth: 0
 
     - name: Install
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Setup Ccache
@@ -260,9 +272,11 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make relassert
 
     - name: Test
+      shell: bash
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
@@ -290,6 +304,7 @@ jobs:
         key: ${{ github.job }}
 
     - name: Test
+      shell: bash
       run: python scripts/test_vector_sizes.py
 
  linux-wasm-release:
@@ -302,9 +317,11 @@ jobs:
         fetch-depth: 0
 
     - name: Build Amalgamation
+      shell: bash
       run: python scripts/amalgamation.py
 
     - name: Setup
+      shell: bash
       run: ./scripts/wasm_configure.sh
 
     - name: Setup Ccache
@@ -313,15 +330,19 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build Library Module
+      shell: bash
       run: ./scripts/wasm_build_lib.sh Release
 
     - name: Build Test Module
+      shell: bash
       run: ./scripts/wasm_build_test.sh Release
 
     - name: Test WASM Module
+      shell: bash
       run: node ./test/wasm/hello_wasm_test.js
 
     - name: Package
+      shell: bash
       run: |
         zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
         python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
@@ -352,9 +373,11 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make
 
     - name: Symbol Leakage Test
+      shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
  linux-httpfs:
@@ -377,6 +400,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install Ninja
+      shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Setup Ccache
@@ -385,14 +409,17 @@ jobs:
         key: ${{ github.job }}
 
     - name: Build
+      shell: bash
       run: make
 
     - name: Start S3/HTTP test server
+      shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
         ./scripts/run_s3_test_server.sh
 
     - name: Test
+      shell: bash
       run: make allunit
 
  amalgamation-tests:
@@ -418,6 +445,7 @@ jobs:
         version: "10.0"
 
     - name: Generate Amalgamation
+      shell: bash
       run:  |
           python scripts/amalgamation.py --extended
           python scripts/parquet_amalgamation.py

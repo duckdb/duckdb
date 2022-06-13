@@ -145,7 +145,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		auto &enum_type_name = EnumType::GetTypeName(type);
 		auto enum_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
 		                                                                               schema, enum_type_name, true);
-		EnumType::SetCatalog(type, enum_type_catalog);
+		LogicalType::SetCatalog(type, enum_type_catalog);
 	}
 }
 

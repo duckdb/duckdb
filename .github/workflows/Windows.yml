@@ -17,10 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -42,20 +38,24 @@ jobs:
         python-version: '3.7'
 
     - name: Build
+      shell: bash
       run: |
         python scripts/windows_ci.py
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test
+      shell: bash
       run: test/Release/unittest.exe
 
     - name: Tools Test
+      shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
         java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         choco install zip -y --force
@@ -75,6 +75,7 @@ jobs:
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
+      shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
  win-release-32:
@@ -92,18 +93,22 @@ jobs:
         python-version: '3.7'
 
     - name: Build
+      shell: bash
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
+      shell: bash
       run: test/Release/unittest.exe
 
     - name: Tools Test
+      shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
 
     - name: Deploy
+      shell: bash
       run: |
         python scripts/amalgamation.py
         choco install zip -y --force
@@ -124,9 +129,6 @@ jobs:
      name: MingW (64 Bit)
      runs-on: windows-latest
      needs: win-release-64
-     defaults:
-       run:
-         shell: msys2 {0}
      steps:
        - uses: actions/checkout@v3
        - uses: msys2/setup-msys2@v2
@@ -137,14 +139,17 @@ jobs:
        # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
        - name: Put MSYS2_MinGW64 on PATH
          # there is not yet an environment variable for this path from msys2/setup-msys2
+         shell: msys2 {0}
          run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
 
        - name: Build
+         shell: msys2 {0}
          run: |
            cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
            cmake --build . --config Release
 
        - name: Test
+         shell: msys2 {0}
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
@@ -163,15 +168,18 @@ jobs:
         python-version: '3.7'
 
     - name: Install Git
+      shell: bash
       run: |
         choco install git -y --force
 
     - name: Build
+      shell: bash
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Install ODBC Driver
+      shell: bash
       run:  |
         tools/odbc/bin/Release/odbc_install.exe //CI //Install
         Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
@@ -179,6 +187,7 @@ jobs:
         Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
 
     - name: Enable ODBC Trace HKCU
+      shell: bash
       run: |
         REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
         REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
@@ -188,11 +197,13 @@ jobs:
         Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
     - name: Install psqlodbc
+      shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
         (cd psqlodbc && git checkout 89726c417d1ea8b4080e486fe240725a79eca0d6 && make release)
 
     - name: Test psqlodbc
+      shell: bash
       run: |
         cd psqlodbc
         export PSQLODBC_TEST_DSN=DuckDB
@@ -200,6 +211,7 @@ jobs:
 
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
+      shell: bash
       run: cat ODBC_TRACE.log
 
  win-extensions-64:
@@ -216,6 +228,7 @@ jobs:
          python-version: '3.7'
 
      - name: Install OpenSSL
+       shell: bash
        run: |
          choco install openssl -y --force
 

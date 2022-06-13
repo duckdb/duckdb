@@ -8,6 +8,10 @@ if(POLICY CMP0051)
   cmake_policy(SET CMP0051 NEW)
 endif()
 
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -687,7 +691,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
     elseif (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
     else()
-      error("EXTENSION static build is only inteded for Linux and Windows on MVSC")
+      error("EXTENSION static build is only intended for Linux and Windows on MVSC")
     endif()
   else()
     if (WIN32)
@@ -794,4 +798,9 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
+endif()
+
+# build out-of-tree extensions on demand
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
 endif()

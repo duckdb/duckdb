@@ -283,7 +283,7 @@ shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vec
 string Relation::ToString() {
 	string str;
 	str += "---------------------\n";
-	str += "-- Expression Tree --\n";
+	str += "--- Relation Tree ---\n";
 	str += "---------------------\n";
 	str += ToString(0);
 	str += "\n\n";

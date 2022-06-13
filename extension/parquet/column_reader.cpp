@@ -76,6 +76,40 @@ idx_t ColumnReader::MaxRepeat() const {
 	return max_repeat;
 }
 
+void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+	if (chunk) {
+		uint64_t size = chunk->meta_data.total_compressed_size;
+		transport.RegisterPrefetch(FileOffset(), size, allow_merge);
+	}
+}
+
+uint64_t ColumnReader::TotalCompressedSize() {
+	if (!chunk) {
+		return 0;
+	}
+
+	return chunk->meta_data.total_compressed_size;
+}
+
+// Note: It's not trivial to determine where all Column data is stored. Chunk->file_offset
+// apparently is not the first page of the data. Therefore we determine the address of the first page by taking the
+// minimum of all page offsets.
+idx_t ColumnReader::FileOffset() const {
+	if (!chunk) {
+		throw std::runtime_error("FileOffset called on ColumnReader with no chunk");
+	}
+	auto min_offset = NumericLimits<idx_t>::Maximum();
+	if (chunk->meta_data.__isset.dictionary_page_offset) {
+		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.dictionary_page_offset);
+	}
+	if (chunk->meta_data.__isset.index_page_offset) {
+		min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.index_page_offset);
+	}
+	min_offset = MinValue<idx_t>(min_offset, chunk->meta_data.data_page_offset);
+
+	return min_offset;
+}
+
 idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
 }
@@ -347,6 +381,11 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 	trans.SetLocation(chunk_read_offset);
 
+	// Perform any skips that were not applied yet.
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips);
+	}
+
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 
@@ -422,14 +461,28 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 }
 
 void ColumnReader::Skip(idx_t num_values) {
+	pending_skips += num_values;
+}
+
+void ColumnReader::ApplyPendingSkips(idx_t num_values) {
+	pending_skips -= num_values;
+
 	dummy_define.zero();
 	dummy_repeat.zero();
 
 	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
 	Vector dummy_result(type, nullptr);
-	auto values_read =
-	    Read(num_values, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
-	if (values_read != num_values) {
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while (remaining) {
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read += Read(to_read, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
 		throw std::runtime_error("Row count mismatch when skipping rows");
 	}
 }
@@ -527,6 +580,10 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 	auto &result_mask = FlatVector::Validity(result_out);
+
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips);
+	}
 
 	D_ASSERT(ListVector::GetListSize(result_out) == 0);
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
@@ -636,7 +693,9 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 
 // ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 //                             Vector &result_out)
-void ListColumnReader::Skip(idx_t num_values) {
+void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
+	pending_skips -= num_values;
+
 	parquet_filter_t filter;
 	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
@@ -718,6 +777,10 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, ui
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips);
+	}
+
 	idx_t read_count = num_values;
 	for (idx_t i = 0; i < struct_entries.size(); i++) {
 		auto child_num_values = child_readers[i]->Read(num_values, filter, define_out, repeat_out, *struct_entries[i]);
@@ -742,6 +805,20 @@ void StructColumnReader::Skip(idx_t num_values) {
 	for (auto &child_reader : child_readers) {
 		child_reader->Skip(num_values);
 	}
+}
+
+void StructColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
+	for (auto &child : child_readers) {
+		child->RegisterPrefetch(transport, allow_merge);
+	}
+}
+
+uint64_t StructColumnReader::TotalCompressedSize() {
+	uint64_t size = 0;
+	for (auto &child : child_readers) {
+		size += child->TotalCompressedSize();
+	}
+	return size;
 }
 
 idx_t StructColumnReader::GroupRowsAvailable() {

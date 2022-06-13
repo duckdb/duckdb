@@ -345,6 +345,9 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
+
+	functions.name = "add";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -563,6 +566,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// we can negate intervals
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
 	set.AddFunction(functions);
+
+	functions.name = "subtract";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -695,6 +701,9 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>, true));
 	set.AddFunction(functions);
+
+	functions.name = "multiply";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -815,6 +824,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
 
+	set.AddFunction(functions);
+
+	functions.name = "divide";
 	set.AddFunction(functions);
 }
 
