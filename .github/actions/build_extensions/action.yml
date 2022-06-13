@@ -59,7 +59,7 @@ inputs:
     default: 1
   substrait:
     description: 'Build Substrait'
-    default: 1
+    default: 0
 
 runs:
   using: "composite"
