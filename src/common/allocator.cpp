@@ -28,14 +28,14 @@ Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_
       reallocate_function(reallocate_function_p), private_data(move(private_data)) {
 }
 
-Allocator& Allocator::operator=( Allocator &&allocator )
+Allocator& Allocator::operator=(Allocator &&allocator)
 {
-	if ( this != &allocator )
+	if (this != &allocator)
 	{
 		allocate_function = allocator.allocate_function;
 		free_function = allocator.free_function;
 		reallocate_function = allocator.reallocate_function;
-		private_data = move( allocator.private_data );
+		private_data = move(allocator.private_data);
 	}
 	return *this;
 }
