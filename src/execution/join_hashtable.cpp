@@ -1104,6 +1104,27 @@ void JoinHashTable::PinPartitions() {
 	}
 }
 
+void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
+	lock_guard<mutex> prepare_lock(probe_scan_state.lock);
+
+	// Get rid of partitions that we already completed
+	for (idx_t p = 0; p < partition_cutoff; p++) {
+		partition_block_collections[p] = nullptr;
+		if (!layout.AllConstant()) {
+			partition_string_heaps[p] = nullptr;
+		}
+	}
+
+	// Reset scan state and set how much we need to scan in this round
+	probe_scan_state.Reset();
+	for (idx_t p = partition_cutoff; p < build_ht.partition_cutoff; p++) {
+		probe_scan_state.to_scan += partition_block_collections[p]->count;
+	}
+
+	// Update cutoff for next round
+	partition_cutoff = build_ht.partition_cutoff;
+}
+
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
                                                        DataChunk &sink_keys, DataChunk &sink_payload) {
 	D_ASSERT(Count() > 0); // should be handled before

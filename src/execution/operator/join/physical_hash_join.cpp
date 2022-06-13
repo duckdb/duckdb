@@ -46,7 +46,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalState : public GlobalSinkState {
 public:
-	HashJoinGlobalState() : finalized(false), next_local_idx(0) {
+	HashJoinGlobalState() : finalized(false), next_local_ht_idx(0) {
 	}
 
 	//! Global HT used by the join
@@ -59,7 +59,9 @@ public:
 	//! Whether we are doing an external join
 	bool external;
 	//! TODO
-	atomic<idx_t> next_local_idx;
+	mutex finalize_lock;
+	//! TODO
+	atomic<idx_t> next_local_ht_idx;
 	//! Memory usage per thread during the Sink and Execute phases
 	idx_t sink_memory_per_thread;
 	idx_t execute_memory_per_thread;
@@ -259,7 +261,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 // Operator
 //===--------------------------------------------------------------------===//
 JoinHashTable *AssignLocalHT(HashJoinGlobalState &sink) {
-	auto local_thread_idx = ++sink.next_local_idx;
+	auto local_thread_idx = ++sink.next_local_ht_idx;
 	// TODO need to add if number of threads changes during execution, assert that it doesn't for now
 	D_ASSERT(local_thread_idx < sink.local_hash_tables.size());
 	return sink.local_hash_tables[local_thread_idx].get();
@@ -364,16 +366,17 @@ public:
 			probe_ht = sink.hash_table->CopyEmpty();
 			sink.hash_table->finalized = false;
 			// need to assign a thread-local HT per thread again: reset atomic
-			sink.next_local_idx = 0;
+			sink.next_local_ht_idx = 0;
 		}
 	}
 
 	const PhysicalHashJoin &op;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
-	JoinHTScanState ht_scan_state;
+	JoinHTScanState full_outer_scan_state;
 
 	//! Only used for external join: Materialized probe-side data
 	unique_ptr<JoinHashTable> probe_ht;
+	JoinHTScanState probe_scan_state;
 
 	idx_t MaxThreads() override {
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
@@ -383,10 +386,11 @@ public:
 
 class HashJoinLocalScanState : public LocalSourceState {
 public:
-	HashJoinLocalScanState() : initialized(false) {
+	HashJoinLocalScanState() : partitioned(false) {
 	}
 
-	bool initialized;
+	//! Whether this thread has partitioned its local HT yet
+	bool partitioned;
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
@@ -398,6 +402,20 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 	return make_unique<HashJoinLocalScanState>();
 }
 
+void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const {
+	auto &sink = (HashJoinGlobalState &)*sink_state;
+	// Prepare the build side
+	sink.hash_table->FinalizeExternal();
+	// Prepare the probe side
+	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, gstate.probe_scan_state);
+	// Reset full outer scan state (if necessary)
+	if (IsRightOuterJoin(join_type)) {
+		auto &outer_ss = gstate.full_outer_scan_state;
+		lock_guard<mutex> fo_lock(outer_ss.lock);
+		outer_ss.Reset();
+	}
+}
+
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
 	auto &sink = (HashJoinGlobalState &)*sink_state;
@@ -405,14 +423,36 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	auto &lstate = (HashJoinLocalScanState &)lstate_p;
 
 	if (sink.external) {
-		if (!lstate.initialized) {
+		if (!lstate.partitioned) {
+			// Partition thread-local probe HT
 			auto local_ht = AssignLocalHT(sink);
-			local_ht->Partition(*sink.hash_table);
-			gstate.probe_ht->Merge(*local_ht);
+			local_ht->Partition(*gstate.probe_ht);
 		}
 
-		if (!sink.hash_table->finalized) {
-			sink.hash_table->FinalizeExternal();
+		auto &probe_ss = gstate.probe_scan_state;
+		{
+			lock_guard<mutex> lock(probe_ss.lock);
+			if (sink.finalized && probe_ss.Finished()) {
+				// Partitioned probe is done
+				lock_guard<mutex> flock(sink.finalize_lock);
+				sink.finalized = false;
+			}
+		}
+
+		if (!sink.finalized) {
+			if (IsRightOuterJoin(join_type)) {
+				// We scan the previous partition's unmatched tuples (if outer join)
+				sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state);
+				if (chunk.size() > 0) {
+					return;
+				}
+			}
+
+			lock_guard<mutex> flock(sink.finalize_lock);
+			// Check again, maybe it was finalized while we waited for the lock
+			if (!sink.finalized) {
+				PrepareProbeRound(gstate);
+			}
 		}
 
 		// TODO When we get here, all data is partitioned, and the next partitioned pointer table has been built
@@ -437,7 +477,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-	sink.hash_table->ScanFullOuter(chunk, gstate.ht_scan_state);
+	sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state);
 }
 
 } // namespace duckdb

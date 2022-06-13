@@ -18,6 +18,8 @@
 
 namespace duckdb {
 
+class HashJoinGlobalScanState;
+
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
@@ -85,6 +87,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	//! TODO
+	void PrepareProbeRound(HashJoinGlobalScanState &gstate) const;
 };
 
 } // namespace duckdb

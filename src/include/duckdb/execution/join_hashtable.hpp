@@ -26,12 +26,33 @@ class Pipeline;
 class Event;
 
 struct JoinHTScanState {
-	JoinHTScanState() : position(0), block_position(0) {
+public:
+	JoinHTScanState() : position(0), block_position(0), to_scan(0), scanned(0) {
 	}
 
+	mutex lock;
 	idx_t position;
 	idx_t block_position;
-	mutex lock;
+
+	//! Used for external join
+	idx_t to_scan;
+	idx_t scanned;
+
+public:
+	void Reset() {
+		position = 0;
+		block_position = 0;
+		to_scan = 0;
+		scanned = 0;
+	}
+
+	bool Finished() const {
+		return to_scan == scanned;
+	}
+
+private:
+	//! Implicit copying is not allowed
+	JoinHTScanState(const JoinHTScanState &) = delete;
 };
 
 //! JoinHashTable is a linear probing HT that is used for computing joins
@@ -222,6 +243,8 @@ public:
 	void Partition(JoinHashTable &global_ht);
 	//! TODO
 	void PinPartitions();
+	//! TODO
+	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
 	//! TODO
 	void FinalizeExternal();
 	//! Probe whatever we can, sink the rest into a thread-local HT
