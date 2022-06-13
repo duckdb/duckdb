@@ -301,13 +301,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
 		BindLogicalType(context, column.TypeMutable());
-		if (column.Type().id() == LogicalTypeId::ENUM) {
-			// We add a catalog dependency
-			auto enum_dependency = EnumType::GetCatalog(column.Type());
-			if (enum_dependency) {
-				// Only if the ENUM comes from a create type
-				result->dependencies.insert(enum_dependency);
-			}
+		// We add a catalog dependency
+		auto type_dependency = LogicalType::GetCatalog(column.Type());
+		if (type_dependency) {
+			// Only if the USER comes from a create type
+			result->dependencies.insert(type_dependency);
 		}
 	}
 	properties.allow_stream_result = false;

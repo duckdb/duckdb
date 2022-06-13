@@ -128,11 +128,9 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	if (new_obj->type == CatalogType::TABLE_ENTRY) {
 		auto table = (TableCatalogEntry *)new_obj;
 		for (auto &column : table->columns) {
-			if (column.Type().id() == LogicalTypeId::ENUM) {
-				auto enum_type_catalog = EnumType::GetCatalog(column.Type());
-				if (enum_type_catalog) {
-					to_add.push_back(enum_type_catalog);
-				}
+			auto user_type_catalog = LogicalType::GetCatalog(column.Type());
+			if (user_type_catalog) {
+				to_add.push_back(user_type_catalog);
 			}
 		}
 	}

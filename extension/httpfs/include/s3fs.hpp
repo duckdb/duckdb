@@ -82,8 +82,6 @@ public:
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
 		} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			throw NotImplementedException("Cannot open an HTTP file for appending");
-		} else if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
-			throw NotImplementedException("Cannot open an HTTP file with Direct I/O flag");
 		}
 	}
 	const S3AuthParams auth_params;
