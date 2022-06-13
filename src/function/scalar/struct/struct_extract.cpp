@@ -33,19 +33,10 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &vec = args.data[0];
 
 	vec.Verify(args.size());
-	if (vec.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(vec);
-		auto &dict_sel = DictionaryVector::SelVector(vec);
-		auto &children = StructVector::GetEntries(child);
-		D_ASSERT(info.index < children.size());
-		auto &struct_child = children[info.index];
-		result.Slice(*struct_child, dict_sel, args.size());
-	} else {
-		auto &children = StructVector::GetEntries(vec);
-		D_ASSERT(info.index < children.size());
-		auto &struct_child = children[info.index];
-		result.Reference(*struct_child);
-	}
+	auto &children = StructVector::GetEntries(vec);
+	D_ASSERT(info.index < children.size());
+	auto &struct_child = children[info.index];
+	result.Reference(*struct_child);
 	result.Verify(args.size());
 }
 
