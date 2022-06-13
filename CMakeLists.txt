@@ -685,7 +685,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
       # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
       set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
-      target_link_libraries(${TARGET_NAME} PRIVATE duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
     elseif (WIN32)
       target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
     elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
