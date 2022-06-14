@@ -671,6 +671,9 @@ string TableCatalogEntry::ToSQL() {
 		if (column.DefaultValue()) {
 			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
 		}
+		if (column.Generated()) {
+			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
+		}
 	}
 	// print any extra constraints that still need to be printed
 	for (auto &extra_constraint : extra_constraints) {
