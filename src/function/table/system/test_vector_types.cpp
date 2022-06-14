@@ -19,8 +19,10 @@ struct TestVectorTypesData : public GlobalTableFunctionState {
 };
 
 struct TestVectorInfo {
-	TestVectorInfo(const LogicalType &type, const map<LogicalTypeId, TestType> &test_type_map, vector<unique_ptr<DataChunk>> &entries) :
-		type(type), test_type_map(test_type_map), entries(entries) {}
+	TestVectorInfo(const LogicalType &type, const map<LogicalTypeId, TestType> &test_type_map,
+	               vector<unique_ptr<DataChunk>> &entries)
+	    : type(type), test_type_map(test_type_map), entries(entries) {
+	}
 
 	const LogicalType &type;
 	const map<LogicalTypeId, TestType> &test_type_map;
@@ -30,10 +32,10 @@ struct TestVectorInfo {
 struct TestVectorFlat {
 	static void GenerateVector(TestVectorInfo &info, const LogicalType &type, Vector &result) {
 		D_ASSERT(type == result.GetType());
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(result);
-			for(auto &child_entry : child_entries) {
+			for (auto &child_entry : child_entries) {
 				GenerateVector(info, child_entry->GetType(), *child_entry);
 			}
 			break;
@@ -66,7 +68,7 @@ struct TestVectorFlat {
 
 	static void Generate(TestVectorInfo &info) {
 		auto result = make_unique<DataChunk>();
-		result->Initialize({ info.type });
+		result->Initialize({info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
@@ -77,10 +79,10 @@ struct TestVectorFlat {
 struct TestVectorConstant {
 	static void GenerateVector(TestVectorInfo &info, const LogicalType &type, Vector &result) {
 		D_ASSERT(type == result.GetType());
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(result);
-			for(auto &child_entry : child_entries) {
+			for (auto &child_entry : child_entries) {
 				GenerateVector(info, child_entry->GetType(), *child_entry);
 			}
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -110,7 +112,7 @@ struct TestVectorConstant {
 
 	static void Generate(TestVectorInfo &info) {
 		auto result = make_unique<DataChunk>();
-		result->Initialize({ info.type });
+		result->Initialize({info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
@@ -121,7 +123,7 @@ struct TestVectorConstant {
 struct TestVectorSequence {
 	static void GenerateVector(TestVectorInfo &info, const LogicalType &type, Vector &result) {
 		D_ASSERT(type == result.GetType());
-		switch(type.id()) {
+		switch (type.id()) {
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -135,10 +137,10 @@ struct TestVectorSequence {
 		default:
 			break;
 		}
-		switch(type.InternalType()) {
+		switch (type.InternalType()) {
 		case PhysicalType::STRUCT: {
 			auto &child_entries = StructVector::GetEntries(result);
-			for(auto &child_entry : child_entries) {
+			for (auto &child_entry : child_entries) {
 				GenerateVector(info, child_entry->GetType(), *child_entry);
 			}
 			break;
@@ -171,7 +173,7 @@ struct TestVectorSequence {
 
 	static void Generate(TestVectorInfo &info) {
 		auto result = make_unique<DataChunk>();
-		result->Initialize({ info.type });
+		result->Initialize({info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
@@ -179,11 +181,10 @@ struct TestVectorSequence {
 	}
 };
 
-
 struct TestVectorDictionary {
 	static void Generate(TestVectorInfo &info) {
 		auto result = make_unique<DataChunk>();
-		result->Initialize({ info.type });
+		result->Initialize({info.type});
 
 		TestVectorFlat::GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
@@ -196,9 +197,8 @@ struct TestVectorDictionary {
 	}
 };
 
-
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<TestVectorBindData>();
 	result->type = input.inputs[0].type();
 	result->all_flat = BooleanValue::Get(input.inputs[1]);
@@ -209,14 +209,14 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (TestVectorBindData &) *input.bind_data;
+	auto &bind_data = (TestVectorBindData &)*input.bind_data;
 
 	auto result = make_unique<TestVectorTypesData>();
 
 	auto test_types = TestAllTypesFun::GetTestTypes();
 
 	map<LogicalTypeId, TestType> test_type_map;
-	for(auto &test_type : test_types) {
+	for (auto &test_type : test_types) {
 		test_type_map.insert(make_pair(test_type.type.id(), move(test_type)));
 	}
 
@@ -225,11 +225,11 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	TestVectorConstant::Generate(info);
 	TestVectorDictionary::Generate(info);
 	TestVectorSequence::Generate(info);
-	for(auto &entry : result->entries) {
+	for (auto &entry : result->entries) {
 		entry->Verify();
 	}
 	if (bind_data.all_flat) {
-		for(auto &entry : result->entries) {
+		for (auto &entry : result->entries) {
 			entry->Normalify();
 			entry->Verify();
 		}
@@ -248,7 +248,8 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("test_vector_types", {LogicalType::ANY, LogicalType::BOOLEAN}, TestVectorTypesFunction, TestVectorTypesBind, TestVectorTypesInit));
+	set.AddFunction(TableFunction("test_vector_types", {LogicalType::ANY, LogicalType::BOOLEAN},
+	                              TestVectorTypesFunction, TestVectorTypesBind, TestVectorTypesInit));
 }
 
 } // namespace duckdb
