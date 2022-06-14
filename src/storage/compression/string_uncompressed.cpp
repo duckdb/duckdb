@@ -280,7 +280,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		uint32_t compressed_size = Load<uint32_t>(handle->node->buffer + offset);
 		uint32_t uncompressed_size = Load<uint32_t>(handle->node->buffer + offset + sizeof(uint32_t));
 		uint32_t remaining = compressed_size;
-		offset += sizeof(2 * sizeof(uint32_t));
+		offset += 2 * sizeof(uint32_t);
 
 		// allocate a buffer to store the compressed string
 		// TODO: profile this to check if we need to reuse buffer

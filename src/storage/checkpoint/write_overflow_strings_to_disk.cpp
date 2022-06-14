@@ -23,7 +23,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 		handle = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	}
 	// first write the length of the string
-	if (block_id == INVALID_BLOCK || offset + sizeof(2 * sizeof(uint32_t)) >= STRING_SPACE) {
+	if (block_id == INVALID_BLOCK || offset + 2 * sizeof(uint32_t) >= STRING_SPACE) {
 		AllocateNewBlock(block_manager.GetFreeBlockId());
 	}
 	result_block = block_id;
@@ -43,7 +43,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	Store<uint32_t>(uncompressed_size, handle->node->buffer + offset + sizeof(uint32_t));
 
 	// now write the remainder of the string
-	offset += sizeof(2 * sizeof(uint32_t));
+	offset += 2 * sizeof(uint32_t);
 	auto strptr = compressed_string.GetDataUnsafe();
 	uint32_t remaining = compressed_size;
 	while (remaining > 0) {
