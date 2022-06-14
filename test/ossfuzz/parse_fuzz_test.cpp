@@ -8,12 +8,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	duckdb::DuckDB db(nullptr);
 	duckdb::Connection con(db);
 
-	std::unordered_set<std::string> internal_error_messages = {"Unoptimized Result differs from original result!", "INTERNAL"};
+	std::unordered_set<std::string> internal_error_messages = {"Unoptimized Result differs from original result!",
+	                                                           "INTERNAL"};
 	con.Query("PRAGMA enable_verification");
 	try {
 		auto result = con.Query(input);
 		if (!result->success) {
-			for(auto &internal_error : internal_error_messages) {
+			for (auto &internal_error : internal_error_messages) {
 				if (duckdb::StringUtil::Contains(result->error, internal_error)) {
 					return 1;
 				}
