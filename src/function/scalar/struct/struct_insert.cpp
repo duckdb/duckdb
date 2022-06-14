@@ -75,8 +75,8 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, BoundFunctionExpression &expr,
-                                           FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
+unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &expr = input.expr;
 	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
 	return move(struct_stats);
 }
