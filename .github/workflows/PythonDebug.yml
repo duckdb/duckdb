@@ -39,22 +39,13 @@ jobs:
       run: |
         export DUCKDEBUG=1
         export ASAN_OPTIONS=detect_leaks=0
-        # Temporarily inline opensll
-        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-        tar -xf openssl-1.1.1c.tar.gz
-        cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -static zlib
-        make
-        make install
-        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-        ldconfig -v
-        cd ..
+        apt-get install libssl-dev libffi-dev
         wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
         unzip v3.9.12.zip
         rm v3.9.12.zip
         cd cpython-3.9.12
         mkdir debug-build
-        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=${GITHUB_WORKSPACE}/debug-build --with-openssl=${GITHUB_WORKSPACE}/openssl-1.1.1c
+        ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --prefix=${GITHUB_WORKSPACE}/debug-build
         make -j
         make install
         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install numpy
