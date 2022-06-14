@@ -32,7 +32,7 @@ static void StructInsertFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+                                                 vector<unique_ptr<Expression>> &arguments) {
 	case_insensitive_set_t name_collision_set;
 
 	if (arguments.empty()) {
@@ -76,18 +76,22 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 }
 
 unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
+	auto offset = struct_stats->child_stats.size() - child_stats.size();
+	for (idx_t i = 1; i < child_stats.size(); i++) {
+		struct_stats->child_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+	}
 	return move(struct_stats);
 }
 
 void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, false, StructInsertBind, nullptr,
-	                   StructInsertStats);
+	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, false, StructInsertBind,
+	                   nullptr, StructInsertStats);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }
 
 } // namespace duckdb
-
