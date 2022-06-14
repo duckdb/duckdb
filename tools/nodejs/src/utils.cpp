@@ -12,6 +12,20 @@ bool Utils::OtherIsInt(Napi::Number source) {
 	}
 }
 
+bool Utils::IsStringArray(Napi::Value source) {
+	if (source.IsArray()) {
+		auto array = source.As<Napi::Array>();
+		for (uint32_t index = 0; index < array.Length(); index++) {
+			auto value = array.Get(index);
+			if (!value.IsString()) {
+				return false;
+			}
+		}
+		return true;
+	}
+	return false;
+}
+
 Napi::Value Utils::CreateError(Napi::Env env, std::string msg) {
 	auto err = Napi::Error::New(env, Napi::String::New(env, msg).Utf8Value()).Value();
 	Napi::Object obj = err.As<Napi::Object>();

@@ -150,6 +150,7 @@ class Utils {
 public:
 	static Napi::Value CreateError(Napi::Env env, std::string msg);
 	static bool OtherIsInt(Napi::Number source);
+	static bool IsStringArray(Napi::Value source);
 
 	template <class T>
 	static T *NewUnwrap(std::vector<napi_value> args) {

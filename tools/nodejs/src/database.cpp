@@ -21,9 +21,38 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	return exports;
 }
 
+struct PathnameReplacementScanData : public duckdb::ReplacementScanData {
+	PathnameReplacementScanData(std::vector<std::string> pathnames_): pathnames(pathnames_) {}
+
+	std::vector<std::string> pathnames;
+};
+
+static std::unique_ptr<duckdb::TableFunctionRef> PathnameScanReplacement(duckdb::ClientContext &context, const std::string &table_name,
+                                            		 					 duckdb::ReplacementScanData *data) {
+	auto &pathname_data = (PathnameReplacementScanData &)*data;
+	for(auto pathname : pathname_data.pathnames) {
+		auto new_table_name = pathname + table_name;
+		auto &fs = duckdb::FileSystem::GetFileSystem(context);
+		if (fs.FileExists(new_table_name)) {
+			auto &config = duckdb::DBConfig::GetConfig(context);
+			// Re-scan to get appropriate table function
+			for (auto &scan : config.replacement_scans) {
+				// Do not recurse
+				if (scan.function != PathnameScanReplacement) {
+					auto replacement_function = scan.function(context, new_table_name, scan.data.get());
+					if (replacement_function) {
+						return replacement_function;
+					}
+				}
+			}
+		}
+	}
+	return nullptr;
+}
+
 struct OpenTask : public Task {
-	OpenTask(Database &database_, std::string filename_, bool read_only_, Napi::Function callback_)
-	    : Task(database_, callback_), filename(filename_), read_only(read_only_) {
+	OpenTask(Database &database_, std::string filename_, bool read_only_, std::vector<std::string> pathnames_, Napi::Function callback_)
+	    : Task(database_, callback_), filename(filename_), read_only(read_only_), pathnames(pathnames_) {
 	}
 
 	void DoWork() override {
@@ -32,11 +61,14 @@ struct OpenTask : public Task {
 			if (read_only) {
 				config.access_mode = duckdb::AccessMode::READ_ONLY;
 			}
+			if (pathnames.size()) {
+				auto pathname_data = std::make_unique<PathnameReplacementScanData>(pathnames);
+				config.replacement_scans.emplace_back(duckdb::ReplacementScan(PathnameScanReplacement, move(pathname_data)));
+			}
 			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &config);
 			duckdb::ParquetExtension extension;
 			extension.Load(*Get<Database>().database);
 			success = true;
-
 		} catch (std::exception &ex) {
 			error = ex.what();
 		}
@@ -60,6 +92,7 @@ struct OpenTask : public Task {
 
 	std::string filename;
 	bool read_only = false;
+	std::vector<std::string> pathnames;
 	std::string error = "";
 	bool success = false;
 };
@@ -73,8 +106,17 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 	std::string filename = info[0].As<Napi::String>();
 	unsigned int pos = 1;
 	int mode = 0;
+	std::vector<std::string> pathnames;
 	if (info.Length() >= pos && info[pos].IsNumber() && Utils::OtherIsInt(info[pos].As<Napi::Number>())) {
 		mode = info[pos++].As<Napi::Number>().Int32Value();
+	}
+
+	if (info.Length() >= pos && Utils::IsStringArray(info[pos])) {
+		auto array = info[pos++].As<Napi::Array>();
+		for (uint32_t index = 0; index < array.Length(); index++) {
+			std::string path_name = array.Get(index).As<Napi::String>();
+			pathnames.push_back(path_name);
+		}
 	}
 
 	Napi::Function callback;
@@ -82,7 +124,7 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 		callback = info[pos++].As<Napi::Function>();
 	}
 
-	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, mode == DUCKDB_NODEJS_READONLY, callback));
+	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, mode == DUCKDB_NODEJS_READONLY, pathnames, callback));
 }
 
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
