@@ -22,15 +22,17 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 }
 
 struct PathnameReplacementScanData : public duckdb::ReplacementScanData {
-	PathnameReplacementScanData(std::vector<std::string> pathnames_): pathnames(pathnames_) {}
+	PathnameReplacementScanData(std::vector<std::string> pathnames_) : pathnames(pathnames_) {
+	}
 
 	std::vector<std::string> pathnames;
 };
 
-static std::unique_ptr<duckdb::TableFunctionRef> PathnameScanReplacement(duckdb::ClientContext &context, const std::string &table_name,
-                                            		 					 duckdb::ReplacementScanData *data) {
+static std::unique_ptr<duckdb::TableFunctionRef> PathnameScanReplacement(duckdb::ClientContext &context,
+                                                                         const std::string &table_name,
+                                                                         duckdb::ReplacementScanData *data) {
 	auto &pathname_data = (PathnameReplacementScanData &)*data;
-	for(auto pathname : pathname_data.pathnames) {
+	for (auto pathname : pathname_data.pathnames) {
 		auto new_table_name = pathname + table_name;
 		auto &fs = duckdb::FileSystem::GetFileSystem(context);
 		if (fs.FileExists(new_table_name)) {
@@ -51,7 +53,8 @@ static std::unique_ptr<duckdb::TableFunctionRef> PathnameScanReplacement(duckdb:
 }
 
 struct OpenTask : public Task {
-	OpenTask(Database &database_, std::string filename_, bool read_only_, std::vector<std::string> pathnames_, Napi::Function callback_)
+	OpenTask(Database &database_, std::string filename_, bool read_only_, std::vector<std::string> pathnames_,
+	         Napi::Function callback_)
 	    : Task(database_, callback_), filename(filename_), read_only(read_only_), pathnames(pathnames_) {
 	}
 
@@ -63,7 +66,8 @@ struct OpenTask : public Task {
 			}
 			if (pathnames.size()) {
 				auto pathname_data = std::make_unique<PathnameReplacementScanData>(pathnames);
-				config.replacement_scans.emplace_back(duckdb::ReplacementScan(PathnameScanReplacement, move(pathname_data)));
+				config.replacement_scans.emplace_back(
+				    duckdb::ReplacementScan(PathnameScanReplacement, move(pathname_data)));
 			}
 			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &config);
 			duckdb::ParquetExtension extension;
