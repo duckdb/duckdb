@@ -14,6 +14,14 @@ CREATE TABLE tbl (
 statement ok
 INSERT INTO tbl VALUES(5);
 
+# Generated columns can not be inserted into directly
+statement error
+INSERT INTO tbl VALUES(2,3)
+
+# 'x' can not be removed, as 'gen_x' depends on it
+statement error
+ALTER TABLE tbl DROP COLUMN x;
+
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_generated_columns' (FORMAT CSV);
 
