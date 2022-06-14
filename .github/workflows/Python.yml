@@ -131,6 +131,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         static_link_build: 1
         treat_warn_as_error: 0
+        substrait: 1
 
     - uses: actions/upload-artifact@v2
       with:
