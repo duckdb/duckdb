@@ -70,6 +70,7 @@ def test_ibis_to_duck_substrait(require):
     connection = require('substrait')
     if connection is None:
         return
+    assert 0 == 1
     duck_con = TPCHBackend(duck_con=connection, fname="")
     # can't compile
     skip = [2]
