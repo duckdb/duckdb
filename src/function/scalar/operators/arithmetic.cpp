@@ -112,9 +112,9 @@ struct SubtractPropagateStatistics {
 };
 
 template <class OP, class PROPAGATE, class BASEOP>
-static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0] || !child_stats[1]) {
@@ -425,9 +425,9 @@ struct NegatePropagateStatistics {
 	}
 };
 
-static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, BoundFunctionExpression &expr,
-                                                       FunctionData *bind_data,
-                                                       vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
