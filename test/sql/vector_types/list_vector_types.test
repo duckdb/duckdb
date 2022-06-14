@@ -43,6 +43,15 @@ SELECT list(val) FROM test_vector_types(NULL::INT[], ${all_flat}) t(val)
 query I nosort not_distinct
 SELECT val IS NOT DISTINCT FROM val FROM test_vector_types(NULL::INT[], ${all_flat}) t(val)
 
+query I nosort distinct
+SELECT val IS DISTINCT FROM val FROM test_vector_types(NULL::INT[], ${all_flat}) t(val)
+
+query I nosort equals
+SELECT val=val FROM test_vector_types(NULL::INT[], ${all_flat}) t(val)
+
+query I nosort not_equals
+SELECT val<>val FROM test_vector_types(NULL::INT[], ${all_flat}) t(val)
+
 query I nosort self_join
 SELECT * FROM test_vector_types(NULL::INT[], ${all_flat}) t(val) JOIN test_vector_types(NULL::INT[], ${all_flat}) t2(val) USING (val)
 

@@ -564,8 +564,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	D_ASSERT(ListVector::GetEntry(left).GetVectorType() != VectorType::DICTIONARY_VECTOR);
-	D_ASSERT(ListVector::GetEntry(right).GetVectorType() != VectorType::DICTIONARY_VECTOR);
+	ListVector::GetEntry(left).Normalify(count);
+	ListVector::GetEntry(right).Normalify(count);
 	Vector lchild(ListVector::GetEntry(left), lcursor, count);
 	Vector rchild(ListVector::GetEntry(right), rcursor, count);
 
