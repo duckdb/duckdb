@@ -358,7 +358,7 @@ void JoinHashTable::Finalize() {
 	finalized = true;
 }
 
-unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
+unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys, const SelectionVector *&current_sel) {
 	D_ASSERT(Count() > 0); // should be handled before
 	D_ASSERT(finalized);
 
@@ -371,8 +371,13 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	}
 
 	// first prepare the keys for probing
-	const SelectionVector *current_sel;
 	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector, false);
+	return ss;
+}
+
+unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
+	const SelectionVector *current_sel;
+	auto ss = InitializeScanStructure(keys, current_sel);
 	if (ss->count == 0) {
 		return ss;
 	}
@@ -385,16 +390,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
 
 	// create the selection vector linking to only non-empty entries
-	idx_t count = 0;
-	auto pointers = FlatVector::GetData<data_ptr_t>(ss->pointers);
-	for (idx_t i = 0; i < ss->count; i++) {
-		auto idx = current_sel->get_index(i);
-		pointers[idx] = Load<data_ptr_t>(pointers[idx]);
-		if (pointers[idx]) {
-			ss->sel_vector.set_index(count++, idx);
-		}
-	}
-	ss->count = count;
+	ss->InitializeSelectionVector(current_sel);
+
 	return ss;
 }
 
@@ -479,6 +476,19 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 		}
 	}
 	this->count = new_count;
+}
+
+void ScanStructure::InitializeSelectionVector(const SelectionVector *current_sel) {
+	idx_t non_empty_count = 0;
+	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = current_sel->get_index(i);
+		ptrs[idx] = Load<data_ptr_t>(ptrs[idx]);
+		if (ptrs[idx]) {
+			sel_vector.set_index(non_empty_count++, idx);
+		}
+	}
+	count = non_empty_count;
 }
 
 void ScanStructure::AdvancePointers() {
@@ -1149,7 +1159,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *current_sel, ss->count, hashes);
 
-	// find out which keys we can match
+	// find out which keys we can match with the current pinned partitions
 	SelectionVector true_sel;
 	SelectionVector false_sel;
 	true_sel.Initialize();

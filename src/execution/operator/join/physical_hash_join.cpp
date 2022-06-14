@@ -277,7 +277,7 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
-	//! Local ht for external join
+	//! Local ht to sink data into for external join
 	JoinHashTable *local_ht;
 	//! DataChunks for sinking data into local_sink for external join
 	DataChunk sink_keys;
@@ -422,62 +422,68 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	auto &gstate = (HashJoinGlobalScanState &)gstate_p;
 	auto &lstate = (HashJoinLocalScanState &)lstate_p;
 
-	if (sink.external) {
-		if (!lstate.partitioned) {
-			// Partition thread-local probe HT
-			auto local_ht = AssignLocalHT(sink);
-			local_ht->Partition(*gstate.probe_ht);
-		}
-
-		auto &probe_ss = gstate.probe_scan_state;
-		{
-			lock_guard<mutex> lock(probe_ss.lock);
-			if (sink.finalized && probe_ss.Finished()) {
-				// Partitioned probe is done
-				lock_guard<mutex> flock(sink.finalize_lock);
-				sink.finalized = false;
-			}
-		}
-
-		if (!sink.finalized) {
-			if (IsRightOuterJoin(join_type)) {
-				// We scan the previous partition's unmatched tuples (if outer join)
-				sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state);
-				if (chunk.size() > 0) {
-					return;
-				}
-			}
-
-			lock_guard<mutex> flock(sink.finalize_lock);
-			// Check again, maybe it was finalized while we waited for the lock
-			if (!sink.finalized) {
-				PrepareProbeRound(gstate);
-			}
-		}
-
-		// TODO When we get here, all data is partitioned, and the next partitioned pointer table has been built
-		//  all probe-side data is in gstate.probe_ht
-
-		// TODO
-		//  This is fine for the first pass, since no other thread will be using the pointer table
-		//  However, we need to do this multiple times, and we need to make sure that we won't start building the new
-		//  pointer table before the last thread is done with probing it ... How do we do this with just a lock?
-		//  What if we merge the thread-local ProbeAndBuild HT's into a global one, that all of the threads are
-		//  scanning? And then we have an atomic 'scanned_count' that is incremented AFTER We would also need to have a
-		//  'block_idx/entry_idx' like in the PayloadScanner for sorted Data
-		//  ----------------------------
-		//  We need to move the thread-local HT's from the Execute phase to the GlobalSinkState
-		//  Because the Execute OperatorState gets deleted
-		//  However, we don't know during Execute when we're done, the pipeline executor does that
-		//  So, maybe we can re-use the thread-local HT's, and have an atomic index?
-		//  ----------------------------
-		//  NOTE: we can do a ScanFullOuter on the partitions that we've completed, and then deallocate them
-		//  This is better than writing the blocks back to disk again and checking this at the end
+	if (!sink.external) {
+		D_ASSERT(IsRightOuterJoin(join_type));
+		// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
+		sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state);
+		return;
 	}
 
-	D_ASSERT(IsRightOuterJoin(join_type));
-	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-	sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state);
+	// This is an external join
+	if (!lstate.partitioned) {
+		// Partition thread-local probe HT
+		auto local_ht = AssignLocalHT(sink);
+		local_ht->Partition(*gstate.probe_ht);
+	}
+
+	auto &probe_ss = gstate.probe_scan_state;
+	{
+		lock_guard<mutex> lock(probe_ss.lock);
+		if (sink.finalized && probe_ss.Finished()) {
+			// Partitioned probe is done
+			lock_guard<mutex> flock(sink.finalize_lock);
+			sink.finalized = false;
+		}
+	}
+
+	if (!sink.finalized) {
+		if (IsRightOuterJoin(join_type)) {
+			// We scan the previous partition's unmatched tuples (if outer join)
+			sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state);
+			if (chunk.size() > 0) {
+				return;
+			}
+		}
+
+		lock_guard<mutex> flock(sink.finalize_lock);
+		// Check again, maybe it was finalized while we waited for the lock
+		if (!sink.finalized) {
+			PrepareProbeRound(gstate);
+		}
+	}
+	D_ASSERT(sink.finalized);
+
+	Vector addresses(LogicalType::POINTER);
+	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+
+	// TODO When we get here, all data is partitioned, and the next partitioned pointer table has been built
+	//  all probe-side data is in gstate.probe_ht
+
+	// TODO
+	//  This is fine for the first pass, since no other thread will be using the pointer table
+	//  However, we need to do this multiple times, and we need to make sure that we won't start building the new
+	//  pointer table before the last thread is done with probing it ... How do we do this with just a lock?
+	//  What if we merge the thread-local ProbeAndBuild HT's into a global one, that all of the threads are
+	//  scanning? And then we have an atomic 'scanned_count' that is incremented AFTER We would also need to have a
+	//  'block_idx/entry_idx' like in the PayloadScanner for sorted Data
+	//  ----------------------------
+	//  We need to move the thread-local HT's from the Execute phase to the GlobalSinkState
+	//  Because the Execute OperatorState gets deleted
+	//  However, we don't know during Execute when we're done, the pipeline executor does that
+	//  So, maybe we can re-use the thread-local HT's, and have an atomic index?
+	//  ----------------------------
+	//  NOTE: we can do a ScanFullOuter on the partitions that we've completed, and then deallocate them
+	//  This is better than writing the blocks back to disk again and checking this at the end
 }
 
 } // namespace duckdb
