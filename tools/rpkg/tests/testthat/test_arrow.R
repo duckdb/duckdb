@@ -15,17 +15,19 @@
 # specific language governing permissions and limitations
 # under the License.
 
+skip_on_cran()
+skip_on_os("windows")
+skip_if_not_installed("dbplyr")
+skip_if_not_installed("dplyr")
+skip_if_not_installed("arrow", "5.0.0")
+# Skip if parquet is not a capability as an indicator that Arrow is fully installed.
+skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
+
 library(arrow, warn.conflicts = FALSE)
 library(dplyr, warn.conflicts = FALSE)
 library(duckdb)
 library("testthat")
 library("DBI")
-skip_on_cran()
-skip_on_os("windows")
-skip_if_not_installed("arrow", "5.0.0")
-# Skip if parquet is not a capability as an indicator that Arrow is fully installed.
-skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
-skip_if_not_installed("dbplyr")
 
 example_data <- dplyr::tibble(
   int = c(1:3, NA_integer_, 5:10),
