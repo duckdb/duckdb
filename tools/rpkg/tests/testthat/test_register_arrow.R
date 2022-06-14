@@ -452,7 +452,7 @@ test_that("duckdb can read arrow timestamps", {
   con <- DBI::dbConnect(duckdb::duckdb(), timezone_out = "UTC")
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
-  timestamp <- as.POSIXct("2022-01-30 11:59:29")
+  timestamp <- as.POSIXct("2022-01-30 11:59:29", tz = "UTC")
 
   for (unit in c("s", "ms", "us", "ns")) {
     tbl <- arrow::arrow_table(t = arrow::Array$create(timestamp, type = arrow::timestamp(unit)))

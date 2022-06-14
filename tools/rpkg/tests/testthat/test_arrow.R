@@ -39,53 +39,52 @@ example_data <- dplyr::tibble(
   fct = factor(letters[c(1:4, NA, NA, 7:10)])
 )
 
-# This seems to fail on the latest released duckdb
-# test_that("to_duckdb", {
-#   ds <- InMemoryDataset$create(example_data)
+test_that("to_duckdb", {
+  ds <- InMemoryDataset$create(example_data)
 
-#   expect_identical(
-#     ds %>%
-#       to_duckdb() %>%
-#       collect() %>%
-#       # factors don't roundtrip https://github.com/duckdb/duckdb/issues/1879
-#       select(!fct) %>%
-#       arrange(int),
-#       example_data %>%
-#         select(!fct) %>%
-#         arrange(int)
-#   )
+  expect_equal(
+    ds %>%
+      to_duckdb() %>%
+      collect() %>%
+      # factors don't roundtrip https://github.com/duckdb/duckdb/issues/1879
+      select(!fct) %>%
+      arrange(int),
+    example_data %>%
+      select(!fct) %>%
+      arrange(int)
+  )
 
-#   expect_identical(
-#     ds %>%
-#       select(int, lgl, dbl) %>%
-#       to_duckdb() %>%
-#       group_by(lgl) %>%
-#       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-#       collect() %>%
-#       arrange(mean_int),
-#     dplyr::tibble(
-#       lgl = c(TRUE, NA, FALSE),
-#       mean_int = c(3, 6.25, 8.5),
-#       mean_dbl = c(3.1, 6.35, 6.1)
-#     )
-#   )
+  expect_equal(
+    ds %>%
+      select(int, lgl, dbl) %>%
+      to_duckdb() %>%
+      group_by(lgl) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      collect() %>%
+      arrange(mean_int),
+    example_data %>%
+      select(int, lgl, dbl) %>%
+      group_by(lgl) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      arrange(mean_int)
+  )
 
-#   # can group_by before the to_duckdb
-#   expect_identical(
-#     ds %>%
-#       select(int, lgl, dbl) %>%
-#       group_by(lgl) %>%
-#       to_duckdb() %>%
-#       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-#       collect() %>%
-#       arrange(mean_int),
-#     dplyr::tibble(
-#       lgl = c(TRUE, NA, FALSE),
-#       mean_int = c(3, 6.25, 8.5),
-#       mean_dbl = c(3.1, 6.35, 6.1)
-#     )
-#   )
-# })
+  # can group_by before the to_duckdb
+  expect_equal(
+    ds %>%
+      select(int, lgl, dbl) %>%
+      group_by(lgl) %>%
+      to_duckdb() %>%
+      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      collect() %>%
+      arrange(mean_int),
+    example_data %>%
+      select(int, lgl, dbl) %>%
+      group_by(lgl) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      arrange(mean_int)
+  )
+})
 
 test_that("to_duckdb then to_arrow", {
   ds <- InMemoryDataset$create(example_data)
