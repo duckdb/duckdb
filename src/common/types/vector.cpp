@@ -159,7 +159,10 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		buffer = make_buffer<DictionaryBuffer>(move(sliced_dictionary));
 		if (GetType().InternalType() == PhysicalType::STRUCT) {
 			auto &child_vector = DictionaryVector::Child(*this);
-			child_vector.auxiliary = make_buffer<VectorStructBuffer>(child_vector, sel, count);
+
+			Vector new_child(child_vector);
+			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
+			auxiliary = make_buffer<VectorChildBuffer>(move(new_child));
 		}
 		return;
 	}
