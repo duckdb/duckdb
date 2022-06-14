@@ -223,6 +223,8 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	data.emplace_back("data/parquet-testing/varchar_stats.parquet");
 	data.emplace_back("data/parquet-testing/zstd.parquet");
 
+	std::vector<std::string> skip;
+
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 	for (auto &parquet_path : data) {
