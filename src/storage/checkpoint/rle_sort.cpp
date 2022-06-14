@@ -152,6 +152,7 @@ void RLESort::FilterKeyColumns() {
 }
 
 void RLESort::ScanColumnsToHLL(vector<HyperLogLog> &logs) {
+	// FIXME: Use new HLL implementation
 	while (scan_state.row_group_scan_state.vector_index * STANDARD_VECTOR_SIZE <
 	       scan_state.row_group_scan_state.max_row) {
 		// Scan the table in chunks of STANDARD_VECTOR_SIZE
