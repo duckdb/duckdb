@@ -191,14 +191,22 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 	case PandasType::VARCHAR:
 	case PandasType::OBJECT: {
+		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
+
+		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
 		unique_ptr<PythonGILWrapper> gil;
+
+		// Loop over every row of the arrays contents
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
+
+			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
+				LogicalType ltype = out.GetType();
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
@@ -288,7 +296,183 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 }
 
-static void AnalyzeObjectType(LogicalType &duckdb_col_type, PandasType &pandas_type) {
+static py::object GetItem(pybind11::object &column, idx_t index) {
+	return column.attr("__getitem__")(index);
+}
+
+static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert);
+
+static duckdb::LogicalType GetListType(py::handle &ele, bool &can_convert) {
+	auto size = py::len(ele);
+
+	if (size == 0) {
+		return LogicalType::LIST(LogicalType::SQLNULL);
+	}
+
+	vector<LogicalType> child_types;
+	child_types.reserve(size);
+
+	idx_t i = 0;
+	LogicalType list_type = LogicalType::SQLNULL;
+	for (auto py_val : ele) {
+		auto item_type = GetItemType(py_val, can_convert);
+		if (!i) {
+			list_type = item_type;
+		} else {
+			if (item_type != list_type) {
+				can_convert = false;
+			}
+		}
+		if (!can_convert) {
+			break;
+		}
+		i++;
+	}
+	return LogicalType::LIST(list_type);
+}
+
+static duckdb::LogicalType EmptyMap() {
+	child_list_t<LogicalType> child_types;
+	auto empty = LogicalType::LIST(LogicalTypeId::SQLNULL);
+	child_types.push_back(make_pair("key", empty));
+	child_types.push_back(make_pair("value", empty));
+	return LogicalType::MAP(move(child_types));
+}
+
+//! 'can_convert' is used to communicate if internal structures encountered here are valid
+//! for example a python list could contain of multiple different types, which we cant communicate downwards through
+//! LogicalType's alone
+static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
+	auto datetime_mod = py::module::import("datetime");
+	auto datetime_date = datetime_mod.attr("date");
+	auto datetime_datetime = datetime_mod.attr("datetime");
+	auto datetime_time = datetime_mod.attr("time");
+	auto decimal_mod = py::module::import("decimal");
+	auto decimal_decimal = decimal_mod.attr("Decimal");
+
+	if (ele.is_none()) {
+		return LogicalType::SQLNULL;
+	} else if (py::isinstance<py::bool_>(ele)) {
+		return LogicalType::BOOLEAN;
+	} else if (py::isinstance<py::int_>(ele)) {
+		return LogicalType::BIGINT;
+	} else if (py::isinstance<py::float_>(ele)) {
+		return LogicalType::DOUBLE;
+	} else if (py::isinstance(ele, decimal_decimal)) {
+		return LogicalType::VARCHAR; // Might be float64 actually?
+	} else if (py::isinstance(ele, datetime_datetime)) {
+		// auto ptr = ele.ptr();
+		// auto year = PyDateTime_GET_YEAR(ptr);
+		// auto month = PyDateTime_GET_MONTH(ptr);
+		// auto day = PyDateTime_GET_DAY(ptr);
+		// auto hour = PyDateTime_DATE_GET_HOUR(ptr);
+		// auto minute = PyDateTime_DATE_GET_MINUTE(ptr);
+		// auto second = PyDateTime_DATE_GET_SECOND(ptr);
+		// auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
+		// This probably needs to be more precise ..
+		return LogicalType::TIMESTAMP;
+	} else if (py::isinstance(ele, datetime_time)) {
+		// auto ptr = ele.ptr();
+		// auto hour = PyDateTime_TIME_GET_HOUR(ptr);
+		// auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
+		// auto second = PyDateTime_TIME_GET_SECOND(ptr);
+		// auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
+		return LogicalType::TIME;
+	} else if (py::isinstance(ele, datetime_date)) {
+		// auto ptr = ele.ptr();
+		// auto year = PyDateTime_GET_YEAR(ptr);
+		// auto month = PyDateTime_GET_MONTH(ptr);
+		// auto day = PyDateTime_GET_DAY(ptr);
+		return LogicalType::DATE;
+	} else if (py::isinstance<py::str>(ele)) {
+		return LogicalType::VARCHAR;
+	} else if (py::isinstance<py::memoryview>(ele)) {
+		return LogicalType::BLOB;
+	} else if (py::isinstance<py::bytes>(ele)) {
+		return LogicalType::BLOB;
+	} else if (py::isinstance<py::list>(ele)) {
+		return GetListType(ele, can_convert);
+	} else if (py::isinstance<py::dict>(ele)) {
+		auto keys = ele.attr("keys")();
+		auto values = ele.attr("values")();
+		auto size = py::len(keys);
+
+		if (size == 0) {
+			return EmptyMap();
+		}
+		child_list_t<LogicalType> child_types;
+		auto key_type = GetListType(keys, can_convert);
+		if (!can_convert) {
+			return EmptyMap();
+		}
+		auto value_type = GetListType(values, can_convert);
+		if (!can_convert) {
+			return EmptyMap();
+		}
+
+		child_types.push_back(make_pair("key", key_type));
+		child_types.push_back(make_pair("value", value_type));
+		return LogicalType::MAP(move(child_types));
+	} else {
+		throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
+	}
+}
+
+// PandasType ConvertLogicalTypeToPandas(const LogicalType& type) {
+//	switch (type.id()) {
+//		case LogicalTypeId::TINYINT: return PandasType::TINYINT;
+//		case LogicalTypeId::SMALLINT: return PandasType::SMALLINT;
+//		case LogicalTypeId::INTEGER: return PandasType::INTEGER;
+//		case LogicalTypeId::BIGINT: return PandasType::BIGINT;
+//		case LogicalTypeId::HUGEINT: return PandasType::OBJECT;
+//		case LogicalTypeId::CHAR:
+//		case LogicalTypeId::UTINYINT: return PandasType::UTINYINT;
+//		case LogicalTypeId::USMALLINT: return PandasType::USMALLINT;
+//		case LogicalTypeId::UINTEGER: return PandasType::UINTEGER;
+//		case LogicalTypeId::UBIGINT: return PandasType::UBIGINT;
+//		case LogicalTypeId::VARCHAR: return PandasType::VARCHAR;
+//		case LogicalTypeId::DECIMAL:
+//		case LogicalTypeId::FLOAT: return PandasType::FLOAT;
+//		case LogicalTypeId::DOUBLE: return PandasType::DOUBLE;
+//		case LogicalTypeId::BOOLEAN: return PandasType::BOOLEAN;
+//		//timedelta?
+//		case LogicalTypeId::TIME:
+//		case LogicalTypeId::TIME_TZ:
+//		//datetime64
+//		case LogicalTypeId::DATE:
+//		case LogicalTypeId::TIMESTAMP:
+//		case LogicalTypeId::TIMESTAMP_MS:
+//		case LogicalTypeId::TIMESTAMP_NS:
+//		case LogicalTypeId::TIMESTAMP_SEC:
+//		case LogicalTypeId::TIMESTAMP_TZ: return PandasType::TIMESTAMP;
+//		case LogicalTypeId::USER: return PandasType::CATEGORY;
+//		default: return PandasType::OBJECT;
+//	}
+// }
+
+static duckdb::LogicalType AnalyzeObjectType(pybind11::object column, bool &can_convert) {
+	idx_t rows = py::len(column);
+	LogicalType item_type = duckdb::LogicalType::SQLNULL;
+	if (!rows) {
+		return item_type;
+	}
+
+	auto first_item = GetItem(column, 0);
+	item_type = GetItemType(first_item, can_convert);
+	if (!can_convert) {
+		return item_type;
+	}
+
+	for (idx_t i = 1; i < rows; i++) {
+		auto next_item = GetItem(column, i);
+		auto next_item_type = GetItemType(next_item, can_convert);
+		if (!can_convert) {
+			break;
+		}
+		item_type = LogicalType::MaxLogicalType(item_type, next_item_type);
+	}
+
+	return item_type;
 }
 
 static void ConvertPandasType(ExtendedNumpyType &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
@@ -440,7 +624,7 @@ ExtendedNumpyType GetExtendedNumpyType(T dtype) {
 		}
 	}
 	// Since people can extend the dtypes with their own custom stuff, it's probably best to check if it falls out of
-	// the supported range of dtypes.
+	// the supported range of dtypes. (little hardcoded though)
 	if (!(extended_type >= 0 && extended_type <= 23) && !(extended_type >= 100 && extended_type <= 103)) {
 		throw std::runtime_error("Dtype num " + to_string(extended_type) + " is not supported");
 	}
@@ -494,6 +678,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 			D_ASSERT(py::hasattr(column, "cat"));
 			D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
 			auto categories = py::array(column.attr("cat").attr("categories"));
+
 			auto category_type = GetExtendedNumpyType(categories.attr("dtype"));
 			if (category_type == ExtendedNumpyType::OBJECT) {
 				// Let's hope the object type is a string.
@@ -525,6 +710,15 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
 			}
 			ConvertPandasType(dtype, duckdb_col_type, bind_data.pandas_type);
+		}
+
+		// Analyze the inner data type of the 'object' column
+		if (bind_data.pandas_type == PandasType::OBJECT) {
+			bool can_convert = true;
+			LogicalType converted_type = AnalyzeObjectType(get_fun(df_columns[col_idx]), can_convert);
+			if (can_convert) {
+				duckdb_col_type = converted_type;
+			}
 		}
 
 		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));

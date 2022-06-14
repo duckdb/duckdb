@@ -16,7 +16,7 @@ namespace duckdb {
 
 enum class ExtendedNumpyType : uint8_t {
 	BOOL,             //! bool_, bool8
-	INT_8,            //!	byte, int8
+	INT_8,            //! byte, int8
 	UINT_8,           //! ubyte, uint8
 	INT_16,           //! int16, short
 	UINT_16,          //! uint16, ushort
@@ -55,7 +55,7 @@ enum class ExtendedNumpyType : uint8_t {
 	PANDA_FLOAT64, //! Float64
 
 	PANDA_STRING,               //! string
-	PANDA_EXTENSION_TYPE = 100, //! category (also, for some reason)
+	PANDA_EXTENSION_TYPE = 100, //! ExtensionDType base class num (cateogory inherits from this)
 	PANDA_DATETIME = 101,       //! datetime64[ns, UTC]
 	PANDA_PERIOD = 102,         //! datetime64[ns, UTC]
 	PANDA_INTERVAL = 103,       //! datetime64[ns, UTC]
