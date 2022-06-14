@@ -186,9 +186,7 @@ void RLESort::CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::
 	for (idx_t i = 0; i < logs.size(); i++) {
 		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-		if (current_count < 10000) {
-			cardinalities.emplace_back(logs[i].Count(), key_column_ids[i]);
-		}
+		cardinalities.emplace_back(current_count, key_column_ids[i]);
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }
