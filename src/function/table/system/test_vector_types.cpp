@@ -204,7 +204,7 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 	result->all_flat = BooleanValue::Get(input.inputs[1]);
 
 	return_types.push_back(result->type);
-	names.push_back("test_vector");
+	names.emplace_back("test_vector");
 	return move(result);
 }
 
