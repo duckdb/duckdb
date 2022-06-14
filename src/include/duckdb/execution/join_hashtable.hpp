@@ -145,7 +145,7 @@ public:
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 	//! Scan the HT to construct the final full outer join result after
-	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
+	void ScanFullOuter(DataChunk &result, JoinHTScanState &state, Vector &addresses);
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 
@@ -240,7 +240,7 @@ public:
 	//! Unswizzle blocks in the 'swizzled_...' RowDataCollections
 	void UnswizzleBlocks();
 	//! Similar to Finalize() but for an external join
-	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> local_hts);
+	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 	//! TODO
@@ -252,6 +252,10 @@ public:
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);
+	//! TODO (must hold the lock!)
+	idx_t GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position);
+	//! TODO
+	void ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx_t position, idx_t block_position, idx_t count);
 
 private:
 	//! Merges histogram into this one

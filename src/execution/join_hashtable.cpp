@@ -796,9 +796,8 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	finished = true;
 }
 
-void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
+void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state, Vector &addresses) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
-	Vector addresses(LogicalType::POINTER);
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t found_entries = 0;
 	{
@@ -1016,13 +1015,12 @@ void JoinHashTable::FinalizeExternal() {
 
 class PartitionTask : public ExecutorTask {
 public:
-	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
-	              unique_ptr<JoinHashTable> local_ht)
-	    : ExecutorTask(context), event(move(event_p)), global_ht(global_ht), local_ht(move(local_ht)) {
+	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht, JoinHashTable &local_ht)
+	    : ExecutorTask(context), event(move(event_p)), global_ht(global_ht), local_ht(local_ht) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		local_ht->Partition(global_ht);
+		local_ht.Partition(global_ht);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -1031,37 +1029,37 @@ private:
 	shared_ptr<Event> event;
 
 	JoinHashTable &global_ht;
-	unique_ptr<JoinHashTable> local_ht;
+	JoinHashTable &local_ht;
 };
 
 class PartitionEvent : public Event {
 public:
-	PartitionEvent(Pipeline &pipeline_p, JoinHashTable &global_ht, vector<unique_ptr<JoinHashTable>> local_hts)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), global_ht(global_ht), local_hts(move(local_hts)) {
+	PartitionEvent(Pipeline &pipeline_p, JoinHashTable &global_ht, vector<unique_ptr<JoinHashTable>> &local_hts)
+	    : Event(pipeline_p.executor), pipeline(pipeline_p), global_ht(global_ht), local_hts(local_hts) {
 	}
 
 	Pipeline &pipeline;
 	JoinHashTable &global_ht;
-	vector<unique_ptr<JoinHashTable>> local_hts;
+	vector<unique_ptr<JoinHashTable>> &local_hts;
 
 public:
 	void Schedule() override {
 		auto &context = pipeline.GetClientContext();
 		vector<unique_ptr<Task>> partition_tasks;
 		for (auto &local_ht : local_hts) {
-			partition_tasks.push_back(
-			    make_unique<PartitionTask>(shared_from_this(), context, global_ht, move(local_ht)));
+			partition_tasks.push_back(make_unique<PartitionTask>(shared_from_this(), context, global_ht, *local_ht));
 		}
 		SetTasks(move(partition_tasks));
 	}
 
 	void FinishEvent() override {
+		local_hts.clear();
 		global_ht.FinalizeExternal();
 	}
 };
 
 void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
-                                           vector<unique_ptr<JoinHashTable>> local_hts) {
+                                           vector<unique_ptr<JoinHashTable>> &local_hts) {
 	idx_t total_string_size = 0;
 	idx_t total_count = 0;
 	// Merge local histograms into this HT's histogram
@@ -1078,7 +1076,7 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 	ReduceHistogram(total_string_size / total_count);
 
 	// Schedule events to partition hts
-	auto new_event = make_shared<PartitionEvent>(pipeline, *this, move(local_hts));
+	auto new_event = make_shared<PartitionEvent>(pipeline, *this, local_hts);
 	event.InsertEvent(move(new_event));
 }
 
@@ -1137,20 +1135,8 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
                                                        DataChunk &sink_keys, DataChunk &sink_payload) {
-	D_ASSERT(Count() > 0); // should be handled before
-	D_ASSERT(finalized);
-
-	// set up the scan structure
-	auto ss = make_unique<ScanStructure>(*this);
-
-	if (join_type != JoinType::INNER) {
-		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-	}
-
-	// first prepare the keys for probing
 	const SelectionVector *current_sel;
-	ss->count = PrepareKeys(keys, ss->key_data, current_sel, ss->sel_vector, false);
+	auto ss = InitializeScanStructure(keys, current_sel);
 	if (ss->count == 0) {
 		return ss;
 	}
@@ -1175,7 +1161,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	sink_payload.Reference(payload);
 	sink_keys.Slice(false_sel, false_count);
 	sink_payload.Slice(false_sel, false_count);
-	local_ht.Build(sink_keys, sink_payload);
+	local_ht.Build(sink_keys, sink_payload); // TODO optimization: we already have the hashes
 
 	// only probe the matching stuff
 	ss->count = true_count;
@@ -1185,18 +1171,67 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
 
 	// create the selection vector linking to only non-empty entries
-	idx_t count = 0;
-	auto pointers = FlatVector::GetData<data_ptr_t>(ss->pointers);
-	for (idx_t i = 0; i < ss->count; i++) {
-		auto idx = current_sel->get_index(i);
-		pointers[idx] = Load<data_ptr_t>(pointers[idx]);
-		if (pointers[idx]) {
-			ss->sel_vector.set_index(count++, idx);
-		}
-	}
-	ss->count = count;
+	ss->InitializeSelectionVector(current_sel);
 
 	return ss;
+}
+
+idx_t JoinHashTable::GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
+	position = state.position;
+	block_position = state.block_position;
+
+	idx_t count = 0;
+	for (; state.block_position < block_collection->blocks.size(); state.block_position++, state.position = 0) {
+		auto &block = block_collection->blocks[state.block_position];
+		auto next = MinValue<idx_t>(block->count, STANDARD_VECTOR_SIZE - count);
+		state.position += next;
+		count += next;
+		if (count == STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	return count;
+}
+
+void JoinHashTable::ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx_t position, idx_t block_position,
+                                        idx_t count) {
+	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+
+	// TODO: these blocks should all be pinned already
+
+	idx_t done = 0;
+	while (done != count) {
+		auto &block = *block_collection->blocks[block_position];
+		auto next = MinValue<idx_t>(block.count, count - done);
+		auto block_handle = buffer_manager.Pin(block.block);
+		auto row_ptr = block_handle->Ptr() + position * layout.GetRowWidth();
+		if (!layout.AllConstant()) {
+			// Unswizzle if necessary
+			auto &heap_block = *string_heap->blocks[block_position];
+			auto heap_handle = buffer_manager.Pin(heap_block.block);
+			RowOperations::UnswizzlePointers(layout, row_ptr, heap_handle->Ptr(), next);
+		}
+		// Set up pointers
+		for (idx_t i = done; i < done + next; i++) {
+			key_locations[i] = row_ptr;
+			row_ptr += layout.GetRowWidth();
+		}
+		// Increment indices
+		position += next;
+		if (position == block.count) {
+			position = 0;
+			block_position++;
+		}
+		done += next;
+	}
+
+	// Now we can fill the DataChunk
+	chunk.Reset();
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		const auto col_offset = layout.GetOffsets()[col_idx];
+		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), chunk.data[col_idx],
+		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, col_idx);
+	}
 }
 
 } // namespace duckdb
