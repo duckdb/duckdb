@@ -1,4 +1,3 @@
-library("testthat")
 skip_on_cran()
 
 # remotes::install_github("r-dbi/dblog")

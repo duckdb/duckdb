@@ -108,9 +108,9 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
-static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                              FunctionData *bind_data,
-                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &bind_data = input.bind_data;
 	if (!child_stats[0]) {
 		return nullptr;
 	}

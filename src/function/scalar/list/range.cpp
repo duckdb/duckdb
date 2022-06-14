@@ -27,17 +27,20 @@ struct NumericRangeInfo {
 		if (start_value < end_value && increment_value < 0) {
 			return 0;
 		}
-		int64_t total_diff = AbsValue(end_value - start_value);
-		int64_t increment = AbsValue(increment_value);
-		int64_t total_values = total_diff / increment;
+		hugeint_t total_diff = AbsValue(hugeint_t(end_value) - hugeint_t(start_value));
+		hugeint_t increment = AbsValue(hugeint_t(increment_value));
+		hugeint_t total_values = total_diff / increment;
 		if (total_diff % increment == 0) {
 			if (inclusive_bound) {
-				total_values++;
+				total_values += 1;
 			}
 		} else {
-			total_values++;
+			total_values += 1;
 		}
-		return total_values;
+		if (total_values > NumericLimits<uint32_t>::Maximum()) {
+			throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+		}
+		return Hugeint::Cast<uint64_t>(total_values);
 	}
 
 	static void Increment(int64_t &input, int64_t increment) {
@@ -83,12 +86,18 @@ struct TimestampRangeInfo {
 			while (inclusive_bound ? start_value >= end_value : start_value > end_value) {
 				start_value = Interval::Add(start_value, increment_value);
 				total_values++;
+				if (total_values > NumericLimits<uint32_t>::Maximum()) {
+					throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+				}
 			}
 		} else {
 			// positive interval, start_value is going up
 			while (inclusive_bound ? start_value <= end_value : start_value < end_value) {
 				start_value = Interval::Add(start_value, increment_value);
 				total_values++;
+				if (total_values > NumericLimits<uint32_t>::Maximum()) {
+					throw InvalidInputException("Lists larger than 2^32 elements are not supported");
+				}
 			}
 		}
 		return total_values;
@@ -217,8 +226,10 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		typename OP::TYPE range_value = start_value;
 		for (idx_t range_idx = 0; range_idx < list_data[i].length; range_idx++) {
+			if (range_idx > 0) {
+				OP::Increment(range_value, increment);
+			}
 			range_data[total_idx++] = range_value;
-			OP::Increment(range_value, increment);
 		}
 	}
 

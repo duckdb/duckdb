@@ -57,6 +57,9 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
+  oote:
+    description: 'Build Out-Of-Tree Extensions'
+    default: 0
 
 runs:
   using: "composite"
@@ -86,6 +89,13 @@ runs:
         echo "$USER"
         git config --global --add safe.directory '*'
         make
+
+    - name: Build External Extensions
+      if: ${{ inputs.out_of_tree_ext != 0 }}
+      shell: bash
+      run: |
+        mkdir -p build/release/extension/out_of_tree
+        python3.7 scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}

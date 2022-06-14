@@ -8,6 +8,10 @@ if(POLICY CMP0051)
   cmake_policy(SET CMP0051 NEW)
 endif()
 
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -794,4 +798,9 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
+endif()
+
+# build out-of-tree extensions on demand
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
 endif()
