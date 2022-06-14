@@ -28,16 +28,6 @@ Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_
       reallocate_function(reallocate_function_p), private_data(move(private_data)) {
 }
 
-Allocator &Allocator::operator=(Allocator &&allocator) noexcept {
-	if (this != &allocator) {
-		allocate_function = allocator.allocate_function;
-		free_function = allocator.free_function;
-		reallocate_function = allocator.reallocate_function;
-		private_data = move(allocator.private_data);
-	}
-	return *this;
-}
-
 data_ptr_t Allocator::AllocateData(idx_t size) {
 	return allocate_function(private_data.get(), size);
 }

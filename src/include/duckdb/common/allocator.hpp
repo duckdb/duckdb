@@ -53,7 +53,7 @@ public:
 	                     reallocate_function_ptr_t reallocate_function_p,
 	                     unique_ptr<PrivateAllocatorData> private_data);
 
-	DUCKDB_API Allocator &operator=(Allocator &&allocator) noexcept;
+	DUCKDB_API Allocator &operator=(Allocator &&allocator) noexcept = default;
 
 	data_ptr_t AllocateData(idx_t size);
 	void FreeData(data_ptr_t pointer, idx_t size);
