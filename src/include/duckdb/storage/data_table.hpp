@@ -22,6 +22,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/table_index.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -33,60 +34,6 @@ class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
-
-class TableIndexList {
-public:
-	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T>
-	void Scan(T &&callback) {
-		// lock the catalog set
-		lock_guard<mutex> lock(indexes_lock);
-		for (auto &index : indexes) {
-			if (callback(*index)) {
-				break;
-			}
-		}
-	}
-
-	void AddIndex(unique_ptr<Index> index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-		indexes.push_back(move(index));
-	}
-
-	void RemoveIndex(Index *index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-
-		for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
-			auto &index_entry = indexes[index_idx];
-			if (index_entry.get() == index) {
-				indexes.erase(indexes.begin() + index_idx);
-				break;
-			}
-		}
-	}
-
-	bool Empty() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.empty();
-	}
-
-	idx_t Count() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.size();
-	}
-
-	Index *FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type);
-
-	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
-	vector<std::pair<idx_t, idx_t>> SerializeIndexes(duckdb::MetaBlockWriter &writer);
-
-private:
-	//! Indexes associated with the current table
-	mutex indexes_lock;
-	vector<unique_ptr<Index>> indexes;
-};
 
 struct DataTableInfo {
 	DataTableInfo(DatabaseInstance &db, string schema, string table)
@@ -103,7 +50,7 @@ struct DataTableInfo {
 	// name of the table
 	string table;
 
-	TableIndexList indexes;
+	TableIndex indexes;
 
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
@@ -218,7 +165,7 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
 
 	//! Checkpoint the table to the specified table data writer
-	BlockPointer Checkpoint(TableDataWriter &writer);
+	void Checkpoint(TableDataWriter &writer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 

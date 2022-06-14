@@ -16,6 +16,7 @@ namespace duckdb {
 class Leaf : public Node {
 public:
 	Leaf(unique_ptr<Key> value, row_t row_id);
+	~Leaf() override;
 
 	Leaf(unique_ptr<Key> value, unique_ptr<row_t[]> row_ids, idx_t num_elements);
 	unique_ptr<Key> value;

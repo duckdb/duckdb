@@ -20,6 +20,11 @@ Leaf::Leaf(unique_ptr<Key> value, unique_ptr<row_t[]> row_ids, idx_t num_element
 	this->num_elements = num_elements;
 }
 
+Leaf::~Leaf() {
+	value.reset();
+	row_ids.reset();
+}
+
 void Leaf::Insert(row_t row_id) {
 
 	// Grow array

@@ -494,25 +494,6 @@ static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, Foreig
 	return true;
 }
 
-Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
-	Index *result = nullptr;
-	Scan([&](Index &index) {
-		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
-			result = &index;
-		}
-		return false;
-	});
-	return result;
-}
-
-vector<std::pair<idx_t, idx_t>> TableIndexList::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
-	vector<std::pair<idx_t, idx_t>> blocks_info;
-	for (auto &index : indexes) {
-		blocks_info.emplace_back(index->Serialize(writer));
-	}
-	return blocks_info;
-}
-
 static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
                                        bool is_append) {
 	const vector<idx_t> *src_keys_ptr = &bfk.info.fk_keys;
@@ -1332,7 +1313,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
+void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	vector<unique_ptr<BaseStatistics>> global_stats;
@@ -1349,25 +1330,33 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	}
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
-	auto &meta_writer = writer.GetMetaWriter();
-	auto pointer = meta_writer.GetBlockPointer();
+	auto &data_writer = writer.GetTableWriter();
+	auto pointer = data_writer.GetBlockPointer();
 
 	for (auto &stats : global_stats) {
-		stats->Serialize(meta_writer);
+		stats->Serialize(data_writer);
 	}
 	// now start writing the row group pointers to disk
-	meta_writer.Write<uint64_t>(row_group_pointers.size());
+	data_writer.Write<uint64_t>(row_group_pointers.size());
 	for (auto &row_group_pointer : row_group_pointers) {
-		RowGroup::Serialize(row_group_pointer, meta_writer);
+		RowGroup::Serialize(row_group_pointer, data_writer);
 	}
-	// FIXME gotta add these to the main writer
-	//	auto &metadata_writer = writer.GetMetaWriter();
-	//	// Now we serialize indexes
-	//	auto blocks_info = info->indexes.SerializeIndexes(metadata_writer);
-	//	// Write-off block ids and offsets of indexes
-	//	metadata_writer.Write(root_offset.first);
-	//	metadata_writer.Write(root_offset.second);
-	return pointer;
+	// Now we serialize indexes in the tabledata_writer
+	auto blocks_info = info->indexes.SerializeIndexes(data_writer);
+
+	// metadata writing time
+	auto &metadata_writer = writer.GetMetaWriter();
+
+	// write the block pointer for the table info
+	metadata_writer.Write<block_id_t>(pointer.block_id);
+	metadata_writer.Write<uint64_t>(pointer.offset);
+
+	// Write-off block ids and offsets of indexes
+	metadata_writer.Write<idx_t>(blocks_info.size());
+	for (auto &block_info : blocks_info) {
+		metadata_writer.Write<idx_t>(block_info.first);
+		metadata_writer.Write<idx_t>(block_info.second);
+	}
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

@@ -16,3 +16,7 @@ statement ok
 checkpoint
 
 restart
+
+# Insert values and create index
+statement error
+INSERT INTO integers VALUES (1)
