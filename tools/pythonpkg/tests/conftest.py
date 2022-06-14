@@ -33,9 +33,6 @@ def require():
             extension_search_patterns.append(env_extension_path + '/*/*.duckdb_extension')
             extension_search_patterns.append(env_extension_path + '/*.duckdb_extension')
 
-        # Depending on the env var, the test will fail on not finding any extensions
-        must_test_extension_load = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False)
-
         extension_paths_found = []
         for pattern in extension_search_patterns:
             extension_pattern_abs = abspath(pattern)
