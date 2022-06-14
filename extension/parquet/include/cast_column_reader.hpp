@@ -30,6 +30,18 @@ public:
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;
+
+	uint64_t TotalCompressedSize() override {
+		return child_reader->TotalCompressedSize();
+	}
+
+	idx_t FileOffset() const override {
+		return child_reader->FileOffset();
+	}
+
+	void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) override {
+		child_reader->RegisterPrefetch(transport, allow_merge);
+	}
 };
 
 } // namespace duckdb

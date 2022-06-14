@@ -1,0 +1,73 @@
+# name: test/sql/copy/s3/parquet_s3_tpch.test_slow
+# description: Test all tpch queries on tpch sf0.01 over s3
+# group: [s3]
+
+require parquet
+
+require httpfs
+
+require tpch
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+statement ok
+SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='s3.s3rver-endpoint.com:4923';SET s3_use_ssl=false;
+
+# Copy files to S3 before beginning tests
+statement ok
+CALL DBGEN(sf=0.01);
+
+# copy tpch files to S3
+statement ok
+COPY lineitem to 's3://test-bucket/tpch-sf0_01/lineitem.parquet';
+COPY nation to 's3://test-bucket/tpch-sf0_01/nation.parquet';
+COPY region to 's3://test-bucket/tpch-sf0_01/region.parquet';
+COPY part to 's3://test-bucket/tpch-sf0_01/part.parquet';
+COPY supplier to 's3://test-bucket/tpch-sf0_01/supplier.parquet';
+COPY partsupp to 's3://test-bucket/tpch-sf0_01/partsupp.parquet';
+COPY customer to 's3://test-bucket/tpch-sf0_01/customer.parquet';
+COPY orders to 's3://test-bucket/tpch-sf0_01/orders.parquet';
+
+# clears tables
+statement ok
+DROP TABLE lineitem;
+DROP TABLE nation;
+DROP TABLE region;
+DROP TABLE part;
+DROP TABLE supplier;
+DROP TABLE partsupp;
+DROP TABLE customer;
+DROP TABLE orders;
+
+statement ok
+CREATE VIEW lineitem as SELECT * FROM 's3://test-bucket/tpch-sf0_01/lineitem.parquet';
+CREATE VIEW nation as SELECT * FROM 's3://test-bucket/tpch-sf0_01/nation.parquet';
+CREATE VIEW region as SELECT * FROM 's3://test-bucket/tpch-sf0_01/region.parquet';
+CREATE VIEW part as SELECT * FROM 's3://test-bucket/tpch-sf0_01/part.parquet';
+CREATE VIEW supplier as SELECT * FROM 's3://test-bucket/tpch-sf0_01/supplier.parquet';
+CREATE VIEW partsupp as SELECT * FROM 's3://test-bucket/tpch-sf0_01/partsupp.parquet';
+CREATE VIEW customer as SELECT * FROM 's3://test-bucket/tpch-sf0_01/customer.parquet';
+CREATE VIEW orders as SELECT * FROM 's3://test-bucket/tpch-sf0_01/orders.parquet';
+
+
+# Run TPCH SF1
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q${i}.csv
+
+endloop

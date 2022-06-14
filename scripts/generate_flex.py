@@ -37,7 +37,7 @@ text = text.replace('register ', '')
 
 text = text + "\n} /* duckdb_libpgquery */\n"
 
-text = re.sub('[(]void[)][ ]*fprintf', '//', text)
+text = re.sub('(?:[(]void[)][ ]*)?fprintf', '//', text)
 text = re.sub('exit[(]', 'throw std::runtime_error(msg); //', text)
 text = re.sub(r'\n\s*if\s*[(]\s*!\s*yyin\s*[)]\s*\n\s*yyin\s*=\s*stdin;\s*\n', '\n', text)
 text = re.sub(r'\n\s*if\s*[(]\s*!\s*yyout\s*[)]\s*\n\s*yyout\s*=\s*stdout;\s*\n', '\n', text)
