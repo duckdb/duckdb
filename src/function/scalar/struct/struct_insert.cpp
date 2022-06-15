@@ -78,12 +78,19 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
-	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
-	auto offset = struct_stats->child_stats.size() - child_stats.size();
-	for (idx_t i = 1; i < child_stats.size(); i++) {
-		struct_stats->child_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+
+	auto &existing_struct_stats = (StructStatistics &)*child_stats[0];
+	auto new_struct_stats = make_unique<StructStatistics>(expr.return_type);
+
+	for (idx_t i = 0; i < existing_struct_stats.child_stats.size(); i++) {
+		new_struct_stats->child_stats[i] = existing_struct_stats.child_stats[i] ? existing_struct_stats.child_stats[i]->Copy() : nullptr;
 	}
-	return move(struct_stats);
+
+	auto offset = new_struct_stats->child_stats.size() - child_stats.size();
+	for (idx_t i = 1; i < child_stats.size(); i++) {
+		new_struct_stats->child_stats[offset + i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
+	}
+	return move(new_struct_stats);
 }
 
 void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
