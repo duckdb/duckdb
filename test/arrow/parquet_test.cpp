@@ -192,7 +192,7 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	data.emplace_back("data/parquet-testing/decimals.parquet");
 	data.emplace_back("data/parquet-testing/enum.parquet");
 	data.emplace_back("data/parquet-testing/filter_bug1391.parquet");
-	data.emplace_back("data/parquet-testing/fixed.parquet");
+	//	data.emplace_back("data/parquet-testing/fixed.parquet");
 	// slow
 	// data.emplace_back("data/parquet-testing/leftdate3_192_loop_1.parquet");
 	data.emplace_back("data/parquet-testing/lineitem-top10000.gzip.parquet");
