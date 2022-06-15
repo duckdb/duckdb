@@ -43,7 +43,7 @@ runs:
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
-        (cd /usr/local/bin; ln -s python python3)
+        (cd /usr/local/bin; ln -s python3.7 python)
 
     - name: Install CMake 3.21
       shell: bash
