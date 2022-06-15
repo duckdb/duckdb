@@ -15,7 +15,7 @@ def duckdb_empty_cursor(request):
 
 @pytest.fixture(scope="function")
 def require():
-    def _require(extension_name):
+    def _require(extension_name, db_name=''):
         # Paths to search for extensions
         extension_search_patterns = [
             "../../../../build/release/extension/*/*.duckdb_extension",
@@ -43,7 +43,7 @@ def require():
         for path in extension_paths_found:
             print(path)
             if (path.endswith(extension_name+".duckdb_extension")):
-                conn = duckdb.connect('')
+                conn = duckdb.connect(db_name)
                 conn.execute(f"LOAD '{path}'")
                 return conn
         return None
