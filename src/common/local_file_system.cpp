@@ -2,6 +2,7 @@
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
@@ -21,8 +22,9 @@
 #include <unistd.h>
 #else
 #include "duckdb/common/windows_util.hpp"
-#include <string>
+
 #include <io.h>
+#include <string>
 
 #ifdef __MINGW32__
 #include <sys/stat.h>
@@ -906,9 +908,10 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		if (FileExists(path) || IsPipe(path)) {
 			result.push_back(path);
 		} else if (!absolute_path) {
-			char *search_path_env = getenv("DUCKDB_SEARCH_PATHS");
-			if (search_path_env != NULL) {
-				auto search_paths = StringUtil::Split(search_path_env, ',');
+			Value value;
+			if (opener->TryGetCurrentSetting("file_search_path", value)) {
+				auto search_paths_str = value.ToString();
+				std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 				for (auto search_path : search_paths) {
 					auto joined_path = JoinPath(search_path, path);
 					if (FileExists(joined_path) || IsPipe(joined_path)) {
