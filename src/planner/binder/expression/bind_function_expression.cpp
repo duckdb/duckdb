@@ -157,8 +157,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	IterateLambdaExprChildren(children, list_child_type, bound_lambda_expr);
 	children.push_back(move(bound_lambda_expr));
 
-	// the alias of the lambda expression contains the number of lambda parameters
 	// NOTE: this is super hacky
+	// the alias of the lambda expression contains the number of lambda parameters
 	children[children.size() - 1]->alias = to_string(num_params);
 
 	unique_ptr<Expression> result =
