@@ -57,7 +57,7 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
-  oote:
+  out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
     default: 0
 
