@@ -11,5 +11,5 @@ if [ -z "${DUCKDB_R_DEBUG}" ]; then
   python3 rconfigure.py
 else
   cd ../..
-  GEN=ninja CONFIGURE_R=1 nice ${MAKE:-make} debug
+  GEN=ninja CONFIGURE_R=1 BUILD_EXCEL=1 BUILD_JSON=1 BUILD_FTS=1 BUILD_VISUALIZER=1 nice ${MAKE:-make} debug
 fi
