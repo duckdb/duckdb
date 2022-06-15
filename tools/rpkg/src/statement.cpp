@@ -111,6 +111,9 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 		case LogicalTypeId::LIST:
 			rtype = "list";
 			break;
+		case LogicalTypeId::STRUCT:
+			rtype = "data.frame";
+			break;
 		case LogicalTypeId::ENUM:
 			rtype = "factor";
 			break;
@@ -207,6 +210,26 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::LIST:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
+	case LogicalTypeId::STRUCT: {
+		cpp11::writable::list dest_list;
+
+		for (const auto &child : StructType::GetChildTypes(type)) {
+			const auto &name = child.first;
+			const auto &child_type = child.second;
+
+			RProtector child_protector;
+			auto dest_child = allocate(child_type, child_protector, nrows);
+			dest_list.push_back(cpp11::named_arg(name.c_str()) = std::move(dest_child));
+		}
+
+		// Note we cannot use cpp11's data frame here as it tries to calculate the number of rows itself,
+		// but gives the wrong answer if the first column is another data frame or the struct is empty.
+		dest_list.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
+		dest_list.attr(R_RowNamesSymbol) = {NA_INTEGER, -static_cast<int>(nrows)};
+
+		varvalue = r_varvalue.Protect(cpp11::as_sexp(dest_list));
+		break;
+	}
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = new DuckDBAltrepStringWrapper();
 		wrapper->length = nrows;
@@ -219,9 +242,15 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::BLOB:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
 		break;
-	case LogicalTypeId::ENUM:
-		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+	case LogicalTypeId::ENUM: {
+		auto physical_type = type.InternalType();
+		if (physical_type == PhysicalType::UINT64) { // DEDUP_POINTER_ENUM
+			varvalue = r_varvalue.Protect(NEW_STRING(nrows));
+		} else {
+			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
+		}
 		break;
+	}
 	default:
 		cpp11::stop("rapi_execute: Unknown column type for execute: %s", type.ToString().c_str());
 	}
@@ -426,6 +455,17 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		}
 		break;
 	}
+	case LogicalTypeId::STRUCT: {
+		const auto &children = StructVector::GetEntries(src_vec);
+
+		for (size_t i = 0; i < children.size(); i++) {
+			const auto &struct_child = children[i];
+			SEXP child_dest = VECTOR_ELT(dest, i);
+			transform(*struct_child, child_dest, dest_offset, n);
+		}
+
+		break;
+	}
 	case LogicalTypeId::BLOB: {
 		auto src_ptr = FlatVector::GetData<string_t>(src_vec);
 		auto &mask = FlatVector::Validity(src_vec);
@@ -445,6 +485,22 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 	case LogicalTypeId::ENUM: {
 		auto physical_type = src_vec.GetType().InternalType();
+		auto dummy = NEW_STRING(1);
+		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(dummy) - (data_ptr_t)dummy; // don't tell anyone
+		if (physical_type == PhysicalType::UINT64) {                                 // DEDUP_POINTER_ENUM
+			auto src_ptr = FlatVector::GetData<uint64_t>(src_vec);
+			auto &mask = FlatVector::Validity(src_vec);
+			/* we have to use SET_STRING_ELT here because otherwise those SEXPs dont get referenced */
+			for (size_t row_idx = 0; row_idx < n; row_idx++) {
+				if (!mask.RowIsValid(row_idx)) {
+					SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
+				} else {
+					SET_STRING_ELT(dest, dest_offset + row_idx,
+					               (SEXP)((data_ptr_t)src_ptr[row_idx] - sexp_header_size));
+				}
+			}
+			break;
+		}
 
 		switch (physical_type) {
 		case PhysicalType::UINT8:
@@ -488,7 +544,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 }
 
-static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
+SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	if (ncols == 0) {
@@ -496,17 +552,23 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	}
 
 	uint64_t nrows = result->collection.Count();
-	cpp11::list retlist(NEW_LIST(ncols));
-	SET_NAMES(retlist, StringsToSexp(result->names));
+
+	// Note we cannot use cpp11's data frame here as it tries to calculate the number of rows itself,
+	// but gives the wrong answer if the first column is another data frame. So we set the necessary
+	// attributes manually.
+	cpp11::writable::list data_frame(NEW_LIST(ncols));
+	data_frame.attr(R_ClassSymbol) = RStrings::get().dataframe_str;
+	data_frame.attr(R_RowNamesSymbol) = {NA_INTEGER, -static_cast<int>(nrows)};
+	SET_NAMES(data_frame, StringsToSexp(result->names));
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
 		// TODO move the protector to allocate?
 		RProtector r_varvalue;
 		auto varvalue = allocate(result->types[col_idx], r_varvalue, nrows);
-		SET_VECTOR_ELT(retlist, col_idx, varvalue);
+		SET_VECTOR_ELT(data_frame, col_idx, varvalue);
 	}
 
-	// at this point retlist is fully allocated and the only protected SEXP
+	// at this point data_frame is fully allocated and the only protected SEXP
 
 	// step 3: set values from chunks
 	uint64_t dest_offset = 0;
@@ -518,9 +580,9 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		}
 
 		D_ASSERT(chunk->ColumnCount() == ncols);
-		D_ASSERT(chunk->ColumnCount() == (idx_t)Rf_length(retlist));
+		D_ASSERT(chunk->ColumnCount() == (idx_t)Rf_length(data_frame));
 		for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
-			SEXP dest = VECTOR_ELT(retlist, col_idx);
+			SEXP dest = VECTOR_ELT(data_frame, col_idx);
 			transform(chunk->data[col_idx], dest, dest_offset, chunk->size());
 		}
 		dest_offset += chunk->size();
@@ -528,7 +590,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	}
 
 	D_ASSERT(dest_offset == nrows);
-	return retlist;
+	return data_frame;
 }
 
 struct AppendableRList {

@@ -105,7 +105,7 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			if (col_idx == 1) {
 				// write the column name
 				auto column_index = entry[col_idx].GetValue<int64_t>();
-				output.SetValue(result_idx, count, Value(bind_data.table_entry->columns[column_index].name));
+				output.SetValue(result_idx, count, Value(bind_data.table_entry->columns[column_index].Name()));
 				result_idx++;
 			}
 			output.SetValue(result_idx, count, entry[col_idx]);

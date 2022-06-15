@@ -36,6 +36,11 @@ class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
 
+struct ParquetReaderPrefetchConfig {
+	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
+	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
+};
+
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
@@ -51,6 +56,9 @@ struct ParquetReaderScanState {
 
 	ResizeableBuffer define_buf;
 	ResizeableBuffer repeat_buf;
+
+	bool prefetch_mode = false;
+	bool current_group_prefetched = false;
 };
 
 struct ParquetOptions {
@@ -115,6 +123,10 @@ private:
 	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
+	idx_t GetGroupOffset(ParquetReaderScanState &state);
+	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
+	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 

@@ -39,16 +39,30 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 	return result;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreateEnum(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateEnumStmt *>(node);
+unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::PGNode *node) {
+	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateTypeStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTypeInfo>();
-	info->internal = false;
 	info->name = ReadPgListToString(stmt->typeName)[0];
-	idx_t size = 0;
-	auto ordered_array = ReadPgListToVector(stmt->vals, size);
-	info->type = LogicalType::ENUM(info->name, ordered_array, size);
+	switch (stmt->kind) {
+	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {
+		info->internal = false;
+		idx_t size = 0;
+		auto ordered_array = ReadPgListToVector(stmt->vals, size);
+		info->type = LogicalType::ENUM(info->name, ordered_array, size);
+	} break;
+
+	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
+		LogicalType target_type = TransformTypeName(stmt->ofType);
+		target_type.SetAlias(info->name);
+		info->type = target_type;
+	} break;
+
+	default:
+		throw InternalException("Unknown kind of new type");
+	}
+
 	result->info = move(info);
 	return result;
 }
