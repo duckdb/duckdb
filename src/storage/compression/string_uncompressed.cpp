@@ -282,25 +282,31 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		uint32_t remaining = compressed_size;
 		offset += 2 * sizeof(uint32_t);
 
-		// allocate a buffer to store the compressed string
-		auto decompression_buffer = std::unique_ptr<data_t[]>(new data_t[compressed_size]);
-		auto target_ptr = decompression_buffer.get();
+		data_ptr_t decompression_ptr;
+		// If string is in single block we decompress straight from it, else we copy first
+		if (remaining <= Storage::BLOCK_SIZE - sizeof(block_id_t) - offset) {
+			decompression_ptr = handle->node->buffer + offset;
+		} else {
+			auto decompression_buffer = std::unique_ptr<data_t[]>(new data_t[compressed_size]);
+			auto target_ptr = decompression_buffer.get();
 
-		// now append the string to the single buffer
-		while (remaining > 0) {
-			idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
-			memcpy(target_ptr, handle->node->buffer + offset, to_write);
+			// now append the string to the single buffer
+			while (remaining > 0) {
+				idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
+				memcpy(target_ptr, handle->node->buffer + offset, to_write);
 
-			remaining -= to_write;
-			offset += to_write;
-			target_ptr += to_write;
-			if (remaining > 0) {
-				// read the next block
-				block_id_t next_block = Load<block_id_t>(handle->node->buffer + offset);
-				block_handle = buffer_manager.RegisterBlock(next_block);
-				handle = buffer_manager.Pin(block_handle);
-				offset = 0;
+				remaining -= to_write;
+				offset += to_write;
+				target_ptr += to_write;
+				if (remaining > 0) {
+					// read the next block
+					block_id_t next_block = Load<block_id_t>(handle->node->buffer + offset);
+					block_handle = buffer_manager.RegisterBlock(next_block);
+					handle = buffer_manager.Pin(block_handle);
+					offset = 0;
+				}
 			}
+			decompression_ptr = decompression_buffer.get();
 		}
 
 		// overflow strings on disk are gzipped, decompress here
@@ -308,7 +314,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
 		auto decompressed_target_ptr = decompressed_target_handle->node->buffer;
 		MiniZStream s;
-		s.Decompress((const char *)decompression_buffer.get(), compressed_size, (char *)decompressed_target_ptr,
+		s.Decompress((const char *)decompression_ptr, compressed_size, (char *)decompressed_target_ptr,
 		             uncompressed_size);
 
 		auto final_buffer = decompressed_target_handle->node->buffer;
