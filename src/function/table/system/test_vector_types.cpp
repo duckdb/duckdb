@@ -68,7 +68,7 @@ struct TestVectorFlat {
 			}
 			result.push_back(entry->second.min_value);
 			result.push_back(entry->second.max_value);
-			result.push_back(Value(type));
+			result.emplace_back(type);
 			break;
 		}
 		}
