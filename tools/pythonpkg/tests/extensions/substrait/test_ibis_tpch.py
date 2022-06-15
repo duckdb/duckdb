@@ -1,3 +1,6 @@
+import duckdb
+import pytest
+
 try:
     from ibis_substrait.compiler.core import SubstraitCompiler
     import ibis
@@ -5,8 +8,6 @@ try:
     from ibis.backends.duckdb.datatypes import parse_type
     from ibis_tpch_util import get_tpch_query
     can_run = True
-    import duckdb
-    import pytest
 
     def unbound_from_duckdb(table):  # noqa: D103
         return ibis.table(
