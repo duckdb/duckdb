@@ -913,6 +913,17 @@ public class TestDuckDBJDBC {
 		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(3)));
 		assertTrue(BigDecimal.class.toString().equals(meta.getColumnClassName(4)));
 
+		assertEquals(3, meta.getPrecision(1));
+		assertEquals(0, meta.getScale(1));
+		assertEquals(4, meta.getPrecision(2));
+		assertEquals(1, meta.getScale(2));
+		assertEquals(9, meta.getPrecision(3));
+		assertEquals(4, meta.getScale(3));
+		assertEquals(18, meta.getPrecision(4));
+		assertEquals(7, meta.getScale(4));
+		assertEquals(38, meta.getPrecision(5));
+		assertEquals(10, meta.getScale(5));
+
 		conn.close();
 	}
 
