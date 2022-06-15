@@ -59,7 +59,7 @@ inputs:
     default: 1
   out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
-    default: 0
+    default: 1
 
 runs:
   using: "composite"
