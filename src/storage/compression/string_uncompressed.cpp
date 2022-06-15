@@ -283,10 +283,8 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		offset += 2 * sizeof(uint32_t);
 
 		// allocate a buffer to store the compressed string
-		// TODO: profile this to check if we need to reuse buffer
-		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, compressed_size);
-		auto target_handle = buffer_manager.Allocate(alloc_size);
-		auto target_ptr = target_handle->node->buffer;
+		auto decompression_buffer = std::unique_ptr<data_t[]>(new data_t[compressed_size]);
+		auto target_ptr = decompression_buffer.get();
 
 		// now append the string to the single buffer
 		while (remaining > 0) {
@@ -310,7 +308,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
 		auto decompressed_target_ptr = decompressed_target_handle->node->buffer;
 		MiniZStream s;
-		s.Decompress((const char *)target_handle->node->buffer, compressed_size, (char *)decompressed_target_ptr,
+		s.Decompress((const char *)decompression_buffer.get(), compressed_size, (char *)decompressed_target_ptr,
 		             uncompressed_size);
 
 		auto final_buffer = decompressed_target_handle->node->buffer;
