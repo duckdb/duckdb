@@ -30,27 +30,35 @@ struct TestVectorInfo {
 };
 
 struct TestVectorFlat {
-	static void GenerateVector(TestVectorInfo &info, const LogicalType &type, Vector &result) {
-		D_ASSERT(type == result.GetType());
+	static constexpr const idx_t TEST_VECTOR_CARDINALITY = 3;
+
+	static vector<Value> GenerateValues(TestVectorInfo &info, const LogicalType &type) {
+		vector<Value> result;
 		switch (type.InternalType()) {
 		case PhysicalType::STRUCT: {
-			auto &child_entries = StructVector::GetEntries(result);
-			for (auto &child_entry : child_entries) {
-				GenerateVector(info, child_entry->GetType(), *child_entry);
+			vector<child_list_t<Value>> struct_children;
+			auto &child_types = StructType::GetChildTypes(type);
+
+			struct_children.resize(TEST_VECTOR_CARDINALITY);
+			for (auto &child_type : child_types) {
+				auto child_values = GenerateValues(info, child_type.second);
+
+				for (idx_t i = 0; i < child_values.size(); i++) {
+					struct_children[i].push_back(make_pair(child_type.first, move(child_values[i])));
+				}
+			}
+			for (auto &struct_child : struct_children) {
+				result.push_back(Value::STRUCT(move(struct_child)));
 			}
 			break;
 		}
 		case PhysicalType::LIST: {
-			auto data = FlatVector::GetData<list_entry_t>(result);
-			data[0].offset = 0;
-			data[0].length = 2;
-			data[1].offset = 2;
-			data[1].length = 0;
-			data[2].offset = 2;
-			data[2].length = 1;
+			auto &child_type = ListType::GetChildType(type);
+			auto child_values = GenerateValues(info, child_type);
 
-			GenerateVector(info, ListType::GetChildType(type), ListVector::GetEntry(result));
-			ListVector::SetListSize(result, 3);
+			result.push_back(Value::LIST(child_type, {child_values[0], child_values[1]}));
+			result.push_back(Value::LIST(child_type, {}));
+			result.push_back(Value::LIST(child_type, {child_values[2]}));
 			break;
 		}
 		default: {
@@ -58,65 +66,43 @@ struct TestVectorFlat {
 			if (entry == info.test_type_map.end()) {
 				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
 			}
-			result.SetValue(0, entry->second.min_value);
-			result.SetValue(1, entry->second.max_value);
-			result.SetValue(2, Value(type));
+			result.push_back(entry->second.min_value);
+			result.push_back(entry->second.max_value);
+			result.push_back(Value(type));
 			break;
 		}
 		}
+		return result;
 	}
 
 	static void Generate(TestVectorInfo &info) {
-		auto result = make_unique<DataChunk>();
-		result->Initialize({info.type});
-
-		GenerateVector(info, info.type, result->data[0]);
-		result->SetCardinality(3);
-		info.entries.push_back(move(result));
+		vector<Value> result_values = GenerateValues(info, info.type);
+		for (idx_t cur_row = 0; cur_row < result_values.size(); cur_row += STANDARD_VECTOR_SIZE) {
+			auto result = make_unique<DataChunk>();
+			result->Initialize({info.type});
+			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
+			for (idx_t i = 0; i < cardinality; i++) {
+				result->data[0].SetValue(i, result_values[cur_row + i]);
+			}
+			result->SetCardinality(cardinality);
+			info.entries.push_back(move(result));
+		}
 	}
 };
 
 struct TestVectorConstant {
-	static void GenerateVector(TestVectorInfo &info, const LogicalType &type, Vector &result) {
-		D_ASSERT(type == result.GetType());
-		switch (type.InternalType()) {
-		case PhysicalType::STRUCT: {
-			auto &child_entries = StructVector::GetEntries(result);
-			for (auto &child_entry : child_entries) {
-				GenerateVector(info, child_entry->GetType(), *child_entry);
-			}
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			break;
-		}
-		case PhysicalType::LIST: {
-			auto data = FlatVector::GetData<list_entry_t>(result);
-			data[0].offset = 0;
-			data[0].length = 1;
-
-			GenerateVector(info, ListType::GetChildType(type), ListVector::GetEntry(result));
-			ListVector::SetListSize(result, 1);
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			break;
-		}
-		default: {
-			auto entry = info.test_type_map.find(type.id());
-			if (entry == info.test_type_map.end()) {
-				throw NotImplementedException("Unimplemented type for test_vector_types %s", type.ToString());
-			}
-			result.SetValue(0, entry->second.min_value);
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			break;
-		}
-		}
-	}
-
 	static void Generate(TestVectorInfo &info) {
-		auto result = make_unique<DataChunk>();
-		result->Initialize({info.type});
+		auto values = TestVectorFlat::GenerateValues(info, info.type);
+		for (idx_t cur_row = 0; cur_row < TestVectorFlat::TEST_VECTOR_CARDINALITY; cur_row += STANDARD_VECTOR_SIZE) {
+			auto result = make_unique<DataChunk>();
+			result->Initialize({info.type});
+			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
+			result->data[0].SetValue(0, values[0]);
+			result->data[0].SetVectorType(VectorType::CONSTANT_VECTOR);
+			result->SetCardinality(cardinality);
 
-		GenerateVector(info, info.type, result->data[0]);
-		result->SetCardinality(3);
-		info.entries.push_back(move(result));
+			info.entries.push_back(move(result));
+		}
 	}
 };
 
@@ -172,28 +158,37 @@ struct TestVectorSequence {
 	}
 
 	static void Generate(TestVectorInfo &info) {
+#if STANDARD_VECTOR_SIZE > 2
 		auto result = make_unique<DataChunk>();
 		result->Initialize({info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
 		info.entries.push_back(move(result));
+#endif
 	}
 };
 
 struct TestVectorDictionary {
 	static void Generate(TestVectorInfo &info) {
-		auto result = make_unique<DataChunk>();
-		result->Initialize({info.type});
+		idx_t current_chunk = info.entries.size();
 
-		TestVectorFlat::GenerateVector(info, info.type, result->data[0]);
-		result->SetCardinality(3);
+		unordered_set<idx_t> slice_entries {1, 2};
 
-		SelectionVector sel(STANDARD_VECTOR_SIZE);
-		sel.set_index(0, 1);
-		sel.set_index(1, 2);
-		result->Slice(sel, 2);
-		info.entries.push_back(move(result));
+		TestVectorFlat::Generate(info);
+		idx_t current_idx = 0;
+		for (idx_t i = current_chunk; i < info.entries.size(); i++) {
+			auto &chunk = *info.entries[i];
+			SelectionVector sel(STANDARD_VECTOR_SIZE);
+			idx_t sel_idx = 0;
+			for (idx_t k = 0; k < chunk.size(); k++) {
+				if (slice_entries.count(current_idx + k) > 0) {
+					sel.set_index(sel_idx++, k);
+				}
+			}
+			chunk.Slice(sel, sel_idx);
+			current_idx += chunk.size();
+		}
 	}
 };
 
