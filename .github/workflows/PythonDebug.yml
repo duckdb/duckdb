@@ -42,8 +42,10 @@ jobs:
         
         wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
         tar -xf openssl-1.1.1c.tar.gz
+        mkdir debug-build-openssl
         cd openssl-1.1.1c
-        ./config --prefix=${GITHUB_WORKSPACE}/openssl-1.1.1c --openssldir=${GITHUB_WORKSPACE}/openssl-1.1.1c no-shared zlib-dynamic
+        
+        ./config --prefix=${GITHUB_WORKSPACE}/debug-build-openssl --openssldir=${GITHUB_WORKSPACE}/debug-build-openssl no-shared zlib-dynamic
         make
         make install
         cd ..
