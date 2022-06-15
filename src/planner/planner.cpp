@@ -119,6 +119,12 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		D_ASSERT(prepared->properties.bound_all_parameters);
 		rebound = true;
 	}
+	// copy the properties of the prepared statement into the planner
+	this->properties = prepared->properties;
+	this->properties.parameter_count = parameter_count;
+	this->names = prepared->names;
+	this->types = prepared->types;
+
 	// add casts to the prepared statement parameters as required
 	for (idx_t i = 0; i < bind_values.size(); i++) {
 		if (prepared->value_map.count(i + 1) == 0) {
@@ -135,11 +141,6 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		return;
 	}
 
-	// copy the properties of the prepared statement into the planner
-	this->properties = prepared->properties;
-	this->properties.parameter_count = parameter_count;
-	this->names = prepared->names;
-	this->types = prepared->types;
 	this->plan = make_unique<LogicalExecute>(move(prepared));
 }
 
