@@ -1,0 +1,18 @@
+# name: test/sql/constraints/foreignkey/test_fk_cross_schema.test
+# description: Test foreign key constraint across different schemas
+# group: [foreignkey]
+
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+CREATE SCHEMA s2
+
+statement ok
+CREATE TABLE s1.pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO s1.pk_integers VALUES (1), (2), (3)
+
+statement error
+CREATE TABLE s2.fk_integers(j INTEGER, FOREIGN KEY (j) REFERENCES s1.pk_intexgers(i))
