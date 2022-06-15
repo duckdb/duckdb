@@ -137,6 +137,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
+		const std::lock_guard<std::mutex> lock(py_connection_lock);
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
@@ -460,7 +461,7 @@ void DuckDBPyConnection::Close() {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared<DuckDBPyConnection>(thread_id);
 	res->database = database;
-	res->connection = connection;
+	res->connection = make_unique<Connection>(*res->database);
 	res->check_same_thread = check_same_thread;
 	cursors.push_back(res);
 	return res;
