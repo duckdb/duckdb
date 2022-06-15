@@ -19,30 +19,24 @@ bool KeyListIsEmpty(list_entry_t *data, idx_t rows) {
 	return true;
 }
 
-static void CheckKeyValidity(DataChunk &args) {
-	auto types = args.GetTypes();
-	if (types.empty()) {
-		return;
-	}
-	auto key_type = ListType::GetChildType(types[0]).id();
-	auto &array = args.data[0];
-	auto arg_data = FlatVector::GetData<list_entry_t>(array);
-	auto &entries = ListVector::GetEntry(array);
+static bool AreKeysNull(Vector &keys) {
+	auto list_type = keys.GetType();
+	auto key_type = ListType::GetChildType(list_type).id();
+	auto arg_data = ListVector::GetData(keys);
+	auto &entries = ListVector::GetEntry(keys);
+	auto keys_size = ListVector::GetListSize(keys);
 	if (key_type == LogicalTypeId::SQLNULL) {
-		if (KeyListIsEmpty(arg_data, args.size())) {
-			return;
+		if (KeyListIsEmpty(arg_data, keys_size)) {
+			return false;
 		}
 		// The entire key list is NULL for one (or more) of the rows: (ARRAY[NULL, NULL, NULL])
-		throw InvalidInputException("Map keys can not be NULL");
+		return true;
 	}
 
 	VectorData list_data;
-	auto count = ListVector::GetListSize(array);
-	args.data[0].Orrify(args.size(), list_data);
+	keys.Orrify(keys_size, list_data);
 	auto validity = FlatVector::Validity(entries);
-	if (!validity.CheckAllValid(count)) {
-		throw InvalidInputException("Map keys can not be NULL");
-	}
+	return (!validity.CheckAllValid(keys_size));
 }
 
 static void CheckForKeyUniqueness(DataChunk &args, ExpressionState &state) {
@@ -84,10 +78,6 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		}
 	}
 
-	CheckKeyValidity(args);
-
-	CheckForKeyUniqueness(args, state);
-
 	auto &child_entries = StructVector::GetEntries(result);
 	D_ASSERT(child_entries.size() == 2);
 	auto &key_vector = child_entries[0];
@@ -109,6 +99,12 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		result.Verify(args.size());
 		return;
 	}
+
+	if (AreKeysNull(args.data[0])) {
+		throw InvalidInputException("Map keys can not be NULL");
+	}
+
+	CheckForKeyUniqueness(args, state);
 
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
