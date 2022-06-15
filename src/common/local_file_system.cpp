@@ -864,15 +864,6 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
 	}
-	// first check if the path has a glob at all
-	if (!HasGlob(path)) {
-		// no glob: return only the file (if it exists or is a pipe)
-		vector<string> result;
-		if (FileExists(path) || IsPipe(path)) {
-			result.push_back(path);
-		}
-		return result;
-	}
 	// split up the path into separate chunks
 	vector<string> splits;
 	idx_t last_pos = 0;
@@ -907,6 +898,26 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			absolute_path = true;
 			splits[0] = home_directory;
 		}
+	}
+	// Check if the path has a glob at all
+	if (!HasGlob(path)) {
+		// no glob: return only the file (if it exists or is a pipe)
+		vector<string> result;
+		if (FileExists(path) || IsPipe(path)) {
+			result.push_back(path);
+		} else if (!absolute_path) {
+			char *search_path_env = getenv("DUCKDB_SEARCH_PATHS");
+			if (search_path_env != NULL) {
+				auto search_paths = StringUtil::Split(search_path_env, ',');
+				for (auto search_path : search_paths) {
+					auto joined_path = JoinPath(search_path, path);
+					if (FileExists(joined_path) || IsPipe(joined_path)) {
+						result.push_back(joined_path);
+					}
+				}
+			}
+		}
+		return result;
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
