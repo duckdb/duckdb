@@ -7,7 +7,6 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
-#include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
