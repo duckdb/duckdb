@@ -222,10 +222,15 @@ void RLESort::Sort() {
 		data_table.prev_end += row_group.count;
 		return;
 	}
-	//	if (row_group.HasInterleavedTransactions()) {
-	//		// Has interleaved tsx, he don't run our magic stuff
-	//		return;
-	//	}
+	// Check if there are any transient segments or if persistent segments have changes
+	for (idx_t column_idx : key_column_ids) {
+		if (row_group.columns[column_idx]->HasChanges(row_group.start)) {
+			// There were changes in the RowGroup - break the for loop and start the sort
+			break;
+		}
+		// None of the key columns had any changes, no need to sort again
+		return;
+	}
 
 	FilterKeyColumns();
 	InitializeScan();

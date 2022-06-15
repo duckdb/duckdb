@@ -392,6 +392,25 @@ void ColumnData::CleanPersistentSegments() {
 	}
 }
 
+// FIXME: Cleanup the old HasChanges() method in the ColumnDataCheckpointer
+bool ColumnData::HasChanges(idx_t row_group_start) {
+	for (auto segment = (ColumnSegment *)data.root_node.get(); segment;
+	     segment = (ColumnSegment *)segment->next.get()) {
+		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
+			// transient segment: always need to write to disk
+			return true;
+		} else {
+			// persistent segment; check if there were any updates or deletions in this segment
+			idx_t start_row_idx = segment->start - row_group_start;
+			idx_t end_row_idx = start_row_idx + segment->count;
+			if (updates && updates->HasUpdates(start_row_idx, end_row_idx)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
 	idx_t data_pointer_count = source.Read<idx_t>();

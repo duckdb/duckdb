@@ -111,6 +111,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
 	                                                     ColumnCheckpointInfo &checkpoint_info);
 
+	//! Check if the column had any changes
+	virtual bool HasChanges(idx_t row_group_start);
 	virtual void CleanPersistentSegments();
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
