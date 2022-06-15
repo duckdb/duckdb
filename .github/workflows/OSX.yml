@@ -106,8 +106,8 @@ jobs:
       shell: bash
       run: |
         python scripts/amalgamation.py
-        zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
-        zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+        zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
@@ -162,6 +162,8 @@ jobs:
           treat_warn_as_error: 0
           post_install: rm build/release/src/libduckdb*
           run_tests: 0
+          out_of_tree_ext: 1
+          static_link_build: 1
 
       - name: Deploy
         shell: bash

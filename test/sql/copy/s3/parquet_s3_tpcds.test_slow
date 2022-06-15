@@ -1,0 +1,77 @@
+# name: test/sql/copy/s3/parquet_s3_tpcds.test_slow
+# description: Test all tpcds queries on tpch sf0.01 over s3
+# group: [s3]
+
+require parquet
+
+require httpfs
+
+require tpcds
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+statement ok
+SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='s3.s3rver-endpoint.com:4923';SET s3_use_ssl=false;
+
+# answers are generated from postgres
+# hence check with NULLS LAST flag
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+statement ok
+CREATE SCHEMA tpcds;
+
+statement ok
+CALL dsdgen(sf=0.01, schema='tpcds');
+
+foreach tbl call_center catalog_page catalog_returns catalog_sales customer customer_demographics customer_address date_dim household_demographics inventory income_band item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site
+
+statement ok
+COPY tpcds.${tbl} TO 's3://test-bucket/tpcds-sf0_01/${tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');
+
+statement ok
+CREATE VIEW ${tbl} AS SELECT * FROM parquet_scan('s3://test-bucket/tpcds-sf0_01/${tbl}.parquet');
+
+endloop
+
+# too slow queries:
+# 64, 85
+
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0${i}.csv
+
+endloop
+
+loop i 10 64
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 65 85
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 86 99
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop

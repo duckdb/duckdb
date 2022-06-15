@@ -36,7 +36,7 @@ jobs:
         run: |
             cd tools/juliapkg
             julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
-            ./format_check.sh 
+            ./format_check.sh
 
   main_julia:
     name: Julia ${{ matrix.version }}

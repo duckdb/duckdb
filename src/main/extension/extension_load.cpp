@@ -39,7 +39,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	if (!fs.FileExists(filename)) {
 		throw IOException("File \"%s\" not found", filename);
 	}
-	auto lib_hdl = dlopen(filename.c_str(), RTLD_LAZY | RTLD_LOCAL);
+	auto lib_hdl = dlopen(filename.c_str(), RTLD_NOW | RTLD_LOCAL);
 	if (!lib_hdl) {
 		throw IOException("File \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
