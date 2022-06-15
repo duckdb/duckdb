@@ -326,6 +326,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// If there is a foreign key constraint, resolve primary key column's index from primary key column's name
 		auto &create_info = (CreateTableInfo &)*stmt.info;
 		auto &catalog = Catalog::GetCatalog(context);
+		// We first check if there are any user types, if yes we check to which custom types they refer.
+		unordered_set<SchemaCatalogEntry *> fk_schemas;
 		for (idx_t i = 0; i < create_info.constraints.size(); i++) {
 			auto &cond = create_info.constraints[i];
 			if (cond->type != ConstraintType::FOREIGN_KEY) {
@@ -342,6 +344,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			} else {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
+				fk_schemas.insert(pk_table_entry_ptr->schema);
 				D_ASSERT(fk.info.pk_keys.empty());
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->constraints, fk);
 				for (auto &keyname : fk.pk_columns) {
@@ -366,9 +369,14 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (AnyConstraintReferencesGeneratedColumn(create_info)) {
 			throw BinderException("Constraints on generated columns are not supported yet");
 		}
-		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
+
+		for (auto &fk_schema : fk_schemas) {
+			if (fk_schema != bound_info->schema) {
+				throw BinderException("Creating foreign keys across different schemas is not supported");
+			}
+		}
 
 		// create the logical operator
 		auto &schema = bound_info->schema;
