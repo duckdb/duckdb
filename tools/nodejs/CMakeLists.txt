@@ -14,6 +14,11 @@ find_path(
     nodejs
   PATHS /usr/include /usr/local/include)
 
+find_path(
+  NAPI_INCLUDE_DIR
+  NAMES napi.h
+  PATHS ${CMAKE_CURRENT_SOURCE_DIR}/node_modules/node-addon-api)
+
 if(NODE_ROOT_DIR)
   macro(add_node_include_dir DIR)
     if(IS_DIRECTORY ${DIR} AND NOT ${DIR} STREQUAL "/usr/include")
@@ -27,6 +32,7 @@ if(NODE_ROOT_DIR)
   add_node_include_dir(${NODE_ROOT_DIR}/include/node)
   add_node_include_dir(${NODE_ROOT_DIR}/include/src)
   add_node_include_dir(${NODE_ROOT_DIR}/src)
+  add_node_include_dir(${NAPI_INCLUDE_DIR})
 else()
   unset(NODE_INCLUDE_DIRS)
   message(ERROR "Failed to find node headers")
@@ -38,7 +44,6 @@ endif()
 message(STATUS "NODE_INCLUDE_DIRS=${NODE_INCLUDE_DIRS}")
 include_directories(src)
 include_directories(${NODE_INCLUDE_DIRS})
-include_directories(./node_modules/node-addon-api/)
 
 # ----------------------------------------------------
 # Build library
