@@ -125,9 +125,9 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	uint32_t string_length;
 	if ((idx_t)row_id == 0) {
 		// edge case where this is the first string in the dict
-		string_length =  std::abs(dict_offset);
+		string_length = std::abs(dict_offset);
 	} else {
-		string_length =  std::abs(dict_offset) -  std::abs(base_data[row_id - 1]);
+		string_length = std::abs(dict_offset) - std::abs(base_data[row_id - 1]);
 	}
 	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, string_length);
 }
