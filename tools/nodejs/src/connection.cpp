@@ -92,7 +92,13 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		descr.Set("rows", jsargs->rows);
 		auto ret = Napi::Object::New(env);
 		ret.Set("sqlType", jsargs->result->GetType().ToString());
-		ret.Set("physicalType", TypeIdToString(jsargs->result->GetType().InternalType()));
+		auto ret_type = jsargs->result->GetType().InternalType();
+#if NAPI_VERSION <= 5
+        if (ret_type == duckdb::PhysicalType::INT64 || ret_type == duckdb::PhysicalType::UINT64) {
+			ret_type = duckdb::PhysicalType::DOUBLE;
+		}
+#endif
+		ret.Set("physicalType", TypeIdToString(ret_type));
 		descr.Set("ret", ret);
 
 		// actually call the UDF, or rather its vectorized wrapper from duckdb.js/Connection.prototype.register wrapper
@@ -118,18 +124,56 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		}
 
 		switch (jsargs->result->GetType().id()) {
-		case duckdb::LogicalTypeId::DOUBLE: {
-			auto data = ret.Get("data").As<Napi::Float64Array>();
-			auto out = duckdb::FlatVector::GetData<double>(*jsargs->result);
-			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
+		case duckdb::LogicalTypeId::TINYINT: {
+			auto data = ret.Get("data").As<Napi::Int8Array>();
+			auto out = duckdb::FlatVector::GetData<int8_t>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(ret_type));
+			break;
+		}
+		case duckdb::LogicalTypeId::SMALLINT: {
+			auto data = ret.Get("data").As<Napi::Int16Array>();
+			auto out = duckdb::FlatVector::GetData<int16_t>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(ret_type));
 			break;
 		}
 		case duckdb::LogicalTypeId::INTEGER: {
-			auto data = ret.Get("data").As<Napi::Uint32Array>();
-			auto out = duckdb::FlatVector::GetData<uint32_t>(*jsargs->result);
-			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(jsargs->result->GetType().InternalType()));
+			auto data = ret.Get("data").As<Napi::Int32Array>();
+			auto out = duckdb::FlatVector::GetData<int32_t>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(ret_type));
 			break;
 		}
+		case duckdb::LogicalTypeId::DOUBLE: {
+			auto data = ret.Get("data").As<Napi::Float64Array>();
+			auto out = duckdb::FlatVector::GetData<double>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(ret_type));
+			break;
+		}
+		case duckdb::LogicalTypeId::TIME:
+		case duckdb::LogicalTypeId::TIMESTAMP:
+		case duckdb::LogicalTypeId::TIMESTAMP_MS:
+		case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+		case duckdb::LogicalTypeId::TIMESTAMP_NS:
+		case duckdb::LogicalTypeId::BIGINT: {
+#if NAPI_VERSION > 5
+			auto data = ret.Get("data").As<Napi::BigInt64Array>();
+#else
+			auto data = ret.Get("data").As<Napi::Float64Array>();
+#endif
+			auto out = duckdb::FlatVector::GetData<int64_t>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(ret_type));
+			break;
+		}
+		case duckdb::LogicalTypeId::UBIGINT: {
+#if NAPI_VERSION > 5
+			auto data = ret.Get("data").As<Napi::BigUint64Array>();
+#else
+			auto data = ret.Get("data").As<Napi::Float64Array>();
+#endif
+			auto out = duckdb::FlatVector::GetData<uint64_t>(*jsargs->result);
+			memcpy(out, data.Data(), jsargs->rows * duckdb::GetTypeIdSize(ret_type));
+			break;
+		}
+		case duckdb::LogicalTypeId::BLOB:
 		case duckdb::LogicalTypeId::VARCHAR: {
 			auto data = ret.Get("data").As<Napi::Array>();
 			auto out = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);

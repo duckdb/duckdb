@@ -1,4 +1,3 @@
-
 #include "duckdb.hpp"
 #include "duckdb_node.hpp"
 #include "napi.h"
@@ -64,6 +63,28 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 
 			// Create data buffer
 			switch (vec_type.id()) {
+			case duckdb::LogicalTypeId::TINYINT: {
+				if (with_data) {
+					auto array = Napi::Int8Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<int8_t>(*vec);
+					for (size_t i = 0; i < chunk.size(); ++i) {
+						array[i] = data[i];
+					}
+					desc.Set("data", array);
+				}
+				break;
+			}
+			case duckdb::LogicalTypeId::SMALLINT: {
+				if (with_data) {
+					auto array = Napi::Int16Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<int16_t>(*vec);
+					for (size_t i = 0; i < chunk.size(); ++i) {
+						array[i] = data[i];
+					}
+					desc.Set("data", array);
+				}
+				break;
+			}
 			case duckdb::LogicalTypeId::INTEGER: {
 				if (with_data) {
 					auto array = Napi::Int32Array::New(env, chunk.size());
@@ -79,6 +100,44 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 				if (with_data) {
 					auto array = Napi::Float64Array::New(env, chunk.size());
 					auto data = duckdb::FlatVector::GetData<double>(*vec);
+					for (size_t i = 0; i < chunk.size(); ++i) {
+						array[i] = data[i];
+					}
+					desc.Set("data", array);
+				}
+				break;
+			}
+			case duckdb::LogicalTypeId::BIGINT:
+			case duckdb::LogicalTypeId::TIME:
+			case duckdb::LogicalTypeId::TIME_TZ:
+			case duckdb::LogicalTypeId::TIMESTAMP_MS:
+			case duckdb::LogicalTypeId::TIMESTAMP_NS:
+			case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+			case duckdb::LogicalTypeId::TIMESTAMP: {
+				if (with_data) {
+#if NAPI_VERSION > 5
+					auto array = Napi::BigInt64Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<int64_t>(*vec);
+#else
+					auto array = Napi::Float64Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<int64_t>(*vec);
+#endif
+					for (size_t i = 0; i < chunk.size(); ++i) {
+						array[i] = data[i];
+					}
+					desc.Set("data", array);
+				}
+				break;
+			}
+			case duckdb::LogicalTypeId::UBIGINT: {
+				if (with_data) {
+#if NAPI_VERSION > 5
+					auto array = Napi::BigUint64Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<uint64_t>(*vec);
+#else
+					auto array = Napi::Float64Array::New(env, chunk.size());
+					auto data = duckdb::FlatVector::GetData<int64_t>(*vec);
+#endif
 					for (size_t i = 0; i < chunk.size(); ++i) {
 						array[i] = data[i];
 					}

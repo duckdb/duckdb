@@ -90,13 +90,28 @@ Connection.prototype.register = function(name, return_type, fun) {
             // Return type
             desc.ret.validity = new Uint8Array(desc.rows);
             switch (desc.ret.physicalType) {
+                case 'INT8':
+                    desc.ret.data = new Int8Array(desc.rows);
+                    break;
+                case 'INT16':
+                    desc.ret.data = new Int16Array(desc.rows);
+                    break;
                 case 'INT32':
-                case 'INTEGER':
-                    desc.ret.data = new Uint32Array(desc.rows);
+                    desc.ret.data = new Int32Array(desc.rows);
                     break;
                 case 'DOUBLE':
                     desc.ret.data = new Float64Array(desc.rows);
                     break;
+                case 'DATE64':
+                case 'TIME64':
+                case 'TIMESTAMP':
+                case 'INT64':
+                    desc.ret.data = new BigInt64Array(desc.rows);
+                    break;
+                case 'UINT64':
+                    desc.ret.data = new BigUint64Array(desc.rows);
+                    break;
+                case 'BLOB':
                 case 'VARCHAR':
                     desc.ret.data = new Array(desc.rows);
                     break;
