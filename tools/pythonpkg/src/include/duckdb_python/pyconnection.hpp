@@ -98,6 +98,8 @@ public:
 
 	unordered_set<string> GetTableNames(const string &query);
 
+	void CheckSameThread(const bool check_thread);
+
 	DuckDBPyConnection *UnregisterPythonObject(const string &name);
 
 	DuckDBPyConnection *Begin();

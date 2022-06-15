@@ -153,6 +153,7 @@ public:
 	static ParsedS3Url S3UrlParse(string url, const S3AuthParams &params);
 
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
+	static std::string UrlDecode(std::string input);
 
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer
