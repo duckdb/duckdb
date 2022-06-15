@@ -94,7 +94,7 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		ret.Set("sqlType", jsargs->result->GetType().ToString());
 		auto ret_type = jsargs->result->GetType().InternalType();
 #if NAPI_VERSION <= 5
-        if (ret_type == duckdb::PhysicalType::INT64 || ret_type == duckdb::PhysicalType::UINT64) {
+		if (ret_type == duckdb::PhysicalType::INT64 || ret_type == duckdb::PhysicalType::UINT64) {
 			ret_type = duckdb::PhysicalType::DOUBLE;
 		}
 #endif
