@@ -493,10 +493,11 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	if (bound_function.null_handling == NULL_IN_NULL_OUT) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
-				// if any of the arguments of a NULL_IN_NULL_OUT function is NULL, we want to return NULL
-				// we can't return a constant, else we get errors with prepared statements, so we do this instead
-				return make_unique<BoundFunctionExpression>(LogicalType::SQLNULL, bound_function, move(children),
-				                                            nullptr, is_operator);
+				// mark the result, telling the binder that it can be replaced with a NULL
+				auto result = make_unique<BoundFunctionExpression>(LogicalType::SQLNULL, bound_function, move(children),
+				                                                   nullptr, is_operator);
+				result->alias = ExpressionBinder::REPLACE_WITH_NULL;
+				return result;
 			}
 		}
 	}

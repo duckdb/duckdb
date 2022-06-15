@@ -2,11 +2,11 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -62,6 +62,20 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
+	} else if (result->alias == REPLACE_WITH_NULL) {
+		// BindScalarFunction marked the function, so we replace the function with a constant NULL
+		// but first, we remove any parameters contained in the FunctionExpression
+		auto &bound_function_expr = (BoundFunctionExpression &)*result;
+		auto &params = *binder.parameters;
+		for (auto &child : bound_function_expr.children) {
+			for (auto param_it = params.begin(); param_it != params.end(); param_it++) {
+				if (child->Equals(*param_it)) {
+					params.erase(param_it);
+					break;
+				}
+			}
+		}
+		return BindResult(make_unique<BoundConstantExpression>(Value()));
 	}
 	return BindResult(move(result));
 }
