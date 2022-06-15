@@ -115,9 +115,8 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                   FunctionData *bind_data,
-                                                   vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
 	if (!child_stats[0]) {
 		return nullptr;
 	}

@@ -8,6 +8,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include <cmath>
 #include <errno.h>
 
@@ -41,7 +42,6 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 //===--------------------------------------------------------------------===//
 // nextafter
 //===--------------------------------------------------------------------===//
-
 struct NextAfterOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
@@ -72,6 +72,71 @@ void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
+static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	D_ASSERT(child_stats.size() == 1);
+	// can only propagate stats if the children have stats
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &lstats = (NumericStatistics &)*child_stats[0];
+	Value new_min, new_max;
+	bool potential_overflow = true;
+	if (!lstats.min.IsNull() && !lstats.max.IsNull()) {
+		switch (expr.return_type.InternalType()) {
+		case PhysicalType::INT8:
+			potential_overflow = lstats.min.GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
+			break;
+		case PhysicalType::INT16:
+			potential_overflow = lstats.min.GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
+			break;
+		case PhysicalType::INT32:
+			potential_overflow = lstats.min.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
+			break;
+		case PhysicalType::INT64:
+			potential_overflow = lstats.min.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
+			break;
+		default:
+			return nullptr;
+		}
+	}
+	if (potential_overflow) {
+		new_min = Value(expr.return_type);
+		new_max = Value(expr.return_type);
+	} else {
+		// no potential overflow
+
+		// compute stats
+		auto current_min = lstats.min.GetValue<int64_t>();
+		auto current_max = lstats.max.GetValue<int64_t>();
+
+		int64_t min_val, max_val;
+
+		if (current_min < 0 && current_max < 0) {
+			// if both min and max are below zero, then min=abs(cur_max) and max=abs(cur_min)
+			min_val = AbsValue(current_max);
+			max_val = AbsValue(current_min);
+		} else if (current_min < 0) {
+			D_ASSERT(current_max >= 0);
+			// if min is below zero and max is above 0, then min=0 and max=max(cur_max, abs(cur_min))
+			min_val = 0;
+			max_val = MaxValue(AbsValue(current_min), current_max);
+		} else {
+			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
+			*input.expr_ptr = move(input.expr.children[0]);
+			return move(child_stats[0]);
+		}
+		new_min = Value::Numeric(expr.return_type, min_val);
+		new_max = Value::Numeric(expr.return_type, max_val);
+		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
+	}
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
+	stats->validity_stats = lstats.validity_stats->Copy();
+	return move(stats);
+}
+
 template <class OP>
 unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
@@ -98,10 +163,28 @@ unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFuncti
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
 	for (auto &type : LogicalType::Numeric()) {
-		if (type.id() == LogicalTypeId::DECIMAL) {
+		switch (type.id()) {
+		case LogicalTypeId::DECIMAL:
 			abs.AddFunction(ScalarFunction({type}, type, nullptr, false, false, DecimalUnaryOpBind<AbsOperator>));
-		} else {
+			break;
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT: {
+			ScalarFunction func({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
+			func.statistics = PropagateAbsStats;
+			abs.AddFunction(func);
+			break;
+		}
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+			break;
+		default:
 			abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
+			break;
 		}
 	}
 	set.AddFunction(abs);

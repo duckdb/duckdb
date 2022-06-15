@@ -164,6 +164,7 @@ jobs:
           run_tests: 0
           out_of_tree_ext: 1
           substrait: 1
+          static_link_build: 1
 
       - name: Deploy
         shell: bash
