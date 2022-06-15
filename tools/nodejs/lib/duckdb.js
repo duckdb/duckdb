@@ -23,24 +23,6 @@ Connection.prototype.each = function(sql) {
     return statement.each.apply(statement, arguments);
 }
 
-function getTypeSize(ptype) {
-    switch (ptype) {
-        case 'UINT8':
-        case 'INT8':
-            return 1;
-        case 'INT32':
-        case 'FLOAT':
-            return 4;
-        case 'INT64':
-        case 'UINT64':
-        case 'DOUBLE':
-        case 'VARCHAR':
-            return 8;
-        default:
-            return 0;
-    }
-}
-
 // this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
 Connection.prototype.register = function(name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
@@ -50,7 +32,7 @@ Connection.prototype.register = function(name, return_type, fun) {
             const buildResolver = (arg) => {
                 let validity = arg.validity || null;
                 switch (arg.physicalType) {
-                    case 'STRUCT<?>': {
+                    case 'STRUCT': {
                         const tmp = {};
                         const children = [];
                         for (let j = 0; j < (arg.children.length || 0); ++j) {

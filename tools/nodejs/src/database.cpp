@@ -77,9 +77,6 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 		mode = info[pos++].As<Napi::Number>().Int32Value();
 	}
 
-	// TODO check read only flag
-	(void)mode;
-
 	Napi::Function callback;
 	if (info.Length() >= pos && info[pos].IsFunction()) {
 		callback = info[pos++].As<Napi::Function>();
