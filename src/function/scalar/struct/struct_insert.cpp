@@ -83,7 +83,8 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 	auto new_struct_stats = make_unique<StructStatistics>(expr.return_type);
 
 	for (idx_t i = 0; i < existing_struct_stats.child_stats.size(); i++) {
-		new_struct_stats->child_stats[i] = existing_struct_stats.child_stats[i] ? existing_struct_stats.child_stats[i]->Copy() : nullptr;
+		new_struct_stats->child_stats[i] =
+		    existing_struct_stats.child_stats[i] ? existing_struct_stats.child_stats[i]->Copy() : nullptr;
 	}
 
 	auto offset = new_struct_stats->child_stats.size() - child_stats.size();
