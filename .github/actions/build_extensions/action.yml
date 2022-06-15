@@ -95,7 +95,7 @@ runs:
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree
-        python scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
+        python scripts/build_out_of_tree_extensions.py
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
