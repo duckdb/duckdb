@@ -139,8 +139,10 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	{
 		// we first release the gil and then acquire the connection lock
 		unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-		py::gil_scoped_release release;
-		lock.lock();
+		{
+			py::gil_scoped_release release;
+			lock.lock();
+		}
 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
