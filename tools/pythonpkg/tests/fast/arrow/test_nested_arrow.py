@@ -124,6 +124,22 @@ class TestArrowNested(object):
         compare_results("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)")
         compare_results("SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5) as lst_tbl) as T")
 
+    def test_map_arrow_to_duckdb(self, duckdb_cursor):
+        map_type = pa.map_(pa.int32(), pa.int32())
+        values = [
+            [
+                (3, 12),
+                (3, 21)
+            ],
+            [
+                (5, 42)
+            ]
+        ]
+        arrow_table = pa.table(
+            {'detail': pa.array(values, map_type)}
+        )
+        with pytest.raises(Exception, match="Arrow map contains duplicate keys, which is not supported by DuckDB map type"):
+            rel = duckdb.from_arrow(arrow_table).fetchall()
     
     def test_map_arrow_to_pandas(self,duckdb_cursor):
         if not can_run:

@@ -615,8 +615,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		}
 		// TODO remove this when arrow ensures keys are unique
 		if (!AreKeysUnique(*child_entries[0], size)) {
-			throw std::runtime_error(
-			    "Arrow map contains duplicate keys, which is not supported by the DuckDB map format");
+			throw std::runtime_error("Arrow map contains duplicate keys, which is not supported by DuckDB map type");
 		}
 		break;
 	}
