@@ -69,7 +69,7 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 	// create an adaptive radix tree around the expressions
 	if (indexes) {
 		auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db, indexes->first,
-		                       indexes->second);
+		                            indexes->second);
 		storage->info->indexes.AddIndex(move(art));
 	} else {
 		auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db);
