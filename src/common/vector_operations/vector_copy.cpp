@@ -71,7 +71,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		return;
 	}
 
-	// Allow copying of a single value to constant vecto
+	// Allow copying of a single value to constant vectors
 	const auto target_vector_type = target.GetVectorType();
 	if (copy_count == 1 && target_vector_type == VectorType::CONSTANT_VECTOR) {
 		target_offset = 0;
