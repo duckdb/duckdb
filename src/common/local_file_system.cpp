@@ -912,7 +912,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			if (opener->TryGetCurrentSetting("file_search_path", value)) {
 				auto search_paths_str = value.ToString();
 				std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
-				for (auto search_path : search_paths) {
+				for (const auto &search_path : search_paths) {
 					auto joined_path = JoinPath(search_path, path);
 					if (FileExists(joined_path) || IsPipe(joined_path)) {
 						result.push_back(joined_path);
