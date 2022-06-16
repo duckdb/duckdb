@@ -3,6 +3,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -611,6 +612,11 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
 			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
 			                     arrow_convert_data, col_idx, arrow_convert_idx, offsets, &struct_validity_mask);
+		}
+		// TODO remove this when arrow ensures keys are unique
+		if (!AreKeysUnique(*child_entries[0], size)) {
+			throw std::runtime_error(
+			    "Arrow map contains duplicate keys, which is not supported by the DuckDB map format");
 		}
 		break;
 	}
