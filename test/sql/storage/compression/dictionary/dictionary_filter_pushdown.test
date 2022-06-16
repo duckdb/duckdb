@@ -9,19 +9,19 @@ statement ok
 PRAGMA force_compression = 'dictionary'
 
 statement ok
-CREATE TABLE test (id VARCHAR, col VARCHAR)
+CREATE TABLE test (id INT, col VARCHAR)
 
 statement ok
-INSERT INTO test SELECT i::VARCHAR id, concat('BLEEPBLOOP-', (i%10)::VARCHAR) col FROM range(10000) tbl(i)
+INSERT INTO test SELECT i::INT id, concat('BLEEPBLOOP-', (i%10)::VARCHAR) col FROM range(10000) tbl(i)
 
 statement ok
 CHECKPOINT
-
-# filter on the dictionary column
-query III
-SELECT MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 'BLEEPBLOOP-5'
-----
-BLEEPBLOOP-5	BLEEPBLOOP-9	5000
+#
+## filter on the dictionary column
+#query III
+#SELECT MIN(col), MAX(col), COUNT(*) FROM test WHERE col >= 'BLEEPBLOOP-5'
+#----
+#BLEEPBLOOP-5	BLEEPBLOOP-9	5000
 
 # filter on non-dictionary column
 query IIIII

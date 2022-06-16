@@ -563,6 +563,8 @@ string VectorTypeToString(VectorType type) {
 	switch (type) {
 	case VectorType::FLAT_VECTOR:
 		return "FLAT";
+	case VectorType::FSST_VECTOR:
+		return "FSST";
 	case VectorType::SEQUENCE_VECTOR:
 		return "SEQUENCE";
 	case VectorType::DICTIONARY_VECTOR:
@@ -582,6 +584,29 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::DICTIONARY_VECTOR:
 		for (idx_t i = 0; i < count; i++) {
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
+		}
+		break;
+	case VectorType::FSST_VECTOR: {
+			D_ASSERT(GetVectorType() == VectorType::FSST_VECTOR);
+			D_ASSERT(GetType() == LogicalType::VARCHAR);
+
+			for (idx_t i = 0; i < count; i++) {
+				string_t compressed_string = ((string_t *)data)[i];
+				unsigned char decompress_buffer[1000]; // variable size
+				auto decompressed_string_size =
+					fsst_decompress(FSSTVector::GetDecoder(
+									const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
+									compressed_string.GetSize(),       /* IN: byte-length of compressed string. */
+									(unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
+									1000,                 /* IN: byte-length of output buffer. */
+									&decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
+					);
+
+				if (decompressed_string_size == 1000) {
+					throw InternalException("DONT THINK THIS LL WORK");
+				}
+				retval += string((const char*)decompress_buffer, decompressed_string_size) + (i == count - 1 ? "" : ", ");
+			}
 		}
 		break;
 	case VectorType::CONSTANT_VECTOR:
@@ -646,7 +671,16 @@ void Vector::Normalify(idx_t count) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
 		break;
-	case VectorType::FSST_VECTOR:
+	case VectorType::FSST_VECTOR: {
+		D_ASSERT(GetType() == LogicalType::VARCHAR);
+		// create vector to decompress into
+		Vector other(GetType(), count);
+		// now copy the data of this vector to the other vector, decompressing the strings in the process
+		VectorOperations::Copy(*this, other, count, 0, 0);
+		// create a reference to the data in the other vector
+		this->Reference(other);
+		break;
+	}
 	case VectorType::DICTIONARY_VECTOR: {
 		// create a new flat vector of this type
 		Vector other(GetType(), count);
@@ -758,7 +792,7 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 		break;
 	case VectorType::FSST_VECTOR: {
 		// create a new flat vector of this type
-		Vector other(GetType(), count);
+		Vector other(GetType());
 		// now copy the data of this vector to the other vector, removing the selection vector in the process
 		VectorOperations::Copy(*this, other, sel, count, 0, 0);
 		// create a reference to the data in the other vector

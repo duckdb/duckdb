@@ -281,16 +281,16 @@ struct FlatVector {
 		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR || vector.GetVectorType() == VectorType::FSST_VECTOR);
 		return vector.validity;
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR  || vector.GetVectorType() == VectorType::FSST_VECTOR);
 		vector.validity.Initialize(new_validity);
 	}
 	static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR  || vector.GetVectorType() == VectorType::FSST_VECTOR);
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();

@@ -60,6 +60,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			finished = true;
 			break;
 		case VectorType::FSST_VECTOR:
+			finished = true;
 			break;
 		case VectorType::FLAT_VECTOR:
 			finished = true;
@@ -132,6 +133,10 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				    1000,              							/* IN: byte-length of output buffer. */
 				    &decompress_buffer[0]    					/* OUT: memory buffer to put the decompressed string in. */
 				);
+
+				if (decompressed_string_size == 1000) {
+					throw InternalException("DONT THINK THIS LL WORK");
+				}
 
 				auto str = FSSTVector::AddCompressedString(target, (const char*)decompress_buffer, decompressed_string_size);
 				tdata[target_idx] = str;
