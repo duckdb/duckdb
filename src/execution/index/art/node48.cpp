@@ -56,7 +56,8 @@ idx_t Node48::GetNextPos(idx_t pos) {
 
 Node *Node48::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(child_index[pos] != Node::EMPTY_MARKER);
-	return Node::GetChildSwizzled(art, (uintptr_t)children[child_index[pos]]);
+	children[child_index[pos]] = Node::GetChildSwizzled(art, (uintptr_t)children[child_index[pos]]);
+	return children[child_index[pos]];
 }
 
 idx_t Node48::GetMin() {

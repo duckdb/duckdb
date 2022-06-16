@@ -57,7 +57,8 @@ idx_t Node16::GetNextPos(idx_t pos) {
 
 Node *Node16::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	return Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
+	children[pos] = Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
+	return children[pos];
 }
 
 idx_t Node16::GetMin() {

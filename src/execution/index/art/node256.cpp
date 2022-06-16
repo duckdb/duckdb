@@ -63,7 +63,8 @@ idx_t Node256::GetNextPos(idx_t pos) {
 }
 
 Node *Node256::GetChild(ART &art, idx_t pos) {
-	return Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
+	children[pos] = Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
+	return children[pos];
 }
 
 void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {

@@ -63,7 +63,8 @@ idx_t Node4::GetNextPos(idx_t pos) {
 
 Node *Node4::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	return Node::GetChildSwizzled(art, (uintptr_t)children_ptrs[pos]);
+	children_ptrs[pos] = Node::GetChildSwizzled(art, (uintptr_t)children_ptrs[pos]);
+	return children_ptrs[pos];
 }
 
 void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
