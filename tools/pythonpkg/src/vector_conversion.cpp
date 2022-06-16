@@ -109,6 +109,32 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 	return result;
 }
 
+template <typename T>
+bool	TryCast(const py::object stuf, T& value){
+    try{
+        value = stuf.cast<T>();
+        return true;
+    }catch(py::cast_error){
+		return false;
+    }
+}
+
+template<typename T>
+T	Cast(const py::object obj) {
+	return obj.cast<T>();
+}
+
+void ScanPandasObject(PandasColumnBindData& bind_data, py::handle object, idx_t count, idx_t offset, Vector& out) {
+	auto& type = out.GetType();
+	switch (type.id()) {
+		case LogicalTypeId::INTEGER: {
+			if (py::isinstance<py::int_>(object)) {
+				auto val = py::cast<int32_t>(object);
+			}
+		}
+	}
+}
+
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
