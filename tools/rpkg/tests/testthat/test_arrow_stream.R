@@ -1,9 +1,9 @@
-library("testthat")
-library("DBI")
 skip_on_cran()
 skip_on_os("windows")
 skip_if_not_installed("arrow", "5.0.0")
 
+library("testthat")
+library("DBI")
 library("arrow", warn.conflicts = FALSE)
 library("dplyr", warn.conflicts = FALSE)
 library("duckdb")

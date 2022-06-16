@@ -24,8 +24,9 @@ class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
+class StandardEntry;
 
-enum class BindingType { BASE, TABLE, MACRO };
+enum class BindingType { BASE, TABLE, MACRO, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
@@ -51,7 +52,17 @@ public:
 	bool HasMatchingBinding(const string &column_name);
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
-	virtual TableCatalogEntry *GetTableEntry();
+	virtual StandardEntry *GetStandardEntry();
+};
+
+struct EntryBinding : public Binding {
+public:
+	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
+	             StandardEntry &entry);
+	StandardEntry &entry;
+
+public:
+	StandardEntry *GetStandardEntry() override;
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
@@ -66,7 +77,7 @@ struct TableBinding : public Binding {
 public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	TableCatalogEntry *GetTableEntry() override;
+	StandardEntry *GetStandardEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;
 };
 

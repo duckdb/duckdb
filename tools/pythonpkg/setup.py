@@ -57,10 +57,10 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel', 'substrait']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel', 'substrait']
+    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel']
 
 unity_build = 0
 if 'DUCKDB_BUILD_UNITY' in os.environ:

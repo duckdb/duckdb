@@ -468,15 +468,15 @@ void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 	mapping[entry->name]->timestamp = timestamp;
 }
 
-void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
-	CatalogEntry *enum_type_catalog = (CatalogEntry *)EnumType::GetCatalog(column.Type());
-	if (enum_type_catalog) {
+void CatalogSet::AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
+	CatalogEntry *user_type_catalog = (CatalogEntry *)LogicalType::GetCatalog(column.Type());
+	if (user_type_catalog) {
 		if (remove) {
-			catalog.dependency_manager->dependents_map[enum_type_catalog].erase(entry->parent);
-			catalog.dependency_manager->dependencies_map[entry->parent].erase(enum_type_catalog);
+			catalog.dependency_manager->dependents_map[user_type_catalog].erase(entry->parent);
+			catalog.dependency_manager->dependencies_map[entry->parent].erase(user_type_catalog);
 		} else {
-			catalog.dependency_manager->dependents_map[enum_type_catalog].insert(entry);
-			catalog.dependency_manager->dependencies_map[entry].insert(enum_type_catalog);
+			catalog.dependency_manager->dependents_map[user_type_catalog].insert(entry);
+			catalog.dependency_manager->dependencies_map[entry].insert(user_type_catalog);
 		}
 	}
 }
@@ -487,12 +487,24 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 	if (column.Type().id() == LogicalTypeId::ENUM) {
 		for (auto &old_column : table->columns) {
 			if (old_column.Name() == column.Name() && old_column.Type().id() != LogicalTypeId::ENUM) {
-				AdjustEnumDependency(entry, column, remove);
+				AdjustUserDependency(entry, column, remove);
 				found = true;
 			}
 		}
 		if (!found) {
-			AdjustEnumDependency(entry, column, remove);
+			AdjustUserDependency(entry, column, remove);
+		}
+	} else if (!(column.Type().GetAlias().empty())) {
+		auto alias = column.Type().GetAlias();
+		for (auto &old_column : table->columns) {
+			auto old_alias = old_column.Type().GetAlias();
+			if (old_column.Name() == column.Name() && old_alias != alias) {
+				AdjustUserDependency(entry, column, remove);
+				found = true;
+			}
+		}
+		if (!found) {
+			AdjustUserDependency(entry, column, remove);
 		}
 	}
 }

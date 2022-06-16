@@ -37,9 +37,9 @@ struct InstrAsciiOperator {
 	}
 };
 
-static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                      FunctionData *bind_data,
-                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> InStrPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {

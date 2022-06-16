@@ -442,6 +442,10 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 }
 
 string LogicalType::ToString() const {
+	auto alias = GetAlias();
+	if (!alias.empty()) {
+		return alias;
+	}
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
 		if (!type_info_) {
@@ -710,32 +714,94 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 enum class ExtraTypeInfoType : uint8_t {
 	INVALID_TYPE_INFO = 0,
-	DECIMAL_TYPE_INFO = 1,
-	STRING_TYPE_INFO = 2,
-	LIST_TYPE_INFO = 3,
-	STRUCT_TYPE_INFO = 4,
-	ENUM_TYPE_INFO = 5,
-	USER_TYPE_INFO = 6,
-	AGGREGATE_STATE_TYPE_INFO = 7
+	GENERIC_TYPE_INFO = 1,
+	DECIMAL_TYPE_INFO = 2,
+	STRING_TYPE_INFO = 3,
+	LIST_TYPE_INFO = 4,
+	STRUCT_TYPE_INFO = 5,
+	ENUM_TYPE_INFO = 6,
+	USER_TYPE_INFO = 7,
+	AGGREGATE_STATE_TYPE_INFO = 8
 };
 
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
 	}
+	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(move(alias)) {
+	}
 	virtual ~ExtraTypeInfo() {
 	}
 
 	ExtraTypeInfoType type;
+	string alias;
+	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
-	virtual bool Equals(ExtraTypeInfo *other) const = 0;
+	bool Equals(ExtraTypeInfo *other_p) const {
+		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
+		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+			if (!other_p) {
+				if (!alias.empty()) {
+					return false;
+				}
+				return true;
+			}
+			if (alias != other_p->alias) {
+				return false;
+			}
+			return true;
+		}
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (ExtraTypeInfo &)*other_p;
+		return alias == other.alias && EqualsInternal(other_p);
+	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
+	virtual void Serialize(FieldWriter &writer) const {};
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+
+protected:
+	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
+		// Do nothing
+		return true;
+	}
 };
+
+void LogicalType::SetAlias(string &alias) {
+	if (!type_info_) {
+		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, alias);
+	} else {
+		type_info_->alias = alias;
+	}
+}
+
+string LogicalType::GetAlias() const {
+	if (!type_info_) {
+		return string();
+	} else {
+		return type_info_->alias;
+	}
+}
+
+void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
+	auto info = type.AuxInfo();
+	if (!info) {
+		return nullptr;
+	}
+	return ((ExtraTypeInfo &)*info).catalog_entry;
+}
 
 //===--------------------------------------------------------------------===//
 // Decimal Type
@@ -749,17 +815,6 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 	uint8_t scale;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (DecimalTypeInfo &)*other_p;
-		return width == other.width && scale == other.scale;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField<uint8_t>(width);
 		writer.WriteField<uint8_t>(scale);
@@ -769,6 +824,12 @@ public:
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (DecimalTypeInfo &)*other_p;
+		return width == other.width && scale == other.scale;
 	}
 };
 
@@ -802,11 +863,6 @@ struct StringTypeInfo : public ExtraTypeInfo {
 	string collation;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		// collation info has no impact on equality
-		return true;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteString(collation);
 	}
@@ -814,6 +870,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto collation = reader.ReadRequired<string>();
 		return make_shared<StringTypeInfo>(move(collation));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		// collation info has no impact on equality
+		return true;
 	}
 };
 
@@ -823,6 +885,9 @@ string StringType::GetCollation(const LogicalType &type) {
 	}
 	auto info = type.AuxInfo();
 	if (!info) {
+		return string();
+	}
+	if (info->type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 		return string();
 	}
 	return ((StringTypeInfo &)*info).collation;
@@ -844,17 +909,6 @@ struct ListTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (ListTypeInfo &)*other_p;
-		return child_type == other.child_type;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteSerializable(child_type);
 	}
@@ -862,6 +916,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_shared<ListTypeInfo>(move(child_type));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (ListTypeInfo &)*other_p;
+		return child_type == other.child_type;
 	}
 };
 
@@ -888,17 +948,6 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	child_list_t<LogicalType> child_types;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (StructTypeInfo &)*other_p;
-		return child_types == other.child_types;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField<uint32_t>(child_types.size());
 		auto &serializer = writer.GetSerializer();
@@ -919,6 +968,12 @@ public:
 		}
 		return make_shared<StructTypeInfo>(move(child_list));
 	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (StructTypeInfo &)*other_p;
+		return child_types == other.child_types;
+	}
 };
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
@@ -929,19 +984,6 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	aggregate_state_t state_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (AggregateStateTypeInfo &)*other_p;
-		return state_type.function_name == other.state_type.function_name &&
-		       state_type.return_type == other.state_type.return_type &&
-		       state_type.bound_argument_types == other.state_type.bound_argument_types;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		auto &serializer = writer.GetSerializer();
 		writer.WriteString(state_type.function_name);
@@ -966,6 +1008,14 @@ public:
 		}
 		return make_shared<AggregateStateTypeInfo>(
 		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (AggregateStateTypeInfo &)*other_p;
+		return state_type.function_name == other.state_type.function_name &&
+		       state_type.return_type == other.state_type.return_type &&
+		       state_type.bound_argument_types == other.state_type.bound_argument_types;
 	}
 };
 
@@ -1058,17 +1108,6 @@ struct UserTypeInfo : public ExtraTypeInfo {
 	string user_type_name;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (UserTypeInfo &)*other_p;
-		return other.user_type_name == user_type_name;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteString(user_type_name);
 	}
@@ -1076,6 +1115,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(move(enum_name));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (UserTypeInfo &)*other_p;
+		return other.user_type_name == user_type_name;
 	}
 };
 
@@ -1110,17 +1155,10 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	string enum_name;
 	Vector values_insert_order;
 	idx_t dict_size;
-	TypeCatalogEntry *catalog_entry = nullptr;
 
-public:
+protected:
 	// Equalities are only used in enums with different catalog entries
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
 		auto &other = (EnumTypeInfo &)*other_p;
 		if (dict_type != other.dict_type) {
 			return false;
@@ -1297,46 +1335,69 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 	if (!info) {
 		writer.WriteField<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
+		writer.WriteString(string());
 	} else {
 		writer.WriteField<ExtraTypeInfoType>(info->type);
 		info->Serialize(writer);
+		writer.WriteString(info->alias);
 	}
 }
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<ExtraTypeInfoType>();
+	shared_ptr<ExtraTypeInfo> extra_info;
 	switch (type) {
-	case ExtraTypeInfoType::INVALID_TYPE_INFO:
+	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
+		auto alias = reader.ReadField<string>(string());
+		if (!alias.empty()) {
+			return make_shared<ExtraTypeInfo>(type, alias);
+		}
 		return nullptr;
+	} break;
+	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
+		extra_info = make_shared<ExtraTypeInfo>(type);
+	} break;
 	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-		return DecimalTypeInfo::Deserialize(reader);
+		extra_info = DecimalTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::STRING_TYPE_INFO:
-		return StringTypeInfo::Deserialize(reader);
+		extra_info = StringTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
-		return ListTypeInfo::Deserialize(reader);
+		extra_info = ListTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-		return StructTypeInfo::Deserialize(reader);
+		extra_info = StructTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::USER_TYPE_INFO:
-		return UserTypeInfo::Deserialize(reader);
+		extra_info = UserTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
 		auto enum_size = reader.ReadRequired<uint32_t>();
 		auto enum_internal_type = EnumVectorDictType(enum_size);
 		switch (enum_internal_type) {
 		case PhysicalType::UINT8:
-			return EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);
+			extra_info = EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);
+			break;
 		case PhysicalType::UINT16:
-			return EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size);
+			extra_info = EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size);
+			break;
 		case PhysicalType::UINT32:
-			return EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size);
+			extra_info = EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size);
+			break;
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
-	}
+	} break;
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
-		return AggregateStateTypeInfo::Deserialize(reader);
+		extra_info = AggregateStateTypeInfo::Deserialize(reader);
+		break;
 
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
+	auto alias = reader.ReadField<string>(string());
+	extra_info->alias = alias;
+	return extra_info;
 }
 
 //===--------------------------------------------------------------------===//

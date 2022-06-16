@@ -44,16 +44,83 @@ jobs:
 
     steps:
       - name: Dependencies
+        shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Build
+        shell: bash
         run: |
             make debug
 
       - name: Fuzz
+        shell: bash
         run: |
             python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
+
+  sqlancer-fuzzing:
+    name: SQLancer Fuzzing
+    if: github.repository == 'duckdb/duckdb'
+    runs-on: ubuntu-latest
+    env:
+      BUILD_SQLSMITH: 1
+      BUILD_JDBC: 1
+      GEN: ninja
+      FUZZEROFDUCKSKEY: ${{ secrets.FUZZEROFDUCKSKEY }}
+
+    steps:
+      - name: Dependencies
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Build SQLancer
+        shell: bash
+        run: |
+          git clone https://github.com/Mytherin/sqlancer
+          cd sqlancer
+          mvn package -q -DskipTests
+          cd ..
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+
+      - name: Build JDBC Driver
+        shell: bash
+        run: |
+          mkdir -p build/jdbcdebug
+          cd build/jdbcdebug
+          cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DJDBC_DRIVER=1 -DBUILD_UNITTESTS=FALSE -DENABLE_SANITIZER=FALSE ../..
+          cmake --build .
+          cd ../..
+          cp build/jdbcdebug/tools/jdbc/duckdb_jdbc.jar ./sqlancer/target/lib/duckdb_jdbc-*.jar
+
+      - name: Build Shell
+        shell: bash
+        run: |
+          make debug
+
+      - name: Build Python Client
+        shell: bash
+        run: |
+          pip install requests numpy
+          cd tools/pythonpkg
+          python3 setup.py install --user
+          cd ../..
+
+      - name: Fuzz
+        shell: bash
+        run: |
+            python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb
