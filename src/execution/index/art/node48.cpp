@@ -138,15 +138,6 @@ std::pair<idx_t, idx_t> Node48::Serialize(ART &art, duckdb::MetaBlockWriter &wri
 		if (child_ptr) {
 			child_ptr = GetChildSwizzled(art, (uintptr_t)child_ptr);
 			child_offsets.push_back(child_ptr->Serialize(art, writer));
-			//			if (!IsSwizzled((uintptr_t ) child_ptr)){
-			//				// We have to write this big boy
-			//				child_offsets.push_back(child_ptr->Serialize(art, writer));
-			//			} else{
-			//				auto child_node = GetChildSwizzled(art, (node) child_ptr)
-			//				// FIXME Just rewrite same offsets?
-			////				auto block_info =  GetSwizzledBlockInfo((uintptr_t ) child_ptr);
-			////				child_offsets.emplace_back(block_info.first, block_info.second);
-			//			}
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
