@@ -345,6 +345,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 		if (state.local_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
 			state.local_ht->SwizzleCollectedBlocks();
 		}
+		// maybe we can scannfullouter here?
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
@@ -424,7 +425,6 @@ void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const 
 		lock_guard<mutex> fo_lock(outer_ss.lock);
 		outer_ss.Reset();
 	}
-	// TODO: also pin the probe stuffff
 }
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
@@ -441,80 +441,81 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	}
 
 	// This is an external join
+	auto &probe_ss = gstate.probe_scan_state;
 	if (!lstate.partitioned) {
 		// Partition thread-local probe HT
-		auto local_ht = AssignLocalHT(sink);
-		local_ht->Partition(*gstate.probe_ht);
-	}
-
-	auto &probe_ss = gstate.probe_scan_state;
-	{
-		lock_guard<mutex> lock(probe_ss.lock);
-		if (sink.finalized && probe_ss.finished) {
-			// Partitioned probe is done TODO maybe change this, see below
-			lock_guard<mutex> flock(sink.finalize_lock);
-			sink.finalized = false;
+		unique_ptr<JoinHashTable> local_ht;
+		{
+			lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
+			local_ht = move(sink.local_hash_tables.back());
 		}
+		local_ht->Partition(*gstate.probe_ht);
+		lstate.partitioned = true;
 	}
 
-	if (!sink.finalized) {
+	if (lstate.scan_structure) {
+		// still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
+		lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
+		if (chunk.size() > 0) {
+			return;
+		}
+		lstate.scan_structure = nullptr;
+		probe_ss.scanned += lstate.probe_chunk.size();
+	}
+
+	if (probe_ss.scan_index == probe_ss.total) {
+		// We cannot read anymore from this partition
 		if (IsRightOuterJoin(join_type)) {
-			// We scan the previous partition's unmatched tuples (if outer join)
+			// Scan full outer (if necessary)
 			sink.hash_table->ScanFullOuter(chunk, gstate.full_outer_scan_state, lstate.addresses);
 			if (chunk.size() > 0) {
 				return;
 			}
 		}
-
-		lock_guard<mutex> flock(sink.finalize_lock);
-		// Check again, maybe it was finalized while we waited for the lock
-		if (!sink.finalized) {
-			PrepareProbeRound(gstate);
+		// Wait (spinlock) until this partition is fully done
+		while (true) {
+			lock_guard<mutex> lock(probe_ss.lock);
+			if (probe_ss.scanned == probe_ss.total) {
+				// Prepare the next partition
+				PrepareProbeRound(gstate);
+				break;
+			}
 		}
-	}
-	D_ASSERT(sink.finalized);
-
-	// Both build and probe sides are materialized and partitioned, and the next partitioned pointer table is built
-	if (lstate.scan_structure) {
-		// still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
-		lstate.scan_structure->Next(lstate.join_keys, lstate.input, chunk);
-		if (chunk.size() > 0) {
-			return;
-		}
-		lstate.scan_structure = nullptr;
-		// TODO: update probe_ss progress
-		//  should spinlock other threads while we can't increment scan position, but aren't done scanning yet
 	}
 
 	// Grab the next read position
 	idx_t probe_chunk_count;
 	idx_t position;
 	idx_t block_position;
-	{
-		lock_guard<mutex> lock(probe_ss.lock);
-		if (probe_ss.Finished()) {
-			// TODO: construct next partition
-		}
-		probe_chunk_count = gstate.probe_ht->GetScanIndices(probe_ss, position, block_position);
-	}
+	probe_chunk_count = gstate.probe_ht->GetScanIndices(probe_ss, position, block_position);
 
 	if (probe_chunk_count == 0) {
-		// TODO what?
+		// Done!
+		return;
 	}
 
 	// Construct input Chunk for next probe
-	gstate.probe_ht->ConstructProbeChunk(lstate.input, lstate.addresses, position, block_position, probe_chunk_count);
+	gstate.probe_ht->ConstructProbeChunk(lstate.probe_chunk, lstate.addresses, position, block_position,
+	                                     probe_chunk_count);
 
 	// Grab the join keys
+	lstate.join_keys.Reset();
 	for (idx_t i = 0; i < lstate.join_keys.ColumnCount(); i++) {
-		lstate.join_keys.data[i].Reference(lstate.input.data[i]);
+		lstate.join_keys.data[i].Reference(lstate.probe_chunk.data[i]);
 	}
 	lstate.join_keys.SetCardinality(probe_chunk_count);
+
+	// And the payload
+	lstate.payload.Reset();
+	for (idx_t i = 0; i < lstate.payload.ColumnCount(); i++) {
+		lstate.payload.data[i].Reference(lstate.probe_chunk.data[i + lstate.join_keys.ColumnCount()]);
+	}
+	lstate.payload.SetCardinality(probe_chunk_count);
 
 	// Perform the probe
 	// TODO optimization: we already have the hashes
 	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys);
-	lstate.scan_structure->Next(lstate.join_keys, lstate.input, chunk);
+	lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
 }
 
 } // namespace duckdb

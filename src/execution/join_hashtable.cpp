@@ -1113,8 +1113,6 @@ void JoinHashTable::PinPartitions() {
 }
 
 void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
-	lock_guard<mutex> prepare_lock(probe_scan_state.lock);
-
 	// Get rid of partitions that we already completed
 	for (idx_t p = 0; p < partition_cutoff; p++) {
 		partition_block_collections[p] = nullptr;
@@ -1126,7 +1124,7 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 	// Reset scan state and set how much we need to scan in this round
 	probe_scan_state.Reset();
 	for (idx_t p = partition_cutoff; p < build_ht.partition_cutoff; p++) {
-		probe_scan_state.to_scan += partition_block_collections[p]->count;
+		probe_scan_state.total += partition_block_collections[p]->count;
 	}
 
 	// Update cutoff for next round
@@ -1177,6 +1175,8 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 }
 
 idx_t JoinHashTable::GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
+	lock_guard<mutex> lock(state.lock);
+
 	position = state.position;
 	block_position = state.block_position;
 
@@ -1190,6 +1190,9 @@ idx_t JoinHashTable::GetScanIndices(JoinHTScanState &state, idx_t &position, idx
 			break;
 		}
 	}
+
+	state.scan_index += count;
+
 	return count;
 }
 
@@ -1232,6 +1235,7 @@ void JoinHashTable::ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx
 		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), chunk.data[col_idx],
 		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, col_idx);
 	}
+	chunk.SetCardinality(count);
 }
 
 } // namespace duckdb

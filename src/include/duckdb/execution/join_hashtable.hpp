@@ -27,27 +27,25 @@ class Event;
 
 struct JoinHTScanState {
 public:
-	JoinHTScanState() : position(0), block_position(0), to_scan(0), scanned(0) {
+	JoinHTScanState() : position(0), block_position(0), total(0), scan_index(0), scanned(0) {
 	}
 
 	mutex lock;
 	idx_t position;
 	idx_t block_position;
 
-	//! Used for external join
-	idx_t to_scan;
-	idx_t scanned;
+	//! Used for synchronization of parallel external join
+	idx_t total;
+	idx_t scan_index;
+	atomic<idx_t> scanned;
 
 public:
 	void Reset() {
 		position = 0;
 		block_position = 0;
-		to_scan = 0;
+		total = 0;
+		scan_index = 0;
 		scanned = 0;
-	}
-
-	bool Finished() const {
-		return to_scan == scanned;
 	}
 
 private:
