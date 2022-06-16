@@ -421,7 +421,9 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// Get any indexes block info
 	idx_t num_indexes = reader.Read<idx_t>();
 	for (idx_t i = 0; i < num_indexes; i++) {
-		bound_info->indexes.emplace_back(reader.Read<idx_t>(), reader.Read<idx_t>());
+		auto idx_block_id = reader.Read<idx_t>();
+		auto idx_offset = reader.Read<idx_t>();
+		bound_info->indexes.emplace_back(idx_block_id, idx_offset);
 	}
 
 	// finally create the table in the catalog
