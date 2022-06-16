@@ -72,7 +72,7 @@
 #include <google/protobuf/port_def.inc>
 
 namespace std {}
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -102,23 +102,19 @@ static const int kMinHeaderVersionForProtoc = 3019000;
 
 // Verifies that the headers and libraries are compatible.  Use the macro
 // below to call this.
-void PROTOBUF_EXPORT VerifyVersion(int headerVersion, int minLibraryVersion,
-                                   const char* filename);
+void  VerifyVersion(int headerVersion, int minLibraryVersion, const char *filename);
 
 // Converts a numeric version number to a string.
-std::string PROTOBUF_EXPORT VersionString(int version);
+std::string  VersionString(int version);
 
-}  // namespace internal
+} // namespace internal
 
 // Place this macro in your main() function (or somewhere before you attempt
 // to use the protobuf library) to verify that the version you link against
 // matches the headers you compiled against.  If a version mismatch is
 // detected, the process will abort.
 #define GOOGLE_PROTOBUF_VERIFY_VERSION                                    \
-  ::google::protobuf::internal::VerifyVersion(                            \
-    GOOGLE_PROTOBUF_VERSION, GOOGLE_PROTOBUF_MIN_LIBRARY_VERSION,         \
-    __FILE__)
-
+  duckdb::google::protobuf::internal::VerifyVersion(GOOGLE_PROTOBUF_VERSION, GOOGLE_PROTOBUF_MIN_LIBRARY_VERSION, __FILE__)
 
 // ===================================================================
 // from google3/util/utf8/public/unilib.h
@@ -127,14 +123,14 @@ namespace internal {
 
 // Checks if the buffer contains structurally-valid UTF-8.  Implemented in
 // structurally_valid.cc.
-PROTOBUF_EXPORT bool IsStructurallyValidUTF8(const char* buf, int len);
+ bool IsStructurallyValidUTF8(const char *buf, int len);
 
 inline bool IsStructurallyValidUTF8(StringPiece str) {
-  return IsStructurallyValidUTF8(str.data(), static_cast<int>(str.length()));
+	return IsStructurallyValidUTF8(str.data(), static_cast<int>(str.length()));
 }
 
 // Returns initial number of bytes of structurally valid UTF-8.
-PROTOBUF_EXPORT int UTF8SpnStructurallyValid(StringPiece str);
+ int UTF8SpnStructurallyValid(StringPiece str);
 
 // Coerce UTF-8 byte string in src_str to be
 // a structurally-valid equal-length string by selectively
@@ -148,44 +144,50 @@ PROTOBUF_EXPORT int UTF8SpnStructurallyValid(StringPiece str);
 //
 // Optimized for: all structurally valid and no byte copying is done.
 //
-PROTOBUF_EXPORT char* UTF8CoerceToStructurallyValid(StringPiece str, char* dst,
-                                                    char replace_char);
+ char *UTF8CoerceToStructurallyValid(StringPiece str, char *dst, char replace_char);
 
-}  // namespace internal
+} // namespace internal
 
 // This lives in message_lite.h now, but we leave this here for any users that
 // #include common.h and not message_lite.h.
-PROTOBUF_EXPORT void ShutdownProtobufLibrary();
+ void ShutdownProtobufLibrary();
 
 namespace internal {
 
 // Strongly references the given variable such that the linker will be forced
 // to pull in this variable's translation unit.
 template <typename T>
-void StrongReference(const T& var) {
-  auto volatile unused = &var;
-  (void)&unused;  // Use address to avoid an extra load of "unused".
+void StrongReference(const T &var) {
+	auto volatile unused = &var;
+	(void)&unused; // Use address to avoid an extra load of "unused".
 }
 
-}  // namespace internal
+} // namespace internal
 
 #if PROTOBUF_USE_EXCEPTIONS
 class FatalException : public std::exception {
- public:
-  FatalException(const char* filename, int line, const std::string& message)
-      : filename_(filename), line_(line), message_(message) {}
-  virtual ~FatalException() throw();
+public:
+	FatalException(const char *filename, int line, const std::string &message)
+	    : filename_(filename), line_(line), message_(message) {
+	}
+	virtual ~FatalException() throw();
 
-  const char* what() const throw() override;
+	const char *what() const throw() override;
 
-  const char* filename() const { return filename_; }
-  int line() const { return line_; }
-  const std::string& message() const { return message_; }
+	const char *filename() const {
+		return filename_;
+	}
+	int line() const {
+		return line_;
+	}
+	const std::string &message() const {
+		return message_;
+	}
 
- private:
-  const char* filename_;
-  const int line_;
-  const std::string message_;
+private:
+	const char *filename_;
+	const int line_;
+	const std::string message_;
 };
 #endif
 
@@ -193,9 +195,9 @@ class FatalException : public std::exception {
 // in some versions of MSVC.
 using std::string;
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_COMMON_H__

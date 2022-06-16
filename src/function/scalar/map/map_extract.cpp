@@ -31,33 +31,16 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto key_value = key.GetValue(0);
 	VectorData offset_data;
 
-	if (map.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(map);
-		auto &children = StructVector::GetEntries(child);
-		auto &dict_sel = DictionaryVector::SelVector(map);
-		children[0]->Orrify(args.size(), offset_data);
-		auto &key_type = ListType::GetChildType(children[0]->GetType());
-		if (key_type != LogicalTypeId::SQLNULL) {
-			key_value = key_value.CastAs(key_type);
-		}
-		for (idx_t row = 0; row < args.size(); row++) {
-			auto offsets =
-			    ListVector::Search(*children[0], key_value, offset_data.sel->get_index(dict_sel.get_index(row)));
-			auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
-			FillResult(values, result, row);
-		}
-	} else {
-		auto &children = StructVector::GetEntries(map);
-		children[0]->Orrify(args.size(), offset_data);
-		auto &key_type = ListType::GetChildType(children[0]->GetType());
-		if (key_type != LogicalTypeId::SQLNULL) {
-			key_value = key_value.CastAs(key_type);
-		}
-		for (idx_t row = 0; row < args.size(); row++) {
-			auto offsets = ListVector::Search(*children[0], key_value, offset_data.sel->get_index(row));
-			auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
-			FillResult(values, result, row);
-		}
+	auto &children = StructVector::GetEntries(map);
+	children[0]->Orrify(args.size(), offset_data);
+	auto &key_type = ListType::GetChildType(children[0]->GetType());
+	if (key_type != LogicalTypeId::SQLNULL) {
+		key_value = key_value.CastAs(key_type);
+	}
+	for (idx_t row = 0; row < args.size(); row++) {
+		auto offsets = ListVector::Search(*children[0], key_value, offset_data.sel->get_index(row));
+		auto values = ListVector::GetValuesFromOffsets(*children[1], offsets);
+		FillResult(values, result, row);
 	}
 
 	if (args.size() == 1) {

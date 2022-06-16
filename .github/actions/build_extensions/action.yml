@@ -60,6 +60,9 @@ inputs:
   oote:
     description: 'Build Out-Of-Tree Extensions'
     default: 0
+  substrait:
+    description: 'Build Substrait'
+    default: 0
 
 runs:
   using: "composite"

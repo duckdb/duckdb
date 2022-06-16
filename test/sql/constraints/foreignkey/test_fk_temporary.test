@@ -1,0 +1,247 @@
+# name: test/sql/constraints/foreignkey/test_fk_temporary.test
+# description: Test foreign key constraint
+# group: [foreignkey]
+
+statement ok
+CREATE TEMPORARY TABLE album(artistid INTEGER, albumname TEXT, albumcover TEXT, UNIQUE (artistid, albumname));
+
+statement ok
+INSERT INTO album VALUES (1, 'A', 'A_cover'), (2, 'B', 'B_cover'), (3, 'C', 'C_cover'), (4, 'D', 'D_cover');
+
+statement ok
+CREATE TEMPORARY TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));
+
+# Any row that is inserted into the table with the foreign key must exist in the table with the primary key (constraint)
+statement error
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'E', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement error
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 5, 'D', 'B_song'), (13, 3, 'C', 'C_song');
+
+statement ok
+INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 'C', 'C_song');
+
+# Any row that is deleted from the table with the primary key must not exist in the table with the foreign key (constraint)
+statement error
+DELETE FROM album WHERE albumname='C';
+
+statement ok
+DELETE FROM album WHERE albumname='D';
+
+query ITT
+SELECT * FROM album;
+----
+1	A	A_cover
+2	B	B_cover
+3	C	C_cover
+
+# Any row that is updated from the table has foreign key must exist in the table with the primary key (constraint)
+statement error
+UPDATE song SET songartist=5, songalbum='A' WHERE songname='B_song';
+
+statement ok
+UPDATE song SET songartist=1, songalbum='A' WHERE songname='B_song';
+
+query ITT
+SELECT * FROM album;
+----
+1	A	A_cover
+2	B	B_cover
+3	C	C_cover
+
+query IITT
+SELECT * FROM song;
+----
+11	1	A	A_song
+13	3	C	C_song
+12	1	A	B_song
+
+# Any row that is updated from the table with primary key must not exist in the table has foreign key (constraint)
+statement error
+UPDATE album SET albumname='B' WHERE albumcover='C_cover';
+
+statement error
+UPDATE song SET songalbum='E' WHERE albumcover='C_song';
+
+statement ok
+UPDATE album SET artistid=5, albumname='D' WHERE albumcover='B_cover';
+
+query ITT
+SELECT * FROM album;
+----
+1	A	A_cover
+3	C	C_cover
+5	D	B_cover
+
+# perform an update on a column that is NOT part of the primary key in the main table
+statement ok
+UPDATE album SET albumcover='C_cover_new' WHERE artistid=3;
+
+# perform an update on a column that is NOT part of the foreign key in the referencing table
+statement ok
+UPDATE song SET songname='C_song_new' WHERE songartist=3;
+
+query ITT
+SELECT * FROM album;
+----
+1	A	A_cover
+3	C	C_cover_new
+5	D	B_cover
+
+query IITT
+SELECT * FROM song;
+----
+11	1	A	A_song
+13	3	C	C_song_new
+12	1	A	B_song
+
+# Cannot rename the columns that are involved in the foreign key constraint
+statement error
+ALTER TABLE album RENAME COLUMN albumname TO albumname_new;
+
+statement error
+ALTER TABLE song RENAME COLUMN songalbum TO songalbum_new;
+
+statement ok
+ALTER TABLE song RENAME COLUMN songname TO songname_new;
+
+# Cannot change type of the columns that are involved in the foreign key constraint
+statement error
+ALTER TABLE song ALTER COLUMN songartist SET DATA TYPE TEXT;
+
+statement error
+ALTER TABLE album ALTER COLUMN artistid SET DATA TYPE TEXT;
+
+statement ok
+ALTER TABLE song ALTER COLUMN songname_new SET DATA TYPE VARCHAR;
+
+# Cannot drop the columns that are involved in the foreign key constraint because of dependency
+statement error
+ALTER TABLE album DROP COLUMN artistid;
+
+statement ok
+ALTER TABLE song DROP COLUMN songname_new;
+
+# Can't drop the table with primary key corresponding with foreign key until exists the table has foreign key
+statement error
+DROP TABLE album;
+
+statement ok
+DROP TABLE song;
+
+statement ok
+ALTER TABLE album RENAME COLUMN albumname TO albumname_new;
+
+statement ok
+ALTER TABLE album ALTER COLUMN albumcover SET DATA TYPE VARCHAR;
+
+statement ok
+ALTER TABLE album DROP COLUMN albumcover;
+
+statement ok
+DROP TABLE album;
+
+# multiple columns and indices
+statement ok
+CREATE TABLE pkt(i INTEGER UNIQUE, k INTEGER UNIQUE)
+
+statement ok
+INSERT INTO pkt VALUES (1, 11), (2, 12), (3, 13)
+
+statement ok
+CREATE TABLE fkt(j INTEGER, l INTEGER UNIQUE, FOREIGN KEY (j) REFERENCES pkt(i))
+
+statement ok
+CREATE INDEX k_index ON pkt(k)
+
+statement ok
+CREATE INDEX l_index ON fkt(l)
+
+statement ok
+INSERT INTO fkt VALUES (1, 101), (2, 102)
+
+statement error
+INSERT INTO fkt VALUES (4, 104)
+
+statement ok
+INSERT INTO fkt VALUES (3, 103)
+
+statement error
+DELETE FROM pkt WHERE k=13
+
+statement ok
+DELETE FROM fkt WHERE l=103
+
+statement ok
+DELETE FROM pkt WHERE k=13
+
+statement error
+UPDATE pkt SET i=5 WHERE k=12
+
+statement error
+UPDATE fkt SET i=4 WHERE l=102
+
+statement error
+UPDATE fkt SET i=4 WHERE l=102
+
+statement ok
+DROP INDEX k_index
+
+statement ok
+DROP INDEX l_index
+
+statement error
+DROP TABLE pkt;
+
+statement ok
+DROP TABLE fkt;
+
+statement ok
+DROP TABLE pkt;
+
+# for tables that do not live in the current schema search path
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+CREATE TABLE s1.pkt(i INTEGER PRIMARY KEY)
+
+statement ok
+CREATE TABLE s1.fkt(j INTEGER, FOREIGN KEY (j) REFERENCES s1.pkt(i))
+
+statement ok
+INSERT INTO s1.pkt VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO s1.fkt VALUES (2), (3)
+
+statement error
+INSERT INTO s1.fkt VALUES (6)
+
+statement ok
+INSERT INTO s1.fkt VALUES (1)
+
+statement error
+DELETE FROM s1.pkt WHERE i=2
+
+statement ok
+DELETE FROM s1.pkt WHERE i=5
+
+statement error
+DROP TABLE s1.pkt;
+
+statement ok
+DROP TABLE s1.fkt;
+
+statement ok
+DROP TABLE s1.pkt;
+
+# insert NULL into the foreign key column
+statement ok
+CREATE TABLE pkt(i INTEGER UNIQUE)
+
+statement ok
+CREATE TABLE fkt(j INTEGER, FOREIGN KEY (j) REFERENCES pkt(i))
+
+statement ok
+INSERT INTO fkt VALUES (NULL)
