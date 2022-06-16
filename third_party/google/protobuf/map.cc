@@ -29,13 +29,14 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <google/protobuf/map.h>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
 
-void* const kGlobalEmptyTable[kGlobalEmptyTableSize] = {nullptr};
+void *const kGlobalEmptyTable[kGlobalEmptyTableSize] = {nullptr};
 
-}  // namespace internal
-}  // namespace protobuf
-}  // namespace google
+} // namespace internal
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
