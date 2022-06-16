@@ -16,6 +16,10 @@ struct BoundStatement {
 	unique_ptr<LogicalOperator> plan;
 	vector<LogicalType> types;
 	vector<string> names;
+	bool special;
+
+	BoundStatement() : special(false) {
+	}
 };
 
 } // namespace duckdb

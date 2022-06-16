@@ -17,6 +17,8 @@ BoundStatement Binder::Bind(ExplainStatement &stmt) {
 	result.plan = move(explain);
 	result.names = {"explain_key", "explain_value"};
 	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR};
+	result.special = true;
+
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

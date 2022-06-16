@@ -23,6 +23,8 @@ BoundStatement Binder::Bind(ShowStatement &stmt) {
 	result.names = {"column_name", "column_type", "null", "key", "default", "extra"};
 	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
 	                LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+	result.special = true;
+
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

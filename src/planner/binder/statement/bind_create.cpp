@@ -259,6 +259,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+	result.special = true;
+
 	properties.return_type = StatementReturnType::NOTHING;
 
 	auto catalog_type = stmt.info->type;

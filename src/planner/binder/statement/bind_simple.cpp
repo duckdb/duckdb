@@ -15,6 +15,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+	result.special = true;
+
 	Catalog &catalog = Catalog::GetCatalog(context);
 	auto entry = catalog.GetEntry(context, stmt.info->GetCatalogType(), stmt.info->schema, stmt.info->name, true);
 	if (entry && !entry->temporary) {
@@ -33,6 +35,7 @@ BoundStatement Binder::Bind(TransactionStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+	result.special = true;
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_TRANSACTION, move(stmt.info));
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;

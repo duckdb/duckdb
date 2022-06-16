@@ -29,6 +29,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+	result.special = true;
 
 	auto table = Catalog::GetCatalog(context).GetEntry<TableCatalogEntry>(context, stmt.schema, stmt.table);
 	D_ASSERT(table);

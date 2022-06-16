@@ -9,6 +9,7 @@ BoundStatement Binder::Bind(LoadStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+	result.special = true;
 
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_LOAD, move(stmt.info));
 	properties.allow_stream_result = false;

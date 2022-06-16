@@ -94,6 +94,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
+	result.special = true;
 
 	// lookup the format in the catalog
 	auto &catalog = Catalog::GetCatalog(context);

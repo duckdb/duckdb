@@ -29,6 +29,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
+	result.special = true;
 
 	// bind the select statement
 	auto select_node = Bind(*stmt.select_statement);
@@ -71,6 +72,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
+	result.special = true;
 
 	D_ASSERT(!stmt.info->table.empty());
 	// COPY FROM a file

@@ -227,6 +227,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->table_index = 0;
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
+		result.special = true;
 		result.plan = move(update);
 		properties.allow_stream_result = false;
 		properties.return_type = StatementReturnType::CHANGED_ROWS;
