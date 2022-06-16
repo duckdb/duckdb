@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -95,7 +96,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("config") = py::dict())
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
-	                           "Get result set attributes, mainly column names");
+	                           "Get result set attributes, mainly column names")
+	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
+	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
+	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension",
+			 py::arg("extension"));
 
 	PyDateTime_IMPORT;
 }
@@ -446,6 +451,15 @@ void DuckDBPyConnection::Close() {
 	}
 	cursors.clear();
 }
+
+void DuckDBPyConnection::InstallExtension (const string &extension, bool force_install) {
+	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
+}
+
+void DuckDBPyConnection::LoadExtension (const string &extension) {
+	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
+}
+
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {

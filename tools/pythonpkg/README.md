@@ -38,6 +38,9 @@ Alternatively, using virtualenv and pip:
 
 This works fine for a single installation, but is not recommended for active development since incremental compilation does not always work correctly here.
 
+If you are installing via `pip`, you can set the environment variable
+`$DUCKDEBUG=1` (or some other non-zero value) to compile in debug mode.
+
 ### Setup for cloud storage
 
 Alternatively, you may need the package files to reside under the same
