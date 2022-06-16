@@ -60,6 +60,9 @@ inputs:
   out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
     default: 1
+  python_name:
+    description: 'Python binary name because wtf Python'
+    default: 'python3'
 
 runs:
   using: "composite"
@@ -95,7 +98,7 @@ runs:
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree
-        python scripts/build_out_of_tree_extensions.py
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
