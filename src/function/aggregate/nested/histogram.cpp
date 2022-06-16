@@ -238,8 +238,7 @@ AggregateFunction GetHistogramFunction(const LogicalType &type) {
 	case LogicalType::DATE:
 		return GetMapType<HistogramFunctor, int32_t, IS_ORDERED>(type);
 	default:
-		throw InvalidInputException("A histogram aggregate function has not yet been implemented for type \"%s\"",
-		                            type.ToString());
+		throw InternalException("Unimplemented histogram aggregate");
 	}
 }
 
