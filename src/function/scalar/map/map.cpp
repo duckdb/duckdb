@@ -65,19 +65,19 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	auto &child_entries = StructVector::GetEntries(result);
 	D_ASSERT(child_entries.size() == 2);
-	auto &key_vector = child_entries[0];
-	auto &value_vector = child_entries[1];
+	auto &key_vector = *child_entries[0];
+	auto &value_vector = *child_entries[1];
 	if (args.data.empty()) {
 		// no arguments: construct an empty map
-		ListVector::SetListSize(*key_vector, 0);
-		key_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto list_data = ConstantVector::GetData<list_entry_t>(*key_vector);
+		ListVector::SetListSize(key_vector, 0);
+		key_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto list_data = ConstantVector::GetData<list_entry_t>(key_vector);
 		list_data->offset = 0;
 		list_data->length = 0;
 
-		ListVector::SetListSize(*value_vector, 0);
-		value_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
-		list_data = ConstantVector::GetData<list_entry_t>(*value_vector);
+		ListVector::SetListSize(value_vector, 0);
+		value_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		list_data = ConstantVector::GetData<list_entry_t>(value_vector);
 		list_data->offset = 0;
 		list_data->length = 0;
 
@@ -88,8 +88,9 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
 	}
-	key_vector->Reference(args.data[0]);
-	value_vector->Reference(args.data[1]);
+
+	key_vector.Reference(args.data[0]);
+	value_vector.Reference(args.data[1]);
 	VerifyMap(result, args.size());
 
 	result.Verify(args.size());

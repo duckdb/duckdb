@@ -1083,9 +1083,9 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 					D_ASSERT(!child_validity->RowIsValid(child_index));
 				}
 			}
-			if (GetType().id() == LogicalTypeId::MAP) {
-				VerifyMap(*this, count);
-			}
+		}
+		if (vector->GetType().id() == LogicalTypeId::MAP) {
+			VerifyMap(*vector, count);
 		}
 	}
 
