@@ -237,6 +237,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		index_buffer.push_back(current_dictionary.size);
 		selection_buffer.push_back(index_buffer.size() - 1);
 		current_string_map.insert({str.GetString(), index_buffer.size() - 1});
+
+		// TODO this is bs, we dont need to write this on very string write ofc..
 		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
 
 		current_width = next_width;
@@ -435,7 +437,6 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		size_t output_buffer_size = state.fsst_string_total_size * 5; // way too big see fsst api
 
 		state.fsst_encoder = fsst_create(n, &state.fsst_string_sizes[0], &state.fsst_string_ptrs[0], 0);
-		unsigned char fsst_symbol_table[sizeof(fsst_decoder_t)];
 
 		auto compressed_ptrs = std::vector<unsigned char*>(n, 0);
 		auto compressed_sizes = std::vector<size_t>(n, 0);
@@ -582,7 +583,7 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct CompressedStringScanState : public StringScanState {
-	unique_ptr<BufferHandle> handle;
+	unique_ptr<BufferHandle> handle; // can be deleted
 	buffer_ptr<Vector> dictionary;
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;

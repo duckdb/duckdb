@@ -24,6 +24,7 @@ struct StringAnalyzeState : public AnalyzeState {
 	idx_t count;
 	idx_t total_string_size;
 	idx_t overflow_strings;
+	//
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
@@ -35,6 +36,7 @@ bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &inp
 	VectorData vdata;
 	input.Orrify(count, vdata);
 
+	// TODO Cache all strings (or 2 samples of strings)
 	state.count += count;
 	auto data = (string_t *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -51,6 +53,13 @@ bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &inp
 }
 
 idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
+
+	// TODO calculate symbol table
+	// TODO calculate/estimate max compressed string length
+
+	// TODO calculation/estimation:
+	// - count * min_bitwidth(max_strlen) + total_compressed_string_size (+ big string marker * big strings?)
+
 	auto &state = (StringAnalyzeState &)state_p;
 	return state.count * sizeof(int32_t) + state.total_string_size + state.overflow_strings * BIG_STRING_MARKER_SIZE;
 }
@@ -59,6 +68,7 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
+	// TODO fetch symbol table from dictionary
 	auto result = make_unique<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -81,6 +91,13 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
 
+	// TODO FSST:
+	//  	decompress bitpacked+delta encoded offsets
+	//			- if first element: start from 0, bitunpack+decode the first min(bitpacking_group_width, scan_count values)
+	//			- else start from last cached value, bitunpack the values from last cached value (rounded down to multiple
+	//          - of bitpacking_group_width) up until the max scanned index rounded to multiple of bitpacking_group_width.
+	// 		use those to fetchstringfromdict en set result to FSST
+
 	for (idx_t i = 0; i < scan_count; i++) {
 		// std::abs used since offsets can be negative to indicate big strings
 		uint32_t string_length = std::abs(base_data[start + i]) - std::abs(previous_offset);
@@ -91,7 +108,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 }
 
 void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
-                                           Vector &result) {
+                                            Vector &result) {
 	StringScanPartial(segment, state, scan_count, result, 0);
 }
 
@@ -121,6 +138,10 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
+	// Todo fetch is expensive with delta encoding
+	//  - basically we just need to call scan_init + scan_partial(count=1)
+	//  - we could cache this segments symbol table and some decoded deltas?
+
 	auto dict_offset = base_data[row_id];
 	uint32_t string_length;
 	if ((idx_t)row_id == 0) {
@@ -135,6 +156,8 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+
+// TODO FSST can go, we dont append
 unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
                                                                                 block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
