@@ -19,14 +19,14 @@ bool KeyListIsEmpty(list_entry_t *data, idx_t rows) {
 	return true;
 }
 
-static bool AreKeysNull(Vector &keys) {
+static bool AreKeysNull(Vector &keys, idx_t row_count) {
 	auto list_type = keys.GetType();
+	D_ASSERT(list_type.id() == LogicalTypeId::LIST);
 	auto key_type = ListType::GetChildType(list_type).id();
 	auto arg_data = ListVector::GetData(keys);
 	auto &entries = ListVector::GetEntry(keys);
-	auto keys_size = ListVector::GetListSize(keys);
 	if (key_type == LogicalTypeId::SQLNULL) {
-		if (KeyListIsEmpty(arg_data, keys_size)) {
+		if (KeyListIsEmpty(arg_data, row_count)) {
 			return false;
 		}
 		// The entire key list is NULL for one (or more) of the rows: (ARRAY[NULL, NULL, NULL])
@@ -34,37 +34,34 @@ static bool AreKeysNull(Vector &keys) {
 	}
 
 	VectorData list_data;
-	keys.Orrify(keys_size, list_data);
+	keys.Orrify(row_count, list_data);
 	auto validity = FlatVector::Validity(entries);
-	return (!validity.CheckAllValid(keys_size));
+	return (!validity.CheckAllValid(row_count));
 }
 
-static void CheckForKeyUniqueness(DataChunk &args, ExpressionState &state) {
-	// Create a copy of the arguments
-	auto types = args.GetTypes();
-	if (types.empty() || ListType::GetChildType(types[0]).id() == LogicalType::SQLNULL) {
-		return;
-	}
+//TODO replace this with a call to ListUnique
+bool AreKeysUnique(Vector& key_vector, idx_t row_count) {
+	D_ASSERT(key_vector.GetType().id() == LogicalTypeId::LIST);
+	auto key_type = ListType::GetChildType(key_vector.GetType());
+	auto& child_entry = ListVector::GetEntry(key_vector);
 
-	auto arg_data = FlatVector::GetData<list_entry_t>(args.data[0]);
+	auto key_data = ListVector::GetData(key_vector);
 
-	DataChunk keys;
-	keys.Initialize(args.GetTypes());
-	args.Copy(keys);
+	for (idx_t row = 0; row < row_count; row++) {
+		unordered_set<duckdb::Value>	unique_keys;
 
-	// Split the copy to separate the keys
-	DataChunk remaining_columns;
-	keys.Split(remaining_columns, 1);
-
-	Vector unique_result(LogicalType::UBIGINT, args.size());
-	ListUniqueFunction(keys, state, unique_result);
-	for (idx_t i = 0; i < args.size(); i++) {
-		auto keys_length = arg_data[i].length;
-		auto unique_keys = FlatVector::GetValue<uint64_t>(unique_result, i);
-		if (unique_keys != keys_length) {
-			throw InvalidInputException("Map keys have to be unique!");
+		idx_t start = key_data[row].offset;
+		idx_t end = start + key_data[row].length;
+		for (idx_t i = start; i < end; i++) {
+			auto val = child_entry.GetValue(i);
+			auto result = unique_keys.insert(val);
+			if (!result.second) {
+				//insertion failed because the element already exists
+				return false;
+			}
 		}
 	}
+	return true;
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -100,11 +97,13 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		return;
 	}
 
-	if (AreKeysNull(args.data[0])) {
+	if (AreKeysNull(args.data[0], args.size())) {
 		throw InvalidInputException("Map keys can not be NULL");
 	}
 
-	CheckForKeyUniqueness(args, state);
+	if (!AreKeysUnique(args.data[0], args.size())) {
+		throw InvalidInputException("Map keys have to be unique");
+	}
 
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
@@ -140,14 +139,8 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 	}
 
 	//! this is more for completeness reasons
-	auto key_type = ListType::GetChildType(child_types[0].second);
 	bound_function.return_type = LogicalType::MAP(move(child_types));
-	if (arguments.empty() || key_type.id() == LogicalTypeId::SQLNULL) {
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
-	}
-	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(key_type);
-	bound_function.arguments.push_back(key_type);
-	return ListAggregatesBindFunction(context, bound_function, key_type, aggr_function);
+	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {
