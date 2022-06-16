@@ -16,8 +16,8 @@
 #include <random>
 #include <stdlib.h>
 
-#ifndef DUCKDB_PYTHON_EXTENSION_NAME
-#define DUCKDB_PYTHON_EXTENSION_NAME _duckdb_extension
+#ifndef DUCKDB_PYTHON_LIB_NAME
+#define DUCKDB_PYTHON_LIB_NAME duckdb
 #endif
 
 namespace py = pybind11;
@@ -64,7 +64,7 @@ static py::object PyTokenize(const string &query) {
 	return move(result);
 }
 
-PYBIND11_MODULE(DUCKDB_PYTHON_EXTENSION_NAME, m) {
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyResult::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
@@ -72,7 +72,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_EXTENSION_NAME, m) {
 	py::options pybind_opts;
 
 	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
-	m.attr("__package__") = "_duckdb_extension";
+	m.attr("__package__") = "duckdb";
 	m.attr("__version__") = DuckDB::LibraryVersion();
 	m.attr("__git_revision__") = DuckDB::SourceID();
 	m.attr("default_connection") = DuckDBPyConnection::DefaultConnection();

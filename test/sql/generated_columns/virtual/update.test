@@ -1,0 +1,57 @@
+# name: test/sql/generated_columns/virtual/update.test
+# description: Test that all types of update statements work
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (
+    foo INTEGER,
+    bar INTEGER GENERATED ALWAYS AS (foo+1) VIRTUAL,
+    foobar INTEGER DEFAULT 5
+);
+
+statement ok
+INSERT INTO test VALUES (5, DEFAULT)
+
+statement ok
+INSERT INTO test VALUES (10, 3);
+
+query III
+SELECT * FROM test;
+----
+5	6	5
+10	11	3
+
+# Cant UPDATE a generated column
+statement error
+UPDATE test SET bar = 5
+
+# Correctly formatted UPDATE statements work
+statement ok
+UPDATE test SET foo=3;
+
+query III
+SELECT * FROM test;
+----
+3	4	5
+3	4	3
+
+statement ok
+UPDATE test SET foo=9001 WHERE (foobar == 3);
+
+query III
+SELECT * FROM test;
+----
+3	4	5
+9001	9002	3
+
+statement ok
+UPDATE test SET foo=0 WHERE (bar < 9000);
+
+query III
+SELECT * FROM test;
+----
+0	1	5
+9001	9002	3

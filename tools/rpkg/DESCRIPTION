@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.3.3
+Version: 0.4.0
 Authors@R:
     c(person(given = "Hannes",
              family = "Mühleisen",
@@ -56,6 +56,8 @@ Suggests:
     dbplyr,
     nycflights13,
     testthat,
+    tibble,
+    vctrs,
     withr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

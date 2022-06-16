@@ -22,6 +22,19 @@
 #endif
 #endif
 
+// duplicate of duckdb/main/winapi.hpp
+#ifndef DUCKDB_EXTENSION_API
+#ifdef _WIN32
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+#define DUCKDB_EXTENSION_API __declspec(dllexport)
+#else
+#define DUCKDB_EXTENSION_API
+#endif
+#else
+#define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
+#endif
+#endif
+
 // duplicate of duckdb/common/constants.hpp
 #ifndef DUCKDB_API_0_3_1
 #define DUCKDB_API_0_3_1 1
@@ -1436,6 +1449,15 @@ Sets the init function of the table function
 DUCKDB_API void duckdb_table_function_set_init(duckdb_table_function table_function, duckdb_table_function_init_t init);
 
 /*!
+Sets the thread-local init function of the table function
+
+* table_function: The table function
+* init: The init function
+*/
+DUCKDB_API void duckdb_table_function_set_local_init(duckdb_table_function table_function,
+                                                     duckdb_table_function_init_t init);
+
+/*!
 Sets the main function of the table function
 
 * table_function: The table function
@@ -1579,6 +1601,14 @@ This function must be used if projection pushdown is enabled to figure out which
 DUCKDB_API idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index);
 
 /*!
+Sets how many threads can process this table function in parallel (default: 1)
+
+* info: The info object
+* max_threads: The maximum amount of threads that can process this table function
+*/
+DUCKDB_API void duckdb_init_set_max_threads(duckdb_init_info info, idx_t max_threads);
+
+/*!
 Report that an error has occurred while calling init.
 
 * info: The info object
@@ -1609,12 +1639,20 @@ For tracking state, use the init data instead.
 DUCKDB_API void *duckdb_function_get_bind_data(duckdb_function_info info);
 
 /*!
-Gets the init data set by `duckdb_bind_set_init_data` during the bind.
+Gets the init data set by `duckdb_init_set_init_data` during the init.
 
 * info: The info object
 * returns: The init data object
 */
 DUCKDB_API void *duckdb_function_get_init_data(duckdb_function_info info);
+
+/*!
+Gets the thread-local init data set by `duckdb_init_set_init_data` during the local_init.
+
+* info: The info object
+* returns: The init data object
+*/
+DUCKDB_API void *duckdb_function_get_local_init_data(duckdb_function_info info);
 
 /*!
 Report that an error has occurred while executing the function.

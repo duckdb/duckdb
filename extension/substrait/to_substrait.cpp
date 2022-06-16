@@ -305,6 +305,21 @@ void DuckDBToSubstrait::TransformCaseExpression(Expression &dexpr, substrait::Ex
 	}
 	TransformExpr(*dcase.else_expr, *scase->mutable_else_());
 }
+
+void DuckDBToSubstrait::TransformInExpression(Expression &dexpr, substrait::Expression &sexpr) {
+	auto &duck_in_op = (BoundOperatorExpression &)dexpr;
+	auto subs_in_op = sexpr.mutable_singular_or_list();
+
+	// Get the expression
+	TransformExpr(*duck_in_op.children[0], *subs_in_op->mutable_value());
+
+	// Get the values
+	for (idx_t i = 1; i < duck_in_op.children.size(); i++) {
+		subs_in_op->add_options();
+		TransformExpr(*duck_in_op.children[i], *subs_in_op->mutable_options(i - 1));
+	}
+}
+
 void DuckDBToSubstrait::TransformExpr(Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset) {
 	switch (dexpr.type) {
 	case ExpressionType::BOUND_REF:
@@ -336,6 +351,9 @@ void DuckDBToSubstrait::TransformExpr(Expression &dexpr, substrait::Expression &
 		break;
 	case ExpressionType::CASE_EXPR:
 		TransformCaseExpression(dexpr, sexpr);
+		break;
+	case ExpressionType::COMPARE_IN:
+		TransformInExpression(dexpr, sexpr);
 		break;
 	default:
 		throw InternalException(ExpressionTypeToString(dexpr.type));

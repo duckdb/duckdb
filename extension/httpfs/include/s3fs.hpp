@@ -82,8 +82,6 @@ public:
 			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
 		} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			throw NotImplementedException("Cannot open an HTTP file for appending");
-		} else if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
-			throw NotImplementedException("Cannot open an HTTP file with Direct I/O flag");
 		}
 	}
 	const S3AuthParams auth_params;
@@ -155,6 +153,7 @@ public:
 	static ParsedS3Url S3UrlParse(string url, const S3AuthParams &params);
 
 	static std::string UrlEncode(const std::string &input, bool encode_slash = false);
+	static std::string UrlDecode(std::string input);
 
 	// Uploads the contents of write_buffer to S3.
 	// Note: caller is responsible to not call this method twice on the same buffer

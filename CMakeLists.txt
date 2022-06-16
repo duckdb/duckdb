@@ -8,6 +8,10 @@ if(POLICY CMP0051)
   cmake_policy(SET CMP0051 NEW)
 endif()
 
+if(POLICY CMP0054)
+  cmake_policy(SET CMP0054 NEW)
+endif()
+
 project(DuckDB)
 
 find_package(Threads REQUIRED)
@@ -64,7 +68,14 @@ foreach(p LIB BIN INCLUDE CMAKE)
   endif()
 endforeach()
 
-
+# This option allows --gc-sections flag during extension linking to discard any unused functions or data
+if (EXTENSION_STATIC_BUILD AND "${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -ffunction-sections -fdata-sections")
+  elseif(WIN32 AND MVSC)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /Gy")
+  endif()
+endif()
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
 
@@ -222,6 +233,9 @@ option(AMALGAMATION_BUILD
 option(BUILD_MAIN_DUCKDB_LIBRARY
         "Build the main duckdb library and executable."
         TRUE)
+option(EXTENSION_STATIC_BUILD
+        "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
+        FALSE)
 
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
@@ -658,12 +672,39 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   add_library(${TARGET_NAME} SHARED ${FILES})
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+
+  # loadable extension binaries can be built two ways:
+  # 1. EXTENSION_STATIC_BUILD=1
+  #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
+  #    DuckDB itself may have been loaded with RTLD_LOCAL. This is currently the main way we distribute the lodable
+  #    extension binaries
+  # 2. EXTENSION_STATIC_BUILD=0
+  #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
+  #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
+  #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
+  if (EXTENSION_STATIC_BUILD)
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+      # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
+      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,--gc-sections -Wl,--exclude-libs,ALL)
+    elseif (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
+    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
+      # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
+      target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip -Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version)
+    else()
+      error("EXTENSION static build is only intended for Linux and Windows on MVSC")
+    endif()
+  else()
+    if (WIN32)
+      target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+    elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+      set_target_properties(${TARGET_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+    endif()
   endif()
-  if(WIN32)
-    target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
-  endif()
+
+
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
@@ -762,4 +803,9 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
+endif()
+
+# build out-of-tree extensions on demand
+if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
 endif()

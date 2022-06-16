@@ -161,6 +161,10 @@ public:
 		return plain_file_source;
 	}
 
+	bool OnDiskFile() {
+		return file_handle->OnDiskFile();
+	}
+
 	idx_t FileSize() {
 		return file_size;
 	}
@@ -1743,13 +1747,19 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
-	idx_t buffer_read_size = INITIAL_BUFFER_SIZE;
+
+	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
+	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;
+
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;
 	}
-	if (remaining + buffer_read_size > options.maximum_line_size) {
+
+	// Check line length
+	if (remaining > options.maximum_line_size) {
 		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
 	}
+
 	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 	buffer_size = remaining + buffer_read_size;
 	if (remaining > 0) {
