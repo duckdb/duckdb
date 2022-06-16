@@ -137,12 +137,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		// we first release the gil and then acquire the connection lock
-		unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-		{
-			py::gil_scoped_release release;
-			lock.lock();
-		}
+		auto cur_py_connection_lock = AcquireConnectionLock();
 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
@@ -183,12 +178,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			// we first release the gil and then acquire the connection lock
-			unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
-			{
-				py::gil_scoped_release release;
-				lock.lock();
-			}
+			auto cur_py_connection_lock = AcquireConnectionLock();
 			auto pending_query = prep->PendingQuery(args);
 			res->result = CompletePendingQuery(*pending_query);
 
@@ -761,6 +751,15 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(string &py_object_type) {
 		return true;
 	}
 	return false;
+}
+unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
+	// we first release the gil and then acquire the connection lock
+	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
+	{
+		py::gil_scoped_release release;
+		lock.lock();
+	}
+	return lock;
 }
 
 } // namespace duckdb

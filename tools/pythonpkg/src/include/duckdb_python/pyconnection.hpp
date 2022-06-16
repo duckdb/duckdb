@@ -139,6 +139,9 @@ public:
 	static shared_ptr<DuckDBPyConnection> default_connection;
 
 	static bool IsAcceptedArrowObject(string &py_object_type);
+
+private:
+	unique_lock<std::mutex> AcquireConnectionLock();
 };
 
 } // namespace duckdb
