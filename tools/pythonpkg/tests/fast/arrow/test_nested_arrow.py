@@ -132,8 +132,7 @@ class TestArrowNested(object):
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t") == [[]]
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t") == [[('Jon Lajoie', 10), ('Backstreet Boys', 9), ('Tenacious D', 10)]]
         assert arrow_to_pandas("SELECT a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(a)") == [[(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)]]
-        with pytest.raises(Exception, match="Invalid Input Error: A histogram aggregate function has not yet been implemented for type *"):
-            assert arrow_to_pandas("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a") == [[({'i': 1, 'j': 2}, {'i': 1, 'j': 2}), ({'i': 3, 'j': 4}, {'i': 3, 'j': 4})]]
+        assert arrow_to_pandas("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a") == [[({'i': 1, 'j': 2}, {'i': 1, 'j': 2}), ({'i': 3, 'j': 4}, {'i': 3, 'j': 4})]]
 
 
     def test_frankstein_nested(self,duckdb_cursor):
@@ -152,12 +151,10 @@ class TestArrowNested(object):
         compare_results("SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
 
         # Map with list as key and/or value
-        with pytest.raises(Exception, match="Invalid Input Error: A histogram aggregate function has not yet been implemented for type *"):
-            compare_results("SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4]))")
+        compare_results("SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4]))")
 
         # Map with struct as key and/or value
-        with pytest.raises(Exception, match="Invalid Input Error: A histogram aggregate function has not yet been implemented for type *"):
-            compare_results("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}))")
+        compare_results("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}))")
 
         # Struct that is NULL entirely
         compare_results("SELECT * FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL)) as a")

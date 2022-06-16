@@ -6,6 +6,7 @@
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/value_map.hpp"
 
 namespace duckdb {
 
@@ -39,16 +40,16 @@ static bool AreKeysNull(Vector &keys, idx_t row_count) {
 	return (!validity.CheckAllValid(row_count));
 }
 
-//TODO replace this with a call to ListUnique
-bool AreKeysUnique(Vector& key_vector, idx_t row_count) {
+// TODO replace this with a call to ListUnique
+bool AreKeysUnique(Vector &key_vector, idx_t row_count) {
 	D_ASSERT(key_vector.GetType().id() == LogicalTypeId::LIST);
 	auto key_type = ListType::GetChildType(key_vector.GetType());
-	auto& child_entry = ListVector::GetEntry(key_vector);
+	auto &child_entry = ListVector::GetEntry(key_vector);
 
 	auto key_data = ListVector::GetData(key_vector);
 
 	for (idx_t row = 0; row < row_count; row++) {
-		unordered_set<duckdb::Value>	unique_keys;
+		value_set_t unique_keys;
 
 		idx_t start = key_data[row].offset;
 		idx_t end = start + key_data[row].length;
@@ -56,7 +57,7 @@ bool AreKeysUnique(Vector& key_vector, idx_t row_count) {
 			auto val = child_entry.GetValue(i);
 			auto result = unique_keys.insert(val);
 			if (!result.second) {
-				//insertion failed because the element already exists
+				// insertion failed because the element already exists
 				return false;
 			}
 		}
