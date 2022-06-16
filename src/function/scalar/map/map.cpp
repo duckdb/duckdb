@@ -41,20 +41,36 @@ static bool AreKeysNull(Vector &keys, idx_t row_count) {
 }
 
 // TODO replace this with a call to ListUnique
-bool AreKeysUnique(Vector &key_vector, idx_t row_count) {
+static bool AreKeysUnique(Vector &key_vector, idx_t row_count) {
 	D_ASSERT(key_vector.GetType().id() == LogicalTypeId::LIST);
 	auto key_type = ListType::GetChildType(key_vector.GetType());
 	auto &child_entry = ListVector::GetEntry(key_vector);
+	VectorData child_vector_data;
+	child_entry.Orrify(ListVector::GetListSize(key_vector), child_vector_data);
+	auto child_validity = child_vector_data.validity;
 
-	auto key_data = ListVector::GetData(key_vector);
+	VectorData vector_data;
+	key_vector.Orrify(row_count, vector_data);
+	auto key_data = (list_entry_t *)vector_data.data;
+	auto key_validity = vector_data.validity;
 
 	for (idx_t row = 0; row < row_count; row++) {
 		value_set_t unique_keys;
+		auto index = vector_data.sel->get_index(row);
 
-		idx_t start = key_data[row].offset;
-		idx_t end = start + key_data[row].length;
+		// Ensure there are no NULL key lists
+		if (!key_validity.RowIsValid(index)) {
+			throw InvalidInputException("Map keys can not be NULL");
+		}
+
+		idx_t start = key_data[index].offset;
+		idx_t end = start + key_data[index].length;
 		for (idx_t i = start; i < end; i++) {
-			auto val = child_entry.GetValue(i);
+			auto child_idx = child_vector_data.sel->get_index(i);
+			if (!child_validity.RowIsValid(child_idx)) {
+				throw InvalidInputException("Map keys can not be NULL");
+			}
+			auto val = child_entry.GetValue(child_idx);
 			auto result = unique_keys.insert(val);
 			if (!result.second) {
 				// insertion failed because the element already exists
@@ -63,6 +79,12 @@ bool AreKeysUnique(Vector &key_vector, idx_t row_count) {
 		}
 	}
 	return true;
+}
+
+void VerifyKeysUnique(Vector &keys, idx_t count) {
+	if (!AreKeysUnique(keys, count)) {
+		throw InvalidInputException("Map keys have to be unique");
+	}
 }
 
 static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -102,9 +124,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		throw InvalidInputException("Map keys can not be NULL");
 	}
 
-	if (!AreKeysUnique(args.data[0], args.size())) {
-		throw InvalidInputException("Map keys have to be unique");
-	}
+	VerifyKeysUnique(args.data[0], args.size());
 
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");

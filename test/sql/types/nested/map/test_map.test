@@ -2,8 +2,8 @@
 # description: Test basic functionality of maps
 # group: [map]
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
 
 # All keys are NULL
 statement error
@@ -43,6 +43,9 @@ query I
 select MAP()
 ----
 {}
+
+statement error
+select MAP(NULL)
 
 # Test making MAPs from columns
 statement ok

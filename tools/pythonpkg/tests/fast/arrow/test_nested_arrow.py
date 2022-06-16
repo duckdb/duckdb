@@ -138,7 +138,7 @@ class TestArrowNested(object):
         arrow_table = pa.table(
             {'detail': pa.array(values, map_type)}
         )
-        with pytest.raises(Exception, match="Arrow map contains duplicate keys, which is not supported by DuckDB map type"):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys have to be unique"):
             rel = duckdb.from_arrow(arrow_table).fetchall()
     
     def test_map_arrow_to_pandas(self,duckdb_cursor):

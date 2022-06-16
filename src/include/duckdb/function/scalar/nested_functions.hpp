@@ -111,6 +111,6 @@ struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-bool AreKeysUnique(Vector &key_vector, idx_t row_count);
+void VerifyKeysUnique(Vector &keys, idx_t count);
 
 } // namespace duckdb

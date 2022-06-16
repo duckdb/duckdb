@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -1030,6 +1031,9 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				}
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
 				children[child_idx]->Verify(sel, count);
+			}
+			if (GetType().id() == LogicalTypeId::MAP && !children.empty()) {
+				VerifyKeysUnique(*children[0], count);
 			}
 		}
 	}
