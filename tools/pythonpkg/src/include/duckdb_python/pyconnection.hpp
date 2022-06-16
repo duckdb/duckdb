@@ -42,12 +42,13 @@ public:
 struct DuckDBPyConnection {
 public:
 	shared_ptr<DuckDB> database;
-	shared_ptr<Connection> connection;
+	unique_ptr<Connection> connection;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
 	std::thread::id thread_id = std::this_thread::get_id();
 	bool check_same_thread = true;
+	std::mutex py_connection_lock;
 
 public:
 	explicit DuckDBPyConnection(std::thread::id thread_id_p = std::this_thread::get_id()) : thread_id(thread_id_p) {
@@ -138,6 +139,9 @@ public:
 	static shared_ptr<DuckDBPyConnection> default_connection;
 
 	static bool IsAcceptedArrowObject(string &py_object_type);
+
+private:
+	unique_lock<std::mutex> AcquireConnectionLock();
 };
 
 } // namespace duckdb
