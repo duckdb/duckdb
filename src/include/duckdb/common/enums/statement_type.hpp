@@ -50,6 +50,8 @@ enum class StatementReturnType : uint8_t {
 	NOTHING       // the statement returns nothing
 };
 
+string StatementReturnTypeToString(StatementReturnType type);
+
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()

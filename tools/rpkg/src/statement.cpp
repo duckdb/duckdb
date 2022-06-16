@@ -129,6 +129,8 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 
 	retlist.push_back({"rtypes"_nm = rtypes});
 	retlist.push_back({"n_param"_nm = stmtholder->stmt->n_param});
+	retlist.push_back(
+	    {"return_type"_nm = StatementReturnTypeToString(stmtholder->stmt->GetStatementProperties().return_type)});
 
 	return retlist;
 }
