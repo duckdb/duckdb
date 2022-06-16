@@ -61,8 +61,6 @@ public:
 
 	MacroBinding *macro_binding;
 
-	static constexpr const char *REPLACE_WITH_NULL = "__duckdb__internal_replace_with_null";
-
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);

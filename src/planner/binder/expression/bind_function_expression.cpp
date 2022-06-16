@@ -59,23 +59,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(move(child.expr));
 	}
 	unique_ptr<Expression> result =
-	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
+	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
-	} else if (result->alias == REPLACE_WITH_NULL) {
-		// BindScalarFunction marked the function, so we replace the function with a constant NULL
-		// but first, we remove any parameters contained in the FunctionExpression
-		auto &bound_function_expr = (BoundFunctionExpression &)*result;
-		auto &params = *binder.parameters;
-		for (auto &child : bound_function_expr.children) {
-			for (auto param_it = params.begin(); param_it != params.end(); param_it++) {
-				if (child->Equals(*param_it)) {
-					params.erase(param_it);
-					break;
-				}
-			}
-		}
-		return BindResult(make_unique<BoundConstantExpression>(Value()));
 	}
 	return BindResult(move(result));
 }

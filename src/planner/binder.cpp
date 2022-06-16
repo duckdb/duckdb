@@ -368,6 +368,17 @@ const unordered_set<string> &Binder::GetTableNames() {
 	return table_names;
 }
 
+void Binder::RemoveParameters(vector<unique_ptr<Expression>> &expressions) {
+	for (auto &expr : expressions) {
+		for (auto param_it = parameters->begin(); param_it != parameters->end(); param_it++) {
+			if (expr->Equals(*param_it)) {
+				parameters->erase(param_it);
+				break;
+			}
+		}
+	}
+}
+
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
 	return FormatError(expr_context.query_location, message);
 }
