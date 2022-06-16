@@ -23,6 +23,7 @@ Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context))
 
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
+	auto parameter_count = statement.n_param;
 
 	vector<BoundParameterExpression *> bound_parameters;
 
@@ -34,6 +35,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	profiler.EndPhase();
 
 	this->properties = binder->properties;
+	this->properties.parameter_count = parameter_count;
 	this->names = bound_statement.names;
 	this->types = bound_statement.types;
 	this->plan = move(bound_statement.plan);
@@ -78,6 +80,7 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 
 void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	auto &stmt = (ExecuteStatement &)*statement;
+	auto parameter_count = stmt.n_param;
 
 	// bind the prepared statement
 	auto &client_data = ClientData::Get(context);
@@ -116,6 +119,12 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		D_ASSERT(prepared->properties.bound_all_parameters);
 		rebound = true;
 	}
+	// copy the properties of the prepared statement into the planner
+	this->properties = prepared->properties;
+	this->properties.parameter_count = parameter_count;
+	this->names = prepared->names;
+	this->types = prepared->types;
+
 	// add casts to the prepared statement parameters as required
 	for (idx_t i = 0; i < bind_values.size(); i++) {
 		if (prepared->value_map.count(i + 1) == 0) {
@@ -132,10 +141,6 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 		return;
 	}
 
-	// copy the properties of the prepared statement into the planner
-	this->properties = prepared->properties;
-	this->names = prepared->names;
-	this->types = prepared->types;
 	this->plan = make_unique<LogicalExecute>(move(prepared));
 }
 
@@ -151,6 +156,7 @@ void Planner::PlanPrepare(unique_ptr<SQLStatement> statement) {
 	properties.requires_valid_transaction = false;
 	properties.allow_stream_result = false;
 	properties.bound_all_parameters = true;
+	properties.parameter_count = 0;
 	properties.return_type = StatementReturnType::NOTHING;
 	this->names = {"Success"};
 	this->types = {LogicalType::BOOLEAN};

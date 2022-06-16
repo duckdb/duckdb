@@ -128,11 +128,14 @@ void ValidityFillLoop(Vector &vector, Vector &result, const SelectionVector &sel
 	} else {
 		VectorData vdata;
 		vector.Orrify(count, vdata);
+		if (vdata.validity.AllValid()) {
+			return;
+		}
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = vdata.sel->get_index(i);
-			auto res_idx = sel.get_index(i);
-
-			result_mask.Set(res_idx, vdata.validity.RowIsValid(source_idx));
+			if (!vdata.validity.RowIsValid(source_idx)) {
+				result_mask.SetInvalid(sel.get_index(i));
+			}
 		}
 	}
 }
@@ -207,7 +210,7 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 			result_data[result_idx].offset += offset;
 		}
 
-		result.Verify(sel, count);
+		Vector::Verify(result, sel, count);
 		break;
 	}
 	default:
