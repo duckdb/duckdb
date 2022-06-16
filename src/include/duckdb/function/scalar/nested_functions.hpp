@@ -111,6 +111,6 @@ struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-void VerifyKeysUnique(Vector &keys, idx_t count);
+void VerifyMap(Vector &map, idx_t count);
 
 } // namespace duckdb

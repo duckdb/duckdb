@@ -613,10 +613,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
 			                     arrow_convert_data, col_idx, arrow_convert_idx, offsets, &struct_validity_mask);
 		}
-		// TODO remove this when arrow ensures keys are unique
-		if (!child_entries.empty()) {
-			VerifyKeysUnique(*child_entries[0], size);
-		}
+		VerifyMap(vector, size);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {

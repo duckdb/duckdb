@@ -59,7 +59,7 @@ class TestFetchNested(object):
     def test_map_df(self,duckdb_cursor):
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",[{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}])
         
-        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys have to be unique"):
             compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t",[{'key': [1, 2, 3, 4, 2, None], 'value': [10, 9, 8, 7, 11, 42]}])
         
         compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t",[{'key': [], 'value': []}])

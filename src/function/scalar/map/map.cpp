@@ -10,80 +10,46 @@
 
 namespace duckdb {
 
-bool KeyListIsEmpty(list_entry_t *data, idx_t rows) {
-	for (idx_t i = 0; i < rows; i++) {
-		auto size = data[i].length;
-		if (size != 0) {
-			return false;
+void VerifyMap(Vector &map, idx_t count) {
+	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
+	VectorData vdata;
+	map.Orrify(count, vdata);
+	auto map_validity = vdata.validity;
+
+	auto &children = StructVector::GetEntries(map);
+	VectorData key_vdata;
+	children[0]->Orrify(count, key_vdata);
+	auto key_data = (list_entry_t *)key_vdata.data;
+	auto key_validity = key_vdata.validity;
+
+	auto &key_entries = ListVector::GetEntry(*children[0]);
+	VectorData key_entry_vdata;
+	key_entries.Orrify(count, key_entry_vdata);
+	auto entry_validity = key_entry_vdata.validity;
+
+	for (idx_t row = 0; row < count; row++) {
+		auto row_idx = vdata.sel->get_index(row);
+		// map is allowed to be NULL
+		if (!map_validity.RowIsValid(row_idx)) {
+			continue;
 		}
-	}
-	return true;
-}
-
-static bool AreKeysNull(Vector &keys, idx_t row_count) {
-	auto list_type = keys.GetType();
-	D_ASSERT(list_type.id() == LogicalTypeId::LIST);
-	auto key_type = ListType::GetChildType(list_type).id();
-	auto arg_data = ListVector::GetData(keys);
-	auto &entries = ListVector::GetEntry(keys);
-	if (key_type == LogicalTypeId::SQLNULL) {
-		if (KeyListIsEmpty(arg_data, row_count)) {
-			return false;
+		row_idx = key_vdata.sel->get_index(row);
+		if (!key_validity.RowIsValid(row_idx)) {
+			throw InvalidInputException("The list of map keys is not allowed to be NULL");
 		}
-		// The entire key list is NULL for one (or more) of the rows: (ARRAY[NULL, NULL, NULL])
-		return true;
-	}
-
-	VectorData list_data;
-	keys.Orrify(row_count, list_data);
-	auto validity = FlatVector::Validity(entries);
-	return (!validity.CheckAllValid(row_count));
-}
-
-// TODO replace this with a call to ListUnique
-static bool AreKeysUnique(Vector &key_vector, idx_t row_count) {
-	D_ASSERT(key_vector.GetType().id() == LogicalTypeId::LIST);
-	auto key_type = ListType::GetChildType(key_vector.GetType());
-	auto &child_entry = ListVector::GetEntry(key_vector);
-	VectorData child_vector_data;
-	child_entry.Orrify(ListVector::GetListSize(key_vector), child_vector_data);
-	auto child_validity = child_vector_data.validity;
-
-	VectorData vector_data;
-	key_vector.Orrify(row_count, vector_data);
-	auto key_data = (list_entry_t *)vector_data.data;
-	auto key_validity = vector_data.validity;
-
-	for (idx_t row = 0; row < row_count; row++) {
 		value_set_t unique_keys;
-		auto index = vector_data.sel->get_index(row);
-
-		// Ensure there are no NULL key lists
-		if (!key_validity.RowIsValid(index)) {
-			throw InvalidInputException("Map keys can not be NULL");
-		}
-
-		idx_t start = key_data[index].offset;
-		idx_t end = start + key_data[index].length;
-		for (idx_t i = start; i < end; i++) {
-			auto child_idx = child_vector_data.sel->get_index(i);
-			if (!child_validity.RowIsValid(child_idx)) {
+		for (idx_t i = 0; i < key_data[row_idx].length; i++) {
+			auto index = key_data[row_idx].offset + i;
+			index = key_entry_vdata.sel->get_index(index);
+			if (!entry_validity.RowIsValid(index)) {
 				throw InvalidInputException("Map keys can not be NULL");
 			}
-			auto val = child_entry.GetValue(child_idx);
-			auto result = unique_keys.insert(val);
+			auto value = key_entries.GetValue(index);
+			auto result = unique_keys.insert(value);
 			if (!result.second) {
-				// insertion failed because the element already exists
-				return false;
+				throw InvalidInputException("Map keys have to be unique");
 			}
 		}
-	}
-	return true;
-}
-
-void VerifyKeysUnique(Vector &keys, idx_t count) {
-	if (!AreKeysUnique(keys, count)) {
-		throw InvalidInputException("Map keys have to be unique");
 	}
 }
 
@@ -120,17 +86,12 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		return;
 	}
 
-	if (AreKeysNull(args.data[0], args.size())) {
-		throw InvalidInputException("Map keys can not be NULL");
-	}
-
-	VerifyKeysUnique(args.data[0], args.size());
-
 	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
 		throw Exception("Key list has a different size from Value list");
 	}
 	key_vector->Reference(args.data[0]);
 	value_vector->Reference(args.data[1]);
+	VerifyMap(result, args.size());
 
 	result.Verify(args.size());
 }
