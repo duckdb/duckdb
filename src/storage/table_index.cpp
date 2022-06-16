@@ -1,4 +1,5 @@
 #include "duckdb/storage/table_index.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 void TableIndex::AddIndex(unique_ptr<Index> index) {
@@ -32,7 +33,7 @@ idx_t TableIndex::Count() {
 Index *TableIndex::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
 	Index *result = nullptr;
 	Scan([&](Index &index) {
-		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
+		if (DataTable::IsForeignKeyIndex(fk_keys, index, fk_type)) {
 			result = &index;
 		}
 		return false;

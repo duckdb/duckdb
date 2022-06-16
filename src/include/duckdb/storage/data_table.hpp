@@ -175,6 +175,7 @@ public:
 	void AppendRowGroup(idx_t start_row);
 
 	vector<vector<Value>> GetStorageInfo();
+	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table

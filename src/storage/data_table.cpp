@@ -472,7 +472,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type) {
+bool DataTable::IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type) {
 	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
 		return false;
 	}
@@ -549,7 +549,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	if (transaction_check) {
 		vector<unique_ptr<Index>> &transact_index_vec = transaction.storage.GetIndexes(data_table);
 		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
-			if (IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
+			if (DataTable::IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
 				if (is_append) {
 					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
 				} else {
