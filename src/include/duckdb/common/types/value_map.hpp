@@ -22,7 +22,7 @@ struct ValueHashFunction {
 
 struct ValueEquality {
 	bool operator()(const Value &a, const Value &b) const {
-		return Value::ValuesAreEqual(a, b);
+		return Value::NotDistinctFrom(a, b);
 	}
 };
 
