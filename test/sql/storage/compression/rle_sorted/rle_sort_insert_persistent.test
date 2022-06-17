@@ -1,0 +1,34 @@
+# name: test/sql/storage/compression/rle_sorted/rle_sort_insert_persistent.test
+# description: Test if persistent segments work correctly with inserts and NULLs (STANDARD_VECTOR_SIZE=4, ROW_GROUP_VECTOR_COUNT=1)
+# group: [rle_sorted]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB'
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+PRAGMA force_compression_sorting=True
+
+statement ok
+CREATE TABLE nulls(i INTEGER)
+
+statement ok
+INSERT INTO nulls VALUES (1), (2), (3), (4), (5), (6);
+
+statement ok
+CHECKPOINT
+
+statement ok
+INSERT INTO nulls VALUES (7), (8);
+
+restart
+
+mode output_result
+
+statement ok
+SELECT * FROM nulls;

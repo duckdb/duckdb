@@ -229,6 +229,7 @@ void RLESort::Sort() {
 			break;
 		}
 		// None of the key columns had any changes, no need to sort again
+		data_table.prev_end += row_group.count;
 		return;
 	}
 
@@ -246,10 +247,6 @@ void RLESort::Sort() {
 	auto &global_sort_state = *sort_state->global_sort_state;
 	global_sort_state.AddLocalState(local_sort_state);
 	global_sort_state.PrepareMergePhase();
-
-	for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
-		row_group.columns[column_idx]->CleanPersistentSegments();
-	}
 
 	// scan the sorted row data and add to the sorted row group
 	int64_t count_change = new_count - old_count;
