@@ -48,7 +48,7 @@ public:
 
 	WindowLocalSinkState(const PhysicalWindow &op_p, BoundWindowExpression *wexpr, const unsigned partition_bits = 10)
 	    : op(op_p), partition_cols(wexpr->partitions.size()), partition_count(size_t(1) << partition_bits),
-	    hash_vector(LogicalTypeId::HASH), sel(STANDARD_VECTOR_SIZE) {
+	      hash_vector(LogicalTypeId::HASH), sel(STANDARD_VECTOR_SIZE) {
 
 		// we sort by both 1) partition by expression list and 2) order by expressions
 		vector<LogicalType> payload_types = op.children[0]->types;
@@ -63,7 +63,7 @@ public:
 				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
 			} else {
 				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
-									wexpr->partitions_stats[prt_idx]->Copy());
+				                    wexpr->partitions_stats[prt_idx]->Copy());
 			}
 		}
 
@@ -167,7 +167,7 @@ void WindowLocalSinkState::Hash() {
 	}
 }
 
-void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &gstate){
+void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &gstate) {
 	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
 		payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
 	}
@@ -196,7 +196,8 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 			payload_chunk.data[i].Orrify(row_count, pdata);
 			payload_data.emplace_back(move(pdata));
 		}
-		RowOperations::Scatter(payload_chunk, payload_data.data(), payload_layout, addresses, *strings, *row_sel, row_count);
+		RowOperations::Scatter(payload_chunk, payload_data.data(), payload_layout, addresses, *strings, *row_sel,
+		                       row_count);
 		return;
 	}
 
@@ -224,7 +225,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 				sort_buffer->Initialize(over_chunk.GetTypes());
 				payload_buffer = make_unique<DataChunk>();
 				payload_buffer->Initialize(payload_chunk.GetTypes());
-				}
+			}
 
 			if (payload_buffer->size() + bin_size > STANDARD_VECTOR_SIZE) {
 				local_sort->SinkChunk(*sort_buffer, *payload_buffer);
@@ -549,7 +550,8 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForPartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate, const hash_t hash_bin) {
+static void SortCollectionForPartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate,
+                                       const hash_t hash_bin) {
 	state.global_sort_state = move(gstate.sorts[hash_bin]);
 }
 
@@ -594,7 +596,7 @@ static void ScanRowCollection(RowDataCollection &rows, ChunkCollection &cols, co
 			auto &column = result.data[i];
 			const auto col_offset = layout.GetOffsets()[i];
 			RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
-								  *FlatVector::IncrementalSelectionVector(), result.size(), col_offset, i);
+			                      *FlatVector::IncrementalSelectionVector(), result.size(), col_offset, i);
 		}
 
 		scan_position += this_n;
