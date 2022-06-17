@@ -1085,7 +1085,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			}
 		}
 		if (vector->GetType().id() == LogicalTypeId::MAP) {
-			VerifyMap(*vector, count);
+			VerifyMap(*vector, count, *sel);
 		}
 	}
 

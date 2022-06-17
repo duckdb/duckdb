@@ -111,6 +111,6 @@ struct StructExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-void VerifyMap(Vector &map, idx_t count);
+void VerifyMap(Vector &map, idx_t count, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 
 } // namespace duckdb

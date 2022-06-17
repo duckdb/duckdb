@@ -9,25 +9,27 @@
 
 namespace duckdb {
 
-void VerifyMap(Vector &map, idx_t count) {
+// TODO: this doesn't recursively verify maps if maps are nested
+void VerifyMap(Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	VectorData vdata;
-	map.Orrify(count, vdata);
-	auto map_validity = vdata.validity;
+	VectorData map_vdata;
+	map.Orrify(count, map_vdata);
+	auto map_validity = map_vdata.validity;
 
-	auto &children = StructVector::GetEntries(map);
+	auto &key_vector = *(StructVector::GetEntries(map)[0]);
 	VectorData key_vdata;
-	children[0]->Orrify(count, key_vdata);
+	key_vector.Orrify(count, key_vdata);
 	auto key_data = (list_entry_t *)key_vdata.data;
 	auto key_validity = key_vdata.validity;
 
-	auto &key_entries = ListVector::GetEntry(*children[0]);
+	auto &key_entries = ListVector::GetEntry(key_vector);
 	VectorData key_entry_vdata;
 	key_entries.Orrify(count, key_entry_vdata);
 	auto entry_validity = key_entry_vdata.validity;
 
 	for (idx_t row = 0; row < count; row++) {
-		auto row_idx = vdata.sel->get_index(row);
+		auto mapped_row = sel.get_index(row);
+		auto row_idx = map_vdata.sel->get_index(mapped_row);
 		// map is allowed to be NULL
 		if (!map_validity.RowIsValid(row_idx)) {
 			continue;
