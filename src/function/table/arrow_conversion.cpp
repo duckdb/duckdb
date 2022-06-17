@@ -207,6 +207,26 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &s
 	}
 }
 
+void ArrowToDuckDBMapVerify(Vector &vector, idx_t count) {
+	auto valid_check = CheckMapValidity(vector, count);
+	switch (valid_check) {
+	case MapInvalidReason::VALID:
+		break;
+	case MapInvalidReason::DUPLICATE_KEY: {
+		throw InvalidInputException("Arrow map contains duplicate key, which isn't supported by DuckDB map type");
+	}
+	case MapInvalidReason::NULL_KEY: {
+		throw InvalidInputException("Arrow map contains NULL as map key, which isn't supported by DuckDB map type");
+	}
+	case MapInvalidReason::NULL_KEY_LIST: {
+		throw InvalidInputException("Arrow map contains NULL as key list, which isn't supported by DuckDB map type");
+	}
+	default: {
+		throw InternalException("MapInvalidReason not implemented");
+	}
+	}
+}
+
 void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
                           unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                           pair<idx_t, idx_t> &arrow_convert_idx, uint32_t *offsets, ValidityMask *parent_mask) {
@@ -613,7 +633,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
 			                     arrow_convert_data, col_idx, arrow_convert_idx, offsets, &struct_validity_mask);
 		}
-		VerifyMap(vector, size);
+		ArrowToDuckDBMapVerify(vector, size);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {

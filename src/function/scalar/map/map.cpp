@@ -10,7 +10,7 @@
 namespace duckdb {
 
 // TODO: this doesn't recursively verify maps if maps are nested
-void VerifyMap(Vector &map, idx_t count, const SelectionVector &sel) {
+MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 	VectorData map_vdata;
 	map.Orrify(count, map_vdata);
@@ -36,21 +36,42 @@ void VerifyMap(Vector &map, idx_t count, const SelectionVector &sel) {
 		}
 		row_idx = key_vdata.sel->get_index(row);
 		if (!key_validity.RowIsValid(row_idx)) {
-			throw InvalidInputException("The list of map keys is not allowed to be NULL");
+			return MapInvalidReason::NULL_KEY_LIST;
 		}
 		value_set_t unique_keys;
 		for (idx_t i = 0; i < key_data[row_idx].length; i++) {
 			auto index = key_data[row_idx].offset + i;
 			index = key_entry_vdata.sel->get_index(index);
 			if (!entry_validity.RowIsValid(index)) {
-				throw InvalidInputException("Map keys can not be NULL");
+				return MapInvalidReason::NULL_KEY;
 			}
 			auto value = key_entries.GetValue(index);
 			auto result = unique_keys.insert(value);
 			if (!result.second) {
-				throw InvalidInputException("Map keys have to be unique");
+				return MapInvalidReason::DUPLICATE_KEY;
 			}
 		}
+	}
+	return MapInvalidReason::VALID;
+}
+
+static void MapConversionVerify(Vector &vector, idx_t count) {
+	auto valid_check = CheckMapValidity(vector, count);
+	switch (valid_check) {
+	case MapInvalidReason::VALID:
+		break;
+	case MapInvalidReason::DUPLICATE_KEY: {
+		throw InvalidInputException("Map keys have to be unique");
+	}
+	case MapInvalidReason::NULL_KEY: {
+		throw InvalidInputException("Map keys can not be NULL");
+	}
+	case MapInvalidReason::NULL_KEY_LIST: {
+		throw InvalidInputException("The list of map keys is not allowed to be NULL");
+	}
+	default: {
+		throw InternalException("MapInvalidReason not implemented");
+	}
 	}
 }
 
@@ -93,7 +114,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 
 	key_vector.Reference(args.data[0]);
 	value_vector.Reference(args.data[1]);
-	VerifyMap(result, args.size());
+	MapConversionVerify(result, args.size());
 
 	result.Verify(args.size());
 }

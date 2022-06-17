@@ -993,6 +993,14 @@ void Vector::UTFVerify(idx_t count) {
 	UTFVerify(*flat_sel, count);
 }
 
+void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+#ifdef DEBUG
+	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::MAP);
+	auto valid_check = CheckMapValidity(vector_p, count, sel_p);
+	D_ASSERT(valid_check == MapInvalidReason::VALID);
+#endif // DEBUG
+}
+
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
@@ -1085,7 +1093,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			}
 		}
 		if (vector->GetType().id() == LogicalTypeId::MAP) {
-			VerifyMap(*vector, count, *sel);
+			VerifyMap(*vector, *sel, count);
 		}
 	}
 
