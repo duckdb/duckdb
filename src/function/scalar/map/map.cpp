@@ -14,7 +14,7 @@ void VerifyMap(Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
 	VectorData map_vdata;
 	map.Orrify(count, map_vdata);
-	auto& map_validity = map_vdata.validity;
+	auto &map_validity = map_vdata.validity;
 
 	auto &key_vector = *(StructVector::GetEntries(map)[0]);
 	VectorData key_vdata;
