@@ -369,6 +369,8 @@ static duckdb::LogicalType EmptyMap() {
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
 //! for example a python list could contain of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
+
+//! Maybe there's an INVALID type actually..
 static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert) {
 	auto datetime_mod = py::module_::import("datetime");
 	auto decimal_mod = py::module_::import("decimal");
