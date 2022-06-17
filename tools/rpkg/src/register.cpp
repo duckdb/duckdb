@@ -40,6 +40,26 @@ using namespace duckdb;
 	}
 }
 
+unique_ptr<TableFunctionRef> duckdb::DataFrameScanReplacement(ClientContext &context, const string &table_name,
+                                                              ReplacementScanData *) {
+
+	int error_occurred = 0;
+	SEXP res = R_tryEvalSilent(Rf_install(table_name.c_str()), R_GetCurrentEnv(), &error_occurred);
+	if (error_occurred) {
+		return nullptr;
+	}
+	if (!Rf_inherits(res, "data.frame")) {
+		return nullptr;
+	}
+
+	auto table_function = make_unique<TableFunctionRef>();
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)res)));
+
+	table_function->function = make_unique<FunctionExpression>("r_dataframe_scan", move(children));
+	return table_function;
+}
+
 class RArrowTabularStreamFactory {
 public:
 	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p, ClientConfig &config)
