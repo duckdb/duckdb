@@ -807,5 +807,7 @@ endif()
 
 # build out-of-tree extensions on demand
 if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
-  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} extension/external)
+  # the build path seems to get ignored on windows in just the right way. no idea why.
+  get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
 endif()
