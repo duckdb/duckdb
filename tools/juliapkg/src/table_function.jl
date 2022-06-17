@@ -62,6 +62,14 @@ function _table_bind_cleanup(data::Ptr{Cvoid})
     return
 end
 
+function get_exception_info()
+    error = ""
+    for (exc, bt) in current_exceptions()
+        error = string(error, sprint(showerror, exc, bt))
+    end
+    return error
+end
+
 function _table_bind_function(info::duckdb_bind_info)
     try
         main_function = unsafe_pointer_to_objref(duckdb_bind_get_extra_info(info))
@@ -70,8 +78,8 @@ function _table_bind_function(info::duckdb_bind_info)
         bind_data_pointer = pointer_from_objref(bind_data)
         _add_global_object(main_function, bind_data)
         duckdb_bind_set_bind_data(info, bind_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
-    catch ex
-        duckdb_bind_set_error(info, sprint(showerror, ex))
+    catch
+        duckdb_bind_set_error(info, get_exception_info())
         return
     end
     return
@@ -92,7 +100,6 @@ struct InitInfo
     end
 end
 
-
 function _table_init_function_generic(info::duckdb_init_info, init_fun::Function)
     try
         main_function = unsafe_pointer_to_objref(duckdb_init_get_extra_info(info))
@@ -101,8 +108,8 @@ function _table_init_function_generic(info::duckdb_init_info, init_fun::Function
         init_data_pointer = pointer_from_objref(init_data)
         _add_global_object(main_function, init_data)
         duckdb_init_set_init_data(info, init_data_pointer, @cfunction(_table_bind_cleanup, Cvoid, (Ptr{Cvoid},)))
-    catch ex
-        duckdb_init_set_error(info, sprint(showerror, ex))
+    catch
+        duckdb_init_set_error(info, get_exception_info())
         return
     end
     return
@@ -175,8 +182,8 @@ function _table_main_function(info::duckdb_function_info, chunk::duckdb_data_chu
     binfo::FunctionInfo = FunctionInfo(info, main_function)
     try
         main_function.main_func(binfo, DataChunk(chunk, false))
-    catch ex
-        duckdb_function_set_error(info, sprint(showerror, ex))
+    catch
+        duckdb_function_set_error(info, get_exception_info())
     end
     return
 end
