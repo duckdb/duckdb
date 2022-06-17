@@ -807,5 +807,5 @@ endif()
 
 # build out-of-tree extensions on demand
 if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
-  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} extension/external)
 endif()
