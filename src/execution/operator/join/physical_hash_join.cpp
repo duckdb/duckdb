@@ -58,9 +58,8 @@ public:
 
 	//! Whether we are doing an external join
 	bool external;
-	//! TODO
 	//! Memory usage per thread during the Sink and Execute phases
-	idx_t sink_memory_per_thread;
+	idx_t max_ht_size;
 	idx_t execute_memory_per_thread;
 
 	//! Hash tables built by each thread
@@ -138,11 +137,11 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	// during the Sink phase we spill at 60%
-	state->sink_memory_per_thread = max_memory / num_threads * 0.6;
+	state->max_ht_size = max_memory / num_threads * 0.6;
 	// during the Execute phase we are probing and sinking at the same time
 	// at this point we're already doing an external join, and we need to spill the new sink data
-	// we can spill at a much lower percentage, like 10%
-	state->execute_memory_per_thread = max_memory / num_threads * 0.6;
+	// we can spill at a much lower percentage, 10%
+	state->execute_memory_per_thread = max_memory / num_threads * 0.1;
 	return move(state);
 }
 
@@ -189,8 +188,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	// swizzle if we reach memory limit
-	if (lstate.hash_table->SizeInBytes() >= gstate.sink_memory_per_thread) {
-		lstate.hash_table->SwizzleCollectedBlocks();
+	if (lstate.hash_table->SizeInBytes() >= gstate.max_ht_size) {
+		lstate.hash_table->SwizzleBlocks();
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -201,11 +200,9 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	if (lstate.initialized) {
 		if (gstate.external) {
-			lstate.hash_table->SwizzleCollectedBlocks();
+			lstate.hash_table->SwizzleBlocks();
 		}
 		gstate.local_hash_tables.push_back(move(lstate.hash_table));
-		// TODO some hash tables may be swizzled while others aren't due to race conditions
-		//  need to ensure all of them are swizzled!
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -222,8 +219,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	if (sink.external) {
 		for (auto &ht : sink.local_hash_tables) {
 			if (ht->Count() != 0) {
-				// Has unswizzled blocks left
-				ht->SwizzleCollectedBlocks();
+				// Has unswizzled blocks left - can happen if one thread finishes before sink.external is set
+				ht->SwizzleBlocks();
 			}
 		}
 	} else {
@@ -244,7 +241,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
 		if (sink.external) {
-			sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables);
+			sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
 		} else {
 			sink.hash_table->Finalize();
 			if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
@@ -343,7 +340,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 		state.scan_structure = sink.hash_table->ProbeAndBuild(state.join_keys, input, *state.local_ht, state.sink_keys,
 		                                                      state.sink_payload);
 		if (state.local_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
-			state.local_ht->SwizzleCollectedBlocks();
+			state.local_ht->SwizzleBlocks();
 		}
 		// maybe we can scannfullouter here?
 	} else {
@@ -362,7 +359,6 @@ public:
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
 		if (sink.external) {
 			probe_ht = sink.hash_table->CopyEmpty();
-			sink.hash_table->finalized = false; // TODO check if this is OK
 		}
 	}
 
@@ -380,10 +376,10 @@ public:
 	}
 };
 
+//! Only used for external join
 class HashJoinLocalScanState : public LocalSourceState {
 public:
 	explicit HashJoinLocalScanState(const PhysicalHashJoin &op) : partitioned(false), addresses(LogicalType::POINTER) {
-		// TODO: oops ... the build types of probe and build side are not the same!
 		probe_chunk.Initialize(op.build_types);
 		join_keys.Initialize(op.condition_types);
 		payload.Initialize(op.children[0]->types);
@@ -392,16 +388,12 @@ public:
 	//! Whether this thread has partitioned its local HT yet
 	bool partitioned;
 
-	//! TODO
-	Vector addresses;
-
-	//! Probe keys and payload TODO
+	//! Everything we need for the probe
+	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	DataChunk probe_chunk;
+	Vector addresses;
 	DataChunk join_keys;
 	DataChunk payload;
-
-	//! TODO
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
@@ -413,9 +405,13 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 	return make_unique<HashJoinLocalScanState>(*this);
 }
 
-void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const {
+bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	// Prepare the build side
+	if (sink.hash_table->AllPartitionsCompleted()) {
+		return false;
+	}
+	sink.hash_table->NextPartitions();
 	sink.hash_table->FinalizeExternal();
 	// Prepare the probe side
 	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, gstate.probe_scan_state);
@@ -425,6 +421,7 @@ void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const 
 		lock_guard<mutex> fo_lock(outer_ss.lock);
 		outer_ss.Reset();
 	}
+	return true;
 }
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
@@ -475,9 +472,12 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		// Wait (spinlock) until this partition is fully done
 		while (true) {
 			lock_guard<mutex> lock(probe_ss.lock);
-			if (probe_ss.scanned == probe_ss.total) {
+			if (probe_ss.scanned == probe_ss.total) { // TODO: and the last ScanFullOuter is also done
 				// Prepare the next partition
-				PrepareProbeRound(gstate);
+				if (!PrepareProbeRound(gstate)) {
+					// All partitions done
+					return;
+				}
 				break;
 			}
 		}

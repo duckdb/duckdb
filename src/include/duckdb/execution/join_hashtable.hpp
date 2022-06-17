@@ -229,66 +229,72 @@ private:
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
 
-	//! Out of core stuff down here
 public:
-	//! TODO
+	//===--------------------------------------------------------------------===//
+	// External Join
+	//===--------------------------------------------------------------------===//
+	//! Size of block_collection + string_heap in bytes
 	idx_t SizeInBytes();
-	//! Swizzles all blocks in this HT
-	void SwizzleCollectedBlocks();
-	//! Unswizzle blocks in the 'swizzled_...' RowDataCollections
+	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
+	void SwizzleBlocks();
+	//! Unswizzle the blocks in this HT (moves from swizzled_... to block_collection and string_heap)
 	void UnswizzleBlocks();
-	//! Similar to Finalize() but for an external join
-	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts);
+
+	//! Schedules one task for every HT in local_hts to partition them and add them to this HT
+	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts,
+	                            idx_t max_ht_size);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
-	//! TODO
-	void PinPartitions();
-	//! TODO
-	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
+
 	//! TODO
 	void FinalizeExternal();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);
-	//! TODO (must hold the lock!)
-	idx_t GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position);
+
+	bool AllPartitionsCompleted();
 	//! TODO
+	void NextPartitions();
+	//! TODO
+	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
+	//! If this is the probe-side HT, get the next indices indicating what to scan
+	idx_t GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position);
+	//! If this is the probe
 	void ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx_t position, idx_t block_position, idx_t count);
 
 private:
-	//! Merges histogram into this one
-	void MergeHistogram(JoinHashTable &other);
-	//! Reduces histogram on bit at a time
-	void ReduceHistogram(idx_t avg_string_size);
-	//! Checks whether the current histogram
-	bool PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size);
+	//	//! Merges histogram into this one
+	//	void MergeHistogram(JoinHashTable &other);
+	//	//! Reduces histogram on bit at a time
+	//	void ReduceHistogram(idx_t avg_string_size);
+	//	//! Checks whether the current histogram
+	//	bool PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size);
 
 private:
-	//! The number of radix bits used to build the histogram
-	static constexpr const idx_t INITIAL_RADIX_BITS = 10;
-	//! The current number of radix bits
-	idx_t current_radix_bits;
+	//	//! The number of radix bits used to build the histogram
+	//	static constexpr const idx_t INITIAL_RADIX_BITS = 10;
+	//! The current number of radix bits used to partition
+	idx_t radix_bits;
+	//!
+	idx_t partitions_per_iteration;
+	//! TODO
+	idx_t partitions_completed;
 
 	//! The RowDataCollection holding the swizzled main data of the hash table
 	unique_ptr<RowDataCollection> swizzled_block_collection;
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
 
-	//! TODO
-	mutex finalize_lock;
-
-	//! Histogram lock
-	mutex histogram_lock;
-	//! Histogram of inserted values
-	unique_ptr<idx_t[]> histogram_ptr;
+	//	//! Histogram lock
+	//	mutex histogram_lock;
+	//	//! Histogram of inserted values
+	//	unique_ptr<idx_t[]> histogram_ptr;
 
 	//! Partitioned data lock
 	mutex partition_lock;
 	//! Partitioned data
 	vector<unique_ptr<RowDataCollection>> partition_block_collections;
 	vector<unique_ptr<RowDataCollection>> partition_string_heaps;
-	//! TODO
-	idx_t partition_cutoff;
 };
 
 } // namespace duckdb

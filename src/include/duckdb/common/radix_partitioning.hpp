@@ -39,6 +39,10 @@ private:
 //! Generic radix partitioning functions
 struct RadixPartitioning {
 public:
+	static idx_t NumberOfPartitions(idx_t radix_bits) {
+		return 1 << radix_bits;
+	}
+
 	//! Initialize histogram for "radix_bits"
 	static unique_ptr<idx_t[]> InitializeHistogram(idx_t radix_bits);
 	//! Update histogram given a vector of hashes

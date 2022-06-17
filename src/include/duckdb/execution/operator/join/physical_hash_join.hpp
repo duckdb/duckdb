@@ -90,7 +90,7 @@ public:
 
 private:
 	//! TODO
-	void PrepareProbeRound(HashJoinGlobalScanState &gstate) const;
+	bool PrepareProbeRound(HashJoinGlobalScanState &gstate) const;
 };
 
 } // namespace duckdb

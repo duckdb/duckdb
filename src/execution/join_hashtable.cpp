@@ -16,8 +16,8 @@ using ScanStructure = JoinHashTable::ScanStructure;
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false),
-      current_radix_bits(INITIAL_RADIX_BITS) {
+      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), radix_bits(7),
+      partitions_completed(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -59,13 +59,13 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 	// compute the per-block capacity of this HT
 	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
 	// Add some so the capacity is a multiple of TMP_BUF_SIZE
-	block_capacity += RadixPartitioningConstants<INITIAL_RADIX_BITS>::TMP_BUF_SIZE -
-	                  (block_capacity % RadixPartitioningConstants<INITIAL_RADIX_BITS>::TMP_BUF_SIZE);
+	block_capacity +=
+	    RadixPartitioningConstants<0>::TMP_BUF_SIZE - (block_capacity % RadixPartitioningConstants<0>::TMP_BUF_SIZE);
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	swizzled_block_collection = block_collection->CopyEmpty();
 	swizzled_string_heap = string_heap->CopyEmpty();
-	histogram_ptr = RadixPartitioning::InitializeHistogram(current_radix_bits);
+	//	histogram_ptr = RadixPartitioning::InitializeHistogram(current_radix_bits);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -108,16 +108,16 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 }
 
-void JoinHashTable::MergeHistogram(JoinHashTable &other) {
-	lock_guard<mutex> lock(histogram_lock);
-	D_ASSERT(current_radix_bits == INITIAL_RADIX_BITS);
-	D_ASSERT(other.current_radix_bits == INITIAL_RADIX_BITS);
-	auto histogram = histogram_ptr.get();
-	const auto other_hist = other.histogram_ptr.get();
-	for (idx_t i = 0; i < RadixPartitioningConstants<INITIAL_RADIX_BITS>::NUM_PARTITIONS; i++) {
-		histogram[i] += other_hist[i];
-	}
-}
+// void JoinHashTable::MergeHistogram(JoinHashTable &other) {
+//	lock_guard<mutex> lock(histogram_lock);
+//	D_ASSERT(current_radix_bits == INITIAL_RADIX_BITS);
+//	D_ASSERT(other.current_radix_bits == INITIAL_RADIX_BITS);
+//	auto histogram = histogram_ptr.get();
+//	const auto other_hist = other.histogram_ptr.get();
+//	for (idx_t i = 0; i < RadixPartitioningConstants<INITIAL_RADIX_BITS>::NUM_PARTITIONS; i++) {
+//		histogram[i] += other_hist[i];
+//	}
+// }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -284,9 +284,9 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	hash_values.Orrify(keys.size(), hdata);
 	source_data.emplace_back(move(hdata));
 
-	// Update the histogram
-	RadixPartitioning::UpdateHistogram(source_data.back(), added_count, keys.size() == added_count, histogram_ptr.get(),
-	                                   INITIAL_RADIX_BITS);
+	//	// Update the histogram
+	//	RadixPartitioning::UpdateHistogram(source_data.back(), added_count, keys.size() == added_count,
+	// histogram_ptr.get(), 	                                   INITIAL_RADIX_BITS);
 
 	source_chunk.SetCardinality(keys);
 
@@ -868,7 +868,7 @@ idx_t JoinHashTable::SizeInBytes() {
 	return block_collection->SizeInBytes() + string_heap->SizeInBytes();
 }
 
-void JoinHashTable::SwizzleCollectedBlocks() {
+void JoinHashTable::SwizzleBlocks() {
 	// The main data blocks can just be moved
 	swizzled_block_collection->Merge(*block_collection);
 
@@ -981,38 +981,6 @@ void JoinHashTable::UnswizzleBlocks() {
 	swizzled_string_heap->Clear();
 }
 
-bool JoinHashTable::PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size) {
-	// TODO: implement (check if any single partition is too big for memory)
-	return false;
-}
-
-void JoinHashTable::ReduceHistogram(idx_t avg_string_size) {
-	idx_t avg_row_size = avg_string_size + layout.GetRowWidth();
-	while (current_radix_bits > 1) {
-		auto reduced_hist =
-		    RadixPartitioning::ReduceHistogram(histogram_ptr.get(), current_radix_bits, current_radix_bits - 1);
-		if (PartitionsFitInMemory(reduced_hist.get(), avg_row_size)) {
-			// Reduced partitions fit, continue
-			histogram_ptr = move(reduced_hist);
-		} else {
-			// Reduced partitions don't fit, stick to current histogram
-			break;
-		}
-	}
-}
-
-void JoinHashTable::FinalizeExternal() {
-	lock_guard<mutex> flock(finalize_lock);
-	if (finalized) {
-		return;
-	}
-	// TODO Complete partitioning, or perhaps schedule another partitioning round
-	//  for now we just move the data back to the swizzled blocks
-	PinPartitions();
-	UnswizzleBlocks();
-	Finalize();
-}
-
 class PartitionTask : public ExecutorTask {
 public:
 	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht, JoinHashTable &local_ht)
@@ -1059,21 +1027,28 @@ public:
 };
 
 void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
-                                           vector<unique_ptr<JoinHashTable>> &local_hts) {
-	idx_t total_string_size = 0;
-	idx_t total_count = 0;
-	// Merge local histograms into this HT's histogram
-	for (auto &ht : local_hts) {
-		// Everything should be in the 'swizzled' variants of these
-		D_ASSERT(ht->block_collection->blocks.empty());
-		D_ASSERT(ht->string_heap->blocks.empty());
-		MergeHistogram(*ht);
-		total_string_size += ht->swizzled_string_heap->SizeInBytes();
-		total_count += ht->swizzled_string_heap->count;
-	}
+                                           vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
+	//	idx_t total_string_size = 0;
+	//	idx_t total_count = 0;
+	//	// Merge local histograms into this HT's histogram
+	//	for (auto &ht : local_hts) {
+	//		// Everything should be in the 'swizzled' variants of these
+	//		D_ASSERT(ht->block_collection->blocks.empty());
+	//		D_ASSERT(ht->string_heap->blocks.empty());
+	//		MergeHistogram(*ht);
+	//		total_string_size += ht->swizzled_string_heap->SizeInBytes();
+	//		total_count += ht->swizzled_string_heap->count;
+	//	}
+	//
+	//	// Reduce histogram until we have as few partitions as possible that still fit in memory
+	//	ReduceHistogram(total_string_size / total_count);
 
-	// Reduce histogram until we have as few partitions as possible that still fit in memory
-	ReduceHistogram(total_string_size / total_count);
+	idx_t total_size = 0;
+	for (auto &ht : local_hts) {
+		total_size += ht->SizeInBytes();
+	}
+	idx_t size_per_partition = total_size / RadixPartitioning::NumberOfPartitions(radix_bits);
+	partitions_per_iteration = max_ht_size / size_per_partition;
 
 	// Schedule events to partition hts
 	auto new_event = make_shared<PartitionEvent>(pipeline, *this, local_hts);
@@ -1092,7 +1067,7 @@ void JoinHashTable::Partition(JoinHashTable &global_ht) {
 	// Partition
 	RadixPartitioning::Partition(global_ht.buffer_manager, global_ht.layout, global_ht.pointer_offset,
 	                             *swizzled_block_collection, *swizzled_string_heap, partition_block_collections,
-	                             partition_string_heaps, global_ht.current_radix_bits);
+	                             partition_string_heaps, global_ht.radix_bits);
 
 	// Clear input data
 	swizzled_block_collection->Clear();
@@ -1102,33 +1077,39 @@ void JoinHashTable::Partition(JoinHashTable &global_ht) {
 	global_ht.Merge(*this);
 }
 
-void JoinHashTable::PinPartitions() {
-	// TODO for now we just move everything back to the normal collections
-	for (idx_t idx = 0; idx < partition_block_collections.size(); idx++) {
-		swizzled_block_collection->Merge(*partition_block_collections[idx]);
+// bool JoinHashTable::PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size) {
+//	// TODO: implement (check if any single partition is too big for memory)
+//	return false;
+// }
+//
+// void JoinHashTable::ReduceHistogram(idx_t avg_string_size) {
+//	idx_t avg_row_size = avg_string_size + layout.GetRowWidth();
+//	while (current_radix_bits > 1) {
+//		auto reduced_hist =
+//		    RadixPartitioning::ReduceHistogram(histogram_ptr.get(), current_radix_bits, current_radix_bits - 1);
+//		if (PartitionsFitInMemory(reduced_hist.get(), avg_row_size)) {
+//			// Reduced partitions fit, continue
+//			histogram_ptr = move(reduced_hist);
+//		} else {
+//			// Reduced partitions don't fit, stick to current histogram
+//			break;
+//		}
+//	}
+// }
+
+void JoinHashTable::FinalizeExternal() {
+	// Move specific partitions to the swizzled_... collections
+	for (idx_t p = partitions_completed; p < partitions_completed + partitions_per_iteration; p++) {
+		swizzled_block_collection->Merge(*partition_block_collections[p]);
 		if (!layout.AllConstant()) {
-			swizzled_string_heap->Merge(*partition_string_heaps[idx]);
+			swizzled_string_heap->Merge(*partition_string_heaps[p]);
 		}
 	}
-}
 
-void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
-	// Get rid of partitions that we already completed
-	for (idx_t p = 0; p < partition_cutoff; p++) {
-		partition_block_collections[p] = nullptr;
-		if (!layout.AllConstant()) {
-			partition_string_heaps[p] = nullptr;
-		}
-	}
-
-	// Reset scan state and set how much we need to scan in this round
-	probe_scan_state.Reset();
-	for (idx_t p = partition_cutoff; p < build_ht.partition_cutoff; p++) {
-		probe_scan_state.total += partition_block_collections[p]->count;
-	}
-
-	// Update cutoff for next round
-	partition_cutoff = build_ht.partition_cutoff;
+	// Unswizzle them
+	UnswizzleBlocks();
+	// Build pointer table
+	Finalize();
 }
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
@@ -1148,8 +1129,8 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	SelectionVector false_sel;
 	true_sel.Initialize();
 	false_sel.Initialize();
-	auto true_count = RadixPartitioning::Select(hashes, current_sel, ss->count, current_radix_bits, partition_cutoff,
-	                                            &true_sel, &false_sel);
+	auto true_count = RadixPartitioning::Select(hashes, current_sel, ss->count, radix_bits,
+	                                            partitions_completed + partitions_per_iteration, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
 	// sink non-matching stuff into HT for later
@@ -1172,6 +1153,33 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	ss->InitializeSelectionVector(current_sel);
 
 	return ss;
+}
+
+bool JoinHashTable::AllPartitionsCompleted() {
+	return partitions_completed == RadixPartitioning::NumberOfPartitions(radix_bits);
+}
+
+void JoinHashTable::NextPartitions() {
+	partitions_completed += partitions_per_iteration;
+}
+
+void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
+	auto p_start = build_ht.partitions_completed;
+	auto p_end = p_start + build_ht.partitions_per_iteration;
+
+	// Get rid of partitions that we already completed
+	for (idx_t p = p_start; p < p_end; p++) {
+		partition_block_collections[p] = nullptr;
+		if (!layout.AllConstant()) {
+			partition_string_heaps[p] = nullptr;
+		}
+	}
+
+	// Reset scan state and set how much we need to scan in this round
+	probe_scan_state.Reset();
+	for (idx_t p = p_start; p < p_end; p++) {
+		probe_scan_state.total += partition_block_collections[p]->count;
+	}
 }
 
 idx_t JoinHashTable::GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
