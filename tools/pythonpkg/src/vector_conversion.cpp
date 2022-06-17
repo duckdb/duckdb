@@ -1,4 +1,5 @@
 #include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/python_instance_checker.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -326,9 +327,9 @@ static py::object GetItem(pybind11::object &column, idx_t index) {
 	return column.attr("__getitem__")(index);
 }
 
-static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert);
+static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert);
 
-static duckdb::LogicalType GetListType(py::handle &ele, bool &can_convert) {
+static duckdb::LogicalType GetListType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert) {
 	auto size = py::len(ele);
 
 	if (size == 0) {
@@ -341,7 +342,7 @@ static duckdb::LogicalType GetListType(py::handle &ele, bool &can_convert) {
 	idx_t i = 0;
 	LogicalType list_type = LogicalType::SQLNULL;
 	for (auto py_val : ele) {
-		auto item_type = GetItemType(py_val, can_convert);
+		auto item_type = GetItemType(instance_checker, py_val, can_convert);
 		if (!i) {
 			list_type = item_type;
 		} else {
@@ -368,25 +369,27 @@ static duckdb::LogicalType EmptyMap() {
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
 //! for example a python list could contain of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
-static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
-	auto datetime_mod = py::module::import("datetime");
+static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert) {
+	auto datetime_mod = py::module_::import("datetime");
+	auto decimal_mod = py::module_::import("decimal");
+
 	auto datetime_date = datetime_mod.attr("date");
 	auto datetime_datetime = datetime_mod.attr("datetime");
 	auto datetime_time = datetime_mod.attr("time");
-	auto decimal_mod = py::module::import("decimal");
+
 	auto decimal_decimal = decimal_mod.attr("Decimal");
 
 	if (ele.is_none()) {
 		return LogicalType::SQLNULL;
-	} else if (py::isinstance<py::bool_>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::bool_>(ele)) {
 		return LogicalType::BOOLEAN;
-	} else if (py::isinstance<py::int_>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::int_>(ele)) {
 		return LogicalType::BIGINT;
-	} else if (py::isinstance<py::float_>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::float_>(ele)) {
 		return LogicalType::DOUBLE;
-	} else if (py::isinstance(ele, decimal_decimal)) {
+	} else if (instance_checker.IsInstanceOf(ele, "Decimal", "decimal")) {
 		return LogicalType::VARCHAR; // Might be float64 actually?
-	} else if (py::isinstance(ele, datetime_datetime)) {
+	} else if (instance_checker.IsInstanceOf(ele, "datetime", "datetime")) {
 		// auto ptr = ele.ptr();
 		// auto year = PyDateTime_GET_YEAR(ptr);
 		// auto month = PyDateTime_GET_MONTH(ptr);
@@ -397,28 +400,28 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		// auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
 		// This probably needs to be more precise ..
 		return LogicalType::TIMESTAMP;
-	} else if (py::isinstance(ele, datetime_time)) {
+	} else if (instance_checker.IsInstanceOf(ele, "time", "datetime")) {
 		// auto ptr = ele.ptr();
 		// auto hour = PyDateTime_TIME_GET_HOUR(ptr);
 		// auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
 		// auto second = PyDateTime_TIME_GET_SECOND(ptr);
 		// auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
 		return LogicalType::TIME;
-	} else if (py::isinstance(ele, datetime_date)) {
+	} else if (instance_checker.IsInstanceOf(ele, "date", "datetime")) {
 		// auto ptr = ele.ptr();
 		// auto year = PyDateTime_GET_YEAR(ptr);
 		// auto month = PyDateTime_GET_MONTH(ptr);
 		// auto day = PyDateTime_GET_DAY(ptr);
 		return LogicalType::DATE;
-	} else if (py::isinstance<py::str>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::str>(ele)) {
 		return LogicalType::VARCHAR;
-	} else if (py::isinstance<py::memoryview>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::memoryview>(ele)) {
 		return LogicalType::BLOB;
-	} else if (py::isinstance<py::bytes>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::bytes>(ele)) {
 		return LogicalType::BLOB;
-	} else if (py::isinstance<py::list>(ele)) {
-		return GetListType(ele, can_convert);
-	} else if (py::isinstance<py::dict>(ele)) {
+	} else if (instance_checker.IsInstanceOf<py::list>(ele)) {
+		return GetListType(instance_checker, ele, can_convert);
+	} else if (instance_checker.IsInstanceOf<py::dict>(ele)) {
 		auto keys = ele.attr("keys")();
 		auto values = ele.attr("values")();
 		auto size = py::len(keys);
@@ -427,11 +430,11 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 			return EmptyMap();
 		}
 		child_list_t<LogicalType> child_types;
-		auto key_type = GetListType(keys, can_convert);
+		auto key_type = GetListType(instance_checker, keys, can_convert);
 		if (!can_convert) {
 			return EmptyMap();
 		}
-		auto value_type = GetListType(values, can_convert);
+		auto value_type = GetListType(instance_checker, values, can_convert);
 		if (!can_convert) {
 			return EmptyMap();
 		}
@@ -476,7 +479,7 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 //	}
 // }
 
-static duckdb::LogicalType AnalyzeObjectType(pybind11::object column, bool &can_convert) {
+static duckdb::LogicalType AnalyzeObjectType(PythonInstanceChecker& instance_checker, pybind11::object column, bool &can_convert) {
 	idx_t rows = py::len(column);
 	LogicalType item_type = duckdb::LogicalType::SQLNULL;
 	if (!rows) {
@@ -484,14 +487,14 @@ static duckdb::LogicalType AnalyzeObjectType(pybind11::object column, bool &can_
 	}
 
 	auto first_item = GetItem(column, 0);
-	item_type = GetItemType(first_item, can_convert);
+	item_type = GetItemType(instance_checker, first_item, can_convert);
 	if (!can_convert) {
 		return item_type;
 	}
 
 	for (idx_t i = 1; i < rows; i++) {
 		auto next_item = GetItem(column, i);
-		auto next_item_type = GetItemType(next_item, can_convert);
+		auto next_item_type = GetItemType(instance_checker, next_item, can_convert);
 		if (!can_convert) {
 			break;
 		}
@@ -670,6 +673,7 @@ bool ColumnIsMasked(pybind11::detail::accessor<pybind11::detail::accessor_polici
 
 void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &bind_columns,
                                   vector<LogicalType> &return_types, vector<string> &names) {
+	auto instance_checker = make_shared<PythonInstanceChecker>();
 	// This performs a shallow copy that allows us to rename the dataframe
 	auto df_columns = py::list(df.attr("columns"));
 	auto df_types = py::list(df.attr("dtypes"));
@@ -741,7 +745,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 		// Analyze the inner data type of the 'object' column
 		if (bind_data.pandas_type == PandasType::OBJECT) {
 			bool can_convert = true;
-			LogicalType converted_type = AnalyzeObjectType(get_fun(df_columns[col_idx]), can_convert);
+			LogicalType converted_type = AnalyzeObjectType(*instance_checker, get_fun(df_columns[col_idx]), can_convert);
 			if (can_convert) {
 				duckdb_col_type = converted_type;
 			}
