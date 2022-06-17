@@ -89,12 +89,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
-	    .def("check_same_thread", &DuckDBPyConnection::CheckSameThread,
-	         "Set flags that decides if different threads can use the same connection/cursor", py::arg("check_thread"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
 	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
-	         py::arg("config") = py::dict(), py::arg("check_same_thread") = true)
+	         py::arg("config") = py::dict())
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
@@ -127,12 +125,6 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
-	}
-	if (std::this_thread::get_id() != thread_id && check_same_thread) {
-		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
-		                         "was created in thread id " +
-		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
-		                         to_string(std::hash<std::thread::id> {}(std::this_thread::get_id())));
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
@@ -410,10 +402,6 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	return connection->GetTableNames(query);
 }
 
-void DuckDBPyConnection::CheckSameThread(const bool check_thread) {
-	this->check_same_thread = check_thread;
-}
-
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	connection->context->external_dependencies.erase(name);
 	temporary_views.erase(name);
@@ -461,10 +449,9 @@ void DuckDBPyConnection::Close() {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
-	auto res = make_shared<DuckDBPyConnection>(thread_id);
+	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
 	res->connection = make_unique<Connection>(*res->database);
-	res->check_same_thread = check_same_thread;
 	cursors.push_back(res);
 	return res;
 }
@@ -597,7 +584,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict, bool check_same_thread) {
+                                                           const py::dict &config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
 
 	DBConfig config;
@@ -615,7 +602,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
-	res->check_same_thread = check_same_thread;
 	if (config.enable_external_access) {
 		DBConfig &cur_config = res->database->instance->config;
 		auto extra_data = make_unique<ReplacementRegisteredObjects>();
@@ -724,15 +710,14 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
 	return default_connection.get();
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
-                                                         bool read_only, const py::dict &config,
-                                                         bool check_same_thread) {
-	return self.Connect(database, read_only, config, check_same_thread);
+                                                         bool read_only, const py::dict &config) {
+	return self.Connect(database, read_only, config);
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,

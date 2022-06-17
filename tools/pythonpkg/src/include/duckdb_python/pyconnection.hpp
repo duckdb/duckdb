@@ -14,7 +14,6 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include <thread>
 
 namespace duckdb {
 
@@ -46,19 +45,17 @@ public:
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
 	unordered_map<string, shared_ptr<Relation>> temporary_views;
-	std::thread::id thread_id = std::this_thread::get_id();
-	bool check_same_thread = true;
 	std::mutex py_connection_lock;
 
 public:
-	explicit DuckDBPyConnection(std::thread::id thread_id_p = std::this_thread::get_id()) : thread_id(thread_id_p) {
+	explicit DuckDBPyConnection() {
 	}
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
 	static shared_ptr<DuckDBPyConnection> Enter(DuckDBPyConnection &self,
 	                                            const string &database = ":memory:", bool read_only = false,
-	                                            const py::dict &config = py::dict(), bool check_same_thread = true);
+	                                            const py::dict &config = py::dict());
 
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
@@ -99,8 +96,6 @@ public:
 
 	unordered_set<string> GetTableNames(const string &query);
 
-	void CheckSameThread(const bool check_thread);
-
 	DuckDBPyConnection *UnregisterPythonObject(const string &name);
 
 	DuckDBPyConnection *Begin();
@@ -130,8 +125,7 @@ public:
 
 	py::object FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config,
-	                                              bool check_same_thread);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
