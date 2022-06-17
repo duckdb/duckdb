@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/corporations/corporations_nosorting.benchmark
-# description: Load corporations from the PublicBI benchmark and check checkpointing time
-# group: [corporations]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=corporations
-SORTINGBOOL=false

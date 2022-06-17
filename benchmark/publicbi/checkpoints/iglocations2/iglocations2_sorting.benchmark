@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/iglocations2/iglocations2_sorting.benchmark
-# description: Load iglocations2 from the PublicBI benchmark and check checkpointing time
-# group: [iglocations2]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=iglocations2
-SORTINGBOOL=true

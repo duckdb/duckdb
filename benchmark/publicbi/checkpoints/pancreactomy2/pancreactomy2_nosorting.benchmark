@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/pancreactomy2/pancreactomy2_nosorting.benchmark
-# description: Load pancreactomy2 from the PublicBI benchmark and check checkpointing time
-# group: [pancreactomy2]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=pancreactomy2
-SORTINGBOOL=false

@@ -1,1 +1,0 @@
-SELECT "USCensus_1"."Agep (bin)" AS "Agep (bin)",   CAST("USCensus_1"."REGION" AS BIGINT) AS "REGION",   CAST("USCensus_1"."SCHL" AS TEXT) AS "SCHL",   SUM(CAST("USCensus_1"."Number of Records" AS BIGINT)) AS "sum:Number of Records:ok" FROM "USCensus_1" GROUP BY "USCensus_1"."Agep (bin)",   "USCensus_1"."REGION",   "SCHL",   "USCensus_1"."REGION" ORDER BY "Agep (bin)";

@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/commongovernment/commongovernment_sorting.benchmark
-# description: Load commongovernment from the PublicBI benchmark and check checkpointing time
-# group: [commongovernment]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=commongovernment
-SORTINGBOOL=true

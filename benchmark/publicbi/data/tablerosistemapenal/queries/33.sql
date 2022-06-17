@@ -1,1 +1,0 @@
-SELECT "TableroSistemaPenal_8"."Calculation_6750825005603169" AS "Calculation_6750825005603169",   "TableroSistemaPenal_8"."DELITO" AS "DELITO" FROM "TableroSistemaPenal_8" GROUP BY "TableroSistemaPenal_8"."Calculation_6750825005603169",   "TableroSistemaPenal_8"."DELITO" ORDER BY "Calculation_6750825005603169";

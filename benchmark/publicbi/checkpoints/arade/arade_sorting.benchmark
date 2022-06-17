@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/arade/arade_sorting.benchmark
-# description: Load arade from the PublicBI benchmark and check checkpointing time
-# group: [arade]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=arade
-SORTINGBOOL=true

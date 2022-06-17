@@ -1,1 +1,0 @@
-SELECT "Taxpayer_3"."nppes_provider_state" AS "nppes_provider_state" FROM "Taxpayer_3" WHERE (("Taxpayer_3"."nppes_provider_first_name" = 'JOHN') AND ("Taxpayer_3"."nppes_provider_last_org_name" = 'HOLDER')) GROUP BY "Taxpayer_3"."nppes_provider_state" ORDER BY "nppes_provider_state";

@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/euro2016/euro2016_nosorting.benchmark
-# description: Load euro2016 from the PublicBI benchmark and check checkpointing time
-# group: [euro2016]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=euro2016
-SORTINGBOOL=false

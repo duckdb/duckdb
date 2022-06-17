@@ -1,1 +1,0 @@
-SELECT "Rentabilidad_8"."Locación" AS "Locación" FROM "Rentabilidad_8" WHERE (("Rentabilidad_8"."Figura" = 'Preventa On Premise') AND ("Rentabilidad_8"."Sede Foraneo Sintec" = 'Sede') AND ("Rentabilidad_8"."Zona" = 'OC')) GROUP BY "Rentabilidad_8"."Locación" ORDER BY "Locación";

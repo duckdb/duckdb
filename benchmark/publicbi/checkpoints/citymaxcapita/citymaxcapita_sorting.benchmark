@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/citymaxcapita/citymaxcapita_sorting.benchmark
-# description: Load citymaxcapita from the PublicBI benchmark and check checkpointing time
-# group: [citymaxcapita]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=citymaxcapita
-SORTINGBOOL=true

@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS PanCreactomy1_1;

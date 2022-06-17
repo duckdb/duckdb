@@ -1,1 +1,0 @@
-SELECT "Romance_2"."term" AS "term" FROM "Romance_2" WHERE (("Romance_2"."lat" >= cast('40.466670000000001' as double)) AND ("Romance_2"."lat" <= cast('41' as double)) AND ("Romance_2"."lng" >= cast('-74.25' as double)) AND ("Romance_2"."lng" <= cast('-73.549999999999997' as double)) AND ("Romance_2"."term" IS NULL)) ORDER BY "term" LIMIT 1;

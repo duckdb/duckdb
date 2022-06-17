@@ -1,1 +1,0 @@
-SELECT COUNT(DISTINCT "CommonGovernment_13"."refidvid_piid") AS "ctd:refidvid_piid:ok",   SUM("CommonGovernment_13"."obligatedamount") AS "sum:obligatedamount:ok" FROM "CommonGovernment_13" HAVING (COUNT(1) > 0) ORDER BY "ctd:refidvid_piid:ok";

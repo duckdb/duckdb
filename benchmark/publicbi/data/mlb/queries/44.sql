@@ -1,1 +1,0 @@
-SELECT "MLB_62"."batter_name" AS "batter_name",   (SUM(CAST("MLB_62"."wRC." AS BIGINT)) * -1) AS "usr:Calculation_541206061053120513:ok" FROM "MLB_62" WHERE ((CAST("MLB_62"."PA" AS BIGINT) >= 0) AND (CAST("MLB_62"."PA" AS BIGINT) <= 668) AND ("MLB_62"."parentteam" = 'NYM') AND (CAST("MLB_62"."year" AS BIGINT) = 2015)) GROUP BY "MLB_62"."batter_name" ORDER BY "batter_name";

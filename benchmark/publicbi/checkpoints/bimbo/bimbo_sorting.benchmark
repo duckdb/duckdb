@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/bimbo/bimbo_sorting.benchmark
-# description: Load bimbo from the PublicBI benchmark and check checkpointing time
-# group: [bimbo]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=bimbo
-SORTINGBOOL=true

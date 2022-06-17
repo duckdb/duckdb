@@ -1,5 +1,0 @@
-DROP TABLE IF EXISTS YaleLanguages_1;
-DROP TABLE IF EXISTS YaleLanguages_2;
-DROP TABLE IF EXISTS YaleLanguages_4;
-DROP TABLE IF EXISTS YaleLanguages_3;
-DROP TABLE IF EXISTS YaleLanguages_5;

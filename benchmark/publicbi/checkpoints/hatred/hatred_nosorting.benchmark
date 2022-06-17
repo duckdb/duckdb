@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/hatred/hatred_nosorting.benchmark
-# description: Load hatred from the PublicBI benchmark and check checkpointing time
-# group: [hatred]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=hatred
-SORTINGBOOL=false

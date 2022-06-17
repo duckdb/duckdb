@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/uscensus/uscensus_nosorting.benchmark
-# description: Load uscensus from the PublicBI benchmark and check checkpointing time
-# group: [uscensus]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=uscensus
-SORTINGBOOL=false

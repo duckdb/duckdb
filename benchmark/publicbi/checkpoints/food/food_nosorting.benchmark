@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/food/food_nosorting.benchmark
-# description: Load food from the PublicBI benchmark and check checkpointing time
-# group: [food]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=food
-SORTINGBOOL=false

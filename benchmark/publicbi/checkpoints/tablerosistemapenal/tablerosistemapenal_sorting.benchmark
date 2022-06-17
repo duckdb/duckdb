@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/tablerosistemapenal/tablerosistemapenal_sorting.benchmark
-# description: Load tablerosistemapenal from the PublicBI benchmark and check checkpointing time
-# group: [tablerosistemapenal]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=tablerosistemapenal
-SORTINGBOOL=true

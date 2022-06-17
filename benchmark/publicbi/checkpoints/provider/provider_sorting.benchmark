@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/provider/provider_sorting.benchmark
-# description: Load provider from the PublicBI benchmark and check checkpointing time
-# group: [provider]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=provider
-SORTINGBOOL=true

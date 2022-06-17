@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/mulheresmil/mulheresmil_sorting.benchmark
-# description: Load mulheresmil from the PublicBI benchmark and check checkpointing time
-# group: [mulheresmil]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=mulheresmil
-SORTINGBOOL=true

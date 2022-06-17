@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/iublibrary/iublibrary_nosorting.benchmark
-# description: Load iublibrary from the PublicBI benchmark and check checkpointing time
-# group: [iublibrary]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=iublibrary
-SORTINGBOOL=false

@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/yalelanguages/yalelanguages_sorting.benchmark
-# description: Load yalelanguages from the PublicBI benchmark and check checkpointing time
-# group: [yalelanguages]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=yalelanguages
-SORTINGBOOL=true

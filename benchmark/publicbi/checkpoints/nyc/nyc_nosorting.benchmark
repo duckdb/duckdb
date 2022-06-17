@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/nyc/nyc_nosorting.benchmark
-# description: Load nyc from the PublicBI benchmark and check checkpointing time
-# group: [nyc]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=nyc
-SORTINGBOOL=false

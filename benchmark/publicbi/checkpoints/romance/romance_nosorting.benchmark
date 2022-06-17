@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/romance/romance_nosorting.benchmark
-# description: Load romance from the PublicBI benchmark and check checkpointing time
-# group: [romance]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=romance
-SORTINGBOOL=false

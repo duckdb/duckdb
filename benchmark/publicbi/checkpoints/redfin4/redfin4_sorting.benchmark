@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/redfin4/redfin4_sorting.benchmark
-# description: Load redfin4 from the PublicBI benchmark and check checkpointing time
-# group: [redfin4]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=redfin4
-SORTINGBOOL=true

@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/motos/motos_sorting.benchmark
-# description: Load motos from the PublicBI benchmark and check checkpointing time
-# group: [motos]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=motos
-SORTINGBOOL=true

@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/rentabilidad/rentabilidad_nosorting.benchmark
-# description: Load rentabilidad from the PublicBI benchmark and check checkpointing time
-# group: [rentabilidad]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=rentabilidad
-SORTINGBOOL=false

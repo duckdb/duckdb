@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/medicare3/medicare3_sorting.benchmark
-# description: Load medicare3 from the PublicBI benchmark and check checkpointing time
-# group: [medicare3]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=medicare3
-SORTINGBOOL=true

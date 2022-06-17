@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/taxpayer/taxpayer_nosorting.benchmark
-# description: Load taxpayer from the PublicBI benchmark and check checkpointing time
-# group: [taxpayer]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=taxpayer
-SORTINGBOOL=false

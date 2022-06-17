@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/mlb/mlb_nosorting.benchmark
-# description: Load mlb from the PublicBI benchmark and check checkpointing time
-# group: [mlb]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=mlb
-SORTINGBOOL=false

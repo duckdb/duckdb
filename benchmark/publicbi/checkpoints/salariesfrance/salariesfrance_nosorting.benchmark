@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/salariesfrance/salariesfrance_nosorting.benchmark
-# description: Load salariesfrance from the PublicBI benchmark and check checkpointing time
-# group: [salariesfrance]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=salariesfrance
-SORTINGBOOL=false

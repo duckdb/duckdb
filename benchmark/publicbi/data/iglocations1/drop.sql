@@ -1,1 +1,0 @@
-DROP TABLE IF EXISTS IGlocations1_1;

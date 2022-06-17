@@ -1,1 +1,0 @@
-SELECT "Provider_8"."nppes_provider_last_org_name" AS "nppes_provider_last_org_name" FROM "Provider_8" WHERE (("Provider_8"."nppes_provider_state" = 'WA') AND ("Provider_8"."provider_type" = 'Emergency Medicine')) GROUP BY "Provider_8"."nppes_provider_last_org_name" ORDER BY "nppes_provider_last_org_name";

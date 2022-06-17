@@ -1,9 +1,0 @@
-DROP TABLE IF EXISTS Rentabilidad_6;
-DROP TABLE IF EXISTS Rentabilidad_4;
-DROP TABLE IF EXISTS Rentabilidad_2;
-DROP TABLE IF EXISTS Rentabilidad_1;
-DROP TABLE IF EXISTS Rentabilidad_9;
-DROP TABLE IF EXISTS Rentabilidad_3;
-DROP TABLE IF EXISTS Rentabilidad_5;
-DROP TABLE IF EXISTS Rentabilidad_8;
-DROP TABLE IF EXISTS Rentabilidad_7;

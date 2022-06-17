@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/physicians/physicians_nosorting.benchmark
-# description: Load physicians from the PublicBI benchmark and check checkpointing time
-# group: [physicians]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=physicians
-SORTINGBOOL=false

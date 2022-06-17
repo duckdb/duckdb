@@ -1,7 +1,0 @@
-# name: benchmark/publicbi/checkpoints/uberlandia/uberlandia_sorting.benchmark
-# description: Load uberlandia from the PublicBI benchmark and check checkpointing time
-# group: [uberlandia]
-
-template benchmark/publicbi/publicbi.benchmark-checkpoint-time.in
-SUBSET=uberlandia
-SORTINGBOOL=true

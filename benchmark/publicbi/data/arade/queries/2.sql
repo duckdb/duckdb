@@ -1,1 +1,0 @@
-SELECT "Arade_1"."F4" AS "F4" FROM "Arade_1" WHERE ((CAST("Arade_1"."F3" as DATE) >= cast('2014-10-17' as DATE)) AND (CAST("Arade_1"."F3" as DATE) <= cast('2015-10-16' as DATE))) GROUP BY "F4" ORDER BY "F4" LIMIT 130;
