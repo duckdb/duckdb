@@ -248,6 +248,11 @@ void RLESort::Sort() {
 	global_sort_state.AddLocalState(local_sort_state);
 	global_sort_state.PrepareMergePhase();
 
+	// Clean old persistent segments of this RowGroup to rewrite the new ones
+	for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
+		row_group.columns[column_idx]->CleanPersistentSegments();
+	}
+
 	// scan the sorted row data and add to the sorted row group
 	int64_t count_change = new_count - old_count;
 	data_table.rows_changed += count_change;

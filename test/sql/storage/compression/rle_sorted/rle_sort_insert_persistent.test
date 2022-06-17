@@ -18,17 +18,56 @@ statement ok
 CREATE TABLE nulls(i INTEGER)
 
 statement ok
-INSERT INTO nulls VALUES (1), (2), (3), (4), (5), (6);
+INSERT INTO nulls VALUES (1), (3), (2), (4), (6), (5);
+
+query I
+SELECT * FROM nulls;
+----
+1
+3
+2
+4
+6
+5
 
 statement ok
 CHECKPOINT
 
+query I
+SELECT * FROM nulls;
+----
+1
+2
+3
+4
+5
+6
+
 statement ok
-INSERT INTO nulls VALUES (7), (8);
+INSERT INTO nulls VALUES (8), (7);
+
+query I
+SELECT * FROM nulls;
+----
+1
+2
+3
+4
+5
+6
+8
+7
 
 restart
 
-mode output_result
-
-statement ok
+query I
 SELECT * FROM nulls;
+----
+1
+2
+3
+4
+5
+6
+7
+8
