@@ -63,6 +63,9 @@ inputs:
   python_name:
     description: 'Python binary name because wtf Python'
     default: 'python3'
+  substrait:
+    description: 'Build Substrait'
+    default: 0
 
 runs:
   using: "composite"

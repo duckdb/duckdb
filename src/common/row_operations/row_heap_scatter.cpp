@@ -22,32 +22,16 @@ static void ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount
                                     const SelectionVector &sel, idx_t offset) {
 	// obtain child vectors
 	idx_t num_children;
-	vector<Vector> struct_vectors;
-	if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(v);
-		auto &dict_sel = DictionaryVector::SelVector(v);
-		auto &children = StructVector::GetEntries(child);
-		num_children = children.size();
-		for (auto &struct_child : children) {
-			Vector struct_vector(*struct_child, dict_sel, vcount);
-			struct_vectors.push_back(move(struct_vector));
-		}
-	} else {
-		auto &children = StructVector::GetEntries(v);
-		num_children = children.size();
-		for (auto &struct_child : children) {
-			Vector struct_vector(*struct_child);
-			struct_vectors.push_back(move(struct_vector));
-		}
-	}
+	auto &children = StructVector::GetEntries(v);
+	num_children = children.size();
 	// add struct validitymask size
 	const idx_t struct_validitymask_size = (num_children + 7) / 8;
 	for (idx_t i = 0; i < ser_count; i++) {
 		entry_sizes[i] += struct_validitymask_size;
 	}
 	// compute size of child vectors
-	for (auto &struct_vector : struct_vectors) {
-		RowOperations::ComputeEntrySizes(struct_vector, entry_sizes, vcount, ser_count, sel, offset);
+	for (auto &struct_vector : children) {
+		RowOperations::ComputeEntrySizes(*struct_vector, entry_sizes, vcount, ser_count, sel, offset);
 	}
 }
 
@@ -212,25 +196,8 @@ static void HeapScatterStructVector(Vector &v, idx_t vcount, const SelectionVect
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	idx_t num_children;
-	vector<Vector> struct_vectors;
-	if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(v);
-		auto &dict_sel = DictionaryVector::SelVector(v);
-		auto &children = StructVector::GetEntries(child);
-		num_children = children.size();
-		for (auto &struct_child : children) {
-			Vector struct_vector(*struct_child, dict_sel, vcount);
-			struct_vectors.push_back(move(struct_vector));
-		}
-	} else {
-		auto &children = StructVector::GetEntries(v);
-		num_children = children.size();
-		for (auto &struct_child : children) {
-			Vector struct_vector(*struct_child);
-			struct_vectors.push_back(move(struct_vector));
-		}
-	}
+	auto &children = StructVector::GetEntries(v);
+	idx_t num_children = children.size();
 
 	// the whole struct itself can be NULL
 	idx_t entry_idx;
@@ -256,8 +223,8 @@ static void HeapScatterStructVector(Vector &v, idx_t vcount, const SelectionVect
 	}
 
 	// now serialize the struct vectors
-	for (idx_t i = 0; i < struct_vectors.size(); i++) {
-		auto &struct_vector = struct_vectors[i];
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &struct_vector = *children[i];
 		RowOperations::HeapScatter(struct_vector, vcount, sel, ser_count, i, key_locations,
 		                           struct_validitymask_locations, offset);
 	}

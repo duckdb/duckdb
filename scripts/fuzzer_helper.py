@@ -49,6 +49,9 @@ def create_session():
     return session
 
 def make_github_issue(title, body):
+    if len(title) > 240:
+        #  avoid title is too long error (maximum is 256 characters)
+        title = title[:240] + '...'
     session = create_session()
     url = issue_url()
     issue = {'title': title,

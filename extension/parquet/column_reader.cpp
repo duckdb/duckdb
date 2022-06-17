@@ -525,7 +525,14 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
-		uint32_t str_len = dict->read<uint32_t>();
+		uint32_t str_len;
+		if (fixed_width_string_length == 0) {
+			// variable length string: read from dictionary
+			str_len = dict->read<uint32_t>();
+		} else {
+			// fixed length string
+			str_len = fixed_width_string_length;
+		}
 		dict->available(str_len);
 
 		auto actual_str_len = VerifyString(dict->ptr, str_len);

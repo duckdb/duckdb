@@ -629,6 +629,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context
 		}
 	}
 
+	input.Verify();
 	switch (join_type) {
 	case JoinType::SEMI:
 	case JoinType::ANTI:

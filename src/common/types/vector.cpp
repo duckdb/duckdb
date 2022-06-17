@@ -157,9 +157,20 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 		auto &current_sel = DictionaryVector::SelVector(*this);
 		auto sliced_dictionary = current_sel.Slice(sel, count);
 		buffer = make_buffer<DictionaryBuffer>(move(sliced_dictionary));
+		if (GetType().InternalType() == PhysicalType::STRUCT) {
+			auto &child_vector = DictionaryVector::Child(*this);
+
+			Vector new_child(child_vector);
+			new_child.auxiliary = make_buffer<VectorStructBuffer>(new_child, sel, count);
+			auxiliary = make_buffer<VectorChildBuffer>(move(new_child));
+		}
 		return;
 	}
 	Vector child_vector(*this);
+	auto internal_type = GetType().InternalType();
+	if (internal_type == PhysicalType::STRUCT) {
+		child_vector.auxiliary = make_buffer<VectorStructBuffer>(*this, sel, count);
+	}
 	auto child_ref = make_buffer<VectorChildBuffer>(move(child_vector));
 	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
 	vector_type = VectorType::DICTIONARY_VECTOR;
@@ -168,7 +179,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 }
 
 void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+	if (GetVectorType() == VectorType::DICTIONARY_VECTOR && GetType().InternalType() != PhysicalType::STRUCT) {
 		// dictionary vector: need to merge dictionaries
 		// check if we have a cached entry
 		auto &current_sel = DictionaryVector::SelVector(*this);
@@ -378,32 +389,44 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 }
 
-Value Vector::GetValue(idx_t index) const {
-	switch (GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR:
-		index = 0;
-		break;
-	case VectorType::FLAT_VECTOR:
-		break;
-		// dictionary: apply dictionary and forward to child
-	case VectorType::DICTIONARY_VECTOR: {
-		auto &sel_vector = DictionaryVector::SelVector(*this);
-		auto &child = DictionaryVector::Child(*this);
-		return child.GetValue(sel_vector.get_index(index));
+Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
+	const Vector *vector = &v_p;
+	idx_t index = index_p;
+	bool finished = false;
+	while (!finished) {
+		switch (vector->GetVectorType()) {
+		case VectorType::CONSTANT_VECTOR:
+			index = 0;
+			finished = true;
+			break;
+		case VectorType::FLAT_VECTOR:
+			finished = true;
+			break;
+			// dictionary: apply dictionary and forward to child
+		case VectorType::DICTIONARY_VECTOR: {
+			auto &sel_vector = DictionaryVector::SelVector(*vector);
+			auto &child = DictionaryVector::Child(*vector);
+			vector = &child;
+			index = sel_vector.get_index(index);
+			break;
+		}
+		case VectorType::SEQUENCE_VECTOR: {
+			int64_t start, increment;
+			SequenceVector::GetSequence(*vector, start, increment);
+			return Value::Numeric(vector->GetType(), start + increment * index);
+		}
+		default:
+			throw InternalException("Unimplemented vector type for Vector::GetValue");
+		}
 	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(*this, start, increment);
-		return Value::Numeric(GetType(), start + increment * index);
-	}
-	default:
-		throw InternalException("Unimplemented vector type for Vector::GetValue");
-	}
+	auto data = vector->data;
+	auto &validity = vector->validity;
+	auto &type = vector->GetType();
 
 	if (!validity.RowIsValid(index)) {
-		return Value(GetType());
+		return Value(vector->GetType());
 	}
-	switch (GetType().id()) {
+	switch (vector->GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(((bool *)data)[index]);
 	case LogicalTypeId::TINYINT:
@@ -443,9 +466,9 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::UUID:
 		return Value::UUID(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
-		auto width = DecimalType::GetWidth(GetType());
-		auto scale = DecimalType::GetScale(GetType());
-		switch (GetType().InternalType()) {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 			return Value::DECIMAL(((int16_t *)data)[index], width, scale);
 		case PhysicalType::INT32:
@@ -461,13 +484,13 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::ENUM: {
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			return Value::ENUM(((uint8_t *)data)[index], GetType());
+			return Value::ENUM(((uint8_t *)data)[index], type);
 		case PhysicalType::UINT16:
-			return Value::ENUM(((uint16_t *)data)[index], GetType());
+			return Value::ENUM(((uint16_t *)data)[index], type);
 		case PhysicalType::UINT32:
-			return Value::ENUM(((uint32_t *)data)[index], GetType());
+			return Value::ENUM(((uint32_t *)data)[index], type);
 		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
-			return Value::ENUM(((uint64_t *)data)[index], GetType());
+			return Value::ENUM(((uint64_t *)data)[index], type);
 		default:
 			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
@@ -496,34 +519,37 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::BLOB((const_data_ptr_t)str.GetDataUnsafe(), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
-		auto &child_entries = StructVector::GetEntries(*this);
+		auto &child_entries = StructVector::GetEntries(*vector);
 		Value key = child_entries[0]->GetValue(index);
 		Value value = child_entries[1]->GetValue(index);
 		return Value::MAP(move(key), move(value));
 	}
 	case LogicalTypeId::STRUCT: {
 		// we can derive the value schema from the vector schema
-		auto &child_entries = StructVector::GetEntries(*this);
+		auto &child_entries = StructVector::GetEntries(*vector);
 		child_list_t<Value> children;
 		for (idx_t child_idx = 0; child_idx < child_entries.size(); child_idx++) {
 			auto &struct_child = child_entries[child_idx];
-			children.push_back(
-			    make_pair(StructType::GetChildName(GetType(), child_idx), struct_child->GetValue(index)));
+			children.push_back(make_pair(StructType::GetChildName(type, child_idx), struct_child->GetValue(index_p)));
 		}
 		return Value::STRUCT(move(children));
 	}
 	case LogicalTypeId::LIST: {
 		auto offlen = ((list_entry_t *)data)[index];
-		auto &child_vec = ListVector::GetEntry(*this);
-		vector<Value> children;
+		auto &child_vec = ListVector::GetEntry(*vector);
+		std::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
 			children.push_back(child_vec.GetValue(i));
 		}
-		return Value::LIST(ListType::GetChildType(GetType()), move(children));
+		return Value::LIST(ListType::GetChildType(type), move(children));
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");
 	}
+}
+
+Value Vector::GetValue(idx_t index) const {
+	return GetValue(*this, index);
 }
 
 // LCOV_EXCL_START
@@ -966,32 +992,39 @@ void Vector::UTFVerify(idx_t count) {
 	UTFVerify(*flat_sel, count);
 }
 
-void Vector::Verify(const SelectionVector &sel, idx_t count) {
+void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
 		return;
 	}
-	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &child = DictionaryVector::Child(*this);
+	Vector *vector = &vector_p;
+	const SelectionVector *sel = &sel_p;
+	SelectionVector owned_sel;
+	auto &type = vector->GetType();
+	auto vtype = vector->GetVectorType();
+	if (vector->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(*vector);
 		D_ASSERT(child.GetVectorType() != VectorType::DICTIONARY_VECTOR);
-		auto &dict_sel = DictionaryVector::SelVector(*this);
+		auto &dict_sel = DictionaryVector::SelVector(*vector);
 		// merge the selection vectors and verify the child
-		auto new_buffer = dict_sel.Slice(sel, count);
-		SelectionVector new_sel(new_buffer);
-		child.Verify(new_sel, count);
-		return;
+		auto new_buffer = dict_sel.Slice(*sel, count);
+		owned_sel.Initialize(new_buffer);
+		sel = &owned_sel;
+		vector = &child;
+		vtype = vector->GetVectorType();
 	}
-	if (TypeIsConstantSize(GetType().InternalType()) &&
-	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
-		D_ASSERT(!auxiliary);
+	if (TypeIsConstantSize(type.InternalType()) &&
+	    (vtype == VectorType::CONSTANT_VECTOR || vtype == VectorType::FLAT_VECTOR)) {
+		D_ASSERT(!vector->auxiliary);
 	}
-	if (GetType().id() == LogicalTypeId::VARCHAR || GetType().id() == LogicalTypeId::JSON) {
+	if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::JSON) {
 		// verify that there are no '\0' bytes in string values
-		switch (GetVectorType()) {
+		switch (vtype) {
 		case VectorType::FLAT_VECTOR: {
-			auto strings = FlatVector::GetData<string_t>(*this);
+			auto &validity = FlatVector::Validity(*vector);
+			auto strings = FlatVector::GetData<string_t>(*vector);
 			for (idx_t i = 0; i < count; i++) {
-				auto oidx = sel.get_index(i);
+				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
 					strings[oidx].VerifyNull();
 				}
@@ -1003,57 +1036,76 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::STRUCT) {
-		auto &child_types = StructType::GetChildTypes(GetType());
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
-		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			// create a selection vector of the non-null entries of the struct vector
-			auto &children = StructVector::GetEntries(*this);
-			D_ASSERT(child_types.size() == children.size());
-			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-				if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
-					D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
-					if (ConstantVector::IsNull(*this)) {
-						D_ASSERT(ConstantVector::IsNull(*children[child_idx]));
-					}
-				} else if (GetVectorType() == VectorType::FLAT_VECTOR &&
-				           children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {
-					// for any NULL entry in the struct, the child should be NULL as well
-					auto &validity = FlatVector::Validity(*this);
-					auto &child_validity = FlatVector::Validity(*children[child_idx]);
-					for (idx_t i = 0; i < count; i++) {
-						auto index = sel.get_index(i);
-						if (!validity.RowIsValid(index)) {
-							D_ASSERT(!child_validity.RowIsValid(index));
-						}
-					}
+		// create a selection vector of the non-null entries of the struct vector
+		auto &children = StructVector::GetEntries(*vector);
+		D_ASSERT(child_types.size() == children.size());
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
+			children[child_idx]->Verify(count);
+			if (vtype == VectorType::CONSTANT_VECTOR) {
+				D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+				if (ConstantVector::IsNull(*vector)) {
+					D_ASSERT(ConstantVector::IsNull(*children[child_idx]));
 				}
-				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-				children[child_idx]->Verify(sel, count);
+			}
+			if (vtype != VectorType::FLAT_VECTOR) {
+				continue;
+			}
+			ValidityMask *child_validity;
+			SelectionVector owned_child_sel;
+			const SelectionVector *child_sel = &owned_child_sel;
+			if (children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {
+				child_sel = FlatVector::IncrementalSelectionVector();
+				child_validity = &FlatVector::Validity(*children[child_idx]);
+			} else if (children[child_idx]->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+				auto &child = DictionaryVector::Child(*children[child_idx]);
+				if (child.GetVectorType() != VectorType::FLAT_VECTOR) {
+					continue;
+				}
+				child_validity = &FlatVector::Validity(child);
+				child_sel = &DictionaryVector::SelVector(*children[child_idx]);
+			} else if (children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				child_sel = ConstantVector::ZeroSelectionVector(count, owned_child_sel);
+				child_validity = &ConstantVector::Validity(*children[child_idx]);
+			} else {
+				continue;
+			}
+			// for any NULL entry in the struct, the child should be NULL as well
+			auto &validity = FlatVector::Validity(*vector);
+			for (idx_t i = 0; i < count; i++) {
+				auto index = sel->get_index(i);
+				if (!validity.RowIsValid(index)) {
+					auto child_index = child_sel->get_index(sel_p.get_index(i));
+					D_ASSERT(!child_validity->RowIsValid(child_index));
+				}
 			}
 		}
 	}
 
-	if (GetType().InternalType() == PhysicalType::LIST) {
-		if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (!ConstantVector::IsNull(*this)) {
-				auto &child = ListVector::GetEntry(*this);
-				SelectionVector child_sel(ListVector::GetListSize(*this));
+	if (type.InternalType() == PhysicalType::LIST) {
+		if (vtype == VectorType::CONSTANT_VECTOR) {
+			if (!ConstantVector::IsNull(*vector)) {
+				auto &child = ListVector::GetEntry(*vector);
+				SelectionVector child_sel(ListVector::GetListSize(*vector));
 				idx_t child_count = 0;
-				auto le = ConstantVector::GetData<list_entry_t>(*this);
-				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*this));
+				auto le = ConstantVector::GetData<list_entry_t>(*vector);
+				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*vector));
 				for (idx_t k = 0; k < le->length; k++) {
 					child_sel.set_index(child_count++, le->offset + k);
 				}
-				child.Verify(child_sel, child_count);
+				Vector::Verify(child, child_sel, child_count);
 			}
-		} else if (GetVectorType() == VectorType::FLAT_VECTOR) {
-			auto &child = ListVector::GetEntry(*this);
-			auto child_size = ListVector::GetListSize(*this);
-			auto list_data = FlatVector::GetData<list_entry_t>(*this);
+		} else if (vtype == VectorType::FLAT_VECTOR) {
+			auto &validity = FlatVector::Validity(*vector);
+			auto &child = ListVector::GetEntry(*vector);
+			auto child_size = ListVector::GetListSize(*vector);
+			auto list_data = FlatVector::GetData<list_entry_t>(*vector);
 			idx_t total_size = 0;
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel.get_index(i);
+				auto idx = sel->get_index(i);
 				auto &le = list_data[idx];
 				if (validity.RowIsValid(idx)) {
 					D_ASSERT(le.offset + le.length <= child_size);
@@ -1063,7 +1115,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			SelectionVector child_sel(total_size);
 			idx_t child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel.get_index(i);
+				auto idx = sel->get_index(i);
 				auto &le = list_data[idx];
 				if (validity.RowIsValid(idx)) {
 					D_ASSERT(le.offset + le.length <= child_size);
@@ -1072,7 +1124,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 					}
 				}
 			}
-			child.Verify(child_sel, child_count);
+			Vector::Verify(child, child_sel, child_count);
 		}
 	}
 #endif
@@ -1080,7 +1132,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 
 void Vector::Verify(idx_t count) {
 	auto flat_sel = FlatVector::IncrementalSelectionVector();
-	Verify(*flat_sel, count);
+	Verify(*this, *flat_sel, count);
 }
 
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
@@ -1167,7 +1219,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		auto &source_entries = StructVector::GetEntries(source);
 		auto &target_entries = StructVector::GetEntries(vector);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			ConstantVector::Reference(*target_entries[i], *source_entries[i], struct_index, count);
+			ConstantVector::Reference(*target_entries[i], *source_entries[i], position, count);
 		}
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;
