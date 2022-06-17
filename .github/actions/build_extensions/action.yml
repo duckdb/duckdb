@@ -57,9 +57,12 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
-  oote:
+  out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
-    default: 0
+    default: 1
+  python_name:
+    description: 'Python binary name because wtf Python'
+    default: 'python3'
   substrait:
     description: 'Build Substrait'
     default: 0
@@ -98,7 +101,7 @@ runs:
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree
-        python3.7 scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}

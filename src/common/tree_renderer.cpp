@@ -296,6 +296,7 @@ string TreeRenderer::RemovePadding(string l) {
 }
 
 void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &result) {
+	D_ASSERT(Utf8Proc::IsValid(source.c_str(), source.size()));
 	idx_t max_line_render_size = config.NODE_RENDER_WIDTH - 2;
 	// utf8 in prompt, get render width
 	idx_t cpos = 0;
@@ -328,6 +329,9 @@ void TreeRenderer::SplitStringBuffer(const string &source, vector<string> &resul
 
 void TreeRenderer::SplitUpExtraInfo(const string &extra_info, vector<string> &result) {
 	if (extra_info.empty()) {
+		return;
+	}
+	if (!Utf8Proc::IsValid(extra_info.c_str(), extra_info.size())) {
 		return;
 	}
 	auto splits = StringUtil::Split(extra_info, "\n");

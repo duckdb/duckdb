@@ -13,11 +13,6 @@ parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for 
 parser.add_argument('--extensions', action='store',
                     help='CSV file with DuckDB extensions to build', default=".github/workflows/extensions.csv")
 
-parser.add_argument('--build', action='store',
-                    help='Build directory', default="build/release")
-
-parser.add_argument('--output', action='store',
-                    help='Folder to store the created extensions', required=True)
 
 args = parser.parse_args()
 
@@ -58,13 +53,6 @@ for task in tasks:
     os.chdir(clonedir)
     exec('git checkout %s' % (task['commit']))
     os.chdir(basedir)
-    exec('cmake -S . -DEXTERNAL_EXTENSION_DIRECTORY=%s -B %s ' % (clonedir, args.build))
-    exec('cmake --build %s --parallel' % (args.build))
-    outpath = pathlib.Path(args.build, 'external_extension_build')
-    for path in outpath.rglob('*.duckdb_extension'):
-        res_path = os.path.join(args.output, path.name)
-        shutil.copyfile(path, res_path)
-        print(res_path)
-    shutil.rmtree(outpath)
-
+    os.environ['BUILD_OUT_OF_TREE_EXTENSION'] = clonedir
+    exec('make')
 print("done")
