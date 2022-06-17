@@ -907,7 +907,7 @@ static_inline void u128_mul_add(u64 a, u64 b, u64 c, u64 *hi, u64 *lo) {
    u64 h, l, t;
    u128_mul(a, b, &h, &l);
    t = l + c;
-   h += ((t < l) | (t < c));
+   h += (u64)(((t < l) | (t < c)));
    *hi = h;
    *lo = t;
 #endif
@@ -1558,11 +1558,11 @@ static_inline void *pointer_read_arr(const char **ptr,
 	   cur++;
 	   idx = idx * 10 + add;
    }
-   if (cur == hdr) return NULL;
+   if (cur == hdr || idx >= (u64)USIZE_MAX) return NULL;
    *ptr = cur;
    return mut
-			  ? (void *)yyjson_mut_arr_get(m_arr, idx)
-			  : (void *)yyjson_arr_get(i_arr, idx);
+			  ? (void *)yyjson_mut_arr_get(m_arr, (usize)idx)
+			  : (void *)yyjson_arr_get(i_arr, (usize)idx);
 }
 
 /**
@@ -3402,7 +3402,6 @@ static_inline bool read_number(u8 **ptr,
 
    /*
 	Read integral part, same as the following code.
-	For more explanation, see the comments under label `skip_ascii_begin`.
 
 		for (int i = 1; i <= 18; i++) {
 		   num = cur[i] - '0';
@@ -3410,15 +3409,9 @@ static_inline bool read_number(u8 **ptr,
 		   else goto digi_sepr_i;
 		}
 	*/
-#if YYJSON_IS_REAL_GCC
-#define expr_intg(i) \
-   if (likely((num = (u64)(cur[i] - (u8)'0')) <= 9)) sig = num + sig * 10; \
-   else { __asm volatile("":"=m"(cur[i])::); goto digi_sepr_##i; }
-#else
 #define expr_intg(i) \
    if (likely((num = (u64)(cur[i] - (u8)'0')) <= 9)) sig = num + sig * 10; \
    else { goto digi_sepr_##i; }
-#endif
    repeat_in_1_18(expr_intg);
 #undef expr_intg
 
@@ -3446,19 +3439,11 @@ static_inline bool read_number(u8 **ptr,
 
 
    /* read fraction part */
-#if YYJSON_IS_REAL_GCC
-#define expr_frac(i) \
-   digi_frac_##i: \
-   if (likely((num = (u64)(cur[i + 1] - (u8)'0')) <= 9)) \
-	   sig = num + sig * 10; \
-   else { __asm volatile("":"=m"(cur[i + 1])::); goto digi_stop_##i; }
-#else
 #define expr_frac(i) \
    digi_frac_##i: \
    if (likely((num = (u64)(cur[i + 1] - (u8)'0')) <= 9)) \
 	   sig = num + sig * 10; \
    else { goto digi_stop_##i; }
-#endif
 	   repeat_in_1_18(expr_frac)
 #undef expr_frac
 
@@ -6020,8 +6005,8 @@ Convert double number from binary to decimal.
 The output significand is shortest decimal but may have trailing zeros.
 
 This function use the Schubfach algorithm:
-Raffaello Giulietti, The Schubfach way to render doubles (4th version), 2021.
-https://drive.google.com/file/d/1IEeATSVnEE6TkrHlCYNY2GjaraBjOT4f
+Raffaello Giulietti, The Schubfach way to render doubles (5th version), 2022.
+https://drive.google.com/file/d/1gp5xv4CAa78SVgCeWfGqqI4FfYYYuNFb
 https://mail.openjdk.java.net/pipermail/core-libs-dev/2021-November/083536.html
 https://github.com/openjdk/jdk/pull/3402 (Java implementation)
 https://github.com/abolz/Drachennest (C++ implementation)
@@ -6211,6 +6196,7 @@ static_noinline u8 *write_f64_raw(u8 *buf, u64 raw, yyjson_write_flag flg) {
 		   /* write with scientific notation */
 		   /* such as 1.234e56 */
 		   u8 *end = write_u64_len_15_to_17_trim(buf + 1, sig_dec);
+		   end -= (end == buf + 2); /* remove '.0', e.g. 2.0e34 -> 2e134 */
 		   exp_dec += sig_len - 1;
 		   hdr[0] = hdr[1];
 		   hdr[1] = '.';
@@ -7306,8 +7292,8 @@ doc_begin:
 val_begin:
    val_type = unsafe_yyjson_get_type(val);
    if (val_type == YYJSON_TYPE_STR) {
-	   is_key = ((u8)ctn_obj & (u8)~ctn_len);
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   is_key = (bool)((u8)ctn_obj & (u8)~ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   str_len = unsafe_yyjson_get_len(val);
 	   str_ptr = (const u8 *)unsafe_yyjson_get_str(val);
 	   check_str_len(str_len);
@@ -7320,7 +7306,7 @@ val_begin:
 	   goto val_end;
    }
    if (val_type == YYJSON_TYPE_NUM) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   incr_len(32 + (no_indent ? 0 : level * 4));
 	   cur = write_indent(cur, no_indent ? 0 : level);
 	   cur = write_number(cur, val, flg);
@@ -7331,7 +7317,7 @@ val_begin:
    }
    if ((val_type & (YYJSON_TYPE_ARR & YYJSON_TYPE_OBJ)) ==
 	   (YYJSON_TYPE_ARR & YYJSON_TYPE_OBJ)) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   ctn_len_tmp = unsafe_yyjson_get_len(val);
 	   ctn_obj_tmp = (val_type == YYJSON_TYPE_OBJ);
 	   if (unlikely(ctn_len_tmp == 0)) {
@@ -7358,7 +7344,7 @@ val_begin:
 	   }
    }
    if (val_type == YYJSON_TYPE_BOOL) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   incr_len(16 + (no_indent ? 0 : level * 4));
 	   cur = write_indent(cur, no_indent ? 0 : level);
 	   cur = write_bool(cur, unsafe_yyjson_get_bool(val));
@@ -7366,7 +7352,7 @@ val_begin:
 	   goto val_end;
    }
    if (val_type == YYJSON_TYPE_NULL) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   incr_len(16 + (no_indent ? 0 : level * 4));
 	   cur = write_indent(cur, no_indent ? 0 : level);
 	   cur = write_null(cur);
@@ -7794,8 +7780,8 @@ doc_begin:
 val_begin:
    val_type = unsafe_yyjson_get_type(val);
    if (val_type == YYJSON_TYPE_STR) {
-	   is_key = ((u8)ctn_obj & (u8)~ctn_len);
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   is_key = (bool)((u8)ctn_obj & (u8)~ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   str_len = unsafe_yyjson_get_len(val);
 	   str_ptr = (const u8 *)unsafe_yyjson_get_str(val);
 	   check_str_len(str_len);
@@ -7808,7 +7794,7 @@ val_begin:
 	   goto val_end;
    }
    if (val_type == YYJSON_TYPE_NUM) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   incr_len(32 + (no_indent ? 0 : level * 4));
 	   cur = write_indent(cur, no_indent ? 0 : level);
 	   cur = write_number(cur, (yyjson_val *)val, flg);
@@ -7819,7 +7805,7 @@ val_begin:
    }
    if ((val_type & (YYJSON_TYPE_ARR & YYJSON_TYPE_OBJ)) ==
 	   (YYJSON_TYPE_ARR & YYJSON_TYPE_OBJ)) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   ctn_len_tmp = unsafe_yyjson_get_len(val);
 	   ctn_obj_tmp = (val_type == YYJSON_TYPE_OBJ);
 	   if (unlikely(ctn_len_tmp == 0)) {
@@ -7848,7 +7834,7 @@ val_begin:
 	   }
    }
    if (val_type == YYJSON_TYPE_BOOL) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   incr_len(16 + (no_indent ? 0 : level * 4));
 	   cur = write_indent(cur, no_indent ? 0 : level);
 	   cur = write_bool(cur, unsafe_yyjson_get_bool(val));
@@ -7856,7 +7842,7 @@ val_begin:
 	   goto val_end;
    }
    if (val_type == YYJSON_TYPE_NULL) {
-	   no_indent = ((u8)ctn_obj & (u8)ctn_len);
+	   no_indent = (bool)((u8)ctn_obj & (u8)ctn_len);
 	   incr_len(16 + (no_indent ? 0 : level * 4));
 	   cur = write_indent(cur, no_indent ? 0 : level);
 	   cur = write_null(cur);
