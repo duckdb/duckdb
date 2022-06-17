@@ -788,7 +788,6 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
                                      DataTable &data_table) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
-	// FIXME: This shouldn't be executed again in the column checkpointer
 	if (db.config.force_compression_sorting) {
 		// Sorts columns to optimize RLE compression
 		auto table_compression = DetectBestCompressionMethodTable(writer);

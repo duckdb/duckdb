@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/rle_sorted/test_large_inserts_single_transaction_small.test
-# description: Test large inserts in a single transaction small STANDARD_VECTOR_SIZE
+# description: Test large inserts in a single transaction (STANDARD_VECTOR_SIZE=2)
 # group: [rle_sorted]
 
 # load the DB from disk

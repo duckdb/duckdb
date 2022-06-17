@@ -39,8 +39,7 @@ RowGroupSortBindData::~RowGroupSortBindData() {
 
 RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionType> table_compression)
     : row_group(row_group), data_table(data_table), old_count(row_group.count) {
-	// Reorder columns to optimize RLE Compression - We skip if the table has indexes, is empty or has a large amount
-	// of columns
+	// Reorder columns to optimize RLE Compression - We skip if the table has indexes or is empty
 	if (row_group.db.config.force_compression_sorting && row_group.count != 0 && row_group.table_info.indexes.Empty()) {
 		// collect logical types by iterating the columns
 		for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
@@ -186,7 +185,9 @@ void RLESort::CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::
 	for (idx_t i = 0; i < logs.size(); i++) {
 		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-		cardinalities.emplace_back(current_count, key_column_ids[i]);
+		if (current_count < 10000) {
+			cardinalities.emplace_back(current_count, key_column_ids[i]);
+		}
 	}
 	std::sort(cardinalities.begin(), cardinalities.end());
 }
@@ -207,6 +208,7 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 		result_chunk.SetCardinality(0);
 		scanner.Scan(result_chunk);
 		if (result_chunk.size() == 0) {
+			// No data was sorted
 			break;
 		}
 		result_chunk.SetCardinality(result_chunk.size());
@@ -222,7 +224,8 @@ void RLESort::Sort() {
 		data_table.prev_end += row_group.count;
 		return;
 	}
-	// Check if there are any transient segments or if persistent segments have changes
+	// Check if there are any transient segments or if persistent segments have changes - otherwise data is already
+	// on disk, and we do not need to sort
 	for (idx_t column_idx : key_column_ids) {
 		if (row_group.columns[column_idx]->HasChanges(row_group.start)) {
 			// There were changes in the RowGroup - break the for loop and start the sort
@@ -248,7 +251,7 @@ void RLESort::Sort() {
 	global_sort_state.AddLocalState(local_sort_state);
 	global_sort_state.PrepareMergePhase();
 
-	// Clean old persistent segments of this RowGroup to rewrite the new ones
+	// Clean old persistent segments of this RowGroup to ensure the old blocks are overwritten
 	for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
 		row_group.columns[column_idx]->CleanPersistentSegments();
 	}

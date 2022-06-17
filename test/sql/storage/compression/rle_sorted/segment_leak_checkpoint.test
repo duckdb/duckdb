@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/rle_sorted/segment_leak_checkpoint.test
-# description: Test that we don't add a segment per checkpoint
+# description: Test that we do not add a segment per checkpoint
 # group: [rle_sorted]
 
 #mode output_result

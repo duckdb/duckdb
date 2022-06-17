@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/rle_sorted/segment_leak_checkpoint_drop_column.test
-# description: Test that we don't add a segment per checkpoint when dropping a column
+# description: Test that we do not add a segment per checkpoint when dropping a column
 # group: [rle_sorted]
 
 #mode output_result
@@ -20,7 +20,6 @@ SELECT MIN(j), MAX(j), COUNT(*) FROM integers
 ----
 0	1023	1024
 
-#loop i 0 0
 
 statement ok
 ALTER TABLE integers DROP COLUMN j;
@@ -43,6 +42,3 @@ query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 ----
 0	1023	1024
-
-
-#endloop

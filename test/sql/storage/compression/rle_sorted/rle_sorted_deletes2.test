@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/rle_sorted/rle_sorted_deletes2.test
-# description: Test deletes correctly with statement directly after
+# description: Test deletes when sorting RLE - 2
 # group: [rle_sorted]
 
 # load the DB from disk

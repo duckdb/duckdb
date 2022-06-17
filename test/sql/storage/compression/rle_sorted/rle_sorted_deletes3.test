@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/rle_sorted/rle_sorted_deletes3.test
-# description: Test deletes correctly with statement directly after
+# description: Test deletes when sorting RLE - 3
 # group: [rle_sorted]
 
 load __TEST_DIR__/checkpoint_morsel_size.db
