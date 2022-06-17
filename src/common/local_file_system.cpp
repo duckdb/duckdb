@@ -2,6 +2,7 @@
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
@@ -21,8 +22,9 @@
 #include <unistd.h>
 #else
 #include "duckdb/common/windows_util.hpp"
-#include <string>
+
 #include <io.h>
+#include <string>
 
 #ifdef __MINGW32__
 #include <sys/stat.h>
@@ -864,15 +866,6 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	if (path.empty()) {
 		return vector<string>();
 	}
-	// first check if the path has a glob at all
-	if (!HasGlob(path)) {
-		// no glob: return only the file (if it exists or is a pipe)
-		vector<string> result;
-		if (FileExists(path) || IsPipe(path)) {
-			result.push_back(path);
-		}
-		return result;
-	}
 	// split up the path into separate chunks
 	vector<string> splits;
 	idx_t last_pos = 0;
@@ -907,6 +900,27 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			absolute_path = true;
 			splits[0] = home_directory;
 		}
+	}
+	// Check if the path has a glob at all
+	if (!HasGlob(path)) {
+		// no glob: return only the file (if it exists or is a pipe)
+		vector<string> result;
+		if (FileExists(path) || IsPipe(path)) {
+			result.push_back(path);
+		} else if (!absolute_path) {
+			Value value;
+			if (opener->TryGetCurrentSetting("file_search_path", value)) {
+				auto search_paths_str = value.ToString();
+				std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
+				for (const auto &search_path : search_paths) {
+					auto joined_path = JoinPath(search_path, path);
+					if (FileExists(joined_path) || IsPipe(joined_path)) {
+						result.push_back(joined_path);
+					}
+				}
+			}
+		}
+		return result;
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {

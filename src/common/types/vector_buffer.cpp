@@ -1,10 +1,10 @@
-#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/common/assert.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 
@@ -39,6 +39,15 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 	}
 }
 
+VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count)
+    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+	auto &other_vector = StructVector::GetEntries(other);
+	for (auto &child_vector : other_vector) {
+		auto vector = make_unique<Vector>(*child_vector, sel, count);
+		children.push_back(move(vector));
+	}
+}
+
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
@@ -47,18 +56,14 @@ VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capa
 }
 
 VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER) {
-	// FIXME: directly construct vector of correct size
-	child = make_unique<Vector>(ListType::GetChildType(list_type));
-	capacity = STANDARD_VECTOR_SIZE;
-	Reserve(initial_capacity);
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity),
+      child(make_unique<Vector>(ListType::GetChildType(list_type), initial_capacity)) {
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
 	if (to_reserve > capacity) {
-		idx_t new_capacity = (to_reserve + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+		idx_t new_capacity = NextPowerOfTwo(to_reserve);
 		D_ASSERT(new_capacity >= to_reserve);
-		D_ASSERT(new_capacity % STANDARD_VECTOR_SIZE == 0);
 		child->Resize(capacity, new_capacity);
 		capacity = new_capacity;
 	}

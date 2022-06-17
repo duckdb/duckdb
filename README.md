@@ -5,7 +5,7 @@
 
 <p align="center">
   <a href="https://github.com/duckdb/duckdb/actions">
-    <img src="https://github.com/cwida/duckdb/workflows/.github/workflows/main.yml/badge.svg?branch=master" alt=".github/workflows/main.yml">
+    <img src="https://github.com/duckdb/duckdb/actions/workflows/Main.yml/badge.svg?branch=master" alt="Github Actions Badge">
   </a>
   <a href="https://www.codefactor.io/repository/github/cwida/duckdb">
     <img src="https://www.codefactor.io/repository/github/cwida/duckdb/badge" alt="CodeFactor"/>

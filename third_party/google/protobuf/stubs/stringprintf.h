@@ -47,39 +47,34 @@
 #include <google/protobuf/stubs/common.h>
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 
 // Return a C++ string
-PROTOBUF_EXPORT extern std::string StringPrintf(const char* format, ...);
+ extern std::string StringPrintf(const char *format, ...);
 
 // Store result into a supplied string and return it
-PROTOBUF_EXPORT extern const std::string& SStringPrintf(std::string* dst,
-                                                        const char* format,
-                                                        ...);
+ extern const std::string &SStringPrintf(std::string *dst, const char *format, ...);
 
 // Append result to a supplied string
-PROTOBUF_EXPORT extern void StringAppendF(std::string* dst, const char* format,
-                                          ...);
+ extern void StringAppendF(std::string *dst, const char *format, ...);
 
 // Lower-level routine that takes a va_list and appends to a specified
 // string.  All other routines are just convenience wrappers around it.
-PROTOBUF_EXPORT extern void StringAppendV(std::string* dst, const char* format,
-                                          va_list ap);
+ extern void StringAppendV(std::string *dst, const char *format, va_list ap);
 
 // The max arguments supported by StringPrintfVector
-PROTOBUF_EXPORT extern const int kStringPrintfVectorMaxArgs;
+ extern const int kStringPrintfVectorMaxArgs;
 
 // You can use this version when all your arguments are strings, but
 // you don't know how many arguments you'll have at compile time.
 // StringPrintfVector will LOG(FATAL) if v.size() > kStringPrintfVectorMaxArgs
-PROTOBUF_EXPORT extern std::string StringPrintfVector(
-    const char* format, const std::vector<std::string>& v);
+ extern std::string StringPrintfVector(const char *format, const std::vector<std::string> &v);
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_STUBS_STRINGPRINTF_H

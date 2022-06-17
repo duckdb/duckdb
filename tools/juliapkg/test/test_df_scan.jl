@@ -137,3 +137,21 @@ end
 
     DBInterface.close!(con)
 end
+
+@testset "Test large DataFrame scan" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    my_df = DataFrame(DBInterface.execute(con, "SELECT i%5 AS i FROM range(10000000) tbl(i)"))
+
+    DuckDB.register_data_frame(con, my_df, "my_df")
+    GC.gc()
+
+    results = DBInterface.execute(con, "SELECT SUM(i) AS sum FROM my_df")
+    GC.gc()
+    df = DataFrame(results)
+    @test names(df) == ["sum"]
+    @test size(df, 1) == 1
+    @test df.sum == [20000000]
+
+    DBInterface.close!(con)
+end

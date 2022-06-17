@@ -161,6 +161,14 @@ struct ExternalThreadsSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct FileSearchPathSetting {
+	static constexpr const char *Name = "file_search_path";
+	static constexpr const char *Description = "A comma separated list of directories to search for input files";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ForceCompressionSetting {
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
@@ -218,6 +226,16 @@ struct PreserveIdentifierCase {
 	    "Whether or not to preserve the identifier case, instead of always lowercasing all non-quoted identifiers";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct PreserveInsertionOrder {
+	static constexpr const char *Name = "preserve_insertion_order";
+	static constexpr const char *Description =
+	    "Whether or not to preserve insertion order. If set to false the system is allowed to re-order any results "
+	    "that do not contain ORDER BY clauses.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
 

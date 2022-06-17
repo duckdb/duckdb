@@ -36,7 +36,7 @@
 #include <google/protobuf/message.h>
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -79,5 +79,5 @@ bool GetAnyFieldDescriptors(const Message& message,
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>

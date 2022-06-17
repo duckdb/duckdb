@@ -47,12 +47,18 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 BenchmarkRunner::BenchmarkRunner() {
 }
 
-void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
-	auto &fs = db.GetFileSystem();
+void BenchmarkRunner::InitializeBenchmarkDirectory() {
+	auto fs = FileSystem::CreateLocal();
 	// check if the database directory exists; if not create it
-	if (!fs.DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
-		fs.CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
+	if (!fs->DirectoryExists(DUCKDB_BENCHMARK_DIRECTORY)) {
+		fs->CreateDirectory(DUCKDB_BENCHMARK_DIRECTORY);
 	}
+}
+
+void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
+	InitializeBenchmarkDirectory();
+
+	auto &fs = db.GetFileSystem();
 	Connection con(db);
 	auto result = con.Query(
 	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
@@ -174,7 +180,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
-	LogLine("name\trun\tnruns\ttiming");
+	LogLine("name\trun\ttiming");
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}
@@ -266,6 +272,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
  * Returns an configuration error code.
  */
 ConfigurationError run_benchmarks() {
+	BenchmarkRunner::InitializeBenchmarkDirectory();
+
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	if (!instance.configuration.name_pattern.empty()) {

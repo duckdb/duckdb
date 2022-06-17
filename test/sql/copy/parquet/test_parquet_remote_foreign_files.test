@@ -1,0 +1,88 @@
+# name: test/sql/copy/parquet/test_parquet_remote_foreign_files.test
+# description: Test queries on tricky parquet files over http. Note: on GH connection issues, these tests fail silently
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+# /data/parquet-testing/bug1554.parquet
+query I
+SELECT COUNT(backlink_count) FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1554.parquet') WHERE http_status_code=200
+----
+0
+
+query II
+SELECT http_status_code, COUNT(backlink_count) FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1554.parquet') GROUP BY http_status_code ORDER BY http_status_code
+----
+200	0
+301	0
+
+# /data/parquet-testing/bug1588.parquet
+
+query I
+SELECT has_image_link FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1588.parquet') where has_image_link = 1
+----
+1
+1
+1
+
+# /data/parquet-testing/bug1589.parquet
+query I
+SELECT backlink_count FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1589.parquet') LIMIT 1
+----
+NULL
+
+statement ok
+SELECT * FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1589.parquet')
+
+
+query I
+SELECT "inner"['str_field'] FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1618_struct_strings.parquet')
+----
+hello
+NULL
+
+query I
+SELECT "inner"['f64_field'] FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1618_struct_strings.parquet')
+----
+NULL
+1.23
+
+query I
+SELECT "inner" FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1618_struct_strings.parquet')
+----
+{'str_field': hello, 'f64_field': NULL}
+{'str_field': NULL, 'f64_field': 1.230000}
+
+# /data/parquet-testing/struct.parquet
+query I
+select "inner"['f64_field'] from parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/struct.parquet');
+----
+NULL
+1.23
+
+# /data/parquet-testing/bug2267.parquet
+query I
+SELECT * FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug2267.parquet')
+----
+[{'disabledPlans': [bea4c11e-220a-4e6d-8eb8-8ea15d019f90], 'skuId': c7df2760-2c81-4ef7-b578-5b5392b571df}, {'disabledPlans': [8a256a2b-b617-496d-b51b-e76466e88db0, 41781fb2-bc02-4b7c-bd55-b576c07bb09d, eec0eb4f-6444-4f95-aba0-50c24d67f998], 'skuId': 84a661c4-e949-4bd2-a560-ed7766fcaf2b}, {'disabledPlans': [], 'skuId': b05e124f-c7cc-45a0-a6aa-8cf78c946968}, {'disabledPlans': [], 'skuId': f30db892-07e9-47e9-837c-80727f46fd3d}]
+
+query I
+SELECT assignedLicenses[1] FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug2267.parquet')
+----
+{'disabledPlans': [bea4c11e-220a-4e6d-8eb8-8ea15d019f90], 'skuId': c7df2760-2c81-4ef7-b578-5b5392b571df}
+
+# multiple files
+query II
+select * from parquet_scan(['https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t1.parquet', 'https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/glob/t2.parquet'])
+----
+1	a
+2	b
+
+# Malformed parquet to test fallback from prefetch
+query IIII
+select * from parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/arrow/nation.dict-malformed.parquet') limit 2;
+----
+0	ALGERIA	0	 haggle. carefully final deposits detect slyly agai
+1	ARGENTINA	1	al foxes promise slyly according to the regular accounts. bold requests alon

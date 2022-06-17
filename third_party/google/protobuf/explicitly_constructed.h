@@ -42,6 +42,7 @@
 #include <google/protobuf/port_def.inc>
 // clang-format on
 
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -85,7 +86,7 @@ class ExplicitlyConstructed {
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_EXPLICITLY_CONSTRUCTED_H__

@@ -321,9 +321,6 @@ def cursor(duckdb_conn, queue):
         queue.put(True)    
 
 class TestDuckMultithread(object):
-    def test_same_conn(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,execute_query_same_connection)
-        duck_threads.multithread_test(False)
 
     def test_execute(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,execute_query)
@@ -432,12 +429,5 @@ class TestDuckMultithread(object):
     def test_cursor(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,cursor)
         duck_threads.multithread_test(False)
-
-    def test_check_same_thread_false(self, duckdb_cursor):
-        con = duckdb.connect(check_same_thread=False)
-
-        x = threading.Thread(target=connect_duck, args=(con,))
-        x.start()
-
 
 

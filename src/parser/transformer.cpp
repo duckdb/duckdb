@@ -135,8 +135,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformCheckpoint(stmt);
 	case duckdb_libpgquery::T_PGLoadStmt:
 		return TransformLoad(stmt);
-	case duckdb_libpgquery::T_PGCreateEnumStmt:
-		return TransformCreateEnum(stmt);
+	case duckdb_libpgquery::T_PGCreateTypeStmt:
+		return TransformCreateType(stmt);
 	case duckdb_libpgquery::T_PGAlterSeqStmt:
 		return TransformAlterSequence(stmt);
 	default:

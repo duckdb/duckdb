@@ -363,6 +363,20 @@ Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// File Search Path
+//===--------------------------------------------------------------------===//
+void FileSearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	auto &client_data = ClientData::Get(context);
+	client_data.file_search_path = parameter;
+}
+
+Value FileSearchPathSetting::GetSetting(ClientContext &context) {
+	auto &client_data = ClientData::Get(context);
+	return Value(client_data.file_search_path);
+}
+
+//===--------------------------------------------------------------------===//
 // Force Compression
 //===--------------------------------------------------------------------===//
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -466,6 +480,18 @@ void PreserveIdentifierCase::SetLocal(ClientContext &context, const Value &input
 
 Value PreserveIdentifierCase::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).preserve_identifier_case);
+}
+
+//===--------------------------------------------------------------------===//
+// PreserveInsertionOrder
+//===--------------------------------------------------------------------===//
+void PreserveInsertionOrder::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.preserve_insertion_order = input.GetValue<bool>();
+}
+
+Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.preserve_insertion_order);
 }
 
 //===--------------------------------------------------------------------===//

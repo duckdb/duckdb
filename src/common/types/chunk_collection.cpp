@@ -2,6 +2,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/queue.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
@@ -9,7 +10,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <queue>
 
 namespace duckdb {
 
@@ -420,7 +420,12 @@ void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t 
 	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
-void ChunkCollection::Print() {
+string ChunkCollection::ToString() const {
+	return chunks.empty() ? "ChunkCollection [ 0 ]"
+	                      : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
+}
+
+void ChunkCollection::Print() const {
 	Printer::Print(ToString());
 }
 

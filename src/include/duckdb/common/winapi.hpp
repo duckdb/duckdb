@@ -28,6 +28,6 @@
 #define DUCKDB_EXTENSION_API
 #endif
 #else
-#define DUCKDB_EXTENSION_API
+#define DUCKDB_EXTENSION_API __attribute__((visibility("default")))
 #endif
 #endif

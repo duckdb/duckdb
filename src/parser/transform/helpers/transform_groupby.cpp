@@ -13,6 +13,14 @@ static void CheckGroupingSetMax(idx_t count) {
 	}
 }
 
+static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
+	idx_t combinations = 1;
+	for (idx_t i = 0; i < cube_count; i++) {
+		combinations *= 2;
+		CheckGroupingSetMax(current_count + combinations);
+	}
+}
+
 struct GroupingExpressionMap {
 	expression_map_t<idx_t> map;
 };
@@ -117,6 +125,8 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 				cube_sets.push_back(VectorToGroupingSet(cube_set));
 			}
 			// generate the subsets of the rollup set and add them to the grouping sets
+			CheckGroupingSetCubes(result_sets.size(), cube_sets.size());
+
 			GroupingSet current_set;
 			AddCubeSets(current_set, cube_sets, result_sets, 0);
 			break;
