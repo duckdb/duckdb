@@ -125,6 +125,8 @@ class TestArrowNested(object):
         compare_results("SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5) as lst_tbl) as T")
 
     def test_map_arrow_to_duckdb(self, duckdb_cursor):
+        if not can_run:
+            return
         map_type = pa.map_(pa.int32(), pa.int32())
         values = [
             [
