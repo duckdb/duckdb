@@ -64,3 +64,17 @@ test_that("uppercase data frames are queryable", {
   expect_true(identical(res, mtcars))
   duckdb::duckdb_unregister(con, "My_Mtcars")
 })
+
+
+
+test_that("replacement scans work as intended", {
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  res <- dbReadTable(con, "mtcars")
+  row.names(res) <- row.names(mtcars)
+  expect_true(identical(res, mtcars))
+
+  expect_error(dbReadTable(con, "does_not_exist"))
+  not_a_df <- 42
+  expect_error(dbReadTable(con, "not_a_df"))
+})

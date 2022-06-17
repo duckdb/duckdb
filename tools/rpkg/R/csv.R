@@ -50,9 +50,9 @@ duckdb_read_csv <- function(conn, name, files, header = TRUE, na.strings = "", n
     on.exit(tryCatch(dbRollback(conn), error = function(e) {}))
   }
 
-  tablename <- dbQuoteIdentifier(conn, name)
+  quoted_tablename <- dbQuoteIdentifier(conn, name)
 
-  if (!dbExistsTable(conn, tablename)) {
+  if (!dbExistsTable(conn, name)) {
     if (lower.case.names) names(headers[[1]]) <- tolower(names(headers[[1]]))
     if (!is.null(col.names)) {
       if (lower.case.names) {
@@ -67,14 +67,14 @@ duckdb_read_csv <- function(conn, name, files, header = TRUE, na.strings = "", n
       }
       names(headers[[1]]) <- col.names
     }
-    dbWriteTable(conn, tablename, headers[[1]][FALSE, , drop = FALSE])
+    dbWriteTable(conn, name, headers[[1]][FALSE, , drop = FALSE])
   }
 
   for (i in seq_along(files)) {
     thefile <- dbQuoteString(conn, enc2native(normalizePath(files[i])))
-    dbExecute(conn, sprintf("COPY %s FROM %s (DELIMITER %s, QUOTE %s, HEADER %s, NULL %s)", tablename, thefile, dbQuoteString(conn, delim), dbQuoteString(conn, quote), tolower(header), dbQuoteString(conn, na.strings[1])))
+    dbExecute(conn, sprintf("COPY %s FROM %s (DELIMITER %s, QUOTE %s, HEADER %s, NULL %s)", quoted_tablename, thefile, dbQuoteString(conn, delim), dbQuoteString(conn, quote), tolower(header), dbQuoteString(conn, na.strings[1])))
   }
-  out <- dbGetQuery(conn, paste("SELECT COUNT(*) FROM", tablename))[[1]]
+  out <- dbGetQuery(conn, paste("SELECT COUNT(*) FROM", quoted_tablename))[[1]]
 
   if (transaction) {
     dbCommit(conn)

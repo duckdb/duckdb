@@ -8,23 +8,7 @@ dbExistsTable__duckdb_connection_character <- function(conn, name, ...) {
   if (length(name) != 1) {
     stop("Can only have a single name argument")
   }
-  exists <- FALSE
-  tryCatch(
-    {
-      dbGetQuery(
-        conn,
-        sqlInterpolate(
-          conn,
-          "SELECT * FROM ? WHERE FALSE",
-          dbQuoteIdentifier(conn, name)
-        )
-      )
-      exists <- TRUE
-    },
-    error = function(c) {
-    }
-  )
-  exists
+  dbGetQuery(conn, "SELECT COUNT(*) > 0 AS found from information_schema.tables WHERE table_name=?", name)$found
 }
 
 #' @rdname duckdb_connection-class
