@@ -66,64 +66,10 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	retlist.push_back({"names"_nm = cpp11::as_sexp(stmtholder->stmt->GetNames())});
 
 	cpp11::writable::strings rtypes;
+	rtypes.reserve(stmtholder->stmt->GetTypes().size());
 
 	for (auto &stype : stmtholder->stmt->GetTypes()) {
-		string rtype = "";
-		switch (stype.id()) {
-		case LogicalTypeId::BOOLEAN:
-			rtype = "logical";
-			break;
-		case LogicalTypeId::UTINYINT:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-			rtype = "integer";
-			break;
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::TIMESTAMP_NS:
-			rtype = "POSIXct";
-			break;
-		case LogicalTypeId::DATE:
-			rtype = "Date";
-			break;
-		case LogicalTypeId::TIME:
-			rtype = "difftime";
-			break;
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::UBIGINT:
-		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::HUGEINT:
-		case LogicalTypeId::FLOAT:
-		case LogicalTypeId::DOUBLE:
-		case LogicalTypeId::DECIMAL:
-			rtype = "numeric";
-			break;
-		case LogicalTypeId::VARCHAR:
-			rtype = "character";
-			break;
-		case LogicalTypeId::BLOB:
-			rtype = "raw";
-			break;
-		case LogicalTypeId::LIST:
-			rtype = "list";
-			break;
-		case LogicalTypeId::STRUCT:
-			rtype = "data.frame";
-			break;
-		case LogicalTypeId::ENUM:
-			rtype = "factor";
-			break;
-		case LogicalTypeId::UNKNOWN:
-			rtype = "unknown";
-			break;
-		default:
-			cpp11::stop("rapi_prepare: Unknown column type for prepare: %s", stype.ToString().c_str());
-			break;
-		}
+		string rtype = RApiTypes::DetectLogicalType(stype, "rapi_prepare");
 		rtypes.push_back(rtype);
 	}
 
