@@ -1,4 +1,5 @@
 import os
+import random
 import subprocess
 import sys
 import reduce_sql
@@ -36,6 +37,11 @@ if shell is None:
 if not os.path.isfile(shell):
 	print(f"Could not find shell \"{shell}\"")
 	exit(1)
+
+if seed < 0:
+	seed = random.randint(0, 2 ** 30)
+
+git_hash = fuzzer_helper.get_github_hash()
 
 targetdir = os.path.join(sqlancer_dir, 'target')
 filenames = os.listdir(targetdir)
@@ -144,4 +150,4 @@ if error_msg in current_errors:
     print("Issue already exists: https://github.com/duckdb/duckdb-fuzzer/issues/" + str(current_errors[error_msg]['number']))
     exit(0)
 
-fuzzer_helper.file_issue(reduced_test_case, error_msg)
+fuzzer_helper.file_issue(reduced_test_case, error_msg, "SQLancer", seed, git_hash)
