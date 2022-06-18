@@ -5,6 +5,7 @@ import os
 import subprocess
 import reduce_sql
 import fuzzer_helper
+import random
 
 seed = -1
 
@@ -20,6 +21,8 @@ for param in sys.argv:
         db = 'tpch'
     elif param.startswith('--shell='):
         shell = param.replace('--shell=', '')
+    elif param.startswith('--seed='):
+        seed = int(param.replace('--seed=', ''))
 
 if fuzzer is None:
     print("Unrecognized fuzzer to run, expected e.g. --sqlsmith")
@@ -32,6 +35,11 @@ if db is None:
 if shell is None:
     print("Unrecognized path to shell, expected e.g. --shell=build/debug/duckdb")
     exit(1)
+
+if seed < 0:
+    seed = random.randint(0, 2**30)
+
+git_hash = fuzzer_helper.get_github_hash()
 
 def create_db_script(db):
     if db == 'alltypes':
@@ -139,4 +147,4 @@ print("=========================================")
 last_query = reduce_sql.reduce(last_query, load_script, shell, error_msg)
 cmd = load_script + '\n' + last_query + "\n"
 
-fuzzer_helper.file_issue(cmd, error_msg)
+fuzzer_helper.file_issue(cmd, error_msg, "SQLSmith", seed, git_hash)
