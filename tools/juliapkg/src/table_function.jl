@@ -65,7 +65,7 @@ end
 function get_exception_info()
     error = ""
     if VERSION < v"1.7"
-        for (exc, bt) in catch_stack()
+        for (exc, bt) in Base.catch_stack()
             error = string(error, sprint(showerror, exc, bt))
         end
     else
