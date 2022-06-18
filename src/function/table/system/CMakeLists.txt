@@ -19,7 +19,8 @@ add_library_unity(
   pragma_functions.cpp
   pragma_storage_info.cpp
   pragma_table_info.cpp
-  test_all_types.cpp)
+  test_all_types.cpp
+  test_vector_types.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_table_func_system>
     PARENT_SCOPE)

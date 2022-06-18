@@ -133,7 +133,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
 
-	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
