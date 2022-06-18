@@ -25,7 +25,7 @@ using counts_t = std::vector<size_t>;
 //	Global sink state
 class WindowGlobalSinkState : public GlobalSinkState {
 public:
-	using GloalSortStatePtr = unique_ptr<GlobalSortState>;
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
 
 	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)),
@@ -34,7 +34,7 @@ public:
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
 	mutex lock;
-	vector<GloalSortStatePtr> sorts;
+	vector<GlobalSortStatePtr> sorts;
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> strings;
 	WindowAggregationMode mode;
@@ -103,6 +103,7 @@ public:
 	const idx_t partition_cols;
 	const size_t partition_count;
 	counts_t counts;
+	counts_t offsets;
 	Vector hash_vector;
 	SelectionVector sel;
 
@@ -142,7 +143,9 @@ void WindowLocalSinkState::Hash() {
 	}
 
 	const auto count = over_chunk.size();
-	if (partition_count) {
+	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
+	if (partition_cols) {
+		// First pass: count bins sizes
 		counts.resize(0);
 		counts.resize(partition_count, 0);
 
@@ -151,8 +154,7 @@ void WindowLocalSinkState::Hash() {
 			VectorOperations::CombineHash(hash_vector, over_chunk.data[prt_idx], count);
 		}
 
-		const auto partition_mask = hash_t(counts.size() - 1);
-		auto hashes = FlatVector::GetData<hash_t>(hash_vector);
+		const auto partition_mask = hash_t(sorts.size() - 1);
 		if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			const auto bin = (hashes[0] & partition_mask);
 			counts[bin] += count;
@@ -161,6 +163,20 @@ void WindowLocalSinkState::Hash() {
 				const auto bin = (hashes[i] & partition_mask);
 				++counts[bin];
 			}
+		}
+
+		// Second pass: Build sequential selections
+		offsets.resize(counts.size());
+		size_t offset = 0;
+		for (size_t c = 0; c < counts.size(); ++c) {
+			offsets[c] = offset;
+			offset += counts[c];
+		}
+
+		for (idx_t i = 0; i < count; ++i) {
+			const auto hash_bin = (hashes[i] & partition_mask);
+			auto &hash_idx = offsets[hash_bin];
+			sel.set_index(hash_idx++, i);
 		}
 	} else {
 		counts.resize(1, count);
@@ -211,6 +227,9 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 			if (!local_sort) {
 				lock_guard<mutex> glock(gstate.lock);
 				auto &buffer_manager = gstate.buffer_manager;
+				if (gstate.sorts.size() != sorts.size()) {
+					gstate.sorts.resize(sorts.size());
+				}
 				auto &global_sort = gstate.sorts[c];
 				if (!global_sort) {
 					vector<BoundOrderByNode> orders_copy;
@@ -237,8 +256,9 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 				local_sort->SinkChunk(over_chunk, payload_chunk);
 			} else {
 				SelectionVector psel(sel.data() + bin_offset);
-				sort_buffer->Append(over_chunk, false, &sel, bin_size);
-				payload_buffer->Append(payload_chunk, false, &sel, bin_size);
+				sort_buffer->Append(over_chunk, false, &psel, bin_size);
+				payload_buffer->Append(payload_chunk, false, &psel, bin_size);
+				bin_offset += bin_size;
 			}
 		}
 	}
@@ -248,6 +268,9 @@ idx_t WindowLocalSinkState::FlushRagged() {
 	// Flush any ragged partition chunks
 	idx_t count = 0;
 	for (size_t c = 0; c < counts.size(); ++c) {
+		if (!counts[c]) {
+			continue;
+		}
 		count += counts[c];
 		auto &sort_buffer = sort_buffers[c];
 		auto &payload_buffer = payload_buffers[c];
@@ -1356,11 +1379,13 @@ static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkSta
 	if (gstate.rows) {
 		//	No partition - convert row collection to chunk collection
 		ScanRowCollection(*gstate.rows, input, input_types);
-	} else {
+	} else if (hash_bin < gstate.sorts.size() && gstate.sorts[hash_bin]) {
 		// Overwrite the collections with the sorted data
 		SortCollectionForPartition(state, gstate, hash_bin);
 		const auto over_types = state.global_sort_state->sort_layout.logical_types;
 		ScanSortedPartition(state, input, input_types, over, over_types);
+	} else {
+		return;
 	}
 
 	ChunkCollection output;
