@@ -7,6 +7,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -25,32 +26,28 @@ struct DateTrunc {
 	struct MillenniumOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-			return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 1000) * 1000, 1, 1), dtime_t(0));
+			return Date::FromDate((Date::ExtractYear(input) / 1000) * 1000, 1, 1);
 		}
 	};
 
 	struct CenturyOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-			return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 100) * 100, 1, 1), dtime_t(0));
+			return Date::FromDate((Date::ExtractYear(input) / 100) * 100, 1, 1);
 		}
 	};
 
 	struct DecadeOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-			return Timestamp::FromDatetime(Date::FromDate((Date::ExtractYear(date) / 10) * 10, 1, 1), dtime_t(0));
+			return Date::FromDate((Date::ExtractYear(input) / 10) * 10, 1, 1);
 		}
 	};
 
 	struct YearOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-			return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), 1, 1), dtime_t(0));
+			return Date::FromDate(Date::ExtractYear(input), 1, 1);
 		}
 	};
 
@@ -58,27 +55,23 @@ struct DateTrunc {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
 			int32_t yyyy, mm, dd;
-			Date::Convert(Timestamp::GetDate(input), yyyy, mm, dd);
+			Date::Convert(input, yyyy, mm, dd);
 			mm = 1 + (((mm - 1) / 3) * 3);
-			return Timestamp::FromDatetime(Date::FromDate(yyyy, mm, 1), dtime_t(0));
+			return Date::FromDate(yyyy, mm, 1);
 		}
 	};
 
 	struct MonthOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-			return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), Date::ExtractMonth(date), 1),
-			                               dtime_t(0));
+			return Date::FromDate(Date::ExtractYear(input), Date::ExtractMonth(input), 1);
 		}
 	};
 
 	struct WeekOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-
-			return Timestamp::FromDatetime(Date::GetMondayOfCurrentWeek(date), dtime_t(0));
+			return Date::GetMondayOfCurrentWeek(input);
 		}
 	};
 
@@ -88,15 +81,14 @@ struct DateTrunc {
 			date_t date = Date::GetMondayOfCurrentWeek(input);
 			date.days -= (Date::ExtractISOWeekNumber(date) - 1) * Interval::DAYS_PER_WEEK;
 
-			return Timestamp::FromDatetime(date, dtime_t(0));
+			return date;
 		}
 	};
 
 	struct DayOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-			return Timestamp::FromDatetime(date, dtime_t(0));
+			return input;
 		}
 	};
 
@@ -159,38 +151,118 @@ struct DateTrunc {
 
 // DATE specialisations
 template <>
+date_t DateTrunc::MillenniumOperator::Operation(timestamp_t input) {
+	return MillenniumOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
+}
+
+template <>
 timestamp_t DateTrunc::MillenniumOperator::Operation(date_t input) {
-	return MillenniumOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(MillenniumOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::MillenniumOperator::Operation(timestamp_t input) {
+	return MillenniumOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::CenturyOperator::Operation(timestamp_t input) {
+	return CenturyOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 template <>
 timestamp_t DateTrunc::CenturyOperator::Operation(date_t input) {
-	return CenturyOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(CenturyOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::CenturyOperator::Operation(timestamp_t input) {
+	return CenturyOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::DecadeOperator::Operation(timestamp_t input) {
+	return DecadeOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 template <>
 timestamp_t DateTrunc::DecadeOperator::Operation(date_t input) {
-	return DecadeOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(DecadeOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::DecadeOperator::Operation(timestamp_t input) {
+	return DecadeOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::YearOperator::Operation(timestamp_t input) {
+	return YearOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 template <>
 timestamp_t DateTrunc::YearOperator::Operation(date_t input) {
-	return YearOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(YearOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::YearOperator::Operation(timestamp_t input) {
+	return YearOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::QuarterOperator::Operation(timestamp_t input) {
+	return QuarterOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 template <>
 timestamp_t DateTrunc::QuarterOperator::Operation(date_t input) {
-	return QuarterOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(QuarterOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::QuarterOperator::Operation(timestamp_t input) {
+	return QuarterOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::MonthOperator::Operation(timestamp_t input) {
+	return MonthOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 template <>
 timestamp_t DateTrunc::MonthOperator::Operation(date_t input) {
-	return MonthOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(MonthOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::MonthOperator::Operation(timestamp_t input) {
+	return MonthOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::WeekOperator::Operation(timestamp_t input) {
+	return WeekOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
 }
 
 template <>
 timestamp_t DateTrunc::WeekOperator::Operation(date_t input) {
-	return WeekOperator::Operation<timestamp_t, timestamp_t>(Timestamp::FromDatetime(input, dtime_t(0)));
+	return Timestamp::FromDatetime(WeekOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::WeekOperator::Operation(timestamp_t input) {
+	return WeekOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::ISOYearOperator::Operation(timestamp_t input) {
+	return ISOYearOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
+}
+
+template <>
+timestamp_t DateTrunc::ISOYearOperator::Operation(date_t input) {
+	return Timestamp::FromDatetime(ISOYearOperator::Operation<date_t, date_t>(input), dtime_t(0));
 }
 
 template <>
@@ -199,8 +271,23 @@ timestamp_t DateTrunc::ISOYearOperator::Operation(timestamp_t input) {
 }
 
 template <>
+date_t DateTrunc::DayOperator::Operation(timestamp_t input) {
+	return DayOperator::Operation<date_t, date_t>(Timestamp::GetDate(input));
+}
+
+template <>
 timestamp_t DateTrunc::DayOperator::Operation(date_t input) {
-	return Timestamp::FromDatetime(input, dtime_t(0));
+	return Timestamp::FromDatetime(DayOperator::Operation<date_t, date_t>(input), dtime_t(0));
+}
+
+template <>
+timestamp_t DateTrunc::DayOperator::Operation(timestamp_t input) {
+	return DayOperator::Operation<date_t, timestamp_t>(Timestamp::GetDate(input));
+}
+
+template <>
+date_t DateTrunc::HourOperator::Operation(date_t input) {
+	return DayOperator::Operation<date_t, date_t>(input);
 }
 
 template <>
@@ -209,8 +296,28 @@ timestamp_t DateTrunc::HourOperator::Operation(date_t input) {
 }
 
 template <>
+date_t DateTrunc::HourOperator::Operation(timestamp_t input) {
+	return Timestamp::GetDate(HourOperator::Operation<timestamp_t, timestamp_t>(input));
+}
+
+template <>
+date_t DateTrunc::MinuteOperator::Operation(date_t input) {
+	return DayOperator::Operation<date_t, date_t>(input);
+}
+
+template <>
 timestamp_t DateTrunc::MinuteOperator::Operation(date_t input) {
 	return DayOperator::Operation<date_t, timestamp_t>(input);
+}
+
+template <>
+date_t DateTrunc::MinuteOperator::Operation(timestamp_t input) {
+	return Timestamp::GetDate(HourOperator::Operation<timestamp_t, timestamp_t>(input));
+}
+
+template <>
+date_t DateTrunc::SecondOperator::Operation(date_t input) {
+	return DayOperator::Operation<date_t, date_t>(input);
 }
 
 template <>
@@ -219,13 +326,38 @@ timestamp_t DateTrunc::SecondOperator::Operation(date_t input) {
 }
 
 template <>
+date_t DateTrunc::SecondOperator::Operation(timestamp_t input) {
+	return Timestamp::GetDate(DayOperator::Operation<timestamp_t, timestamp_t>(input));
+}
+
+template <>
+date_t DateTrunc::MillisecondOperator::Operation(date_t input) {
+	return DayOperator::Operation<date_t, date_t>(input);
+}
+
+template <>
 timestamp_t DateTrunc::MillisecondOperator::Operation(date_t input) {
 	return DayOperator::Operation<date_t, timestamp_t>(input);
 }
 
 template <>
+date_t DateTrunc::MillisecondOperator::Operation(timestamp_t input) {
+	return Timestamp::GetDate(MillisecondOperator::Operation<timestamp_t, timestamp_t>(input));
+}
+
+template <>
+date_t DateTrunc::MicrosecondOperator::Operation(date_t input) {
+	return DayOperator::Operation<date_t, date_t>(input);
+}
+
+template <>
 timestamp_t DateTrunc::MicrosecondOperator::Operation(date_t input) {
 	return DayOperator::Operation<date_t, timestamp_t>(input);
+}
+
+template <>
+date_t DateTrunc::MicrosecondOperator::Operation(timestamp_t input) {
+	return Timestamp::GetDate(MicrosecondOperator::Operation<timestamp_t, timestamp_t>(input));
 }
 
 // INTERVAL specialisations
@@ -451,12 +583,58 @@ static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
+static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &bound_function,
+                                              vector<unique_ptr<Expression>> &arguments) {
+	if (!arguments[0]->IsFoldable()) {
+		return nullptr;
+	}
+
+	// Rebind to return a date if we are truncating that far
+	Value part_value = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+	if (part_value.IsNull()) {
+		return nullptr;
+	}
+	const auto part_name = part_value.ToString();
+	const auto part_code = GetDatePartSpecifier(part_name);
+	switch (part_code) {
+	case DatePartSpecifier::MILLENNIUM:
+	case DatePartSpecifier::CENTURY:
+	case DatePartSpecifier::DECADE:
+	case DatePartSpecifier::YEAR:
+	case DatePartSpecifier::QUARTER:
+	case DatePartSpecifier::MONTH:
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
+	case DatePartSpecifier::ISOYEAR:
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+		switch (arguments[1]->return_type.id()) {
+		case LogicalType::TIMESTAMP:
+			bound_function.function = DateTruncFunction<timestamp_t, date_t>;
+			break;
+		case LogicalType::DATE:
+			bound_function.function = DateTruncFunction<date_t, date_t>;
+			break;
+		default:
+			break;
+		}
+		bound_function.return_type = LogicalType::DATE;
+		break;
+	default:
+		break;
+	}
+
+	return nullptr;
+}
+
 void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_trunc("date_trunc");
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<timestamp_t, timestamp_t>));
+	                                      DateTruncFunction<timestamp_t, timestamp_t>, false, false, DateTruncBind));
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<date_t, timestamp_t>));
+	                                      DateTruncFunction<date_t, timestamp_t>, false, false, DateTruncBind));
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
 	set.AddFunction(date_trunc);

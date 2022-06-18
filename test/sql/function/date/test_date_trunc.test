@@ -88,7 +88,7 @@ NULL
 query T
 SELECT date_trunc('month', DATE '1992-02-02') FROM dates LIMIT 1;
 ----
-1992-02-01 00:00:00
+1992-02-01
 
 query T
 SELECT date_trunc(s, d) FROM dates;
@@ -148,58 +148,58 @@ infinity
 query T
 SELECT date_trunc('week', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;
 ----
-2019-12-30 00:00:00
+2019-12-30
 
 query T
 SELECT date_trunc('week', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2018-12-31 00:00:00
+2018-12-31
 
 query T
 SELECT date_trunc('yearweek', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;
 ----
-2019-12-30 00:00:00
+2019-12-30
 
 query T
 SELECT date_trunc('yearweek', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2018-12-31 00:00:00
+2018-12-31
 
 # Test quarter operator more thoroughly
 query T
 SELECT date_trunc('quarter', TIMESTAMP '2020-12-02 04:03:02') FROM timestamps LIMIT 1;
 ----
-2020-10-01 00:00:00
+2020-10-01
 
 query T
 SELECT date_trunc('quarter', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2019-01-01 00:00:00
+2019-01-01
 
 query T
 SELECT date_trunc('millennium', TIMESTAMP '1996-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-1000-01-01 00:00:00
+1000-01-01
 
 query T
 SELECT date_trunc('century', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2000-01-01 00:00:00
+2000-01-01
 
 query T
 SELECT date_trunc('decade', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2010-01-01 00:00:00
+2010-01-01
 
 query T
 SELECT date_trunc('year', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2019-01-01 00:00:00
+2019-01-01
 
 query T
 SELECT date_trunc('day', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 ----
-2019-01-06 00:00:00
+2019-01-06
 
 query T
 SELECT date_trunc('hour', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
