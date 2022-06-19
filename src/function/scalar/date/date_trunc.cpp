@@ -601,7 +601,7 @@ static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStat
 	auto min = nstats.min.GetValueUnsafe<TA>();
 	auto max = nstats.max.GetValueUnsafe<TA>();
 	if (min > max) {
-		return nullptr;
+		throw InternalException("Invalid DATETRUNC child statistics");
 	}
 
 	// Infinite values are unmodified
