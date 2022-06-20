@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 
 namespace duckdb {
 
@@ -47,8 +48,8 @@ public:
 	void SetName(const string &name);
 
 	//! compression_type
-	const duckdb::CompressionType &CompressionType() const;
-	void SetCompressionType(duckdb::CompressionType compression_type);
+	const CompressionType &GetCompressionType() const;
+	void SetCompressionType(CompressionType compression_type);
 
 	//! storage_oid
 	const storage_t &StorageOid() const;
@@ -84,7 +85,7 @@ private:
 	//! The type of the column
 	LogicalType type;
 	//! Compression Type used for this column
-	duckdb::CompressionType compression_type = duckdb::CompressionType::COMPRESSION_AUTO;
+	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	//! The index of the column in the storage of the table
 	storage_t storage_oid;
 	//! The index of the column in the table

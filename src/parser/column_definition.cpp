@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 
 namespace duckdb {
 
@@ -11,7 +12,7 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(mov
 }
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
-                                   TableColumnType category, duckdb::CompressionType compression_type)
+                                   TableColumnType category, CompressionType compression_type)
     : name(move(name_p)), type(move(type_p)), category(category), compression_type(compression_type) {
 	switch (category) {
 	case TableColumnType::STANDARD: {
@@ -102,11 +103,11 @@ void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
 }
 
-const duckdb::CompressionType &ColumnDefinition::CompressionType() const {
+const CompressionType &ColumnDefinition::GetCompressionType() const {
 	return compression_type;
 }
 
-void ColumnDefinition::SetCompressionType(duckdb::CompressionType compression_type) {
+void ColumnDefinition::SetCompressionType(CompressionType compression_type) {
 	this->compression_type = compression_type;
 }
 

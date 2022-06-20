@@ -84,7 +84,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_COMPRESSION:
 		column.SetCompressionType(CompressionTypeFromString(constraint->compression_name));
-		if (column.CompressionType() == CompressionType::COMPRESSION_AUTO) {
+		if (column.GetCompressionType() == CompressionType::COMPRESSION_AUTO) {
 			throw ParserException("Unrecognized option for column compression, expected none, uncompressed, rle, "
 			                      "dictionary, pfor, bitpacking or fsst");
 		}
