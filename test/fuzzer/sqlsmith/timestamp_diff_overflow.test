@@ -1,5 +1,5 @@
 # name: test/fuzzer/sqlsmith/timestamp_diff_overflow.test
-# description: Test overflow in dayofweek
+# description: Test overflow in timestamp subtract
 # group: [sqlsmith]
 
 statement ok
