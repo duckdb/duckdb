@@ -10,11 +10,11 @@
 namespace duckdb {
 
 static DefaultMacro internal_macros[] = {
-	{DEFAULT_SCHEMA, "get_current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
-	{DEFAULT_SCHEMA, "get_current_catalog", {nullptr}, "'duckdb'"},                    // name of current database (called "catalog" in the SQL standard)
+	{DEFAULT_SCHEMA, "current_user", {nullptr}, "'duckdb'"},                       // user name of current execution context
+	{DEFAULT_SCHEMA, "current_catalog", {nullptr}, "'duckdb'"},                    // name of current database (called "catalog" in the SQL standard)
 	{DEFAULT_SCHEMA, "current_database", {nullptr}, "'duckdb'"},                   // name of current database
-	{DEFAULT_SCHEMA, "get_user", {nullptr}, "current_user"},                           // equivalent to current_user
-	{DEFAULT_SCHEMA, "get_session_user", {nullptr}, "'duckdb'"},                       // session user name
+	{DEFAULT_SCHEMA, "user", {nullptr}, "current_user"},                           // equivalent to current_user
+	{DEFAULT_SCHEMA, "session_user", {nullptr}, "'duckdb'"},                       // session user name
 	{"pg_catalog", "inet_client_addr", {nullptr}, "NULL"},                       // address of the remote connection
 	{"pg_catalog", "inet_client_port", {nullptr}, "NULL"},                       // port of the remote connection
 	{"pg_catalog", "inet_server_addr", {nullptr}, "NULL"},                       // address of the local connection

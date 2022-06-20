@@ -292,7 +292,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	switch (op) {
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
-		return "get_current_date";
+		return "current_date";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
 		return "get_current_time";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
@@ -310,17 +310,17 @@ static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
 		return "current_localtimestamp_n";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
-		return "get_current_role";
+		return "current_role";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
-		return "get_current_user";
+		return "current_user";
 	case duckdb_libpgquery::PG_SVFOP_USER:
-		return "get_user";
+		return "user";
 	case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
-		return "get_session_user";
+		return "session_user";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
-		return "get_current_catalog";
+		return "current_catalog";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
-		return "get_current_schema";
+		return "current_schema";
 	default:
 		throw InternalException("Could not find named SQL value function specification " + to_string((int)op));
 	}

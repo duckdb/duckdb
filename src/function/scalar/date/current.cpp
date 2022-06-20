@@ -62,8 +62,7 @@ void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("get_current_date", {}, LogicalType::DATE, CurrentDateFunction, false, BindCurrentTime));
+	set.AddFunction(ScalarFunction("current_date", {}, LogicalType::DATE, CurrentDateFunction, false, BindCurrentTime));
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
