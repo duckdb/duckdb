@@ -98,6 +98,7 @@ function close_database(db::DB)
 end
 
 const VECTOR_SIZE = duckdb_vector_size()
+const ROW_GROUP_SIZE = VECTOR_SIZE * 100
 
 DB() = DB(":memory:")
 DBInterface.connect(::Type{DB}) = DB()

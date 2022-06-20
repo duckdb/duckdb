@@ -17,10 +17,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 jobs:
   format_check:
     name: Julia Format Check
@@ -36,10 +32,11 @@ jobs:
           arch: x64
 
       - name: Format Check
+        shell: bash
         run: |
             cd tools/juliapkg
             julia -e "import Pkg; Pkg.add(\"JuliaFormatter\")"
-            ./format_check.sh 
+            ./format_check.sh
 
   main_julia:
     name: Julia ${{ matrix.version }}
@@ -65,11 +62,18 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
 
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.version }}
+
       - name: Build DuckDB
+        shell: bash
         run: |
-            make
+            BUILD_TPCH=1 make
 
       - name: Run Tests
+        shell: bash
         run: |
           export JULIA_DUCKDB_LIBRARY="`pwd`/build/release/src/libduckdb.so"
           export JULIA_NUM_THREADS=2

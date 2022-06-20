@@ -21,6 +21,8 @@ class SelectNode;
 class SetOperationNode;
 class QueryNode;
 class ParsedExpression;
+class ResultModifier;
+class OrderModifier;
 
 class StatementSimplifier {
 public:
@@ -60,6 +62,9 @@ private:
 	void Simplify(SelectNode &node);
 	void Simplify(SetOperationNode &node);
 	void Simplify(QueryNode &node);
+
+	void Simplify(ResultModifier &modifier);
+	void Simplify(OrderModifier &modifier);
 
 	void SimplifyExpression(unique_ptr<ParsedExpression> &expr);
 };

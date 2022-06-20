@@ -52,8 +52,8 @@ def aggregation_generic(aggregation_function,assertion_answers):
         aggregation_function(None).execute().fetchall()
         
     # Check broken
-    with pytest.raises(Exception, match='Referenced column "bla" not found'):
-        aggregation_function('bla').execute().fetchall()
+    with pytest.raises(Exception, match='Referenced column "nonexistant" not found'):
+        aggregation_function('nonexistant').execute().fetchall()
 
 class TestRAPIAggregations(object):
     def test_sum(self, duckdb_cursor):
@@ -239,5 +239,5 @@ class TestRAPIAggregations(object):
 
     def test_describe(self, duckdb_cursor):
         rel = initialize(duckdb_cursor)
-        assert rel.describe().fetchall() == [('[Min: 1, Max: 2][Has Null: true]', '[Min: 2.10, Max: 3.20][Has Null: true]', '[Min: a, Max: b, Has Unicode: false, Max String Length: 1][Has Null: true]')]
+        assert rel.describe().fetchall() == [('[Min: 1, Max: 2][Has Null: true, Has No Null: true][Approx Unique: 2]', '[Min: 2.10, Max: 3.20][Has Null: true, Has No Null: true][Approx Unique: 2]', '[Min: a, Max: b, Has Unicode: false, Max String Length: 1][Has Null: true, Has No Null: true][Approx Unique: 2]')]
         duckdb_cursor.execute("drop table bla")

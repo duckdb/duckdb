@@ -124,7 +124,9 @@ public:
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify(idx_t count);
-	DUCKDB_API void Verify(const SelectionVector &sel, idx_t count);
+	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
+	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
+	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API void UTFVerify(idx_t count);
 	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);
 
@@ -166,6 +168,10 @@ public:
 
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
+
+private:
+	//! Returns the [index] element of the Vector as a Value.
+	DUCKDB_API static Value GetValue(const Vector &v, idx_t index);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
@@ -287,7 +293,6 @@ struct FlatVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return !vector.validity.RowIsValid(idx);
 	}
-	DUCKDB_API static const SelectionVector *IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel);
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
 };
 

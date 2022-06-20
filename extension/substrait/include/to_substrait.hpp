@@ -67,6 +67,7 @@ private:
 	void TransformConjunctionExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
 	void TransformNotNullExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
 	void TransformCaseExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
+	void TransformInExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
 
 	//! Transforms a DuckDB Logical Type into a Substrait Type
 	::substrait::Type DuckToSubstraitType(LogicalType &d_type);

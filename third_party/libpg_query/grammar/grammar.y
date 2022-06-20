@@ -49,6 +49,7 @@
 	PGOverridingKind       override;
 	PGSortByDir            sortorder;
 	PGSortByNulls          nullorder;
+	PGConstrType           constr;
 	PGLockClauseStrength lockstrength;
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
@@ -71,7 +72,7 @@
  */
 %token <str>	IDENT FCONST SCONST BCONST XCONST Op
 %token <ival>	ICONST PARAM
-%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER LAMBDA_ARROW
+%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER LAMBDA_ARROW POWER_OF
 %token			LESS_EQUALS GREATER_EQUALS NOT_EQUALS
 
 /*
@@ -141,7 +142,7 @@
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
 %left		'*' '/' '%'
-%left		'^'
+%left		'^' POWER_OF
 /* Unary Operators */
 %left		AT				/* sets precedence for AT TIME ZONE */
 %left		COLLATE

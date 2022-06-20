@@ -18,6 +18,9 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	for (auto &dependency : dependencies) {
 		idx_t entry_index;
 		CatalogEntry *catalog_entry;
+		if (!dependency->set) {
+			throw InternalException("Dependency has no set");
+		}
 		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index, catalog_entry)) {
 			throw InternalException("Dependency has already been deleted?");
 		}
@@ -103,7 +106,7 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 			auto table = (TableCatalogEntry *)new_obj;
 			bool deleted_dependency = true;
 			for (auto &column : table->columns) {
-				if (column.type == user_type->user_type) {
+				if (column.Type() == user_type->user_type) {
 					deleted_dependency = false;
 					break;
 				}
@@ -125,11 +128,9 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	if (new_obj->type == CatalogType::TABLE_ENTRY) {
 		auto table = (TableCatalogEntry *)new_obj;
 		for (auto &column : table->columns) {
-			if (column.type.id() == LogicalTypeId::ENUM) {
-				auto enum_type_catalog = EnumType::GetCatalog(column.type);
-				if (enum_type_catalog) {
-					to_add.push_back(enum_type_catalog);
-				}
+			auto user_type_catalog = LogicalType::GetCatalog(column.Type());
+			if (user_type_catalog) {
+				to_add.push_back(user_type_catalog);
 			}
 		}
 	}

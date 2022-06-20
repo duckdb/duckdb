@@ -15,6 +15,19 @@ namespace duckdb {
 // This function is an implementation of the "period-crossing" date difference function from T-SQL
 // https://docs.microsoft.com/en-us/sql/t-sql/functions/datediff-transact-sql?view=sql-server-ver15
 struct DateDiff {
+	template <class TA, class TB, class TR, class OP>
+	static inline void BinaryExecute(Vector &left, Vector &right, Vector &result, idx_t count) {
+		BinaryExecutor::ExecuteWithNulls<TA, TB, TR>(
+		    left, right, result, count, [&](TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+			    if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+				    return OP::template Operation<TA, TB, TR>(startdate, enddate);
+			    } else {
+				    mask.SetInvalid(idx);
+				    return TR();
+			    }
+		    });
+	}
+
 	struct YearOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
@@ -321,8 +334,13 @@ static int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate)
 
 struct DateDiffTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
-	static inline TR Operation(TS part, TA startdate, TB enddate) {
-		return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
+	static inline TR Operation(TS part, TA startdate, TB enddate, ValidityMask &mask, idx_t idx) {
+		if (Value::IsFinite(startdate) && Value::IsFinite(enddate)) {
+			return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
+		} else {
+			mask.SetInvalid(idx);
+			return TR();
+		}
 	}
 };
 
@@ -330,51 +348,51 @@ template <typename TA, typename TB, typename TR>
 static void DateDiffBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, Vector &result, idx_t count) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::YearOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::YearOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MONTH:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MonthOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::MonthOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::DayOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::DayOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::DECADE:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::DecadeOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::DecadeOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::CENTURY:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::CenturyOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::CenturyOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MILLENNIUM:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MilleniumOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::MilleniumOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::QUARTER:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::QuarterOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::QuarterOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::WEEK:
 	case DatePartSpecifier::YEARWEEK:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::WeekOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::WeekOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::ISOYEAR:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::ISOYearOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::ISOYearOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MicrosecondsOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::MicrosecondsOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MillisecondsOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::MillisecondsOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::SECOND:
 	case DatePartSpecifier::EPOCH:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::SecondsOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::SecondsOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MINUTE:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MinutesOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::MinutesOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::HOUR:
-		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::HoursOperator>(left, right, result, count);
+		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::HoursOperator>(left, right, result, count);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEDIFF");
@@ -385,8 +403,8 @@ template <typename T>
 static void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 3);
 	auto &part_arg = args.data[0];
-	auto &startdate_arg = args.data[1];
-	auto &enddate_arg = args.data[2];
+	auto &start_arg = args.data[1];
+	auto &end_arg = args.data[2];
 
 	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		// Common case of constant part.
@@ -395,11 +413,12 @@ static void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &re
 			ConstantVector::SetNull(result, true);
 		} else {
 			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DateDiffBinaryExecutor<T, T, int64_t>(type, startdate_arg, enddate_arg, result, args.size());
+			DateDiffBinaryExecutor<T, T, int64_t>(type, start_arg, end_arg, result, args.size());
 		}
 	} else {
-		TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, startdate_arg, enddate_arg, result, args.size(),
-		                                                  DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
+		TernaryExecutor::ExecuteWithNulls<string_t, T, T, int64_t>(
+		    part_arg, start_arg, end_arg, result, args.size(),
+		    DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
 	}
 }
 

@@ -95,8 +95,8 @@ private:
 	void AdjustTableDependencies(CatalogEntry *entry);
 	//! Adjust one dependency
 	void AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column, bool remove);
-	//! Adjust Enum dependency
-	void AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove);
+	//! Adjust User dependency
+	void AdjustUserDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
 	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
@@ -109,6 +109,11 @@ private:
 	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);
 	void DeleteMapping(ClientContext &context, const string &name);
 	void DropEntryDependencies(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade);
+
+	//! Create all default entries
+	void CreateDefaultEntries(ClientContext &context, unique_lock<mutex> &lock);
+	//! Attempt to create a default entry with the specified name. Returns the entry if successful, nullptr otherwise.
+	CatalogEntry *CreateDefaultEntry(ClientContext &context, const string &name, unique_lock<mutex> &lock);
 
 private:
 	Catalog &catalog;

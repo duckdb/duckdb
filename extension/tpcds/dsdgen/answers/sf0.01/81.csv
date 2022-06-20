@@ -1,10 +1,10 @@
 c_customer_id|c_salutation|c_first_name|c_last_name|ca_street_number|ca_street_name|ca_street_type|ca_suite_number|ca_city|ca_county|ca_state|ca_zip|ca_country|ca_gmt_offset|ca_location_type|ctr_total_return
-AAAAAAAAFDAAAAAA|Mr.|Paul|Higgins|828|2nd Miller|ST|Suite S|Mechanicsburg|Wheeler County|GA|32219|United States|-0.05|apartment|15.10
+AAAAAAAAFDAAAAAA|Mr.|Paul|Higgins|828|2nd Miller|ST|Suite S|Mechanicsburg|Wheeler County|GA|32219|United States|-0.05|apartment|15.11
 AAAAAAAAFDDAAAAA|Dr.|Amy|Joyce|640|4th Laurel|Boulevard|Suite 340|Enterprise|Peach County|GA|31757|United States|-0.05|apartment|11.41
 AAAAAAAAHBCAAAAA|Dr.|Vera|Prewitt|989|Hill 1st|RD|Suite E|Lakeside|Washington County|GA|39532|United States|-0.05|single family|6.07
 AAAAAAAAHBDAAAAA|Miss|Ernestina|Harding|939|Cedar |Court|Suite A|Mount Pleasant|Marion County|GA|32739|United States|-0.05|single family|24.12
-AAAAAAAAJJCAAAAA|Dr.|Daniel|Null|81|Lee 4th|RD|Suite 140|Centerville|Coffee County|GA|30059|United States|-0.05|single family|25.41
+AAAAAAAAJJCAAAAA|Dr.|Daniel|Null|81|Lee 4th|RD|Suite 140|Centerville|Coffee County|GA|30059|United States|-0.05|single family|25.42
 AAAAAAAALNDAAAAA|Mr.|Todd|Norris|498|Lake |Way|Suite 490|Spring Valley|Habersham County|GA|36060|United States|-0.05|single family|43.22
-AAAAAAAAMEDAAAAA|Ms.|Michele|Michael|986|West East|Blvd|Suite F|Pleasant Grove|Coweta County|GA|34136|United States|-0.05|apartment|32.54
-AAAAAAAANACAAAAA|Miss|Judith|Winkler|52|6th Park|Drive|Suite E|Farmington|Johnson County|GA|39145|United States|-0.05|condo|41.80
+AAAAAAAAMEDAAAAA|Ms.|Michele|Michael|986|West East|Blvd|Suite F|Pleasant Grove|Coweta County|GA|34136|United States|-0.05|apartment|32.55
+AAAAAAAANACAAAAA|Miss|Judith|Winkler|52|6th Park|Drive|Suite E|Farmington|Johnson County|GA|39145|United States|-0.05|condo|41.81
 AAAAAAAANCAAAAAA|Dr.|Floy|Hammonds|129|Valley |Circle|Suite 410|Ashland|Decatur County|GA|34244|United States|-0.05|single family|73.02

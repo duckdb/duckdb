@@ -15,7 +15,7 @@ ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>
     : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
-	is_little_endian = IsLittleEndian();
+	is_little_endian = Radix::IsLittleEndian();
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:

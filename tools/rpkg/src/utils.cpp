@@ -54,7 +54,7 @@ RStrings::RStrings() {
 	R_PreserveObject(strings);
 	MARK_NOT_MUTABLE(strings);
 
-	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 7));
+	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 8));
 	SET_VECTOR_ELT(chars, 0, UTC_str = Rf_mkString("UTC"));
 	SET_VECTOR_ELT(chars, 1, Date_str = Rf_mkString("Date"));
 	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));
@@ -62,6 +62,7 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 4, arrow_str = Rf_mkString("arrow"));
 	SET_VECTOR_ELT(chars, 5, POSIXct_POSIXt_str = StringsToSexp({"POSIXct", "POSIXt"}));
 	SET_VECTOR_ELT(chars, 6, factor_str = Rf_mkString("factor"));
+	SET_VECTOR_ELT(chars, 7, dataframe_str = Rf_mkString("data.frame"));
 
 	R_PreserveObject(chars);
 	MARK_NOT_MUTABLE(chars);
@@ -114,6 +115,8 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	case RType::STRING: {
 		auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
 		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
+		//  TODO this does not deal with NULLs yet
+		// return Value::ENUM((uint64_t)DATAPTR(str_val), LogicalType::DEDUP_POINTER_ENUM());
 	}
 	case RType::FACTOR: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];
@@ -191,7 +194,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	}
 }
 
-SEXP RApiTypes::ValueToSexp(Value &val) {
+SEXP RApiTypes::ValueToSexp(Value &val, string &timezone_config) {
 	if (val.IsNull()) {
 		return R_NilValue;
 	}
@@ -219,7 +222,13 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		// TODO bit of duplication here with statement.cpp, fix this
 		// some dresssup for R
 		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
-		Rf_setAttrib(res, RStrings::get().tzone_sym, R_NilValue);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, StringsToSexp({""}));
+		return res;
+	}
+	case LogicalTypeId::TIMESTAMP_TZ: {
+		cpp11::doubles res({(double)Timestamp::GetEpochSeconds(val.GetValue<timestamp_t>())});
+		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, StringsToSexp({timezone_config}));
 		return res;
 	}
 	case LogicalTypeId::TIME: {

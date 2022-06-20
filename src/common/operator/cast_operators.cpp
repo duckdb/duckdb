@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -788,7 +789,7 @@ template <typename T>
 struct IntegerCastData {
 	using Result = T;
 	Result result;
-	uint8_t decimal_count;
+	bool seen_decimal;
 };
 
 struct IntegerCastOperation {
@@ -816,20 +817,33 @@ struct IntegerCastOperation {
 		if (dbl_res < NumericLimits<result_t>::Minimum() || dbl_res > NumericLimits<result_t>::Maximum()) {
 			return false;
 		}
-		state.result = (result_t)dbl_res;
+		state.result = (result_t)std::nearbyint(dbl_res);
 		return true;
 	}
 
 	template <class T, bool NEGATIVE>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (!state.decimal_count) {
-			if (NEGATIVE) {
-				state.result -= (digit >= 5);
-			} else {
-				state.result += (digit >= 5);
-			}
+		if (state.seen_decimal) {
+			return true;
 		}
-		++state.decimal_count;
+		state.seen_decimal = true;
+		// round the integer based on what is after the decimal point
+		// if digit >= 5, then we round up (or down in case of negative numbers)
+		auto increment = digit >= 5;
+		if (!increment) {
+			return true;
+		}
+		if (NEGATIVE) {
+			if (state.result == NumericLimits<typename T::Result>::Minimum()) {
+				return false;
+			}
+			state.result--;
+		} else {
+			if (state.result == NumericLimits<typename T::Result>::Maximum()) {
+				return false;
+			}
+			state.result++;
+		}
 		return true;
 	}
 
@@ -1089,6 +1103,13 @@ bool TryCast::Operation(date_t input, date_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (input == date_t::infinity()) {
+		result = timestamp_t::infinity();
+		return true;
+	} else if (input == date_t::ninfinity()) {
+		result = timestamp_t::ninfinity();
+		return true;
+	}
 	return Timestamp::TryFromDatetime(input, Time::FromTime(0, 0, 0), result);
 }
 
@@ -1206,6 +1227,35 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 		return false;
 	}
 	result = Timestamp::GetEpochSeconds(result);
+	return true;
+}
+
+template <>
+bool TryCastToTimestampNS::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	if (!TryMultiplyOperator::Operation(result.value, Interval::NANOS_PER_MICRO, result.value)) {
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool TryCastToTimestampMS::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result.value /= Interval::MICROS_PER_MSEC;
+	return true;
+}
+
+template <>
+bool TryCastToTimestampSec::Operation(date_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<date_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result.value /= Interval::MICROS_PER_MSEC * Interval::MSECS_PER_SEC;
 	return true;
 }
 
@@ -1491,7 +1541,7 @@ struct DecimalCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		Finalize<T>(state);
 		if (exponent < 0) {
-			for (idx_t i = 0; i < idx_t(-exponent); i++) {
+			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
 				state.result /= 10;
 				if (state.result == 0) {
 					break;

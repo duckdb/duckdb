@@ -27,6 +27,11 @@ StatementType PreparedStatement::GetStatementType() {
 	return data->statement_type;
 }
 
+StatementProperties PreparedStatement::GetStatementProperties() {
+	D_ASSERT(data);
+	return data->properties;
+}
+
 const vector<LogicalType> &PreparedStatement::GetTypes() {
 	D_ASSERT(data);
 	return data->types;
@@ -38,19 +43,22 @@ const vector<string> &PreparedStatement::GetNames() {
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
-	auto pending = PendingQuery(values);
+	auto pending = PendingQuery(values, allow_stream_result);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(pending->error);
 	}
-	return pending->Execute(allow_stream_result && data->allow_stream_result);
+	return pending->Execute();
 }
 
-unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values) {
+unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values, bool allow_stream_result) {
 	if (!success) {
 		throw InvalidInputException("Attempting to execute an unsuccessfully prepared statement!");
 	}
 	D_ASSERT(data);
-	auto result = context->PendingQuery(query, data, values);
+	PendingQueryParameters parameters;
+	parameters.parameters = &values;
+	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
+	auto result = context->PendingQuery(query, data, parameters);
 	return result;
 }
 

@@ -43,9 +43,9 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.columns[check_column_id];
 			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    column.type, ColumnBinding(proj.table_index, proj.expressions.size())));
+			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
 			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    column.type, ColumnBinding(get.table_index, get.column_ids.size())));
+			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id);
 			update.columns.push_back(check_column_id);
 		}
@@ -101,7 +101,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 
 	// we also convert any updates on LIST columns into delete + insert
 	for (auto &col : update.columns) {
-		if (!TypeSupportsRegularUpdate(table.columns[col].type)) {
+		if (!TypeSupportsRegularUpdate(table.columns[col].Type())) {
 			update.update_is_del_and_insert = true;
 			break;
 		}
@@ -144,7 +144,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 
 	if (!table->temporary) {
 		// update of persistent table: not read only!
-		this->read_only = false;
+		properties.read_only = false;
 	}
 	auto update = make_unique<LogicalUpdate>(table);
 
@@ -178,16 +178,19 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 			throw BinderException("Referenced update column %s not found in table!", colname);
 		}
 		auto &column = table->GetColumn(colname);
-		if (std::find(update->columns.begin(), update->columns.end(), column.oid) != update->columns.end()) {
+		if (column.Generated()) {
+			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+		}
+		if (std::find(update->columns.begin(), update->columns.end(), column.Oid()) != update->columns.end()) {
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
-		update->columns.push_back(column.oid);
+		update->columns.push_back(column.Oid());
 
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.type));
+			update->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
-			binder.target_type = column.type;
+			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(&bound_expr, &root);
 
@@ -225,7 +228,8 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		result.names = {"Count"};
 		result.types = {LogicalType::BIGINT};
 		result.plan = move(update);
-		this->allow_stream_result = false;
+		properties.allow_stream_result = false;
+		properties.return_type = StatementReturnType::CHANGED_ROWS;
 	}
 	return result;
 }

@@ -17,9 +17,9 @@
 
 /*  _tal long RandSeed = "Random^SeedFromTimestamp" (void); */
 
-#define ADVANCE_STREAM(stream_id, num_calls) advanceStream(stream_id, num_calls, 0)
+#define ADVANCE_STREAM(stream_id, num_calls)   advanceStream(stream_id, num_calls, 0)
 #define ADVANCE_STREAM64(stream_id, num_calls) advanceStream(stream_id, num_calls, 1)
-#define MAX_COLOR 92
+#define MAX_COLOR                              92
 long name_bits[MAX_COLOR / BITS_PER_LONG];
 static seed_t *Seed = DBGenGlobals::Seed;
 void fakeVStr(int nAvg, long nSeed, DSS_HUGE nCount);
@@ -197,6 +197,22 @@ long sd_supp(int child, DSS_HUGE skip_count) {
 	ADVANCE_STREAM(BBB_JNK_SD, skip_count);
 	ADVANCE_STREAM(BBB_OFFSET_SD, skip_count);
 	ADVANCE_STREAM(BBB_TYPE_SD, skip_count); /* avoid one trudge */
+
+	return (0L);
+}
+
+long sd_nation(int child, DSS_HUGE skip_count) {
+	(void)child;
+
+	ADVANCE_STREAM(N_CMNT_SD, skip_count * 2);
+
+	return (0L);
+}
+
+long sd_region(int child, DSS_HUGE skip_count) {
+	(void)child;
+
+	ADVANCE_STREAM(R_CMNT_SD, skip_count * 2);
 
 	return (0L);
 }

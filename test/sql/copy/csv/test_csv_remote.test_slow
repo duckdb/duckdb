@@ -1,0 +1,12 @@
+# name: test/sql/copy/csv/test_csv_remote.test_slow
+# description: Test reading csv files over http, slow queries
+# group: [csv]
+
+require httpfs
+
+# Read a compressed file (~44MB compressed, ~700MB uncompressed) over HTTP
+query IIIIII
+select count(*), min(strain), max(strain), min(strlen(sequence)), max(strlen(sequence)), avg(strlen(sequence))
+from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/master/data/csv/sequences.csv.gz', delim=',', header=True);
+----
+100000	ARG/Cordoba-1006-155/2020	tiger/NY/040420/2020	17340	30643	29821.264410

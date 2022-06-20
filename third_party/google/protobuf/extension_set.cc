@@ -53,6 +53,7 @@
 // clang-format off
 #include <google/protobuf/port_def.inc>  // must be last.
 // clang-format on
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -2251,5 +2252,5 @@ size_t ExtensionSet::MessageSetByteSize() const {
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>

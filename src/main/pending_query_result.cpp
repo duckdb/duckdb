@@ -5,9 +5,10 @@
 namespace duckdb {
 
 PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
-                                       vector<LogicalType> types_p)
-    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, move(types_p), statement.names),
-      context(move(context_p)) {
+                                       vector<LogicalType> types_p, bool allow_stream_result)
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, statement.statement_type, statement.properties, move(types_p),
+                      statement.names),
+      context(move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
 PendingQueryResult::PendingQueryResult(string error) : BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
@@ -45,21 +46,21 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 	return context->ExecuteTaskInternal(lock, *this);
 }
 
-unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock, bool allow_streaming_result) {
+unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
 	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY) {
 	}
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
-	auto result = context->FetchResultInternal(lock, *this, allow_streaming_result);
+	auto result = context->FetchResultInternal(lock, *this);
 	Close();
 	return result;
 }
 
-unique_ptr<QueryResult> PendingQueryResult::Execute(bool allow_streaming_result) {
+unique_ptr<QueryResult> PendingQueryResult::Execute() {
 	auto lock = LockContext();
-	return ExecuteInternal(*lock, allow_streaming_result);
+	return ExecuteInternal(*lock);
 }
 
 void PendingQueryResult::Close() {

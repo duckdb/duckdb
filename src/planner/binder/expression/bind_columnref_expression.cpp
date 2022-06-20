@@ -1,18 +1,18 @@
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/where_binder.hpp"
 
 namespace duckdb {
 
@@ -40,15 +40,17 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		D_ASSERT(!binder.macro_binding->alias.empty());
 		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	} else {
+		// see if it's a column
 		string table_name = binder.bind_context.GetMatchingBinding(column_name);
-		if (table_name.empty()) {
-			auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-			error_message =
-			    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
-			return nullptr;
+		if (!table_name.empty()) {
+			return binder.bind_context.CreateColumnReference(table_name, column_name);
 		}
-		return binder.bind_context.CreateColumnReference(table_name, column_name);
+		// it's not, find candidates and error
+		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
+		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
+		error_message =
+		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
+		return nullptr;
 	}
 }
 
@@ -98,6 +100,33 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	return move(extract_fun);
 }
 
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpression &colref) {
+	D_ASSERT(colref.column_names.size() <= 2);
+	string error_message;
+	auto &table_name = colref.column_names.back();
+	auto binding = binder.bind_context.GetBinding(table_name, error_message);
+	if (!binding) {
+		return nullptr;
+	}
+	if (colref.column_names.size() == 2) {
+		// "schema_name.table_name"
+		auto catalog_entry = binding->GetStandardEntry();
+		if (!catalog_entry) {
+			return nullptr;
+		}
+		auto &schema_name = colref.column_names[0];
+		if (catalog_entry->schema->name != schema_name || catalog_entry->name != table_name) {
+			return nullptr;
+		}
+	}
+	// We found the table, now create the struct_pack expression
+	vector<unique_ptr<ParsedExpression>> child_exprs;
+	for (const auto &column_name : binding->names) {
+		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+	}
+	return make_unique<FunctionExpression>("struct_pack", move(child_exprs));
+}
+
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
 	idx_t column_parts = colref.column_names.size();
 	// column names can have an arbitrary amount of dots
@@ -106,14 +135,20 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// no dots (i.e. "part1")
 		// -> part1 refers to a column
 		// check if we can qualify the column name with the table name
-		return QualifyColumnName(colref.GetColumnName(), error_message);
+		auto qualified_colref = QualifyColumnName(colref.GetColumnName(), error_message);
+		if (qualified_colref) {
+			// we could: return it
+			return qualified_colref;
+		}
+		// we could not! Try creating an implicit struct_pack
+		return CreateStructPack(colref);
 	} else if (column_parts == 2) {
 		// one dot (i.e. "part1.part2")
 		// EITHER:
 		// -> part1 is a table, part2 is a column
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
-		// first check if part1 is a table
+		// first check if part1 is a table, and part2 is a standard column
 		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
@@ -122,12 +157,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
-			if (!qualified_colref) {
-				// we could not! bail
-				return nullptr;
+			if (qualified_colref) {
+				// we could: create a struct extract
+				return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
 			}
-			// we could: create a struct extract
-			return CreateStructExtract(move(qualified_colref), colref.column_names[1]);
+			// we could not! Try creating an implicit struct_pack
+			return CreateStructPack(colref);
 		}
 	} else {
 		// two or more dots (i.e. "part1.part2.part3.part4...")
@@ -184,12 +219,14 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	if (!expr) {
 		return BindResult(binder.FormatError(colref_p, error_message));
 	}
+	//! Generated column returns generated expression
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		return BindExpression(&expr, depth);
 	}
 	auto &colref = (ColumnRefExpression &)*expr;
-	D_ASSERT(colref.column_names.size() == 2 || colref.column_names.size() == 3);
-	auto &table_name = colref.column_names.size() == 3 ? colref.column_names[1] : colref.column_names[0];
+	D_ASSERT(colref.IsQualified());
+	auto &table_name = colref.GetTableName();
+
 	// individual column reference
 	// resolve to either a base table or a subquery expression
 	// if it was a macro parameter, let macro_binding bind it to the argument

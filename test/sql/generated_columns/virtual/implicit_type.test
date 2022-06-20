@@ -1,0 +1,43 @@
+# name: test/sql/generated_columns/virtual/implicit_type.test
+# description: Test implicit typing of generated columns
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (
+    foo INTEGER,
+    bar GENERATED ALWAYS AS (foo+1),
+    foobar INTEGER DEFAULT 5
+);
+
+# Can not use implicit types without GENERATED ALWAYS AS
+statement ok
+CREATE TABLE unit (
+    foo INTEGER,
+    bar AS (foo+1),
+)
+
+# Attempting to use implicit type on a standard column
+statement error
+CREATE TABLE tbl (
+    foo,
+    bar GENERATED ALWAYS AS (foo+1)
+);
+
+statement ok
+INSERT INTO test(foo) VALUES (1);
+
+query I
+SELECT bar FROM test
+----
+2
+
+statement ok
+INSERT INTO unit VALUES(5)
+
+query I
+SELECT bar FROM unit
+----
+6

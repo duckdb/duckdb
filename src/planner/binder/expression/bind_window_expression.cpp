@@ -146,6 +146,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &order : window.orders) {
 		BindChild(order.expression, depth, error);
 	}
+	BindChild(window.filter_expr, depth, error);
 	BindChild(window.start_expr, depth, error);
 	BindChild(window.end_expr, depth, error);
 	BindChild(window.offset_expr, depth, error);
@@ -278,6 +279,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, move(expression));
 	}
+
+	result->filter_expr = CastWindowExpression(window.filter_expr, LogicalType::BOOLEAN);
 
 	result->start_expr = CastWindowExpression(window.start_expr, start_type);
 	result->end_expr = CastWindowExpression(window.end_expr, end_type);

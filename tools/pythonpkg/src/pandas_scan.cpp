@@ -1,6 +1,5 @@
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/array_wrapper.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/vector_conversion.hpp"
@@ -28,28 +27,44 @@ struct PandasScanFunctionData : public TableFunctionData {
 	}
 };
 
-struct PandasScanState : public FunctionOperatorData {
-	PandasScanState(idx_t start, idx_t end) : start(start), end(end) {
+struct PandasScanLocalState : public LocalTableFunctionState {
+	PandasScanLocalState(idx_t start, idx_t end) : start(start), end(end), batch_index(0) {
 	}
 
 	idx_t start;
 	idx_t end;
+	idx_t batch_index;
 	vector<column_t> column_ids;
 };
 
-struct ParallelPandasScanState : public ParallelState {
-	ParallelPandasScanState() : position(0) {
+struct PandasScanGlobalState : public GlobalTableFunctionState {
+	explicit PandasScanGlobalState(idx_t max_threads) : position(0), batch_index(0), max_threads(max_threads) {
 	}
 
 	std::mutex lock;
 	idx_t position;
+	idx_t batch_index;
+	idx_t max_threads;
+
+	idx_t MaxThreads() const override {
+		return max_threads;
+	}
 };
 
 PandasScanFunction::PandasScanFunction()
-    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInit, nullptr,
-                    nullptr, nullptr, PandasScanCardinality, nullptr, nullptr, PandasScanMaxThreads,
-                    PandasScanInitParallelState, PandasScanFuncParallel, PandasScanParallelInit,
-                    PandasScanParallelStateNext, true, false, PandasProgress) {
+    : TableFunction("pandas_scan", {LogicalType::POINTER}, PandasScanFunc, PandasScanBind, PandasScanInitGlobal,
+                    PandasScanInitLocal) {
+	get_batch_index = PandasScanGetBatchIndex;
+	cardinality = PandasScanCardinality;
+	table_scan_progress = PandasProgress;
+	projection_pushdown = true;
+}
+
+idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+                                                  LocalTableFunctionState *local_state,
+                                                  GlobalTableFunctionState *global_state) {
+	auto &data = (PandasScanLocalState &)*local_state;
+	return data.batch_index;
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
@@ -67,13 +82,17 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	return make_unique<PandasScanFunctionData>(df, row_count, move(pandas_bind_data), return_types);
 }
 
-unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContext &context,
-                                                                    const FunctionData *bind_data_p,
-                                                                    const vector<column_t> &column_ids,
-                                                                    TableFilterCollection *filters) {
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-	auto result = make_unique<PandasScanState>(0, bind_data.row_count);
-	result->column_ids = column_ids;
+unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(ClientContext &context,
+                                                                              TableFunctionInitInput &input) {
+	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
+}
+
+unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ClientContext &context,
+                                                                            TableFunctionInitInput &input,
+                                                                            GlobalTableFunctionState *gstate) {
+	auto result = make_unique<PandasScanLocalState>(0, 0);
+	result->column_ids = input.column_ids;
+	PandasScanParallelStateNext(context, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
@@ -85,32 +104,12 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 	return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 }
 
-unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(ClientContext &context,
-                                                                          const FunctionData *bind_data_p,
-                                                                          const vector<column_t> &column_ids,
-                                                                          TableFilterCollection *filters) {
-	return make_unique<ParallelPandasScanState>();
-}
-
-unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanParallelInit(ClientContext &context,
-                                                                            const FunctionData *bind_data_p,
-                                                                            ParallelState *state,
-                                                                            const vector<column_t> &column_ids,
-                                                                            TableFilterCollection *filters) {
-	auto result = make_unique<PandasScanState>(0, 0);
-	result->column_ids = column_ids;
-	if (!PandasScanParallelStateNext(context, bind_data_p, result.get(), state)) {
-		return nullptr;
-	}
-	return move(result);
-}
-
 bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
-                                                     FunctionOperatorData *operator_state,
-                                                     ParallelState *parallel_state_p) {
+                                                     LocalTableFunctionState *lstate,
+                                                     GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
-	auto &parallel_state = (ParallelPandasScanState &)*parallel_state_p;
-	auto &state = (PandasScanState &)*operator_state;
+	auto &parallel_state = (PandasScanGlobalState &)*gstate;
+	auto &state = (PandasScanLocalState &)*lstate;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	if (parallel_state.position >= bind_data.row_count) {
@@ -122,10 +121,12 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 		parallel_state.position = bind_data.row_count;
 	}
 	state.end = parallel_state.position;
+	state.batch_index = parallel_state.batch_index++;
 	return true;
 }
 
-double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p) {
+double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
+                                          const GlobalTableFunctionState *gstate) {
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	if (bind_data.row_count == 0) {
 		return 100;
@@ -134,25 +135,16 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 	return percentage;
 }
 
-void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const FunctionData *bind_data,
-                                                FunctionOperatorData *operator_state, DataChunk &output,
-                                                ParallelState *parallel_state_p) {
-	//! FIXME: Have specialized parallel function from pandas scan here
-	PandasScanFunc(context, bind_data, operator_state, output);
-}
-
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
-void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
-                                        FunctionOperatorData *operator_state, DataChunk &output) {
-	if (!operator_state) {
-		return;
-	}
-	auto &data = (PandasScanFunctionData &)*bind_data;
-	auto &state = (PandasScanState &)*operator_state;
+void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PandasScanFunctionData &)*data_p.bind_data;
+	auto &state = (PandasScanLocalState &)*data_p.local_state;
 
 	if (state.start >= state.end) {
-		return;
+		if (!PandasScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
+			return;
+		}
 	}
 	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, state.end - state.start);
 	output.SetCardinality(this_count);
@@ -173,6 +165,47 @@ unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientConte
                                                                      const FunctionData *bind_data) {
 	auto &data = (PandasScanFunctionData &)*bind_data;
 	return make_unique<NodeStatistics>(data.row_count, data.row_count);
+}
+
+py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &original_df) {
+	auto copy_df = original_df.attr("copy")(false);
+	unordered_map<string, idx_t> name_map;
+	unordered_set<string> columns_seen;
+	py::list column_name_list;
+	auto df_columns = py::list(original_df.attr("columns"));
+
+	for (auto &column_name_py : df_columns) {
+		string column_name = py::str(column_name_py);
+		// put it all lower_case
+		auto column_name_low = StringUtil::Lower(column_name);
+		name_map[column_name_low] = 1;
+	}
+	for (auto &column_name_py : df_columns) {
+		const string column_name = py::str(column_name_py);
+		auto column_name_low = StringUtil::Lower(column_name);
+		if (columns_seen.find(column_name_low) == columns_seen.end()) {
+			// `column_name` has not been seen before -> It isn't a duplicate
+			column_name_list.append(column_name);
+			columns_seen.insert(column_name_low);
+		} else {
+			// `column_name` already seen. Deduplicate by with suffix _{x} where x starts at the repetition number of
+			// `column_name` If `column_name_{x}` already exists in `name_map`, increment x and try again.
+			string new_column_name = column_name + "_" + std::to_string(name_map[column_name_low]);
+			auto new_column_name_low = StringUtil::Lower(new_column_name);
+			while (name_map.find(new_column_name_low) != name_map.end()) {
+				// This name is already here due to a previous definition
+				name_map[column_name_low]++;
+				new_column_name = column_name + "_" + std::to_string(name_map[column_name_low]);
+				new_column_name_low = StringUtil::Lower(new_column_name);
+			}
+			column_name_list.append(new_column_name);
+			columns_seen.insert(new_column_name_low);
+			name_map[column_name_low]++;
+		}
+	}
+
+	copy_df.attr("columns") = column_name_list;
+	return copy_df;
 }
 
 } // namespace duckdb

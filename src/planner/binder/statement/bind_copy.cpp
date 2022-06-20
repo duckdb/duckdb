@@ -99,13 +99,13 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		expected_names.resize(bound_insert.expected_types.size());
 		for (idx_t i = 0; i < table->columns.size(); i++) {
 			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
-				expected_names[bound_insert.column_index_map[i]] = table->columns[i].name;
+				expected_names[bound_insert.column_index_map[i]] = table->columns[i].Name();
 			}
 		}
 	} else {
 		expected_names.reserve(bound_insert.expected_types.size());
 		for (idx_t i = 0; i < table->columns.size(); i++) {
-			expected_names.push_back(table->columns[i].name);
+			expected_names.push_back(table->columns[i].Name());
 		}
 	}
 
@@ -140,7 +140,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		}
 		stmt.select_statement = move(statement);
 	}
-	this->allow_stream_result = false;
+	properties.allow_stream_result = false;
+	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	if (stmt.info->is_from) {
 		return BindCopyFrom(stmt);
 	} else {
