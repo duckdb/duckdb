@@ -75,11 +75,11 @@ public:
 			orders.emplace_back(order.Copy());
 		}
 
+		payload_chunk.Initialize(payload_types);
+		payload_layout.Initialize(payload_types);
+
 		if (!over_types.empty()) {
 			over_chunk.Initialize(over_types);
-
-			payload_chunk.Initialize(payload_types);
-			payload_layout.Initialize(payload_types);
 
 			if (wexpr->partitions.empty()) {
 				sorts.resize(1);
@@ -285,6 +285,7 @@ idx_t WindowLocalSinkState::FlushRagged() {
 void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 	lock_guard<mutex> glock(gstate.lock);
 
+	// OVER()
 	if (over_chunk.ColumnCount() == 0) {
 		if (gstate.rows) {
 			gstate.rows->Merge(*rows);
@@ -295,6 +296,7 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 			gstate.rows = move(rows);
 			gstate.strings = move(strings);
 		}
+		return;
 	}
 
 	if (FlushRagged() == 0) {
@@ -576,11 +578,17 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 static void SortCollectionForPartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate,
                                        const hash_t hash_bin) {
 	state.global_sort_state = move(gstate.sorts[hash_bin]);
+
+	auto &global_sort_state = *state.global_sort_state;
+	while (global_sort_state.sorted_blocks.size() > 1) {
+		global_sort_state.InitializeMergeRound();
+		MergeSorter merge_sorter(global_sort_state, global_sort_state.buffer_manager);
+		merge_sorter.PerformInMergeRound();
+		global_sort_state.CompleteMergeRound(true);
+	}
 }
 
 static void ScanRowCollection(RowDataCollection &rows, ChunkCollection &cols, const vector<LogicalType> &types) {
-	const auto entries = rows.count;
-	const auto tuples_per_block = rows.block_capacity;
 	const auto tuple_size = rows.entry_size;
 
 	Vector addresses(LogicalType::POINTER);
@@ -591,40 +599,34 @@ static void ScanRowCollection(RowDataCollection &rows, ChunkCollection &cols, co
 
 	DataChunk result;
 	result.Initialize(types);
-	for (idx_t scan_position = 0; scan_position < entries;) {
-		const auto remaining = entries - scan_position;
-		const auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
+	for (idx_t block_idx = 0; block_idx < rows.blocks.size(); ++block_idx) {
+		auto &block = rows.blocks[block_idx];
+		auto handle = rows.buffer_manager.Pin(block.block);
+		auto read_ptr = handle->Ptr();
 
-		auto chunk_idx = scan_position / tuples_per_block;
-		auto chunk_offset = (scan_position % tuples_per_block) * tuple_size;
-		D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
+		for (idx_t block_pos = 0; block_pos < block.count;) {
+			const auto remaining = block.count - block_pos;
+			const auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
 
-		auto *payload_hds = &rows.blocks[chunk_idx];
-		auto read_ptr = rows.buffer_manager.Pin(payload_hds->block)->Ptr();
-		for (idx_t i = 0; i < this_n; i++) {
-			data_pointers[i] = read_ptr + chunk_offset;
-			chunk_offset += tuple_size;
-			if (chunk_offset >= tuples_per_block * tuple_size) {
-				rows.buffer_manager.Unpin(payload_hds->block);
-				payload_hds = &rows.blocks[++chunk_idx];
-				read_ptr = rows.buffer_manager.Pin(payload_hds->block)->Ptr();
-				chunk_offset = 0;
+			auto row_offset = block_pos * tuple_size;
+			D_ASSERT(row_offset + tuple_size <= Storage::BLOCK_SIZE);
+			for (idx_t i = 0; i < this_n; i++) {
+				data_pointers[i] = read_ptr + row_offset;
+				row_offset += tuple_size;
 			}
+
+			result.Reset();
+			result.SetCardinality(this_n);
+			for (idx_t i = 0; i < result.ColumnCount(); i++) {
+				auto &column = result.data[i];
+				const auto col_offset = layout.GetOffsets()[i];
+				RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
+				                      *FlatVector::IncrementalSelectionVector(), result.size(), col_offset, i);
+			}
+			cols.Append(result);
+
+			block_pos += this_n;
 		}
-
-		result.Reset();
-		result.SetCardinality(this_n);
-
-		for (idx_t i = 0; i < result.ColumnCount(); i++) {
-			auto &column = result.data[i];
-			const auto col_offset = layout.GetOffsets()[i];
-			RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
-			                      *FlatVector::IncrementalSelectionVector(), result.size(), col_offset, i);
-		}
-
-		scan_position += this_n;
-
-		cols.Append(result);
 	}
 }
 
@@ -632,11 +634,15 @@ static void ScanSortedPartition(WindowLocalSourceState &state, ChunkCollection &
                                 const vector<LogicalType> &input_types, ChunkCollection &over,
                                 const vector<LogicalType> &over_types) {
 	auto &global_sort_state = *state.global_sort_state;
+	if (global_sort_state.sorted_blocks.empty()) {
+		return;
+	}
 
 	auto payload_types = input_types;
 	payload_types.insert(payload_types.end(), over_types.begin(), over_types.end());
 
 	// scan the sorted row data
+	D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	for (;;) {
 		DataChunk payload_chunk;
@@ -1376,7 +1382,7 @@ static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkSta
 	// Scan the sorted data into new Collections
 	ChunkCollection input;
 	ChunkCollection over;
-	if (gstate.rows) {
+	if (gstate.rows && !hash_bin) {
 		//	No partition - convert row collection to chunk collection
 		ScanRowCollection(*gstate.rows, input, input_types);
 	} else if (hash_bin < gstate.sorts.size() && gstate.sorts[hash_bin]) {
