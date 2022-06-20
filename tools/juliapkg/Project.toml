@@ -1,7 +1,7 @@
 name = "DuckDB"
-uuid = "dc41c802-e0d0-4f5a-8bba-22eb8b17d8a4"
+uuid = "d2f5444f-75bc-4fdf-ac35-56f514c445e1"
 authors = ["Mark Raasveldt <mark@duckdblabs.com", "Hannes Mühleisen <hannes@duckdblabs.com>"]
-version = "0.3.2"
+version = "0.4.0"
 
 [deps]
 DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
