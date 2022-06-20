@@ -11,7 +11,7 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(mov
 }
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
-                                   TableColumnType category, CompressionType compression_type)
+                                   TableColumnType category, duckdb::CompressionType compression_type)
     : name(move(name_p)), type(move(type_p)), category(category), compression_type(compression_type) {
 	switch (category) {
 	case TableColumnType::STANDARD: {
@@ -49,7 +49,6 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 		writer.WriteOptional(default_value);
 	}
 	writer.WriteField<TableColumnType>(category);
-	writer.WriteOptional(default_value);
 	writer.WriteField(compression_type);
 	writer.Finalize();
 }
