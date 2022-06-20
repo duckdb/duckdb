@@ -32,8 +32,10 @@ ALTER TABLE integers ADD COLUMN i${i} INTEGER
 statement ok
 CHECKPOINT
 
+# Sorting adds one additional block during the first checkpoint, so we increase by 1.
+# It should not leak additional blocks in the loop
 query I
-SELECT total_blocks<=10 FROM pragma_database_size()
+SELECT total_blocks<11 FROM pragma_database_size()
 ----
 true
 

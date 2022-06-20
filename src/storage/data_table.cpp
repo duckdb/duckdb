@@ -1372,6 +1372,26 @@ idx_t DataTable::GetTotalRows() {
 	return total_rows;
 }
 
+void DataTable::SetTotalRows(idx_t &new_total_rows) {
+	this->total_rows = new_total_rows;
+}
+
+int64_t DataTable::GetRowsChanged() {
+	return rows_changed;
+}
+
+void DataTable::SetRowsChanged(int64_t &new_rows_changed) {
+	this->rows_changed = new_rows_changed;
+}
+
+int64_t DataTable::GetPrevEnd() {
+	return prev_end;
+}
+
+void DataTable::SetPrevEnd(int64_t &new_prev_end) {
+	this->prev_end = new_prev_end;
+}
+
 void DataTable::CommitDropTable() {
 	// commit a drop of this table: mark all blocks as modified so they can be reclaimed later on
 	auto segment = (RowGroup *)row_groups->GetRootSegment();

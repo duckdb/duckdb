@@ -119,7 +119,9 @@ void RLESort::SinkKeysPayloadSort() {
 void RLESort::ReplaceRowGroup(RowGroup &sorted_rowgroup) {
 	// We have to delete from the data table the difference of chunk counts
 	// These refer to deleted tuples
-	data_table.total_rows -= row_group.count - new_count;
+	idx_t total_rows = data_table.GetTotalRows();
+	total_rows -= row_group.count - new_count;
+	data_table.SetTotalRows(total_rows);
 	row_group.columns = sorted_rowgroup.columns;
 	row_group.stats = sorted_rowgroup.stats;
 	row_group.version_info = sorted_rowgroup.version_info;
@@ -194,7 +196,8 @@ void RLESort::CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::
 
 unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_state) {
 	// Initialize sorted rowgroup
-	auto sorted_rowgroup = make_unique<RowGroup>(row_group.db, row_group.table_info, data_table.prev_end, new_count);
+	auto sorted_rowgroup =
+	    make_unique<RowGroup>(row_group.db, row_group.table_info, data_table.GetPrevEnd(), new_count);
 	sorted_rowgroup->InitializeEmpty(payload_column_types);
 	TableAppendState append_state;
 	sorted_rowgroup->InitializeAppendInternal(append_state.row_group_append_state, new_count);
@@ -221,7 +224,9 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 void RLESort::Sort() {
 	if (key_column_ids.empty()) {
 		// Nothing to sort on
-		data_table.prev_end += row_group.count;
+		int64_t prev_end = data_table.GetPrevEnd();
+		prev_end += row_group.count;
+		data_table.SetPrevEnd(prev_end);
 		return;
 	}
 	// Check if there are any transient segments or if persistent segments have changes - otherwise data is already
@@ -232,7 +237,9 @@ void RLESort::Sort() {
 			break;
 		}
 		// None of the key columns had any changes, no need to sort again
-		data_table.prev_end += row_group.count;
+		int64_t prev_end = data_table.GetPrevEnd();
+		prev_end += row_group.count;
+		data_table.SetPrevEnd(prev_end);
 		return;
 	}
 
@@ -242,7 +249,9 @@ void RLESort::Sort() {
 	SinkKeysPayloadSort();
 	if (new_count == 0) {
 		// No changes
-		data_table.prev_end += row_group.count;
+		int64_t prev_end = data_table.GetPrevEnd();
+		prev_end += row_group.count;
+		data_table.SetPrevEnd(prev_end);
 		return;
 	}
 
@@ -258,12 +267,16 @@ void RLESort::Sort() {
 
 	// scan the sorted row data and add to the sorted row group
 	int64_t count_change = new_count - old_count;
-	data_table.rows_changed += count_change;
+	int64_t rows_changed = data_table.GetRowsChanged();
+	rows_changed += count_change;
+	data_table.SetRowsChanged(rows_changed);
 
 	// Initialize Sorted Row Group
 	auto sorted_rowgroup = CreateSortedRowGroup(global_sort_state);
 
-	data_table.prev_end += new_count;
+	int64_t prev_end = data_table.GetPrevEnd();
+	prev_end += row_group.count;
+	data_table.SetPrevEnd(prev_end);
 	ReplaceRowGroup(*sorted_rowgroup);
 }
 } // namespace duckdb

@@ -136,18 +136,21 @@ public:
 	//! A reference to the database instance
 	DatabaseInstance &db;
 
-	//! The number of rows in the table
-	atomic<idx_t> total_rows;
-
-	//! The number of rows in the table
-	atomic<int64_t> rows_changed;
-
-	//! The end of the previously checkpointed row group
-	atomic<int64_t> prev_end;
-
 public:
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
+
+	//! Get and set total_rows
+	idx_t GetTotalRows();
+	void SetTotalRows(idx_t &new_total_rows);
+
+	//! Get and set total_rows
+	int64_t GetRowsChanged();
+	void SetRowsChanged(int64_t &new_rows_changed);
+
+	//! Get and set total_rows
+	int64_t GetPrevEnd();
+	void SetPrevEnd(int64_t &new_prev_end);
 
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filter = nullptr);
@@ -228,8 +231,6 @@ public:
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 
-	idx_t GetTotalRows();
-
 	//! Appends an empty row_group to the table
 	void AppendRowGroup(idx_t start_row);
 
@@ -266,5 +267,11 @@ private:
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	atomic<bool> is_root;
+	//! The number of rows in the table
+	atomic<idx_t> total_rows;
+	//! The number of rows in the table
+	atomic<int64_t> rows_changed;
+	//! The end of the previously checkpointed row group
+	atomic<int64_t> prev_end;
 };
 } // namespace duckdb

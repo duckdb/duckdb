@@ -153,11 +153,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 		}
 	}
 
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
-		VectorData vdata;
-		scan_vector.Orrify(count, vdata);
-	});
-
 	// now we need to write our segment
 	// we will first run an analyze step that determines which compression function to use
 	idx_t compression_idx;

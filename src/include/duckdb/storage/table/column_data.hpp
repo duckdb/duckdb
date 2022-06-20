@@ -50,8 +50,6 @@ public:
 	LogicalType type;
 	//! The parent column (if any)
 	ColumnData *parent;
-	//! Vector with reorder indices
-	SelectionVector sel_sorted;
 	//! The segments holding the data of this column segment
 	SegmentTree data;
 
