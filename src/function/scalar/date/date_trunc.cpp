@@ -8,19 +8,23 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 namespace duckdb {
 
 struct DateTrunc {
 	template <class TA, class TR, class OP>
+	static inline TR UnaryFunction(TA input) {
+		if (Value::IsFinite(input)) {
+			return OP::template Operation<TA, TR>(input);
+		} else {
+			return Cast::template Operation<TA, TR>(input);
+		}
+	}
+
+	template <class TA, class TR, class OP>
 	static inline void UnaryExecute(Vector &left, Vector &result, idx_t count) {
-		UnaryExecutor::Execute<TA, TR>(left, result, count, [&](TA input) {
-			if (Value::IsFinite(input)) {
-				return OP::template Operation<TA, TR>(input);
-			} else {
-				return Cast::template Operation<TA, TR>(input);
-			}
-		});
+		UnaryExecutor::Execute<TA, TR>(left, result, count, UnaryFunction<TA, TR, OP>);
 	}
 
 	struct MillenniumOperator {
@@ -583,6 +587,82 @@ static void DateTruncFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 }
 
+template <class TA, class TR, class OP>
+static unique_ptr<BaseStatistics> DateTruncStatistics(vector<unique_ptr<BaseStatistics>> &child_stats) {
+	// we can only propagate date stats if the child has stats
+	if (!child_stats[1]) {
+		return nullptr;
+	}
+	auto &nstats = (NumericStatistics &)*child_stats[1];
+	if (nstats.min.IsNull() || nstats.max.IsNull()) {
+		return nullptr;
+	}
+	// run the operator on both the min and the max, this gives us the [min, max] bound
+	auto min = nstats.min.GetValueUnsafe<TA>();
+	auto max = nstats.max.GetValueUnsafe<TA>();
+	if (min > max) {
+		throw InternalException("Invalid DATETRUNC child statistics");
+	}
+
+	// Infinite values are unmodified
+	auto min_part = DateTrunc::UnaryFunction<TA, TR, OP>(min);
+	auto max_part = DateTrunc::UnaryFunction<TA, TR, OP>(max);
+
+	auto min_value = Value::CreateValue(min_part);
+	auto max_value = Value::CreateValue(max_part);
+	auto result = make_unique<NumericStatistics>(min_value.type(), min_value, max_value, StatisticsType::LOCAL_STATS);
+	if (child_stats[0]->validity_stats) {
+		result->validity_stats = child_stats[1]->validity_stats->Copy();
+	}
+	return move(result);
+}
+
+template <class TA, class TR, class OP>
+static unique_ptr<BaseStatistics> PropagateDateTruncStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+	return DateTruncStatistics<TA, TR, OP>(input.child_stats);
+}
+
+template <typename TA, typename TR>
+static function_statistics_t DateTruncStats(DatePartSpecifier type) {
+	switch (type) {
+	case DatePartSpecifier::MILLENNIUM:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::MillenniumOperator>;
+	case DatePartSpecifier::CENTURY:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::CenturyOperator>;
+	case DatePartSpecifier::DECADE:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::DecadeOperator>;
+	case DatePartSpecifier::YEAR:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::YearOperator>;
+	case DatePartSpecifier::QUARTER:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::QuarterOperator>;
+	case DatePartSpecifier::MONTH:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::MonthOperator>;
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::WeekOperator>;
+	case DatePartSpecifier::ISOYEAR:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::ISOYearOperator>;
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::DayOperator>;
+	case DatePartSpecifier::HOUR:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::HourOperator>;
+	case DatePartSpecifier::MINUTE:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::MinuteOperator>;
+	case DatePartSpecifier::SECOND:
+	case DatePartSpecifier::EPOCH:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::SecondOperator>;
+	case DatePartSpecifier::MILLISECONDS:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::MillisecondOperator>;
+	case DatePartSpecifier::MICROSECONDS:
+		return PropagateDateTruncStatistics<TA, TR, DateTrunc::MicrosecondOperator>;
+	default:
+		throw NotImplementedException("Specifier type not implemented for DATETRUNC statistics");
+	}
+}
+
 static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[0]->IsFoldable()) {
@@ -613,9 +693,11 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 		switch (arguments[1]->return_type.id()) {
 		case LogicalType::TIMESTAMP:
 			bound_function.function = DateTruncFunction<timestamp_t, date_t>;
+			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
 			break;
 		case LogicalType::DATE:
 			bound_function.function = DateTruncFunction<date_t, date_t>;
+			bound_function.statistics = DateTruncStats<date_t, date_t>(part_code);
 			break;
 		default:
 			break;
@@ -623,6 +705,16 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 		bound_function.return_type = LogicalType::DATE;
 		break;
 	default:
+		switch (arguments[1]->return_type.id()) {
+		case LogicalType::TIMESTAMP:
+			bound_function.statistics = DateTruncStats<timestamp_t, timestamp_t>(part_code);
+			break;
+		case LogicalType::DATE:
+			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
+			break;
+		default:
+			break;
+		}
 		break;
 	}
 
