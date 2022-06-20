@@ -292,13 +292,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	switch (op) {
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
-		return "current_date";
+		return "get_current_date";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
-		return "current_time";
+		return "get_current_time";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
 		return "current_time_n";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
-		return "current_timestamp";
+		return "get_current_timestamp";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
 		return "current_timestamp_n";
 	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:
@@ -310,17 +310,17 @@ static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
 		return "current_localtimestamp_n";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
-		return "current_role";
+		return "get_current_role";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
-		return "current_user";
+		return "get_current_user";
 	case duckdb_libpgquery::PG_SVFOP_USER:
-		return "user";
+		return "get_user";
 	case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
-		return "session_user";
+		return "get_session_user";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
-		return "current_catalog";
+		return "get_current_catalog";
 	case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
-		return "current_schema";
+		return "get_current_schema";
 	default:
 		throw InternalException("Could not find named SQL value function specification " + to_string((int)op));
 	}

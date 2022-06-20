@@ -74,8 +74,8 @@ void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, true, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, false, BindSystemFunction));
+	set.AddFunction(ScalarFunction("get_current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, false,
+	                               BindSystemFunction));
 	set.AddFunction(ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
 	                               false, BindSystemFunction));
 	set.AddFunction(
