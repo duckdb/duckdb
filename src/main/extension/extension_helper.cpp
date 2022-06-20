@@ -93,8 +93,8 @@ static DefaultExtension internal_extensions[] = {
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
 	idx_t index;
-	for (index = 0; internal_extensions[index].name != nullptr; index++)
-		;
+	for (index = 0; internal_extensions[index].name != nullptr; index++) {
+	}
 	return index;
 }
 
