@@ -496,8 +496,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 	}
-	case LogicalTypeId::HASH:
-		return Value::HASH(((hash_t *)data)[index]);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(((uintptr_t *)data)[index]);
 	case LogicalTypeId::FLOAT:
