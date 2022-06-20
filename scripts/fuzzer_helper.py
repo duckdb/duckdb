@@ -24,6 +24,9 @@ if len(TOKEN) != 40:
 REPO_OWNER = 'duckdb'
 REPO_NAME = 'duckdb-fuzzer'
 
+fuzzer_desc = '''Issue found by ${FUZZER} on git commit hash [${SHORT_HASH}](https://github.com/duckdb/duckdb/commit/${FULL_HASH}) using seed ${SEED}.
+'''
+
 header = '''### To Reproduce
 ```sql
 '''
@@ -37,6 +40,10 @@ middle = '''
 
 footer = '''
 ```'''
+
+def get_github_hash():
+    proc = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
+    return proc.stdout.read().decode('utf8').strip()
 
 # github stuff
 def issue_url():
@@ -89,7 +96,7 @@ def close_github_issue(number):
 def extract_issue(body, nr):
     try:
         splits = body.split(middle)
-        sql = splits[0][len(header):]
+        sql = splits[0].split(header)[1]
         error = splits[1][:-len(footer)]
         return (sql, error)
     except:
@@ -132,12 +139,13 @@ def extract_github_issues(shell):
             close_github_issue(int(issue['number']))
     return current_errors
 
-def file_issue(cmd, error_msg):
+def file_issue(cmd, error_msg, fuzzer, seed, hash):
     # issue is new, file it
     print("Filing new issue to Github")
 
     title = error_msg
-    body = header + cmd + middle + error_msg + footer
+    body = fuzzer_desc.replace("${FUZZER}", fuzzer).replace("${FULL_HASH}", hash).replace("${SHORT_HASH}", hash[:5]).replace("${SEED}", str(seed))
+    body += header + cmd + middle + error_msg + footer
     print(title, body)
     make_github_issue(title, body)
 

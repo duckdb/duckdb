@@ -828,9 +828,26 @@ uint64_t StructColumnReader::TotalCompressedSize() {
 	return size;
 }
 
+static bool TypeHasExactRowCount(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::STRUCT:
+		for (auto &kv : StructType::GetChildTypes(type)) {
+			if (TypeHasExactRowCount(kv.second.id())) {
+				return true;
+			}
+		}
+		return false;
+	default:
+		return true;
+	}
+}
+
 idx_t StructColumnReader::GroupRowsAvailable() {
 	for (idx_t i = 0; i < child_readers.size(); i++) {
-		if (child_readers[i]->Type().id() != LogicalTypeId::LIST) {
+		if (TypeHasExactRowCount(child_readers[i]->Type())) {
 			return child_readers[i]->GroupRowsAvailable();
 		}
 	}

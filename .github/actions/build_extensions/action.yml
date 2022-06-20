@@ -66,7 +66,9 @@ inputs:
   substrait:
     description: 'Build Substrait'
     default: 0
-
+  osx_universal:
+    description: 'Build Universal Binary for OSX'
+    default: 0
 runs:
   using: "composite"
   steps:
@@ -89,6 +91,8 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+        OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+
       run: |
         ls -al
         pwd
