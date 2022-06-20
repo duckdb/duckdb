@@ -84,14 +84,14 @@ private:
 	string name;
 	//! The type of the column
 	LogicalType type;
-	//! Compression Type used for this column
-	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	//! The index of the column in the storage of the table
 	storage_t storage_oid;
 	//! The index of the column in the table
 	idx_t oid;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
+	//! Compression Type used for this column
+	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 	//! Used by Generated Columns
 	unique_ptr<ParsedExpression> generated_expression;
 };

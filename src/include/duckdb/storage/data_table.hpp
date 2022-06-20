@@ -264,14 +264,14 @@ private:
 	vector<shared_ptr<ColumnStatistics>> column_stats;
 	//! The statistics lock
 	mutex stats_lock;
-	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
-	//! that can be appended to
-	atomic<bool> is_root;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
 	//! The number of rows in the table
 	atomic<int64_t> rows_changed;
 	//! The end of the previously checkpointed row group
 	atomic<int64_t> prev_end;
+	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
+	//! that can be appended to
+	atomic<bool> is_root;
 };
 } // namespace duckdb
