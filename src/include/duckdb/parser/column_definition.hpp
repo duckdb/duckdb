@@ -28,7 +28,7 @@ class ColumnDefinition {
 public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type);
 	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
-	                            TableColumnType category, CompressionType compression_type);
+	                            TableColumnType category, duckdb::CompressionType compression_type);
 
 	//! The default value of the column (if any)
 	unique_ptr<ParsedExpression> default_value;
@@ -48,8 +48,8 @@ public:
 	void SetName(const string &name);
 
 	//! compression_type
-	const CompressionType &GetCompressionType() const;
-	void SetCompressionType(CompressionType compression_type);
+	const duckdb::CompressionType &CompressionType() const;
+	void SetCompressionType(duckdb::CompressionType compression_type);
 
 	//! storage_oid
 	const storage_t &StorageOid() const;
@@ -91,7 +91,7 @@ private:
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
 	//! Compression Type used for this column
-	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
+	duckdb::CompressionType compression_type = duckdb::CompressionType::COMPRESSION_AUTO;
 	//! Used by Generated Columns
 	unique_ptr<ParsedExpression> generated_expression;
 };

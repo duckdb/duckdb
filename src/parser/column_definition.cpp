@@ -12,7 +12,7 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p) : name(mov
 }
 
 ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr<ParsedExpression> expression,
-                                   TableColumnType category, CompressionType compression_type)
+                                   TableColumnType category, duckdb::CompressionType compression_type)
     : name(move(name_p)), type(move(type_p)), category(category), compression_type(compression_type) {
 	switch (category) {
 	case TableColumnType::STANDARD: {
@@ -60,7 +60,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
-	auto compression_type = reader.ReadField(CompressionType::COMPRESSION_AUTO);
+	auto compression_type = reader.ReadField(duckdb::CompressionType::COMPRESSION_AUTO);
 	reader.Finalize();
 
 	switch (category) {
@@ -103,11 +103,11 @@ void ColumnDefinition::SetName(const string &name) {
 	this->name = name;
 }
 
-const CompressionType &ColumnDefinition::GetCompressionType() const {
+const duckdb::CompressionType &ColumnDefinition::CompressionType() const {
 	return compression_type;
 }
 
-void ColumnDefinition::SetCompressionType(CompressionType compression_type) {
+void ColumnDefinition::SetCompressionType(duckdb::CompressionType compression_type) {
 	this->compression_type = compression_type;
 }
 
