@@ -64,9 +64,11 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 
 	switch (category) {
 	case TableColumnType::STANDARD:
-		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::STANDARD, compression_type);
+		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::STANDARD,
+		                        compression_type);
 	case TableColumnType::GENERATED:
-		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::GENERATED, compression_type);
+		return ColumnDefinition(column_name, column_type, move(expression), TableColumnType::GENERATED,
+		                        compression_type);
 	default:
 		throw NotImplementedException("Type not implemented for TableColumnType");
 	}
