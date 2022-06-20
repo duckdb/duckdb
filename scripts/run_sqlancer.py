@@ -84,15 +84,9 @@ if subprocess.returncode == 0:
 print('--------------------- SQLANCER FAILURE ----------------------')
 print('SQLANCER EXITED WITH CODE ' + str(subprocess.returncode))
 print('--------------------- SQLANCER ERROR LOG ----------------------')
-try:
-    print(err.decode('utf8'))
-except:
-    print(err)
-try:
-    print('--------------------- SQLancer Logs ----------------------')
-    print(out.decode('utf8'))
-except:
-    print(out)
+print(err.decode('utf8', 'ignore'))
+print('--------------------- SQLancer Logs ----------------------')
+print(out.decode('utf8', 'ignore'))
 try:
     with open('duckdb-queries.log', 'r') as f:
         text = f.read()
