@@ -12,3 +12,10 @@ FixedPointDecimals = "fb4d412d-6eee-574d-9565-ede6634db7b0"
 Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
+
+[compat]
+DBInterface = "2.5"
+DataFrames = "1.3"
+FixedPointDecimals = "0.4"
+Tables = "1.7"
+WeakRefStrings = "1.4"
