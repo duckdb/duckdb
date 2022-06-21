@@ -99,8 +99,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	                           "Get result set attributes, mainly column names")
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
-	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension",
-			 py::arg("extension"));
+	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 
 	PyDateTime_IMPORT;
 }
@@ -452,14 +451,13 @@ void DuckDBPyConnection::Close() {
 	cursors.clear();
 }
 
-void DuckDBPyConnection::InstallExtension (const string &extension, bool force_install) {
+void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
 	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
 }
 
-void DuckDBPyConnection::LoadExtension (const string &extension) {
+void DuckDBPyConnection::LoadExtension(const string &extension) {
 	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
 }
-
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
