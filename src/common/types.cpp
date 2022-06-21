@@ -108,9 +108,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
-	case LogicalTypeId::HASH:
-		static_assert(sizeof(hash_t) == sizeof(uint64_t), "Hash must be uint64_t");
-		return PhysicalType::UINT64;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -419,8 +416,6 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "LIST";
 	case LogicalTypeId::MAP:
 		return "MAP";
-	case LogicalTypeId::HASH:
-		return "HASH";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
 	case LogicalTypeId::TABLE:

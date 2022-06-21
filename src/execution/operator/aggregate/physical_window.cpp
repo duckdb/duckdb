@@ -48,7 +48,7 @@ public:
 
 	WindowLocalSinkState(const PhysicalWindow &op_p, BoundWindowExpression *wexpr, const unsigned partition_bits = 10)
 	    : op(op_p), partition_cols(wexpr->partitions.size()), partition_count(size_t(1) << partition_bits),
-	      hash_vector(LogicalTypeId::HASH), sel(STANDARD_VECTOR_SIZE) {
+	      hash_vector(LogicalTypeId::UBIGINT), sel(STANDARD_VECTOR_SIZE) {
 
 		// we sort by both 1) partition by expression list and 2) order by expressions
 		vector<LogicalType> payload_types = op.children[0]->types;
