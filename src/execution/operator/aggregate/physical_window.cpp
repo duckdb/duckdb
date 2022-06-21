@@ -267,21 +267,23 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 idx_t WindowLocalSinkState::FlushRagged() {
 	// Flush any ragged partition chunks
 	idx_t count = 0;
-	for (size_t c = 0; c < counts.size(); ++c) {
-		if (!counts[c]) {
+	for (size_t s = 0; s < sorts.size(); ++s) {
+		auto &sort = sorts[s];
+		if (!sort) {
 			continue;
 		}
-		count += counts[c];
-		auto &sort_buffer = sort_buffers[c];
-		auto &payload_buffer = payload_buffers[c];
+		auto &sort_buffer = sort_buffers[s];
+		auto &payload_buffer = payload_buffers[s];
 		if (sort_buffer->size() > 0) {
-			sorts[c]->SinkChunk(*sort_buffer, *payload_buffer);
+			sort->SinkChunk(*sort_buffer, *payload_buffer);
+			count += sort_buffer->size();
 			sort_buffer->Reset();
 			payload_buffer->Reset();
 		}
 	}
 	return count;
 }
+
 void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 	lock_guard<mutex> glock(gstate.lock);
 
@@ -299,9 +301,8 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 		return;
 	}
 
-	if (FlushRagged() == 0) {
-		return;
-	}
+	FlushRagged();
+
 	for (idx_t p = 0; p < sorts.size(); ++p) {
 		auto &local_sort = sorts[p];
 		if (local_sort) {
@@ -318,28 +319,19 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 // Per-thread read state
 class WindowLocalSourceState : public LocalSourceState {
 public:
-	WindowLocalSourceState(const PhysicalWindow &op, ExecutionContext &context)
-	    : buffer_manager(BufferManager::GetBufferManager(context.client)) {
-		auto &gstate = (WindowGlobalSinkState &)*op.sink_state;
-		// initialize thread-local operator state
-		partitions = gstate.sorts.size();
-		next_part = 0;
-		position = 0;
+	WindowLocalSourceState(const PhysicalWindow &op, ExecutionContext &context) : position(0) {
 	}
 
-	//! The number of partitions to process (0 if there is no partitioning)
-	size_t partitions;
-	//! The output read position.
-	size_t next_part;
+	unique_ptr<GlobalSortState> global_sort_state;
+
 	//! The generated input chunks
 	ChunkCollection chunks;
 	//! The generated output chunks
 	ChunkCollection window_results;
+	//! The read partition
+	idx_t hash_bin;
 	//! The read cursor
 	idx_t position;
-
-	BufferManager &buffer_manager;
-	unique_ptr<GlobalSortState> global_sort_state;
 };
 
 // this implements a sorted window functions variant
@@ -1370,6 +1362,7 @@ static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkSta
 	//	Get rid of any stale data
 	state.chunks.Reset();
 	state.window_results.Reset();
+	state.hash_bin = hash_bin;
 	state.position = 0;
 	state.global_sort_state = nullptr;
 
@@ -1459,12 +1452,12 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 class WindowGlobalSourceState : public GlobalSourceState {
 public:
-	explicit WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_part(0) {
+	explicit WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_bin(0) {
 	}
 
 	const PhysicalWindow &op;
 	//! The output read position.
-	atomic<idx_t> next_part;
+	atomic<idx_t> next_bin;
 
 public:
 	idx_t MaxThreads() override {
@@ -1501,24 +1494,24 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	auto &global_source = (WindowGlobalSourceState &)gstate_p;
 	auto &gstate = (WindowGlobalSinkState &)*sink_state;
 
-	do {
-		if (state.position >= state.chunks.Count()) {
-			auto hash_bin = global_source.next_part++;
-			for (; hash_bin < state.partitions; hash_bin = global_source.next_part++) {
-				if (gstate.sorts[hash_bin]) {
-					break;
-				}
-			}
-			GeneratePartition(state, gstate, hash_bin);
-		}
-		Scan(state, chunk);
-		if (chunk.size() != 0) {
+	const auto bin_count = gstate.sorts.empty() ? 1 : gstate.sorts.size();
+
+	//	Move to the next bin if we are done.
+	while (state.position >= state.chunks.Count()) {
+		auto hash_bin = global_source.next_bin++;
+		if (hash_bin >= bin_count) {
 			return;
-		} else {
-			break;
 		}
-	} while (true);
-	D_ASSERT(chunk.size() == 0);
+
+		for (; hash_bin < gstate.sorts.size(); hash_bin = global_source.next_bin++) {
+			if (gstate.sorts[hash_bin]) {
+				break;
+			}
+		}
+		GeneratePartition(state, gstate, hash_bin);
+	}
+
+	Scan(state, chunk);
 }
 
 string PhysicalWindow::ParamsToString() const {
