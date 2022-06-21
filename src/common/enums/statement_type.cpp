@@ -56,6 +56,18 @@ string StatementTypeToString(StatementType type) {
 	}
 	return "INVALID";
 }
+
+string StatementReturnTypeToString(StatementReturnType type) {
+	switch (type) {
+	case StatementReturnType::QUERY_RESULT:
+		return "QUERY_RESULT";
+	case StatementReturnType::CHANGED_ROWS:
+		return "CHANGED_ROWS";
+	case StatementReturnType::NOTHING:
+		return "NOTHING";
+	}
+	return "INVALID";
+}
 // LCOV_EXCL_STOP
 
 } // namespace duckdb

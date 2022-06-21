@@ -41,7 +41,7 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 
@@ -56,28 +56,24 @@ namespace internal {
 // protos. This struct and the following related functions should only be used
 // by protobuf generated code.
 struct EnumEntry {
-  StringPiece name;
-  int value;
+	StringPiece name;
+	int value;
 };
 
 // Looks up a numeric enum value given the string name.
-PROTOBUF_EXPORT bool LookUpEnumValue(const EnumEntry* enums, size_t size,
-                                     StringPiece name, int* value);
+ bool LookUpEnumValue(const EnumEntry *enums, size_t size, StringPiece name, int *value);
 
 // Looks up an enum name given the numeric value.
-PROTOBUF_EXPORT int LookUpEnumName(const EnumEntry* enums,
-                                   const int* sorted_indices, size_t size,
-                                   int value);
+ int LookUpEnumName(const EnumEntry *enums, const int *sorted_indices, size_t size, int value);
 
 // Initializes the list of enum names in std::string form.
-PROTOBUF_EXPORT bool InitializeEnumStrings(
-    const EnumEntry* enums, const int* sorted_indices, size_t size,
-    internal::ExplicitlyConstructed<std::string>* enum_strings);
+ bool InitializeEnumStrings(const EnumEntry *enums, const int *sorted_indices, size_t size,
+                                           internal::ExplicitlyConstructed<std::string> *enum_strings);
 
-}  // namespace internal
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace internal
+} // namespace protobuf
+} // namespace google
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_GENERATED_ENUM_UTIL_H__

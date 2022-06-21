@@ -22,14 +22,17 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 }
 
 struct OpenTask : public Task {
-	OpenTask(Database &database_, std::string filename_, Napi::Function callback_)
-	    : Task(database_, callback_), filename(filename_) {
+	OpenTask(Database &database_, std::string filename_, bool read_only_, Napi::Function callback_)
+	    : Task(database_, callback_), filename(filename_), read_only(read_only_) {
 	}
 
 	void DoWork() override {
 		try {
-
-			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename);
+			duckdb::DBConfig config;
+			if (read_only) {
+				config.access_mode = duckdb::AccessMode::READ_ONLY;
+			}
+			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &config);
 			duckdb::ParquetExtension extension;
 			extension.Load(*Get<Database>().database);
 			success = true;
@@ -56,6 +59,7 @@ struct OpenTask : public Task {
 	}
 
 	std::string filename;
+	bool read_only = false;
 	std::string error = "";
 	bool success = false;
 };
@@ -73,14 +77,12 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 		mode = info[pos++].As<Napi::Number>().Int32Value();
 	}
 
-	// TODO check read only flag
-
 	Napi::Function callback;
 	if (info.Length() >= pos && info[pos].IsFunction()) {
 		callback = info[pos++].As<Napi::Function>();
 	}
 
-	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, callback));
+	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, mode == DUCKDB_NODEJS_READONLY, callback));
 }
 
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {

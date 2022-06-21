@@ -24,14 +24,8 @@ con <- DBI::dbConnect(duckdb::duckdb(), path = ":memory:")
 x <- tibble(txt = c("why", "video", "cross", "extra", "deal", "authority"))
 dbx <- copy_to(con, x, overwrite = TRUE)
 
-# x \%>\% filter(grepl("^.[hrx]", txt))
-dbx \%>\% filter(grepl("^.[hrx]", txt))
-
 # x \%>\% mutate(a = stringr::str_pad(txt, 10, side = "both", pad = ">"))
 dbx \%>\% mutate(a = str_pad(txt, 10, side = "both", pad = ">"))
-
-# x \%>\% mutate(a = stringr::str_replace_all(txt, "[aeiou]", "?"))
-dbx \%>\% mutate(a = str_replace_all(txt, "[aeiou]", "?"))
 
 DBI::dbDisconnect(con, shutdown = TRUE)
 duckdb::duckdb_shutdown(duckdb::duckdb())

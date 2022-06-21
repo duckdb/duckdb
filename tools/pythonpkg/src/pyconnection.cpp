@@ -92,7 +92,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
 	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
-	         py::arg("config") = py::dict(), py::arg("check_same_thread") = true)
+	         py::arg("config") = py::dict())
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
@@ -105,20 +105,32 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 	return this;
 }
 
+static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
+	PendingExecutionResult execution_result;
+	do {
+		{
+			py::gil_scoped_release release;
+			execution_result = pending_query.ExecuteTask();
+		}
+		if (PyErr_CheckSignals() != 0) {
+			throw std::runtime_error("Query interrupted");
+		}
+	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
+		throw std::runtime_error(pending_query.error);
+	}
+	return pending_query.Execute();
+}
+
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	if (std::this_thread::get_id() != thread_id && check_same_thread) {
-		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
-		                         "was created in thread id " +
-		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
-		                         to_string(std::hash<std::thread::id> {}(std::this_thread::get_id())));
-	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		py::gil_scoped_release release;
+		auto cur_py_connection_lock = AcquireConnectionLock();
+
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
 			// no statements to execute
@@ -127,7 +139,9 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto res = connection->Query(move(statements[i]));
+			auto pending_query = connection->PendingQuery(move(statements[i]));
+			auto res = CompletePendingQuery(*pending_query);
+
 			if (!res->success) {
 				throw std::runtime_error(res->error);
 			}
@@ -156,8 +170,10 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			py::gil_scoped_release release;
-			res->result = prep->Execute(args);
+			auto cur_py_connection_lock = AcquireConnectionLock();
+			auto pending_query = prep->PendingQuery(args);
+			res->result = CompletePendingQuery(*pending_query);
+
 			if (!res->result->success) {
 				throw std::runtime_error(res->result->error);
 			}
@@ -433,9 +449,9 @@ void DuckDBPyConnection::Close() {
 
 // cursor() is stupid
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
-	auto res = make_shared<DuckDBPyConnection>(thread_id);
+	auto res = make_shared<DuckDBPyConnection>();
 	res->database = database;
-	res->connection = connection;
+	res->connection = make_unique<Connection>(*res->database);
 	cursors.push_back(res);
 	return res;
 }
@@ -568,7 +584,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict, bool check_same_thread) {
+                                                           const py::dict &config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
 
 	DBConfig config;
@@ -586,7 +602,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
-	res->check_same_thread = check_same_thread;
 	if (config.enable_external_access) {
 		DBConfig &cur_config = res->database->instance->config;
 		auto extra_data = make_unique<ReplacementRegisteredObjects>();
@@ -695,15 +710,14 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
 DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	if (!default_connection) {
 		py::dict config_dict;
-		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict, true);
+		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
 	return default_connection.get();
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
-                                                         bool read_only, const py::dict &config,
-                                                         bool check_same_thread) {
-	return self.Connect(database, read_only, config, check_same_thread);
+                                                         bool read_only, const py::dict &config) {
+	return self.Connect(database, read_only, config);
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
@@ -722,6 +736,15 @@ bool DuckDBPyConnection::IsAcceptedArrowObject(string &py_object_type) {
 		return true;
 	}
 	return false;
+}
+unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {
+	// we first release the gil and then acquire the connection lock
+	unique_lock<std::mutex> lock(py_connection_lock, std::defer_lock);
+	{
+		py::gil_scoped_release release;
+		lock.lock();
+	}
+	return lock;
 }
 
 } // namespace duckdb

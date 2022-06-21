@@ -9,7 +9,9 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -Wextra -Wno-unused-parameter -Wno-redundant-move"
   )
 endif()
+set(EXIT_TIME_DESTRUCTORS_WARNING FALSE)
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  set(EXIT_TIME_DESTRUCTORS_WARNING TRUE)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
 endif()
 

@@ -3,6 +3,8 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -50,8 +52,12 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 	if (cdef->colname) {
 		colname = cdef->colname;
 	}
-	LogicalType target_type = TransformTypeName(cdef->typeName);
+	bool optional_type = cdef->category == duckdb_libpgquery::COL_GENERATED;
+	LogicalType target_type = (optional_type && !cdef->typeName) ? LogicalType::ANY : TransformTypeName(cdef->typeName);
 	if (cdef->collClause) {
+		if (cdef->category == duckdb_libpgquery::COL_GENERATED) {
+			throw ParserException("Collations are not supported on generated columns");
+		}
 		if (target_type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
@@ -89,6 +95,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		throw ParserException("Table must have at least one column!");
 	}
 
+	idx_t column_count = 0;
 	for (auto c = stmt->tableElts->head; c != nullptr; c = lnext(c)) {
 		auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(c->data.ptr_value);
 		switch (node->type) {
@@ -104,6 +111,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 				}
 			}
 			info->columns.push_back(move(centry));
+			column_count++;
 			break;
 		}
 		case duckdb_libpgquery::T_PGConstraint: {
@@ -114,6 +122,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			throw NotImplementedException("ColumnDef type not handled yet");
 		}
 	}
+
+	if (!column_count) {
+		throw ParserException("Table must have at least one column!");
+	}
+
 	result->info = move(info);
 	return result;
 }

@@ -326,7 +326,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	active_query->executor = make_unique<Executor>(*this);
 	auto &executor = *active_query->executor;
 	if (config.enable_progress_bar) {
-		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time);
+		active_query->progress_bar = make_unique<ProgressBar>(executor, config.wait_time, config.print_progress_bar);
 		active_query->progress_bar->Start();
 		query_progress = 0;
 	}
@@ -660,6 +660,9 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending_query = PendingQuery(move(statement), allow_stream_result);
+	if (!pending_query->success) {
+		return make_unique<MaterializedQueryResult>(pending_query->error);
+	}
 	return pending_query->Execute();
 }
 
@@ -905,6 +908,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		} catch (std::exception &ex) {
 			results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
 		}
+		interrupted = false;
 	}
 	config.enable_optimizer = optimizer_enabled;
 
@@ -915,6 +919,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		try {
 			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
+			interrupted = false;
 			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
 		} // LCOV_EXCL_STOP
 	}
@@ -1034,7 +1039,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 		result->schema = schema_name;
 		result->table = table_name;
 		for (auto &column : table->columns) {
-			result->columns.emplace_back(column.name, column.type);
+			result->columns.emplace_back(column.Name(), column.Type());
 		}
 	});
 	return result;
@@ -1049,7 +1054,7 @@ void ClientContext::Append(TableDescription &description, ChunkCollection &colle
 			throw Exception("Failed to append: table entry has different number of columns!");
 		}
 		for (idx_t i = 0; i < description.columns.size(); i++) {
-			if (description.columns[i].type != table_entry->columns[i].type) {
+			if (description.columns[i].Type() != table_entry->columns[i].Type()) {
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
@@ -1122,7 +1127,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	if (result->types.size() == expected_columns.size()) {
 		bool mismatch = false;
 		for (idx_t i = 0; i < result->types.size(); i++) {
-			if (result->types[i] != expected_columns[i].type || result->names[i] != expected_columns[i].name) {
+			if (result->types[i] != expected_columns[i].Type() || result->names[i] != expected_columns[i].Name()) {
 				mismatch = true;
 				break;
 			}
@@ -1138,7 +1143,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 		if (i > 0) {
 			err_str += ", ";
 		}
-		err_str += expected_columns[i].name + " " + expected_columns[i].type.ToString();
+		err_str += expected_columns[i].Name() + " " + expected_columns[i].Type().ToString();
 	}
 	err_str += "]\nBut result contained the following: ";
 	for (idx_t i = 0; i < result->types.size(); i++) {

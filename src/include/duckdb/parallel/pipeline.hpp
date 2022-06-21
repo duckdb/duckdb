@@ -11,7 +11,6 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/atomic.hpp"
 
@@ -81,7 +80,7 @@ public:
 	void Print() const;
 
 	//! Returns query progress
-	bool GetProgress(double &current_percentage);
+	bool GetProgress(double &current_percentage, idx_t &estimated_cardinality);
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<PhysicalOperator *> GetOperators() const;
@@ -115,7 +114,6 @@ private:
 	idx_t base_batch_index = 0;
 
 private:
-	bool GetProgressInternal(ClientContext &context, PhysicalOperator *op, double &current_percentage);
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
