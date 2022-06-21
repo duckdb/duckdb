@@ -1,6 +1,6 @@
 # name: test/sql/types/alias/test_alias_struct.test
 # description: Test creates alias for struct type
-# group: [struct]
+# group: [alias]
 
 statement ok
 PRAGMA enable_verification

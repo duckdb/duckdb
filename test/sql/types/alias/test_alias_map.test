@@ -1,5 +1,5 @@
 # name: test/sql/types/alias/test_alias_map.test
-# description: Test alias with map 
+# description: Test alias with map
 # group: [alias]
 
 statement ok
