@@ -1,6 +1,6 @@
 # name: test/sql/types/numeric/test_empty_numeric.test
 # description: Test empty numeric
-# group: [Numeric]
+# group: [numeric]
 
 statement ok
 PRAGMA enable_verification
