@@ -212,6 +212,7 @@ private:
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
 	void RegisterTrigonometricsFunctions();
+	void RegisterStatisticalFunctions();
 
 	// pragmas
 	void RegisterPragmaFunctions();

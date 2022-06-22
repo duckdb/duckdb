@@ -118,6 +118,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
 	RegisterTrigonometricsFunctions();
+	RegisterStatisticalFunctions();
 
 	RegisterPragmaFunctions();
 

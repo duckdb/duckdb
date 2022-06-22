@@ -22,6 +22,7 @@ add_library_unity(
   pragma_functions.cpp
   sequence_functions.cpp
   trigonometrics_functions.cpp
+  statistical_functions.cpp
   enum_functions.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_scalar>
