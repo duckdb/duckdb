@@ -4,6 +4,7 @@ add_library_unity(
   duckdb_columns.cpp
   duckdb_constraints.cpp
   duckdb_dependencies.cpp
+  duckdb_extensions.cpp
   duckdb_functions.cpp
   duckdb_keywords.cpp
   duckdb_indexes.cpp

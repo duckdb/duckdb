@@ -303,3 +303,15 @@ select ts::TIME, tstz::TIME, dt::TIME FROM specials
 
 statement error
 select 'infinity'::TIME;
+
+# infinite subtract
+statement error
+select
+  subtract(
+    cast('infinity' as timestamp), timestamp '1970-01-01')
+
+statement error
+select
+  subtract(
+    timestamp '1970-01-01',
+    cast('-infinity' as timestamp))
