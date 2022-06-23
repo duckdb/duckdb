@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-struct PragmaDatabaseListData : public FunctionOperatorData {
+struct PragmaDatabaseListData : public GlobalTableFunctionState {
 	PragmaDatabaseListData() : finished(false) {
 	}
 
@@ -25,15 +25,12 @@ static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, T
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> PragmaDatabaseListInit(ClientContext &context, const FunctionData *bind_data,
-                                                        const vector<column_t> &column_ids,
-                                                        TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> PragmaDatabaseListInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_unique<PragmaDatabaseListData>();
 }
 
-void PragmaDatabaseListFunction(ClientContext &context, const FunctionData *bind_data,
-                                FunctionOperatorData *operator_state, DataChunk &output) {
-	auto &data = (PragmaDatabaseListData &)*operator_state;
+void PragmaDatabaseListFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (PragmaDatabaseListData &)*data_p.global_state;
 	if (data.finished) {
 		return;
 	}

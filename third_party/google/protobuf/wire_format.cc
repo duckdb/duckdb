@@ -58,6 +58,7 @@
 #include <google/protobuf/port_def.inc>
 
 const size_t kMapEntryTagByteSize = 2;
+namespace duckdb{
 
 namespace google {
 namespace protobuf {
@@ -1747,5 +1748,5 @@ size_t ComputeUnknownFieldsSize(const InternalMetadata& metadata,
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>

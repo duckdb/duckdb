@@ -256,9 +256,8 @@ static idx_t DistinctSelectConstant(Vector &left, Vector &right, const Selection
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelect(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                             SelectionVector *true_sel, SelectionVector *false_sel) {
-	SelectionVector owned_sel;
 	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+		sel = FlatVector::IncrementalSelectionVector();
 	}
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		return DistinctSelectConstant<LEFT_TYPE, RIGHT_TYPE, OP>(left, right, sel, count, true_sel, false_sel);
@@ -445,22 +444,6 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThan>(Vector &left, Vecto
 
 using StructEntries = vector<unique_ptr<Vector>>;
 
-static StructEntries &StructVectorGetSlicedEntries(Vector &parent, StructEntries &sliced, const idx_t count) {
-	// We have to manually slice STRUCT dictionaries.
-	auto &children = StructVector::GetEntries(parent);
-	if (parent.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &dict_sel = DictionaryVector::SelVector(parent);
-		for (auto &child : children) {
-			auto v = make_unique<Vector>(*child, dict_sel, count);
-			sliced.push_back(move(v));
-		}
-
-		return sliced;
-	}
-
-	return children;
-}
-
 static void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                                    OptionalSelection &opt) {
 
@@ -487,8 +470,8 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 
 	// Avoid allocating in the 99% of the cases where we don't need to.
 	StructEntries lsliced, rsliced;
-	auto &lchildren = StructVectorGetSlicedEntries(left, lsliced, count);
-	auto &rchildren = StructVectorGetSlicedEntries(right, rsliced, count);
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
 
 	// In order to reuse the comparators, we have to track what passed and failed internally.
@@ -555,7 +538,6 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 			match_count += true_count;
 		}
 	}
-
 	return match_count;
 }
 
@@ -582,6 +564,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
+	ListVector::GetEntry(left).Normalify(count);
+	ListVector::GetEntry(right).Normalify(count);
 	Vector lchild(ListVector::GetEntry(left), lcursor, count);
 	Vector rchild(ListVector::GetEntry(right), rcursor, count);
 
@@ -692,9 +676,8 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, const SelectionVe
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
 	// and then scatter the output selections when we are done.
-	SelectionVector owned_sel;
 	if (!sel) {
-		sel = FlatVector::IncrementalSelectionVector(count, owned_sel);
+		sel = FlatVector::IncrementalSelectionVector();
 	}
 
 	// Make buffered selections for progressive comparisons

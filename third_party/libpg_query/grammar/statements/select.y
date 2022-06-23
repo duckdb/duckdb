@@ -1213,6 +1213,10 @@ colid_type_list:
 
 RowOrStruct: ROW | STRUCT
 
+opt_Typename:
+			Typename						{ $$ = $1; }
+			| /*EMPTY*/						{ $$ = NULL; }
+
 Typename:	SimpleTypename opt_array_bounds
 				{
 					$$ = $1;
@@ -1329,7 +1333,7 @@ GenericType:
 			// 	}
 		;
 
-opt_type_modifiers: '(' expr_list_opt_comma	 ')'				{ $$ = $2; }
+opt_type_modifiers: '(' opt_expr_list_opt_comma	 ')'				{ $$ = $2; }
 					| /* EMPTY */					{ $$ = NIL; }
 		;
 
@@ -2961,17 +2965,6 @@ expr_list_opt_comma:
 			expr_list ','
 				{
 					$$ = $1;
-				}
-		;
-
-opt_expr_list:
-			expr_list
-				{
-					$$ = $1;
-				}
-			| /* empty */
-				{
-					$$ = NULL;
 				}
 		;
 

@@ -39,7 +39,7 @@
 #include <google/protobuf/stubs/common.h>
 
 #include <google/protobuf/stubs/strutil.h>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace io {
@@ -49,34 +49,35 @@ namespace io {
 const double MAX_FLOAT_AS_DOUBLE_ROUNDED = 3.4028235677973366e+38;
 
 float SafeDoubleToFloat(double value) {
-  // static_cast<float> on a number larger than float can result in illegal
-  // instruction error, so we need to manually convert it to infinity or max.
-  if (value > std::numeric_limits<float>::max()) {
-    // Max float value is about 3.4028234664E38 when represented as a double.
-    // However, when printing float as text, it will be rounded as
-    // 3.4028235e+38. If we parse the value of 3.4028235e+38 from text and
-    // compare it to 3.4028234664E38, we may think that it is larger, but
-    // actually, any number between these two numbers could only be represented
-    // as the same max float number in float, so we should treat them the same
-    // as max float.
-    if (value <= MAX_FLOAT_AS_DOUBLE_ROUNDED) {
-      return std::numeric_limits<float>::max();
-    }
-    return std::numeric_limits<float>::infinity();
-  } else if (value < -std::numeric_limits<float>::max()) {
-    if (value >= -MAX_FLOAT_AS_DOUBLE_ROUNDED) {
-      return -std::numeric_limits<float>::max();
-    }
-    return -std::numeric_limits<float>::infinity();
-  } else {
-    return static_cast<float>(value);
-  }
+	// static_cast<float> on a number larger than float can result in illegal
+	// instruction error, so we need to manually convert it to infinity or max.
+	if (value > std::numeric_limits<float>::max()) {
+		// Max float value is about 3.4028234664E38 when represented as a double.
+		// However, when printing float as text, it will be rounded as
+		// 3.4028235e+38. If we parse the value of 3.4028235e+38 from text and
+		// compare it to 3.4028234664E38, we may think that it is larger, but
+		// actually, any number between these two numbers could only be represented
+		// as the same max float number in float, so we should treat them the same
+		// as max float.
+		if (value <= MAX_FLOAT_AS_DOUBLE_ROUNDED) {
+			return std::numeric_limits<float>::max();
+		}
+		return std::numeric_limits<float>::infinity();
+	} else if (value < -std::numeric_limits<float>::max()) {
+		if (value >= -MAX_FLOAT_AS_DOUBLE_ROUNDED) {
+			return -std::numeric_limits<float>::max();
+		}
+		return -std::numeric_limits<float>::infinity();
+	} else {
+		return static_cast<float>(value);
+	}
 }
 
-double NoLocaleStrtod(const char* str, char** endptr) {
-  return google::protobuf::internal::NoLocaleStrtod(str, endptr);
+double NoLocaleStrtod(const char *str, char **endptr) {
+	return google::protobuf::internal::NoLocaleStrtod(str, endptr);
 }
 
-}  // namespace io
-}  // namespace protobuf
-}  // namespace google
+} // namespace io
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb

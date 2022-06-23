@@ -57,6 +57,9 @@ endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
 endif
+ifeq (${EXTENSION_STATIC_BUILD}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DEXTENSION_STATIC_BUILD=1
+endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDISABLE_BUILTIN_EXTENSIONS=1
 endif
@@ -128,6 +131,9 @@ ifeq ($(BUILD_ARROW_ABI_TEST), 1)
 endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	EXTENSIONS:=${EXTENSIONS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
+endif
+ifneq ($(BUILD_OUT_OF_TREE_EXTENSION),)
+	EXTENSIONS:=${EXTENSIONS} -DEXTERNAL_EXTENSION_DIRECTORY=$(BUILD_OUT_OF_TREE_EXTENSION)
 endif
 
 clean:
@@ -258,8 +264,4 @@ sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
 
 clangd:
-	mkdir -p ./build/clangd && \
-	cd ./build/clangd && \
-	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} ../.. && \
-	cd ../.. && \
-	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json
+	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} -B build/clangd .

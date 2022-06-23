@@ -339,6 +339,15 @@ static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::TIMESTAMP_TZ:
 		// date to timestamp
 		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCast>(source, result, count, error_message);
+	case LogicalTypeId::TIMESTAMP_NS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampNS>(source, result, count,
+		                                                                            error_message);
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampSec>(source, result, count,
+		                                                                             error_message);
+	case LogicalTypeId::TIMESTAMP_MS:
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCastToTimestampMS>(source, result, count,
+		                                                                            error_message);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
@@ -669,6 +678,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
 	auto res_vec_ptr = FlatVector::GetData<string_t>(result);
 
+	// TODO remove value api from this loop
 	for (idx_t i = 0; i < count; i++) {
 		auto src_val = source.GetValue(i);
 		if (src_val.IsNull()) {
@@ -687,8 +697,14 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 		case PhysicalType::UINT32:
 			enum_idx = UIntegerValue::Get(src_val);
 			break;
+		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		{
+			res_vec_ptr[i] = (const char *)UBigIntValue::Get(src_val);
+			continue;
+		}
+
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		res_vec_ptr[i] = str_vec_ptr[enum_idx];
 	}

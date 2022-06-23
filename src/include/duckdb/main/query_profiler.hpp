@@ -41,7 +41,7 @@ struct ExpressionInfo {
 	//! The function Name
 	string function_name;
 	//! The function time
-	uint64_t function_time;
+	uint64_t function_time = 0;
 	//! Count the number of ALL tuples
 	uint64_t tuples_count = 0;
 	//! Count the number of tuples sampled

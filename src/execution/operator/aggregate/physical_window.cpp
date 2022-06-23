@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -21,63 +22,421 @@ namespace duckdb {
 
 using counts_t = std::vector<size_t>;
 
-//	Global sink state
-class WindowGlobalState : public GlobalSinkState {
+class WindowGlobalHashGroup {
 public:
-	WindowGlobalState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)),
-	      mode(DBConfig::GetConfig(context).window_mode) {
+	using GlobalSortStatePtr = unique_ptr<GlobalSortState>;
+	using LocalSortStatePtr = unique_ptr<LocalSortState>;
+	using Orders = vector<BoundOrderByNode>;
+	using Types = vector<LogicalType>;
+
+	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &orders, const Types &payload_types,
+	                      idx_t max_mem)
+	    : memory_per_thread(max_mem) {
+		Orders orders_copy;
+		for (const auto &order : orders) {
+			sort_types.emplace_back(order.expression->return_type);
+			orders_copy.emplace_back(order.Copy());
+		}
+
+		RowLayout payload_layout;
+		payload_layout.Initialize(payload_types);
+		global_sort = make_unique<GlobalSortState>(buffer_manager, orders_copy, payload_layout);
 	}
+
+	void Sink(DataChunk &sort_buffer, DataChunk &payload_buffer) {
+		lock_guard<mutex> guard(lock);
+		if (!local_sort) {
+			local_sort = make_unique<LocalSortState>();
+			local_sort->Initialize(*global_sort, global_sort->buffer_manager);
+		}
+
+		local_sort->SinkChunk(sort_buffer, payload_buffer);
+	}
+
+	void Sort() {
+		if (local_sort) {
+			global_sort->AddLocalState(*local_sort);
+		}
+
+		global_sort->PrepareMergePhase();
+		while (global_sort->sorted_blocks.size() > 1) {
+			global_sort->InitializeMergeRound();
+			MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
+			merge_sorter.PerformInMergeRound();
+			global_sort->CompleteMergeRound(true);
+		}
+	}
+
+	Types sort_types;
+	mutex lock;
+	GlobalSortStatePtr global_sort;
+	LocalSortStatePtr local_sort;
+	idx_t memory_per_thread;
+
+private:
+};
+
+//	Global sink state
+class WindowGlobalSinkState : public GlobalSinkState {
+public:
+	using HashGroupPtr = unique_ptr<WindowGlobalHashGroup>;
+	using Orders = vector<BoundOrderByNode>;
+	using Types = vector<LogicalType>;
+
+	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
+	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), memory_per_thread(0),
+	      mode(DBConfig::GetConfig(context).window_mode) {
+
+		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[0].get());
+
+		// we sort by both 1) partition by expression list and 2) order by expressions
+		payload_types = op.children[0]->types;
+
+		for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
+			auto &pexpr = wexpr->partitions[prt_idx];
+			payload_types.push_back(pexpr->return_type);
+
+			if (wexpr->partitions_stats.empty() || !wexpr->partitions_stats[prt_idx]) {
+				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(), nullptr);
+			} else {
+				orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, pexpr->Copy(),
+				                    wexpr->partitions_stats[prt_idx]->Copy());
+			}
+		}
+
+		for (const auto &order : wexpr->orders) {
+			auto &oexpr = order.expression;
+			payload_types.push_back(oexpr->return_type);
+			orders.emplace_back(order.Copy());
+		}
+
+		// Memory usage per thread should scale with max mem / num threads
+		// We take 1/4th of this, to be conservative
+		idx_t max_memory = buffer_manager.GetMaxMemory();
+		idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		memory_per_thread = (max_memory / num_threads) / 4;
+	}
+
+	WindowGlobalHashGroup *GetHashGroup(idx_t group) {
+		lock_guard<mutex> guard(lock);
+		if (group >= hash_groups.size()) {
+			hash_groups.resize(group + 1);
+		}
+
+		auto &hash_group = hash_groups[group];
+		if (!hash_group) {
+			hash_group = make_unique<WindowGlobalHashGroup>(buffer_manager, orders, payload_types, memory_per_thread);
+		}
+
+		return hash_group.get();
+	}
+
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
 	mutex lock;
-	ChunkCollection chunks;
-	ChunkCollection over_collection;
-	ChunkCollection hash_collection;
-	counts_t counts;
+	Orders orders;
+	Types payload_types;
+	vector<HashGroupPtr> hash_groups;
+	unique_ptr<RowDataCollection> rows;
+	unique_ptr<RowDataCollection> strings;
+	idx_t memory_per_thread;
 	WindowAggregationMode mode;
 };
 
-//	Per-thread sink state
-class WindowLocalState : public LocalSinkState {
+//	Per-thread hash group
+class WindowLocalHashGroup {
 public:
-	explicit WindowLocalState(const PhysicalWindow &op_p, const unsigned partition_bits = 10)
-	    : op(op_p), partition_count(size_t(1) << partition_bits) {
+	using LocalSortStatePtr = unique_ptr<LocalSortState>;
+
+	explicit WindowLocalHashGroup(WindowGlobalHashGroup &global_group_p) : global_group(global_group_p) {
+		sort_buffer.Initialize(global_group.sort_types);
+		payload_buffer.Initialize(global_group.global_sort->payload_layout.GetTypes());
+	}
+
+	LocalSortState *GetLocalSortState();
+
+	void Flush();
+	void Sink(DataChunk &sort_chunk, DataChunk &payload_chunk, SelectionVector *sel, const idx_t count);
+	void Combine();
+
+	WindowGlobalHashGroup &global_group;
+	LocalSortStatePtr local_sort;
+	DataChunk sort_buffer;
+	DataChunk payload_buffer;
+};
+
+LocalSortState *WindowLocalHashGroup::GetLocalSortState() {
+	if (!local_sort) {
+		local_sort = make_unique<LocalSortState>();
+		local_sort->Initialize(*global_group.global_sort, global_group.global_sort->buffer_manager);
+	}
+
+	return local_sort.get();
+}
+
+void WindowLocalHashGroup::Flush() {
+	if (payload_buffer.size() == 0) {
+		return;
+	}
+
+	GetLocalSortState()->SinkChunk(sort_buffer, payload_buffer);
+	sort_buffer.Reset();
+	payload_buffer.Reset();
+
+	if (local_sort->SizeInBytes() >= global_group.memory_per_thread) {
+		local_sort->Sort(*global_group.global_sort, true);
+	}
+}
+
+void WindowLocalHashGroup::Sink(DataChunk &sort_chunk, DataChunk &payload_chunk, SelectionVector *sel,
+                                const idx_t count) {
+
+	if (payload_buffer.size() + count > STANDARD_VECTOR_SIZE) {
+		Flush();
+	}
+
+	if (sel) {
+		sort_buffer.Append(sort_chunk, false, sel, count);
+		payload_buffer.Append(payload_chunk, false, sel, count);
+	} else {
+		GetLocalSortState()->SinkChunk(sort_chunk, payload_chunk);
+	}
+}
+
+void WindowLocalHashGroup::Combine() {
+	//	Merge this group into the global group
+	if (local_sort) {
+		//	We had enough data for a local sort block
+		Flush();
+		global_group.global_sort->AddLocalState(*local_sort);
+	} else if (payload_buffer.size()) {
+		//	Only buffers, so pass them along
+		global_group.Sink(sort_buffer, payload_buffer);
+	}
+}
+
+//	Per-thread sink state
+class WindowLocalSinkState : public LocalSinkState {
+public:
+	using LocalHashGroupPtr = unique_ptr<WindowLocalHashGroup>;
+
+	WindowLocalSinkState(const PhysicalWindow &op_p, BoundWindowExpression *wexpr, const unsigned partition_bits = 10)
+	    : op(op_p), partition_cols(wexpr->partitions.size()), partition_count(size_t(1) << partition_bits),
+	      hash_vector(LogicalTypeId::UBIGINT), sel(STANDARD_VECTOR_SIZE) {
+
+		// we sort by both 1) partition by expression list and 2) order by expressions
+		vector<LogicalType> payload_types = op.children[0]->types;
+		vector<LogicalType> over_types;
+		for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
+			auto &pexpr = wexpr->partitions[prt_idx];
+			over_types.push_back(pexpr->return_type);
+			payload_types.push_back(pexpr->return_type);
+			executor.AddExpression(*pexpr);
+		}
+
+		for (const auto &order : wexpr->orders) {
+			auto &oexpr = order.expression;
+			over_types.push_back(oexpr->return_type);
+			payload_types.push_back(oexpr->return_type);
+			executor.AddExpression(*oexpr);
+		}
+
+		payload_chunk.Initialize(payload_types);
+		payload_layout.Initialize(payload_types);
+
+		if (!over_types.empty()) {
+			over_chunk.Initialize(over_types);
+			local_groups.resize(wexpr->partitions.empty() ? 1 : partition_count);
+		}
 	}
 
 	const PhysicalWindow &op;
-	ChunkCollection chunks;
-	ChunkCollection over_collection;
-	ChunkCollection hash_collection;
+
+	// Over
+	ExpressionExecutor executor;
+	DataChunk over_chunk;
+
+	// Partitioning
+	const idx_t partition_cols;
 	const size_t partition_count;
 	counts_t counts;
+	counts_t offsets;
+	Vector hash_vector;
+	SelectionVector sel;
+	vector<LocalHashGroupPtr> local_groups;
+
+	// Sorting
+	RowLayout payload_layout;
+	DataChunk payload_chunk;
+
+	// OVER() (no sorting)
+	unique_ptr<RowDataCollection> rows;
+	unique_ptr<RowDataCollection> strings;
+
+	void Over(DataChunk &input_chunk);
+	void Hash();
+	void Sink(DataChunk &input_chunk, WindowGlobalSinkState &gstate);
+	idx_t FlushRagged();
+	void Combine(WindowGlobalSinkState &gstate);
 };
 
-// Per-thread read state
-class WindowOperatorState : public LocalSourceState {
-public:
-	WindowOperatorState(const PhysicalWindow &op, ExecutionContext &context)
-	    : buffer_manager(BufferManager::GetBufferManager(context.client)) {
-		auto &gstate = (WindowGlobalState &)*op.sink_state;
-		// initialize thread-local operator state
-		partitions = gstate.counts.size();
-		next_part = 0;
-		position = 0;
+void WindowLocalSinkState::Over(DataChunk &input_chunk) {
+	if (over_chunk.ColumnCount() > 0) {
+		executor.Execute(input_chunk, over_chunk);
+		over_chunk.Verify();
+	}
+}
+
+void WindowLocalSinkState::Hash() {
+	// There are three types of partitions:
+	// 1. No partition (no sorting)
+	// 2. One partition (sorting, but no hashing)
+	// 3. Multiple partitions (sorting and hashing)
+	if (over_chunk.ColumnCount() == 0) {
+		return;
 	}
 
-	//! The number of partitions to process (0 if there is no partitioning)
-	size_t partitions;
-	//! The output read position.
-	size_t next_part;
+	const auto count = over_chunk.size();
+	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
+	if (partition_cols) {
+		// First pass: count bins sizes
+		counts.resize(0);
+		counts.resize(partition_count, 0);
+
+		VectorOperations::Hash(over_chunk.data[0], hash_vector, count);
+		for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
+			VectorOperations::CombineHash(hash_vector, over_chunk.data[prt_idx], count);
+		}
+
+		const auto partition_mask = hash_t(counts.size() - 1);
+		if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			const auto bin = (hashes[0] & partition_mask);
+			counts[bin] += count;
+		} else {
+			for (idx_t i = 0; i < count; ++i) {
+				const auto bin = (hashes[i] & partition_mask);
+				++counts[bin];
+			}
+		}
+
+		// Second pass: Build sequential selections
+		offsets.resize(counts.size());
+		size_t offset = 0;
+		for (size_t c = 0; c < counts.size(); ++c) {
+			offsets[c] = offset;
+			offset += counts[c];
+		}
+
+		for (idx_t i = 0; i < count; ++i) {
+			const auto hash_bin = (hashes[i] & partition_mask);
+			auto &hash_idx = offsets[hash_bin];
+			sel.set_index(hash_idx++, i);
+		}
+	} else {
+		counts.resize(1, count);
+	}
+}
+
+void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &gstate) {
+	for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
+		payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
+	}
+	for (idx_t col_idx = 0; col_idx < over_chunk.ColumnCount(); ++col_idx) {
+		payload_chunk.data[input_chunk.ColumnCount() + col_idx].Reference(over_chunk.data[col_idx]);
+	}
+	payload_chunk.SetCardinality(input_chunk);
+
+	if (over_chunk.ColumnCount() == 0) {
+		//	No sorts, so build row chunks
+		if (!rows) {
+			const auto entry_size = payload_layout.GetRowWidth();
+			const auto capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
+			rows = make_unique<RowDataCollection>(gstate.buffer_manager, capacity, entry_size);
+			strings = make_unique<RowDataCollection>(gstate.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		}
+		const auto row_count = payload_chunk.size();
+		const auto row_sel = FlatVector::IncrementalSelectionVector();
+		Vector addresses(LogicalType::POINTER);
+		auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+		auto handles = rows->Build(row_count, key_locations, nullptr, row_sel);
+		vector<VectorData> payload_data;
+		payload_data.reserve(payload_chunk.ColumnCount());
+		for (idx_t i = 0; i < payload_chunk.ColumnCount(); i++) {
+			VectorData pdata;
+			payload_chunk.data[i].Orrify(row_count, pdata);
+			payload_data.emplace_back(move(pdata));
+		}
+		RowOperations::Scatter(payload_chunk, payload_data.data(), payload_layout, addresses, *strings, *row_sel,
+		                       row_count);
+		return;
+	}
+
+	idx_t group_offset = 0;
+	for (size_t group = 0; group < counts.size(); ++group) {
+		const auto group_size = counts[group];
+		if (group_size) {
+			auto &local_group = local_groups[group];
+			if (!local_group) {
+				auto global_group = gstate.GetHashGroup(group);
+				local_group = make_unique<WindowLocalHashGroup>(*global_group);
+			}
+
+			if (counts.size() == 1) {
+				local_group->Sink(over_chunk, payload_chunk, nullptr, group_size);
+			} else {
+				SelectionVector psel(sel.data() + group_offset);
+				local_group->Sink(over_chunk, payload_chunk, &psel, group_size);
+				group_offset += group_size;
+			}
+		}
+	}
+}
+
+void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
+	lock_guard<mutex> glock(gstate.lock);
+
+	// OVER()
+	if (over_chunk.ColumnCount() == 0) {
+		if (gstate.rows) {
+			gstate.rows->Merge(*rows);
+			gstate.strings->Merge(*strings);
+			rows.reset();
+			strings.reset();
+		} else {
+			gstate.rows = move(rows);
+			gstate.strings = move(strings);
+		}
+		return;
+	}
+
+	// Binned data
+	for (size_t group = 0; group < local_groups.size(); ++group) {
+		auto &local_group = local_groups[group];
+		if (local_group) {
+			local_group->Combine();
+		}
+	}
+}
+
+// Per-thread read state
+class WindowLocalSourceState : public LocalSourceState {
+public:
+	using HashGroupPtr = unique_ptr<WindowGlobalHashGroup>;
+
+	WindowLocalSourceState(const PhysicalWindow &op, ExecutionContext &context) : position(0) {
+	}
+
+	HashGroupPtr hash_group;
+
 	//! The generated input chunks
 	ChunkCollection chunks;
 	//! The generated output chunks
 	ChunkCollection window_results;
+	//! The read partition
+	idx_t hash_bin;
 	//! The read cursor
 	idx_t position;
-
-	BufferManager &buffer_manager;
-	unique_ptr<GlobalSortState> global_sort_state;
 };
 
 // this implements a sorted window functions variant
@@ -326,126 +685,67 @@ struct WindowInputExpression {
 	DataChunk chunk;
 };
 
-static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowExpression *wexpr, ChunkCollection &input,
-                                       ChunkCollection &over, ChunkCollection *hashes, const hash_t hash_bin,
-                                       const hash_t hash_mask) {
-	if (input.Count() == 0) {
-		return;
-	}
-
-	vector<BoundOrderByNode> orders;
-	// we sort by both 1) partition by expression list and 2) order by expressions
-	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
-		if (wexpr->partitions_stats.empty() || !wexpr->partitions_stats[prt_idx]) {
-			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, wexpr->partitions[prt_idx]->Copy(),
-			                    nullptr);
-		} else {
-			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, wexpr->partitions[prt_idx]->Copy(),
-			                    wexpr->partitions_stats[prt_idx]->Copy());
-		}
-	}
-	for (const auto &order : wexpr->orders) {
-		orders.push_back(order.Copy());
-	}
-
-	// fuse input and sort collection into one
-	// (sorting columns are not decoded, and we need them later)
-	auto payload_types = input.Types();
-	payload_types.insert(payload_types.end(), over.Types().begin(), over.Types().end());
-	DataChunk payload_chunk;
-	payload_chunk.InitializeEmpty(payload_types);
-
-	// initialise partitioning memory
-	// to minimise copying, we fill up a chunk and then sink it.
-	SelectionVector sel;
-	DataChunk over_partition;
-	DataChunk payload_partition;
-	if (hashes) {
-		sel.Initialize(STANDARD_VECTOR_SIZE);
-		over_partition.Initialize(over.Types());
-		payload_partition.Initialize(payload_types);
-	}
-
-	// initialize row layout for sorting
-	RowLayout payload_layout;
-	payload_layout.Initialize(payload_types);
-
-	// initialize sorting states
-	state.global_sort_state = make_unique<GlobalSortState>(state.buffer_manager, orders, payload_layout);
-	auto &global_sort_state = *state.global_sort_state;
-	LocalSortState local_sort_state;
-	local_sort_state.Initialize(global_sort_state, state.buffer_manager);
-
-	// sink collection chunks into row format
-	const idx_t chunk_count = over.ChunkCount();
-	for (idx_t i = 0; i < chunk_count; i++) {
-		auto &input_chunk = *input.Chunks()[i];
-		for (idx_t col_idx = 0; col_idx < input_chunk.ColumnCount(); ++col_idx) {
-			payload_chunk.data[col_idx].Reference(input_chunk.data[col_idx]);
-		}
-		auto &over_chunk = *over.Chunks()[i];
-		for (idx_t col_idx = 0; col_idx < over_chunk.ColumnCount(); ++col_idx) {
-			payload_chunk.data[input_chunk.ColumnCount() + col_idx].Reference(over_chunk.data[col_idx]);
-		}
-		payload_chunk.SetCardinality(input_chunk);
-
-		// Extract the hash partition, if any
-		if (hashes) {
-			auto &hash_chunk = *hashes->Chunks()[i];
-			auto hash_size = hash_chunk.size();
-			auto hash_data = FlatVector::GetData<hash_t>(hash_chunk.data[0]);
-			idx_t bin_size = 0;
-			for (idx_t i = 0; i < hash_size; ++i) {
-				if ((hash_data[i] & hash_mask) == hash_bin) {
-					sel.set_index(bin_size++, i);
-				}
-			}
-
-			// Flush the partition chunks if we would overflow
-			if (over_partition.size() + bin_size > STANDARD_VECTOR_SIZE) {
-				local_sort_state.SinkChunk(over_partition, payload_partition);
-				over_partition.Reset();
-				payload_partition.Reset();
-			}
-
-			// Copy the data for each collection.
-			if (bin_size) {
-				over_partition.Append(over_chunk, false, &sel, bin_size);
-				payload_partition.Append(payload_chunk, false, &sel, bin_size);
-			}
-		} else {
-			local_sort_state.SinkChunk(over_chunk, payload_chunk);
-		}
-	}
-
-	// Flush any ragged partition chunks
-	if (over_partition.size() > 0) {
-		local_sort_state.SinkChunk(over_partition, payload_partition);
-		over_partition.Reset();
-		payload_partition.Reset();
-	}
-
-	// If there are no hashes, release the input to save memory.
-	if (!hashes) {
-		over.Reset();
-		input.Reset();
-	}
-
-	// add local state to global state, which sorts the data
-	global_sort_state.AddLocalState(local_sort_state);
-	// Prepare for merge phase (in this case we never have a merge phase, but this call is still needed)
-	global_sort_state.PrepareMergePhase();
+static void SortCollectionForPartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate,
+                                       const hash_t hash_bin) {
+	state.hash_group = move(gstate.hash_groups[hash_bin]);
+	state.hash_group->Sort();
 }
 
-static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &input,
+static void ScanRowCollection(RowDataCollection &rows, ChunkCollection &cols, const vector<LogicalType> &types) {
+	const auto tuple_size = rows.entry_size;
+
+	Vector addresses(LogicalType::POINTER);
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
+
+	RowLayout layout;
+	layout.Initialize(types);
+
+	DataChunk result;
+	result.Initialize(types);
+	for (idx_t block_idx = 0; block_idx < rows.blocks.size(); ++block_idx) {
+		auto &block = rows.blocks[block_idx];
+		auto handle = rows.buffer_manager.Pin(block.block);
+		auto read_ptr = handle->Ptr();
+
+		for (idx_t block_pos = 0; block_pos < block.count;) {
+			const auto remaining = block.count - block_pos;
+			const auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
+
+			auto row_offset = block_pos * tuple_size;
+			D_ASSERT(row_offset + tuple_size <= Storage::BLOCK_SIZE);
+			for (idx_t i = 0; i < this_n; i++) {
+				data_pointers[i] = read_ptr + row_offset;
+				row_offset += tuple_size;
+			}
+
+			result.Reset();
+			result.SetCardinality(this_n);
+			for (idx_t i = 0; i < result.ColumnCount(); i++) {
+				auto &column = result.data[i];
+				const auto col_offset = layout.GetOffsets()[i];
+				RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), column,
+				                      *FlatVector::IncrementalSelectionVector(), result.size(), col_offset, i);
+			}
+			cols.Append(result);
+
+			block_pos += this_n;
+		}
+	}
+}
+
+static void ScanSortedPartition(WindowLocalSourceState &state, ChunkCollection &input,
                                 const vector<LogicalType> &input_types, ChunkCollection &over,
                                 const vector<LogicalType> &over_types) {
-	auto &global_sort_state = *state.global_sort_state;
+	auto &global_sort_state = *state.hash_group->global_sort;
+	if (global_sort_state.sorted_blocks.empty()) {
+		return;
+	}
 
 	auto payload_types = input_types;
 	payload_types.insert(payload_types.end(), over_types.begin(), over_types.end());
 
 	// scan the sorted row data
+	D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	for (;;) {
 		DataChunk payload_chunk;
@@ -464,56 +764,6 @@ static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &inp
 		input.Append(payload_chunk);
 		over.Append(over_chunk);
 	}
-}
-
-static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_chunk, const idx_t partition_cols) {
-	const vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
-	hash_chunk.Initialize(hash_types);
-	hash_chunk.SetCardinality(sort_chunk);
-	auto &hash_vector = hash_chunk.data[0];
-
-	const auto count = sort_chunk.size();
-	VectorOperations::Hash(sort_chunk.data[0], hash_vector, count);
-	for (idx_t prt_idx = 1; prt_idx < partition_cols; ++prt_idx) {
-		VectorOperations::CombineHash(hash_vector, sort_chunk.data[prt_idx], count);
-	}
-
-	const auto partition_mask = hash_t(counts.size() - 1);
-	auto hashes = FlatVector::GetData<hash_t>(hash_vector);
-	if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		const auto bin = (hashes[0] & partition_mask);
-		counts[bin] += count;
-	} else {
-		for (idx_t i = 0; i < count; ++i) {
-			const auto bin = (hashes[i] & partition_mask);
-			++counts[bin];
-		}
-	}
-}
-
-static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &input_chunk, DataChunk &over_chunk) {
-	vector<LogicalType> over_types;
-	ExpressionExecutor executor;
-
-	// we sort by both 1) partition by expression list and 2) order by expressions
-	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
-		auto &pexpr = wexpr->partitions[prt_idx];
-		over_types.push_back(pexpr->return_type);
-		executor.AddExpression(*pexpr);
-	}
-
-	for (idx_t ord_idx = 0; ord_idx < wexpr->orders.size(); ord_idx++) {
-		auto &oexpr = wexpr->orders[ord_idx].expression;
-		over_types.push_back(oexpr->return_type);
-		executor.AddExpression(*oexpr);
-	}
-
-	D_ASSERT(!over_types.empty());
-
-	over_chunk.Initialize(over_types);
-	executor.Execute(input_chunk, over_chunk);
-
-	over_chunk.Verify();
 }
 
 static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
@@ -1222,7 +1472,7 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
+static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate, const idx_t hash_bin) {
 	auto &op = (PhysicalWindow &)gstate.op;
 	WindowExpressions window_exprs;
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
@@ -1234,56 +1484,38 @@ static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gst
 	//	Get rid of any stale data
 	state.chunks.Reset();
 	state.window_results.Reset();
+	state.hash_bin = hash_bin;
 	state.position = 0;
-	state.global_sort_state = nullptr;
-
-	//	Pick out a function for the OVER clause
-	auto over_expr = window_exprs[0];
+	state.hash_group = nullptr;
 
 	// There are three types of partitions:
 	// 1. No partition (no sorting)
 	// 2. One partition (sorting, but no hashing)
 	// 3. Multiple partitions (sorting and hashing)
-	const auto input_types = gstate.chunks.Types();
-	const auto over_types = gstate.over_collection.Types();
+	const auto &input_types = op.children[0]->types;
 
-	if (gstate.counts.empty() && hash_bin == 0) {
-		ChunkCollection &input = gstate.chunks;
-		ChunkCollection output;
-		ChunkCollection &over = gstate.over_collection;
-
-		const auto has_sorting = over_expr->partitions.size() + over_expr->orders.size();
-		if (has_sorting && input.Count() > 0) {
-			// 2. One partition
-			SortCollectionForPartition(state, over_expr, input, over, nullptr, 0, 0);
-
-			// Overwrite the collections with the sorted data
-			ScanSortedPartition(state, input, input_types, over, over_types);
-		}
-
-		ComputeWindowExpressions(window_exprs, input, output, over, gstate.mode);
-		state.chunks.Merge(input);
-		state.window_results.Merge(output);
-
-	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
-		// 3. Multiple partitions
-		const auto hash_mask = hash_t(gstate.counts.size() - 1);
-		SortCollectionForPartition(state, over_expr, gstate.chunks, gstate.over_collection, &gstate.hash_collection,
-		                           hash_bin, hash_mask);
-
-		// Scan the sorted data into new Collections
-		ChunkCollection input;
-		ChunkCollection output;
-		ChunkCollection over;
+	// Scan the sorted data into new Collections
+	ChunkCollection input;
+	ChunkCollection over;
+	if (gstate.rows && !hash_bin) {
+		//	No partition - convert row collection to chunk collection
+		ScanRowCollection(*gstate.rows, input, input_types);
+	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {
+		// Overwrite the collections with the sorted data
+		SortCollectionForPartition(state, gstate, hash_bin);
+		const auto over_types = state.hash_group->global_sort->sort_layout.logical_types;
 		ScanSortedPartition(state, input, input_types, over, over_types);
-
-		ComputeWindowExpressions(window_exprs, input, output, over, gstate.mode);
-		state.chunks.Merge(input);
-		state.window_results.Merge(output);
+	} else {
+		return;
 	}
+
+	ChunkCollection output;
+	ComputeWindowExpressions(window_exprs, input, output, over, gstate.mode);
+	state.chunks.Merge(input);
+	state.window_results.Merge(output);
 }
 
-static void Scan(WindowOperatorState &state, DataChunk &chunk) {
+static void Scan(WindowLocalSourceState &state, DataChunk &chunk) {
 	ChunkCollection &big_data = state.chunks;
 	ChunkCollection &window_results = state.window_results;
 
@@ -1309,63 +1541,32 @@ static void Scan(WindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                     DataChunk &input) const {
-	auto &lstate = (WindowLocalState &)lstate_p;
-	lstate.chunks.Append(input);
+	auto &gstate = (WindowGlobalSinkState &)gstate_p;
+	auto &lstate = (WindowLocalSinkState &)lstate_p;
 
-	// Compute the over columns and the hash values for this block (if any)
-	const auto over_idx = 0;
-	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+	lstate.Over(input);
+	lstate.Hash();
+	lstate.Sink(input, gstate);
 
-	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-	if (sort_col_count > 0) {
-		DataChunk over_chunk;
-		MaterializeOverForWindow(over_expr, input, over_chunk);
-
-		if (!over_expr->partitions.empty()) {
-			if (lstate.counts.empty()) {
-				lstate.counts.resize(lstate.partition_count, 0);
-			}
-
-			DataChunk hash_chunk;
-			HashChunk(lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
-			lstate.hash_collection.Append(hash_chunk);
-			D_ASSERT(lstate.chunks.Count() == lstate.hash_collection.Count());
-		}
-
-		lstate.over_collection.Append(over_chunk);
-		D_ASSERT(lstate.chunks.Count() == lstate.over_collection.Count());
-	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &lstate = (WindowLocalState &)lstate_p;
-	if (lstate.chunks.Count() == 0) {
-		return;
-	}
-	auto &gstate = (WindowGlobalState &)gstate_p;
-	lock_guard<mutex> glock(gstate.lock);
-	gstate.chunks.Merge(lstate.chunks);
-	gstate.over_collection.Merge(lstate.over_collection);
-	gstate.hash_collection.Merge(lstate.hash_collection);
-	if (gstate.counts.empty()) {
-		gstate.counts = lstate.counts;
-	} else {
-		D_ASSERT(gstate.counts.size() == lstate.counts.size());
-		for (idx_t i = 0; i < gstate.counts.size(); ++i) {
-			gstate.counts[i] += lstate.counts[i];
-		}
-	}
+	auto &gstate = (WindowGlobalSinkState &)gstate_p;
+	auto &lstate = (WindowLocalSinkState &)lstate_p;
+	lstate.Combine(gstate);
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<WindowLocalState>(*this);
+	D_ASSERT(select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+	auto wexpr = reinterpret_cast<BoundWindowExpression *>(select_list[0].get());
+	return make_unique<WindowLocalSinkState>(*this, wexpr);
 }
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<WindowGlobalState>(*this, context);
+	return make_unique<WindowGlobalSinkState>(*this, context);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1373,25 +1574,25 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 class WindowGlobalSourceState : public GlobalSourceState {
 public:
-	explicit WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_part(0) {
+	explicit WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_bin(0) {
 	}
 
 	const PhysicalWindow &op;
 	//! The output read position.
-	atomic<idx_t> next_part;
+	atomic<idx_t> next_bin;
 
 public:
 	idx_t MaxThreads() override {
-		auto &state = (WindowGlobalState &)*op.sink_state;
+		auto &state = (WindowGlobalSinkState &)*op.sink_state;
 
 		// If there is only one partition, we have to process it on one thread.
-		if (state.counts.empty()) {
+		if (state.hash_groups.empty()) {
 			return 1;
 		}
 
 		idx_t max_threads = 0;
-		for (const auto count : state.counts) {
-			if (count > 0) {
+		for (const auto &hash_group : state.hash_groups) {
+			if (hash_group) {
 				max_threads++;
 			}
 		}
@@ -1402,7 +1603,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_unique<WindowOperatorState>(*this, context);
+	return make_unique<WindowLocalSourceState>(*this, context);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
@@ -1411,28 +1612,28 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                              LocalSourceState &lstate_p) const {
-	auto &state = (WindowOperatorState &)lstate_p;
+	auto &state = (WindowLocalSourceState &)lstate_p;
 	auto &global_source = (WindowGlobalSourceState &)gstate_p;
-	auto &gstate = (WindowGlobalState &)*sink_state;
+	auto &gstate = (WindowGlobalSinkState &)*sink_state;
 
-	do {
-		if (state.position >= state.chunks.Count()) {
-			auto hash_bin = global_source.next_part++;
-			for (; hash_bin < state.partitions; hash_bin = global_source.next_part++) {
-				if (gstate.counts[hash_bin] > 0) {
-					break;
-				}
-			}
-			GeneratePartition(state, gstate, hash_bin);
-		}
-		Scan(state, chunk);
-		if (chunk.size() != 0) {
+	const auto bin_count = gstate.hash_groups.empty() ? 1 : gstate.hash_groups.size();
+
+	//	Move to the next bin if we are done.
+	while (state.position >= state.chunks.Count()) {
+		auto hash_bin = global_source.next_bin++;
+		if (hash_bin >= bin_count) {
 			return;
-		} else {
-			break;
 		}
-	} while (true);
-	D_ASSERT(chunk.size() == 0);
+
+		for (; hash_bin < gstate.hash_groups.size(); hash_bin = global_source.next_bin++) {
+			if (gstate.hash_groups[hash_bin]) {
+				break;
+			}
+		}
+		GeneratePartition(state, gstate, hash_bin);
+	}
+
+	Scan(state, chunk);
 }
 
 string PhysicalWindow::ParamsToString() const {

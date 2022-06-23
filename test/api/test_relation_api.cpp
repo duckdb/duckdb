@@ -79,16 +79,16 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = proj->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	// we can check the column names
-	REQUIRE(proj->Columns()[0].name == "a");
-	REQUIRE(proj->Columns()[0].type == LogicalType::INTEGER);
+	REQUIRE(proj->Columns()[0].Name() == "a");
+	REQUIRE(proj->Columns()[0].Type() == LogicalType::INTEGER);
 
 	// we can also alias like this
 	REQUIRE_NOTHROW(proj = filter->Project("i + 1", "a"));
 	REQUIRE_NOTHROW(result = proj->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 	// we can check the column names
-	REQUIRE(proj->Columns()[0].name == "a");
-	REQUIRE(proj->Columns()[0].type == LogicalType::INTEGER);
+	REQUIRE(proj->Columns()[0].Name() == "a");
+	REQUIRE(proj->Columns()[0].Type() == LogicalType::INTEGER);
 
 	// now we can use that column to perform additional projections
 	REQUIRE_NOTHROW(result = proj->Project("a + 1")->Execute());

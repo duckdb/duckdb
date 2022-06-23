@@ -38,6 +38,7 @@
 #include <google/protobuf/repeated_field.h>
 #include <google/protobuf/wire_format.h>
 #include <google/protobuf/wire_format_lite.h>
+namespace duckdb{
 
 namespace google {
 namespace protobuf {
@@ -101,3 +102,4 @@ bool MergePartialFromCodedStream(MessageLite* msg, const ParseTable& table,
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
+} // namespace duckdb
