@@ -15,9 +15,9 @@ namespace duckdb {
 
 static_assert(sizeof(date_t) == sizeof(int32_t), "date_t was padded");
 
-const char *Date::PINF = "infinity"; 	// NOLINT
-const char *Date::NINF = "-infinity";  	// NOLINT
-const char *Date::EPOCH = "epoch"; 		// NOLINT
+const char *Date::PINF = "infinity";  // NOLINT
+const char *Date::NINF = "-infinity"; // NOLINT
+const char *Date::EPOCH = "epoch";    // NOLINT
 
 const string_t Date::MONTH_NAMES_ABBREVIATED[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
