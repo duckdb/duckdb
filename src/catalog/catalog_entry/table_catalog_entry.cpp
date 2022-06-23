@@ -402,11 +402,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		auto copy = columns[i].Copy();
 		create_info->columns.push_back(move(copy));
 		// has to push all to avoid CheckZonemap() error
-		column_ids.push_back(i);
-		types.push_back(columns[i].type);
 	}
 
 	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	column_ids.push_back(not_null_idx);
+	types.push_back(columns[not_null_idx].type);
 	bool has_not_null = false;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -430,7 +430,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 
 		// filter
 		TableFilterSet table_filters;
-		table_filters.PushFilter(not_null_idx, make_unique<IsNullFilter>());
+		table_filters.PushFilter(0, make_unique<IsNullFilter>());
 
 		// state
 		TableScanState state;

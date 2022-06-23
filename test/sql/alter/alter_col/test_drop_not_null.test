@@ -1,6 +1,6 @@
 # name: test/sql/alter/not_null/test_drop_not_null.test
 # description: Test ALTER TABLE ALTER COLUMN column_name DROP NOT NULL
-# group: [alter_column]
+# group: [alter_col]
 # Happy path
 
 statement ok
