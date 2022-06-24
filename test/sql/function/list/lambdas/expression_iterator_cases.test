@@ -113,7 +113,21 @@ CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
 statement error
 SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
 
+# BOUND_UNNEST
+
+query I
+SELECT list_transform([1], x -> x = UNNEST([1]));
+----
+[True]
+
+query I
+SELECT list_filter([1], x -> x = UNNEST([1]));
+----
+[1]
+
 # BOUND_WINDOW
+
+require vector_size 512
 
 statement ok
 CREATE TABLE my_window (l integer[], g integer, o integer)
@@ -129,15 +143,3 @@ SELECT list(list_transform(l, e -> e + 1)) OVER (PARTITION BY g ORDER BY o) FROM
 [[2], [2, NULL, 3]]
 [[]]
 [[], [2, 3]]
-
-# BOUND_UNNEST
-
-query I
-SELECT list_transform([1], x -> x = UNNEST([1]));
-----
-[True]
-
-query I
-SELECT list_filter([1], x -> x = UNNEST([1]));
-----
-[1]
