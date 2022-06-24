@@ -51,33 +51,6 @@ static void AssertValidFileFlags(uint8_t flags) {
 #endif
 }
 
-#ifdef __MINGW32__
-bool LocalFileSystem::FileExists(const string &filename) {
-	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
-	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
-		_wstati64(wpath, &status);
-		if (status.st_size > 0) {
-			return true;
-		}
-	}
-	return false;
-}
-bool LocalFileSystem::IsPipe(const string &filename) {
-	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
-	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status;
-		_wstati64(wpath, &status);
-		if (status.st_size == 0) {
-			return true;
-		}
-	}
-	return false;
-}
-
-#else
 #ifndef _WIN32
 bool LocalFileSystem::FileExists(const string &filename) {
 	if (!filename.empty()) {
@@ -132,7 +105,6 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 	}
 	return false;
 }
-#endif
 #endif
 
 #ifndef _WIN32
