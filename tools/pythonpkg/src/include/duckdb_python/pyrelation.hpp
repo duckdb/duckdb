@@ -70,6 +70,11 @@ public:
 	static unique_ptr<DuckDBPyRelation>
 	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
+	void InstallExtension(const string &query, bool force_install,
+	                      DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	void LoadExtension(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
 	static unique_ptr<DuckDBPyRelation>
 	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
@@ -133,7 +138,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
 
-	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");

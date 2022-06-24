@@ -437,6 +437,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	}
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
 
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
@@ -518,6 +519,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
 
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
@@ -670,6 +672,9 @@ string TableCatalogEntry::ToSQL() {
 		}
 		if (column.DefaultValue()) {
 			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
+		}
+		if (column.Generated()) {
+			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed

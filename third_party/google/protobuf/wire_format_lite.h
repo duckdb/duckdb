@@ -68,7 +68,7 @@
 
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -82,7 +82,7 @@ namespace internal {
 // reflection.
 //
 // This class is really a namespace that contains only static methods.
-class PROTOBUF_EXPORT WireFormatLite {
+class  WireFormatLite {
  public:
   // -----------------------------------------------------------------
   // Helper constants and functions related to the format.  These are
@@ -747,7 +747,7 @@ class PROTOBUF_EXPORT WireFormatLite {
 // discards them.  WireFormat defines a subclass which writes to an
 // UnknownFieldSet.  This class is used by ExtensionSet::ParseField(), since
 // ExtensionSet is part of the lite library but UnknownFieldSet is not.
-class PROTOBUF_EXPORT FieldSkipper {
+class  FieldSkipper {
  public:
   FieldSkipper() {}
   virtual ~FieldSkipper() {}
@@ -767,7 +767,7 @@ class PROTOBUF_EXPORT FieldSkipper {
 
 // Subclass of FieldSkipper which saves skipped fields to a CodedOutputStream.
 
-class PROTOBUF_EXPORT CodedOutputStreamFieldSkipper : public FieldSkipper {
+class  CodedOutputStreamFieldSkipper : public FieldSkipper {
  public:
   explicit CodedOutputStreamFieldSkipper(io::CodedOutputStream* unknown_fields)
       : unknown_fields_(unknown_fields) {}
@@ -1909,7 +1909,7 @@ bool ParseMessageSetItemImpl(io::CodedInputStream* input, MS ms) {
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_WIRE_FORMAT_LITE_H__

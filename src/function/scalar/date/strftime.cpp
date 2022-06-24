@@ -420,6 +420,9 @@ string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
 }
 
 string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeFormat &format) {
+	if (format_string.empty()) {
+		return "Empty format string";
+	}
 	format.specifiers.clear();
 	format.literals.clear();
 	format.numeric_width.clear();
@@ -798,6 +801,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	uint64_t yearday = 0;
 
 	for (idx_t i = 0;; i++) {
+		D_ASSERT(i < literals.size());
 		// first compare the literal
 		const auto &literal = literals[i];
 		for (size_t l = 0; l < literal.size();) {
@@ -1188,7 +1192,10 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	string format_string = options_str.ToString();
 	StrpTimeFormat format;
-	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+	if (!options_str.IsNull()) {
+		if (options_str.type().id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("strptime format must be a string");
+		}
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {

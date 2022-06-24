@@ -122,6 +122,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 			throw NotImplementedException("ColumnDef type not handled yet");
 		}
 	}
+
+	if (!column_count) {
+		throw ParserException("Table must have at least one column!");
+	}
+
 	result->info = move(info);
 	return result;
 }

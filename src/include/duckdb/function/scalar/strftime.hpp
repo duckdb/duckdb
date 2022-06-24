@@ -74,7 +74,7 @@ protected:
 	//! Format is literals[0], specifiers[0], literals[1], ..., specifiers[n - 1], literals[n]
 	vector<string> literals;
 	//! The constant size that appears in the format string
-	idx_t constant_size;
+	idx_t constant_size = 0;
 	//! The max numeric width of the specifier (if it is parsed as a number), or -1 if it is not a number
 	vector<int> numeric_width;
 

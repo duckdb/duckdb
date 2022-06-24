@@ -39,7 +39,7 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -687,5 +687,5 @@ PRIMITIVE_HANDLER_FUNCTIONS(BOOL)
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #endif  // GOOGLE_PROTOBUF_MAP_TYPE_HANDLER_H__

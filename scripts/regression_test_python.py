@@ -47,16 +47,19 @@ def open_connection():
         con.execute(f"SET threads={threads}")
     return con
 
-def benchmark_query(benchmark_name, con, query):
+def benchmark_queries(benchmark_name, con, queries):
     if verbose:
         print(benchmark_name)
-        print(query)
+        print(queries)
     for nrun in range(nruns):
-        start = time.time()
-        df_result = con.execute(query).df()
-        end = time.time()
+        t = 0.0
+        for q in queries:
+            start = time.time()
+            df_result = con.execute(q).df()
+            end = time.time()
+            t += float(end - start)
 
-        bench_result = f"{benchmark_name}\t{nrun}\t{end - start}"
+        bench_result = f"{benchmark_name}\t{nrun}\t{t}"
 
         if out_file is not None:
             f.write(bench_result)
@@ -65,9 +68,11 @@ def benchmark_query(benchmark_name, con, query):
             print(bench_result)
 
 def run_tpch(con, prefix):
+    benchmark_name = f"{prefix}tpch"
+    queries = []
     for i in range(1, TPCH_NQUERIES + 1):
-        benchmark_name = "%stpch_q%02d" % (prefix, i)
-        benchmark_query(benchmark_name, con, f'PRAGMA tpch({i})')
+        queries.append(f'PRAGMA tpch({i})')
+    benchmark_queries(benchmark_name, con, queries)
 
 
 if out_file is not None:
@@ -84,13 +89,13 @@ for table in tables:
 
 run_tpch(df_con, "pandas_")
 
-# # arrow scans
-# arrow_tables = {}
-# for table in tables:
-#     arrow_tables[table] = pa.Table.from_pandas(data_frames[table])
-#
-# arrow_con = open_connection()
-# for table in tables:
-#     arrow_con.register(table, arrow_tables[table])
-#
-# run_tpch(arrow_con, "arrow_")
+# arrow scans
+arrow_tables = {}
+for table in tables:
+    arrow_tables[table] = pa.Table.from_pandas(data_frames[table])
+
+arrow_con = open_connection()
+for table in tables:
+    arrow_con.register(table, arrow_tables[table])
+
+run_tpch(arrow_con, "arrow_")

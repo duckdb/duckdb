@@ -25,7 +25,7 @@ SELECT * FROM '__TEST_DIR__/int_map.parquet'
 {101=3, 201=NULL, 301=5}
 {55=6, 66=7, 77=NULL}
 
-statement ok
+statement error
 INSERT INTO int_maps VALUES
 	(MAP([NULL], [NULL]))
 ;
@@ -59,14 +59,10 @@ SELECT * FROM '__TEST_DIR__/string_map.parquet'
 NULL
 {option=NULL}
 
-statement ok
+statement error
 INSERT INTO string_map VALUES
 	(MAP([NULL], [NULL]))
 ;
-
-# parquet does not support keys with null values
-statement error
-COPY string_map TO '__TEST_DIR__/string_map.parquet' (FORMAT PARQUET)
 
 # list -> list map
 statement ok
@@ -77,7 +73,7 @@ INSERT INTO list_map VALUES
 	(MAP([[1, 2, 3], [], [4, 5]], [[6, 7, 8], NULL, [NULL]])),
 	(MAP([], [])),
 	(MAP([[1]], [NULL])),
-	(MAP([[10, 12, 14, 16, 18, 20], [], []], [[1], [2], [3]]))
+	(MAP([[10, 12, 14, 16, 18, 20], []], [[1], [2]]))
 ;
 
 statement ok
@@ -89,13 +85,10 @@ SELECT * FROM '__TEST_DIR__/list_map.parquet'
 {[1, 2, 3]=[6, 7, 8], []=NULL, [4, 5]=[NULL]}
 {}
 {[1]=NULL}
-{[10, 12, 14, 16, 18, 20]=[1], []=[2], []=[3]}
+{[10, 12, 14, 16, 18, 20]=[1], []=[2]}
 
-statement ok
+# Keys can not be NULL;
+statement error
 INSERT INTO list_map VALUES
 	(MAP([NULL], [NULL]))
 ;
-
-# parquet does not support keys with null values
-statement error
-COPY list_map TO '__TEST_DIR__/list_map.parquet' (FORMAT PARQUET)

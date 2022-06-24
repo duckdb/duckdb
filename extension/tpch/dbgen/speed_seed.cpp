@@ -202,18 +202,17 @@ long sd_supp(int child, DSS_HUGE skip_count) {
 }
 
 long sd_nation(int child, DSS_HUGE skip_count) {
-  (void)child;
+	(void)child;
 
-  ADVANCE_STREAM(N_CMNT_SD, skip_count * 2);
+	ADVANCE_STREAM(N_CMNT_SD, skip_count * 2);
 
-  return (0L);
+	return (0L);
 }
 
 long sd_region(int child, DSS_HUGE skip_count) {
-  (void)child;
+	(void)child;
 
-  ADVANCE_STREAM(R_CMNT_SD, skip_count * 2);
+	ADVANCE_STREAM(R_CMNT_SD, skip_count * 2);
 
-  return (0L);
+	return (0L);
 }
-
