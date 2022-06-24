@@ -227,7 +227,8 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
 	// first evict blocks until we have enough memory to store this buffer
 	if (!EvictBlocks(alloc_size, maximum_memory)) {
-		throw OutOfMemoryException("could not allocate block of %lld bytes%s", alloc_size, InMemoryWarning());
+		throw OutOfMemoryException("could not allocate block of %lld bytes (%lld/%lld used) %s", alloc_size,
+		                           GetUsedMemory(), GetMaxMemory(), InMemoryWarning());
 	}
 
 	// allocate the buffer

@@ -289,25 +289,20 @@ FROM specials;
 1	1	1
 0	0	0
 
-query I
-select (timestamp 'infinity')::varchar;
-----
-infinity
+# Casts
 
-query I
-select (timestamp '-infinity')::varchar;
+query III
+select ts::VARCHAR, tstz::VARCHAR, dt::VARCHAR FROM specials
 ----
--infinity
+infinity	infinity	infinity
+-infinity	-infinity	-infinity
+1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
 
-query I
-select (date 'infinity')::varchar;
-----
-infinity
+statement error
+select ts::TIME, tstz::TIME, dt::TIME FROM specials
 
-query I
-select (date '-infinity')::varchar;
-----
--infinity
+statement error
+select 'infinity'::TIME;
 
 # infinite subtract
 statement error

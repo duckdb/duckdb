@@ -85,9 +85,9 @@ duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
 template <>
 duckdb::string_t StringCast::Operation(date_t input, Vector &vector) {
 	if (input == date_t::infinity()) {
-		return "infinity";
+		return StringVector::AddString(vector, Date::PINF);
 	} else if (input == date_t::ninfinity()) {
-		return "-infinity";
+		return StringVector::AddString(vector, Date::NINF);
 	}
 	int32_t date[3];
 	Date::Convert(input, date[0], date[1], date[2]);
@@ -125,9 +125,9 @@ duckdb::string_t StringCast::Operation(dtime_t input, Vector &vector) {
 template <>
 duckdb::string_t StringCast::Operation(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
-		return string_t("infinity");
+		return StringVector::AddString(vector, Date::PINF);
 	} else if (input == timestamp_t::ninfinity()) {
-		return string_t("-infinity");
+		return StringVector::AddString(vector, Date::NINF);
 	}
 	date_t date_entry;
 	dtime_t time_entry;
@@ -187,6 +187,11 @@ string_t StringCastTZ::Operation(dtime_t input, Vector &vector) {
 
 template <>
 string_t StringCastTZ::Operation(timestamp_t input, Vector &vector) {
+	if (input == timestamp_t::infinity()) {
+		return StringVector::AddString(vector, Date::PINF);
+	} else if (input == timestamp_t::ninfinity()) {
+		return StringVector::AddString(vector, Date::NINF);
+	}
 	date_t date_entry;
 	dtime_t time_entry;
 	Timestamp::Convert(input, date_entry, time_entry);

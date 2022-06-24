@@ -318,29 +318,32 @@ void WindowLocalSinkState::Hash() {
 			VectorOperations::CombineHash(hash_vector, over_chunk.data[prt_idx], count);
 		}
 
-		const auto partition_mask = hash_t(counts.size() - 1);
+		const auto group_mask = hash_t(counts.size() - 1);
 		if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			const auto bin = (hashes[0] & partition_mask);
-			counts[bin] += count;
+			const auto group = (hashes[0] & group_mask);
+			counts[group] = count;
+			for (idx_t i = 0; i < count; ++i) {
+				sel.set_index(i, i);
+			}
 		} else {
 			for (idx_t i = 0; i < count; ++i) {
-				const auto bin = (hashes[i] & partition_mask);
+				const auto bin = (hashes[i] & group_mask);
 				++counts[bin];
 			}
-		}
 
-		// Second pass: Build sequential selections
-		offsets.resize(counts.size());
-		size_t offset = 0;
-		for (size_t c = 0; c < counts.size(); ++c) {
-			offsets[c] = offset;
-			offset += counts[c];
-		}
+			// Second pass: Build sequential selections
+			offsets.resize(counts.size());
+			size_t offset = 0;
+			for (size_t c = 0; c < counts.size(); ++c) {
+				offsets[c] = offset;
+				offset += counts[c];
+			}
 
-		for (idx_t i = 0; i < count; ++i) {
-			const auto hash_bin = (hashes[i] & partition_mask);
-			auto &hash_idx = offsets[hash_bin];
-			sel.set_index(hash_idx++, i);
+			for (idx_t i = 0; i < count; ++i) {
+				const auto group = (hashes[i] & group_mask);
+				auto &group_idx = offsets[group];
+				sel.set_index(group_idx++, i);
+			}
 		}
 	} else {
 		counts.resize(1, count);
