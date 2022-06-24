@@ -93,7 +93,7 @@ PhysicalType LogicalType::GetInternalType() {
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
 		} else {
-			throw InternalException("Widths bigger than 38 are not supported");
+			throw InternalException("Widths bigger than %d are not supported", DecimalType::MaxWidth());
 		}
 	}
 	case LogicalTypeId::VARCHAR:
@@ -651,7 +651,13 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
 			auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
 			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-			return LogicalType::DECIMAL(extra_width + scale, scale);
+			auto width = extra_width + scale;
+			if (width > DecimalType::MaxWidth()) {
+				// if the resulting decimal does not fit, we truncate the scale
+				width = DecimalType::MaxWidth();
+				scale = width - extra_width;
+			}
+			return LogicalType::DECIMAL(width, scale);
 		} else if (type_id == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
 			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
@@ -845,6 +851,10 @@ uint8_t DecimalType::GetScale(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((DecimalTypeInfo &)*info).scale;
+}
+
+uint8_t DecimalType::MaxWidth() {
+	return 38;
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {
