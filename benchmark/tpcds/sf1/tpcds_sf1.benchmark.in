@@ -8,6 +8,8 @@ subgroup sf1
 
 require tpcds
 
+storage persistent
+
 cache tpcds_sf1
 
 load benchmark/tpcds/sf1/load.sql
