@@ -84,7 +84,8 @@ public:
 //! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
 //! parameters.
 struct DummyBinding : public Binding {
-	static constexpr const char *DUMMY_NAME = "__duckdb__internal_dummy_binding";
+	// NOTE: changing this string conflicts with the storage version
+	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
 	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
