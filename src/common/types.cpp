@@ -643,10 +643,15 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 				return right;
 			}
 		} else if (type_id == LogicalTypeId::DECIMAL) {
-			// use max width/scale of the two types
-			auto width = MaxValue<uint8_t>(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
+			// unify the width/scale so that the resulting decimal always fits
+			// "width - scale" gives us the number of digits on the left side of the decimal point
+			// "scale" gives us the number of digits allowed on the right of the deciaml point
+			// using the max of these of the two types gives us the new decimal size
+			auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
+			auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
+			auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
 			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-			return LogicalType::DECIMAL(width, scale);
+			return LogicalType::DECIMAL(extra_width + scale, scale);
 		} else if (type_id == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
 			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
