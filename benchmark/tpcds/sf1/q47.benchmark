@@ -2,6 +2,18 @@
 # description: Run query 47 from the TPC-DS benchmark
 # group: [sf1]
 
-template benchmark/tpcds/sf1/tpcds_sf1.benchmark.in
-QUERY_NUMBER=47
-QUERY_NUMBER_PADDED=47
+name DSQ47
+group tpcds
+subgroup sf1
+
+require tpcds
+
+storage persistent
+
+cache tpcds_sf1
+
+load benchmark/tpcds/sf1/load.sql
+
+run extension/tpcds/dsdgen/queries/47.sql
+
+result extension/tpcds/dsdgen/answers/sf1/47.csv
