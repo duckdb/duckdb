@@ -64,9 +64,10 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		if (out.bad()) {
 			throw IOException("Failed to write extension to \"%s\"", temp_path);
 		}
-		fs.MoveFile(temp_path, local_extension_path);
 		in.close();
 		out.close();
+
+		fs.MoveFile(temp_path, local_extension_path);
 		return;
 	} else if (StringUtil::Contains(extension, "/") && !is_http_url) {
 		throw IOException("Failed to read extension from \"%s\": no such file", extension);
@@ -113,6 +114,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	if (out.bad()) {
 		throw IOException("Failed to write extension to %s", temp_path);
 	}
+	out.close();
 	fs.MoveFile(temp_path, local_extension_path);
 #endif
 }
