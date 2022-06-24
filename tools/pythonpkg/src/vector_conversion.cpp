@@ -1,4 +1,5 @@
 #include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/python_instance_checker.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -111,28 +112,49 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 }
 
 template <typename T>
-bool	TryCast(const py::object stuf, T& value){
-    try{
-        value = stuf.cast<T>();
-        return true;
-    }catch(py::cast_error){
+bool TryCast(const py::object stuf, T &value) {
+	try {
+		value = stuf.cast<T>();
+		return true;
+	} catch (py::cast_error) {
 		return false;
-    }
+	}
 }
 
-template<typename T>
-T	Cast(const py::object obj) {
+template <typename T>
+T Cast(const py::object obj) {
 	return obj.cast<T>();
 }
 
-void ScanPandasObject(PandasColumnBindData& bind_data, py::handle object, idx_t count, idx_t offset, Vector& out) {
-	auto& type = out.GetType();
-	switch (type.id()) {
-		case LogicalTypeId::INTEGER: {
-			if (py::isinstance<py::int_>(object)) {
-				auto val = py::cast<int32_t>(object);
-			}
-		}
+void ObjectConversionFailure(const LogicalType &type, py::handle &object) {
+	throw ConversionException("Could not convert Python object of type name \"%s\" to a Value of LogicalType \"%s\"",
+	                          string(py::str(object.get_type().attr("__name__"))), type.ToString());
+}
+
+//! 'count' is the amount of rows in the 'out' vector
+//! offset is the current row number within this vector
+void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
+
+	// handle None
+	if (object == Py_None) {
+		auto &validity = FlatVector::Validity(out);
+		validity.SetInvalid(offset);
+		return;
+	}
+
+	auto val = TransformPythonValue(*bind_data.instance_checker, object);
+	out.SetValue(offset, val);
+}
+
+void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
+	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
+	out.SetVectorType(VectorType::FLAT_VECTOR);
+	for (idx_t i = 0; i < count; i++) {
+		// This segfaults..
+
+		// Inspected the type, it's 'ndarray'
+		// Went into python and saw that it's perfectly possible to use __getitem__ on a numpy.ndarray object
+		ScanPandasObject(bind_data, col[i], i, out);
 	}
 }
 
@@ -218,8 +240,12 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 	case PandasType::VARCHAR:
 	case PandasType::OBJECT: {
+		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
+		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
+			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
+		}
 
 		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
@@ -327,9 +353,9 @@ static py::object GetItem(pybind11::object &column, idx_t index) {
 	return column.attr("__getitem__")(index);
 }
 
-static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert);
+static duckdb::LogicalType GetItemType(PythonInstanceChecker &instance_checker, py::handle &ele, bool &can_convert);
 
-static duckdb::LogicalType GetListType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert) {
+static duckdb::LogicalType GetListType(PythonInstanceChecker &instance_checker, py::handle &ele, bool &can_convert) {
 	auto size = py::len(ele);
 
 	if (size == 0) {
@@ -371,7 +397,7 @@ static duckdb::LogicalType EmptyMap() {
 //! LogicalType's alone
 
 //! Maybe there's an INVALID type actually..
-static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, py::handle &ele, bool &can_convert) {
+static duckdb::LogicalType GetItemType(PythonInstanceChecker &instance_checker, py::handle &ele, bool &can_convert) {
 	auto datetime_mod = py::module_::import("datetime");
 	auto decimal_mod = py::module_::import("decimal");
 
@@ -444,8 +470,11 @@ static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, 
 		child_types.push_back(make_pair("key", key_type));
 		child_types.push_back(make_pair("value", value_type));
 		return LogicalType::MAP(move(child_types));
+	} else if (instance_checker.IsInstanceOf(ele, "ndarray", "numpy")) {
+		auto to_list = ele.attr("tolist")();
+		return GetItemType(instance_checker, to_list, can_convert);
 	} else {
-		throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
+		throw std::runtime_error("GetItemType unknown param type " + py::str(ele.get_type()).cast<string>());
 	}
 }
 
@@ -481,7 +510,8 @@ static duckdb::LogicalType GetItemType(PythonInstanceChecker& instance_checker, 
 //	}
 // }
 
-static duckdb::LogicalType AnalyzeObjectType(PythonInstanceChecker& instance_checker, pybind11::object column, bool &can_convert) {
+static duckdb::LogicalType AnalyzeObjectType(PythonInstanceChecker &instance_checker, pybind11::object column,
+                                             bool &can_convert) {
 	idx_t rows = py::len(column);
 	LogicalType item_type = duckdb::LogicalType::SQLNULL;
 	if (!rows) {
@@ -697,6 +727,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 		bool masked = ColumnIsMasked(df_columns[col_idx], dtype);
 		// auto col_type = string(py::str(df_types[col_idx]));
 
+		bind_data.instance_checker = instance_checker;
 		bind_data.mask = nullptr;
 		if (masked) {
 			// masked object
@@ -747,7 +778,8 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 		// Analyze the inner data type of the 'object' column
 		if (bind_data.pandas_type == PandasType::OBJECT) {
 			bool can_convert = true;
-			LogicalType converted_type = AnalyzeObjectType(*instance_checker, get_fun(df_columns[col_idx]), can_convert);
+			LogicalType converted_type =
+			    AnalyzeObjectType(*instance_checker, get_fun(df_columns[col_idx]), can_convert);
 			if (can_convert) {
 				duckdb_col_type = converted_type;
 			}

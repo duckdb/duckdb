@@ -1,6 +1,7 @@
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
 
@@ -17,6 +18,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb_python/vector_conversion.hpp"
 
 #include "datetime.h" // from Python
 
@@ -148,12 +150,13 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		params_set = params;
 	}
 
+	PythonInstanceChecker instance_checker;
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
 			throw std::runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
 			                         to_string(py::len(single_query_params)) + " given");
 		}
-		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
+		auto args = DuckDBPyConnection::TransformPythonParamList(instance_checker, single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
 			py::gil_scoped_release release;
@@ -260,7 +263,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
+	PythonInstanceChecker instance_checker;
+	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(instance_checker, std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
 
@@ -280,8 +284,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 		throw std::runtime_error("connection closed");
 	}
 
-	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
+	PythonInstanceChecker instance_checker;
+	return make_unique<DuckDBPyRelation>(connection->TableFunction(
+	    fname, DuckDBPyConnection::TransformPythonParamList(instance_checker, std::move(params))));
 }
 
 static std::string GenerateRandomName() {
@@ -611,83 +616,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	return res;
 }
 
-Value TransformPythonValue(py::handle ele) {
-	auto datetime_mod = py::module::import("datetime");
-	auto datetime_date = datetime_mod.attr("date");
-	auto datetime_datetime = datetime_mod.attr("datetime");
-	auto datetime_time = datetime_mod.attr("time");
-	auto decimal_mod = py::module::import("decimal");
-	auto decimal_decimal = decimal_mod.attr("Decimal");
-
-	if (ele.is_none()) {
-		return Value();
-	} else if (py::isinstance<py::bool_>(ele)) {
-		return Value::BOOLEAN(ele.cast<bool>());
-	} else if (py::isinstance<py::int_>(ele)) {
-		return Value::BIGINT(ele.cast<int64_t>());
-	} else if (py::isinstance<py::float_>(ele)) {
-		return Value::DOUBLE(ele.cast<double>());
-	} else if (py::isinstance(ele, decimal_decimal)) {
-		return py::str(ele).cast<string>();
-	} else if (py::isinstance(ele, datetime_datetime)) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		auto hour = PyDateTime_DATE_GET_HOUR(ptr);
-		auto minute = PyDateTime_DATE_GET_MINUTE(ptr);
-		auto second = PyDateTime_DATE_GET_SECOND(ptr);
-		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-		return Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_time)) {
-		auto ptr = ele.ptr();
-		auto hour = PyDateTime_TIME_GET_HOUR(ptr);
-		auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
-		auto second = PyDateTime_TIME_GET_SECOND(ptr);
-		auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
-		return Value::TIME(hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_date)) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		return Value::DATE(year, month, day);
-	} else if (py::isinstance<py::str>(ele)) {
-		return ele.cast<string>();
-	} else if (py::isinstance<py::memoryview>(ele)) {
-		py::memoryview py_view = ele.cast<py::memoryview>();
-		PyObject *py_view_ptr = py_view.ptr();
-		Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
-		return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
-	} else if (py::isinstance<py::bytes>(ele)) {
-		const string &ele_string = ele.cast<string>();
-		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
-	} else if (py::isinstance<py::list>(ele)) {
-		auto size = py::len(ele);
-
-		if (size == 0) {
-			return Value::EMPTYLIST(LogicalType::SQLNULL);
-		}
-
-		vector<Value> values;
-		values.reserve(size);
-
-		for (auto py_val : ele) {
-			values.emplace_back(TransformPythonValue(py_val));
-		}
-
-		return Value::LIST(values);
-	} else {
-		throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
-	}
-}
-
-vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
+vector<Value> DuckDBPyConnection::TransformPythonParamList(PythonInstanceChecker &instance_checker, py::handle params) {
 	vector<Value> args;
 	args.reserve(py::len(params));
 
 	for (auto param : params) {
-		args.emplace_back(TransformPythonValue(param));
+		args.emplace_back(TransformPythonValue(instance_checker, param));
 	}
 	return args;
 }

@@ -554,7 +554,8 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 }
 
 void DuckDBPyRelation::Insert(py::object params) {
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
+	PythonInstanceChecker instance_checker;
+	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(instance_checker, move(params))};
 	py::gil_scoped_release release;
 	rel->Insert(values);
 }
