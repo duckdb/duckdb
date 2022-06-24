@@ -12,12 +12,12 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <sys/stat.h>
 
 #ifndef _WIN32
 #include <dirent.h>
 #include <fcntl.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #else
@@ -27,7 +27,6 @@
 #include <string>
 
 #ifdef __MINGW32__
-#include <sys/stat.h>
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
@@ -57,8 +56,8 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stat64i32 status;
-		_wstat64i32(wpath, &status);
+		struct _stati64 status;
+		_wstati64(wpath, &status);
 		if (status.st_size > 0) {
 			return true;
 		}
@@ -69,8 +68,8 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stat64i32 status;
-		_wstat64i32(wpath, &status);
+		struct _stati64 status;
+		_wstati64(wpath, &status);
 		if (status.st_size == 0) {
 			return true;
 		}
@@ -113,8 +112,8 @@ bool LocalFileSystem::FileExists(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stat64i32 status;
-		_wstat(wpath, &status);
+		struct _stati64 status;
+		_wstati64(wpath, &status);
 		if (status.st_mode & S_IFREG) {
 			return true;
 		}
@@ -125,8 +124,8 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
-		struct _stat64i32 status;
-		_wstat(wpath, &status);
+		struct _stati64 status;
+		_wstati64(wpath, &status);
 		if (status.st_mode & _S_IFCHR) {
 			return true;
 		}
