@@ -48,19 +48,26 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		return;
 	}
 
+	string temp_path = local_extension_path + ".tmp";
+	if (fs.FileExists(temp_path)) {
+		fs.RemoveFile(temp_path);
+	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
 	if (fs.FileExists(extension)) {
+
 		std::ifstream in(extension, std::ios::binary);
 		if (in.bad()) {
 			throw IOException("Failed to read extension from \"%s\"", extension);
 		}
-		std::ofstream out(local_extension_path, std::ios::binary);
+		std::ofstream out(temp_path, std::ios::binary);
 		out << in.rdbuf();
 		if (out.bad()) {
-			throw IOException("Failed to write extension to \"%s\"", local_extension_path);
+			throw IOException("Failed to write extension to \"%s\"", temp_path);
 		}
 		in.close();
 		out.close();
+
+		fs.MoveFile(temp_path, local_extension_path);
 		return;
 	} else if (StringUtil::Contains(extension, "/") && !is_http_url) {
 		throw IOException("Failed to read extension from \"%s\": no such file", extension);
@@ -102,11 +109,13 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		throw IOException("Failed to download extension %s%s", url_base, url_local_part);
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
-	std::ofstream out(local_extension_path, std::ios::binary);
+	std::ofstream out(temp_path, std::ios::binary);
 	out.write(decompressed_body.data(), decompressed_body.size());
 	if (out.bad()) {
-		throw IOException("Failed to write extension to %s", local_extension_path);
+		throw IOException("Failed to write extension to %s", temp_path);
 	}
+	out.close();
+	fs.MoveFile(temp_path, local_extension_path);
 #endif
 }
 
