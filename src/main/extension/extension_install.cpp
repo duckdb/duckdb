@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/gzip_file_system.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
 #include "httplib.hpp"
@@ -48,7 +49,8 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		return;
 	}
 
-	string temp_path = local_extension_path + ".tmp";
+	auto uuid = UUID::ToString(UUID::GenerateRandomUUID());
+	string temp_path = local_extension_path + ".tmp-" + uuid;
 	if (fs.FileExists(temp_path)) {
 		fs.RemoveFile(temp_path);
 	}
