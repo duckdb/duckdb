@@ -512,6 +512,7 @@ public:
 struct DecimalType {
 	DUCKDB_API static uint8_t GetWidth(const LogicalType &type);
 	DUCKDB_API static uint8_t GetScale(const LogicalType &type);
+	DUCKDB_API static uint8_t MaxWidth();
 };
 
 struct StringType {
