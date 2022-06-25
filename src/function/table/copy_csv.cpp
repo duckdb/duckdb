@@ -314,6 +314,15 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
+		} else if (options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
+			// use the date format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+			// use the timestamp format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].ConvertTimestampVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
 			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], input.size());
