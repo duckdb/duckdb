@@ -525,7 +525,14 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 	dict = move(data);
 	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
-		uint32_t str_len = dict->read<uint32_t>();
+		uint32_t str_len;
+		if (fixed_width_string_length == 0) {
+			// variable length string: read from dictionary
+			str_len = dict->read<uint32_t>();
+		} else {
+			// fixed length string
+			str_len = fixed_width_string_length;
+		}
 		dict->available(str_len);
 
 		auto actual_str_len = VerifyString(dict->ptr, str_len);
@@ -821,9 +828,26 @@ uint64_t StructColumnReader::TotalCompressedSize() {
 	return size;
 }
 
+static bool TypeHasExactRowCount(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::STRUCT:
+		for (auto &kv : StructType::GetChildTypes(type)) {
+			if (TypeHasExactRowCount(kv.second.id())) {
+				return true;
+			}
+		}
+		return false;
+	default:
+		return true;
+	}
+}
+
 idx_t StructColumnReader::GroupRowsAvailable() {
 	for (idx_t i = 0; i < child_readers.size(); i++) {
-		if (child_readers[i]->Type().id() != LogicalTypeId::LIST) {
+		if (TypeHasExactRowCount(child_readers[i]->Type())) {
 			return child_readers[i]->GroupRowsAvailable();
 		}
 	}

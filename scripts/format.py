@@ -8,6 +8,7 @@ import sys
 import inspect
 import subprocess
 import difflib
+import re
 from python_helpers import open_utf8
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
@@ -221,7 +222,9 @@ def get_formatted_text(f, full_path, directory, ext):
         print(' '.join(proc_command))
         print(stderr)
         exit(1)
-    return new_text.replace('\r', '')
+    new_text = new_text.replace('\r', '')
+    new_text = re.sub(r'\n*$', '', new_text)
+    return new_text + '\n'
 
 def format_file(f, full_path, directory, ext):
     global difference_files

@@ -185,6 +185,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, D
 	return conn->FromSubstrait(proto);
 }
 
+void DuckDBPyRelation::InstallExtension(const string &extension, bool force_install, DuckDBPyConnection *conn) {
+	return conn->InstallExtension(extension, force_install);
+}
+
+void DuckDBPyRelation::LoadExtension(const string &extension, DuckDBPyConnection *conn) {
+	return conn->LoadExtension(extension);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object, DuckDBPyConnection *conn) {
 	return conn->FromArrow(arrow_object);
 }

@@ -34,7 +34,7 @@
 #include <google/protobuf/parse_context.h>
 #include <google/protobuf/extension_set.h>
 #include <google/protobuf/metadata_lite.h>
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -272,5 +272,5 @@ const char* ExtensionSet::ParseMessageSetItemTmpl(
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #endif  // GOOGLE_PROTOBUF_EXTENSION_SET_INL_H__

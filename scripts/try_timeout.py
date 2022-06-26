@@ -18,6 +18,7 @@ class Command(object):
         self.process = None
 
     def run(self, timeout):
+        self.process = None
         def target():
             self.process = subprocess.Popen(self.cmd)
             self.process.communicate()
@@ -30,6 +31,8 @@ class Command(object):
             print('Terminating process: process exceeded timeout of ' + str(timeout) + ' seconds')
             self.process.terminate()
             thread.join()
+        if self.process is None:
+            return 1
         return self.process.returncode
 
 for i in range(retries):

@@ -50,11 +50,13 @@ enum class StatementReturnType : uint8_t {
 	NOTHING       // the statement returns nothing
 };
 
+string StatementReturnTypeToString(StatementReturnType type);
+
 //! A struct containing various properties of a SQL statement
 struct StatementProperties {
 	StatementProperties()
 	    : read_only(true), requires_valid_transaction(true), allow_stream_result(false), bound_all_parameters(true),
-	      return_type(StatementReturnType::QUERY_RESULT) {
+	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0) {
 	}
 
 	//! Whether or not the statement is a read-only statement, or whether it can result in changes to the database
@@ -68,6 +70,8 @@ struct StatementProperties {
 	bool bound_all_parameters;
 	//! What type of data the statement returns
 	StatementReturnType return_type;
+	//! The number of prepared statement parameters
+	idx_t parameter_count;
 };
 
 } // namespace duckdb

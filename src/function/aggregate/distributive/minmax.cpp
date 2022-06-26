@@ -284,15 +284,16 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 }
 
 template <class OP>
-static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount) {
+static bool TemplatedOptimumStruct(Vector &left, idx_t lidx_p, idx_t lcount, Vector &right, idx_t ridx_p,
+                                   idx_t rcount) {
 	// STRUCT dictionaries apply to all the children
 	// so map the indexes first
 	VectorData lvdata, rvdata;
 	left.Orrify(lcount, lvdata);
 	right.Orrify(rcount, rvdata);
 
-	lidx = lvdata.sel->get_index(lidx);
-	ridx = rvdata.sel->get_index(ridx);
+	idx_t lidx = lvdata.sel->get_index(lidx_p);
+	idx_t ridx = rvdata.sel->get_index(ridx_p);
 
 	// DISTINCT semantics are in effect for nested types
 	auto lnull = !lvdata.validity.RowIsValid(lidx);
@@ -310,7 +311,7 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vecto
 		auto &rchild = *rchildren[col_no];
 
 		// Strict comparisons use the OP for definite
-		if (TemplatedOptimumValue<OP>(lchild, lidx, lcount, rchild, ridx, rcount)) {
+		if (TemplatedOptimumValue<OP>(lchild, lidx_p, lcount, rchild, ridx_p, rcount)) {
 			return true;
 		}
 
@@ -319,7 +320,7 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vecto
 		}
 
 		// Strict comparisons use IS NOT DISTINCT for possible
-		if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, lidx, lcount, rchild, ridx, rcount)) {
+		if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, lidx_p, lcount, rchild, ridx_p, rcount)) {
 			return false;
 		}
 	}

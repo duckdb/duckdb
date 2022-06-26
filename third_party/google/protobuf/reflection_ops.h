@@ -46,7 +46,7 @@
 #endif
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -60,32 +60,30 @@ namespace internal {
 // the Message interface.
 //
 // This class is really a namespace that contains only static methods.
-class PROTOBUF_EXPORT ReflectionOps {
- public:
-  static void Copy(const Message& from, Message* to);
-  static void Merge(const Message& from, Message* to);
-  static void Clear(Message* message);
-  static bool IsInitialized(const Message& message);
-  static bool IsInitialized(const Message& message, bool check_fields,
-                            bool check_descendants);
-  static void DiscardUnknownFields(Message* message);
+class  ReflectionOps {
+public:
+	static void Copy(const Message &from, Message *to);
+	static void Merge(const Message &from, Message *to);
+	static void Clear(Message *message);
+	static bool IsInitialized(const Message &message);
+	static bool IsInitialized(const Message &message, bool check_fields, bool check_descendants);
+	static void DiscardUnknownFields(Message *message);
 
-  // Finds all unset required fields in the message and adds their full
-  // paths (e.g. "foo.bar[5].baz") to *names.  "prefix" will be attached to
-  // the front of each name.
-  static void FindInitializationErrors(const Message& message,
-                                       const std::string& prefix,
-                                       std::vector<std::string>* errors);
+	// Finds all unset required fields in the message and adds their full
+	// paths (e.g. "foo.bar[5].baz") to *names.  "prefix" will be attached to
+	// the front of each name.
+	static void FindInitializationErrors(const Message &message, const std::string &prefix,
+	                                     std::vector<std::string> *errors);
 
- private:
-  // All methods are static.  No need to construct.
-  GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(ReflectionOps);
+private:
+	// All methods are static.  No need to construct.
+	GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(ReflectionOps);
 };
 
-}  // namespace internal
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace internal
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_REFLECTION_OPS_H__

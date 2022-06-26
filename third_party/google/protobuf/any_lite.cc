@@ -35,65 +35,60 @@
 #include <google/protobuf/generated_message_util.h>
 #include <google/protobuf/stubs/strutil.h>
 
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
 
-std::string GetTypeUrl(StringPiece message_name,
-                       StringPiece type_url_prefix) {
-  if (!type_url_prefix.empty() &&
-      type_url_prefix[type_url_prefix.size() - 1] == '/') {
-    return StrCat(type_url_prefix, message_name);
-  } else {
-    return StrCat(type_url_prefix, "/", message_name);
-  }
+std::string GetTypeUrl(StringPiece message_name, StringPiece type_url_prefix) {
+	if (!type_url_prefix.empty() && type_url_prefix[type_url_prefix.size() - 1] == '/') {
+		return StrCat(type_url_prefix, message_name);
+	} else {
+		return StrCat(type_url_prefix, "/", message_name);
+	}
 }
 
 const char kAnyFullTypeName[] = "google.protobuf.Any";
 const char kTypeGoogleApisComPrefix[] = "type.googleapis.com/";
 const char kTypeGoogleProdComPrefix[] = "type.googleprod.com/";
 
-bool AnyMetadata::InternalPackFrom(Arena* arena, const MessageLite& message,
-                                   StringPiece type_url_prefix,
+bool AnyMetadata::InternalPackFrom(Arena *arena, const MessageLite &message, StringPiece type_url_prefix,
                                    StringPiece type_name) {
-  type_url_->Set(&::google::protobuf::internal::GetEmptyString(),
-                 GetTypeUrl(type_name, type_url_prefix), arena);
-  return message.SerializeToString(
-      value_->Mutable(ArenaStringPtr::EmptyDefault{}, arena));
+	type_url_->Set(&duckdb::google::protobuf::internal::GetEmptyString(), GetTypeUrl(type_name, type_url_prefix),
+	               arena);
+	return message.SerializeToString(value_->Mutable(ArenaStringPtr::EmptyDefault {}, arena));
 }
 
-bool AnyMetadata::InternalUnpackTo(StringPiece type_name,
-                                   MessageLite* message) const {
-  if (!InternalIs(type_name)) {
-    return false;
-  }
-  return message->ParseFromString(value_->Get());
+bool AnyMetadata::InternalUnpackTo(StringPiece type_name, MessageLite *message) const {
+	if (!InternalIs(type_name)) {
+		return false;
+	}
+	return message->ParseFromString(value_->Get());
 }
 
 bool AnyMetadata::InternalIs(StringPiece type_name) const {
-  StringPiece type_url = type_url_->Get();
-  return type_url.size() >= type_name.size() + 1 &&
-         type_url[type_url.size() - type_name.size() - 1] == '/' &&
-         HasSuffixString(type_url, type_name);
+	StringPiece type_url = type_url_->Get();
+	return type_url.size() >= type_name.size() + 1 && type_url[type_url.size() - type_name.size() - 1] == '/' &&
+	       HasSuffixString(type_url, type_name);
 }
 
-bool ParseAnyTypeUrl(StringPiece type_url, std::string* url_prefix,
-                     std::string* full_type_name) {
-  size_t pos = type_url.find_last_of('/');
-  if (pos == std::string::npos || pos + 1 == type_url.size()) {
-    return false;
-  }
-  if (url_prefix) {
-    *url_prefix = std::string(type_url.substr(0, pos + 1));
-  }
-  *full_type_name = std::string(type_url.substr(pos + 1));
-  return true;
+bool ParseAnyTypeUrl(StringPiece type_url, std::string *url_prefix, std::string *full_type_name) {
+	size_t pos = type_url.find_last_of('/');
+	if (pos == std::string::npos || pos + 1 == type_url.size()) {
+		return false;
+	}
+	if (url_prefix) {
+		*url_prefix = std::string(type_url.substr(0, pos + 1));
+	}
+	*full_type_name = std::string(type_url.substr(pos + 1));
+	return true;
 }
 
-bool ParseAnyTypeUrl(StringPiece type_url, std::string* full_type_name) {
-  return ParseAnyTypeUrl(type_url, nullptr, full_type_name);
+bool ParseAnyTypeUrl(StringPiece type_url, std::string *full_type_name) {
+	return ParseAnyTypeUrl(type_url, nullptr, full_type_name);
 }
 
-}  // namespace internal
-}  // namespace protobuf
-}  // namespace google
+} // namespace internal
+} // namespace protobuf
+} // namespace google
+} // namespace duckdb
