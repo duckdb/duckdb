@@ -21,7 +21,8 @@ typedef std::pair<idx_t, idx_t> FrameBounds;
 class AggregateExecutor {
 private:
 	template <class STATE_TYPE, class OP>
-	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data, idx_t count) {
+	static inline void NullaryFlatLoop(STATE_TYPE **__restrict states, AggregateInputData &aggr_input_data,
+	                                   idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			OP::template Operation<STATE_TYPE, OP>(states[i], aggr_input_data, i);
 		}
@@ -49,8 +50,8 @@ private:
 				if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
 					for (; base_idx < next; base_idx++) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], aggr_input_data, idata, mask,
-						                                                   base_idx);
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], aggr_input_data, idata,
+						                                                   mask, base_idx);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
@@ -61,8 +62,8 @@ private:
 					idx_t start = base_idx;
 					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], aggr_input_data, idata, mask,
-							                                                   base_idx);
+							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(states[base_idx], aggr_input_data, idata,
+							                                                   mask, base_idx);
 						}
 					}
 				}
@@ -119,7 +120,8 @@ private:
 				idx_t start = base_idx;
 				for (; base_idx < next; base_idx++) {
 					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, aggr_input_data, idata, mask, base_idx);
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(state, aggr_input_data, idata, mask,
+						                                                   base_idx);
 					}
 				}
 			}
@@ -148,10 +150,11 @@ private:
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data, B_TYPE *__restrict bdata,
-	                                     STATE_TYPE **__restrict states, idx_t count, const SelectionVector &asel,
-	                                     const SelectionVector &bsel, const SelectionVector &ssel,
-	                                     ValidityMask &avalidity, ValidityMask &bvalidity) {
+	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                                     B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
+	                                     const SelectionVector &asel, const SelectionVector &bsel,
+	                                     const SelectionVector &ssel, ValidityMask &avalidity,
+	                                     ValidityMask &bvalidity) {
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
@@ -169,24 +172,25 @@ private:
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], aggr_input_data, adata, bdata, avalidity,
-				                                                       bvalidity, aidx, bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(states[sidx], aggr_input_data, adata, bdata,
+				                                                       avalidity, bvalidity, aidx, bidx);
 			}
 		}
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data, B_TYPE *__restrict bdata,
-	                                    STATE_TYPE *__restrict state, idx_t count, const SelectionVector &asel,
-	                                    const SelectionVector &bsel, ValidityMask &avalidity, ValidityMask &bvalidity) {
+	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                                    B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
+	                                    const SelectionVector &asel, const SelectionVector &bsel,
+	                                    ValidityMask &avalidity, ValidityMask &bvalidity) {
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
 				auto aidx = asel.get_index(i);
 				auto bidx = bsel.get_index(i);
 				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx)) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, aggr_input_data, adata, bdata, avalidity,
-					                                                       bvalidity, aidx, bidx);
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(state, aggr_input_data, adata, bdata,
+					                                                       avalidity, bvalidity, aidx, bidx);
 				}
 			}
 		} else {
@@ -238,13 +242,15 @@ public:
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input), count);
+			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input),
+			                                          count);
 		} else {
 			VectorData idata, sdata;
 			input.Orrify(count, idata);
 			states.Orrify(count, sdata);
-			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data, (STATE_TYPE **)sdata.data,
-			                                             *idata.sel, *sdata.sel, idata.validity, count);
+			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data,
+			                                             (STATE_TYPE **)sdata.data, *idata.sel, *sdata.sel,
+			                                             idata.validity, count);
 		}
 	}
 
@@ -269,8 +275,8 @@ public:
 		default: {
 			VectorData idata;
 			input.Orrify(count, idata);
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data, (STATE_TYPE *)state, count,
-			                                            idata.validity, *idata.sel);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data, (STATE_TYPE *)state,
+			                                            count, idata.validity, *idata.sel);
 			break;
 		}
 		}
@@ -313,7 +319,8 @@ public:
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
-	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, idx_t offset) {
+	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
@@ -335,13 +342,14 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data, data_ptr_t state,
-	                        const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid, idx_t bias) {
+	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
+	                        data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev, Vector &result,
+	                        idx_t rid, idx_t bias) {
 
 		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
 		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, (STATE *)state, frame,
-		                                                    prev, result, rid, bias);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, (STATE *)state,
+		                                                    frame, prev, result, rid, bias);
 	}
 
 	template <class STATE_TYPE, class OP>

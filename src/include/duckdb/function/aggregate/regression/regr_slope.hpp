@@ -25,10 +25,10 @@ struct RegrSlopeOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, y_data, x_data, bmask,
-		                                                          amask, yidx, xidx);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, y_data, x_data,
+		                                                          bmask, amask, yidx, xidx);
 		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, aggr_input_data, y_data, bmask, yidx);
 	}
 

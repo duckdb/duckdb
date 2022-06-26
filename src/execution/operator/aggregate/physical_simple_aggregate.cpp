@@ -141,9 +141,8 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 		}
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
-		                                 aggr_input_data, payload_cnt, sink.state.aggregates[aggr_idx].get(),
-		                                 payload_chunk.size());
+		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], aggr_input_data,
+		                                 payload_cnt, sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
 	return SinkResultType::NEED_MORE_INPUT;

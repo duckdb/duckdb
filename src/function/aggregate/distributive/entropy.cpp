@@ -82,8 +82,8 @@ struct EntropyFunction : EntropyFunctionBase {
 		state->count++;
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
@@ -102,8 +102,8 @@ struct EntropyFunctionString : EntropyFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}

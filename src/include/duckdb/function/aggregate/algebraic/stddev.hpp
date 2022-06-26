@@ -30,8 +30,7 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input_data, ValidityMask &mask,
-	                      idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input_data, ValidityMask &mask, idx_t idx) {
 		// update running mean and d^2
 		state->count++;
 		const double input = input_data[idx];
@@ -45,8 +44,8 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input_data, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input_data,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input_data, mask, 0);
 		}

@@ -23,13 +23,13 @@ struct RegrInterceptOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		state->count++;
 		state->sum_x += y_data[yidx];
 		state->sum_y += x_data[xidx];
-		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(&state->slope, aggr_input_data, x_data, y_data,
-		                                                                  amask, bmask, xidx, yidx);
+		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(&state->slope, aggr_input_data, x_data,
+		                                                                  y_data, amask, bmask, xidx, yidx);
 	}
 
 	template <class STATE, class OP>
@@ -41,7 +41,8 @@ struct RegrInterceptOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 			return;

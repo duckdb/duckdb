@@ -83,8 +83,8 @@ static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -96,8 +96,8 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 
 struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -109,8 +109,8 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {

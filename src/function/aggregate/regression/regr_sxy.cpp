@@ -20,12 +20,12 @@ struct RegrSXYOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask, amask,
-		                                                         yidx, xidx);
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, x_data, y_data, amask,
-		                                                          bmask, xidx, yidx);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask,
+		                                                         amask, yidx, xidx);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, x_data, y_data,
+		                                                          amask, bmask, xidx, yidx);
 	}
 
 	template <class STATE, class OP>
@@ -35,7 +35,8 @@ struct RegrSXYOperation {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
+	                     ValidityMask &mask, idx_t idx) {
 		CovarPopOperation::Finalize<T, CovarState>(result, aggr_input_data, &state->cov_pop, target, mask, idx);
 		auto cov_pop = target[idx];
 		RegrCountFunction::Finalize<T, size_t>(result, aggr_input_data, &state->count, target, mask, idx);

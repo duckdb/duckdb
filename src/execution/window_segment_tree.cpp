@@ -248,8 +248,8 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		                     MinValue((active_chunks.second + 1) * STANDARD_VECTOR_SIZE, coll.Count()));
 
 		AggregateInputData aggr_input_data(bind_info);
-		aggregate.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(), frame, prev,
-		                 result, rid, active.first);
+		aggregate.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(), frame,
+		                 prev, result, rid, active.first);
 		return;
 	}
 

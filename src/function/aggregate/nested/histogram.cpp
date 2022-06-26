@@ -113,7 +113,8 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, AggregateI
 }
 
 template <class OP, class T, class MAP_TYPE>
-static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
+static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+                                      idx_t offset) {
 
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);

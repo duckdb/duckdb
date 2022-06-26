@@ -182,7 +182,8 @@ struct SortedAggregateFunction {
 		target->ordering.Append(const_cast<ChunkCollection &>(source.ordering));
 	}
 
-	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, idx_t offset) {
+	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
 		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
 
 		//	 Reusable inner state
@@ -194,6 +195,8 @@ struct SortedAggregateFunction {
 
 		// State variables
 		const auto input_count = order_bind->function.arguments.size();
+		auto bind_info = order_bind->bind_info.get();
+		AggregateInputData aggr_bind_info(bind_info);
 
 		// Inner aggregate APIs
 		auto initialize = order_bind->function.initialize;
@@ -218,17 +221,17 @@ struct SortedAggregateFunction {
 			for (auto &chunk : state->arguments.Chunks()) {
 				// These are all simple updates, so use it if available
 				if (simple_update) {
-					simple_update(chunk->data.data(), aggr_input_data, input_count, agg_state.data(), chunk->size());
+					simple_update(chunk->data.data(), aggr_bind_info, input_count, agg_state.data(), chunk->size());
 				} else {
 					// We are only updating a constant state
 					agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-					update(chunk->data.data(), aggr_input_data, input_count, agg_state_vec, chunk->size());
+					update(chunk->data.data(), aggr_bind_info, input_count, agg_state_vec, chunk->size());
 				}
 			}
 
 			// Finalize a single value at the next offset
 			agg_state_vec.SetVectorType(states.GetVectorType());
-			finalize(agg_state_vec, aggr_input_data, result, 1, i + offset);
+			finalize(agg_state_vec, aggr_bind_info, result, 1, i + offset);
 
 			if (destructor) {
 				destructor(agg_state_vec, 1);

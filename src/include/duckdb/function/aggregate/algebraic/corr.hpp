@@ -32,12 +32,14 @@ struct CorrOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, x_data, y_data, amask,
-		                                                          bmask, xidx, yidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, aggr_input_data, x_data, amask, xidx);
-		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, aggr_input_data, y_data, bmask, yidx);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, x_data, y_data,
+		                                                          amask, bmask, xidx, yidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, aggr_input_data, x_data, amask,
+		                                                        xidx);
+		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, aggr_input_data, y_data, bmask,
+		                                                        yidx);
 	}
 
 	template <class STATE, class OP>

@@ -378,8 +378,8 @@ struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
@@ -409,7 +409,8 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, // NOLINT
+static void ExecuteListFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result,
+                                idx_t count, // NOLINT
                                 idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
@@ -469,8 +470,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t ridx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame,
+	                   const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -621,8 +622,8 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &list, idx_t lidx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame,
+	                   const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
 
@@ -965,8 +966,8 @@ template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, RESULT_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, RESULT_TYPE *target, ValidityMask &mask,
+	                     idx_t idx) {
 		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;

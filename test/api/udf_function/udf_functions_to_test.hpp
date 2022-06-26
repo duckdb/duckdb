@@ -343,8 +343,7 @@ struct UDFAverageFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!Value::DoubleIsFinite(double(state->sum))) {
 			throw OutOfRangeException("AVG is out of range!");
 		} else if (state->count == 0) {
@@ -426,8 +425,7 @@ struct UDFCovarOperation {
 
 struct UDFCovarPopOperation : public UDFCovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask,
-	                     idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -469,7 +467,8 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE>
-	static void Update(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states, idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
+	                   idx_t count) {
 		D_ASSERT(input_count == 1);
 
 		if (inputs[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&

@@ -26,7 +26,8 @@ struct ListFunction {
 	}
 };
 
-static void ListUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
+static void ListUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
+                               idx_t count) {
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];
