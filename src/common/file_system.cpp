@@ -95,7 +95,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	mem_state.dwLength = sizeof(MEMORYSTATUSEX);
 
 	if (GlobalMemoryStatusEx(&mem_state)) {
-		return MinValue<idx_t>(statex.ullTotalPhys, UINTPTR_MAX);
+		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
 	}
 	return DConstants::INVALID_INDEX;
 }
