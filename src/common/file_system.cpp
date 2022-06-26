@@ -59,7 +59,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
-		throw IOException("Could not fetch available system memory!");
+		return DConstants::INVALID_INDEX;
 	}
 	return max_memory;
 }
@@ -87,7 +87,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 idx_t FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
 	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
-		throw IOException("Could not fetch available system memory!");
+		return DConstants::INVALID_INDEX;
 	}
 	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
 }
