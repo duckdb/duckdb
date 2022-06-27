@@ -641,11 +641,18 @@ unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	return stats[column_idx]->statistics->Copy();
 }
 
-void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
+void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 	D_ASSERT(column_idx < stats.size());
 
 	lock_guard<mutex> slock(stats_lock);
 	stats[column_idx]->statistics->Merge(other);
+}
+
+void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
+	D_ASSERT(column_idx < stats.size());
+
+	lock_guard<mutex> slock(stats_lock);
+	other.Merge(*stats[column_idx]->statistics);
 }
 
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {

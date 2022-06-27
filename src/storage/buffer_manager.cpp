@@ -479,7 +479,9 @@ string BufferManager::InMemoryWarning() {
 //===--------------------------------------------------------------------===//
 data_ptr_t BufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = (BufferAllocatorData &)*private_data;
-	data.manager.current_memory += size;
+	if (!data.manager.EvictBlocks(size, data.manager.maximum_memory)) {
+		throw OutOfMemoryException("failed to allocate data of size %lld%s", size, data.manager.InMemoryWarning());
+	}
 	return Allocator::Get(data.manager.db).AllocateData(size);
 }
 

@@ -721,7 +721,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 			// merge the stats
 			lock_guard<mutex> stats_guard(stats_lock);
 			for (idx_t i = 0; i < column_definitions.size(); i++) {
-				column_stats[i]->stats->Merge(*current_row_group->GetStatistics(i));
+				current_row_group->MergeIntoStatistics(i, *column_stats[i]->stats);
 			}
 		}
 		state.remaining_append_count -= append_count;
