@@ -12,7 +12,6 @@
 
 #include "duckdb.hpp"
 #include "duckdb_python/python_object_container.hpp"
-#include "duckdb_python/python_instance_checker.hpp"
 namespace duckdb {
 
 enum class ExtendedNumpyType : uint8_t {
@@ -98,7 +97,6 @@ struct PandasColumnBindData {
 	string internal_categorical_type;
 	// When object types are cast we must hold their data somewhere
 	PythonObjectContainer<py::str> object_str_val;
-	shared_ptr<PythonInstanceChecker> instance_checker = nullptr;
 };
 
 class VectorConversion {

@@ -99,4 +99,4 @@ Value TransformPythonValue(py::handle ele) {
 	}
 }
 
-} //namespace duckdb
+} // namespace duckdb

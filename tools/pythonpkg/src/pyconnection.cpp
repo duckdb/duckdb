@@ -18,7 +18,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb_python/vector_conversion.hpp"
 
 #include "datetime.h" // from Python
 
@@ -150,13 +149,12 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		params_set = params;
 	}
 
-	PythonInstanceChecker instance_checker;
 	for (pybind11::handle single_query_params : params_set) {
 		if (prep->n_param != py::len(single_query_params)) {
 			throw std::runtime_error("Prepared statement needs " + to_string(prep->n_param) + " parameters, " +
 			                         to_string(py::len(single_query_params)) + " given");
 		}
-		auto args = DuckDBPyConnection::TransformPythonParamList(instance_checker, single_query_params);
+		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
 			py::gil_scoped_release release;
@@ -263,8 +261,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	PythonInstanceChecker instance_checker;
-	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(instance_checker, std::move(params))};
+	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
 }
 
@@ -284,9 +281,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 		throw std::runtime_error("connection closed");
 	}
 
-	PythonInstanceChecker instance_checker;
-	return make_unique<DuckDBPyRelation>(connection->TableFunction(
-	    fname, DuckDBPyConnection::TransformPythonParamList(instance_checker, std::move(params))));
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
 }
 
 static std::string GenerateRandomName() {
@@ -616,16 +612,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	return res;
 }
 
-<<<<<<< HEAD
-vector<Value> DuckDBPyConnection::TransformPythonParamList(PythonInstanceChecker &instance_checker, py::handle params) {
-=======
 vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
->>>>>>> bb2b3df708e070d929db24d2188b3085d647756b
 	vector<Value> args;
 	args.reserve(py::len(params));
 
 	for (auto param : params) {
-		args.emplace_back(TransformPythonValue(instance_checker, param));
+		args.emplace_back(TransformPythonValue(param));
 	}
 	return args;
 }

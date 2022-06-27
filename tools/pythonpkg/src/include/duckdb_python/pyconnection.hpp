@@ -14,7 +14,6 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb_python/python_instance_checker.hpp"
 #include <thread>
 
 namespace duckdb {
@@ -131,7 +130,7 @@ public:
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config,
 	                                              bool check_same_thread);
 
-	static vector<Value> TransformPythonParamList(PythonInstanceChecker &instance_checker, py::handle params);
+	static vector<Value> TransformPythonParamList(py::handle params);
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
