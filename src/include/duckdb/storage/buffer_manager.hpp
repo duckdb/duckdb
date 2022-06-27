@@ -16,6 +16,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/managed_buffer.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -76,6 +77,8 @@ public:
 
 	void SetTemporaryDirectory(string new_dir);
 
+	DUCKDB_API Allocator &GetBufferAllocator();
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
@@ -98,6 +101,10 @@ private:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 	string InMemoryWarning();
+
+	static data_ptr_t BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
+	static void BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 
 private:
 	//! The database instance
@@ -122,5 +129,7 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager
+	Allocator buffer_allocator;
 };
 } // namespace duckdb

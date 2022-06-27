@@ -14,21 +14,22 @@
 #include <unordered_map>
 
 namespace duckdb {
-constexpr uint32_t DEFAULT_UNDO_CHUNK_SIZE = 4096 * 3;
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
 static idx_t AlignLength(idx_t len) {
 	return (len + 7) / 8 * 8;
 }
 
-UndoBuffer::UndoBuffer() {
-	head = make_unique<UndoChunk>(0);
-	tail = head.get();
+UndoBuffer::UndoBuffer(shared_ptr<ClientContext> context) : allocator(Allocator::GetBufferAllocator(*context)) {
+	D_ASSERT(context);
+	head = nullptr;
+	tail = nullptr;
+	current_capacity = UNDO_CHUNK_INITIAL_CAPACITY;
 }
 
-UndoChunk::UndoChunk(idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
+UndoChunk::UndoChunk(Allocator &allocator, idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
 	if (size > 0) {
-		data = unique_ptr<data_t[]>(new data_t[maximum_size]);
+		data = allocator.Allocate(size);
 	}
 }
 UndoChunk::~UndoChunk() {
@@ -43,12 +44,12 @@ UndoChunk::~UndoChunk() {
 data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 	len = AlignLength(len);
 	D_ASSERT(sizeof(UndoFlags) + sizeof(len) == 8);
-	Store<UndoFlags>(type, data.get() + current_position);
+	Store<UndoFlags>(type, data->get() + current_position);
 	current_position += sizeof(UndoFlags);
-	Store<uint32_t>(len, data.get() + current_position);
+	Store<uint32_t>(len, data->get() + current_position);
 	current_position += sizeof(uint32_t);
 
-	data_ptr_t result = data.get() + current_position;
+	data_ptr_t result = data->get() + current_position;
 	current_position += len;
 	return result;
 }
@@ -56,11 +57,17 @@ data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	D_ASSERT(len <= NumericLimits<uint32_t>::Maximum());
 	idx_t needed_space = AlignLength(len + UNDO_ENTRY_HEADER_SIZE);
-	if (head->current_position + needed_space >= head->maximum_size) {
-		auto new_chunk =
-		    make_unique<UndoChunk>(needed_space > DEFAULT_UNDO_CHUNK_SIZE ? needed_space : DEFAULT_UNDO_CHUNK_SIZE);
-		head->prev = new_chunk.get();
-		new_chunk->next = move(head);
+	if (!head || head->current_position + needed_space >= head->maximum_size) {
+		do {
+			current_capacity *= 2;
+		} while (current_capacity < needed_space);
+		auto new_chunk = make_unique<UndoChunk>(allocator, current_capacity);
+		if (head) {
+			head->prev = new_chunk.get();
+			new_chunk->next = move(head);
+		} else {
+			tail = new_chunk.get();
+		}
 		head = move(new_chunk);
 	}
 	return head->WriteEntry(type, len);
@@ -71,7 +78,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 	// iterate in insertion order: start with the tail
 	state.current = tail;
 	while (state.current) {
-		state.start = state.current->data.get();
+		state.start = state.current->data->get();
 		state.end = state.start + state.current->current_position;
 		while (state.start < state.end) {
 			UndoFlags type = Load<UndoFlags>(state.start);
@@ -91,7 +98,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 	// iterate in insertion order: start with the tail
 	state.current = tail;
 	while (state.current) {
-		state.start = state.current->data.get();
+		state.start = state.current->data->get();
 		state.end =
 		    state.current == end_state.current ? end_state.start : state.start + state.current->current_position;
 		while (state.start < state.end) {
@@ -115,7 +122,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
 	auto current = head.get();
 	while (current) {
-		data_ptr_t start = current->data.get();
+		data_ptr_t start = current->data->get();
 		data_ptr_t end = start + current->current_position;
 		// create a vector with all nodes in this chunk
 		vector<pair<UndoFlags, data_ptr_t>> nodes;
@@ -136,7 +143,7 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 }
 
 bool UndoBuffer::ChangesMade() {
-	return head->maximum_size > 0;
+	return head && head->maximum_size > 0;
 }
 
 idx_t UndoBuffer::EstimatedSize() {

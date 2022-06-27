@@ -79,6 +79,9 @@ public:
 		return private_data.get();
 	}
 
+	//! Returns an allocator that passes all allocations through the buffer manager of the specified db
+	static Allocator &GetBufferAllocator(ClientContext &context);
+
 private:
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;

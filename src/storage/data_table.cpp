@@ -803,6 +803,9 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 }
 
 void DataTable::WriteToLog(WriteAheadLog &log, idx_t row_start, idx_t count) {
+	if (log.skip_writing) {
+		return;
+	}
 	log.WriteSetTable(info->schema, info->table);
 	ScanTableSegment(row_start, count, [&](DataChunk &chunk) { log.WriteInsert(chunk); });
 }

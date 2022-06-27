@@ -7,6 +7,13 @@
 
 namespace duckdb {
 
+struct BufferAllocatorData : PrivateAllocatorData {
+	BufferAllocatorData(BufferManager &manager) : manager(manager) {
+	}
+
+	BufferManager &manager;
+};
+
 BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
     : db(db), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0), can_destroy(false) {
 	eviction_timestamp = 0;
@@ -162,7 +169,9 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK),
+      buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
+                       make_unique<BufferAllocatorData>(*this)) {
 }
 
 BufferManager::~BufferManager() {
@@ -463,6 +472,34 @@ string BufferManager::InMemoryWarning() {
 	       "\nUnused blocks cannot be offloaded to disk."
 	       "\n\nLaunch the database with a persistent storage back-end"
 	       "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
+}
+
+//===--------------------------------------------------------------------===//
+// Buffer Allocator
+//===--------------------------------------------------------------------===//
+data_ptr_t BufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
+	auto &data = (BufferAllocatorData &)*private_data;
+	data.manager.current_memory += size;
+	return Allocator::Get(data.manager.db).AllocateData(size);
+}
+
+void BufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+	auto &data = (BufferAllocatorData &)*private_data;
+	data.manager.current_memory -= size;
+	return Allocator::Get(data.manager.db).FreeData(pointer, size);
+}
+
+data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+	throw InternalException("FIXME: realloc not implemented for allocator realloc");
+}
+
+Allocator &Allocator::GetBufferAllocator(ClientContext &context) {
+	auto &manager = BufferManager::GetBufferManager(context);
+	return manager.GetBufferAllocator();
+}
+
+Allocator &BufferManager::GetBufferAllocator() {
+	return buffer_allocator;
 }
 
 } // namespace duckdb
