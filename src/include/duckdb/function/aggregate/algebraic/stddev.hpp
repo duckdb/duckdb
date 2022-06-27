@@ -30,8 +30,7 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, ValidityMask &mask,
-	                      idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input_data, ValidityMask &mask, idx_t idx) {
 		// update running mean and d^2
 		state->count++;
 		const double input = input_data[idx];
@@ -45,15 +44,15 @@ struct STDDevBaseOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input_data, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input_data,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input_data, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input_data, mask, 0);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (target->count == 0) {
 			*target = source;
 		} else if (source.count > 0) {
@@ -74,7 +73,7 @@ struct STDDevBaseOperation {
 
 struct VarSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count <= 1) {
 			mask.SetInvalid(idx);
 		} else {
@@ -88,7 +87,7 @@ struct VarSampOperation : public STDDevBaseOperation {
 
 struct VarPopOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -102,7 +101,7 @@ struct VarPopOperation : public STDDevBaseOperation {
 
 struct STDDevSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count <= 1) {
 			mask.SetInvalid(idx);
 		} else {
@@ -116,7 +115,7 @@ struct STDDevSampOperation : public STDDevBaseOperation {
 
 struct STDDevPopOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
@@ -130,7 +129,7 @@ struct STDDevPopOperation : public STDDevBaseOperation {
 
 struct StandardErrorOfTheMeanOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {

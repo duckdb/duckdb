@@ -6072,7 +6072,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 		return false;
 	}
 
-	auto location = detail::decode_url(res.get_header_value("location"), true);
+	auto location = detail::decode_url(res.get_header_value("location"), false);
 	if (location.empty()) { return false; }
 
 	const static Regex re(

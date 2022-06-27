@@ -378,20 +378,20 @@ struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		state->v.emplace_back(data[idx]);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.v.empty()) {
 			return;
 		}
@@ -409,12 +409,13 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, // NOLINT
+static void ExecuteListFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result,
+                                idx_t count, // NOLINT
                                 idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	D_ASSERT(bind_data_p);
-	auto bind_data = (QuantileBindData *)bind_data_p;
+	D_ASSERT(aggr_input_data.bind_data);
+	auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -423,7 +424,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 		auto &mask = ConstantVector::Validity(result);
-		OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[0], rdata, mask, 0);
+		OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -433,7 +434,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i + offset);
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
 		}
 	}
 
@@ -454,14 +455,14 @@ template <bool DISCRETE>
 struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
 		}
-		D_ASSERT(bind_data_p);
-		auto bind_data = (QuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
 		D_ASSERT(bind_data->quantiles.size() == 1);
 		Interpolator<DISCRETE> interp(bind_data->quantiles[0], state->v.size());
 		target[idx] = interp.template Operation<typename STATE::SaveType, RESULT_TYPE>(state->v.data(), result);
@@ -469,8 +470,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t ridx, idx_t bias) {
+	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame,
+	                   const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -483,8 +484,8 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto index = state->w.data();
 		D_ASSERT(index);
 
-		D_ASSERT(bind_data_p);
-		auto bind_data = (QuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
 
 		// Find the two positions needed
 		const auto q = bind_data->quantiles[0];
@@ -586,15 +587,15 @@ template <class CHILD_TYPE, bool DISCRETE>
 struct QuantileListOperation : public QuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
+	static void Finalize(Vector &result_list, AggregateInputData &aggr_input_data, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
 		}
 
-		D_ASSERT(bind_data_p);
-		auto bind_data = (QuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
@@ -621,10 +622,10 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &list, idx_t lidx, idx_t bias) {
-		D_ASSERT(bind_data_p);
-		auto bind_data = (QuantileBindData *)bind_data_p;
+	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame,
+	                   const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
 
 		QuantileIncluded included(fmask, dmask, bias);
 
@@ -965,8 +966,8 @@ template <typename MEDIAN_TYPE>
 struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, RESULT_TYPE *target, ValidityMask &mask,
+	                     idx_t idx) {
 		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
@@ -981,7 +982,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   AggregateInputData &, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
 	                   Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
