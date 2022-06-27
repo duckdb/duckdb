@@ -17,7 +17,7 @@ void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 static void AddPointOrStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
-	const auto count = args.size();
+	const int count = args.size();
 
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
@@ -101,7 +101,7 @@ static void AddPointOrStructFunction(DataChunk &args, ExpressionState &state, Ve
 static void SubPointOrStructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
-	const auto count = args.size();
+	const int count = args.size();
 
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
