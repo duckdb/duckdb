@@ -259,6 +259,22 @@ Value EnableExternalAccessSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allow Unsigned Extensions
+//===--------------------------------------------------------------------===//
+void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	if (db && new_value) {
+		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
+	}
+	config.allow_unsigned_extensions = new_value;
+}
+
+Value AllowUnsignedExtensionsSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.allow_unsigned_extensions);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Object Cache
 //===--------------------------------------------------------------------===//
 void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
