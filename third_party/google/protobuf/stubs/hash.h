@@ -39,10 +39,12 @@
 #include <unordered_set>
 
 # define GOOGLE_PROTOBUF_HASH_NAMESPACE_DECLARATION_START \
+  namespace duckdb{                                                        \
   namespace google {                                      \
   namespace protobuf {
-# define GOOGLE_PROTOBUF_HASH_NAMESPACE_DECLARATION_END }}
+# define GOOGLE_PROTOBUF_HASH_NAMESPACE_DECLARATION_END }}}
 
+namespace duckdb {
 namespace google {
 namespace protobuf {
 
@@ -50,65 +52,64 @@ template <typename Key>
 struct hash : public std::hash<Key> {};
 
 template <typename Key>
-struct hash<const Key*> {
-  inline size_t operator()(const Key* key) const {
-    return reinterpret_cast<size_t>(key);
-  }
+struct hash<const Key *> {
+	inline size_t operator()(const Key *key) const {
+		return reinterpret_cast<size_t>(key);
+	}
 };
 
 // Unlike the old SGI version, the TR1 "hash" does not special-case char*.  So,
 // we go ahead and provide our own implementation.
 template <>
-struct hash<const char*> {
-  inline size_t operator()(const char* str) const {
-    size_t result = 0;
-    for (; *str != '\0'; str++) {
-      result = 5 * result + static_cast<size_t>(*str);
-    }
-    return result;
-  }
+struct hash<const char *> {
+	inline size_t operator()(const char *str) const {
+		size_t result = 0;
+		for (; *str != '\0'; str++) {
+			result = 5 * result + static_cast<size_t>(*str);
+		}
+		return result;
+	}
 };
 
-template<>
+template <>
 struct hash<bool> {
-  size_t operator()(bool x) const {
-    return static_cast<size_t>(x);
-  }
+	size_t operator()(bool x) const {
+		return static_cast<size_t>(x);
+	}
 };
 
 template <>
 struct hash<std::string> {
-  inline size_t operator()(const std::string& key) const {
-    return hash<const char*>()(key.c_str());
-  }
+	inline size_t operator()(const std::string &key) const {
+		return hash<const char *>()(key.c_str());
+	}
 
-  static const size_t bucket_size = 4;
-  static const size_t min_buckets = 8;
-  inline bool operator()(const std::string& a, const std::string& b) const {
-    return a < b;
-  }
+	static const size_t bucket_size = 4;
+	static const size_t min_buckets = 8;
+	inline bool operator()(const std::string &a, const std::string &b) const {
+		return a < b;
+	}
 };
 
 template <typename First, typename Second>
-struct hash<std::pair<First, Second> > {
-  inline size_t operator()(const std::pair<First, Second>& key) const {
-    size_t first_hash = hash<First>()(key.first);
-    size_t second_hash = hash<Second>()(key.second);
+struct hash<std::pair<First, Second>> {
+	inline size_t operator()(const std::pair<First, Second> &key) const {
+		size_t first_hash = hash<First>()(key.first);
+		size_t second_hash = hash<Second>()(key.second);
 
-    // FIXME(kenton):  What is the best way to compute this hash?  I have
-    // no idea!  This seems a bit better than an XOR.
-    return first_hash * ((1 << 16) - 1) + second_hash;
-  }
+		// FIXME(kenton):  What is the best way to compute this hash?  I have
+		// no idea!  This seems a bit better than an XOR.
+		return first_hash * ((1 << 16) - 1) + second_hash;
+	}
 
-  static const size_t bucket_size = 4;
-  static const size_t min_buckets = 8;
-  inline bool operator()(const std::pair<First, Second>& a,
-                           const std::pair<First, Second>& b) const {
-    return a < b;
-  }
+	static const size_t bucket_size = 4;
+	static const size_t min_buckets = 8;
+	inline bool operator()(const std::pair<First, Second> &a, const std::pair<First, Second> &b) const {
+		return a < b;
+	}
 };
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #endif  // GOOGLE_PROTOBUF_STUBS_HASH_H__

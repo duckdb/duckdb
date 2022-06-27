@@ -25,11 +25,11 @@ public:
 	//! The statement type
 	StatementType type;
 	//! The statement location within the query string
-	idx_t stmt_location;
+	idx_t stmt_location = 0;
 	//! The statement length within the query string
-	idx_t stmt_length;
+	idx_t stmt_length = 0;
 	//! The number of prepared statement parameters (if any)
-	idx_t n_param;
+	idx_t n_param = 0;
 	//! The query text that corresponds to this SQL statement
 	string query;
 

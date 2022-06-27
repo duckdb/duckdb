@@ -120,7 +120,7 @@ AggregateFunction GetEntropyFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<uint16_t>, uint16_t, double, EntropyFunction>(
-		    LogicalType::UTINYINT, LogicalType::DOUBLE);
+		    LogicalType::USMALLINT, LogicalType::DOUBLE);
 	case PhysicalType::UINT32:
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<uint32_t>, uint32_t, double, EntropyFunction>(
 		    LogicalType::UINTEGER, LogicalType::DOUBLE);
@@ -129,7 +129,7 @@ AggregateFunction GetEntropyFunction(PhysicalType type) {
 		    LogicalType::UBIGINT, LogicalType::DOUBLE);
 	case PhysicalType::INT16:
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<int16_t>, int16_t, double, EntropyFunction>(
-		    LogicalType::TINYINT, LogicalType::DOUBLE);
+		    LogicalType::SMALLINT, LogicalType::DOUBLE);
 	case PhysicalType::INT32:
 		return AggregateFunction::UnaryAggregateDestructor<EntropyState<int32_t>, int32_t, double, EntropyFunction>(
 		    LogicalType::INTEGER, LogicalType::DOUBLE);

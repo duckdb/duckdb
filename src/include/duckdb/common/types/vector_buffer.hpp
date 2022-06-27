@@ -162,6 +162,7 @@ class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
 	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
 public:

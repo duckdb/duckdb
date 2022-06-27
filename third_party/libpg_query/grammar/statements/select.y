@@ -1333,7 +1333,7 @@ GenericType:
 			// 	}
 		;
 
-opt_type_modifiers: '(' expr_list_opt_comma	 ')'				{ $$ = $2; }
+opt_type_modifiers: '(' opt_expr_list_opt_comma	 ')'				{ $$ = $2; }
 					| /* EMPTY */					{ $$ = NIL; }
 		;
 
