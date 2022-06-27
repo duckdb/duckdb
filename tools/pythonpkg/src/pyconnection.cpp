@@ -616,7 +616,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	return res;
 }
 
+<<<<<<< HEAD
 vector<Value> DuckDBPyConnection::TransformPythonParamList(PythonInstanceChecker &instance_checker, py::handle params) {
+=======
+vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
+>>>>>>> bb2b3df708e070d929db24d2188b3085d647756b
 	vector<Value> args;
 	args.reserve(py::len(params));
 
