@@ -121,14 +121,14 @@ public:
 		return entry->columns.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->columns[col].name;
+		return entry->columns[col].Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->columns[col].type;
+		return entry->columns[col].Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		if (entry->columns[col].default_value) {
-			return Value(entry->columns[col].default_value->ToString());
+		if (entry->columns[col].DefaultValue()) {
+			return Value(entry->columns[col].DefaultValue()->ToString());
 		}
 		return Value();
 	}

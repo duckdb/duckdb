@@ -112,9 +112,9 @@ struct SubtractPropagateStatistics {
 };
 
 template <class OP, class PROPAGATE, class BASEOP>
-static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0] || !child_stats[1]) {
@@ -345,6 +345,9 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
+
+	functions.name = "add";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -422,9 +425,9 @@ struct NegatePropagateStatistics {
 	}
 };
 
-static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, BoundFunctionExpression &expr,
-                                                       FunctionData *bind_data,
-                                                       vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -563,6 +566,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// we can negate intervals
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
 	set.AddFunction(functions);
+
+	functions.name = "subtract";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -695,6 +701,9 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>, true));
 	set.AddFunction(functions);
+
+	functions.name = "multiply";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -815,6 +824,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
 
+	set.AddFunction(functions);
+
+	functions.name = "divide";
 	set.AddFunction(functions);
 }
 

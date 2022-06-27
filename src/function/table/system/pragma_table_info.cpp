@@ -100,20 +100,20 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 		bool not_null, pk;
 		auto index = i - data.offset;
 		auto &column = table->columns[i];
-		D_ASSERT(column.oid < (idx_t)NumericLimits<int32_t>::Maximum());
-		CheckConstraints(table, column.oid, not_null, pk);
+		D_ASSERT(column.Oid() < (idx_t)NumericLimits<int32_t>::Maximum());
+		CheckConstraints(table, column.Oid(), not_null, pk);
 
 		// return values:
 		// "cid", PhysicalType::INT32
-		output.SetValue(0, index, Value::INTEGER((int32_t)column.oid));
+		output.SetValue(0, index, Value::INTEGER((int32_t)column.Oid()));
 		// "name", PhysicalType::VARCHAR
-		output.SetValue(1, index, Value(column.name));
+		output.SetValue(1, index, Value(column.Name()));
 		// "type", PhysicalType::VARCHAR
-		output.SetValue(2, index, Value(column.type.ToString()));
+		output.SetValue(2, index, Value(column.Type().ToString()));
 		// "notnull", PhysicalType::BOOL
 		output.SetValue(3, index, Value::BOOLEAN(not_null));
 		// "dflt_value", PhysicalType::VARCHAR
-		Value def_value = column.default_value ? Value(column.default_value->ToString()) : Value();
+		Value def_value = column.DefaultValue() ? Value(column.DefaultValue()->ToString()) : Value();
 		output.SetValue(4, index, def_value);
 		// "pk", PhysicalType::BOOL
 		output.SetValue(5, index, Value::BOOLEAN(pk));

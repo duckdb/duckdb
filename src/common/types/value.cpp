@@ -618,6 +618,9 @@ Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
 	case PhysicalType::UINT32:
 		result.value_.uinteger = value;
 		break;
+	case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		result.value_.ubigint = value;
+		break;
 	default:
 		throw InternalException("Incorrect Physical Type for ENUM");
 	}
@@ -940,8 +943,6 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
 		return Value((double)value);
-	case LogicalTypeId::HASH:
-		return Value::HASH(value);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
@@ -1284,9 +1285,9 @@ string Value::ToString() const {
 	case LogicalTypeId::UUID:
 		return UUID::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
-		return to_string(value_.float_);
+		return duckdb_fmt::format("{}", value_.float_);
 	case LogicalTypeId::DOUBLE:
-		return to_string(value_.double_);
+		return duckdb_fmt::format("{}", value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
 		auto scale = DecimalType::GetScale(type_);
@@ -1332,8 +1333,6 @@ string Value::ToString() const {
 		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
 		return to_string(value_.pointer);
-	case LogicalTypeId::HASH:
-		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);
@@ -1386,8 +1385,10 @@ string Value::ToString() const {
 		case PhysicalType::UINT32:
 			enum_idx = value_.uinteger;
 			break;
+		case PhysicalType::UINT64:
+			return string((const char *)value_.bigint);
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		return values_insert_order.GetValue(enum_idx).ToString();
 	}

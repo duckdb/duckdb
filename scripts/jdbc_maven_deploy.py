@@ -28,6 +28,12 @@ if len(sys.argv) < 2 or not version_regex.match(sys.argv[1]):
 	print("Usage: [release_tag, format: v1.2.3]")
 	exit(1)
 
+def exec(cmd):
+  print(cmd)
+  return subprocess.run(cmd.split(' '), check=True, stdout=subprocess.PIPE).stdout
+
+combine_builds = ['linux-amd64', 'osx-universal', 'windows-amd64']
+
 staging_dir = tempfile.mkdtemp()
 release_tag = sys.argv[1]
 release_version = version_regex.search(release_tag).group(1)
@@ -38,25 +44,6 @@ binary_jar = '%s/duckdb_jdbc-%s.jar' % (staging_dir, release_version)
 pom = '%s/duckdb_jdbc-%s.pom' % (staging_dir, release_version)
 sources_jar = '%s/duckdb_jdbc-%s-sources.jar' % (staging_dir, release_version)
 javadoc_jar = '%s/duckdb_jdbc-%s-javadoc.jar' % (staging_dir, release_version)
-
-combine_builds = ['linux-amd64', 'osx-amd64', 'windows-amd64']
-for build in combine_builds:
-	file_url = '%s/duckdb_jdbc-%s.jar' % (release_prefix, build)
-	# print(file_url)
-	urllib.request.urlretrieve(file_url, '%s/duckdb_jdbc-%s.jar' % (staging_dir, build))
-
-# fatten up jar to add other binaries, start with first one
-shutil.copyfile('%s/duckdb_jdbc-%s.jar' % (staging_dir, combine_builds[0]), binary_jar)
-
-def exec(cmd):
-	subprocess.run(cmd.split(' '), check=True, stdout=subprocess.DEVNULL)
-
-for build in combine_builds[1:]:
-	old_jar = zipfile.ZipFile('%s/duckdb_jdbc-%s.jar' % (staging_dir, build), 'r')
-	for zip_entry in old_jar.namelist():
-		if zip_entry.startswith('libduckdb_java.so'):
-			old_jar.extract(zip_entry, staging_dir)
-			exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
 
 pom_template = """
 <project>
@@ -91,6 +78,22 @@ pom_template = """
     <developerConnection>scm:git:ssh://github.com:duckdb/duckdb.git</developerConnection>
     <url>http://github.com/duckdb/duckdb/tree/master</url>
   </scm>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.sonatype.plugins</groupId>
+        <artifactId>nexus-staging-maven-plugin</artifactId>
+        <version>1.6.13</version>
+        <extensions>true</extensions>
+        <configuration>
+         <serverId>ossrh</serverId>
+         <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+       </configuration>
+     </plugin>
+   </plugins>
+ </build>
+
 </project>
 <!-- Note: this cannot be used to build the JDBC driver, we only use it to deploy -->
 """
@@ -98,6 +101,21 @@ pom_template = """
 # create a matching POM with this version
 pom_path = pathlib.Path(pom)
 pom_path.write_text(pom_template.replace("${VERSION}", release_version))
+
+for build in combine_builds:
+	file_url = '%s/duckdb_jdbc-%s.jar' % (release_prefix, build)
+	# print(file_url)
+	urllib.request.urlretrieve(file_url, '%s/duckdb_jdbc-%s.jar' % (staging_dir, build))
+
+# fatten up jar to add other binaries, start with first one
+shutil.copyfile('%s/duckdb_jdbc-%s.jar' % (staging_dir, combine_builds[0]), binary_jar)
+
+for build in combine_builds[1:]:
+	old_jar = zipfile.ZipFile('%s/duckdb_jdbc-%s.jar' % (staging_dir, build), 'r')
+	for zip_entry in old_jar.namelist():
+		if zip_entry.startswith('libduckdb_java.so'):
+			old_jar.extract(zip_entry, staging_dir)
+			exec("jar -uf %s -C %s %s" % (binary_jar, staging_dir, zip_entry))
 
 # download sources to create separate sources and javadoc JARs, this is required by maven central
 source_zip_url = 'https://github.com/duckdb/duckdb/archive/%s.zip' % release_tag 
@@ -138,12 +156,25 @@ exec("java -cp %s org.duckdb.test.TestDuckDBJDBC" % binary_jar)
 
 #exit(0)
 
-print("JARs created, uploading (this can take a while!). When done, visit https://oss.sonatype.org")
+print("JARs created, uploading (this can take a while!)")
 deploy_cmd_prefix = 'mvn gpg:sign-and-deploy-file -Durl=https://oss.sonatype.org/service/local/staging/deploy/maven2/ -DrepositoryId=ossrh'
 exec("%s -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, binary_jar))
 exec("%s -Dclassifier=sources -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, sources_jar))
 exec("%s -Dclassifier=javadoc -DpomFile=%s -Dfile=%s" % (deploy_cmd_prefix, pom, javadoc_jar))
 
-# manual step: login to https://oss.sonatype.org , login, go to "staging repositories", 'close' and then 'release'
+
+print("Close/Release steps")
+
+# beautiful
+os.environ["MAVEN_OPTS"] = '--add-opens=java.base/java.util=ALL-UNNAMED'
+
+# this list has horrid output, lets try to parse. What we want starts with orgduckdb- and then a number
+repo_id = re.search(r'(orgduckdb-\d+)', exec("mvn -f %s nexus-staging:rc-list" % (pom)).decode('utf8')).groups()[0]
+exec("mvn -f %s nexus-staging:rc-close -DstagingRepositoryId=%s" % (pom, repo_id))
+exec("mvn -f %s nexus-staging:rc-release -DstagingRepositoryId=%s" % (pom, repo_id))
+
+print("Done?")
+
+
 # TODO upload the asset to gh releases, too!
 

@@ -12,7 +12,8 @@ PreparedStatementData::~PreparedStatementData() {
 
 void PreparedStatementData::Bind(vector<Value> values) {
 	// set parameters
-	const auto required = unbound_statement ? unbound_statement->n_param : 0;
+	const auto required = properties.parameter_count;
+	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);
 	if (values.size() != required) {
 		throw BinderException("Parameter/argument count mismatch for prepared statement. Expected %llu, got %llu",
 		                      required, values.size());

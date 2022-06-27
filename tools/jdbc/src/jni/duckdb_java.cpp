@@ -273,8 +273,38 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 
 	auto query = byte_array_to_string(env, query_j);
 
+	// invalid sql raises a parse exception
+	// need to be caught and thrown via JNI
+	vector<unique_ptr<SQLStatement>> statements;
+	try {
+		statements = conn_ref->ExtractStatements(query.c_str());
+	} catch (const std::exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return nullptr;
+	}
+
+	if (statements.empty()) {
+		env->ThrowNew(J_SQLException, "No statements to execute.");
+		return nullptr;
+	}
+
+	// if there are multiple statements, we directly execute the statements besides the last one
+	// we only return the result of the last statement to the user, unless one of the previous statements fails
+	for (idx_t i = 0; i + 1 < statements.size(); i++) {
+		try {
+			auto res = conn_ref->Query(move(statements[i]));
+			if (!res->success) {
+				env->ThrowNew(J_SQLException, res->error.c_str());
+				return nullptr;
+			}
+		} catch (const std::exception &ex) {
+			env->ThrowNew(J_SQLException, ex.what());
+			return nullptr;
+		}
+	}
+
 	auto stmt_ref = new StatementHolder();
-	stmt_ref->stmt = conn_ref->Prepare(query);
+	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
 	if (!stmt_ref->stmt->success) {
 		string error_msg = string(stmt_ref->stmt->error);
 		stmt_ref->stmt = nullptr;
@@ -785,16 +815,26 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1string(JNIEnv *env, jclass,
                                                                                            jobject appender_ref_buf,
-                                                                                           jstring value) {
+                                                                                           jbyteArray value) {
 	try {
 		if (env->IsSameObject(value, NULL)) {
 			get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
 			return;
 		}
 
-		auto c_string_value = env->GetStringUTFChars(value, NULL);
-		get_appender(env, appender_ref_buf)->Append(c_string_value);
-		env->ReleaseStringUTFChars(value, c_string_value);
+		auto string_value = byte_array_to_string(env, value);
+		get_appender(env, appender_ref_buf)->Append(string_value.c_str());
+	} catch (exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return;
+	}
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1append_1null(JNIEnv *env, jclass,
+                                                                                         jobject appender_ref_buf) {
+	try {
+		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+		return;
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
 		return;

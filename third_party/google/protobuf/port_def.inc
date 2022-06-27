@@ -173,14 +173,16 @@
 #if defined(PROTOBUF_NAMESPACE) || defined(PROTOBUF_NAMESPACE_ID)
 #error PROTOBUF_NAMESPACE or PROTOBUF_NAMESPACE_ID was previously defined
 #endif
-#define PROTOBUF_NAMESPACE "google::protobuf"
-#define PROTOBUF_NAMESPACE_ID google::protobuf
+#define PROTOBUF_NAMESPACE "duckdb::google::protobuf"
+#define PROTOBUF_NAMESPACE_ID duckdb::google::protobuf
 #define PROTOBUF_NAMESPACE_OPEN \
+  namespace duckdb {            \
   namespace google {            \
   namespace protobuf {
 #define PROTOBUF_NAMESPACE_CLOSE \
   } /* namespace protobuf */     \
-  } /* namespace google */
+  } /* namespace google */       \
+  } /* namespace duckdb */
 
 #ifdef PROTOBUF_ALWAYS_INLINE
 #error PROTOBUF_ALWAYS_INLINE was previously defined
@@ -403,46 +405,6 @@
   static_cast< ::uint32_t>(reinterpret_cast<const char*>(                   \
                              &reinterpret_cast<const TYPE*>(16)->FIELD) - \
                          reinterpret_cast<const char*>(16))
-#endif
-
-#ifdef PROTOBUF_EXPORT
-#error PROTOBUF_EXPORT was previously defined
-#endif
-
-#if defined(PROTOBUF_USE_DLLS) && defined(_MSC_VER)
-# if defined(LIBPROTOBUF_EXPORTS)
-#  define PROTOBUF_EXPORT __declspec(dllexport)
-#  define PROTOBUF_EXPORT_TEMPLATE_DECLARE
-#  define PROTOBUF_EXPORT_TEMPLATE_DEFINE __declspec(dllexport)
-# else
-#  define PROTOBUF_EXPORT __declspec(dllimport)
-#  define PROTOBUF_EXPORT_TEMPLATE_DECLARE
-#  define PROTOBUF_EXPORT_TEMPLATE_DEFINE __declspec(dllimport)
-# endif  // defined(LIBPROTOBUF_EXPORTS)
-#elif defined(PROTOBUF_USE_DLLS) && defined(LIBPROTOBUF_EXPORTS)
-# define PROTOBUF_EXPORT __attribute__((visibility("default")))
-# define PROTOBUF_EXPORT_TEMPLATE_DECLARE __attribute__((visibility("default")))
-# define PROTOBUF_EXPORT_TEMPLATE_DEFINE
-#else
-# define PROTOBUF_EXPORT
-# define PROTOBUF_EXPORT_TEMPLATE_DECLARE
-# define PROTOBUF_EXPORT_TEMPLATE_DEFINE
-#endif
-
-#ifdef PROTOC_EXPORT
-#error PROTOC_EXPORT was previously defined
-#endif
-
-#if defined(PROTOBUF_USE_DLLS) && defined(_MSC_VER)
-# if defined(LIBPROTOC_EXPORTS)
-#  define PROTOC_EXPORT __declspec(dllexport)
-# else
-#  define PROTOC_EXPORT __declspec(dllimport)
-# endif  // defined(LIBPROTOC_EXPORTS)
-#elif defined(PROTOBUF_USE_DLLS) && defined(LIBPROTOBUF_EXPORTS)
-# define PROTOC_EXPORT __attribute__((visibility("default")))
-#else
-# define PROTOC_EXPORT
 #endif
 
 #if defined(PROTOBUF_PREDICT_TRUE) || defined(PROTOBUF_PREDICT_FALSE)
@@ -676,10 +638,10 @@
 #endif
 
 #define PROTOBUF_TC_PARAM_DECL                                 \
-  ::google::protobuf::MessageLite *msg, const char *ptr,                 \
-      ::google::protobuf::internal::ParseContext *ctx,                   \
-      const ::google::protobuf::internal::TcParseTableBase *table,       \
-      uint64_t hasbits, ::google::protobuf::internal::TcFieldData data
+  duckdb::google::protobuf::MessageLite *msg, const char *ptr,                 \
+      duckdb::google::protobuf::internal::ParseContext *ctx,                   \
+      const duckdb::google::protobuf::internal::TcParseTableBase *table,       \
+      uint64_t hasbits, duckdb::google::protobuf::internal::TcFieldData data
 
 #ifdef PROTOBUF_UNUSED
 #error PROTOBUF_UNUSED was previously defined

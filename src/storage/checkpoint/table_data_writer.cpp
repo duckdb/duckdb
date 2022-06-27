@@ -22,7 +22,7 @@ BlockPointer TableDataWriter::WriteTableData() {
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns[i].compression_type;
+	return table.columns[i].CompressionType();
 }
 
 } // namespace duckdb

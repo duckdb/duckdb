@@ -41,6 +41,12 @@ SELECT * FROM integers
 3	3
 
 statement error
+CREATE TABLE indirect_subq(
+	i INTEGER,
+	CHECK (i > (2 * (SELECT(1))))
+);
+
+statement error
 CREATE TABLE integers2(i INTEGER CHECK(i > (SELECT 42)), j INTEGER)
 
 statement error
