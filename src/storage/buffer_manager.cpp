@@ -8,7 +8,7 @@
 namespace duckdb {
 
 struct BufferAllocatorData : PrivateAllocatorData {
-	BufferAllocatorData(BufferManager &manager) : manager(manager) {
+	explicit BufferAllocatorData(BufferManager &manager) : manager(manager) {
 	}
 
 	BufferManager &manager;
