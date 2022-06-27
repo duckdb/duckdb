@@ -601,6 +601,9 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance<py::int_>(ele)) {
 		return LogicalType::BIGINT;
 	} else if (py::isinstance<py::float_>(ele)) {
+		if (std::isnan(PyFloat_AsDouble(ele.ptr()))) {
+			return LogicalType::SQLNULL;
+		}
 		return LogicalType::DOUBLE;
 	} else if (py::isinstance(ele, decimal_decimal)) {
 		return LogicalType::VARCHAR; // Might be float64 actually?

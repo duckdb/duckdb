@@ -22,6 +22,9 @@ Value TransformPythonValue(py::handle ele) {
 	} else if (py::isinstance<py::int_>(ele)) {
 		return Value::BIGINT(ele.cast<int64_t>());
 	} else if (py::isinstance<py::float_>(ele)) {
+		if (std::isnan(PyFloat_AsDouble(ele.ptr()))) {
+			return Value();
+		}
 		return Value::DOUBLE(ele.cast<double>());
 	} else if (py::isinstance(ele, decimal_decimal)) {
 		return py::str(ele).cast<string>();
