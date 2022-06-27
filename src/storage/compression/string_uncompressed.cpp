@@ -87,6 +87,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, *scan_state.handle);
 	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;
