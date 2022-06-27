@@ -552,6 +552,13 @@ static duckdb::LogicalType AnalyzeObjectType(py::handle column, bool &can_conver
 		return item_type;
 	}
 
+	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
+	auto pandas_module = py::module::import("pandas");
+	auto pandas_series = pandas_module.attr("core").attr("series").attr("Series");
+	if (py::isinstance(column, pandas_series)) {
+		column = column.attr("__array__")();
+	}
+
 	auto first_item = GetItem(column, 0);
 	item_type = GetItemType(first_item, can_convert);
 	if (!can_convert) {
