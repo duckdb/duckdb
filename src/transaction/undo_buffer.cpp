@@ -20,7 +20,7 @@ static idx_t AlignLength(idx_t len) {
 	return (len + 7) / 8 * 8;
 }
 
-UndoBuffer::UndoBuffer(shared_ptr<ClientContext> context) : allocator(Allocator::GetBufferAllocator(*context)) {
+UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context) : allocator(Allocator::GetBufferAllocator(*context)) {
 	D_ASSERT(context);
 	head = nullptr;
 	tail = nullptr;
