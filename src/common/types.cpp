@@ -653,7 +653,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			// list: perform max recursively on child type
 			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 			return LogicalType::LIST(move(new_child));
-		} else if (type_id == LogicalTypeId::STRUCT) {
+		} else if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP) {
 			// struct: perform recursively
 			auto &left_child_types = StructType::GetChildTypes(left);
 			auto &right_child_types = StructType::GetChildTypes(right);

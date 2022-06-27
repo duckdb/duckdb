@@ -515,9 +515,6 @@ static duckdb::LogicalType GetListType(py::handle &ele, bool &can_convert) {
 		return LogicalType::LIST(LogicalType::SQLNULL);
 	}
 
-	vector<LogicalType> child_types;
-	child_types.reserve(size);
-
 	idx_t i = 0;
 	LogicalType list_type = LogicalType::SQLNULL;
 	for (auto py_val : ele) {
@@ -525,9 +522,7 @@ static duckdb::LogicalType GetListType(py::handle &ele, bool &can_convert) {
 		if (!i) {
 			list_type = item_type;
 		} else {
-			if (item_type != list_type) {
-				can_convert = false;
-			}
+			list_type = LogicalType::MaxLogicalType(list_type, item_type);
 		}
 		if (!can_convert) {
 			break;
@@ -584,15 +579,18 @@ static duckdb::LogicalType AnalyzeObjectType(py::handle column, bool &can_conver
 //! Maybe there's an INVALID type actually..
 static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 	auto datetime_mod = py::module_::import("datetime");
-	auto decimal_mod = py::module_::import("decimal");
-
 	auto datetime_date = datetime_mod.attr("date");
 	auto datetime_datetime = datetime_mod.attr("datetime");
 	auto datetime_time = datetime_mod.attr("time");
 
+	auto decimal_mod = py::module_::import("decimal");
 	auto decimal_decimal = decimal_mod.attr("Decimal");
+
 	auto numpy_mod = py::module::import("numpy");
 	auto numpy_ndarray = numpy_mod.attr("ndarray");
+
+	auto uuid_mod = py::module::import("uuid");
+	auto uuid_uuid = uuid_mod.attr("UUID");
 
 	if (ele.is_none()) {
 		return LogicalType::SQLNULL;
@@ -606,7 +604,7 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		}
 		return LogicalType::DOUBLE;
 	} else if (py::isinstance(ele, decimal_decimal)) {
-		return LogicalType::VARCHAR; // Might be float64 actually?
+		return LogicalType::VARCHAR; // Might be float64 actually? //or DECIMAL
 	} else if (py::isinstance(ele, datetime_datetime)) {
 		// auto ptr = ele.ptr();
 		// auto year = PyDateTime_GET_YEAR(ptr);
@@ -633,6 +631,10 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		return LogicalType::DATE;
 	} else if (py::isinstance<py::str>(ele)) {
 		return LogicalType::VARCHAR;
+	} else if (py::isinstance(ele, uuid_uuid)) {
+		return LogicalType::UUID;
+	} else if (py::isinstance<py::bytearray>(ele)) {
+		return LogicalType::BLOB;
 	} else if (py::isinstance<py::memoryview>(ele)) {
 		return LogicalType::BLOB;
 	} else if (py::isinstance<py::bytes>(ele)) {
@@ -659,6 +661,11 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 
 		child_types.push_back(make_pair("key", key_type));
 		child_types.push_back(make_pair("value", value_type));
+		auto key_child_type = ListType::GetChildType(key_type);
+		auto val_child_type = ListType::GetChildType(value_type);
+		while (val_child_type.id() == LogicalTypeId::LIST) {
+			val_child_type = ListType::GetChildType(val_child_type);
+		}
 		return LogicalType::MAP(move(child_types));
 	} else if (py::isinstance(ele, numpy_ndarray)) {
 		auto extended_type = GetExtendedNumpyType(ele.attr("dtype"));
