@@ -1,0 +1,10 @@
+# name: test/extension/load_test_alias.test
+# description: Enable TestAliasExtension.
+# group: [extension]
+
+require test_alias
+
+query I
+SELECT test_alias_hello();
+----
+Hello Alias!
