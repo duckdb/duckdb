@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
 namespace duckdb {
@@ -33,6 +34,8 @@ class TableFunction;
 struct PragmaInfo;
 
 struct FunctionData {
+	//! External dependencies of this table function
+	unique_ptr<ExternalDependency> external_dependency;
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
