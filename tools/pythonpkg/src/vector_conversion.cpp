@@ -572,11 +572,49 @@ static duckdb::LogicalType AnalyzeObjectType(py::handle column, bool &can_conver
 	return item_type;
 }
 
+static duckdb::LogicalType DictToMap(py::handle &dict_values, bool &can_convert) {
+	auto keys = dict_values.attr("__getitem__")(0);
+	auto values = dict_values.attr("__getitem__")(1);
+
+	child_list_t<LogicalType> child_types;
+	auto key_type = GetListType(keys, can_convert);
+	if (!can_convert) {
+		return EmptyMap();
+	}
+	auto value_type = GetListType(values, can_convert);
+	if (!can_convert) {
+		return EmptyMap();
+	}
+
+	child_types.push_back(make_pair("key", key_type));
+	child_types.push_back(make_pair("value", value_type));
+	return LogicalType::MAP(move(child_types));
+}
+
+static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_values, idx_t size, bool &can_convert) {
+	// Verify that all keys are strings
+	child_list_t<LogicalType> struct_children;
+
+	for (idx_t i = 0; i < size; i++) {
+		auto dict_key = dict_keys.attr("__getitem__")(i);
+		auto key = TransformPythonValue(dict_key);
+		if (key.type().id() != LogicalTypeId::VARCHAR) {
+			can_convert = false;
+			return LogicalType::SQLNULL;
+		}
+		auto dict_val = dict_values.attr("__getitem__")(i);
+		auto val = GetItemType(dict_val, can_convert);
+		struct_children.push_back(make_pair(key.GetValue<string>(), move(val)));
+	}
+	return LogicalType::STRUCT(move(struct_children));
+}
+
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
 //! for example a python list could contain of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
 //! Maybe there's an INVALID type actually..
+// This should be called Bind .. something
 static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 	auto datetime_mod = py::module_::import("datetime");
 	auto datetime_date = datetime_mod.attr("date");
@@ -642,31 +680,18 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance<py::list>(ele)) {
 		return GetListType(ele, can_convert);
 	} else if (py::isinstance<py::dict>(ele)) {
-		auto keys = ele.attr("keys")();
-		auto values = ele.attr("values")();
-		auto size = py::len(keys);
+		auto dict_keys = py::list(ele.attr("keys")());
+		auto dict_values = py::list(ele.attr("values")());
+		auto size = py::len(dict_values);
+		// Assuming keys and values are the same size
 
 		if (size == 0) {
 			return EmptyMap();
 		}
-		child_list_t<LogicalType> child_types;
-		auto key_type = GetListType(keys, can_convert);
-		if (!can_convert) {
-			return EmptyMap();
+		if (DictionaryHasMapFormat(dict_values, size)) {
+			return DictToMap(dict_values, can_convert);
 		}
-		auto value_type = GetListType(values, can_convert);
-		if (!can_convert) {
-			return EmptyMap();
-		}
-
-		child_types.push_back(make_pair("key", key_type));
-		child_types.push_back(make_pair("value", value_type));
-		auto key_child_type = ListType::GetChildType(key_type);
-		auto val_child_type = ListType::GetChildType(value_type);
-		while (val_child_type.id() == LogicalTypeId::LIST) {
-			val_child_type = ListType::GetChildType(val_child_type);
-		}
-		return LogicalType::MAP(move(child_types));
+		return DictToStruct(dict_keys, dict_values, size, can_convert);
 	} else if (py::isinstance(ele, numpy_ndarray)) {
 		auto extended_type = GetExtendedNumpyType(ele.attr("dtype"));
 		LogicalType ltype;

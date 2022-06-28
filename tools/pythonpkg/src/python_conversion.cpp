@@ -5,6 +5,44 @@
 
 namespace duckdb {
 
+bool DictionaryHasMapFormat(py::handle dict_values, idx_t len) {
+	if (len != 2) {
+		return false;
+	}
+	auto keys = dict_values.attr("__getitem__")(0);
+	auto values = dict_values.attr("__getitem__")(1);
+	// Dont check for 'py::list' to allow ducktyping
+	if (!py::hasattr(keys, "__getitem__") || !py::hasattr(keys, "__len__")) {
+		// throw std::runtime_error("Dictionary malformed, keys(index 0) found within 'dict.values' is not a list");
+		return false;
+	}
+	if (!py::hasattr(values, "__getitem__") || !py::hasattr(values, "__len__")) {
+		// throw std::runtime_error("Dictionary malformed, values(index 1) found within 'dict.values' is not a list");
+		return false;
+	}
+	auto size = py::len(keys);
+	if (size != py::len(values)) {
+		// throw std::runtime_error("Dictionary malformed, keys and values lists are not of the same size");
+		return false;
+	}
+	return true;
+}
+
+Value TransformDictionaryToMap(py::handle dict_values) {
+	auto keys = dict_values.attr("__getitem__")(0);
+	auto values = dict_values.attr("__getitem__")(1);
+
+	auto key_size = py::len(keys);
+	D_ASSERT(key_size == py::len(values));
+	if (key_size == 0) {
+		// dict == { 'key': [], 'value': [] }
+		return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
+	}
+	auto key_list = TransformPythonValue(keys);
+	auto value_list = TransformPythonValue(values);
+	return Value::MAP(key_list, value_list);
+}
+
 Value TransformPythonValue(py::handle ele) {
 	auto datetime_mod = py::module::import("datetime");
 	auto datetime_date = datetime_mod.attr("date");
@@ -95,39 +133,31 @@ Value TransformPythonValue(py::handle ele) {
 
 		return Value::LIST(values);
 	} else if (py::isinstance<py::dict>(ele)) {
+		//! DICT -> MAP FORMAT
 		// keys() = [key, value]
-		// values() = [ ..keys.. ], [ ..values.. ]
-		auto dict_keys = py::list(ele.attr("keys")());
+		// values() = [ [n keys] ], [ [n values] ]
+
+		//! DICT -> STRUCT FORMAT
+		// keys() = ['a', .., 'n']
+		// values() = [ val1, .., valn]
 		auto dict_values = py::list(ele.attr("values")());
-		auto key_size = py::len(dict_keys);
 		auto value_size = py::len(dict_values);
-
-		if (key_size != value_size) {
-			throw std::runtime_error("Dictionary malformed, should have 2 'dict.values', a list of keys(index 0) and a "
-			                         "list of values(index 1).");
-		}
-		auto keys = dict_values.attr("__getitem__")(0);
-		auto values = dict_values.attr("__getitem__")(1);
-		// Dont check for 'py::list' to allow ducktyping
-		if (!py::hasattr(keys, "__getitem__")) {
-			throw std::runtime_error("Dictionary malformed, keys(index 0) found within 'dict.values' is not a list");
-		}
-		if (!py::hasattr(values, "__getitem__")) {
-			throw std::runtime_error("Dictionary malformed, values(index 1) found within 'dict.values' is not a list");
-		}
-
-		auto size = py::len(keys);
-		if (size != py::len(values)) {
-			throw std::runtime_error("Dictionary malformed, keys and values lists are not of the same size");
-		}
-
-		if (size == 0) {
+		if (value_size == 0) {
+			// dict == {}
 			return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
 		}
 
-		auto key_values = TransformPythonValue(keys);
-		auto val_values = TransformPythonValue(values);
-		return Value::MAP(key_values, val_values);
+		if (DictionaryHasMapFormat(dict_values, value_size)) {
+			return TransformDictionaryToMap(dict_values);
+		}
+		auto dict_keys = py::list(ele.attr("keys")());
+		child_list_t<Value> struct_values;
+		for (idx_t i = 0; i < value_size; i++) {
+			auto key = TransformPythonValue(dict_keys.attr("__getitem__")(i));
+			auto val = TransformPythonValue(dict_values.attr("__getitem__")(i));
+			struct_values.emplace_back(make_pair(key.GetValue<string>(), move(val)));
+		}
+		return Value::STRUCT(move(struct_values));
 	} else if (py::isinstance(ele, numpy_ndarray)) {
 		return TransformPythonValue(ele.attr("tolist")());
 	} else {

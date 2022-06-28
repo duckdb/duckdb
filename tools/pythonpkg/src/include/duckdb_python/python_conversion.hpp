@@ -16,6 +16,7 @@
 
 namespace duckdb {
 
+bool DictionaryHasMapFormat(py::handle dict_values, idx_t len);
 Value TransformPythonValue(py::handle ele);
 
 } // namespace duckdb
