@@ -57,7 +57,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
 		} else if (entry->second.back()->type() != value->type()) {
 			// used before, but types are inconsistent
-			throw BinderException("Inconsistent types found for parameter with index %llu", expr->parameter_nr);
+			throw BinderException(
+			    "Inconsistent types found for parameter with index %llu, current type %s, new type %s",
+			    expr->parameter_nr, entry->second.back()->type().ToString(), value->type().ToString());
 		}
 		value_map[expr->parameter_nr].push_back(move(value));
 	}
