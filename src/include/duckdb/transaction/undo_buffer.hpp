@@ -10,34 +10,19 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/storage/batched_allocator.hpp"
 
 namespace duckdb {
 
 class WriteAheadLog;
 
-struct UndoChunk {
-	UndoChunk(Allocator &allocator, idx_t size);
-	~UndoChunk();
-
-	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);
-
-	unique_ptr<AllocatedData> data;
-	idx_t current_position;
-	idx_t maximum_size;
-	unique_ptr<UndoChunk> next;
-	UndoChunk *prev;
-};
-
 //! The undo buffer of a transaction is used to hold previous versions of tuples
 //! that might be required in the future (because of rollbacks or previous
 //! transactions accessing them)
 class UndoBuffer {
-	static constexpr const idx_t UNDO_CHUNK_INITIAL_CAPACITY = 4096;
-
 public:
 	struct IteratorState {
-		UndoChunk *current;
+		AllocatedChunk *current;
 		data_ptr_t start;
 		data_ptr_t end;
 	};
@@ -63,10 +48,7 @@ public:
 	void Rollback() noexcept;
 
 private:
-	Allocator &allocator;
-	idx_t current_capacity;
-	unique_ptr<UndoChunk> head;
-	UndoChunk *tail;
+	BatchedAllocator allocator;
 
 private:
 	template <class T>

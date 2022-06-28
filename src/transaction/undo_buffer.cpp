@@ -16,67 +16,26 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-static idx_t AlignLength(idx_t len) {
-	return (len + 7) / 8 * 8;
-}
-
 UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context) : allocator(Allocator::GetBufferAllocator(*context)) {
 	D_ASSERT(context);
-	head = nullptr;
-	tail = nullptr;
-	current_capacity = UNDO_CHUNK_INITIAL_CAPACITY;
-}
-
-UndoChunk::UndoChunk(Allocator &allocator, idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
-	if (size > 0) {
-		data = allocator.Allocate(size);
-	}
-}
-UndoChunk::~UndoChunk() {
-	if (next) {
-		auto current_next = move(next);
-		while (current_next) {
-			current_next = move(current_next->next);
-		}
-	}
-}
-
-data_ptr_t UndoChunk::WriteEntry(UndoFlags type, uint32_t len) {
-	len = AlignLength(len);
-	D_ASSERT(sizeof(UndoFlags) + sizeof(len) == 8);
-	Store<UndoFlags>(type, data->get() + current_position);
-	current_position += sizeof(UndoFlags);
-	Store<uint32_t>(len, data->get() + current_position);
-	current_position += sizeof(uint32_t);
-
-	data_ptr_t result = data->get() + current_position;
-	current_position += len;
-	return result;
 }
 
 data_ptr_t UndoBuffer::CreateEntry(UndoFlags type, idx_t len) {
 	D_ASSERT(len <= NumericLimits<uint32_t>::Maximum());
-	idx_t needed_space = AlignLength(len + UNDO_ENTRY_HEADER_SIZE);
-	if (!head || head->current_position + needed_space >= head->maximum_size) {
-		do {
-			current_capacity *= 2;
-		} while (current_capacity < needed_space);
-		auto new_chunk = make_unique<UndoChunk>(allocator, current_capacity);
-		if (head) {
-			head->prev = new_chunk.get();
-			new_chunk->next = move(head);
-		} else {
-			tail = new_chunk.get();
-		}
-		head = move(new_chunk);
-	}
-	return head->WriteEntry(type, len);
+	len = AlignValue(len);
+	idx_t needed_space = len + UNDO_ENTRY_HEADER_SIZE;
+	auto data = allocator.Allocate(needed_space);
+	Store<UndoFlags>(type, data);
+	data += sizeof(UndoFlags);
+	Store<uint32_t>(len, data);
+	data += sizeof(uint32_t);
+	return data;
 }
 
 template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) {
 	// iterate in insertion order: start with the tail
-	state.current = tail;
+	state.current = allocator.GetTail();
 	while (state.current) {
 		state.start = state.current->data->get();
 		state.end = state.start + state.current->current_position;
@@ -96,7 +55,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, T &&callback) 
 template <class T>
 void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback) {
 	// iterate in insertion order: start with the tail
-	state.current = tail;
+	state.current = allocator.GetTail();
 	while (state.current) {
 		state.start = state.current->data->get();
 		state.end =
@@ -120,7 +79,7 @@ void UndoBuffer::IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::It
 template <class T>
 void UndoBuffer::ReverseIterateEntries(T &&callback) {
 	// iterate in reverse insertion order: start with the head
-	auto current = head.get();
+	auto current = allocator.GetHead();
 	while (current) {
 		data_ptr_t start = current->data->get();
 		data_ptr_t end = start + current->current_position;
@@ -143,12 +102,12 @@ void UndoBuffer::ReverseIterateEntries(T &&callback) {
 }
 
 bool UndoBuffer::ChangesMade() {
-	return head && head->maximum_size > 0;
+	return !allocator.IsEmpty();
 }
 
 idx_t UndoBuffer::EstimatedSize() {
 	idx_t estimated_size = 0;
-	auto node = head.get();
+	auto node = allocator.GetHead();
 	while (node) {
 		estimated_size += node->current_position;
 		node = node->next.get();
