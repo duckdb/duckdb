@@ -80,9 +80,9 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 		D_ASSERT(result_offset == 0);
 		Scan(state, scan_count, result);
 	} else {
-		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR || result.GetVectorType() == VectorType::FSST_VECTOR);
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		ScanPartial(state, scan_count, result, result_offset);
-		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR || result.GetVectorType() == VectorType::FSST_VECTOR);
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
 }
 

@@ -23,6 +23,7 @@ struct FSSTStorage {
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	template <bool ALLOW_FSST_VECTORS>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                                    idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -425,10 +426,9 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
+template <bool ALLOW_FSST_VECTORS=false>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
-//		throw std::runtime_error("FSST SCAN NOT IMPLEMENTED");
-
 // clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = (FSSTScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -436,20 +436,32 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, *scan_state.handle);
 	auto base_data = (data_ptr_t)(baseptr + sizeof(fsst_compression_header_t));
-	auto result_data = FlatVector::GetData<string_t>(result);
+	string_t* result_data;
+	unique_ptr<Vector> output_vector;
 
-	if (scan_state.fsst_decoder) {
-		result.SetVectorType(VectorType::FSST_VECTOR);
-		FSSTVector::RegisterDecoder(result, scan_state.fsst_decoder);
+	if (ALLOW_FSST_VECTORS) {
+		D_ASSERT(result_offset == 0);
+		if (scan_state.fsst_decoder) {
+			result.SetVectorType(VectorType::FSST_VECTOR);
+			FSSTVector::RegisterDecoder(result, scan_state.fsst_decoder);
+			result_data = FSSTVector::GetCompressedData<string_t>(result);
+		} else {
+			result_data = FlatVector::GetData<string_t>(result);
+		}
 	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		// Todo should we do something special here?
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+		output_vector = make_unique<Vector>(result.GetType(), scan_count);
+		output_vector->SetVectorType(VectorType::FSST_VECTOR);
+		FSSTVector::RegisterDecoder(*output_vector, scan_state.fsst_decoder);
+		result_data = FSSTVector::GetCompressedData<string_t>(*output_vector);
 	}
 
 	// We need to decode from the last known row to be able to do delta decoding
 	uint32_t delta_decode_start;
 	idx_t dict_index_offset;
-	if (start == 0 || !scan_state.last_known_isset || scan_state.last_known_row >= start) { // GTE should be GT and handle edge case
+
+	// TODO GTE should be GT and handle edge case
+	if (start == 0 || !scan_state.last_known_isset || scan_state.last_known_row >= start) {
 		delta_decode_start = 0;
 		dict_index_offset = start;
 	} else {
@@ -477,11 +489,9 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		delta_decode_buffer[i] = bitunpack_buffer[i] + delta_decode_buffer[i-1];
 	}
 
-	uint32_t* size_ptr = &bitunpack_buffer[dict_index_offset];
-
 	for (idx_t i = 0; i < scan_count; i++) {
-		uint32_t string_length = size_ptr[i];
-		result_data[result_offset + i] =
+		uint32_t string_length = bitunpack_buffer[i + dict_index_offset];
+		result_data[i] =
 		    UncompressedStringStorage::FetchStringFromDict(segment, dict, result, baseptr, delta_decode_buffer[i + dict_index_offset], string_length);
 	}
 
@@ -490,12 +500,14 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	scan_state.last_known_index = delta_decode_buffer[scan_count - 1];
 	scan_state.last_known_isset = true;
 
-//	std::cout << "\n Scanned:\n";
-//	std::cout << result.ToString(5) << "\n";
+	if (!ALLOW_FSST_VECTORS) {
+		// Decompress the FSST Vector by copying it to a flat vector
+		VectorOperations::Copy(*output_vector, result, scan_count, 0, result_offset);
+	}
 }
 
 void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	StringScanPartial(segment, state, scan_count, result, 0);
+	StringScanPartial<true>(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
