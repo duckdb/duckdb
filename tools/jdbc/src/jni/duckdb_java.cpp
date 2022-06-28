@@ -1,6 +1,8 @@
 #include "org_duckdb_DuckDBNative.h"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -228,6 +230,19 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNI
 		return nullptr;
 	}
 	return nullptr;
+}
+
+JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema(JNIEnv *env, jclass,
+                                                                                 jobject conn_ref_buf) {
+	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	if (!conn_ref || !conn_ref->context) {
+		env->ThrowNew(J_SQLException, "Invalid connection");
+		return nullptr;
+	}
+
+	auto schema = ClientData::Get(*conn_ref->context).catalog_search_path->GetDefault();
+
+	return env->NewStringUTF(schema.c_str());
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1auto_1commit(JNIEnv *env, jclass,
