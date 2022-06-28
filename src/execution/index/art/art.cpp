@@ -728,17 +728,17 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
 	case NodeType::N4:
-		next = Node::GetChildSwizzled(*this, (uintptr_t)((Node4 &)node).children_ptrs[0]);
+		next = (Node *)Node::GetChildSwizzled(*this, ((Node4 &)node).children_ptrs[0]);
 		break;
 	case NodeType::N16:
-		next = Node::GetChildSwizzled(*this, (uintptr_t)((Node16 &)node).children[0]);
+		next = (Node *)Node::GetChildSwizzled(*this, ((Node16 &)node).children[0]);
 		break;
 	case NodeType::N48: {
 		auto &n48 = (Node48 &)node;
 		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		next = Node::GetChildSwizzled(*this, (uintptr_t)n48.children[n48.child_index[pos]]);
+		next = (Node *)Node::GetChildSwizzled(*this, n48.children[n48.child_index[pos]]);
 		break;
 	}
 	case NodeType::N256: {
@@ -746,7 +746,7 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		while (!n256.children[pos]) {
 			pos++;
 		}
-		next = Node::GetChildSwizzled(*this, (uintptr_t)n256.children[pos]);
+		next = (Node *)Node::GetChildSwizzled(*this, n256.children[pos]);
 		break;
 	}
 	}

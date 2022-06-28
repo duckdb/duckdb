@@ -68,13 +68,13 @@ public:
 
 	//! Tries to get a child from a given address, checks if the address is pointing to a memory space
 	//! Or if its a swizzled pointer.
-	static Node *GetChildSwizzled(ART &art, uintptr_t pointer);
+	static uint64_t GetChildSwizzled(ART &art, uint64_t pointer);
 
-	static std::pair<idx_t, idx_t> GetSwizzledBlockInfo(uintptr_t pointer);
+	static std::pair<idx_t, idx_t> GetSwizzledBlockInfo(uint64_t pointer);
 	//! Checks if a given pointer is a swizzled pointer or not.
-	static bool IsSwizzled(uintptr_t pointer);
+	static bool IsSwizzled(uint64_t pointer);
 	//! Generate Swizzled Pointer from block id and offset
-	static uintptr_t GenerateSwizzledPointer(idx_t block_id, idx_t offset);
+	static uint64_t GenerateSwizzledPointer(idx_t block_id, idx_t offset);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);

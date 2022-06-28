@@ -9,15 +9,15 @@ Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_leng
 		child_index[i] = Node::EMPTY_MARKER;
 	}
 	for (auto &child : children) {
-		child = nullptr;
+		child = 0;
 	}
 }
 
 Node48::~Node48() {
 	for (auto &child : children) {
 		if (child) {
-			if (!IsSwizzled((uintptr_t)child)) {
-				delete child;
+			if (!IsSwizzled(child)) {
+				delete (Node *)child;
 			}
 		}
 	}
@@ -56,8 +56,8 @@ idx_t Node48::GetNextPos(idx_t pos) {
 
 Node *Node48::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(child_index[pos] != Node::EMPTY_MARKER);
-	children[child_index[pos]] = Node::GetChildSwizzled(art, (uintptr_t)children[child_index[pos]]);
-	return children[child_index[pos]];
+	children[child_index[pos]] = Node::GetChildSwizzled(art, children[child_index[pos]]);
+	return (Node *)children[child_index[pos]];
 }
 
 idx_t Node48::GetMin() {
@@ -83,7 +83,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 				pos++;
 			}
 		}
-		n->children[pos] = child;
+		n->children[pos] = (uint64_t)child;
 		n->child_index[key_byte] = pos;
 		n->count++;
 	} else {
@@ -92,7 +92,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->children[i] = n->children[n->child_index[i]];
-				n->children[n->child_index[i]] = nullptr;
+				n->children[n->child_index[i]] = 0;
 			}
 		}
 		new_node->count = n->count;
@@ -104,16 +104,16 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 }
 
 void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[child_index[pos]] = node;
+	children[child_index[pos]] = (uint64_t)node;
 }
 
 void Node48::Erase(Node *&node, int pos) {
 	auto n = (Node48 *)(node);
 
-	if (!IsSwizzled((uintptr_t)n->children[n->child_index[pos]])) {
-		delete n->children[n->child_index[pos]];
+	if (!IsSwizzled(n->children[n->child_index[pos]])) {
+		delete (Node *)n->children[n->child_index[pos]];
 	}
-	n->children[n->child_index[pos]] = nullptr;
+	n->children[n->child_index[pos]] = 0;
 	n->child_index[pos] = Node::EMPTY_MARKER;
 	n->count--;
 	if (node->count <= 12) {
@@ -122,8 +122,8 @@ void Node48::Erase(Node *&node, int pos) {
 		for (idx_t i = 0; i < 256; i++) {
 			if (n->child_index[i] != Node::EMPTY_MARKER) {
 				new_node->key[new_node->count] = i;
-				new_node->children[new_node->count++] = n->children[n->child_index[i]];
-				n->children[n->child_index[i]] = nullptr;
+				new_node->children[new_node->count++] = (uint64_t)n->children[n->child_index[i]];
+				n->children[n->child_index[i]] = 0;
 			}
 		}
 		delete node;
@@ -136,8 +136,8 @@ std::pair<idx_t, idx_t> Node48::Serialize(ART &art, duckdb::MetaBlockWriter &wri
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_ptr : children) {
 		if (child_ptr) {
-			child_ptr = GetChildSwizzled(art, (uintptr_t)child_ptr);
-			child_offsets.push_back(child_ptr->Serialize(art, writer));
+			child_ptr = (uint64_t)GetChildSwizzled(art, child_ptr);
+			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -184,7 +184,7 @@ Node48 *Node48::Deserialize(duckdb::MetaBlockReader &reader) {
 	for (idx_t i = 0; i < 48; i++) {
 		idx_t block_id = reader.Read<idx_t>();
 		idx_t offset = reader.Read<idx_t>();
-		node48->children[i] = (Node *)(Node::GenerateSwizzledPointer(block_id, offset));
+		node48->children[i] = Node::GenerateSwizzledPointer(block_id, offset);
 	}
 	return node48;
 }

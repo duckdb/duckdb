@@ -29,43 +29,43 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
-Node *Node::GetChildSwizzled(ART &art, uintptr_t pointer) {
+uint64_t Node::GetChildSwizzled(ART &art, uint64_t pointer) {
 	if (IsSwizzled(pointer)) {
 		// This means our pointer is not yet in memory, gotta deserialize this
 		// first we unset the bae
 		auto block_info = GetSwizzledBlockInfo(pointer);
-		return Deserialize(art, block_info.first, block_info.second);
+		return (uint64_t)Deserialize(art, block_info.first, block_info.second);
 
 	} else {
-		return (Node *)pointer;
+		return pointer;
 	}
 }
 
-std::pair<idx_t, idx_t> Node::GetSwizzledBlockInfo(uintptr_t pointer) {
+std::pair<idx_t, idx_t> Node::GetSwizzledBlockInfo(uint64_t pointer) {
 	D_ASSERT(IsSwizzled(pointer));
 	idx_t pointer_size = sizeof(pointer) * 8;
-	pointer = pointer & ~(1UL << (pointer_size - 1));
+	pointer = pointer & ~(1ULL << (pointer_size - 1));
 	uint32_t block_id = pointer >> (pointer_size / 2);
 	uint32_t offset = pointer & 0xffffffff;
 	return {block_id, offset};
 }
 
-bool Node::IsSwizzled(uintptr_t pointer) {
+bool Node::IsSwizzled(uint64_t pointer) {
 	idx_t pointer_size = sizeof(pointer) * 8;
 	return (pointer >> (pointer_size - 1)) & 1;
 }
 
-uintptr_t Node::GenerateSwizzledPointer(idx_t block_id, idx_t offset) {
+uint64_t Node::GenerateSwizzledPointer(idx_t block_id, idx_t offset) {
 	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
 		return 0;
 	}
-	uintptr_t pointer;
+	uint64_t pointer;
 	idx_t pointer_size = sizeof(pointer) * 8;
 	pointer = block_id;
 	pointer = pointer << (pointer_size / 2);
 	pointer += offset;
 	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
-	uintptr_t mask = 1;
+	uint64_t mask = 1;
 	mask = mask << (pointer_size - 1);
 	pointer |= mask;
 	return pointer;
@@ -74,7 +74,8 @@ uintptr_t Node::GenerateSwizzledPointer(idx_t block_id, idx_t offset) {
 Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	MetaBlockReader reader(art.db, block_id);
 	reader.offset = offset;
-	NodeType node_type(static_cast<NodeType>(reader.Read<uint8_t>()));
+	auto n = reader.Read<uint8_t>();
+	NodeType node_type(static_cast<NodeType>(n));
 	switch (node_type) {
 	case NodeType::NLeaf:
 		return Leaf::Deserialize(reader);

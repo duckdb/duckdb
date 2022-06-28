@@ -17,7 +17,7 @@ public:
 	~Node4() override;
 	uint8_t key[4];
 	// Pointers to the child nodes
-	Node *children_ptrs[4];
+	uint64_t children_ptrs[4];
 
 public:
 	//! Get position of a byte, returns -1 if not exists

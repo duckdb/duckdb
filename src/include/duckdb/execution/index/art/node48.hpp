@@ -17,7 +17,7 @@ public:
 	~Node48() override;
 	uint8_t child_index[256];
 
-	Node *children[48];
+	uint64_t children[48];
 
 public:
 	//! Get position of a byte, returns -1 if not exists

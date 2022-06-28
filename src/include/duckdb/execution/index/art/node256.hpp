@@ -16,7 +16,7 @@ public:
 	explicit Node256(size_t compression_length);
 
 	~Node256();
-	Node *children[256];
+	uint64_t children[256];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists

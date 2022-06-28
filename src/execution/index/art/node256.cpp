@@ -5,14 +5,14 @@ namespace duckdb {
 
 Node256::Node256(size_t compression_length) : Node(NodeType::N256, compression_length) {
 	for (auto &child : children) {
-		child = nullptr;
+		child = 0;
 	}
 }
 Node256::~Node256() {
 	for (auto &child : children) {
 		if (child) {
-			if (!IsSwizzled((uintptr_t)child)) {
-				delete child;
+			if (!IsSwizzled(child)) {
+				delete (Node *)child;
 			}
 		}
 	}
@@ -50,7 +50,7 @@ idx_t Node256::GetMin() {
 }
 
 void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = node;
+	children[pos] = (uint64_t)node;
 }
 
 idx_t Node256::GetNextPos(idx_t pos) {
@@ -63,24 +63,24 @@ idx_t Node256::GetNextPos(idx_t pos) {
 }
 
 Node *Node256::GetChild(ART &art, idx_t pos) {
-	children[pos] = Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
-	return children[pos];
+	children[pos] = Node::GetChildSwizzled(art, children[pos]);
+	return (Node *)children[pos];
 }
 
 void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {
 	auto n = (Node256 *)(node);
 
 	n->count++;
-	n->children[key_byte] = child;
+	n->children[key_byte] = (uint64_t)child;
 }
 
 void Node256::Erase(Node *&node, int pos) {
 	auto n = (Node256 *)(node);
 
-	if (!IsSwizzled((uintptr_t)n->children[pos])) {
-		delete n->children[pos];
+	if (!IsSwizzled(n->children[pos])) {
+		delete (Node *)n->children[pos];
 	}
-	n->children[pos] = nullptr;
+	n->children[pos] = 0;
 	n->count--;
 	if (node->count <= 36) {
 		auto new_node = new Node48(n->prefix_length);
@@ -89,7 +89,7 @@ void Node256::Erase(Node *&node, int pos) {
 			if (n->children[i]) {
 				new_node->child_index[i] = new_node->count;
 				new_node->children[new_node->count] = n->children[i];
-				n->children[i] = nullptr;
+				n->children[i] = 0;
 				new_node->count++;
 			}
 		}
@@ -103,8 +103,8 @@ std::pair<idx_t, idx_t> Node256::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_ptr : children) {
 		if (child_ptr) {
-			child_ptr = GetChildSwizzled(art, (uintptr_t)child_ptr);
-			child_offsets.push_back(child_ptr->Serialize(art, writer));
+			child_ptr = (uint64_t)GetChildSwizzled(art, child_ptr);
+			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -141,7 +141,7 @@ Node256 *Node256::Deserialize(duckdb::MetaBlockReader &reader) {
 	for (idx_t i = 0; i < 256; i++) {
 		idx_t block_id = reader.Read<idx_t>();
 		idx_t offset = reader.Read<idx_t>();
-		node256->children[i] = (Node *)(Node::GenerateSwizzledPointer(block_id, offset));
+		node256->children[i] = Node::GenerateSwizzledPointer(block_id, offset);
 	}
 	return node256;
 }

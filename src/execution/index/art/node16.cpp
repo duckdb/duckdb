@@ -9,15 +9,15 @@ namespace duckdb {
 Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_length) {
 	memset(key, 16, sizeof(key));
 	for (auto &child : children) {
-		child = nullptr;
+		child = 0;
 	}
 }
 
 Node16::~Node16() {
 	for (auto &child : children) {
 		if (child) {
-			if (!IsSwizzled((uintptr_t)child)) {
-				delete child;
+			if (!IsSwizzled(child)) {
+				delete (Node *)child;
 			}
 		}
 	}
@@ -57,8 +57,8 @@ idx_t Node16::GetNextPos(idx_t pos) {
 
 Node *Node16::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	children[pos] = Node::GetChildSwizzled(art, (uintptr_t)children[pos]);
-	return children[pos];
+	children[pos] = Node::GetChildSwizzled(art, children[pos]);
+	return (Node *)children[pos];
 }
 
 idx_t Node16::GetMin() {
@@ -66,7 +66,7 @@ idx_t Node16::GetMin() {
 }
 
 void Node16::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = node;
+	children[pos] = (uint64_t)node;
 }
 
 void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
@@ -78,14 +78,14 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		while (pos < node->count && n->key[pos] < key_byte) {
 			pos++;
 		}
-		if (n->children[pos] != nullptr) {
+		if (n->children[pos] != 0) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
 				n->children[i] = n->children[i - 1];
 			}
 		}
 		n->key[pos] = key_byte;
-		n->children[pos] = child;
+		n->children[pos] = (uint64_t)child;
 		n->count++;
 	} else {
 		// Grow to Node48
@@ -93,7 +93,7 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		for (idx_t i = 0; i < node->count; i++) {
 			new_node->child_index[n->key[i]] = i;
 			new_node->children[i] = n->children[i];
-			n->children[i] = nullptr;
+			n->children[i] = 0;
 		}
 		CopyPrefix(n, new_node);
 		new_node->count = node->count;
@@ -109,8 +109,8 @@ std::pair<idx_t, idx_t> Node16::Serialize(ART &art, duckdb::MetaBlockWriter &wri
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_ptr : children) {
 		if (child_ptr) {
-			child_ptr = GetChildSwizzled(art, (uintptr_t)child_ptr);
-			child_offsets.push_back(child_ptr->Serialize(art, writer));
+			child_ptr = (uint64_t)GetChildSwizzled(art, child_ptr);
+			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -156,7 +156,7 @@ Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 	for (idx_t i = 0; i < 16; i++) {
 		idx_t block_id = reader.Read<idx_t>();
 		idx_t offset = reader.Read<idx_t>();
-		node16->children[i] = (Node *)(Node::GenerateSwizzledPointer(block_id, offset));
+		node16->children[i] = Node::GenerateSwizzledPointer(block_id, offset);
 	}
 	return node16;
 }
@@ -164,10 +164,10 @@ Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 void Node16::Erase(Node *&node, int pos) {
 	auto n = (Node16 *)node;
 	// erase the child and decrease the count
-	if (!IsSwizzled((uintptr_t)n->children[pos])) {
-		delete n->children[pos];
+	if (!IsSwizzled(n->children[pos])) {
+		delete (Node *)n->children[pos];
 	}
-	n->children[pos] = nullptr;
+	n->children[pos] = 0;
 	n->count--;
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
@@ -179,7 +179,7 @@ void Node16::Erase(Node *&node, int pos) {
 		if (!n->children[pos]) {
 			break;
 		}
-		n->children[pos] = nullptr;
+		n->children[pos] = 0;
 	}
 
 	if (node->count <= 3) {
@@ -188,7 +188,7 @@ void Node16::Erase(Node *&node, int pos) {
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
 			new_node->children_ptrs[new_node->count++] = n->children[i];
-			n->children[i] = nullptr;
+			n->children[i] = 0;
 		}
 		CopyPrefix(n, new_node);
 		delete node;

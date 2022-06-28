@@ -16,7 +16,7 @@ public:
 	explicit Node16(size_t compression_length);
 	~Node16() override;
 	uint8_t key[16];
-	Node *children[16];
+	uint64_t children[16];
 
 public:
 	//! Get position of a byte, returns -1 if not exists
