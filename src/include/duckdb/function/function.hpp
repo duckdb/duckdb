@@ -34,8 +34,6 @@ class TableFunction;
 struct PragmaInfo;
 
 struct FunctionData {
-	//! External dependencies of this table function
-	unique_ptr<ExternalDependency> external_dependency;
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -51,6 +49,11 @@ struct TableFunctionData : public FunctionData {
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
+};
+
+struct PyTableFunctionData : public TableFunctionData {
+	//! External dependencies of this table function
+	unique_ptr<ExternalDependency> external_dependency;
 };
 
 struct FunctionParameters {
