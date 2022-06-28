@@ -1,0 +1,13 @@
+# name: test/sql/table_function/duckdb_extensions.test
+# description: Test duckdb_extensions function
+# group: [table_function]
+
+statement ok
+SELECT * FROM duckdb_extensions();
+
+require tpch
+
+query I
+SELECT extension_name FROM duckdb_extensions() WHERE loaded AND extension_name='tpch';
+----
+tpch

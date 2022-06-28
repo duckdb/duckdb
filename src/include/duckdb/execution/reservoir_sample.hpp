@@ -11,8 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-
-#include <queue>
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 

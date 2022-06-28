@@ -93,7 +93,7 @@ PhysicalType LogicalType::GetInternalType() {
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
 		} else {
-			throw InternalException("Widths bigger than 38 are not supported");
+			throw InternalException("Widths bigger than %d are not supported", DecimalType::MaxWidth());
 		}
 	}
 	case LogicalTypeId::VARCHAR:
@@ -108,9 +108,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
-	case LogicalTypeId::HASH:
-		static_assert(sizeof(hash_t) == sizeof(uint64_t), "Hash must be uint64_t");
-		return PhysicalType::UINT64;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -125,8 +122,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
-		auto size = EnumType::GetSize(*this);
-		return EnumType::GetPhysicalType(size);
+		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
@@ -420,8 +416,6 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "LIST";
 	case LogicalTypeId::MAP:
 		return "MAP";
-	case LogicalTypeId::HASH:
-		return "HASH";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
 	case LogicalTypeId::TABLE:
@@ -443,6 +437,10 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 }
 
 string LogicalType::ToString() const {
+	auto alias = GetAlias();
+	if (!alias.empty()) {
+		return alias;
+	}
 	switch (id_) {
 	case LogicalTypeId::STRUCT: {
 		if (!type_info_) {
@@ -519,7 +517,7 @@ LogicalType TransformStringToLogicalType(const string &str) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
-	return Parser::ParseColumnList("dummy " + str)[0].type;
+	return Parser::ParseColumnList("dummy " + str)[0].Type();
 }
 
 bool LogicalType::IsIntegral() const {
@@ -645,9 +643,20 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 				return right;
 			}
 		} else if (type_id == LogicalTypeId::DECIMAL) {
-			// use max width/scale of the two types
-			auto width = MaxValue<uint8_t>(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
+			// unify the width/scale so that the resulting decimal always fits
+			// "width - scale" gives us the number of digits on the left side of the decimal point
+			// "scale" gives us the number of digits allowed on the right of the deciaml point
+			// using the max of these of the two types gives us the new decimal size
+			auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
+			auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
+			auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
 			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
+			auto width = extra_width + scale;
+			if (width > DecimalType::MaxWidth()) {
+				// if the resulting decimal does not fit, we truncate the scale
+				width = DecimalType::MaxWidth();
+				scale = width - extra_width;
+			}
 			return LogicalType::DECIMAL(width, scale);
 		} else if (type_id == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
@@ -691,7 +700,7 @@ bool ApproxEqual(float ldecimal, float rdecimal) {
 	if (!Value::FloatIsFinite(ldecimal) || !Value::FloatIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	float epsilon = std::fabs(rdecimal) * 0.01;
+	float epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
@@ -702,7 +711,7 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	if (!Value::DoubleIsFinite(ldecimal) || !Value::DoubleIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	double epsilon = std::fabs(rdecimal) * 0.01;
+	double epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
@@ -711,32 +720,94 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 enum class ExtraTypeInfoType : uint8_t {
 	INVALID_TYPE_INFO = 0,
-	DECIMAL_TYPE_INFO = 1,
-	STRING_TYPE_INFO = 2,
-	LIST_TYPE_INFO = 3,
-	STRUCT_TYPE_INFO = 4,
-	ENUM_TYPE_INFO = 5,
-	USER_TYPE_INFO = 6,
-	AGGREGATE_STATE_TYPE_INFO = 7
+	GENERIC_TYPE_INFO = 1,
+	DECIMAL_TYPE_INFO = 2,
+	STRING_TYPE_INFO = 3,
+	LIST_TYPE_INFO = 4,
+	STRUCT_TYPE_INFO = 5,
+	ENUM_TYPE_INFO = 6,
+	USER_TYPE_INFO = 7,
+	AGGREGATE_STATE_TYPE_INFO = 8
 };
 
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
 	}
+	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(move(alias)) {
+	}
 	virtual ~ExtraTypeInfo() {
 	}
 
 	ExtraTypeInfoType type;
+	string alias;
+	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
-	virtual bool Equals(ExtraTypeInfo *other) const = 0;
+	bool Equals(ExtraTypeInfo *other_p) const {
+		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
+		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+			if (!other_p) {
+				if (!alias.empty()) {
+					return false;
+				}
+				return true;
+			}
+			if (alias != other_p->alias) {
+				return false;
+			}
+			return true;
+		}
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (ExtraTypeInfo &)*other_p;
+		return alias == other.alias && EqualsInternal(other_p);
+	}
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
+	virtual void Serialize(FieldWriter &writer) const {};
 	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
 	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
 	//! Deserializes a blob back into an ExtraTypeInfo
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+
+protected:
+	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
+		// Do nothing
+		return true;
+	}
 };
+
+void LogicalType::SetAlias(string &alias) {
+	if (!type_info_) {
+		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, alias);
+	} else {
+		type_info_->alias = alias;
+	}
+}
+
+string LogicalType::GetAlias() const {
+	if (!type_info_) {
+		return string();
+	} else {
+		return type_info_->alias;
+	}
+}
+
+void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
+	auto info = type.AuxInfo();
+	if (!info) {
+		return nullptr;
+	}
+	return ((ExtraTypeInfo &)*info).catalog_entry;
+}
 
 //===--------------------------------------------------------------------===//
 // Decimal Type
@@ -750,17 +821,6 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 	uint8_t scale;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (DecimalTypeInfo &)*other_p;
-		return width == other.width && scale == other.scale;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField<uint8_t>(width);
 		writer.WriteField<uint8_t>(scale);
@@ -770,6 +830,12 @@ public:
 		auto width = reader.ReadRequired<uint8_t>();
 		auto scale = reader.ReadRequired<uint8_t>();
 		return make_shared<DecimalTypeInfo>(width, scale);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (DecimalTypeInfo &)*other_p;
+		return width == other.width && scale == other.scale;
 	}
 };
 
@@ -785,6 +851,10 @@ uint8_t DecimalType::GetScale(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((DecimalTypeInfo &)*info).scale;
+}
+
+uint8_t DecimalType::MaxWidth() {
+	return 38;
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {
@@ -803,11 +873,6 @@ struct StringTypeInfo : public ExtraTypeInfo {
 	string collation;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		// collation info has no impact on equality
-		return true;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteString(collation);
 	}
@@ -815,6 +880,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto collation = reader.ReadRequired<string>();
 		return make_shared<StringTypeInfo>(move(collation));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		// collation info has no impact on equality
+		return true;
 	}
 };
 
@@ -824,6 +895,9 @@ string StringType::GetCollation(const LogicalType &type) {
 	}
 	auto info = type.AuxInfo();
 	if (!info) {
+		return string();
+	}
+	if (info->type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 		return string();
 	}
 	return ((StringTypeInfo &)*info).collation;
@@ -845,17 +919,6 @@ struct ListTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (ListTypeInfo &)*other_p;
-		return child_type == other.child_type;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteSerializable(child_type);
 	}
@@ -863,6 +926,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_shared<ListTypeInfo>(move(child_type));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (ListTypeInfo &)*other_p;
+		return child_type == other.child_type;
 	}
 };
 
@@ -889,17 +958,6 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	child_list_t<LogicalType> child_types;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (StructTypeInfo &)*other_p;
-		return child_types == other.child_types;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteField<uint32_t>(child_types.size());
 		auto &serializer = writer.GetSerializer();
@@ -920,6 +978,12 @@ public:
 		}
 		return make_shared<StructTypeInfo>(move(child_list));
 	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (StructTypeInfo &)*other_p;
+		return child_types == other.child_types;
+	}
 };
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
@@ -930,19 +994,6 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	aggregate_state_t state_type;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (AggregateStateTypeInfo &)*other_p;
-		return state_type.function_name == other.state_type.function_name &&
-		       state_type.return_type == other.state_type.return_type &&
-		       state_type.bound_argument_types == other.state_type.bound_argument_types;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		auto &serializer = writer.GetSerializer();
 		writer.WriteString(state_type.function_name);
@@ -967,6 +1018,14 @@ public:
 		}
 		return make_shared<AggregateStateTypeInfo>(
 		    aggregate_state_t(move(function_name), move(return_type), move(bound_argument_types)));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (AggregateStateTypeInfo &)*other_p;
+		return state_type.function_name == other.state_type.function_name &&
+		       state_type.return_type == other.state_type.return_type &&
+		       state_type.bound_argument_types == other.state_type.bound_argument_types;
 	}
 };
 
@@ -1059,17 +1118,6 @@ struct UserTypeInfo : public ExtraTypeInfo {
 	string user_type_name;
 
 public:
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		auto &other = (UserTypeInfo &)*other_p;
-		return other.user_type_name == user_type_name;
-	}
-
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteString(user_type_name);
 	}
@@ -1077,6 +1125,12 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
 		auto enum_name = reader.ReadRequired<string>();
 		return make_shared<UserTypeInfo>(move(enum_name));
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = (UserTypeInfo &)*other_p;
+		return other.user_type_name == user_type_name;
 	}
 };
 
@@ -1095,36 +1149,43 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
+
+enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1, DEDUP_POINTER = 2 };
+
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t size)
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)),
-	      values_insert_order(values_insert_order_p), size(size) {
+	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::VECTOR_DICT),
+	      enum_name(move(enum_name_p)), values_insert_order(values_insert_order_p), dict_size(dict_size_p) {
 	}
+	explicit EnumTypeInfo()
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), dict_type(EnumDictType::DEDUP_POINTER),
+	      enum_name("dedup_pointer"), values_insert_order(Vector(LogicalType::VARCHAR)), dict_size(0) {
+	}
+	EnumDictType dict_type;
 	string enum_name;
 	Vector values_insert_order;
-	idx_t size;
-	TypeCatalogEntry *catalog_entry = nullptr;
+	idx_t dict_size;
 
-public:
+protected:
 	// Equalities are only used in enums with different catalog entries
-	bool Equals(ExtraTypeInfo *other_p) const override {
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
 		auto &other = (EnumTypeInfo &)*other_p;
-
+		if (dict_type != other.dict_type) {
+			return false;
+		}
+		if (dict_type == EnumDictType::DEDUP_POINTER) {
+			return true;
+		}
+		D_ASSERT(dict_type == EnumDictType::VECTOR_DICT);
 		// We must check if both enums have the same size
-		if (other.size != size) {
+		if (other.dict_size != dict_size) {
 			return false;
 		}
 		auto other_vector_ptr = FlatVector::GetData<string_t>(other.values_insert_order);
 		auto this_vector_ptr = FlatVector::GetData<string_t>(values_insert_order);
 
 		// Now we must check if all strings are the same
-		for (idx_t i = 0; i < size; i++) {
+		for (idx_t i = 0; i < dict_size; i++) {
 			if (!Equals::Operation(other_vector_ptr[i], this_vector_ptr[i])) {
 				return false;
 			}
@@ -1133,9 +1194,12 @@ public:
 	}
 
 	void Serialize(FieldWriter &writer) const override {
-		writer.WriteField<uint32_t>(size);
+		if (dict_type != EnumDictType::VECTOR_DICT) {
+			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
+		}
+		writer.WriteField<uint32_t>(dict_size);
 		writer.WriteString(enum_name);
-		((Vector &)values_insert_order).Serialize(size, writer.GetSerializer());
+		((Vector &)values_insert_order).Serialize(dict_size, writer.GetSerializer());
 	}
 };
 
@@ -1164,10 +1228,22 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).enum_name;
 }
 
+static PhysicalType EnumVectorDictType(idx_t size) {
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		return PhysicalType::UINT8;
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		return PhysicalType::UINT16;
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		return PhysicalType::UINT32;
+	} else {
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
+}
+
 LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	auto enum_internal_type = EnumType::GetPhysicalType(size);
+	auto enum_internal_type = EnumVectorDictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
 		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data, size);
@@ -1182,6 +1258,12 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 		throw InternalException("Invalid Physical Type for ENUMs");
 	}
 	// Generate Actual Enum Type
+	return LogicalType(LogicalTypeId::ENUM, info);
+}
+
+LogicalType LogicalType::DEDUP_POINTER_ENUM() { // NOLINT
+	auto info = make_shared<EnumTypeInfo>();
+	D_ASSERT(info->dict_type == EnumDictType::DEDUP_POINTER);
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
@@ -1209,6 +1291,10 @@ int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 
 const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
+	auto &enum_info = ((EnumTypeInfo &)*info);
+	if (enum_info.dict_type == EnumDictType::DEDUP_POINTER) {
+		return (const char *)val.GetValue<uint64_t>();
+	}
 	auto &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
 	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
@@ -1224,7 +1310,7 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).size;
+	return ((EnumTypeInfo &)*info).dict_size;
 }
 
 void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
@@ -1240,16 +1326,17 @@ TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).catalog_entry;
 }
 
-PhysicalType EnumType::GetPhysicalType(idx_t size) {
-	if (size <= NumericLimits<uint8_t>::Maximum()) {
-		return PhysicalType::UINT8;
-	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-		return PhysicalType::UINT16;
-	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-		return PhysicalType::UINT32;
-	} else {
-		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto aux_info = type.AuxInfo();
+	D_ASSERT(aux_info);
+	auto &info = (EnumTypeInfo &)*aux_info;
+
+	if (info.dict_type == EnumDictType::DEDUP_POINTER) {
+		return PhysicalType::UINT64; // for pointer enum types
 	}
+	D_ASSERT(info.dict_type == EnumDictType::VECTOR_DICT);
+	return EnumVectorDictType(info.dict_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1258,46 +1345,69 @@ PhysicalType EnumType::GetPhysicalType(idx_t size) {
 void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 	if (!info) {
 		writer.WriteField<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
+		writer.WriteString(string());
 	} else {
 		writer.WriteField<ExtraTypeInfoType>(info->type);
 		info->Serialize(writer);
+		writer.WriteString(info->alias);
 	}
 }
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<ExtraTypeInfoType>();
+	shared_ptr<ExtraTypeInfo> extra_info;
 	switch (type) {
-	case ExtraTypeInfoType::INVALID_TYPE_INFO:
+	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
+		auto alias = reader.ReadField<string>(string());
+		if (!alias.empty()) {
+			return make_shared<ExtraTypeInfo>(type, alias);
+		}
 		return nullptr;
+	} break;
+	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
+		extra_info = make_shared<ExtraTypeInfo>(type);
+	} break;
 	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-		return DecimalTypeInfo::Deserialize(reader);
+		extra_info = DecimalTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::STRING_TYPE_INFO:
-		return StringTypeInfo::Deserialize(reader);
+		extra_info = StringTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
-		return ListTypeInfo::Deserialize(reader);
+		extra_info = ListTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-		return StructTypeInfo::Deserialize(reader);
+		extra_info = StructTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::USER_TYPE_INFO:
-		return UserTypeInfo::Deserialize(reader);
+		extra_info = UserTypeInfo::Deserialize(reader);
+		break;
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
 		auto enum_size = reader.ReadRequired<uint32_t>();
-		auto enum_internal_type = EnumType::GetPhysicalType(enum_size);
+		auto enum_internal_type = EnumVectorDictType(enum_size);
 		switch (enum_internal_type) {
 		case PhysicalType::UINT8:
-			return EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);
+			extra_info = EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size);
+			break;
 		case PhysicalType::UINT16:
-			return EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size);
+			extra_info = EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size);
+			break;
 		case PhysicalType::UINT32:
-			return EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size);
+			extra_info = EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size);
+			break;
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
-	}
+	} break;
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
-		return AggregateStateTypeInfo::Deserialize(reader);
+		extra_info = AggregateStateTypeInfo::Deserialize(reader);
+		break;
 
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
+	auto alias = reader.ReadField<string>(string());
+	extra_info->alias = alias;
+	return extra_info;
 }
 
 //===--------------------------------------------------------------------===//

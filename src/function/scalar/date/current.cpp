@@ -57,7 +57,8 @@ unique_ptr<FunctionData> BindCurrentTime(ClientContext &context, ScalarFunction 
 }
 
 void CurrentTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("current_time", {}, LogicalType::TIME, CurrentTimeFunction, false, BindCurrentTime));
+	set.AddFunction(
+	    ScalarFunction("get_current_time", {}, LogicalType::TIME, CurrentTimeFunction, false, BindCurrentTime));
 }
 
 void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
@@ -65,8 +66,9 @@ void CurrentDateFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void CurrentTimestampFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction({"now", "current_timestamp"}, ScalarFunction({}, LogicalType::TIMESTAMP, CurrentTimestampFunction,
-	                                                             false, false, BindCurrentTime));
+	set.AddFunction(
+	    {"now", "get_current_timestamp"},
+	    ScalarFunction({}, LogicalType::TIMESTAMP, CurrentTimestampFunction, false, false, BindCurrentTime));
 }
 
 } // namespace duckdb

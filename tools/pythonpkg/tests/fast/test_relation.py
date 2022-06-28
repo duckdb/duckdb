@@ -41,6 +41,7 @@ class TestRelation(object):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.limit(2).execute().fetchall() == [(1, 'one'), (2, 'two')]
+        assert rel.limit(2, offset=1).execute().fetchall() == [(2, 'two'), (3, 'three')]
 
     def test_intersect_operator(self,duckdb_cursor):
         conn = duckdb.connect()
@@ -189,3 +190,13 @@ class TestRelation(object):
         assert rel1.join(rel2, 'i=j', 'inner').aggregate('count()').fetchone()[0] == 2
 
         assert rel1.join(rel2, 'i=j', 'left').aggregate('count()').fetchone()[0] == 4
+
+    def test_explain(self, duckdb_cursor):
+        con = duckdb.connect()
+        con.execute("Create table t1 (i integer)")
+        con.execute("Create table t2 (j integer)")
+        rel1 = con.table('t1')
+        rel2 = con.table('t2')
+        join = rel1.join(rel2, 'i=j', 'inner').aggregate('count()')
+        assert join.explain() == 'Aggregate [count_star()]\n  Join INNER i = j\n    Scan Table [t1]\n    Scan Table [t2]'
+
