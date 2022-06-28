@@ -91,6 +91,9 @@ struct StrfTimeFormat : public StrTimeFormat {
 
 	DUCKDB_API static string Format(timestamp_t timestamp, const string &format);
 
+	DUCKDB_API void ConvertDateVector(Vector &input, Vector &result, idx_t count);
+	DUCKDB_API void ConvertTimestampVector(Vector &input, Vector &result, idx_t count);
+
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
 	vector<StrTimeSpecifier> var_length_specifiers;

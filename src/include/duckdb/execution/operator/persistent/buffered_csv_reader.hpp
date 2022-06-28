@@ -123,6 +123,9 @@ struct BufferedCSVReaderOptions {
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! The date format to use for writing (if any is specified)
+	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
@@ -137,6 +140,7 @@ struct BufferedCSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 
 	void SetWriteOption(const string &loption, const Value &value);
+	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 
 	std::string ToString() const;
 };
