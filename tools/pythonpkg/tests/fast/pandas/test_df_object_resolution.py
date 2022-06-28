@@ -7,6 +7,12 @@ import pytest
 def create_generic_dataframe(data):
     return pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
 
+class IntString:
+    def __init__(self, value: int):
+        self.value = value
+    def __str__(self):
+        return str(self.value)
+
 class TestResolveObjectColumns(object):
 
     def test_integers(self, duckdb_cursor):
@@ -50,3 +56,18 @@ class TestResolveObjectColumns(object):
         )
         with pytest.raises(Exception, match="Struct entries have differing amounts of fields"):
             converted_df = duckdb.query("SELECT * FROM x").df()
+
+    def test_struct_key_conversion(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{
+                    IntString(5) :      1,
+                    IntString(-25):     3,
+                    IntString(32):      3,
+                    IntString(32456):   7
+                }],
+            ]
+        )
+        duckdb_col = duckdb.query("select {'5':1, '-25':3, '32':3, '32456':7} as '0'").df()
+        converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        pd.testing.assert_frame_equal(duckdb_col, converted_col)
