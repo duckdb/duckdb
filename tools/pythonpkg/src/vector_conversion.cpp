@@ -4,6 +4,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb_python/python_import_cache.hpp"
 
 namespace duckdb {
 
@@ -649,16 +650,17 @@ static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_
 
 // This should be called Bind .. something
 static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
-	auto datetime_mod = py::module_::import("datetime");
-	auto datetime_date = datetime_mod.attr("date");
-	auto datetime_datetime = datetime_mod.attr("datetime");
-	auto datetime_time = datetime_mod.attr("time");
+	// auto datetime_mod = py::module_::import("datetime");
+	// auto datetime_date = datetime_mod.attr("date");
+	// auto datetime_datetime = datetime_mod.attr("datetime");
+	// auto datetime_time = datetime_mod.attr("time");
 
 	auto decimal_mod = py::module_::import("decimal");
 	auto decimal_decimal = decimal_mod.attr("Decimal");
 
-	auto numpy_mod = py::module::import("numpy");
-	auto numpy_ndarray = numpy_mod.attr("ndarray");
+	// auto numpy_mod = py::module::import("numpy");
+	// auto numpy_ndarray = numpy_mod.attr("ndarray");
+	PythonImportCache import_cache;
 
 	auto uuid_mod = py::module::import("uuid");
 	auto uuid_uuid = uuid_mod.attr("UUID");
@@ -676,7 +678,7 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		return LogicalType::DOUBLE;
 	} else if (py::isinstance(ele, decimal_decimal)) {
 		return LogicalType::VARCHAR; // Might be float64 actually? //or DECIMAL
-	} else if (py::isinstance(ele, datetime_datetime)) {
+	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		// auto ptr = ele.ptr();
 		// auto year = PyDateTime_GET_YEAR(ptr);
 		// auto month = PyDateTime_GET_MONTH(ptr);
@@ -687,14 +689,14 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		// auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
 		// This probably needs to be more precise ..
 		return LogicalType::TIMESTAMP;
-	} else if (py::isinstance(ele, datetime_time)) {
+	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		// auto ptr = ele.ptr();
 		// auto hour = PyDateTime_TIME_GET_HOUR(ptr);
 		// auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
 		// auto second = PyDateTime_TIME_GET_SECOND(ptr);
 		// auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
 		return LogicalType::TIME;
-	} else if (py::isinstance(ele, datetime_date)) {
+	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		// auto ptr = ele.ptr();
 		// auto year = PyDateTime_GET_YEAR(ptr);
 		// auto month = PyDateTime_GET_MONTH(ptr);
@@ -725,7 +727,7 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 			return DictToMap(dict_values, can_convert);
 		}
 		return DictToStruct(dict_keys, dict_values, size, can_convert);
-	} else if (py::isinstance(ele, numpy_ndarray)) {
+	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		auto extended_type = GetPandasType(ele.attr("dtype"));
 		LogicalType ltype;
 		ltype = ConvertPandasType(extended_type);

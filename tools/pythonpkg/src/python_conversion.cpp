@@ -1,5 +1,6 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/python_import_cache.hpp"
 
 #include "datetime.h" //From Python
 
@@ -64,14 +65,15 @@ Value TransformListValue(py::handle ele) {
 }
 
 Value TransformPythonValue(py::handle ele) {
-	auto datetime_mod = py::module::import("datetime");
-	auto datetime_date = datetime_mod.attr("date");
-	auto datetime_datetime = datetime_mod.attr("datetime");
-	auto datetime_time = datetime_mod.attr("time");
+	// auto datetime_mod = py::module::import("datetime");
+	// auto datetime_date = datetime_mod.attr("date");
+	// auto datetime_datetime = datetime_mod.attr("datetime");
+	// auto datetime_time = datetime_mod.attr("time");
 	auto decimal_mod = py::module::import("decimal");
 	auto decimal_decimal = decimal_mod.attr("Decimal");
-	auto numpy_mod = py::module::import("numpy");
-	auto numpy_ndarray = numpy_mod.attr("ndarray");
+	PythonImportCache import_cache;
+	// auto numpy_mod = py::module::import("numpy");
+	// auto numpy_ndarray = numpy_mod.attr("ndarray");
 	auto uuid_mod = py::module::import("uuid");
 	auto uuid_uuid = uuid_mod.attr("UUID");
 
@@ -91,7 +93,7 @@ Value TransformPythonValue(py::handle ele) {
 	} else if (py::isinstance(ele, uuid_uuid)) {
 		auto string_val = py::str(ele).cast<string>();
 		return Value::UUID(string_val);
-	} else if (py::isinstance(ele, datetime_datetime)) {
+	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		auto ptr = ele.ptr();
 		auto year = PyDateTime_GET_YEAR(ptr);
 		auto month = PyDateTime_GET_MONTH(ptr);
@@ -101,14 +103,14 @@ Value TransformPythonValue(py::handle ele) {
 		auto second = PyDateTime_DATE_GET_SECOND(ptr);
 		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
 		return Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_time)) {
+	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		auto ptr = ele.ptr();
 		auto hour = PyDateTime_TIME_GET_HOUR(ptr);
 		auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
 		auto second = PyDateTime_TIME_GET_SECOND(ptr);
 		auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
 		return Value::TIME(hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_date)) {
+	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		auto ptr = ele.ptr();
 		auto year = PyDateTime_GET_YEAR(ptr);
 		auto month = PyDateTime_GET_MONTH(ptr);
@@ -156,7 +158,7 @@ Value TransformPythonValue(py::handle ele) {
 			struct_values.emplace_back(make_pair(key, move(val)));
 		}
 		return Value::STRUCT(move(struct_values));
-	} else if (py::isinstance(ele, numpy_ndarray)) {
+	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return TransformPythonValue(ele.attr("tolist")());
 	} else {
 		throw std::runtime_error("TransformPythonValue unknown param type " + py::str(ele.get_type()).cast<string>());
