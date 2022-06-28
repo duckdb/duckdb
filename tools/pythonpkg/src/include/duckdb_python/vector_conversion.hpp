@@ -14,7 +14,7 @@
 #include "duckdb_python/python_object_container.hpp"
 namespace duckdb {
 
-enum class ExtendedNumpyType : uint8_t {
+enum class PandasType : uint8_t {
 	//! Original NumPy dtype nums
 
 	BOOL = 0,              //! bool_, bool8
@@ -40,7 +40,7 @@ enum class ExtendedNumpyType : uint8_t {
 	RECORD = 20,           //! |V1, record, void, void0
 	DATETIME = 21,         //! datetime64[D], datetime64
 	TIMEDELTA = 22,        //! timedelta64[D], timedelta64
-	FLOAT_16 = 23,         //! float16, half
+	FLOAT_16 = 23,         //! float16, halfq
 
 	//! ------------------------------------------------------------
 
@@ -67,26 +67,6 @@ enum class ExtendedNumpyType : uint8_t {
 	PANDA_INTERVAL = 103,       //! datetime64[ns, UTC]
 };
 
-// enum class PandasType : uint8_t {
-//	BOOL,
-//	PANDA_BOOL,
-//	TINYINT,
-//	SMALLINT,
-//	INTEGER,
-//	BIGINT,
-//	UTINYINT,
-//	USMALLINT,
-//	UINTEGER,
-//	UBIGINT,
-//	FLOAT,
-//	DOUBLE,
-//	TIMESTAMP,
-//	INTERVAL,
-//	VARCHAR,
-//	OBJECT,
-//	CATEGORY
-// };
-
 struct NumPyArrayWrapper {
 	explicit NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {
 	}
@@ -95,7 +75,7 @@ struct NumPyArrayWrapper {
 };
 
 struct PandasColumnBindData {
-	ExtendedNumpyType pandas_type;
+	PandasType pandas_type;
 	py::array numpy_col;
 	idx_t numpy_stride;
 	unique_ptr<NumPyArrayWrapper> mask;
