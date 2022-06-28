@@ -179,9 +179,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	date_struct.month = 9;
 	date_struct.day = 3;
 
-	auto str = strdup("hello world this is my long string");
-	status = duckdb_append_blob(tappender, str, strlen(str));
-	free(str);
+	char blob_data[] = "hello world this\0is my long string";
+	idx_t blob_len = 34;
+	status = duckdb_append_blob(tappender, blob_data, blob_len);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_date(tappender, duckdb_to_date(date_struct));
@@ -298,8 +298,8 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(10, 0) == "hello");
 
 	auto blob = duckdb_value_blob(&result->InternalResult(), 11, 0);
-	REQUIRE(blob.size == 34);
-	REQUIRE(memcmp(blob.data, "hello world this is my long string", 34) == 0);
+	REQUIRE(blob.size == blob_len);
+	REQUIRE(memcmp(blob.data, blob_data, blob_len) == 0);
 	duckdb_free(blob.data);
 	REQUIRE(duckdb_value_int32(&result->InternalResult(), 11, 0) == 0);
 

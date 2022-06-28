@@ -91,9 +91,9 @@ SELECT g, LIST(e) l1, LIST(e) l2 from list_data GROUP BY g ORDER BY g
 query IT
 SELECT g, LIST(e/2.0) from list_data GROUP BY g order by g
 ----
-1	[0.500000, 1.000000]
-2	[1.500000, 2.000000, 2.500000]
-3	[3.000000]
+1	[0.5, 1.0]
+2	[1.5, 2.0, 2.5]
+3	[3.0]
 5	[NULL]
 
 query IT
