@@ -60,11 +60,7 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, 
 	// Set external (can be force with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
 	global_sort_state.external = config.force_external;
-	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/4th of this, to be conservative
-	idx_t max_memory = global_sort_state.buffer_manager.GetMaxMemory();
-	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	memory_per_thread = (max_memory / num_threads) / 4;
+	memory_per_thread = PhysicalRangeJoin::GetMaxThreadMemory(context);
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
