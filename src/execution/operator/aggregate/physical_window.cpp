@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parallel/event.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -53,19 +54,13 @@ public:
 		local_sort->SinkChunk(sort_buffer, payload_buffer);
 	}
 
-	void Sort() {
+	void PrepareMergePhase() {
 		if (local_sort) {
 			global_sort->AddLocalState(*local_sort);
 			local_sort.reset();
 		}
 
 		global_sort->PrepareMergePhase();
-		while (global_sort->sorted_blocks.size() > 1) {
-			global_sort->InitializeMergeRound();
-			MergeSorter merge_sorter(*global_sort, global_sort->buffer_manager);
-			merge_sorter.PerformInMergeRound();
-			global_sort->CompleteMergeRound(true);
-		}
 	}
 
 	Types sort_types;
@@ -85,7 +80,7 @@ public:
 	using Types = vector<LogicalType>;
 
 	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), memory_per_thread(0),
+	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), next_sort(0), memory_per_thread(0),
 	      mode(DBConfig::GetConfig(context).window_mode) {
 
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
@@ -133,11 +128,23 @@ public:
 		return hash_group.get();
 	}
 
+	size_t GetNextSortGroup() {
+		for (auto group = next_sort++; group < hash_groups.size(); group = next_sort++) {
+			// Only non-empty groups exist.
+			if (hash_groups[group]) {
+				return group;
+			}
+		}
+
+		return hash_groups.size();
+	}
+
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
 	mutex lock;
 	Orders orders;
 	Types payload_types;
+	std::atomic<size_t> next_sort;
 	vector<HashGroupPtr> hash_groups;
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> strings;
@@ -688,7 +695,6 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 static void SortCollectionForPartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate,
                                        const hash_t hash_bin) {
 	state.hash_group = move(gstate.hash_groups[hash_bin]);
-	state.hash_group->Sort();
 }
 
 static void ScanRowCollection(RowDataCollection &rows, ChunkCollection &cols, const vector<LogicalType> &types) {
@@ -1558,6 +1564,116 @@ unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &c
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<WindowGlobalSinkState>(*this, context);
+}
+
+class WindowMergeTask : public ExecutorTask {
+public:
+	WindowMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, WindowGlobalHashGroup &hash_group_p)
+	    : ExecutorTask(context_p), event(move(event_p)), hash_group(hash_group_p) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		// Initialize merge sorted and iterate until done
+		auto &global_sort = *hash_group.global_sort;
+		MergeSorter merge_sorter(global_sort, global_sort.buffer_manager);
+		merge_sorter.PerformInMergeRound();
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+	WindowGlobalHashGroup &hash_group;
+};
+
+class WindowMergeEvent : public Event {
+public:
+	WindowMergeEvent(WindowGlobalSinkState &gstate_p, Pipeline &pipeline_p, WindowGlobalHashGroup &hash_group_p)
+	    : Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p), hash_group(hash_group_p) {
+	}
+
+	WindowGlobalSinkState &gstate;
+	Pipeline &pipeline;
+	WindowGlobalHashGroup &hash_group;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline.GetClientContext();
+
+		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
+		auto &ts = TaskScheduler::GetScheduler(context);
+		idx_t num_threads = ts.NumberOfThreads();
+
+		vector<unique_ptr<Task>> merge_tasks;
+		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
+			merge_tasks.push_back(make_unique<WindowMergeTask>(shared_from_this(), context, hash_group));
+		}
+		SetTasks(move(merge_tasks));
+	}
+
+	void FinishEvent() override {
+		hash_group.global_sort->CompleteMergeRound();
+		CreateMergeTasks(pipeline, *this, gstate, hash_group);
+	}
+
+	static bool CreateMergeTasks(Pipeline &pipeline, Event &event, WindowGlobalSinkState &state,
+		WindowGlobalHashGroup &hash_group) {
+
+		// Multiple blocks remaining in the group: Schedule the next round
+		if (hash_group.global_sort->sorted_blocks.size() > 1) {
+			hash_group.global_sort->InitializeMergeRound();
+			auto new_event = make_shared<WindowMergeEvent>(state, pipeline, hash_group);
+			event.InsertEvent(move(new_event));
+			return true;
+		}
+
+		//	Find the next group to sort
+		for (;;) {
+			auto group = state.GetNextSortGroup();
+			if (group >= state.hash_groups.size()) {
+				//	Out of groups
+				return false;
+			}
+
+			auto &hash_group = *state.hash_groups[group];
+			auto &global_sort = *hash_group.global_sort;
+
+			// Prepare for merge sort phase
+			hash_group.PrepareMergePhase();
+			if (global_sort.sorted_blocks.size() > 1) {
+				global_sort.InitializeMergeRound();
+				auto new_event = make_shared<WindowMergeEvent>(state, pipeline, hash_group);
+				event.InsertEvent(move(new_event));
+				return true;
+			}
+		}
+	}
+};
+
+SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                          GlobalSinkState &gstate_p) const {
+	auto &state = (WindowGlobalSinkState &)gstate_p;
+
+	// Do we have any sorting to schedule?
+	if (state.rows) {
+		D_ASSERT(state.hash_groups.empty());
+		return state.rows->count ? SinkFinalizeType::READY : SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+
+	// Find the first group to sort
+	auto group = state.GetNextSortGroup();
+	if (group >= state.hash_groups.size()) {
+		// Empty input!
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+
+	auto &hash_group = *state.hash_groups[group];
+
+	// Prepare for merge sort phase
+	hash_group.PrepareMergePhase();
+	WindowMergeEvent::CreateMergeTasks(pipeline, event, state, hash_group);
+
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//
