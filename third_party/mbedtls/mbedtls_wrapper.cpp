@@ -3,6 +3,8 @@
 #include "mbedtls/sha256.h"
 #include "mbedtls/pk.h"
 
+#include <stdexcept>
+
 using namespace std;
 using namespace duckdb_mbedtls;
 
