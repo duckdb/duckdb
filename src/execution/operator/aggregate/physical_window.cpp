@@ -411,10 +411,12 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 	// OVER()
 	if (over_chunk.ColumnCount() == 0) {
 		if (gstate.rows) {
-			gstate.rows->Merge(*rows);
-			gstate.strings->Merge(*strings);
-			rows.reset();
-			strings.reset();
+			if (rows) {
+				gstate.rows->Merge(*rows);
+				gstate.strings->Merge(*strings);
+				rows.reset();
+				strings.reset();
+			}
 		} else {
 			gstate.rows = move(rows);
 			gstate.strings = move(strings);
