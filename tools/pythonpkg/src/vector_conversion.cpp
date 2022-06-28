@@ -126,99 +126,65 @@ T Cast(const py::object obj) {
 	return obj.cast<T>();
 }
 
-static void ConvertPandasType(ExtendedNumpyType &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
+static LogicalType ConvertPandasType(const ExtendedNumpyType &col_type) {
 	switch (col_type) {
-	case ExtendedNumpyType::BOOL: {
-		duckdb_col_type = LogicalType::BOOLEAN;
-		pandas_type = PandasType::BOOL;
-		break;
-	}
+	case ExtendedNumpyType::BOOL:
 	case ExtendedNumpyType::PANDA_BOOL: {
-		duckdb_col_type = LogicalType::BOOLEAN;
-		pandas_type = PandasType::BOOLEAN;
-		break;
+		return LogicalType::BOOLEAN;
 	}
 	case ExtendedNumpyType::PANDA_INT8:
 	case ExtendedNumpyType::INT_8: {
-		duckdb_col_type = LogicalType::TINYINT;
-		pandas_type = PandasType::TINYINT;
-		break;
+		return LogicalType::TINYINT;
 	}
 	case ExtendedNumpyType::PANDA_UINT8:
 	case ExtendedNumpyType::UINT_8: {
-		duckdb_col_type = LogicalType::UTINYINT;
-		pandas_type = PandasType::UTINYINT;
-		break;
+		return LogicalType::UTINYINT;
 	}
 	case ExtendedNumpyType::PANDA_INT16:
 	case ExtendedNumpyType::INT_16: {
-		duckdb_col_type = LogicalType::SMALLINT;
-		pandas_type = PandasType::SMALLINT;
-		break;
+		return LogicalType::SMALLINT;
 	}
 	case ExtendedNumpyType::PANDA_UINT16:
 	case ExtendedNumpyType::UINT_16: {
-		duckdb_col_type = LogicalType::USMALLINT;
-		pandas_type = PandasType::USMALLINT;
-		break;
+		return LogicalType::USMALLINT;
 	}
 	case ExtendedNumpyType::PANDA_INT32:
 	case ExtendedNumpyType::INT_32: {
-		duckdb_col_type = LogicalType::INTEGER;
-		pandas_type = PandasType::INTEGER;
-		break;
+		return LogicalType::INTEGER;
 	}
 	case ExtendedNumpyType::PANDA_UINT32:
 	case ExtendedNumpyType::UINT_32: {
-		duckdb_col_type = LogicalType::UINTEGER;
-		pandas_type = PandasType::UINTEGER;
-		break;
+		return LogicalType::UINTEGER;
 	}
 	case ExtendedNumpyType::PANDA_INT64:
 	case ExtendedNumpyType::INT_64: {
-		duckdb_col_type = LogicalType::BIGINT;
-		pandas_type = PandasType::BIGINT;
-		break;
+		return LogicalType::BIGINT;
 	}
 	case ExtendedNumpyType::PANDA_UINT64:
 	case ExtendedNumpyType::UINT_64: {
-		duckdb_col_type = LogicalType::UBIGINT;
-		pandas_type = PandasType::UBIGINT;
-		break;
+		return LogicalType::UBIGINT;
 	}
 	case ExtendedNumpyType::PANDA_FLOAT32:
 	case ExtendedNumpyType::FLOAT_32: {
-		duckdb_col_type = LogicalType::FLOAT;
-		pandas_type = PandasType::FLOAT;
-		break;
+		return LogicalType::FLOAT;
 	}
 	case ExtendedNumpyType::PANDA_FLOAT64:
 	case ExtendedNumpyType::LONG_FLOAT_64:
 	case ExtendedNumpyType::FLOAT_64: {
-		duckdb_col_type = LogicalType::DOUBLE;
-		pandas_type = PandasType::DOUBLE;
-		break;
+		return LogicalType::DOUBLE;
 	}
 	case ExtendedNumpyType::OBJECT: {
-		duckdb_col_type = LogicalType::VARCHAR;
-		pandas_type = PandasType::OBJECT;
-		break;
+		return LogicalType::VARCHAR;
 	}
 	case ExtendedNumpyType::PANDA_STRING: {
-		duckdb_col_type = LogicalType::VARCHAR;
-		pandas_type = PandasType::VARCHAR;
-		break;
+		return LogicalType::VARCHAR;
 	}
 	case ExtendedNumpyType::TIMEDELTA: {
-		duckdb_col_type = LogicalType::INTERVAL;
-		pandas_type = PandasType::INTERVAL;
-		break;
+		return LogicalType::INTERVAL;
 	}
 	case ExtendedNumpyType::PANDA_DATETIME:
 	case ExtendedNumpyType::DATETIME: {
-		duckdb_col_type = LogicalType::TIMESTAMP;
-		pandas_type = PandasType::TIMESTAMP;
-		break;
+		return LogicalType::TIMESTAMP;
 	}
 	default: {
 		throw std::runtime_error("Failed to convert dtype num " + to_string((uint8_t)col_type) +
@@ -311,43 +277,55 @@ void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
-	case PandasType::BOOLEAN:
+	case ExtendedNumpyType::PANDA_BOOL:
 		ScanPandasMasked<bool>(bind_data, count, offset, out);
 		break;
-	case PandasType::BOOL:
+	case ExtendedNumpyType::BOOL:
 		ScanPandasColumn<bool>(numpy_col, bind_data.numpy_stride, offset, out, count);
 		break;
-	case PandasType::UTINYINT:
+	case ExtendedNumpyType::UINT_8:
+	case ExtendedNumpyType::PANDA_UINT8:
 		ScanPandasMasked<uint8_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::USMALLINT:
+	case ExtendedNumpyType::UINT_16:
+	case ExtendedNumpyType::PANDA_UINT16:
 		ScanPandasMasked<uint16_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::UINTEGER:
+	case ExtendedNumpyType::UINT_32:
+	case ExtendedNumpyType::PANDA_UINT32:
 		ScanPandasMasked<uint32_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::UBIGINT:
+	case ExtendedNumpyType::UINT_64:
+	case ExtendedNumpyType::PANDA_UINT64:
 		ScanPandasMasked<uint64_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::TINYINT:
+	case ExtendedNumpyType::INT_8:
+	case ExtendedNumpyType::PANDA_INT8:
 		ScanPandasMasked<int8_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::SMALLINT:
+	case ExtendedNumpyType::INT_16:
+	case ExtendedNumpyType::PANDA_INT16:
 		ScanPandasMasked<int16_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::INTEGER:
+	case ExtendedNumpyType::INT_32:
+	case ExtendedNumpyType::PANDA_INT32:
 		ScanPandasMasked<int32_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::BIGINT:
+	case ExtendedNumpyType::INT_64:
+	case ExtendedNumpyType::PANDA_INT64:
 		ScanPandasMasked<int64_t>(bind_data, count, offset, out);
 		break;
-	case PandasType::FLOAT:
+	case ExtendedNumpyType::FLOAT_32:
+	case ExtendedNumpyType::PANDA_FLOAT32:
 		ScanPandasFpColumn<float>((float *)numpy_col.data(), count, offset, out);
 		break;
-	case PandasType::DOUBLE:
+	case ExtendedNumpyType::FLOAT_64:
+	case ExtendedNumpyType::LONG_FLOAT_64:
+	case ExtendedNumpyType::PANDA_FLOAT64:
 		ScanPandasFpColumn<double>((double *)numpy_col.data(), count, offset, out);
 		break;
-	case PandasType::TIMESTAMP: {
+	case ExtendedNumpyType::PANDA_DATETIME:
+	case ExtendedNumpyType::DATETIME: {
 		auto src_ptr = (int64_t *)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
@@ -363,7 +341,8 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		}
 		break;
 	}
-	case PandasType::INTERVAL: {
+	case ExtendedNumpyType::TIMEDELTA:
+	case ExtendedNumpyType::PANDA_INTERVAL: {
 		auto src_ptr = (int64_t *)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<interval_t>(out);
 		auto &mask = FlatVector::Validity(out);
@@ -388,8 +367,8 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		}
 		break;
 	}
-	case PandasType::VARCHAR:
-	case PandasType::OBJECT: {
+	case ExtendedNumpyType::PANDA_STRING:
+	case ExtendedNumpyType::OBJECT: {
 		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
@@ -412,7 +391,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
+			if (bind_data.pandas_type == ExtendedNumpyType::OBJECT && !PyUnicode_CheckExact(val)) {
 				LogicalType ltype = out.GetType();
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
@@ -481,7 +460,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		}
 		break;
 	}
-	case PandasType::CATEGORY: {
+	case ExtendedNumpyType::PANDA_CATEGORY: {
 		switch (out.GetType().InternalType()) {
 		case PhysicalType::UINT8:
 			ScanPandasCategory<uint8_t>(numpy_col, count, offset, out, bind_data.internal_categorical_type);
@@ -499,7 +478,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 
 	default:
-		throw std::runtime_error("Unsupported type " + out.GetType().ToString());
+		throw std::runtime_error("Unsupported dtype num " + to_string((uint8_t)bind_data.pandas_type));
 	}
 }
 
@@ -560,12 +539,26 @@ static bool StructKeysAreEqual(idx_t row, const child_list_t<LogicalType> &refer
 // Verify that all struct entries in a column have the same amount of fields and that keys are equal
 static void VerifyStructValidity(vector<LogicalType> &structs) {
 	D_ASSERT(!structs.empty());
+	idx_t reference_entry = 0;
+	// Get first non-null entry
+	for (; reference_entry < structs.size(); reference_entry++) {
+		if (structs[reference_entry].id() != LogicalTypeId::SQLNULL) {
+			break;
+		}
+	}
+	// All entries are NULL
+	if (reference_entry == structs.size()) {
+		return;
+	}
 	auto reference_type = structs[0];
 	auto reference_children = StructType::GetChildTypes(reference_type);
 
 	string error_message;
-	for (idx_t i = 1; i < structs.size(); i++) {
+	for (idx_t i = reference_entry + 1; i < structs.size(); i++) {
 		auto &entry = structs[i];
+		if (entry.id() == LogicalTypeId::SQLNULL) {
+			continue;
+		}
 		auto &entry_children = StructType::GetChildTypes(entry);
 		if (entry_children.size() != reference_children.size()) {
 			throw std::runtime_error("Struct entries have differing amounts of fields");
@@ -735,9 +728,8 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance(ele, numpy_ndarray)) {
 		auto extended_type = GetExtendedNumpyType(ele.attr("dtype"));
 		LogicalType ltype;
-		PandasType ptype;
-		ConvertPandasType(extended_type, ltype, ptype);
-		if (ptype == PandasType::OBJECT) {
+		ltype = ConvertPandasType(extended_type);
+		if (extended_type == ExtendedNumpyType::OBJECT) {
 			LogicalType converted_type = AnalyzeObjectType(ele, can_convert);
 			if (can_convert) {
 				ltype = converted_type;
@@ -802,7 +794,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 			auto category_type = GetExtendedNumpyType(categories.attr("dtype"));
 			if (category_type == ExtendedNumpyType::OBJECT) {
 				// Let's hope the object type is a string.
-				bind_data.pandas_type = PandasType::CATEGORY;
+				bind_data.pandas_type = ExtendedNumpyType::PANDA_CATEGORY;
 				auto enum_name = string(py::str(df_columns[col_idx]));
 				vector<string> enum_entries = py::cast<vector<string>>(categories);
 				idx_t size = enum_entries.size();
@@ -821,7 +813,8 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				auto numpy_type = bind_data.numpy_col.attr("dtype");
 				// for category types (non-strings), we use the converted numpy type
 				category_type = GetExtendedNumpyType(numpy_type);
-				ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
+				bind_data.pandas_type = category_type;
+				duckdb_col_type = ConvertPandasType(category_type);
 			}
 		} else {
 			if (masked || dtype == ExtendedNumpyType::DATETIME || dtype == ExtendedNumpyType::PANDA_DATETIME) {
@@ -829,11 +822,12 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 			} else {
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
 			}
-			ConvertPandasType(dtype, duckdb_col_type, bind_data.pandas_type);
+			bind_data.pandas_type = dtype;
+			duckdb_col_type = ConvertPandasType(dtype);
 		}
 
 		// Analyze the inner data type of the 'object' column
-		if (bind_data.pandas_type == PandasType::OBJECT) {
+		if (bind_data.pandas_type == ExtendedNumpyType::OBJECT) {
 			bool can_convert = true;
 			LogicalType converted_type = AnalyzeObjectType(get_fun(df_columns[col_idx]), can_convert);
 			if (can_convert) {
