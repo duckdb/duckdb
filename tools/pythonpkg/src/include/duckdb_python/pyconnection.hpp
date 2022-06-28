@@ -24,6 +24,7 @@ public:
 	explicit RegisteredObject(py::object obj_p) : obj(move(obj_p)) {
 	}
 	virtual ~RegisteredObject() {
+		py::gil_scoped_acquire acquire;
 		obj = py::none();
 	}
 
