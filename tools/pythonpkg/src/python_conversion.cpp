@@ -43,18 +43,6 @@ Value TransformDictionaryToMap(py::handle dict_values) {
 	return Value::MAP(key_list, value_list);
 }
 
-static void CastAllValues(vector<Value> &values, const LogicalType &target_type) {
-	for (idx_t i = 0; i < values.size(); i++) {
-		values[i] = values[i].CastAs(target_type);
-	}
-}
-
-static void CastNullValues(vector<Value> &values, vector<idx_t> &null_indices, const LogicalType &target_type) {
-	for (auto &idx : null_indices) {
-		values[idx] = values[idx].CastAs(target_type);
-	}
-}
-
 Value TransformListValue(py::handle ele) {
 	auto size = py::len(ele);
 
@@ -163,9 +151,9 @@ Value TransformPythonValue(py::handle ele) {
 		auto dict_keys = py::list(ele.attr("keys")());
 		child_list_t<Value> struct_values;
 		for (idx_t i = 0; i < value_size; i++) {
-			auto key = TransformPythonValue(dict_keys.attr("__getitem__")(i));
+			auto key = string(py::str(dict_keys.attr("__getitem__")(i)));
 			auto val = TransformPythonValue(dict_values.attr("__getitem__")(i));
-			struct_values.emplace_back(make_pair(key.GetValue<string>(), move(val)));
+			struct_values.emplace_back(make_pair(key, move(val)));
 		}
 		return Value::STRUCT(move(struct_values));
 	} else if (py::isinstance(ele, numpy_ndarray)) {

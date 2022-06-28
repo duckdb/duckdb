@@ -597,14 +597,13 @@ static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_
 
 	for (idx_t i = 0; i < size; i++) {
 		auto dict_key = dict_keys.attr("__getitem__")(i);
-		auto key = TransformPythonValue(dict_key);
-		if (key.type().id() != LogicalTypeId::VARCHAR) {
-			can_convert = false;
-			return LogicalType::SQLNULL;
-		}
+
+		//! Have to already transform here because the child_list needs a string as key
+		auto key = string(py::str(dict_key));
+
 		auto dict_val = dict_values.attr("__getitem__")(i);
 		auto val = GetItemType(dict_val, can_convert);
-		struct_children.push_back(make_pair(key.GetValue<string>(), move(val)));
+		struct_children.push_back(make_pair(key, move(val)));
 	}
 	return LogicalType::STRUCT(move(struct_children));
 }
