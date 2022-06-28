@@ -111,7 +111,8 @@ private:
 	                                                                TableFunctionInitInput &input);
 
 	//! Initialize Local State
-	static unique_ptr<LocalTableFunctionState> ArrowScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+	static unique_ptr<LocalTableFunctionState> ArrowScanInitLocal(ExecutionContext &context,
+	                                                              TableFunctionInitInput &input,
 	                                                              GlobalTableFunctionState *global_state);
 
 	//! Scan Function

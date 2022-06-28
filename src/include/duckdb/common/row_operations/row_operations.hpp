@@ -14,6 +14,7 @@
 namespace duckdb {
 
 struct AggregateObject;
+struct AggregateFilterData;
 class DataChunk;
 class RowLayout;
 class RowDataCollection;
@@ -34,7 +35,8 @@ struct RowOperations {
 	//! update - aligned addresses
 	static void UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx, idx_t count);
 	//! filtered update - aligned addresses
-	static void UpdateFilteredStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx);
+	static void UpdateFilteredStates(AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
+	                                 DataChunk &payload, idx_t arg_idx);
 	//! combine - unaligned addresses, updated
 	static void CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count);
 	//! finalize - unaligned addresses, updated

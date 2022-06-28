@@ -46,4 +46,9 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t size) {
 	return reallocate_function(private_data.get(), pointer, size);
 }
 
+Allocator &Allocator::DefaultAllocator() {
+	static Allocator allocator;
+	return allocator;
+}
+
 } // namespace duckdb

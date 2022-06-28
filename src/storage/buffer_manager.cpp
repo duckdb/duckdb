@@ -495,7 +495,7 @@ data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_d
 	throw InternalException("FIXME: realloc not implemented for allocator realloc");
 }
 
-Allocator &Allocator::GetBufferAllocator(ClientContext &context) {
+Allocator &BufferAllocator::Get(ClientContext &context) {
 	auto &manager = BufferManager::GetBufferManager(context);
 	return manager.GetBufferAllocator();
 }

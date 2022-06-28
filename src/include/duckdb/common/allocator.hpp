@@ -14,6 +14,8 @@ namespace duckdb {
 class Allocator;
 class ClientContext;
 class DatabaseInstance;
+class ExecutionContext;
+class ThreadContext;
 
 struct PrivateAllocatorData {
 	virtual ~PrivateAllocatorData() {
@@ -79,8 +81,7 @@ public:
 		return private_data.get();
 	}
 
-	//! Returns an allocator that passes all allocations through the buffer manager of the specified db
-	static Allocator &GetBufferAllocator(ClientContext &context);
+	static Allocator &DefaultAllocator();
 
 private:
 	allocate_function_ptr_t allocate_function;
@@ -88,6 +89,25 @@ private:
 	reallocate_function_ptr_t reallocate_function;
 
 	unique_ptr<PrivateAllocatorData> private_data;
+};
+
+//! The ArenaAllocator is a special thread-local allocator that should be used to allocate thread-local state
+//! Note that the ArenaAllocator has a unique behavior: anything allocated through the allocator CANNOT be freed
+//! Instead, everything allocated will be freed at the end - when the thread is finished executing the current pipeline
+//! This is problematic when the allocator is used in a loop, since the allocated memory will only grow
+//! Care must be taken when using the ArenaAllocator for this reason
+struct ArenaAllocator {
+	static Allocator &Get(ExecutionContext &context);
+	static Allocator &Get(ThreadContext &tcontext);
+};
+
+//! The BufferAllocator is a wrapper around the global allocator class that sends any allocations made through the
+//! buffer manager. This makes the buffer manager aware of the memory usage, allowing it to potentially free
+//! other blocks to make space in memory.
+//! Note that there is a cost to doing so (several atomic operations will be performed on allocation/free).
+//! As such this class should be used primarily for larger allocations.
+struct BufferAllocator {
+	static Allocator &Get(ClientContext &context);
 };
 
 } // namespace duckdb

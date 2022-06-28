@@ -63,10 +63,10 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunct
 	auto &data = (PragmaLastProfilingOutputData &)*data_p.bind_data;
 	if (!state.initialized) {
 		// create a ChunkCollection
-		auto collection = make_unique<ChunkCollection>();
+		auto collection = make_unique<ChunkCollection>(context);
 
 		DataChunk chunk;
-		chunk.Initialize(data.types);
+		chunk.Initialize(context, data.types);
 		int operator_counter = 1;
 		if (!ClientData::Get(context).query_profiler_history->GetPrevProfilers().empty()) {
 			for (auto op :

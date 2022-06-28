@@ -87,7 +87,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 
 	auto &transaction = Transaction::GetTransaction(context);
 
-	ExpressionExecutor executor;
+	ExpressionExecutor executor(Allocator::Get(context));
 	DataChunk dummy_chunk;
 	Vector result(new_column_type);
 	if (!default_value) {
@@ -212,10 +212,11 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 			scan_types.push_back(parent.column_definitions[bound_columns[i]].Type());
 		}
 	}
+	auto &allocator = Allocator::Get(context);
 	DataChunk scan_chunk;
-	scan_chunk.Initialize(scan_types);
+	scan_chunk.Initialize(allocator, scan_types);
 
-	ExpressionExecutor executor;
+	ExpressionExecutor executor(allocator);
 	executor.AddExpression(cast_expr);
 
 	TableScanState scan_state;
@@ -441,7 +442,7 @@ static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk
                                              column_t index) {
 	auto &col = table.columns[index];
 	D_ASSERT(col.Generated());
-	ExpressionExecutor executor(expr);
+	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
 	Vector result(col.Type());
 	try {
 		executor.ExecuteExpression(chunk, result);
@@ -451,7 +452,7 @@ static void VerifyGeneratedExpressionSuccess(TableCatalogEntry &table, DataChunk
 }
 
 static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, DataChunk &chunk) {
-	ExpressionExecutor executor(expr);
+	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
 	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
@@ -770,7 +771,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 		types.push_back(col.Type());
 	}
 	DataChunk chunk;
-	chunk.Initialize(types);
+	chunk.Initialize(Allocator::Get(db), types);
 
 	CreateIndexScanState state;
 
@@ -969,7 +970,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 		state.column_ids.push_back(i);
 	}
 	DataChunk result;
-	result.Initialize(types);
+	result.Initialize(Allocator::Get(db), types);
 
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
 	row_group->ScanCommitted(state.row_group_scan_state, result,
@@ -1030,7 +1031,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 			col_ids.push_back(column_definitions[i].StorageOid());
 			types.emplace_back(column_definitions[i].Type());
 		}
-		verify_chunk.Initialize(types);
+		verify_chunk.Initialize(Allocator::Get(context), types);
 		Fetch(transaction, verify_chunk, col_ids, row_identifiers, count, fetch_state);
 	}
 	VerifyDeleteConstraints(table, context, verify_chunk);
@@ -1267,8 +1268,10 @@ bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, 
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
+	auto &allocator = Allocator::Get(db);
+
 	DataChunk result;
-	result.Initialize(index->logical_types);
+	result.Initialize(allocator, index->logical_types);
 
 	DataChunk intermediate;
 	vector<LogicalType> intermediate_types;
@@ -1279,7 +1282,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		intermediate_types.push_back(col.Type());
 	}
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
-	intermediate.Initialize(intermediate_types);
+	intermediate.Initialize(allocator, intermediate_types);
 
 	// initialize an index scan
 	CreateIndexScanState state;
@@ -1293,7 +1296,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	{
 		IndexLock lock;
 		index->InitializeLock(lock);
-		ExpressionExecutor executor(expressions);
+		ExpressionExecutor executor(allocator, expressions);
 		while (true) {
 			intermediate.Reset();
 			// scan a new chunk from the table to index

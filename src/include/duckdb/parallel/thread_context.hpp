@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/storage/batched_allocator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -20,6 +21,8 @@ public:
 
 	//! The operator profiler for the individual thread context
 	OperatorProfiler profiler;
+	//! Thread-local batch allocator
+	BatchedAllocator allocator;
 };
 
 } // namespace duckdb

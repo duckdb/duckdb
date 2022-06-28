@@ -424,7 +424,7 @@ void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 void GlobalSortState::Print() {
 	PayloadScanner scanner(*this, false);
 	DataChunk chunk;
-	chunk.Initialize(scanner.GetPayloadTypes());
+	chunk.Initialize(Allocator::DefaultAllocator(), scanner.GetPayloadTypes());
 	for (;;) {
 		scanner.Scan(chunk);
 		const auto count = chunk.size();

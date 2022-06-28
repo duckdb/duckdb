@@ -120,7 +120,7 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	ChunkCollection collection;
+	ChunkCollection collection(*context);
 	collection.Append(chunk);
 	Append(description, collection);
 }
