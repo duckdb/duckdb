@@ -205,7 +205,10 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.maximum_memory = new_config.maximum_memory;
 	if (config.maximum_memory == (idx_t)-1) {
-		config.maximum_memory = FileSystem::GetAvailableMemory() * 8 / 10;
+		auto memory = FileSystem::GetAvailableMemory();
+		if (memory != DConstants::INVALID_INDEX) {
+			config.maximum_memory = memory * 8 / 10;
+		}
 	}
 	if (new_config.maximum_threads == (idx_t)-1) {
 #ifndef DUCKDB_NO_THREADS

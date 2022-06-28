@@ -38,7 +38,7 @@ struct StringAggFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->dataptr) {
 			mask.SetInvalid(idx);
 		} else {
@@ -93,26 +93,26 @@ struct StringAggFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *str_data, ValidityMask &str_mask,
-	                      idx_t str_idx) {
-		PerformOperation(state, str_data[str_idx], bind_data);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *str_data,
+	                      ValidityMask &str_mask, idx_t str_idx) {
+		PerformOperation(state, str_data[str_idx], aggr_input_data.bind_data);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
 		if (!source.dataptr) {
 			// source is not set: skip combining
 			return;
 		}
-		PerformOperation(target, string_t(source.dataptr, source.size), bind_data);
+		PerformOperation(target, string_t(source.dataptr, source.size), aggr_input_data.bind_data);
 	}
 };
 

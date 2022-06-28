@@ -53,7 +53,7 @@ query I
 SELECT "inner" FROM parquet_scan('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/bug1618_struct_strings.parquet')
 ----
 {'str_field': hello, 'f64_field': NULL}
-{'str_field': NULL, 'f64_field': 1.230000}
+{'str_field': NULL, 'f64_field': 1.23}
 
 # /data/parquet-testing/struct.parquet
 query I

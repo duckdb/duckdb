@@ -1,7 +1,8 @@
 #include "duckdb/catalog/default/default_types.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
@@ -64,6 +65,7 @@ static DefaultType internal_types[] = {{"int", LogicalTypeId::INTEGER},
                                        {"guid", LogicalTypeId::UUID},
                                        {"struct", LogicalTypeId::STRUCT},
                                        {"row", LogicalTypeId::STRUCT},
+                                       {"list", LogicalTypeId::LIST},
                                        {"map", LogicalTypeId::MAP},
                                        {"utinyint", LogicalTypeId::UTINYINT},
                                        {"uint8", LogicalTypeId::UTINYINT},

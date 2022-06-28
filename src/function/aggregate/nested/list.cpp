@@ -26,7 +26,8 @@ struct ListFunction {
 	}
 };
 
-static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
+static void ListUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
+                               idx_t count) {
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];
@@ -50,7 +51,7 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	}
 }
 
-static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *bind_data, idx_t count) {
+static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputData &, idx_t count) {
 	VectorData sdata;
 	state.Orrify(count, sdata);
 	auto states_ptr = (ListAggState **)sdata.data;
@@ -73,7 +74,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, FunctionData *b
 	}
 }
 
-static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
+static void ListFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (ListAggState **)sdata.data;

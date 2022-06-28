@@ -1285,9 +1285,9 @@ string Value::ToString() const {
 	case LogicalTypeId::UUID:
 		return UUID::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
-		return to_string(value_.float_);
+		return duckdb_fmt::format("{}", value_.float_);
 	case LogicalTypeId::DOUBLE:
-		return to_string(value_.double_);
+		return duckdb_fmt::format("{}", value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
 		auto scale = DecimalType::GetScale(type_);
