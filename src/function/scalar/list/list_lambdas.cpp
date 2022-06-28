@@ -312,6 +312,12 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
 
+	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		bound_function.arguments.emplace_back(LogicalType(LogicalTypeId::UNKNOWN));
+		bound_function.return_type = LogicalType::SQLNULL;
+		return nullptr;
+	}
+
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 
 	// push back the correct return types into the bound_function arguments

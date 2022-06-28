@@ -99,9 +99,9 @@ SELECT list_transform([[1], [2], [3]], x -> list_concat(x, x))
 [[1, 1], [2, 2], [3, 3]]
 
 query I
-SELECT list_transform([5, NULL, 6], x -> POW(x, 2))
+SELECT list_transform([5, NULL, 6], x -> POW(x, 2)::INTEGER)
 ----
-[25.000000, NULL, 36.000000]
+[25, NULL, 36]
 
 query I
 SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
@@ -109,9 +109,9 @@ SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
 [6, 1, 7]
 
 query I
-SELECT list_transform(list_value(list_unique(list_concat([1,2],[2,2]))), x -> x + 1);
+SELECT list_transform(list_value(list_unique(list_concat([1,2],[2,2]))), x -> (x + 1)::INTEGER);
 ----
-[3.000000]
+[3]
 
 query I
 SELECT list_sort(list_transform(list_distinct(list_concat([1,2],[2,2])), x -> x + 1));

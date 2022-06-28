@@ -42,9 +42,9 @@ SELECT list_filter(['hello', 'duck', 'sunshine'], str -> (CASE WHEN str LIKE '%e
 # BOUND_CAST
 
 query I
-SELECT list_transform([2], x -> x::DOUBLE)
+SELECT list_transform([2.0::DOUBLE], x -> x::INTEGER)
 ----
-[2.000000]
+[2]
 
 query I
 SELECT list_filter([2], x -> x::DOUBLE == 2)

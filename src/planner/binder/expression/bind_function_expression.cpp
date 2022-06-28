@@ -107,12 +107,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &list_child = (BoundExpression &)*function.children[0];
 
 	if (list_child.expr->return_type.id() != LogicalTypeId::LIST &&
-	    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
+	    list_child.expr->return_type.id() != LogicalTypeId::SQLNULL &&
+	    list_child.expr->return_type.id() != LogicalTypeId::UNKNOWN) {
 		throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
 	}
 
-	LogicalType list_child_type = LogicalType::SQLNULL;
-	if (list_child.expr->return_type.id() != LogicalTypeId::SQLNULL) {
+	LogicalType list_child_type = list_child.expr->return_type.id();
+	if (list_child.expr->return_type.id() != LogicalTypeId::SQLNULL &&
+	    list_child.expr->return_type.id() != LogicalTypeId::UNKNOWN) {
 		list_child_type = ListType::GetChildType(list_child.expr->return_type);
 	}
 
