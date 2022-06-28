@@ -205,7 +205,10 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.maximum_memory = new_config.maximum_memory;
 	if (config.maximum_memory == (idx_t)-1) {
-		config.maximum_memory = FileSystem::GetAvailableMemory() * 8 / 10;
+		auto memory = FileSystem::GetAvailableMemory();
+		if (memory != DConstants::INVALID_INDEX) {
+			config.maximum_memory = memory * 8 / 10;
+		}
 	}
 	if (new_config.maximum_threads == (idx_t)-1) {
 #ifndef DUCKDB_NO_THREADS
@@ -240,6 +243,10 @@ idx_t DatabaseInstance::NumberOfThreads() {
 	return scheduler->NumberOfThreads();
 }
 
+const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
+	return loaded_extensions;
+}
+
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
@@ -249,6 +256,14 @@ bool DuckDB::ExtensionIsLoaded(const std::string &name) {
 }
 void DuckDB::SetExtensionLoaded(const std::string &name) {
 	instance->loaded_extensions.insert(name);
+}
+
+string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
+	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
+		return "UTC";
+	} else {
+		return config.set_variables["TimeZone"].GetValue<std::string>();
+	}
 }
 
 } // namespace duckdb

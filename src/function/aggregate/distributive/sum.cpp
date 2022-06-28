@@ -14,7 +14,7 @@ struct SumSetOperation {
 		state->Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		target->Combine(source);
 	}
 	template <class STATE>
@@ -25,7 +25,7 @@ struct SumSetOperation {
 
 struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -36,7 +36,7 @@ struct IntegerSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 
 struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -48,7 +48,7 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 template <class ADD_OPERATOR>
 struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -65,7 +65,7 @@ using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {

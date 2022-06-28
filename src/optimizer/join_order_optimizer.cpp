@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 
 #include "duckdb/common/pair.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
@@ -246,6 +247,9 @@ bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *rig
 }
 
 bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
+	if (node->count == relations.size()) {
+		return true;
+	}
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
 	unordered_set<idx_t> exclusion_set;
 	for (idx_t i = 0; i < node->relations[0]; i++) {
@@ -289,7 +293,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
 		auto neighbor = set_manager.GetJoinRelation(neighbors[i]);
 		// emit the combinations of this node and its neighbors
 		auto combined_set = set_manager.Union(right, neighbor);
-		if (plans.find(combined_set) != plans.end()) {
+		if (combined_set->count > right->count && plans.find(combined_set) != plans.end()) {
 			auto connection = query_graph.GetConnection(left, combined_set);
 			if (connection) {
 				if (!TryEmitPair(left, combined_set, connection)) {
@@ -300,9 +304,9 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet *left, JoinRelati
 		union_sets[i] = combined_set;
 	}
 	// recursively enumerate the sets
+	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		unordered_set<idx_t> new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
@@ -324,7 +328,7 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_
 		auto neighbor = set_manager.GetJoinRelation(neighbors[i]);
 		// emit the combinations of this node and its neighbors
 		auto new_set = set_manager.Union(node, neighbor);
-		if (plans.find(new_set) != plans.end()) {
+		if (new_set->count > node->count && plans.find(new_set) != plans.end()) {
 			if (!EmitCSG(new_set)) {
 				return false;
 			}
@@ -332,9 +336,9 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet *node, unordered_
 		union_sets[i] = new_set;
 	}
 	// recursively enumerate the sets
+	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		unordered_set<idx_t> new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
 			return false;
@@ -768,6 +772,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// could not find the final plan
 		// this should only happen in case the sets are actually disjunct
 		// in this case we need to generate cross product to connect the disjoint sets
+		if (context.config.force_no_cross_product) {
+			throw InternalException("HyperGraph isn't connected");
+		}
 		GenerateCrossProducts();
 		//! solve the join order again
 		SolveJoinOrder();

@@ -14,7 +14,7 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-#define RTLD_LAZY  0
+#define RTLD_NOW   0
 #define RTLD_LOCAL 0
 #endif
 

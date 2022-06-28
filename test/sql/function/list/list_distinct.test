@@ -203,6 +203,12 @@ SELECT list_distinct(['2021-08-20'::TIMESTAMPTZ])
 ----
 [2021-08-20 00:00:00+00]
 
+# interval
+query I
+SELECT list_distinct([INTERVAL 1 YEAR])
+----
+[1 year]
+
 foreach type date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz
 
 query I
@@ -224,6 +230,21 @@ SELECT list_distinct([NULL::JSON])
 ----
 []
 
+# enums
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')
+
+statement ok
+CREATE TABLE enums (e mood[])
+
+statement ok
+INSERT INTO enums VALUES (['happy', 'ok'])
+
+query I
+SELECT list_sort(list_distinct(e)) FROM enums
+----
+[ok, happy]
+
 # test WHERE
 
 statement ok
@@ -243,3 +264,9 @@ query I
 SELECT name FROM wheretest WHERE name ILIKE 'two%' AND list_unique(list_distinct(l)) > 3;
 ----
 two1
+
+# bug in #3481
+query I
+SELECT list_sort(list_distinct(['a', 'b、c', 'a']))
+----
+[a, b、c]

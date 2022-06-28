@@ -4,39 +4,10 @@ import sys
 import os
 import subprocess
 import reduce_sql
-
-if 'FUZZEROFDUCKSKEY' not in os.environ:
-    print("FUZZEROFDUCKSKEY not found in environment variables")
-    exit(1)
-
-USERNAME = 'fuzzerofducks'
-TOKEN = os.environ['FUZZEROFDUCKSKEY']
-
-if len(TOKEN) == 0:
-    print("FUZZEROFDUCKSKEY is set but is empty")
-    exit(1)
-
-if len(TOKEN) != 40:
-    print("Incorrect length for FUZZEROFDUCKSKEY")
-    exit(1)
-
-REPO_OWNER = 'duckdb'
-REPO_NAME = 'duckdb-fuzzer'
+import fuzzer_helper
+import random
 
 seed = -1
-
-header = '''### To Reproduce
-```sql
-'''
-
-middle = '''```
-
-### Error Message
-```
-'''
-
-footer = '''
-```'''
 
 fuzzer = None
 db = None
@@ -50,6 +21,8 @@ for param in sys.argv:
         db = 'tpch'
     elif param.startswith('--shell='):
         shell = param.replace('--shell=', '')
+    elif param.startswith('--seed='):
+        seed = int(param.replace('--seed=', ''))
 
 if fuzzer is None:
     print("Unrecognized fuzzer to run, expected e.g. --sqlsmith")
@@ -63,50 +36,10 @@ if shell is None:
     print("Unrecognized path to shell, expected e.g. --shell=build/debug/duckdb")
     exit(1)
 
-# github stuff
-def issue_url():
-    return 'https://api.github.com/repos/%s/%s/issues' % (REPO_OWNER, REPO_NAME)
+if seed < 0:
+    seed = random.randint(0, 2**30)
 
-def create_session():
-    # Create an authenticated session to create the issue
-    session = requests.Session()
-    session.headers.update({'Authorization': 'token %s' % (TOKEN,)})
-    return session
-
-def make_github_issue(title, body):
-    session = create_session()
-    url = issue_url()
-    issue = {'title': title,
-             'body': body}
-    r = session.post(url, json.dumps(issue))
-    if r.status_code == 201:
-        print('Successfully created Issue "%s"' % title)
-    else:
-        print('Could not create Issue "%s"' % title)
-        print('Response:', r.content.decode('utf8'))
-        raise Exception("Failed to create issue")
-
-def get_github_issues():
-    session = create_session()
-    url = issue_url()
-    r = session.get(url)
-    if r.status_code != 200:
-        print('Failed to get list of issues')
-        print('Response:', r.content.decode('utf8'))
-        raise Exception("Failed to get list of issues")
-    return json.loads(r.content.decode('utf8'))
-
-def close_github_issue(number):
-    session = create_session()
-    url = issue_url() + '/' + str(number)
-    params = {'state': 'closed'}
-    r = session.patch(url, json.dumps(params))
-    if r.status_code == 200:
-        print(f'Successfully closed Issue "{number}"')
-    else:
-        print(f'Could not close Issue "{number}" (status code {r.status_code})')
-        print('Response:', r.content.decode('utf8'))
-        raise Exception("Failed to close issue")
+git_hash = fuzzer_helper.get_github_hash()
 
 def create_db_script(db):
     if db == 'alltypes':
@@ -126,47 +59,13 @@ def run_shell_command(cmd):
     command = [shell, '--batch', '-init', '/dev/null']
 
     res = subprocess.run(command, input=bytearray(cmd, 'utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout = res.stdout.decode('utf8').strip()
-    stderr = res.stderr.decode('utf8').strip()
+    stdout = res.stdout.decode('utf8', 'ignore').strip()
+    stderr = res.stderr.decode('utf8', 'ignore').strip()
     return (stdout, stderr, res.returncode)
 
-def extract_issue(body, nr):
-    try:
-        splits = body.split(middle)
-        sql = splits[0].lstrip(header)
-        error = splits[1].rstrip(footer)
-        return (sql, error)
-    except:
-        print(f"Failed to extract SQL/error message from issue {nr}")
-        print(body)
-        return None
-
-
-def test_reproducibility(issue, current_errors):
-    extract = extract_issue(issue['body'], issue['number'])
-    if extract is None:
-        # failed extract: leave the issue as-is
-        return True
-    sql = extract[0]
-    error = extract[1]
-    (stdout, stderr, returncode) = run_shell_command(sql)
-    if returncode == 0:
-        return False
-    # issue is still reproducible
-    current_errors[error] = issue
-    return True
 
 # first get a list of all github issues, and check if we can still reproduce them
-current_errors = dict()
-
-issues = get_github_issues()
-for issue in issues:
-    # check if the github issue is still reproducible
-    if not test_reproducibility(issue, current_errors):
-        # the issue appears to be fixed - close the issue
-        print(f"Failed to reproduce issue {issue['number']}, closing...")
-        close_github_issue(int(issue['number']))
-
+current_errors = fuzzer_helper.extract_github_issues(shell)
 
 max_queries = 1000
 last_query_log_file = 'sqlsmith.log'
@@ -221,6 +120,9 @@ print(stdout)
 print("==============  STDERR  =================")
 print(stderr)
 print("==========================================")
+if not fuzzer_helper.is_internal_error(stderr):
+    print("Failed to reproduce the internal error with a single command")
+    exit(0)
 
 error_msg = reduce_sql.sanitize_error(stderr)
 
@@ -245,10 +147,4 @@ print("=========================================")
 last_query = reduce_sql.reduce(last_query, load_script, shell, error_msg)
 cmd = load_script + '\n' + last_query + "\n"
 
-# issue is new, file it
-print("Filing new issue to Github")
-
-title = error_msg
-body = header + cmd + middle + error_msg + footer
-print(title, body)
-make_github_issue(title, body)
+fuzzer_helper.file_issue(cmd, error_msg, "SQLSmith", seed, git_hash)

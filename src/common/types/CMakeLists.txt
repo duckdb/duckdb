@@ -1,6 +1,12 @@
+if(${EXIT_TIME_DESTRUCTORS_WARNING})
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+endif()
+
 add_library_unity(
   duckdb_common_types
   OBJECT
+  batched_chunk_collection.cpp
   blob.cpp
   cast_helpers.cpp
   chunk_collection.cpp

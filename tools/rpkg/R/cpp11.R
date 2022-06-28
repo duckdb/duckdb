@@ -32,6 +32,86 @@ rapi_unregister_arrow <- function(conn, name) {
   invisible(.Call(`_duckdb_rapi_unregister_arrow`, conn, name))
 }
 
+rapi_expr_reference <- function(name, table) {
+  .Call(`_duckdb_rapi_expr_reference`, name, table)
+}
+
+rapi_expr_constant <- function(val) {
+  .Call(`_duckdb_rapi_expr_constant`, val)
+}
+
+rapi_expr_function <- function(name, args) {
+  .Call(`_duckdb_rapi_expr_function`, name, args)
+}
+
+rapi_expr_set_alias <- function(expr, alias) {
+  invisible(.Call(`_duckdb_rapi_expr_set_alias`, expr, alias))
+}
+
+rapi_expr_tostring <- function(expr) {
+  .Call(`_duckdb_rapi_expr_tostring`, expr)
+}
+
+rapi_rel_from_df <- function(con, df) {
+  .Call(`_duckdb_rapi_rel_from_df`, con, df)
+}
+
+rapi_rel_filter <- function(rel, exprs) {
+  .Call(`_duckdb_rapi_rel_filter`, rel, exprs)
+}
+
+rapi_rel_project <- function(rel, exprs) {
+  .Call(`_duckdb_rapi_rel_project`, rel, exprs)
+}
+
+rapi_rel_aggregate <- function(rel, groups, aggregates) {
+  .Call(`_duckdb_rapi_rel_aggregate`, rel, groups, aggregates)
+}
+
+rapi_rel_order <- function(rel, orders) {
+  .Call(`_duckdb_rapi_rel_order`, rel, orders)
+}
+
+rapi_rel_inner_join <- function(left, right, conds) {
+  .Call(`_duckdb_rapi_rel_inner_join`, left, right, conds)
+}
+
+rapi_rel_limit <- function(rel, n) {
+  .Call(`_duckdb_rapi_rel_limit`, rel, n)
+}
+
+rapi_rel_distinct <- function(rel) {
+  .Call(`_duckdb_rapi_rel_distinct`, rel)
+}
+
+rapi_rel_to_df <- function(rel) {
+  .Call(`_duckdb_rapi_rel_to_df`, rel)
+}
+
+rapi_rel_tostring <- function(rel) {
+  .Call(`_duckdb_rapi_rel_tostring`, rel)
+}
+
+rapi_rel_explain <- function(rel) {
+  .Call(`_duckdb_rapi_rel_explain`, rel)
+}
+
+rapi_rel_alias <- function(rel) {
+  .Call(`_duckdb_rapi_rel_alias`, rel)
+}
+
+rapi_rel_set_alias <- function(rel, alias) {
+  .Call(`_duckdb_rapi_rel_set_alias`, rel, alias)
+}
+
+rapi_rel_sql <- function(rel, sql) {
+  .Call(`_duckdb_rapi_rel_sql`, rel, sql)
+}
+
+rapi_rel_names <- function(rel) {
+  .Call(`_duckdb_rapi_rel_names`, rel)
+}
+
 rapi_release <- function(stmt) {
   invisible(.Call(`_duckdb_rapi_release`, stmt))
 }

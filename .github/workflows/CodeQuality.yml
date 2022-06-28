@@ -13,10 +13,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    shell: bash
-
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
@@ -40,9 +36,11 @@ jobs:
           fetch-depth: 0
 
       - name: Install
+        shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
 
       - name: Format Check
+        shell: bash
         run: |
           clang-format --version
           clang-format --dump-config
@@ -66,10 +64,33 @@ jobs:
           fetch-depth: 0
 
       - name: Install
+        shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
 
+      - name: Cache clang-tidy
+        id: date
+        shell: bash
+        run: echo "::set-output name=now::$(date)"
+
+      - name: Cache clang-tidy
+        uses: actions/cache@v3
+        with:
+          path: ~/.ctcache/cache
+          key: clang-tidy-${{ steps.date.outputs.now }}
+          restore-keys: |
+            clang-tidy
+
+      - name: Download clang-tidy-cache
+        shell: bash
+        run: |
+          set -e
+          curl -Lo /tmp/clang-tidy-cache https://github.com/ejfitzgerald/clang-tidy-cache/releases/download/v0.4.0/clang-tidy-cache-linux-amd64
+          md5sum /tmp/clang-tidy-cache | grep 880b290d7bbe7c1fb2a4f591f9a86cc1
+          chmod +x /tmp/clang-tidy-cache
+
       - name: Tidy Check
-        run: make tidy-check
+        shell: bash
+        run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
 
   codecov:
     name: CodeCov
@@ -83,9 +104,11 @@ jobs:
           fetch-depth: 0
 
       - name: Install
+        shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl
 
       - name: Validate Configuration
+        shell: bash
         run: |
           curl --fail --data-binary @.codecov.yml https://codecov.io/validate
 
@@ -95,16 +118,19 @@ jobs:
           python-version: '3.9'
 
       - name: Before Install
+        shell: bash
         run: |
-          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==7.0" "psutil>=5.9.0" pytest
+          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==8.0" "psutil>=5.9.0" pytest
           sudo apt-get install g++
 
       - name: Coverage Reset
+        shell: bash
         run: |
           lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
           lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
 
       - name: Run Tests
+        shell: bash
         run: |
           mkdir -p build/coverage
           (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_SUBSTRAIT_EXTENSION=1 -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
@@ -113,7 +139,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
+          python3 scripts/try_timeout.py --timeout=3000 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
@@ -121,6 +147,7 @@ jobs:
 
 
       - name: Generate Coverage
+        shell: bash
         run: |
           lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
           lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info

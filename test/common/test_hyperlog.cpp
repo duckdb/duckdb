@@ -23,15 +23,15 @@ TEST_CASE("Test that hyperloglog works", "[hyperloglog]") {
 	}
 	// the count is approximate, but should be pretty close to a million
 	size_t count = log2.Count();
-	REQUIRE(count > 999000LL);
-	REQUIRE(count < 1001000LL);
+	REQUIRE(count > 995000LL);
+	REQUIRE(count < 1005000LL);
 
 	// now we can merge the HLLs
 	auto new_log = log.Merge(log2);
 	// the count should be pretty much the same
 	count = new_log->Count();
-	REQUIRE(count > 999000LL);
-	REQUIRE(count < 1001000LL);
+	REQUIRE(count > 995000LL);
+	REQUIRE(count < 1005000LL);
 
 	// now test composability of the merge
 	// add everything to one big_hll one

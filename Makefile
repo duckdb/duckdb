@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release release_expanded test unittest allunit docs doxygen format sqlite imdb
+.PHONY: all opt unit clean debug release release_expanded test unittest allunit benchmark docs doxygen format sqlite imdb
 
 all: release
 opt: release
@@ -56,6 +56,9 @@ ifeq (${DISABLE_PARQUET}, 1)
 endif
 ifeq (${DISABLE_MAIN_DUCKDB_LIBRARY}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_MAIN_DUCKDB_LIBRARY=0
+endif
+ifeq (${EXTENSION_STATIC_BUILD}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DEXTENSION_STATIC_BUILD=1
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDISABLE_BUILTIN_EXTENSIONS=1
@@ -120,11 +123,17 @@ endif
 ifneq ($(TIDY_THREADS),)
 	TIDY_THREAD_PARAMETER := -j ${TIDY_THREADS}
 endif
+ifneq ($(TIDY_BINARY),)
+	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
+endif
 ifeq ($(BUILD_ARROW_ABI_TEST), 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ARROW_ABI_TEST=1
 endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	EXTENSIONS:=${EXTENSIONS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
+endif
+ifneq ($(BUILD_OUT_OF_TREE_EXTENSION),)
+	EXTENSIONS:=${EXTENSIONS} -DEXTERNAL_EXTENSION_DIRECTORY=$(BUILD_OUT_OF_TREE_EXTENSION)
 endif
 
 clean:
@@ -194,6 +203,12 @@ relassert:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
+benchmark:
+	mkdir -p build/release && \
+	cd build/release && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake --build . --config Release
+
 amaldebug:
 	mkdir -p build/amaldebug && \
 	python scripts/amalgamation.py && \
@@ -205,7 +220,7 @@ tidy-check:
 	mkdir -p build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_ODBC_DRIVER=TRUE -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
-	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER}
+	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
 
 tidy-fix:
 	mkdir -p build/tidy && \
@@ -236,7 +251,7 @@ format-master:
 	python3 scripts/format.py master --fix --noconfirm
 
 third_party/sqllogictest:
-	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
 
 third_party/imdb/data:
 	wget -i "http://download.duckdb.org/imdb/list.txt" -P third_party/imdb/data
@@ -249,8 +264,4 @@ sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
 
 clangd:
-	mkdir -p ./build/clangd && \
-	cd ./build/clangd && \
-	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} ../.. && \
-	cd ../.. && \
-	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json
+	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ${EXTENSIONS} -B build/clangd .

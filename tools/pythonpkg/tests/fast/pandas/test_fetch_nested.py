@@ -59,17 +59,22 @@ class TestFetchNested(object):
     def test_map_df(self,duckdb_cursor):
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",[{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}])
         
-        compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t",[{'key': [1, 2, 3, 4, 2, None], 'value': [10, 9, 8, 7, 11, 42]}])
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys have to be unique"):
+            compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t",[{'key': [1, 2, 3, 4, 2, None], 'value': [10, 9, 8, 7, 11, 42]}])
         
         compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t",[{'key': [], 'value': []}])
 
-        compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", [{'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'], 'value': [10, 9, 10, 11]}])
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys have to be unique"):
+            compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", [{'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'], 'value': [10, 9, 10, 11]}])
 
-        compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", [{'key': ['Jon Lajoie', None, 'Tenacious D', None, None], 'value': [10, 9, 10, 11, 13]}])
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
+            compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", [{'key': ['Jon Lajoie', None, 'Tenacious D', None, None], 'value': [10, 9, 10, 11, 13]}])
 
-        compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t",[{'key': [None, None, None, None, None], 'value': [10, 9, 10, 11, 13]}])
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
+            compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t",[{'key': [None, None, None, None, None], 'value': [10, 9, 10, 11, 13]}])
 
-        compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", [{'key': [None, None, None, None, None], 'value': [None, None, None, None, None]}])
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
+            compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", [{'key': [None, None, None, None, None], 'value': [None, None, None, None, None]}])
         
         compare_results("SELECT m as a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)", [{'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}])
 

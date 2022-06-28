@@ -12,6 +12,8 @@
 #include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
+class ClientContext;
+struct RandomEngine;
 
 //! The UUID class contains static operations for the UUID type
 class UUID {
@@ -25,6 +27,10 @@ public:
 	}
 	//! Convert a hugeint object to a uuid style string
 	static void ToString(hugeint_t input, char *buf);
+
+	//! Convert a hugeint object to a uuid style string
+	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
+	static hugeint_t GenerateRandomUUID();
 
 	//! Convert a hugeint object to a uuid style string
 	static string ToString(hugeint_t input) {

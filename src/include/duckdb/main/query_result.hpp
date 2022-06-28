@@ -20,11 +20,9 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 class BaseQueryResult {
 public:
-	//! Creates a successful empty query result
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                           vector<string> names);
+	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+	                           vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
 	DUCKDB_API virtual ~BaseQueryResult();
@@ -33,6 +31,8 @@ public:
 	QueryResultType type;
 	//! The type of the statement that created this result
 	StatementType statement_type;
+	//! Properties of the statement
+	StatementProperties properties;
 	//! The SQL types of the result
 	vector<LogicalType> types;
 	//! The names of the result
@@ -53,11 +53,9 @@ public:
 //! incrementally fetch data from the database.
 class QueryResult : public BaseQueryResult {
 public:
-	//! Creates a successful empty query result
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type);
 	//! Creates a successful query result with the specified names and types
-	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, vector<LogicalType> types,
-	                       vector<string> names);
+	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
+	                       vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API QueryResult(QueryResultType type, string error);
 	DUCKDB_API virtual ~QueryResult() override;
@@ -93,7 +91,10 @@ public:
 		}
 	}
 
-	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names);
+	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names,
+	                                     string &config_timezone);
+
+	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
 	//! The current chunk used by the iterator

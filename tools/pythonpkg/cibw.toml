@@ -3,11 +3,16 @@
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]
 before-build = 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-before-test = 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "psutil>=5.9.0" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==7.0" || true)'
+before-test = 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "psutil>=5.9.0" google-cloud-storage && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==8.0" || true) && (pip install --prefer-binary "ibis-framework[duckdb]" || true) && (pip install --prefer-binary "ibis-substrait"  || true)'
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests'
 
 # For musllinux we currently don't build extensions yet
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"
+test-command = "python -m pytest {project}/tests/fast"
+
+# For 32 bit we don't build extensions
+[[tool.cibuildwheel.overrides]]
+select = "*i686*"
 test-command = "python -m pytest {project}/tests/fast"

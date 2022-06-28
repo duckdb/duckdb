@@ -12,13 +12,41 @@ require-env S3_TEST_SERVER_AVAILABLE 1
 set ignore_error_messages
 
 statement ok
-SET s3_secret_access_key='S3RVER';SET s3_access_key_id='S3RVER';SET s3_region='eu-west-1'; SET s3_endpoint='s3.s3rver-endpoint.com:4923';SET s3_use_ssl=false;
+SET s3_secret_access_key='minio_duckdb_user_password';SET s3_access_key_id='minio_duckdb_user';SET s3_region='eu-west-1'; SET s3_endpoint='duckdb-minio.com:9000';SET s3_use_ssl=false;
 
 # Copy files to S3 before beginning tests
 statement ok
 COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t1.parquet';
 COPY (select * from 'data/parquet-testing/glob/t2.parquet') to 's3://test-bucket/parquet_glob_s3/glob/t2.parquet';
 COPY (select * from 'data/parquet-testing/glob2/t1.parquet') to 's3://test-bucket/parquet_glob_s3/glob2/t1.parquet';
+COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/with+plus/t1.parquet';
+COPY (select * from 'data/parquet-testing/glob/t1.parquet') to 's3://test-bucket/parquet_glob_s3/with space/t1.parquet';
+
+# parquet glob with COPY FROM
+statement ok
+CREATE TABLE vals (i INTEGER, j BLOB)
+
+statement ok
+COPY vals FROM 's3://test-bucket/parquet_glob_s3/glob/t?.parquet' (FORMAT PARQUET);
+
+query II
+SELECT * FROM vals ORDER BY 1, 2
+----
+1	a
+2	b
+
+# failed to copy: incorrect types found in parquet file
+statement ok
+CREATE TABLE vals2 (i INTEGER, j INTEGER)
+
+statement error
+COPY vals2 FROM 's3://test-bucket/parquet_glob_s3/nonexistentfolderblablabla/t*.parquet' (FORMAT PARQUET);
+
+# Test variety of urls with both url styles
+foreach urlstyle path vhost
+
+statement ok
+SET s3_url_style='${urlstyle}'
 
 # Begin tests
 query I
@@ -51,29 +79,14 @@ select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parque
 ----
 2
 
+query I
+select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/with*/*.parquet')
+----
+2
+
 # schema mismatch in parquet glob
 statement error
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/notglob/*.parquet')
-
-# parquet glob with COPY FROM
-statement ok
-CREATE TABLE vals (i INTEGER, j BLOB)
-
-statement ok
-COPY vals FROM 's3://test-bucket/parquet_glob_s3/glob/t?.parquet' (FORMAT PARQUET);
-
-query II
-SELECT * FROM vals ORDER BY 1, 2
-----
-1	a
-2	b
-
-# failed to copy: incorrect types found in parquet file
-statement ok
-CREATE TABLE vals2 (i INTEGER, j INTEGER)
-
-statement error
-COPY vals2 FROM 's3://test-bucket/parquet_glob_s3/nonexistentfolderblablabla/t*.parquet' (FORMAT PARQUET);
 
 # parallel testing
 statement ok
@@ -103,3 +116,5 @@ query I
 select count(*) from parquet_scan('s3://test-bucket/parquet_glob_s3/g*/t1.parquet')
 ----
 2
+
+endloop

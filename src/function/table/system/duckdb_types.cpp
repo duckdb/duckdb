@@ -2,18 +2,20 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
-struct DuckDBTypesData : public FunctionOperatorData {
+struct DuckDBTypesData : public GlobalTableFunctionState {
 	DuckDBTypesData() : offset(0) {
 	}
 
-	vector<LogicalType> types;
+	vector<TypeCatalogEntry *> entries;
 	idx_t offset;
+	unordered_set<int64_t> oids;
 };
 
 static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFunctionBindInput &input,
@@ -33,6 +35,9 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("type_size");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("logical_type");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	// NUMERIC, STRING, DATETIME, BOOLEAN, COMPOSITE, USER
 	names.emplace_back("type_category");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -43,40 +48,62 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-unique_ptr<FunctionOperatorData> DuckDBTypesInit(ClientContext &context, const FunctionData *bind_data,
-                                                 const vector<column_t> &column_ids, TableFilterCollection *filters) {
+unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBTypesData>();
-	result->types = LogicalType::AllTypes();
-	// FIXME: add user-defined types here (when we have them)
+	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	for (auto &schema : schemas) {
+		schema->Scan(context, CatalogType::TYPE_ENTRY,
+		             [&](CatalogEntry *entry) { result->entries.push_back((TypeCatalogEntry *)entry); });
+	};
+
+	// check the temp schema as well
+	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
+		result->entries.push_back((TypeCatalogEntry *)entry);
+	});
 	return move(result);
 }
 
-void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                         DataChunk &output) {
-	auto &data = (DuckDBTypesData &)*operator_state;
-	if (data.offset >= data.types.size()) {
+void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (DuckDBTypesData &)*data_p.global_state;
+	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
-	while (data.offset < data.types.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &type = data.types[data.offset++];
+	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
+		auto &type_entry = data.entries[data.offset++];
+		auto &type = type_entry->user_type;
 
 		// return values:
-		// schema_name, VARCHAR
-		output.SetValue(0, count, Value());
-		// schema_oid, BIGINT
-		output.SetValue(1, count, Value());
+		// schema_name, LogicalType::VARCHAR
+		output.SetValue(0, count, Value(type_entry->schema->name));
+		// schema_oid, LogicalType::BIGINT
+		output.SetValue(1, count, Value::BIGINT(type_entry->schema->oid));
 		// type_oid, BIGINT
-		output.SetValue(2, count, Value::BIGINT(int(type.id())));
+		int64_t oid;
+		if (type_entry->internal) {
+			oid = int64_t(type.id());
+		} else {
+			oid = type_entry->oid;
+		}
+		Value oid_val;
+		if (data.oids.find(oid) == data.oids.end()) {
+			data.oids.insert(oid);
+			oid_val = Value::BIGINT(oid);
+		} else {
+			oid_val = Value();
+		}
+		output.SetValue(2, count, oid_val);
 		// type_name, VARCHAR
-		output.SetValue(3, count, Value(type.ToString()));
+		output.SetValue(3, count, Value(type_entry->name));
 		// type_size, BIGINT
 		auto internal_type = type.InternalType();
 		output.SetValue(4, count,
 		                internal_type == PhysicalType::INVALID ? Value() : Value::BIGINT(GetTypeIdSize(internal_type)));
+		// logical_type, VARCHAR
+		output.SetValue(5, count, Value(LogicalTypeIdToString(type.id())));
 		// type_category, VARCHAR
 		string category;
 		switch (type.id()) {
@@ -120,9 +147,9 @@ void DuckDBTypesFunction(ClientContext &context, const FunctionData *bind_data, 
 		default:
 			break;
 		}
-		output.SetValue(5, count, category.empty() ? Value() : Value(category));
+		output.SetValue(6, count, category.empty() ? Value() : Value(category));
 		// internal, BOOLEAN
-		output.SetValue(6, count, Value::BOOLEAN(true));
+		output.SetValue(7, count, Value::BOOLEAN(type_entry->internal));
 
 		count++;
 	}

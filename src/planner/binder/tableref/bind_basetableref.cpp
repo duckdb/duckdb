@@ -103,16 +103,23 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto scan_function = TableScanFunction::GetFunction();
 		auto bind_data = make_unique<TableScanBindData>(table);
 		auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
+		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
+		vector<TableColumnType> table_categories;
+
+		vector<LogicalType> return_types;
+		vector<string> return_names;
 		for (auto &col : table->columns) {
-			table_types.push_back(col.type);
-			table_names.push_back(col.name);
+			table_types.push_back(col.Type());
+			table_names.push_back(col.Name());
+			return_types.push_back(col.Type());
+			return_names.push_back(col.Name());
 		}
 		table_names = BindContext::AliasColumnNames(alias, table_names, ref.column_name_alias);
 
-		auto logical_get =
-		    make_unique<LogicalGet>(table_index, scan_function, move(bind_data), table_types, table_names);
+		auto logical_get = make_unique<LogicalGet>(table_index, scan_function, move(bind_data), move(return_types),
+		                                           move(return_names));
 		bind_context.AddBaseTable(table_index, alias, table_names, table_types, *logical_get);
 		return make_unique_base<BoundTableRef, BoundBaseTableRef>(table, move(logical_get));
 	}
@@ -139,8 +146,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		if (bound_subquery.subquery->types != view_catalog_entry->types) {
 			throw BinderException("Contents of view were altered: types don't match!");
 		}
-		bind_context.AddSubquery(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
-		                         *bound_subquery.subquery);
+		bind_context.AddView(bound_subquery.subquery->GetRootIndex(), subquery.alias, subquery,
+		                     *bound_subquery.subquery, view_catalog_entry);
 		return bound_child;
 	}
 	default:

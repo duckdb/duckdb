@@ -23,40 +23,48 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 	}
 }
 
-void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
+void VectorOperations::Copy(const Vector &source_p, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(source.GetType() == target.GetType());
+	D_ASSERT(source_p.GetType() == target.GetType());
 	idx_t copy_count = source_count - source_offset;
 
 	SelectionVector owned_sel;
 	const SelectionVector *sel = &sel_p;
-	switch (source.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR: {
-		// dictionary vector: merge selection vectors
-		auto &child = DictionaryVector::Child(source);
-		auto &dict_sel = DictionaryVector::SelVector(source);
-		// merge the selection vectors and verify the child
-		auto new_buffer = dict_sel.Slice(*sel, source_count);
-		SelectionVector merged_sel(new_buffer);
-		VectorOperations::Copy(child, target, merged_sel, source_count, source_offset, target_offset);
-		return;
-	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		Vector seq(source.GetType());
-		SequenceVector::GetSequence(source, start, increment);
-		VectorOperations::GenerateSequence(seq, source_count, *sel, start, increment);
-		VectorOperations::Copy(seq, target, *sel, source_count, source_offset, target_offset);
-		return;
-	}
-	case VectorType::CONSTANT_VECTOR:
-		sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
-		break; // carry on with below code
-	case VectorType::FLAT_VECTOR:
-		break;
-	default:
-		throw NotImplementedException("FIXME unimplemented vector type for VectorOperations::Copy");
+
+	const Vector *source = &source_p;
+	bool finished = false;
+	while (!finished) {
+		switch (source->GetVectorType()) {
+		case VectorType::DICTIONARY_VECTOR: {
+			// dictionary vector: merge selection vectors
+			auto &child = DictionaryVector::Child(*source);
+			auto &dict_sel = DictionaryVector::SelVector(*source);
+			// merge the selection vectors and verify the child
+			auto new_buffer = dict_sel.Slice(*sel, source_count);
+			owned_sel.Initialize(new_buffer);
+			sel = &owned_sel;
+			source = &child;
+			break;
+		}
+		case VectorType::SEQUENCE_VECTOR: {
+			int64_t start, increment;
+			Vector seq(source->GetType());
+			SequenceVector::GetSequence(*source, start, increment);
+			VectorOperations::GenerateSequence(seq, source_count, *sel, start, increment);
+			VectorOperations::Copy(seq, target, *sel, source_count, source_offset, target_offset);
+			return;
+		}
+		case VectorType::CONSTANT_VECTOR:
+			sel = ConstantVector::ZeroSelectionVector(copy_count, owned_sel);
+			finished = true;
+			break;
+		case VectorType::FLAT_VECTOR:
+			finished = true;
+			break;
+		default:
+			throw NotImplementedException("FIXME unimplemented vector type for VectorOperations::Copy");
+		}
 	}
 
 	if (copy_count == 0) {
@@ -73,13 +81,13 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 
 	// first copy the nullmask
 	auto &tmask = FlatVector::Validity(target);
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		const bool valid = !ConstantVector::IsNull(source);
+	if (source->GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		const bool valid = !ConstantVector::IsNull(*source);
 		for (idx_t i = 0; i < copy_count; i++) {
 			tmask.Set(target_offset + i, valid);
 		}
 	} else {
-		auto &smask = FlatVector::Validity(source);
+		auto &smask = FlatVector::Validity(*source);
 		if (smask.IsMaskSet()) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto idx = sel->get_index(source_offset + i);
@@ -104,46 +112,46 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	D_ASSERT(sel);
 
 	// now copy over the data
-	switch (source.GetType().InternalType()) {
+	switch (source->GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedCopy<int8_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<int8_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::INT16:
-		TemplatedCopy<int16_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<int16_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::INT32:
-		TemplatedCopy<int32_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<int32_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::INT64:
-		TemplatedCopy<int64_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<int64_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedCopy<uint8_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<uint8_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedCopy<uint16_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<uint16_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedCopy<uint32_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<uint32_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedCopy<uint64_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<uint64_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::INT128:
-		TemplatedCopy<hugeint_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<hugeint_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedCopy<float>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<float>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedCopy<double>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<double>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedCopy<interval_t>(source, *sel, target, source_offset, target_offset, copy_count);
+		TemplatedCopy<interval_t>(*source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::VARCHAR: {
-		auto ldata = FlatVector::GetData<string_t>(source);
+		auto ldata = FlatVector::GetData<string_t>(*source);
 		auto tdata = FlatVector::GetData<string_t>(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
@@ -155,11 +163,11 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		break;
 	}
 	case PhysicalType::STRUCT: {
-		auto &source_children = StructVector::GetEntries(source);
+		auto &source_children = StructVector::GetEntries(*source);
 		auto &target_children = StructVector::GetEntries(target);
 		D_ASSERT(source_children.size() == target_children.size());
 		for (idx_t i = 0; i < source_children.size(); i++) {
-			VectorOperations::Copy(*source_children[i], *target_children[i], *sel, source_count, source_offset,
+			VectorOperations::Copy(*source_children[i], *target_children[i], sel_p, source_count, source_offset,
 			                       target_offset);
 		}
 		break;
@@ -167,8 +175,8 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 
-		auto &source_child = ListVector::GetEntry(source);
-		auto sdata = FlatVector::GetData<list_entry_t>(source);
+		auto &source_child = ListVector::GetEntry(*source);
+		auto sdata = FlatVector::GetData<list_entry_t>(*source);
 		auto tdata = FlatVector::GetData<list_entry_t>(target);
 
 		if (target_vector_type == VectorType::CONSTANT_VECTOR) {
@@ -226,7 +234,7 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	}
 	default:
 		throw NotImplementedException("Unimplemented type '%s' for copy!",
-		                              TypeIdToString(source.GetType().InternalType()));
+		                              TypeIdToString(source->GetType().InternalType()));
 	}
 
 	if (target_vector_type != VectorType::FLAT_VECTOR) {
@@ -236,40 +244,8 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
                             idx_t target_offset) {
-	switch (source.GetVectorType()) {
-	case VectorType::DICTIONARY_VECTOR: {
-		// dictionary: continue into child with selection vector
-		auto &child = DictionaryVector::Child(source);
-		auto &dict_sel = DictionaryVector::SelVector(source);
-		VectorOperations::Copy(child, target, dict_sel, source_count, source_offset, target_offset);
-		break;
-	}
-	case VectorType::CONSTANT_VECTOR: {
-		SelectionVector owned_sel;
-		auto sel = ConstantVector::ZeroSelectionVector(source_count, owned_sel);
-		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
-		break;
-	}
-	case VectorType::FLAT_VECTOR: {
-		SelectionVector owned_sel;
-		auto sel = FlatVector::IncrementalSelectionVector(source_count, owned_sel);
-		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
-		break;
-	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(source, start, increment);
-		Vector flattened(source.GetType());
-		VectorOperations::GenerateSequence(flattened, source_count, start, increment);
-
-		SelectionVector owned_sel;
-		auto sel = FlatVector::IncrementalSelectionVector(source_count, owned_sel);
-		VectorOperations::Copy(flattened, target, *sel, source_count, source_offset, target_offset);
-		break;
-	}
-	default:
-		throw NotImplementedException("FIXME: unimplemented vector type for VectorOperations::Copy");
-	}
+	VectorOperations::Copy(source, target, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
+	                       target_offset);
 }
 
 } // namespace duckdb

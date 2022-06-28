@@ -23,10 +23,17 @@ public:
 	explicit PythonDependencies(py::function map_function)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
-	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), py_object(std::move(py_object)) {};
-
+	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
+		py_object_list.push_back(move(py_object));
+	};
+	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
+	                            unique_ptr<RegisteredObject> py_object_copy)
+	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
+		py_object_list.push_back(move(py_object_original));
+		py_object_list.push_back(move(py_object_copy));
+	};
 	py::function map_function;
-	unique_ptr<RegisteredObject> py_object;
+	vector<unique_ptr<RegisteredObject>> py_object_list;
 };
 
 struct DuckDBPyRelation {
@@ -39,7 +46,7 @@ public:
 public:
 	static void Initialize(py::handle &m);
 
-	static unique_ptr<DuckDBPyRelation> FromDf(py::object df,
+	static unique_ptr<DuckDBPyRelation> FromDf(const py::object &df,
 	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
@@ -63,6 +70,11 @@ public:
 	static unique_ptr<DuckDBPyRelation>
 	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
+	void InstallExtension(const string &query, bool force_install,
+	                      DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
+	void LoadExtension(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+
 	static unique_ptr<DuckDBPyRelation>
 	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
@@ -71,29 +83,29 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const py::object &df, const string &expr,
 	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	py::str GetAlias();
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> AliasDF(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> AliasDF(const py::object &df, const string &expr,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> FilterDf(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> FilterDf(const py::object &df, const string &expr,
 	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	unique_ptr<DuckDBPyRelation> Limit(int64_t n);
+	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 
-	static unique_ptr<DuckDBPyRelation> LimitDF(py::object df, int64_t n,
+	static unique_ptr<DuckDBPyRelation> LimitDF(const py::object &df, int64_t n,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> OrderDf(py::object df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> OrderDf(const py::object &df, const string &expr,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
@@ -126,7 +138,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
 
-	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns, const string &groups = "");
+	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
@@ -149,12 +161,12 @@ public:
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
-	static unique_ptr<DuckDBPyRelation> AggregateDF(py::object df, const string &expr, const string &groups = "",
+	static unique_ptr<DuckDBPyRelation> AggregateDF(const py::object &df, const string &expr, const string &groups = "",
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	static unique_ptr<DuckDBPyRelation> DistinctDF(py::object df,
+	static unique_ptr<DuckDBPyRelation> DistinctDF(const py::object &df,
 	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	py::object ToDF();
@@ -179,7 +191,7 @@ public:
 
 	void WriteCsv(const string &file);
 
-	static void WriteCsvDF(py::object df, const string &file,
+	static void WriteCsvDF(const py::object &df, const string &file,
 	                       DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	// should this return a rel with the new view?
@@ -189,7 +201,7 @@ public:
 
 	unique_ptr<DuckDBPyResult> Execute();
 
-	static unique_ptr<DuckDBPyResult> QueryDF(py::object df, const string &view_name, const string &sql_query,
+	static unique_ptr<DuckDBPyResult> QueryDF(const py::object &df, const string &view_name, const string &sql_query,
 	                                          DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	void InsertInto(const string &table);
@@ -203,6 +215,8 @@ public:
 	py::list ColumnTypes();
 
 	string Print();
+
+	string Explain();
 
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,

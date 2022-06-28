@@ -88,8 +88,9 @@ public:
 	mutex write_lock;
 
 public:
-	//! Get the ClientContext from the Catalog
+	//! Get the Catalog from the ClientContext
 	DUCKDB_API static Catalog &GetCatalog(ClientContext &context);
+	//! Get the Catalog from the DatabaseInstance
 	DUCKDB_API static Catalog &GetCatalog(DatabaseInstance &db);
 
 	DUCKDB_API DependencyManager &GetDependencyManager() {
@@ -168,6 +169,9 @@ public:
 	//! Gets the "schema.name" entry without a specified type, if entry does not exist an exception is thrown
 	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, const string &schema, const string &name);
 
+	//! Fetches a logical type from the catalog
+	DUCKDB_API LogicalType GetType(ClientContext &context, const string &schema, const string &name);
+
 	template <class T>
 	T *GetEntry(ClientContext &context, const string &schema_name, const string &name, bool if_exists = false,
 	            QueryErrorContext error_context = QueryErrorContext());
@@ -226,5 +230,8 @@ DUCKDB_API AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &conte
 template <>
 DUCKDB_API CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
                                                   bool if_exists, QueryErrorContext error_context);
+template <>
+DUCKDB_API TypeCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
+                                               bool if_exists, QueryErrorContext error_context);
 
 } // namespace duckdb

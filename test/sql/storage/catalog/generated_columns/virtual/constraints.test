@@ -1,0 +1,198 @@
+# name: test/sql/storage/catalog/generated_columns/virtual/constraints.test
+# description: Constraints combined with generated columns
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/generated_column_storage.db
+
+# --- CHECK - indirect
+
+statement ok
+CREATE TABLE tbl (
+	gcol_x AS (x),
+	gcol_y AS (y),
+	y INTEGER,
+	x TEXT
+	CHECK (y > 5)
+);
+
+restart
+
+statement error
+INSERT INTO tbl VALUES (5, 'test');
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement ok
+SELECT * FROM tbl;
+
+statement ok
+DROP TABLE tbl;
+
+# --- CHECK - direct
+
+statement ok
+CREATE TABLE tbl (
+	gcol_x AS (x),
+	gcol_y AS (y),
+	y INTEGER CHECK (y > 5),
+	x TEXT
+);
+
+restart
+
+statement error
+INSERT INTO tbl VALUES (5, 'test');
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement ok
+SELECT * FROM tbl;
+
+statement ok
+DROP TABLE tbl;
+
+# --- UNIQUE | PRIMARY direct
+
+statement ok
+CREATE TABLE tbl (
+	gcol_x AS (x),
+	gcol_y AS (y),
+	y INTEGER UNIQUE,
+	x TEXT PRIMARY KEY
+);
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement error
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement ok
+SELECT * FROM tbl;
+
+statement ok
+DROP TABLE tbl;
+
+# --- UNIQUE | PRIMARY indirect
+
+statement ok
+CREATE TABLE tbl (
+	gcol_x AS (x),
+	gcol_y AS (y),
+	y INTEGER,
+	x TEXT,
+	PRIMARY KEY (y),
+	UNIQUE (x)
+);
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement error
+INSERT INTO tbl VALUES (6,'test');
+
+restart
+
+statement ok
+SELECT * FROM tbl;
+
+statement ok
+DROP TABLE tbl;
+
+# --- FOREIGN KEY
+
+statement ok
+CREATE TABLE base (
+	price INTEGER PRIMARY KEY
+);
+
+statement ok
+CREATE TABLE tbl (
+	gcol_nest AS (gcol),
+	gcol AS (x),
+	x INTEGER,
+	FOREIGN KEY (x) REFERENCES base (price)
+);
+
+restart
+
+statement ok
+INSERT INTO base VALUES (5);
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+DROP TABLE base;
+
+# --- DEFAULT value
+
+statement ok
+CREATE TABLE tbl (
+	gcol2 AS (gcol1),
+	price INTEGER DEFAULT (5),
+	gcol1 AS (price),
+);
+
+restart
+
+statement ok
+INSERT INTO tbl VALUES (DEFAULT);
+
+restart
+
+query III
+SELECT * FROM tbl;
+----
+5	5	5
+
+# gcol1 is a dependency of gcol2
+statement error
+ALTER TABLE tbl DROP COLUMN gcol1;
+
+# gcol2 is not a dependency of anything
+statement ok
+ALTER TABLE tbl DROP COLUMN gcol2;
+
+# gcol1 is no longer a dependency of anything
+statement ok
+ALTER TABLE tbl DROP COLUMN gcol1;
+
+restart
+
+statement ok
+SELECT * FROM tbl;

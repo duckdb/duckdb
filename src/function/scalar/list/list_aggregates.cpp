@@ -54,14 +54,29 @@ struct StateVector {
 	Vector state_vector;
 };
 
+struct FinalizeValueFunctor {
+	template <class T>
+	static Value FinalizeValue(T first) {
+		return Value::CreateValue(first);
+	}
+};
+
+struct FinalizeStringValueFunctor {
+	template <class T>
+	static Value FinalizeValue(T first) {
+		string_t value = first;
+		return Value::CreateValue(value);
+	}
+};
+
 struct AggregateFunctor {
-	template <class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 	}
 };
 
 struct DistinctFunctor {
-	template <class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 
 		VectorData sdata;
@@ -85,7 +100,7 @@ struct DistinctFunctor {
 			offset += state->hist->size();
 
 			for (auto &entry : *state->hist) {
-				auto bucket_value = Value::CreateValue(entry.first);
+				Value bucket_value = OP::template FinalizeValue<T>(entry.first);
 				ListVector::PushBack(result, bucket_value);
 			}
 		}
@@ -94,7 +109,7 @@ struct DistinctFunctor {
 };
 
 struct UniqueFunctor {
-	template <class T, class MAP_TYPE = unordered_map<T, idx_t>>
+	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 
 		VectorData sdata;
@@ -118,7 +133,7 @@ struct UniqueFunctor {
 	}
 };
 
-template <class OP, bool IS_AGGR = false>
+template <class FUNCTION_FUNCTOR, bool IS_AGGR = false>
 static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 
 	auto count = args.size();
@@ -137,6 +152,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
 	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
+	AggregateInputData aggr_input_data(aggr.bind_info.get());
 
 	D_ASSERT(aggr.function.update);
 
@@ -194,7 +210,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 				// update the aggregate state(s)
 				Vector slice = Vector(child_vector, sel_vector, states_idx);
-				aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
@@ -210,12 +226,12 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
 		Vector slice = Vector(child_vector, sel_vector, states_idx);
-		aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+		aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 	}
 
 	if (IS_AGGR) {
 		// finalize all the aggregate states
-		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+		aggr.function.finalize(state_vector.state_vector, aggr_input_data, result, count, 0);
 
 	} else {
 		// finalize manually to use the map
@@ -224,61 +240,80 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 		switch (key_type.InternalType()) {
 		case PhysicalType::BOOL:
-			OP::template ListExecuteFunction<bool>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, bool>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::UINT8:
-			OP::template ListExecuteFunction<uint8_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, uint8_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::UINT16:
-			OP::template ListExecuteFunction<uint16_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, uint16_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::UINT32:
-			OP::template ListExecuteFunction<uint32_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, uint32_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::UINT64:
-			OP::template ListExecuteFunction<uint64_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, uint64_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::INT8:
-			OP::template ListExecuteFunction<int8_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int8_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::INT16:
-			OP::template ListExecuteFunction<int16_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int16_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::INT32:
-			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::INT64:
-			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::FLOAT:
-			OP::template ListExecuteFunction<float>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, float>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::DOUBLE:
-			OP::template ListExecuteFunction<double>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, double>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::DATE32:
-			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::DATE64:
-			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::TIMESTAMP:
-			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::TIME32:
-			OP::template ListExecuteFunction<int32_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::TIME64:
-			OP::template ListExecuteFunction<int64_t>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::STRING:
-			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::LARGE_STRING:
-			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
+			    result, state_vector.state_vector, count);
 			break;
 		case PhysicalType::VARCHAR:
-			OP::template ListExecuteFunction<string>(result, state_vector.state_vector, count);
+			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
+			    result, state_vector.state_vector, count);
 			break;
 		default:
 			throw InternalException("Unimplemented histogram aggregate");

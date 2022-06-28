@@ -108,8 +108,9 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	stmt->res = stmt->stmt->Execute(values);
 
 	if (!stmt->res->success) {
-		stmt->error_messages.emplace_back(stmt->res->error);
-		return SQL_ERROR;
+		duckdb::DiagRecord diag_rec(stmt->res->GetError(), duckdb::SQLStateType::GENERAL_ERROR,
+		                            stmt->dbc->GetDataSourceName());
+		throw duckdb::OdbcException("SingleExecuteStmt", SQL_ERROR, diag_rec);
 	}
 	stmt->open = true;
 	if (ret == SQL_STILL_EXECUTING) {
@@ -190,9 +191,13 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duckdb::OdbcHandleStmt *stmt,
                            SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	if (!target_value_ptr) {
-		return OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr);
+		if (OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr) == SQL_SUCCESS) {
+			duckdb::DiagRecord diag_rec("Could not set str_len_or_ind_ptr",
+			                            duckdb::SQLStateType::INVALID_STR_BUFF_LENGTH, stmt->dbc->GetDataSourceName());
+			throw duckdb::OdbcException("GetVariableValue", SQL_ERROR, diag_rec);
+		}
+		return SQL_SUCCESS;
 	}
-
 	SQLRETURN ret = SQL_SUCCESS;
 	stmt->odbc_fetcher->SetLastFetchedVariableVal((duckdb::row_t)col_idx);
 
@@ -202,7 +207,10 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 		last_len = 0;
 	}
 
-	auto out_len = duckdb::MinValue(val_str.size() - last_len, (size_t)buffer_length);
+	uint64_t out_len = val_str.size() - last_len;
+	if (buffer_length != 0) {
+		out_len = duckdb::MinValue(val_str.size() - last_len, (size_t)buffer_length);
+	}
 	memcpy((char *)target_value_ptr, val_str.c_str() + last_len, out_len);
 
 	if (out_len == (size_t)buffer_length) {

@@ -420,6 +420,9 @@ string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
 }
 
 string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeFormat &format) {
+	if (format_string.empty()) {
+		return "Empty format string";
+	}
 	format.specifiers.clear();
 	format.literals.clear();
 	format.numeric_width.clear();
@@ -624,6 +627,25 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	return make_unique<StrfTimeBindData>(format, format_string);
 }
 
+void StrfTimeFormat::ConvertDateVector(Vector &input, Vector &result, idx_t count) {
+	D_ASSERT(input.GetType().id() == LogicalTypeId::DATE);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
+	UnaryExecutor::ExecuteWithNulls<date_t, string_t>(input, result, count,
+	                                                  [&](date_t input, ValidityMask &mask, idx_t idx) {
+		                                                  if (Date::IsFinite(input)) {
+			                                                  dtime_t time(0);
+			                                                  idx_t len = GetLength(input, time, 0, nullptr);
+			                                                  string_t target = StringVector::EmptyString(result, len);
+			                                                  FormatString(input, time, target.GetDataWriteable());
+			                                                  target.Finalize();
+			                                                  return target;
+		                                                  } else {
+			                                                  mask.SetInvalid(idx);
+			                                                  return string_t();
+		                                                  }
+	                                                  });
+}
+
 template <bool REVERSED>
 static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
@@ -634,14 +656,28 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::Execute<date_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(), [&](date_t input) {
-		dtime_t time(0);
-		idx_t len = info.format.GetLength(input, time, 0, nullptr);
-		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(input, time, target.GetDataWriteable());
-		target.Finalize();
-		return target;
-	});
+	info.format.ConvertDateVector(args.data[REVERSED ? 1 : 0], result, args.size());
+}
+
+void StrfTimeFormat::ConvertTimestampVector(Vector &input, Vector &result, idx_t count) {
+	D_ASSERT(input.GetType().id() == LogicalTypeId::TIMESTAMP);
+	D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
+	UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(
+	    input, result, count, [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+		    if (Timestamp::IsFinite(input)) {
+			    date_t date;
+			    dtime_t time;
+			    Timestamp::Convert(input, date, time);
+			    idx_t len = GetLength(date, time, 0, nullptr);
+			    string_t target = StringVector::EmptyString(result, len);
+			    FormatString(date, time, target.GetDataWriteable());
+			    target.Finalize();
+			    return target;
+		    } else {
+			    mask.SetInvalid(idx);
+			    return string_t();
+		    }
+	    });
 }
 
 template <bool REVERSED>
@@ -654,18 +690,7 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-
-	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[REVERSED ? 1 : 0], result, args.size(),
-	                                              [&](timestamp_t input) {
-		                                              date_t date;
-		                                              dtime_t time;
-		                                              Timestamp::Convert(input, date, time);
-		                                              idx_t len = info.format.GetLength(date, time, 0, nullptr);
-		                                              string_t target = StringVector::EmptyString(result, len);
-		                                              info.format.FormatString(date, time, target.GetDataWriteable());
-		                                              target.Finalize();
-		                                              return target;
-	                                              });
+	info.format.ConvertTimestampVector(args.data[REVERSED ? 1 : 0], result, args.size());
 }
 
 void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -787,6 +812,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	uint64_t yearday = 0;
 
 	for (idx_t i = 0;; i++) {
+		D_ASSERT(i < literals.size());
 		// first compare the literal
 		const auto &literal = literals[i];
 		for (size_t l = 0; l < literal.size();) {
@@ -1177,7 +1203,10 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	string format_string = options_str.ToString();
 	StrpTimeFormat format;
-	if (!options_str.IsNull() && options_str.type().id() == LogicalTypeId::VARCHAR) {
+	if (!options_str.IsNull()) {
+		if (options_str.type().id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("strptime format must be a string");
+		}
 		format.format_specifier = format_string;
 		string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 		if (!error.empty()) {

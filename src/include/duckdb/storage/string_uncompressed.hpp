@@ -41,7 +41,7 @@ public:
 	//! Base size of big string marker (block id + offset)
 	static constexpr idx_t BIG_STRING_MARKER_BASE_SIZE = sizeof(block_id_t) + sizeof(int32_t);
 	//! The marker size of the big string
-	static constexpr idx_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE + sizeof(uint16_t);
+	static constexpr idx_t BIG_STRING_MARKER_SIZE = BIG_STRING_MARKER_BASE_SIZE;
 	//! The size below which the segment is compacted on flushing
 	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 
@@ -80,11 +80,16 @@ public:
 				return i;
 			}
 			remaining_space -= sizeof(int32_t);
+			auto dictionary = GetDictionary(segment, *handle);
 			if (!data.validity.RowIsValid(source_idx)) {
-				// null value is stored as -1
-				result_data[target_idx] = 0;
+				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
+				// string_length calculation
+				if (target_idx > 0) {
+					result_data[target_idx] = result_data[target_idx - 1];
+				} else {
+					result_data[target_idx] = 0;
+				}
 			} else {
-				auto dictionary = GetDictionary(segment, *handle);
 				auto end = handle->node->buffer + dictionary.end;
 
 				dictionary.Verify();
@@ -108,7 +113,7 @@ public:
 					// Unknown string, continue
 					// non-null value, check if we can fit it within the block
 					idx_t string_length = source_data[source_idx].GetSize();
-					idx_t dictionary_length = string_length + sizeof(uint16_t);
+					idx_t dictionary_length = string_length;
 
 					// determine whether or not we have space in the block for this string
 					bool use_overflow_block = false;
@@ -141,16 +146,17 @@ public:
 						// string fits in block, append to dictionary and increment dictionary position
 						D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
 						dictionary.size += required_space;
-						auto dict_pos = end - dictionary.size; // first write the length as u16
-						Store<uint16_t>(string_length, dict_pos);
+						auto dict_pos = end - dictionary.size;
 						// now write the actual string data into the dictionary
-						memcpy(dict_pos + sizeof(uint16_t), source_data[source_idx].GetDataUnsafe(), string_length);
+						memcpy(dict_pos, source_data[source_idx].GetDataUnsafe(), string_length);
 					}
 					D_ASSERT(RemainingSpace(segment, *handle) <= Storage::BLOCK_SIZE);
 					// place the dictionary offset into the set of vectors
 					dictionary.Verify();
 
-					result_data[target_idx] = dictionary.size;
+					// note: for overflow strings we write negative value
+					result_data[target_idx] = use_overflow_block ? -1 * dictionary.size : dictionary.size;
+
 					if (DUPLICATE_ELIMINATE) {
 						seen_strings->insert({source_data[source_idx].GetString(), dictionary.size});
 					}
@@ -176,16 +182,17 @@ public:
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
 	                              int32_t &result_offset);
-	static string_t ReadString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
-	static string_t ReadString(data_ptr_t target, int32_t offset);
+	static string_t ReadOverflowString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
+	static string_t ReadString(data_ptr_t target, int32_t offset, uint32_t string_length);
+	static string_t ReadStringWithLength(data_ptr_t target, int32_t offset);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
 	static string_location_t FetchStringLocation(StringDictionaryContainer dict, data_ptr_t baseptr,
 	                                             int32_t dict_offset);
 	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                                    data_ptr_t baseptr, int32_t dict_offset);
+	                                    data_ptr_t baseptr, int32_t dict_offset, uint32_t string_length);
 	static string_t FetchString(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
-	                            data_ptr_t baseptr, string_location_t location);
+	                            data_ptr_t baseptr, string_location_t location, uint32_t string_length);
 };
 } // namespace duckdb

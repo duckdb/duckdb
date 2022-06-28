@@ -118,7 +118,6 @@ void OdbcHandleStmt::Close() {
 	// the parameter values can be reused after
 	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-	bound_cols.clear();
 	error_messages.clear();
 }
 

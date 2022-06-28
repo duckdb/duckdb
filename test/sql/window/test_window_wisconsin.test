@@ -106,7 +106,7 @@ SELECT cast(percent_rank() OVER (PARTITION BY four ORDER BY ten)*10 as INTEGER) 
 10
 0
 0
-6
+7
 10
 0
 0
@@ -116,12 +116,12 @@ SELECT cast(percent_rank() OVER (PARTITION BY four ORDER BY ten)*10 as INTEGER) 
 query I
 SELECT cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) FROM tenk1 WHERE  unique2 < 10 order by four, ten
 ----
-6
-6
+7
+7
 10
 5
 5
-7
+8
 10
 10
 5
@@ -305,14 +305,13 @@ SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integ
 query IRIIII
 SELECT COUNT(*) OVER w c, SUM(four) OVER w s, cast(AVG(ten) OVER w * 10 as integer) a, RANK() over w r, DENSE_RANK() over w dr, ROW_NUMBER() OVER w rn FROM tenk1 WINDOW w AS (rows between 1 preceding and 1 following) ORDER BY rn
 ----
-2	3.000000	5	1	1	1
-3	3.000000	3	1	1	2
-3	5.000000	3	1	1	3
-3	2.000000	13	1	1	4
-3	3.000000	43	1	1	5
-3	2.000000	66	1	1	6
-3	3.000000	56	1	1	7
-3	3.000000	30	1	1	8
-3	5.000000	16	1	1	9
-2	4.000000	20	1	1	10
-
+2	3	5	1	1	1
+3	3	3	1	1	2
+3	5	3	1	1	3
+3	2	13	1	1	4
+3	3	43	1	1	5
+3	2	67	1	1	6
+3	3	57	1	1	7
+3	3	30	1	1	8
+3	5	17	1	1	9
+2	4	20	1	1	10
