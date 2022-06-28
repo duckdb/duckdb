@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -540,6 +541,41 @@ static duckdb::LogicalType EmptyMap() {
 	return LogicalType::MAP(move(child_types));
 }
 
+//! Check if the keys match
+static bool StructKeysAreEqual(idx_t row, const child_list_t<LogicalType> &reference,
+                               const child_list_t<LogicalType> &compare, string &error_message) {
+	D_ASSERT(reference.size() == compare.size());
+	for (idx_t i = 0; i < reference.size(); i++) {
+		auto &ref = reference[i].first;
+		auto &comp = compare[i].first;
+		if (!duckdb::CaseInsensitiveStringEquality()(ref, comp)) {
+			error_message = "Struct key on row " + to_string(row) + " is incorrect, expected '" + ref +
+			                "' but encountered '" + comp + "'";
+			return false;
+		}
+	}
+	return true;
+}
+
+// Verify that all struct entries in a column have the same amount of fields and that keys are equal
+static void VerifyStructValidity(vector<LogicalType> &structs) {
+	D_ASSERT(!structs.empty());
+	auto reference_type = structs[0];
+	auto reference_children = StructType::GetChildTypes(reference_type);
+
+	string error_message;
+	for (idx_t i = 1; i < structs.size(); i++) {
+		auto &entry = structs[i];
+		auto &entry_children = StructType::GetChildTypes(entry);
+		if (entry_children.size() != reference_children.size()) {
+			throw std::runtime_error("Struct entries have differing amounts of fields");
+		}
+		if (!StructKeysAreEqual(i, reference_children, entry_children, error_message)) {
+			throw std::runtime_error(error_message);
+		}
+	}
+}
+
 static duckdb::LogicalType AnalyzeObjectType(py::handle column, bool &can_convert) {
 	idx_t rows = py::len(column);
 	LogicalType item_type = duckdb::LogicalType::SQLNULL;
@@ -554,19 +590,25 @@ static duckdb::LogicalType AnalyzeObjectType(py::handle column, bool &can_conver
 		column = column.attr("__array__")();
 	}
 
+	vector<LogicalType> types;
 	auto first_item = GetItem(column, 0);
 	item_type = GetItemType(first_item, can_convert);
 	if (!can_convert) {
 		return item_type;
 	}
+	types.push_back(item_type);
 
 	for (idx_t i = 1; i < rows; i++) {
 		auto next_item = GetItem(column, i);
 		auto next_item_type = GetItemType(next_item, can_convert);
+		types.push_back(next_item_type);
 		if (!can_convert) {
 			break;
 		}
 		item_type = LogicalType::MaxLogicalType(item_type, next_item_type);
+	}
+	if (item_type.id() == LogicalTypeId::STRUCT) {
+		VerifyStructValidity(types);
 	}
 
 	return item_type;
@@ -591,8 +633,8 @@ static duckdb::LogicalType DictToMap(py::handle &dict_values, bool &can_convert)
 	return LogicalType::MAP(move(child_types));
 }
 
+//! Python dictionaries don't allow duplicate keys, so we don't need to check this.
 static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_values, idx_t size, bool &can_convert) {
-	// Verify that all keys are strings
 	child_list_t<LogicalType> struct_children;
 
 	for (idx_t i = 0; i < size; i++) {
@@ -609,7 +651,7 @@ static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_
 }
 
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
-//! for example a python list could contain of multiple different types, which we cant communicate downwards through
+//! for example a python list could consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
 //! Maybe there's an INVALID type actually..
