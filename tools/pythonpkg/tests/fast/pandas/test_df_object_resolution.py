@@ -71,3 +71,15 @@ class TestResolveObjectColumns(object):
         duckdb_col = duckdb.query("select {'5':1, '-25':3, '32':3, '32456':7} as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
+
+    def test_fallthrough_object_conversion(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [IntString(4)],
+                [IntString(2)],
+                [IntString(0)],
+            ]
+        )
+        duckdb_col = duckdb.query("select * from x").df()
+        df_expected_res = pd.DataFrame({'0': pd.Series(['4','2','0'])})
+        pd.testing.assert_frame_equal(duckdb_col, df_expected_res)

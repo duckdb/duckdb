@@ -651,10 +651,9 @@ static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_
 }
 
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
-//! for example a python list could consist of multiple different types, which we cant communicate downwards through
+//! e.g python lists can consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
-//! Maybe there's an INVALID type actually..
 // This should be called Bind .. something
 static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 	auto datetime_mod = py::module_::import("datetime");
@@ -746,7 +745,9 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		}
 		return LogicalType::LIST(ltype);
 	} else {
-		throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
+		// Fall back to string for unknown types
+		can_convert = false;
+		return LogicalType::VARCHAR;
 	}
 }
 
