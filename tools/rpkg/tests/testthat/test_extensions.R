@@ -33,6 +33,7 @@ load_extension <- function(extension_name) {
 }
 
 test_that("extensions can be loaded", {
+    skip_if(Sys.getenv("DUCKDB_R_TEST_EXTENSION_REQUIRED") != "1", "DUCKDB_R_TEST_EXTENSION_REQUIRED not set, hence not testing extensions")
     con <- load_extension("httpfs.duckdb_extension")
     on.exit(dbDisconnect(con, shutdown = TRUE))
     df0 <- data.frame(
@@ -46,6 +47,7 @@ test_that("extensions can be loaded", {
 })
 
 test_that("substrait extension test", {
+  skip_if(Sys.getenv("DUCKDB_R_TEST_EXTENSION_REQUIRED") != "1", "DUCKDB_R_TEST_EXTENSION_REQUIRED not set, hence not testing extensions")
   con <- load_extension("substrait.duckdb_extension")
   on.exit(dbDisconnect(con, shutdown = TRUE))
   dbExecute(con, "CREATE TABLE integers (i INTEGER)")
