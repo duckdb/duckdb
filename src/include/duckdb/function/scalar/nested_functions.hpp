@@ -45,6 +45,10 @@ struct StructPackFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StructInsertFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ListValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
