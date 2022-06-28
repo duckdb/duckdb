@@ -33,7 +33,7 @@ TEST_CASE("Test that we can verify a signature", "[mbedtls]") {
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(borked_pubkey, signature, hash));
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(empty_string, signature, hash));
 
-	// wrong-length signatures should never happen either
+	// wrong-length signatures or hashes should never happen either
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(pubkey, empty_string, hash));
 	REQUIRE_THROWS(MbedTlsWrapper::IsValidSha256Signature(pubkey, signature, empty_string));
 

@@ -84,6 +84,7 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_unique<DBConfig>();
 	result->checkpoint_wal_size = 0;
+	result->allow_unsigned_extensions = true;
 	return result;
 }
 
