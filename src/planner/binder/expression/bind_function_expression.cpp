@@ -91,7 +91,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	string error;
 
 	if (function.children.size() != 2) {
-		throw BinderException("Invalid number of arguments, expected two (list, lambda expression)!");
+		throw BinderException("Invalid function arguments!");
 	}
 	if (function.children[1]->GetExpressionClass() != ExpressionClass::LAMBDA) {
 		throw BinderException("Invalid lambda expression!");

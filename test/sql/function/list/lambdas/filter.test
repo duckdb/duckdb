@@ -193,3 +193,18 @@ SELECT (SELECT (SELECT (SELECT list_filter(l, elem -> length(elem) >= 1)))) FROM
 [2, hello, wie gehts]
 NULL
 []
+
+# positional references in lambda functions
+query I
+SELECT list_filter([1, 2, 3, 4, 5, 6, 7, 8, 9], x -> x > #1) FROM range(10)
+----
+[1, 2, 3, 4, 5, 6, 7, 8, 9]
+[2, 3, 4, 5, 6, 7, 8, 9]
+[3, 4, 5, 6, 7, 8, 9]
+[4, 5, 6, 7, 8, 9]
+[5, 6, 7, 8, 9]
+[6, 7, 8, 9]
+[7, 8, 9]
+[8, 9]
+[9]
+[]

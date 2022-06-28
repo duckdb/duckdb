@@ -11,6 +11,18 @@ CREATE TABLE incorrect_test (i integer);
 foreach func_name list_transform list_filter
 
 statement error
+SELECT ${func_name}()
+
+statement error
+SELECT ${func_name}([])
+
+statement error
+SELECT ${func_name}([1], x -> x, 3)
+
+statement error
+SELECT ${func_name}(1, 2, 3)
+
+statement error
 SELECT ${func_name}(NULL, NULL)
 
 statement error
@@ -85,3 +97,10 @@ SELECT list_filter([1, 2], (x, y) -> x >= y)
 
 statement error
 SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
+
+# using lambdas in functions that do not support them
+statement error
+SELECT cos(x -> x + 1)
+
+statement error
+SELECT cos([1], x -> x + 1)

@@ -224,3 +224,18 @@ SELECT (SELECT (SELECT (SELECT list_transform(l, elem -> elem + 1)))) FROM corr_
 [NULL, 3, 5, 5]
 NULL
 []
+
+# positional references in lambda functions
+query I
+SELECT list_transform([1, 2, 3], x -> x + #1) FROM range(10)
+----
+[1, 2, 3]
+[2, 3, 4]
+[3, 4, 5]
+[4, 5, 6]
+[5, 6, 7]
+[6, 7, 8]
+[7, 8, 9]
+[8, 9, 10]
+[9, 10, 11]
+[10, 11, 12]
