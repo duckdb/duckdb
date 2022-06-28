@@ -382,7 +382,7 @@ static void mbedtls_ct_mem_move_to_left( void *start,
                                          size_t total,
                                          size_t offset )
 {
-    volatile unsigned char *buf = start;
+    volatile unsigned char *buf = (volatile unsigned char *) start;
     size_t i, n;
     if( total == 0 )
         return;
