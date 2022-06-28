@@ -43,6 +43,38 @@ Value TransformDictionaryToMap(py::handle dict_values) {
 	return Value::MAP(key_list, value_list);
 }
 
+static void CastAllValues(vector<Value> &values, const LogicalType &target_type) {
+	for (idx_t i = 0; i < values.size(); i++) {
+		values[i] = values[i].CastAs(target_type);
+	}
+}
+
+static void CastNullValues(vector<Value> &values, vector<idx_t> &null_indices, const LogicalType &target_type) {
+	for (auto &idx : null_indices) {
+		values[idx] = values[idx].CastAs(target_type);
+	}
+}
+
+Value TransformListValue(py::handle ele) {
+	auto size = py::len(ele);
+
+	if (size == 0) {
+		return Value::EMPTYLIST(LogicalType::SQLNULL);
+	}
+
+	vector<Value> values;
+	values.reserve(size);
+
+	LogicalType element_type = LogicalType::SQLNULL;
+	for (idx_t i = 0; i < size; i++) {
+		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i));
+		element_type = LogicalType::MaxLogicalType(element_type, new_value.type());
+		values.push_back(move(new_value));
+	}
+
+	return Value::LIST(element_type, values);
+}
+
 Value TransformPythonValue(py::handle ele) {
 	auto datetime_mod = py::module::import("datetime");
 	auto datetime_date = datetime_mod.attr("date");
@@ -109,29 +141,7 @@ Value TransformPythonValue(py::handle ele) {
 		const string &ele_string = ele.cast<string>();
 		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
 	} else if (py::isinstance<py::list>(ele)) {
-		auto size = py::len(ele);
-
-		if (size == 0) {
-			return Value::EMPTYLIST(LogicalType::SQLNULL);
-		}
-
-		vector<Value> values;
-		values.reserve(size);
-
-		bool first = true;
-		for (auto py_val : ele) {
-			Value new_value = TransformPythonValue(py_val);
-			// First value does not need to be checked
-			// If a value is NULL, it's always fine
-			// Otherwise if the types dont match, throw an exception
-			if (!first && !new_value.IsNull() && values[0].type().id() != new_value.type().id()) {
-				throw std::runtime_error("TransformPythonValue - list contains elements of differing types");
-			}
-			values.push_back(move(new_value));
-			first = false;
-		}
-
-		return Value::LIST(values);
+		return TransformListValue(ele);
 	} else if (py::isinstance<py::dict>(ele)) {
 		//! DICT -> MAP FORMAT
 		// keys() = [key, value]
