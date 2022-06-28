@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -30,7 +31,7 @@ public:
 	using Types = vector<LogicalType>;
 
 	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &orders, const Types &payload_types,
-	                      idx_t max_mem)
+	                      idx_t max_mem, bool external)
 	    : memory_per_thread(max_mem) {
 		Orders orders_copy;
 		for (const auto &order : orders) {
@@ -41,6 +42,7 @@ public:
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
 		global_sort = make_unique<GlobalSortState>(buffer_manager, orders_copy, payload_layout);
+		global_sort->external = external;
 	}
 
 	void Sink(DataChunk &sort_buffer, DataChunk &payload_buffer) {
@@ -112,14 +114,11 @@ public:
 			orders.emplace_back(order.Copy());
 		}
 
-		// Memory usage per thread should scale with max mem / num threads
-		// We take 1/4th of this, to be conservative
-		idx_t max_memory = buffer_manager.GetMaxMemory();
-		idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		memory_per_thread = (max_memory / num_threads) / 4;
+		memory_per_thread = op.GetMaxThreadMemory(context);
+		external = ClientConfig::GetConfig(context).force_external;
 	}
 
-	WindowGlobalHashGroup *GetHashGroup(idx_t group) {
+	WindowGlobalHashGroup *GetHashGroup(idx_t group, const size_t max_groups) {
 		lock_guard<mutex> guard(lock);
 		if (group >= hash_groups.size()) {
 			hash_groups.resize(group + 1);
@@ -127,7 +126,8 @@ public:
 
 		auto &hash_group = hash_groups[group];
 		if (!hash_group) {
-			hash_group = make_unique<WindowGlobalHashGroup>(buffer_manager, orders, payload_types, memory_per_thread);
+			const auto maxmem = memory_per_thread / max_groups;
+			hash_group = make_unique<WindowGlobalHashGroup>(buffer_manager, orders, payload_types, maxmem, external);
 		}
 
 		return hash_group.get();
@@ -142,6 +142,7 @@ public:
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> strings;
 	idx_t memory_per_thread;
+	bool external;
 	WindowAggregationMode mode;
 };
 
@@ -390,7 +391,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		if (group_size) {
 			auto &local_group = local_groups[group];
 			if (!local_group) {
-				auto global_group = gstate.GetHashGroup(group);
+				auto global_group = gstate.GetHashGroup(group, counts.size());
 				local_group = make_unique<WindowLocalHashGroup>(*global_group);
 			}
 
