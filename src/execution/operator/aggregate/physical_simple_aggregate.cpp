@@ -69,7 +69,8 @@ public:
 
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
-	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates)
+	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
+	                          const vector<LogicalType> &child_types)
 	    : state(aggregates), child_executor(allocator) {
 		vector<LogicalType> payload_types;
 		vector<AggregateObject> aggregate_objects;
@@ -88,7 +89,7 @@ public:
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
 			payload_chunk.Initialize(allocator, payload_types);
 		}
-		filter_set.Initialize(allocator, aggregate_objects, payload_types);
+		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
 	void Reset() {
 		payload_chunk.Reset();
@@ -109,7 +110,7 @@ unique_ptr<GlobalSinkState> PhysicalSimpleAggregate::GetGlobalSinkState(ClientCo
 }
 
 unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates);
+	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes());
 }
 
 SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,

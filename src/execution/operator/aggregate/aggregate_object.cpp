@@ -27,6 +27,9 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 AggregateFilterData::AggregateFilterData(Allocator &allocator, Expression &filter_expr,
                                          const vector<LogicalType> &payload_types)
     : filter_executor(allocator, &filter_expr), true_sel(STANDARD_VECTOR_SIZE) {
+	if (payload_types.empty()) {
+		return;
+	}
 	filtered_payload.Initialize(allocator, payload_types);
 }
 
