@@ -829,6 +829,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 		// Analyze the inner data type of the 'object' column
 		if (bind_data.pandas_type == PandasType::OBJECT) {
 			bool can_convert = true;
+			py::gil_scoped_acquire acquire;
 			LogicalType converted_type = AnalyzeObjectType(get_fun(df_columns[col_idx]), can_convert);
 			if (can_convert) {
 				duckdb_col_type = converted_type;

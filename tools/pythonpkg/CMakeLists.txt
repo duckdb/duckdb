@@ -18,6 +18,7 @@ add_library(
   src/array_wrapper.cpp
   src/pandas_scan.cpp
   src/pyconnection.cpp
+  src/python_import_cache.cpp
   src/pyrelation.cpp
   src/pyresult.cpp
   src/map.cpp

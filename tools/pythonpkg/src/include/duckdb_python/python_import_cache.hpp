@@ -8,98 +8,113 @@
 
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include "datetime.h" //From python
 
 namespace duckdb {
 
-//Every cache item knows how to retrieve its object
+enum class PythonImportCacheItemType { MODULE, TYPE };
+
+struct PythonImportCache;
+
+// Every cache item knows how to retrieve its object
 struct PythonImportCacheItem {
 public:
-	//Modules dont have a source
-	PythonImportCacheItem() : source(*this), object(nullptr) {}
-
-	PythonImportCacheItem(PythonImportCacheItem& source) : source(source), object(nullptr) {}
-	virtual ~PythonImportCacheItem() {}
-	py::handle operator () (void) {
-		if (!object) {
-			object = LoadObject();
-		}
-		return object;
+	//! Constructor for a module
+	PythonImportCacheItem(const string &name, PythonImportCache &cache)
+	    : source(*this), object(nullptr), name(name), cache(cache), item_type(PythonImportCacheItemType::MODULE) {
 	}
+	//! Constructor for an attribute
+	PythonImportCacheItem(const string &name, PythonImportCacheItem &source, PythonImportCache &cache)
+	    : source(source), object(nullptr), name(name), cache(cache), item_type(PythonImportCacheItemType::TYPE) {
+	}
+	virtual ~PythonImportCacheItem() {
+	}
+
+public:
+	py::object &operator()(void);
+	const string &Name() {
+		return name;
+	}
+
 protected:
-	//! Implemented by the class that derives from this
-	virtual PyObject* LoadObject() = 0;
+	py::object *LoadObject();
+
 protected:
-	//! Where to get the item from
-	PythonImportCacheItem& source;
+	//! Where to get the parent item from
+	PythonImportCacheItem &source;
 	//! The stored item
-	PyObject* object;
+	py::object *object;
+
+private:
+	py::object *AddCache(py::object object);
+	py::object *LoadModule();
+	py::object *LoadAttribute();
+
+private:
+	//! Name of the object
+	string name;
+	//! The cache that owns the py::objects;
+	PythonImportCache &cache;
+	//! Used in LoadObject to determine how to load the object
+	PythonImportCacheItemType item_type;
 };
 
 //! --------------- NumPy ---------------
 
-struct NdArrayCacheItem : public PythonImportCacheItem {
-	NdArrayCacheItem(PythonImportCacheItem& source) : PythonImportCacheItem(source) {}
-	PyObject* LoadObject() override {
-		py::handle object_source = source();
-		return object_source.attr("ndarray").ptr();
-	}
-};
-
 struct NumpyCacheItem : public PythonImportCacheItem {
-	NumpyCacheItem() : PythonImportCacheItem(),
-		ndarray(*this)
-	{}
-	PyObject* LoadObject() override {
-		return py::module::import("numpy").ptr();
+public:
+	NumpyCacheItem(PythonImportCache &cache) : PythonImportCacheItem("numpy", cache), ndarray("ndarray", *this, cache) {
 	}
-	NdArrayCacheItem ndarray;
+
+public:
+	PythonImportCacheItem ndarray;
 };
 
 //! --------------- Datetime ---------------
 
 struct DatetimeCacheItem : public PythonImportCacheItem {
-	DatetimeCacheItem(PythonImportCacheItem& source) : PythonImportCacheItem(source) {}
-	PyObject* LoadObject() override {
-		py::handle object_source = source();
-		return object_source.attr("datetime").ptr();
+public:
+	DatetimeCacheItem(PythonImportCache &cache)
+	    : PythonImportCacheItem("datetime", cache), datetime("datetime", *this, cache), date("date", *this, cache),
+	      time("time", *this, cache) {
 	}
+
+public:
+	PythonImportCacheItem datetime;
+	PythonImportCacheItem date;
+	PythonImportCacheItem time;
 };
 
-struct DateCacheItem : public PythonImportCacheItem {
-	DateCacheItem(PythonImportCacheItem& source) : PythonImportCacheItem(source) {}
-	PyObject* LoadObject() override {
-		py::handle object_source = source();
-		return object_source.attr("date").ptr();
-	}
-};
-
-struct TimeCacheItem : public PythonImportCacheItem {
-	TimeCacheItem(PythonImportCacheItem& source) : PythonImportCacheItem(source) {}
-	PyObject* LoadObject() override {
-		py::handle object_source = source();
-		return object_source.attr("time").ptr();
-	}
-};
-
-struct DatetimeModuleCacheItem : public PythonImportCacheItem {
-	DatetimeModuleCacheItem() : PythonImportCacheItem(),
-		datetime(*this),
-		date(*this),
-		time(*this)
-	{}
-	PyObject* LoadObject() override {
-		return py::module::import("datetime").ptr();
-	}
-	DatetimeCacheItem datetime;
-	DateCacheItem date;
-	TimeCacheItem time;
-};
-
+// Contains a list of cached modules
 struct PythonImportCache {
+public:
+	PythonImportCache() : numpy(*this), datetime(*this), owned_objects() {
+	}
+	~PythonImportCache();
+	//! Stored modules
+public:
 	NumpyCacheItem numpy;
-	DatetimeModuleCacheItem datetime;
+	DatetimeCacheItem datetime;
+
+public:
+	py::object *AddCache(py::object item);
+
+private:
+	vector<py::object> owned_objects;
 };
 
-} //namespace duckdb
+} // namespace duckdb
+
+//! Example of how to extend PythonImportCacheItem if sub objects of an attribute are introduced making them no longer a
+//! leaf.
+
+// struct NdArrayCacheItem : public PythonImportCacheItem {
+// public:
+//	NdArrayCacheItem(PythonImportCacheItem& source, PythonImportCache& cache) : PythonImportCacheItem("ndarray", source,
+//cache), 		new_object("new_object", *this, cache)
+//	{}
+// public:
+//	PythonImportCacheItem new_object;
+// };
