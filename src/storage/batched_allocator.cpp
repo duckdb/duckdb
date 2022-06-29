@@ -1,6 +1,11 @@
 #include "duckdb/storage/batched_allocator.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#ifdef DUCKDB_DEBUG_ALLOCATION
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include <execinfo.h>
+#endif
 
 namespace duckdb {
 
@@ -26,19 +31,45 @@ AllocatedChunk::~AllocatedChunk() {
 	}
 }
 
+struct BatchedAllocatorDebugInfo {
+	~BatchedAllocatorDebugInfo() {
+#ifdef DUCKDB_DEBUG_ALLOCATION
+		if (allocation_count != 0) {
+			printf("Outstanding allocations found for BatchedAllocator\n");
+			for (auto &entry : pointers) {
+				printf("Allocation of size %lld at address %p\n", entry.second.first, (void *)entry.first);
+				printf("Stack trace:\n%s\n", entry.second.second.c_str());
+				printf("\n");
+			}
+		}
+#endif
+		//! Verify that there is no outstanding memory still associated with the batched allocator
+		//! Only works for access to the batched allocator through the batched allocator interface
+		//! If this assertion triggers, enable DUCKDB_DEBUG_ALLOCATION for more information about the allocations
+		D_ASSERT(allocation_count == 0);
+	}
+
+	//! The number of bytes that are outstanding (i.e. that have been allocated - but not freed)
+	//! Used for debug purposes
+	idx_t allocation_count = 0;
+#ifdef DUCKDB_DEBUG_ALLOCATION
+	//! Set of active outstanding pointers together with stack traces
+	unordered_map<data_ptr_t, pair<idx_t, string>> pointers;
+#endif
+};
+
 BatchedAllocator::BatchedAllocator(Allocator &allocator, idx_t initial_capacity)
     : allocator(allocator), batched_allocator(BatchedAllocatorAllocate, BatchedAllocatorFree, BatchedAllocatorRealloc,
-                                              make_unique<BatchedAllocatorData>(*this)),
-      allocation_count(0) {
+                                              make_unique<BatchedAllocatorData>(*this)) {
 	head = nullptr;
 	tail = nullptr;
 	current_capacity = initial_capacity;
+#ifdef DEBUG
+	debug_info = make_unique<BatchedAllocatorDebugInfo>();
+#endif
 }
 
 BatchedAllocator::~BatchedAllocator() {
-	//! Verify that there is no outstanding memory still associated with the batched allocator
-	//! Only works for access to the batched allocator through the batched allocator interface
-	D_ASSERT(allocation_count == 0);
 }
 
 data_ptr_t BatchedAllocator::Allocate(idx_t len) {
@@ -74,30 +105,56 @@ bool BatchedAllocator::IsEmpty() {
 	return head == nullptr;
 }
 
-void BatchedAllocator::AddAllocation(idx_t size) {
-	allocation_count += size;
-}
-
-void BatchedAllocator::FreeAllocation(idx_t size) {
-	D_ASSERT(allocation_count >= size);
-	allocation_count -= size;
+BatchedAllocatorDebugInfo &BatchedAllocator::GetDebugInfo() {
+#ifndef DEBUG
+	throw InternalException("Debug info can only be used in debug mode");
+#else
+	D_ASSERT(debug_info);
+	return *debug_info;
+#endif
 }
 
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
+#ifdef DUCKDB_DEBUG_ALLOCATION
+inline string GetStackTrace(int max_depth = 128) {
+	string result;
+	auto callstack = unique_ptr<void *[]>(new void *[max_depth]);
+	int frames = backtrace(callstack.get(), max_depth);
+	char **strs = backtrace_symbols(callstack.get(), frames);
+	for (int i = 0; i < frames; i++) {
+		result += strs[i];
+		result += "\n";
+	}
+	free(strs);
+	return result;
+}
+#endif
+
 data_ptr_t BatchedAllocator::BatchedAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = (BatchedAllocatorData &)*private_data;
+	auto result = data.batched_allocator.Allocate(size);
 #ifdef DEBUG
-	data.batched_allocator.AddAllocation(size);
+	auto &debug_info = data.batched_allocator.GetDebugInfo();
+	debug_info.allocation_count += size;
+#ifdef DUCKDB_DEBUG_ALLOCATION
+	debug_info.pointers[result] = make_pair(size, GetStackTrace());
 #endif
-	return data.batched_allocator.Allocate(size);
+#endif
+	return result;
 }
 
 void BatchedAllocator::BatchedAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 #ifdef DEBUG
 	auto &data = (BatchedAllocatorData &)*private_data;
-	data.batched_allocator.FreeAllocation(size);
+	auto &debug_info = data.batched_allocator.GetDebugInfo();
+	D_ASSERT(debug_info.allocation_count >= size);
+	debug_info.allocation_count -= size;
+#ifdef DUCKDB_DEBUG_ALLOCATION
+	D_ASSERT(debug_info.pointers.find(pointer) != debug_info.pointers.end());
+	debug_info.pointers.erase(pointer);
+#endif
 #endif
 }
 

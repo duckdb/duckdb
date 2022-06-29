@@ -26,10 +26,11 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
 }
 
 unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ExecutionContext &context) const {
+	auto &gstate = (TableInOutGlobalState &)*op_state;
 	auto result = make_unique<TableInOutLocalState>();
 	if (function.init_local) {
 		TableFunctionInitInput input(bind_data.get(), column_ids, nullptr);
-		result->local_state = function.init_local(context, input, nullptr);
+		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
 	return move(result);
 }

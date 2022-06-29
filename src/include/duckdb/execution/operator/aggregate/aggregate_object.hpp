@@ -45,10 +45,12 @@ struct AggregateFilterDataSet {
 	AggregateFilterDataSet();
 
 	vector<unique_ptr<AggregateFilterData>> filter_data;
+
 public:
-	void Initialize(Allocator &allocator, const vector<AggregateObject> &aggregates, const vector<LogicalType> &payload_types);
+	void Initialize(Allocator &allocator, const vector<AggregateObject> &aggregates,
+	                const vector<LogicalType> &payload_types);
 
 	AggregateFilterData &GetFilterData(idx_t aggr_idx);
 };
 
-}
+} // namespace duckdb

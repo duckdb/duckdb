@@ -9,7 +9,7 @@ ThreadContext::ThreadContext(ClientContext &context)
 }
 
 Allocator &ArenaAllocator::Get(ExecutionContext &context) {
-	return ArenaAllocator::Get(context.thread);
+	return Allocator::Get(context.client);
 }
 
 Allocator &ArenaAllocator::Get(ThreadContext &tcontext) {

@@ -12,6 +12,7 @@
 #include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
+struct BatchedAllocatorDebugInfo;
 
 struct AllocatedChunk {
 	AllocatedChunk(Allocator &allocator, idx_t size);
@@ -44,10 +45,7 @@ public:
 
 	Allocator &GetBatchedAllocator();
 
-	//! Increment allocation_count, used for debug purposes
-	void AddAllocation(idx_t size);
-	//! Decrement allocation count, used for debug purposes
-	void FreeAllocation(idx_t size);
+	BatchedAllocatorDebugInfo &GetDebugInfo();
 
 private:
 	//! Internal allocator that is used by the batched allocator
@@ -57,9 +55,8 @@ private:
 	AllocatedChunk *tail;
 	//! Allocator associated with the batched allocator, that passes all allocations through it
 	Allocator batched_allocator;
-	//! The number of bytes that are outstanding (i.e. that have been allocated - but not freed)
-	//! Used for debug purposes
-	idx_t allocation_count;
+	//! Debug info - only used in debug mode
+	unique_ptr<BatchedAllocatorDebugInfo> debug_info;
 };
 
 } // namespace duckdb
