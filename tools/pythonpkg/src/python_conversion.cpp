@@ -65,17 +65,7 @@ Value TransformListValue(py::handle ele) {
 }
 
 Value TransformPythonValue(py::handle ele) {
-	// auto datetime_mod = py::module::import("datetime");
-	// auto datetime_date = datetime_mod.attr("date");
-	// auto datetime_datetime = datetime_mod.attr("datetime");
-	// auto datetime_time = datetime_mod.attr("time");
-	auto decimal_mod = py::module::import("decimal");
-	auto decimal_decimal = decimal_mod.attr("Decimal");
 	PythonImportCache import_cache;
-	// auto numpy_mod = py::module::import("numpy");
-	// auto numpy_ndarray = numpy_mod.attr("ndarray");
-	auto uuid_mod = py::module::import("uuid");
-	auto uuid_uuid = uuid_mod.attr("UUID");
 
 	if (ele.is_none()) {
 		return Value();
@@ -88,9 +78,9 @@ Value TransformPythonValue(py::handle ele) {
 			return Value();
 		}
 		return Value::DOUBLE(ele.cast<double>());
-	} else if (py::isinstance(ele, decimal_decimal)) {
+	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return py::str(ele).cast<string>();
-	} else if (py::isinstance(ele, uuid_uuid)) {
+	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
 		auto string_val = py::str(ele).cast<string>();
 		return Value::UUID(string_val);
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {

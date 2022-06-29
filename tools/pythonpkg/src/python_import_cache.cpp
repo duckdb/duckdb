@@ -2,7 +2,9 @@
 
 namespace duckdb {
 
-//! Cache Item
+//===--------------------------------------------------------------------===//
+// PythonImportCacheItem (SUPER CLASS)
+//===--------------------------------------------------------------------===//
 
 py::handle PythonImportCacheItem::operator()(void) {
 	if (!object) {
@@ -11,7 +13,7 @@ py::handle PythonImportCacheItem::operator()(void) {
 	return object;
 }
 
-//! Only require the cache item to interact directly with the cache
+//! Only require the super class to interact directly with the cache
 PyObject *PythonImportCacheItem::AddCache(py::object object) {
 	return cache.AddCache(move(object));
 }

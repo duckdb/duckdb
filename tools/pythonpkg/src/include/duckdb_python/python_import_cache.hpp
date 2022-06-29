@@ -59,7 +59,30 @@ private:
 	PythonImportCacheItemType item_type;
 };
 
-//! --------------- NumPy ---------------
+//===--------------------------------------------------------------------===//
+// Modules
+//===--------------------------------------------------------------------===//
+
+struct DecimalCacheItem : public PythonImportCacheItem {
+public:
+	DecimalCacheItem(PythonImportCache &cache)
+	    : PythonImportCacheItem("decimal", cache), Decimal("Decimal", *this, cache) {
+	}
+
+public:
+	//! decimal.Decimal
+	PythonImportCacheItem Decimal;
+};
+
+struct UUIDCacheItem : public PythonImportCacheItem {
+public:
+	UUIDCacheItem(PythonImportCache &cache) : PythonImportCacheItem("uuid", cache), UUID("UUID", *this, cache) {
+	}
+
+public:
+	//! uuid.UUID
+	PythonImportCacheItem UUID;
+};
 
 struct NumpyCacheItem : public PythonImportCacheItem {
 public:
@@ -69,8 +92,6 @@ public:
 public:
 	PythonImportCacheItem ndarray;
 };
-
-//! --------------- Datetime ---------------
 
 struct DatetimeCacheItem : public PythonImportCacheItem {
 public:
@@ -85,16 +106,21 @@ public:
 	PythonImportCacheItem time;
 };
 
-// Contains a list of cached modules
+//===--------------------------------------------------------------------===//
+// PythonImportCache
+//===--------------------------------------------------------------------===//
+
 struct PythonImportCache {
 public:
-	PythonImportCache() : numpy(*this), datetime(*this), owned_objects() {
+	PythonImportCache() : numpy(*this), datetime(*this), decimal(*this), uuid(*this), owned_objects() {
 	}
 	~PythonImportCache();
 	//! Stored modules
 public:
 	NumpyCacheItem numpy;
 	DatetimeCacheItem datetime;
+	DecimalCacheItem decimal;
+	UUIDCacheItem uuid;
 
 public:
 	PyObject *AddCache(py::object item);
@@ -105,14 +131,17 @@ private:
 
 } // namespace duckdb
 
-//! Example of how to extend PythonImportCacheItem if sub objects of an attribute are introduced making them no longer a
-//! leaf.
+//===--------------------------------------------------------------------===//
+// Extension documentation
+//===--------------------------------------------------------------------===//
+
+//! The code below shows an example implementation of an attribute with subtypes
 
 // struct NdArrayCacheItem : public PythonImportCacheItem {
 // public:
-//	NdArrayCacheItem(PythonImportCacheItem& source, PythonImportCache& cache) : PythonImportCacheItem("ndarray", source,
+// NdArrayCacheItem(PythonImportCacheItem& source, PythonImportCache& cache) : PythonImportCacheItem("ndarray", source,
 // cache), 		new_object("new_object", *this, cache)
-//	{}
+//{}
 // public:
-//	PythonImportCacheItem new_object;
+// PythonImportCacheItem new_object;
 // };

@@ -648,22 +648,8 @@ static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_
 //! e.g python lists can consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
-// This should be called Bind .. something
 static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
-	// auto datetime_mod = py::module_::import("datetime");
-	// auto datetime_date = datetime_mod.attr("date");
-	// auto datetime_datetime = datetime_mod.attr("datetime");
-	// auto datetime_time = datetime_mod.attr("time");
-
-	auto decimal_mod = py::module_::import("decimal");
-	auto decimal_decimal = decimal_mod.attr("Decimal");
-
-	// auto numpy_mod = py::module::import("numpy");
-	// auto numpy_ndarray = numpy_mod.attr("ndarray");
 	PythonImportCache import_cache;
-
-	auto uuid_mod = py::module::import("uuid");
-	auto uuid_uuid = uuid_mod.attr("UUID");
 
 	if (ele.is_none()) {
 		return LogicalType::SQLNULL;
@@ -676,7 +662,7 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 			return LogicalType::SQLNULL;
 		}
 		return LogicalType::DOUBLE;
-	} else if (py::isinstance(ele, decimal_decimal)) {
+	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return LogicalType::VARCHAR; // Might be float64 actually? //or DECIMAL
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		// auto ptr = ele.ptr();
@@ -704,7 +690,7 @@ static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
 		return LogicalType::DATE;
 	} else if (py::isinstance<py::str>(ele)) {
 		return LogicalType::VARCHAR;
-	} else if (py::isinstance(ele, uuid_uuid)) {
+	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
 		return LogicalType::UUID;
 	} else if (py::isinstance<py::bytearray>(ele)) {
 		return LogicalType::BLOB;
