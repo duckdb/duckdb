@@ -39,8 +39,11 @@ import org.duckdb.DuckDBResultSetMetaData;
 public class TestDuckDBJDBC {
 
 	private static void assertTrue(boolean val) throws Exception {
+		assertTrue(val, null);
+	}
+	private static void assertTrue(boolean val, String message) throws Exception {
 		if (!val) {
-			throw new Exception();
+			throw new Exception(message);
 		}
 	}
 
@@ -52,7 +55,7 @@ public class TestDuckDBJDBC {
 		if (a == null && b == null) {
 			return;
 		}
-		assertTrue(a.equals(b));
+		assertTrue(a.equals(b), String.format("%s should equal %s", a, b));
 	}
 
 	private static void assertNull(Object a) throws Exception {
