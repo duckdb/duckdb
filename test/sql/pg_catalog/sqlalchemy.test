@@ -19,7 +19,8 @@ CREATE TABLE integral_values (
     r bytea,
     s date,
     t time,
-    u timestamp
+    u timestamp,
+	v date[]
 );
 
 # has_schema
@@ -187,6 +188,7 @@ r	bytea	NULL	false
 s	date	NULL	false
 t	time without time zone	NULL	false
 u	timestamp without time zone	NULL	false
+v	list	NULL	false
 
 # get_pk_constraint
 statement ok

@@ -140,9 +140,9 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 			}
 		}
 
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx],
-		                                 aggregate.bind_info.get(), payload_cnt, sink.state.aggregates[aggr_idx].get(),
-		                                 payload_chunk.size());
+		AggregateInputData aggr_input_data(aggregate.bind_info.get());
+		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], aggr_input_data,
+		                                 payload_cnt, sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
@@ -165,7 +165,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
 		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 
-		aggregate.function.combine(source_state, dest_state, aggregate.bind_info.get(), 1);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get());
+		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
@@ -212,7 +213,8 @@ void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chun
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
-		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1, 0);
+		AggregateInputData aggr_input_data(aggregate.bind_info.get());
+		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
 	state.finished = true;
 }

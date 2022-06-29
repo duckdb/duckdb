@@ -62,8 +62,6 @@
 #pragma warning(default : 4214)
 #endif
 
-#define TEXT_POOL_SIZE (300 * 1024 * 1024) /* 300MiB */
-
 #include "dbgen/dss.h"
 #include "dbgen/dsstypes.h"
 
@@ -261,6 +259,9 @@ static char *auxillaries_index[AUXILLARIES_MAX_WEIGHT + 1];
 static char *verbs_index[VERBS_MAX_WEIGHT + 1];
 static char *prepositions_index[PREPOSITIONS_MAX_WEIGHT + 1];
 
+static char *szTextPool;
+static long txtBufferSize = 0;
+
 // generate a lookup table for weight -> str
 static void gen_index(char **index, distribution *s) {
 	for (size_t w = 0; w <= s->list[s->count - 1].weight; w++) {
@@ -396,6 +397,34 @@ static char *gen_sentence(char *dest, int sd) {
 }
 
 /*
+ * init_text_pool() --
+ *    allocate and initialize the internal text pool buffer (szTextPool).
+ *    Make sure to call it before using dbg_text().
+ */
+void init_text_pool(long bSize) {
+	gen_index(noun_index, &nouns);
+	gen_index(adjectives_index, &adjectives);
+	gen_index(adverbs_index, &adverbs);
+	gen_index(auxillaries_index, &auxillaries);
+	gen_index(verbs_index, &verbs);
+	gen_index(prepositions_index, &prepositions);
+
+  txtBufferSize = bSize;
+  szTextPool = (char*)malloc(bSize + 1 + 100);
+
+	char *ptr = szTextPool;
+	char *endptr = szTextPool + bSize + 1;
+	while (ptr < endptr) {
+		ptr = gen_sentence(ptr, 5);
+	}
+	szTextPool[bSize] = '\0';
+}
+
+void free_text_pool() {
+  free(szTextPool);
+}
+
+/*
  * dbg_text() --
  *		produce ELIZA-like text of random, bounded length, truncating the last
  *		generated sentence as required
@@ -403,28 +432,8 @@ static char *gen_sentence(char *dest, int sd) {
 void dbg_text(char *tgt, int min, int max, int sd) {
 	DSS_HUGE hgLength = 0, hgOffset, wordlen = 0, s_len, needed;
 	char sentence[MAX_SENT_LEN + 1], *cp;
-	static char szTextPool[TEXT_POOL_SIZE + 1 + 100];
-	static int bInit = 0;
 
-	if (!bInit) {
-		gen_index(noun_index, &nouns);
-		gen_index(adjectives_index, &adjectives);
-		gen_index(adverbs_index, &adverbs);
-		gen_index(auxillaries_index, &auxillaries);
-		gen_index(verbs_index, &verbs);
-		gen_index(prepositions_index, &prepositions);
-
-		char *ptr = szTextPool;
-		char *endptr = szTextPool + TEXT_POOL_SIZE + 1;
-		while (ptr < endptr) {
-			ptr = gen_sentence(ptr, 5);
-		}
-		szTextPool[TEXT_POOL_SIZE] = '\0';
-
-		bInit = 1;
-	}
-
-	RANDOM(hgOffset, 0, TEXT_POOL_SIZE - max, sd);
+	RANDOM(hgOffset, 0, txtBufferSize - max, sd);
 	RANDOM(hgLength, min, max, sd);
 	strncpy(&tgt[0], &szTextPool[hgOffset], (int)hgLength);
 	tgt[hgLength] = '\0';

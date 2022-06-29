@@ -64,7 +64,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		D_ASSERT(mask.RowIsValid(0));
 		if (!state->isset) {
@@ -76,7 +76,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input[idx]);
 			state->isset = true;
@@ -97,7 +97,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		mask.Set(idx, state->isset);
 		target[idx] = state->value;
 	}
@@ -112,7 +112,7 @@ struct MinOperation : public NumericMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -135,7 +135,7 @@ struct MaxOperation : public NumericMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -173,7 +173,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
@@ -182,7 +182,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
@@ -284,15 +284,16 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 }
 
 template <class OP>
-static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount) {
+static bool TemplatedOptimumStruct(Vector &left, idx_t lidx_p, idx_t lcount, Vector &right, idx_t ridx_p,
+                                   idx_t rcount) {
 	// STRUCT dictionaries apply to all the children
 	// so map the indexes first
 	VectorData lvdata, rvdata;
 	left.Orrify(lcount, lvdata);
 	right.Orrify(rcount, rvdata);
 
-	lidx = lvdata.sel->get_index(lidx);
-	ridx = rvdata.sel->get_index(ridx);
+	idx_t lidx = lvdata.sel->get_index(lidx_p);
+	idx_t ridx = rvdata.sel->get_index(ridx_p);
 
 	// DISTINCT semantics are in effect for nested types
 	auto lnull = !lvdata.validity.RowIsValid(lidx);
@@ -310,7 +311,7 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vecto
 		auto &rchild = *rchildren[col_no];
 
 		// Strict comparisons use the OP for definite
-		if (TemplatedOptimumValue<OP>(lchild, lidx, lcount, rchild, ridx, rcount)) {
+		if (TemplatedOptimumValue<OP>(lchild, lidx_p, lcount, rchild, ridx_p, rcount)) {
 			return true;
 		}
 
@@ -319,7 +320,7 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vecto
 		}
 
 		// Strict comparisons use IS NOT DISTINCT for possible
-		if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, lidx, lcount, rchild, ridx, rcount)) {
+		if (!TemplatedOptimumValue<NotDistinctFrom>(lchild, lidx_p, lcount, rchild, ridx_p, rcount)) {
 			return false;
 		}
 	}
@@ -417,7 +418,7 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		VectorData idata;
 		input.Orrify(count, idata);
@@ -442,7 +443,7 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.value) {
 			return;
 		} else if (!target->value) {
@@ -453,7 +454,7 @@ struct VectorMinMaxBase {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
 			// we need to use SetNull here
 			// since for STRUCT columns only setting the validity mask of the struct is incorrect

@@ -1,0 +1,26 @@
+# name: test/fuzzer/sqlsmith/timestamp_diff_overflow.test
+# description: Test overflow in timestamp subtract
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE ts("timestamp" TIMESTAMP);;
+
+statement ok
+INSERT INTO ts VALUES('290309-12-22 (BC) 00:00:00');
+
+statement ok
+INSERT INTO ts VALUES('294247-01-10 04:00:54.775806');
+
+statement ok
+INSERT INTO ts VALUES(NULL);
+
+statement error
+select
+  subtract(
+    cast(now() as timestamp),
+    cast(ref_0.timestamp as timestamp)) as c10
+from
+  ts as ref_0

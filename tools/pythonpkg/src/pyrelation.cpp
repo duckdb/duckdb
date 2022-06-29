@@ -135,7 +135,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
-	    .def("__repr__", &DuckDBPyRelation::Print);
+	    .def("__repr__", &DuckDBPyRelation::Print)
+	    .def("explain", &DuckDBPyRelation::Explain);
 }
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
@@ -183,6 +184,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query,
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn) {
 	return conn->FromSubstrait(proto);
+}
+
+void DuckDBPyRelation::InstallExtension(const string &extension, bool force_install, DuckDBPyConnection *conn) {
+	return conn->InstallExtension(extension, force_install);
+}
+
+void DuckDBPyRelation::LoadExtension(const string &extension, DuckDBPyConnection *conn) {
+	return conn->LoadExtension(extension);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_object, DuckDBPyConnection *conn) {
@@ -581,6 +590,10 @@ string DuckDBPyRelation::Print() {
 
 	return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
 	       rel_res_string + "\n";
+}
+
+string DuckDBPyRelation::Explain() {
+	return rel->ToString(0);
 }
 
 // TODO: RelationType to a python enum

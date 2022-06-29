@@ -15,6 +15,9 @@ def sanitize_error(err):
     err = re.sub('Error: near line \d+: ', '', err)
     err = err.replace(os.getcwd() + '/', '')
     err = err.replace(os.getcwd(), '')
+    if 'AddressSanitizer' in err:
+        match = re.search(r'[ \t]+[#]0 ([A-Za-z0-9]+) ([^\n]+)', err).groups()[1]
+        err = 'AddressSanitizer error ' + match
     return err
 
 def run_shell_command(shell, cmd):

@@ -1,0 +1,15 @@
+# name: test/sql/storage/test_large_parquet_storage.test_slow
+# description: Test storage of large parquet files
+# group: [storage]
+
+require parquet
+
+require 64bit
+
+statement ok
+COPY (SELECT ((i::UBIGINT*129371982737)%2478526729)::BIGINT a,  ((i::UBIGINT*12937198273679)%2478527)::BIGINT::VARCHAR b FROM range(150000000) t(i)) TO '__TEST_DIR__/big.parquet' (FORMAT PARQUET, COMPRESSION UNCOMPRESSED);
+
+query I
+SELECT COUNT(*) FROM '__TEST_DIR__/big.parquet'
+----
+150000000
