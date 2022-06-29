@@ -2186,7 +2186,6 @@ public class TestDuckDBJDBC {
 		boolean anyFailed = false;
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
-				m.invoke(null);
 				System.out.print(m.getName() + " ");
 
 				LocalDateTime start = LocalDateTime.now();
