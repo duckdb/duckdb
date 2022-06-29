@@ -109,7 +109,7 @@ unique_ptr<GlobalSinkState> PhysicalSimpleAggregate::GetGlobalSinkState(ClientCo
 }
 
 unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<SimpleAggregateLocalState>(ArenaAllocator::Get(context), aggregates);
+	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates);
 }
 
 SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,

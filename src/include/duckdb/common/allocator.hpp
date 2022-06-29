@@ -91,16 +91,6 @@ private:
 	unique_ptr<PrivateAllocatorData> private_data;
 };
 
-//! The ArenaAllocator is a special thread-local allocator that should be used to allocate thread-local state
-//! Note that the ArenaAllocator has a unique behavior: anything allocated through the allocator CANNOT be freed
-//! Instead, everything allocated will be freed at the end - when the thread is finished executing the current pipeline
-//! This is problematic when the allocator is used in a loop, since the allocated memory will only grow
-//! Care must be taken when using the ArenaAllocator for this reason
-struct ArenaAllocator {
-	static Allocator &Get(ExecutionContext &context);
-	static Allocator &Get(ThreadContext &tcontext);
-};
-
 //! The BufferAllocator is a wrapper around the global allocator class that sends any allocations made through the
 //! buffer manager. This makes the buffer manager aware of the memory usage, allowing it to potentially free
 //! other blocks to make space in memory.

@@ -1,4 +1,4 @@
-#include "duckdb/storage/batched_allocator.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #ifdef DUCKDB_DEBUG_ALLOCATION
@@ -9,20 +9,20 @@
 
 namespace duckdb {
 
-struct BatchedAllocatorData : PrivateAllocatorData {
-	explicit BatchedAllocatorData(BatchedAllocator &batched_allocator) : batched_allocator(batched_allocator) {
+struct ArenaAllocatorData : PrivateAllocatorData {
+	explicit ArenaAllocatorData(ArenaAllocator &batched_allocator) : batched_allocator(batched_allocator) {
 	}
 
-	BatchedAllocator &batched_allocator;
+	ArenaAllocator &batched_allocator;
 	idx_t allocation_counter = 0;
 };
 
-AllocatedChunk::AllocatedChunk(Allocator &allocator, idx_t size)
+ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size)
     : current_position(0), maximum_size(size), prev(nullptr) {
 	D_ASSERT(size > 0);
 	data = allocator.Allocate(size);
 }
-AllocatedChunk::~AllocatedChunk() {
+ArenaChunk::~ArenaChunk() {
 	if (next) {
 		auto current_next = move(next);
 		while (current_next) {
@@ -31,11 +31,11 @@ AllocatedChunk::~AllocatedChunk() {
 	}
 }
 
-struct BatchedAllocatorDebugInfo {
-	~BatchedAllocatorDebugInfo() {
+struct ArenaAllocatorDebugInfo {
+	~ArenaAllocatorDebugInfo() {
 #ifdef DUCKDB_DEBUG_ALLOCATION
 		if (allocation_count != 0) {
-			printf("Outstanding allocations found for BatchedAllocator\n");
+			printf("Outstanding allocations found for ArenaAllocator\n");
 			for (auto &entry : pointers) {
 				printf("Allocation of size %lld at address %p\n", entry.second.first, (void *)entry.first);
 				printf("Stack trace:\n%s\n", entry.second.second.c_str());
@@ -43,8 +43,8 @@ struct BatchedAllocatorDebugInfo {
 			}
 		}
 #endif
-		//! Verify that there is no outstanding memory still associated with the batched allocator
-		//! Only works for access to the batched allocator through the batched allocator interface
+		//! Verify that there is no outstanding memory still associated with the arena allocator
+		//! Only works for access to the arena allocator through the arena allocator interface
 		//! If this assertion triggers, enable DUCKDB_DEBUG_ALLOCATION for more information about the allocations
 		D_ASSERT(allocation_count == 0);
 	}
@@ -58,27 +58,27 @@ struct BatchedAllocatorDebugInfo {
 #endif
 };
 
-BatchedAllocator::BatchedAllocator(Allocator &allocator, idx_t initial_capacity)
-    : allocator(allocator), batched_allocator(BatchedAllocatorAllocate, BatchedAllocatorFree, BatchedAllocatorRealloc,
-                                              make_unique<BatchedAllocatorData>(*this)) {
+ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
+    : allocator(allocator), batched_allocator(ArenaAllocatorAllocate, ArenaAllocatorFree, ArenaAllocatorRealloc,
+                                              make_unique<ArenaAllocatorData>(*this)) {
 	head = nullptr;
 	tail = nullptr;
 	current_capacity = initial_capacity;
 #ifdef DEBUG
-	debug_info = make_unique<BatchedAllocatorDebugInfo>();
+	debug_info = make_unique<ArenaAllocatorDebugInfo>();
 #endif
 }
 
-BatchedAllocator::~BatchedAllocator() {
+ArenaAllocator::~ArenaAllocator() {
 }
 
-data_ptr_t BatchedAllocator::Allocate(idx_t len) {
+data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 	D_ASSERT(!head || head->current_position <= head->maximum_size);
 	if (!head || head->current_position + len > head->maximum_size) {
 		do {
 			current_capacity *= 2;
 		} while (current_capacity < len);
-		auto new_chunk = make_unique<AllocatedChunk>(allocator, current_capacity);
+		auto new_chunk = make_unique<ArenaChunk>(allocator, current_capacity);
 		if (head) {
 			head->prev = new_chunk.get();
 			new_chunk->next = move(head);
@@ -93,19 +93,19 @@ data_ptr_t BatchedAllocator::Allocate(idx_t len) {
 	return result;
 }
 
-AllocatedChunk *BatchedAllocator::GetHead() {
+ArenaChunk *ArenaAllocator::GetHead() {
 	return head.get();
 }
 
-AllocatedChunk *BatchedAllocator::GetTail() {
+ArenaChunk *ArenaAllocator::GetTail() {
 	return tail;
 }
 
-bool BatchedAllocator::IsEmpty() {
+bool ArenaAllocator::IsEmpty() {
 	return head == nullptr;
 }
 
-BatchedAllocatorDebugInfo &BatchedAllocator::GetDebugInfo() {
+ArenaAllocatorDebugInfo &ArenaAllocator::GetDebugInfo() {
 #ifndef DEBUG
 	throw InternalException("Debug info can only be used in debug mode");
 #else
@@ -132,8 +132,8 @@ inline string GetStackTrace(int max_depth = 128) {
 }
 #endif
 
-data_ptr_t BatchedAllocator::BatchedAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	auto &data = (BatchedAllocatorData &)*private_data;
+data_ptr_t ArenaAllocator::ArenaAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
+	auto &data = (ArenaAllocatorData &)*private_data;
 	auto result = data.batched_allocator.Allocate(size);
 #ifdef DEBUG
 	auto &debug_info = data.batched_allocator.GetDebugInfo();
@@ -145,9 +145,9 @@ data_ptr_t BatchedAllocator::BatchedAllocatorAllocate(PrivateAllocatorData *priv
 	return result;
 }
 
-void BatchedAllocator::BatchedAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+void ArenaAllocator::ArenaAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 #ifdef DEBUG
-	auto &data = (BatchedAllocatorData &)*private_data;
+	auto &data = (ArenaAllocatorData &)*private_data;
 	auto &debug_info = data.batched_allocator.GetDebugInfo();
 	D_ASSERT(debug_info.allocation_count >= size);
 	debug_info.allocation_count -= size;
@@ -158,12 +158,12 @@ void BatchedAllocator::BatchedAllocatorFree(PrivateAllocatorData *private_data, 
 #endif
 }
 
-data_ptr_t BatchedAllocator::BatchedAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
+data_ptr_t ArenaAllocator::ArenaAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
                                                      idx_t size) {
-	throw InternalException("FIXME: realloc not implemented for batched allocator");
+	throw InternalException("FIXME: realloc not implemented for arena allocator");
 }
 
-Allocator &BatchedAllocator::GetBatchedAllocator() {
+Allocator &ArenaAllocator::GetArenaAllocator() {
 	return batched_allocator;
 }
 

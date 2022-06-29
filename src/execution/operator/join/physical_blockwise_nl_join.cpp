@@ -76,7 +76,7 @@ SinkFinalizeType PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &ev
 class BlockwiseNLJoinState : public OperatorState {
 public:
 	explicit BlockwiseNLJoinState(ExecutionContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : left_position(0), right_position(0), executor(ArenaAllocator::Get(context), *op.condition) {
+	    : left_position(0), right_position(0), executor(Allocator::Get(context.client), *op.condition) {
 		if (IsLeftOuterJoin(op.join_type)) {
 			left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 			memset(left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);

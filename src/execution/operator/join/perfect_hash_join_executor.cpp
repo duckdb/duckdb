@@ -145,7 +145,7 @@ public:
 };
 
 unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionContext &context) {
-	auto state = make_unique<PerfectHashJoinState>(ArenaAllocator::Get(context), join);
+	auto state = make_unique<PerfectHashJoinState>(Allocator::Get(context.client), join);
 	return move(state);
 }
 

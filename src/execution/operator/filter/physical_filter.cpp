@@ -23,7 +23,7 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 class FilterState : public OperatorState {
 public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
-	    : executor(ArenaAllocator::Get(context), expr), sel(STANDARD_VECTOR_SIZE) {
+	    : executor(Allocator::Get(context.client), expr), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;

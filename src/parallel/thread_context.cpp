@@ -5,15 +5,7 @@
 namespace duckdb {
 
 ThreadContext::ThreadContext(ClientContext &context)
-    : profiler(QueryProfiler::Get(context).IsEnabled()), allocator(BufferAllocator::Get(context)) {
-}
-
-Allocator &ArenaAllocator::Get(ExecutionContext &context) {
-	return Allocator::Get(context.client);
-}
-
-Allocator &ArenaAllocator::Get(ThreadContext &tcontext) {
-	return tcontext.allocator.GetBatchedAllocator();
+    : profiler(QueryProfiler::Get(context).IsEnabled()) {
 }
 
 } // namespace duckdb

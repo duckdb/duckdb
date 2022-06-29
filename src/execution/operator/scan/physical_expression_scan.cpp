@@ -17,7 +17,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<ExpressionScanState>(ArenaAllocator::Get(context), *this);
+	return make_unique<ExpressionScanState>(Allocator::Get(context.client), *this);
 }
 
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -27,7 +27,7 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	for (; chunk.size() + input.size() <= STANDARD_VECTOR_SIZE && state.expression_index < expressions.size();
 	     state.expression_index++) {
 		state.temp_chunk.Reset();
-		EvaluateExpression(ArenaAllocator::Get(context), state.expression_index, &input, state.temp_chunk);
+		EvaluateExpression(Allocator::Get(context.client), state.expression_index, &input, state.temp_chunk);
 		chunk.Append(state.temp_chunk);
 	}
 	if (state.expression_index < expressions.size()) {

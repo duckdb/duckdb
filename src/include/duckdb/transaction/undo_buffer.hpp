@@ -10,7 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
-#include "duckdb/storage/batched_allocator.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 
@@ -22,7 +22,7 @@ class WriteAheadLog;
 class UndoBuffer {
 public:
 	struct IteratorState {
-		AllocatedChunk *current;
+		ArenaChunk *current;
 		data_ptr_t start;
 		data_ptr_t end;
 	};
@@ -48,7 +48,7 @@ public:
 	void Rollback() noexcept;
 
 private:
-	BatchedAllocator allocator;
+	ArenaAllocator allocator;
 
 private:
 	template <class T>

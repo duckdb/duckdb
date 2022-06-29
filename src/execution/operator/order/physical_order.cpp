@@ -31,14 +31,14 @@ public:
 class OrderLocalState : public LocalSinkState {
 public:
 	OrderLocalState(ExecutionContext &context, const vector<BoundOrderByNode> &orders)
-	    : executor(ArenaAllocator::Get(context)) {
+	    : executor(Allocator::Get(context.client)) {
 		// Initialize order clause expression executor and DataChunk
 		vector<LogicalType> types;
 		for (auto &order : orders) {
 			types.push_back(order.expression->return_type);
 			executor.AddExpression(*order.expression);
 		}
-		sort.Initialize(ArenaAllocator::Get(context), types);
+		sort.Initialize(Allocator::Get(context.client), types);
 	}
 
 public:

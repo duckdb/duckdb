@@ -249,7 +249,7 @@ TopNHeap::TopNHeap(ClientContext &context, const vector<LogicalType> &payload_ty
 
 TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
                    const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-    : TopNHeap(BufferManager::GetBufferManager(context.client), ArenaAllocator::Get(context), payload_types, orders,
+    : TopNHeap(BufferManager::GetBufferManager(context.client), Allocator::Get(context.client), payload_types, orders,
                limit, offset) {
 }
 
