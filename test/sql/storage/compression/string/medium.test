@@ -1,12 +1,14 @@
-# name: test/sql/storage/compression/dictionary/dictionary_medium.test
-# description: Test medium storage with dictionary compression(> vector size)
+# name: test/sql/storage/compression/dictionary/medium.test
+# description: Test medium storage with string compression(> vector size)
 # group: [dictionary]
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
 
+foreach compression fsst dictionary
+
 statement ok
-PRAGMA force_compression = 'dictionary'
+PRAGMA force_compression='${compression}'
 
 # simple dictionary compressed column with few values
 statement ok
@@ -26,3 +28,8 @@ query IIII
 SELECT SUM(a::INT), MIN(a::INT), MAX(a::INT), COUNT(*) FROM test
 ----
 2495000	0	499	10000
+
+statement ok
+DROP TABLE test;
+
+endloop

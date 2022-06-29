@@ -7,6 +7,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -114,39 +115,35 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 
 	D_ASSERT(sel);
 
-	// For FSST Vectors we decompress on
+	// For FSST Vectors we decompress on copy
 	if (source->GetVectorType() == VectorType::FSST_VECTOR) {
+		D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto ldata = FSSTVector::GetCompressedData<string_t>(*source);
 		auto tdata = FlatVector::GetData<string_t>(target);
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = sel->get_index(source_offset + i);
 			auto target_idx = target_offset + i;
-			if (tmask.RowIsValid(target_idx)) {
+			string_t compressed_string = ldata[source_idx];
+			if (tmask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
 				// Decompress
-				string_t compressed_string = ldata[source_idx];
-				unsigned char decompress_buffer [1000]; // variable size
+				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
 
 				auto decompressed_string_size = fsst_decompress(
-				    FSSTVector::GetDecoder(const_cast<Vector &>(*source)),  							/* IN: use this symbol table for compression. */
-				    compressed_string.GetSize(),        				/* IN: byte-length of compressed string. */
-				    (unsigned char*)compressed_string.GetDataUnsafe(),  /* IN: compressed string. */
-				    1000,              							/* IN: byte-length of output buffer. */
-				    &decompress_buffer[0]    					/* OUT: memory buffer to put the decompressed string in. */
+				    FSSTVector::GetDecoder(const_cast<Vector &>(*source)),  	/* IN: use this symbol table for compression. */
+				    compressed_string.GetSize(),        						/* IN: byte-length of compressed string. */
+				    (unsigned char*)compressed_string.GetDataUnsafe(),  		/* IN: compressed string. */
+				    StringUncompressed::STRING_BLOCK_LIMIT+1,              									/* IN: byte-length of output buffer. */
+				    &decompress_buffer[0]    							/* OUT: memory buffer to put the decompressed string in. */
 				);
 
-				if (decompressed_string_size == 1000) {
-					throw InternalException("DONT THINK THIS LL WORK");
-				}
+				D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
-				auto str = FSSTVector::AddCompressedString(target, (const char*)decompress_buffer, decompressed_string_size);
+				auto str = StringVector::AddStringOrBlob(target, (const char*)decompress_buffer, decompressed_string_size);
 				tdata[target_idx] = str;
+			} else {
+				tdata[target_idx] = string_t(nullptr, 0);
 			}
 		}
-
-		if (target_vector_type != VectorType::FLAT_VECTOR) {
-			target.SetVectorType(target_vector_type);
-		}
-
 		return;
 	}
 

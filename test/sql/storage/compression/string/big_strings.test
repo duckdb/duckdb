@@ -1,9 +1,14 @@
-# name: test/sql/storage/compression/dictionary/dictionary_big_strings.test
-# description: Test dictionary compression big strings which are currently unsupported
+# name: test/sql/storage/compression/string/big_strings.test
+# description: Test string compression with big strings, which are currently unsupported by the compression algorithms
 # group: [dictionary]
 
 # load the DB from disk
-load __TEST_DIR__/test_dictionary.db
+load __TEST_DIR__/test_string_compression.db
+
+foreach compression fsst dictionary
+
+statement ok
+PRAGMA force_compression='${compression}'
 
 # Baseline, non big string, dictionary compression should work
 statement ok
@@ -40,3 +45,5 @@ query I
 SELECT compression FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 Uncompressed
+
+endloop

@@ -3,6 +3,7 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "miniz_wrapper.hpp"
 
+
 namespace duckdb {
 
 typedef struct {
@@ -398,8 +399,8 @@ struct FSSTScanState : public StringScanState {
 	bitpacking_width_t current_width;
 
 	// To speed up delta decoding we store the last index
-	uint32_t last_known_index;
-	uint32_t last_known_row;
+	uint32_t last_known_index = 0;
+	uint32_t last_known_row = 0;
 	bool last_known_isset = false;
 };
 
@@ -429,7 +430,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 template <bool ALLOW_FSST_VECTORS=false>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
-// clear any previously locked buffers and get the primary buffer handle
+
 	auto &scan_state = (FSSTScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
@@ -439,6 +440,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	string_t* result_data;
 	unique_ptr<Vector> output_vector;
 
+//	std::cout << "\nScanning from " << start << " to " << start + scan_count << " of " << segment.count << "\n";
+
 	if (ALLOW_FSST_VECTORS) {
 		D_ASSERT(result_offset == 0);
 		if (scan_state.fsst_decoder) {
@@ -446,6 +449,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			FSSTVector::RegisterDecoder(result, scan_state.fsst_decoder);
 			result_data = FSSTVector::GetCompressedData<string_t>(result);
 		} else {
+			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 			result_data = FlatVector::GetData<string_t>(result);
 		}
 	} else {
@@ -456,54 +460,115 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		result_data = FSSTVector::GetCompressedData<string_t>(*output_vector);
 	}
 
-	// We need to decode from the last known row to be able to do delta decoding
-	uint32_t delta_decode_start;
-	idx_t dict_index_offset;
 
-	// TODO GTE should be GT and handle edge case
-	if (start == 0 || !scan_state.last_known_isset || scan_state.last_known_row >= start) {
-		delta_decode_start = 0;
-		dict_index_offset = start;
+	/// Bitunpack buffer offsets
+	// Offset into segment where we should start bitunpacking
+	idx_t bitunpack_offset;
+	// The offset into the bitunpacked buffer to the first value we need to delta decode
+	uint32_t delta_decode_offset;
+
+	/// DeltaDecode buffer offsets
+	// This is the offset into the decoded dict offsets where the scan will need to start
+	idx_t scan_offset;
+
+	// The number of values we need to delta decode in order to be able to scan what we want
+	idx_t unused_delta_decoded_values;
+
+	// TODO GTE should be GT and handle edge case?
+	bool start_from_zero = start == 0 || !scan_state.last_known_isset || scan_state.last_known_row >= start;
+
+	if (start_from_zero) {
+		// We cannot a cached value for the delta decoding, start at the beginning
+		bitunpack_offset = 0;
+		delta_decode_offset = 0;
+		unused_delta_decoded_values = start;
+		scan_offset = start;
+//		std::cout << "Cannot use last index\n";
 	} else {
-		// We need to decode from the last known row to be able to do delta decoding
-		// We can only read aligned to the bitpacking algorithm group size.
-		delta_decode_start = scan_state.last_known_row+1;
-		dict_index_offset = delta_decode_start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		D_ASSERT(scan_state.last_known_row < start);
+//		std::cout << "using last row: " << scan_state.last_known_row << "\n";
+//		std::cout << "with index: " << scan_state.last_known_index << "\n";
+		idx_t first_row_to_delta_decode = (scan_state.last_known_row+1);
+		idx_t bitunpack_alignment_count = first_row_to_delta_decode % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		unused_delta_decoded_values = start - first_row_to_delta_decode;
+
+		// Start bitunpacking at nearest BITPACKING_ALGORITHM_GROUP_SIZE aligned value
+		bitunpack_offset = start - bitunpack_alignment_count;
+		// Offset to the first delta to decode will be equal to the amount of padding required
+		delta_decode_offset = bitunpack_alignment_count;
+		scan_offset = bitunpack_alignment_count + unused_delta_decoded_values;
+
+//		std::cout << "bitunpack_alignment_count: " << bitunpack_alignment_count << "\n";
+//		std::cout << "unused_delta_decoded_values: " << unused_delta_decoded_values << "\n";
+//		std::cout << "delta_decode_offset: " << delta_decode_offset << "\n";
+//		std::cout << "scan_offset: " << scan_offset << "\n";
 	}
 
 	// Bitunpack + delta-decode count
-	idx_t bpd_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + dict_index_offset);
+	idx_t total_bitunpack_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + scan_offset);
+
+	idx_t total_delta_decode_count = scan_count + unused_delta_decoded_values;
+	D_ASSERT(total_delta_decode_count + delta_decode_offset <= total_bitunpack_count);
 
 	// Decompression buffer for all dict offsets we need to calculate
-	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[bpd_count]);
-	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[bpd_count]);
-	auto src = &base_data[((start - dict_index_offset) * scan_state.current_width) / 8];
+	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[total_bitunpack_count]);
+	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[total_delta_decode_count]);
+	auto src = &base_data[(bitunpack_offset * scan_state.current_width) / 8];
 
-	BitpackingPrimitives::UnPackBuffer<uint32_t>((data_ptr_t)bitunpack_buffer.get(), src, bpd_count, scan_state.current_width);
+	BitpackingPrimitives::UnPackBuffer<uint32_t>((data_ptr_t)bitunpack_buffer.get(), src, total_bitunpack_count, scan_state.current_width);
 
-	delta_decode_buffer[0] = bitunpack_buffer[0];
-	if (delta_decode_start != 0) {
+	delta_decode_buffer[0] = bitunpack_buffer[delta_decode_offset];
+	if (!start_from_zero) {
 		delta_decode_buffer[0] += scan_state.last_known_index;
 	}
-	for (idx_t i = 1; i < bpd_count; i++) {
-		delta_decode_buffer[i] = bitunpack_buffer[i] + delta_decode_buffer[i-1];
+	for (idx_t i = 1; i < total_delta_decode_count; i++) {
+		delta_decode_buffer[i] = bitunpack_buffer[delta_decode_offset + i] + delta_decode_buffer[i-1];
 	}
 
+	// Why is total_delta_decode_count + delta_decode_offset > total_bitunpack_count?
+//
+//	std::cout << "\n stored last row: " << scan_state.last_known_row << "\n";
+//	std::cout << "\n stored last index: " << scan_state.last_known_index << "\n";
+//	std::cout << "\n actual value delta_decode_buffer[" << scan_state.last_known_row << "]: " << delta_decode_buffer[scan_state.last_known_row] << "\n";
+
+//	D_ASSERT(!scan_state.last_known_isset || delta_decode_buffer[scan_state.last_known_row] == scan_state.last_known_index);
+
 	for (idx_t i = 0; i < scan_count; i++) {
-		uint32_t string_length = bitunpack_buffer[i + dict_index_offset];
+		uint32_t string_length = bitunpack_buffer[i + scan_offset];
+
+//		if (segment.count == 232976 && scan_count == 2496) {
+//			std::cout << "i = " << i << "\n";
+//			std::cout << "Dict Offset: " << delta_decode_buffer[i + scan_offset] << "\n";
+//			std::cout << "string length: " << string_length << "\n";
+//		}
 		result_data[i] =
-		    UncompressedStringStorage::FetchStringFromDict(segment, dict, result, baseptr, delta_decode_buffer[i + dict_index_offset], string_length);
+		    UncompressedStringStorage::FetchStringFromDict(segment, dict, result, baseptr, delta_decode_buffer[i + unused_delta_decoded_values], string_length);
 	}
 
 	// Store last scanned row:
 	scan_state.last_known_row = start + scan_count - 1;
-	scan_state.last_known_index = delta_decode_buffer[scan_count - 1];
+	scan_state.last_known_index = delta_decode_buffer[scan_count + unused_delta_decoded_values - 1];
 	scan_state.last_known_isset = true;
 
 	if (!ALLOW_FSST_VECTORS) {
 		// Decompress the FSST Vector by copying it to a flat vector
 		VectorOperations::Copy(*output_vector, result, scan_count, 0, result_offset);
+//		std::cout << "\nScan no allow FSST Vectors:\n";
+//		std::cout << result.ToString(scan_count + result_offset);
+	} else {
+//		std::cout << "\nScan with allow FSST Vectors:\n";
+//		std::cout << result.ToString(scan_count + result_offset);
 	}
+
+//	// TODO: so thisone doesnt catch it, but it is caught later??
+//	if (result.GetVectorType() == VectorType::FSST_VECTOR) {
+//		std::cout << result.ToString(scan_count + result_offset) << "\n";
+//	}
+//
+//	if (scan_count + result_offset == 640) {
+//		std::cout << "lel\n";
+//	}
+//	result.Verify(scan_count + result_offset);
 }
 
 void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -528,7 +593,7 @@ CompressionFunction FSSTFun::GetFunction(PhysicalType data_type) {
 	    CompressionType::COMPRESSION_FSST, data_type, FSSTStorage::StringInitAnalyze, FSSTStorage::StringAnalyze,
 	    FSSTStorage::StringFinalAnalyze, FSSTStorage::InitCompression, FSSTStorage::Compress,
 	    FSSTStorage::FinalizeCompress, FSSTStorage::StringInitScan, FSSTStorage::StringScan,
-	    FSSTStorage::StringScanPartial, FSSTStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
+	    FSSTStorage::StringScanPartial<false>, FSSTStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
 bool FSSTFun::TypeIsSupported(PhysicalType type) {

@@ -5,8 +5,10 @@
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db
 
+foreach compression fsst dictionary
+
 statement ok
-PRAGMA force_compression='fsst'
+PRAGMA force_compression='${compression}'
 
 # simple compression with few values
 statement ok
@@ -18,20 +20,25 @@ INSERT INTO test SELECT CONCAT('A-',(i%5)::VARCHAR) FROM range(0,1025) tbl(i);
 statement ok
 checkpoint
 
-#query I
-#select * from test limit 5;
-#----
-#A-0
-#A-1
-#A-2
-#A-3
-#A-4
-
 query I
-select a[0] from test limit 5;
+select * from test limit 5;
 ----
 A-0
 A-1
 A-2
 A-3
 A-4
+
+query I
+select a[3] from test limit 5;
+----
+0
+1
+2
+3
+4
+
+statement ok
+DROP TABLE test;
+
+endloop

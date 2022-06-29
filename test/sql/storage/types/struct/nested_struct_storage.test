@@ -6,7 +6,7 @@
 load __TEST_DIR__/struct_storage_test.db
 
 
-foreach compression <compression>
+foreach compression fsst
 
 statement ok
 PRAGMA force_compression='${compression}'
