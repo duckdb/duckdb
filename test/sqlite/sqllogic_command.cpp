@@ -39,6 +39,39 @@ Connection *Command::CommandConnection() {
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
                                                           string sql_query) {
 	query_break(query_line);
+	vector<unique_ptr<SQLStatement>> statements;
+	bool query_fail = false;
+	try {
+		statements = connection->context->ParseStatements(sql_query);
+	} catch (...) {
+		query_fail = true;
+	}
+	bool all_select = true;
+	for (auto &statament : statements) {
+		if (statament->type != StatementType::SELECT_STATEMENT) {
+			all_select = false;
+			break;
+		}
+	}
+	if (!statements.empty() && !query_fail && all_select && TestForceReload() && TestForceStorage() &&
+	    !connection->HasActiveTransaction() && connection->context->db->loaded_extensions.empty()) {
+		// We do a restart here to force the database to reload from disk
+		auto command = make_unique<RestartCommand>(runner);
+		// We must save the current configuration
+		auto config = connection->context->config;
+		DBConfigOptions db_config_opt = connection->context->db->config.options;
+		// We must reload all extensions afterwards
+		//		auto extensions = connection->context->db->loaded_extensions;
+		runner.ExecuteCommand(move(command));
+		connection = runner.con.get();
+		connection->context->config = config;
+		connection->context->db->config.options = db_config_opt;
+		//		connection->context->db->loaded_extensions = extensions;
+		//		for (auto&extension:extensions){
+		//			connection->Query("LOAD " + extension);
+		//		}
+	}
+
 	auto result = connection->Query(sql_query);
 
 	if (!result->success) {

@@ -20,7 +20,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
 	auto &config = DBConfig::GetConfig(db);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);

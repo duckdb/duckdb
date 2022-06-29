@@ -26,7 +26,7 @@ class WindowGlobalState : public GlobalSinkState {
 public:
 	WindowGlobalState(const PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)),
-	      mode(DBConfig::GetConfig(context).window_mode) {
+	      mode(DBConfig::GetConfig(context).options.window_mode) {
 	}
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;

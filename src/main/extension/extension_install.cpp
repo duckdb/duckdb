@@ -19,7 +19,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 
 void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &extension, bool force_install) {
 	auto &config = DBConfig::GetConfig(db);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);

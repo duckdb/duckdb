@@ -315,7 +315,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	auto &db_config = DBConfig::GetConfig(*this);
-	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
+	if (db_config.options.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type)));
 	}
