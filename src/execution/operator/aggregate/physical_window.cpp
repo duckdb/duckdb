@@ -34,15 +34,13 @@ public:
 	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &orders, const Types &payload_types,
 	                      idx_t max_mem, bool external)
 	    : memory_per_thread(max_mem) {
-		Orders orders_copy;
 		for (const auto &order : orders) {
 			sort_types.emplace_back(order.expression->return_type);
-			orders_copy.emplace_back(order.Copy());
 		}
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
-		global_sort = make_unique<GlobalSortState>(buffer_manager, orders_copy, payload_layout);
+		global_sort = make_unique<GlobalSortState>(buffer_manager, orders, payload_layout);
 		global_sort->external = external;
 	}
 
