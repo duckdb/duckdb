@@ -12,7 +12,6 @@
 #include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
-struct ArenaAllocatorDebugInfo;
 
 struct ArenaChunk {
 	ArenaChunk(Allocator &allocator, idx_t size);
@@ -39,24 +38,12 @@ public:
 
 	bool IsEmpty();
 
-	static data_ptr_t ArenaAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
-	static void ArenaAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
-	static data_ptr_t ArenaAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
-
-	Allocator &GetArenaAllocator();
-
-	ArenaAllocatorDebugInfo &GetDebugInfo();
-
 private:
 	//! Internal allocator that is used by the arena allocator
 	Allocator &allocator;
 	idx_t current_capacity;
 	unique_ptr<ArenaChunk> head;
 	ArenaChunk *tail;
-	//! Allocator associated with the arena allocator, that passes all allocations through it
-	Allocator batched_allocator;
-	//! Debug info - only used in debug mode
-	unique_ptr<ArenaAllocatorDebugInfo> debug_info;
 };
 
 } // namespace duckdb
