@@ -259,7 +259,7 @@ unique_ptr<VectorData[]> DataChunk::Orrify() {
 }
 
 void DataChunk::Hash(Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
+	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < ColumnCount(); i++) {
 		VectorOperations::CombineHash(result, data[i], size());

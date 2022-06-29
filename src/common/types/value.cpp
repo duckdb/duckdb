@@ -943,8 +943,6 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
 		return Value((double)value);
-	case LogicalTypeId::HASH:
-		return Value::HASH(value);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(value);
 	case LogicalTypeId::DATE:
@@ -1287,9 +1285,9 @@ string Value::ToString() const {
 	case LogicalTypeId::UUID:
 		return UUID::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
-		return to_string(value_.float_);
+		return duckdb_fmt::format("{}", value_.float_);
 	case LogicalTypeId::DOUBLE:
-		return to_string(value_.double_);
+		return duckdb_fmt::format("{}", value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
 		auto scale = DecimalType::GetScale(type_);
@@ -1335,8 +1333,6 @@ string Value::ToString() const {
 		return Blob::ToString(string_t(str_value));
 	case LogicalTypeId::POINTER:
 		return to_string(value_.pointer);
-	case LogicalTypeId::HASH:
-		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
 		auto &child_types = StructType::GetChildTypes(type_);

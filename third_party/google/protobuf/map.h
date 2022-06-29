@@ -65,7 +65,7 @@
 #endif
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 
@@ -285,7 +285,7 @@ size_t MapValueSpaceUsedExcludingSelfLong(const T& message) {
 }
 
 constexpr size_t kGlobalEmptyTableSize = 1;
-PROTOBUF_EXPORT extern void* const kGlobalEmptyTable[kGlobalEmptyTableSize];
+ extern void* const kGlobalEmptyTable[kGlobalEmptyTableSize];
 
 // Space used for the table, trees, and nodes.
 // Does not include the indirect space used. Eg the data of a std::string.
@@ -1371,7 +1371,7 @@ class Map {
 
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_MAP_H__

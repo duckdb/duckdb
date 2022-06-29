@@ -130,7 +130,7 @@ struct ModeFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -139,7 +139,7 @@ struct ModeFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.frequency_map) {
 			return;
 		}
@@ -154,7 +154,7 @@ struct ModeFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, INPUT_TYPE *target, ValidityMask &mask,
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, INPUT_TYPE *target, ValidityMask &mask,
 	                     idx_t idx) {
 		if (!state->frequency_map) {
 			mask.SetInvalid(idx);
@@ -168,7 +168,7 @@ struct ModeFunction {
 		}
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
@@ -179,7 +179,7 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   FunctionData *bind_data_p, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   AggregateInputData &, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
 	                   Vector &result, idx_t rid, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);

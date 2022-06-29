@@ -1,0 +1,28 @@
+# name: test/sql/copy/parquet/parquet_fixed_length_blob_dict.test
+# description: Parquet file with dictionary of fixed length byte arrays
+# group: [parquet]
+
+require parquet
+
+query IIIIIIIIIIII
+SELECT
+    MIN(sfc_key), MAX(sfc_key),
+    MIN(gps_time), MAX(gps_time),
+    MIN(intensity), MAX(intensity),
+    MIN(classification), MAX(classification),
+    MIN(return_number), MAX(return_number),
+    MIN(number_of_returns), MAX(number_of_returns)
+FROM parquet_scan('data/parquet-testing/sorted.zstd_18_131072_small.parquet')
+----
+\x00\xA0e\xFB\xF8|\xF0\xA8_t\x16\x9A
+\x03,\xDF$)\xF5\x13\x11\x9B\x11k\x10
+205949378.92443183
+205949634.3036811
+4
+1035
+1
+9
+1
+5
+1
+7

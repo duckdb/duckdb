@@ -63,7 +63,6 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 
 template <bool HAS_RSEL, bool FIRST_HASH>
 static inline void StructLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
-	input.Normalify(count);
 	auto &children = StructVector::GetEntries(input);
 
 	D_ASSERT(!children.empty());
@@ -177,7 +176,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 
 template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
-	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
+	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -309,7 +308,7 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 
 template <bool HAS_RSEL>
 static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const SelectionVector *rsel, idx_t count) {
-	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
+	D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
 	switch (input.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
 namespace duckdb {
@@ -48,6 +49,11 @@ struct TableFunctionData : public FunctionData {
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
+};
+
+struct PyTableFunctionData : public TableFunctionData {
+	//! External dependencies of this table function
+	unique_ptr<ExternalDependency> external_dependency;
 };
 
 struct FunctionParameters {

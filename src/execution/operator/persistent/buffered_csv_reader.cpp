@@ -255,6 +255,22 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
+void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
+	string error;
+	if (read_format) {
+		auto &date_format = this->date_format[type];
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		date_format.format_specifier = format;
+	} else {
+		auto &date_format = this->write_date_format[type];
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+	}
+	if (!error.empty()) {
+		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	}
+	has_format[type] = true;
+}
+
 void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value &value,
                                              vector<string> &expected_names) {
 	if (SetBaseOption(loption, value)) {
@@ -299,22 +315,10 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		force_not_null = ParseColumnList(value, expected_names, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
-		auto &date_format = this->date_format[LogicalTypeId::DATE];
-		string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
-		date_format.format_specifier = format;
-		if (!error.empty()) {
-			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
-		}
-		has_format[LogicalTypeId::DATE] = true;
+		SetDateFormat(LogicalTypeId::DATE, format, true);
 	} else if (loption == "timestamp_format" || loption == "timestampformat") {
 		string format = ParseString(value, loption);
-		auto &timestamp_format = date_format[LogicalTypeId::TIMESTAMP];
-		string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
-		timestamp_format.format_specifier = format;
-		if (!error.empty()) {
-			throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
-		}
-		has_format[LogicalTypeId::TIMESTAMP] = true;
+		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "escape") {
 		escape = ParseString(value, loption);
 		has_escape = true;
@@ -332,6 +336,15 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 
 	if (loption == "force_quote") {
 		force_quote = ParseColumnList(value, names, loption);
+	} else if (loption == "date_format" || loption == "dateformat") {
+		string format = ParseString(value, loption);
+		SetDateFormat(LogicalTypeId::DATE, format, false);
+	} else if (loption == "timestamp_format" || loption == "timestampformat") {
+		string format = ParseString(value, loption);
+		if (StringUtil::Lower(format) == "iso") {
+			format = "%Y-%m-%dT%H:%M:%S.%fZ";
+		}
+		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}

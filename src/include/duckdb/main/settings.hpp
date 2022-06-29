@@ -161,6 +161,14 @@ struct ExternalThreadsSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct FileSearchPathSetting {
+	static constexpr const char *Name = "file_search_path";
+	static constexpr const char *Description = "A comma separated list of directories to search for input files";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ForceCompressionSetting {
 	static constexpr const char *Name = "force_compression";
 	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";

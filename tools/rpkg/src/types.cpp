@@ -67,6 +67,52 @@ RType RApiTypes::DetectRType(SEXP v) {
 	return RType::UNKNOWN;
 }
 
+string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller) {
+	switch (stype.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return "logical";
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+		return "integer";
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return "POSIXct";
+	case LogicalTypeId::DATE:
+		return "Date";
+	case LogicalTypeId::TIME:
+		return "difftime";
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return "numeric";
+	case LogicalTypeId::VARCHAR:
+		return "character";
+	case LogicalTypeId::BLOB:
+		return "raw";
+	case LogicalTypeId::LIST:
+		return "list";
+	case LogicalTypeId::STRUCT:
+		return "data.frame";
+	case LogicalTypeId::ENUM:
+		return "factor";
+	case LogicalTypeId::UNKNOWN:
+		return "unknown";
+	default:
+		cpp11::stop("%s: Unknown column type for prepare: %s", caller, stype.ToString().c_str());
+		break;
+	}
+}
+
 bool RDoubleType::IsNull(double val) {
 	return ISNA(val);
 }

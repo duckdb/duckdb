@@ -302,8 +302,8 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
+	PurgeQueue();
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-	// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
 }
 
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
