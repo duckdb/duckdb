@@ -196,6 +196,18 @@ static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_
 	return j_str;
 }
 
+static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
+	if (conn_ref_buf) {
+		auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+		if (conn_ref && conn_ref->context) {
+			return conn_ref;
+		}
+	}
+
+	env->ThrowNew(J_SQLException, "Invalid connection");
+	return nullptr;
+}
+
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNIEnv *env, jclass, jbyteArray database_j,
                                                                              jboolean read_only) {
 	auto database = byte_array_to_string(env, database_j);
@@ -234,9 +246,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1connect(JNI
 
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema(JNIEnv *env, jclass,
                                                                                  jobject conn_ref_buf) {
-	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
-	if (!conn_ref || !conn_ref->context) {
-		env->ThrowNew(J_SQLException, "Invalid connection");
+	auto conn_ref = get_connection(env, conn_ref_buf);
+	if (!conn_ref) {
 		return nullptr;
 	}
 
