@@ -463,6 +463,7 @@ public:
 			// fetch a new block index to write to
 			index = GetNewBlockIndex(buffer.id);
 			used_blocks[buffer.id] = index;
+			indexes_in_use.insert(index);
 		}
 		buffer.Write(*handle, GetPositionInFile(index));
 	}
@@ -473,13 +474,21 @@ public:
 	}
 
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
-		lock_guard<mutex> lock(block_lock);
-		D_ASSERT(handle);
-		auto index = GetTempBlockIndex(id);
+		idx_t index;
+		{
+			lock_guard<mutex> lock(block_lock);
+			D_ASSERT(handle);
+			index = GetTempBlockIndex(id);
+		}
 
 		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(index), Storage::BLOCK_SIZE, id,
 		                                          move(reusable_buffer));
-		RemoveTempBlockIndex(id, index);
+		{
+			// remove the block (and potentially truncate the temp file)
+			lock_guard<mutex> lock(block_lock);
+			D_ASSERT(handle);
+			RemoveTempBlockIndex(id, index);
+		}
 		return buffer;
 	}
 
@@ -509,9 +518,29 @@ private:
 	}
 
 	void RemoveTempBlockIndex(block_id_t block_id, idx_t index) {
+		// remove this block from the set of blocks
 		used_blocks.erase(block_id);
+		indexes_in_use.erase(index);
 		free_indexes.insert(index);
-		// FIXME: truncate file if possible?
+		// check if we can truncate the file
+
+		// get the max_index in use right now
+		auto max_index_in_use = *indexes_in_use.rbegin();
+		if (max_index_in_use < max_index) {
+			// max index in use is lower than the max_index
+			// truncate the file
+			auto &fs = FileSystem::GetFileSystem(db);
+			max_index = max_index_in_use;
+			fs.Truncate(*handle, GetPositionInFile(max_index + 1));
+			// we can remove any free_indexes that are larger than the current max_index
+			while (!free_indexes.empty()) {
+				auto max_entry = *free_indexes.rbegin();
+				if (max_entry < max_index) {
+					break;
+				}
+				free_indexes.erase(max_entry);
+			}
+		}
 	}
 
 	idx_t GetPositionInFile(idx_t index) {
@@ -525,6 +554,7 @@ private:
 	mutex block_lock;
 	idx_t max_index;
 	set<idx_t> free_indexes;
+	set<idx_t> indexes_in_use;
 	unordered_map<block_id_t, idx_t> used_blocks;
 };
 
