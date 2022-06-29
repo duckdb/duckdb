@@ -2165,6 +2165,18 @@ public class TestDuckDBJDBC {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 
 		assertEquals(conn.getSchema(), "main");
+
+		conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:/alternate_schema");
+		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.close();
+
+		try {
+			conn.getSchema();
+			fail();
+		} catch (SQLException e) {
+			assertEquals(e.getMessage(), "Invalid connection");
+		}
 	}
 
 
