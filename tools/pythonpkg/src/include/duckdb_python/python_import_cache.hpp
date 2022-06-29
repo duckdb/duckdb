@@ -9,6 +9,8 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb_python/python_object_container.hpp"
+#include "duckdb_python/registered_py_object.hpp"
 
 #include "datetime.h" //From python
 
@@ -18,16 +20,15 @@ enum class PythonImportCacheItemType { MODULE, TYPE };
 
 struct PythonImportCache;
 
-// Every cache item knows how to retrieve its object
 struct PythonImportCacheItem {
 public:
 	//! Constructor for a module
 	PythonImportCacheItem(const string &name, PythonImportCache &cache)
-	    : source(*this), object(nullptr), name(name), cache(cache), item_type(PythonImportCacheItemType::MODULE) {
+	    : source(*this), name(name), cache(cache), item_type(PythonImportCacheItemType::MODULE), object(LoadObject()) {
 	}
 	//! Constructor for an attribute
 	PythonImportCacheItem(const string &name, PythonImportCacheItem &source, PythonImportCache &cache)
-	    : source(source), object(nullptr), name(name), cache(cache), item_type(PythonImportCacheItemType::TYPE) {
+	    : source(source), name(name), cache(cache), item_type(PythonImportCacheItemType::TYPE), object(LoadObject()) {
 	}
 	virtual ~PythonImportCacheItem() {
 	}
@@ -38,12 +39,6 @@ public:
 		return name;
 	}
 
-protected:
-	//! Where to get the parent item from
-	PythonImportCacheItem &source;
-	//! The stored item
-	PyObject *object;
-
 private:
 	PyObject *AddCache(py::object object);
 	PyObject *LoadObject();
@@ -51,12 +46,16 @@ private:
 	PyObject *LoadAttribute();
 
 private:
+	//! Where to get the parent item from
+	PythonImportCacheItem &source;
 	//! Name of the object
 	string name;
 	//! The cache that owns the py::objects;
 	PythonImportCache &cache;
 	//! Used in LoadObject to determine how to load the object
 	PythonImportCacheItemType item_type;
+	//! The stored item
+	PyObject *object;
 };
 
 //===--------------------------------------------------------------------===//
@@ -110,13 +109,24 @@ public:
 // PythonImportCache
 //===--------------------------------------------------------------------===//
 
+//! Constructs py::objects, so it takes the gil before doing so, then releases it after initializing all modules
 struct PythonImportCache {
 public:
-	PythonImportCache() : numpy(*this), datetime(*this), decimal(*this), uuid(*this), owned_objects() {
+	//! The vector and the GIL have to be initialized before the modules are
+	//! It's pretty horrible: but this order matters!
+	explicit PythonImportCache()
+	    : owned_objects(), gil(make_unique<PythonGILWrapper>()), numpy(*this), datetime(*this), decimal(*this),
+	      uuid(*this) {
+		//! Release the GIL
+		gil = nullptr;
 	}
 	~PythonImportCache();
 	//! Stored modules
 public:
+	// Do not touch this order!
+	vector<unique_ptr<RegisteredObject>> owned_objects;
+	unique_ptr<PythonGILWrapper> gil;
+
 	NumpyCacheItem numpy;
 	DatetimeCacheItem datetime;
 	DecimalCacheItem decimal;
@@ -124,9 +134,6 @@ public:
 
 public:
 	PyObject *AddCache(py::object item);
-
-private:
-	vector<py::object> owned_objects;
 };
 
 } // namespace duckdb

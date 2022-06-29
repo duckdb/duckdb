@@ -1,6 +1,9 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
-#include "duckdb_python/python_import_cache.hpp"
+
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" //From Python
 
@@ -65,7 +68,7 @@ Value TransformListValue(py::handle ele) {
 }
 
 Value TransformPythonValue(py::handle ele) {
-	PythonImportCache import_cache;
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
 		return Value();

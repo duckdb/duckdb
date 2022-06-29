@@ -1,10 +1,12 @@
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/vector_conversion.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb_python/python_import_cache.hpp"
 
 namespace duckdb {
 
@@ -649,7 +651,7 @@ static duckdb::LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_
 //! LogicalType's alone
 
 static duckdb::LogicalType GetItemType(py::handle &ele, bool &can_convert) {
-	PythonImportCache import_cache;
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
 		return LogicalType::SQLNULL;

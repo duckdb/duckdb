@@ -7,9 +7,6 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 py::handle PythonImportCacheItem::operator()(void) {
-	if (!object) {
-		object = LoadObject();
-	}
 	return object;
 }
 
@@ -37,7 +34,9 @@ PyObject *PythonImportCacheItem::LoadAttribute() {
 	return AddCache(move(source_object.attr(name.c_str())));
 }
 
-//! Cache
+//===--------------------------------------------------------------------===//
+// PythonImportCache (CONTAINER)
+//===--------------------------------------------------------------------===//
 
 PythonImportCache::~PythonImportCache() {
 	py::gil_scoped_acquire acquire;
@@ -45,8 +44,10 @@ PythonImportCache::~PythonImportCache() {
 }
 
 PyObject *PythonImportCache::AddCache(py::object item) {
-	owned_objects.push_back(move(item));
-	return owned_objects.back().ptr();
+	auto registered_object = make_unique<RegisteredObject>(move(item));
+	auto object_ptr = registered_object->obj.ptr();
+	owned_objects.push_back(move(registered_object));
+	return object_ptr;
 }
 
 } // namespace duckdb
