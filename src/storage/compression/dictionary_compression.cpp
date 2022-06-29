@@ -7,14 +7,26 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
 struct StringHash {
-	std::size_t operator()(const string &k) const {
-		return Hash(k.c_str(), k.size());
+	std::size_t operator()(const string_t &k) const {
+		return Hash(k);
 	}
 };
+
+struct StringEquality {
+	bool operator()(const string_t &a, const string_t &b) const {
+		return Equals::Operation(a, b);
+	}
+};
+
+template <typename T>
+using string_map_t = unordered_map<string_t, T, StringHash, StringEquality>;
+
+using string_set_t = unordered_set<string_t, StringHash, StringEquality>;
 
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
@@ -171,7 +183,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	data_ptr_t current_end_ptr;
 
 	// Buffers and map for current segment
-	std::unordered_map<string, uint32_t, StringHash> current_string_map;
+	StringHeap heap;
+	string_map_t<uint32_t> current_string_map;
 	std::vector<uint32_t> index_buffer;
 	std::vector<uint32_t> selection_buffer;
 
@@ -191,7 +204,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	}
 
 	bool LookupString(string_t str) override {
-		auto search = current_string_map.find(str.GetString());
+		auto search = current_string_map.find(str);
 		auto has_result = search != current_string_map.end();
 
 		if (has_result) {
@@ -213,7 +226,11 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// Update buffers and map
 		index_buffer.push_back(current_dictionary.size);
 		selection_buffer.push_back(index_buffer.size() - 1);
-		current_string_map.insert({str.GetString(), index_buffer.size() - 1});
+		if (str.IsInlined()) {
+			current_string_map.insert({str, index_buffer.size() - 1});
+		} else {
+			current_string_map.insert({heap.AddBlob(str), index_buffer.size() - 1});
+		}
 		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
 
 		current_width = next_width;
@@ -322,19 +339,24 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
 	size_t current_dict_size;
-	std::unordered_set<string, StringHash> current_set;
+	StringHeap heap;
+	string_set_t current_set;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
 	bool LookupString(string_t str) override {
-		return current_set.count(str.GetString());
+		return current_set.count(str);
 	}
 
 	void AddNewString(string_t str) override {
 		current_tuple_count++;
 		current_unique_count++;
 		current_dict_size += str.GetSize();
-		current_set.insert(str.GetString());
+		if (str.IsInlined()) {
+			current_set.insert(str);
+		} else {
+			current_set.insert(heap.AddBlob(str));
+		}
 		current_width = next_width;
 	}
 

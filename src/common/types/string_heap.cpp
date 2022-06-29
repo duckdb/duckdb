@@ -39,6 +39,10 @@ string_t StringHeap::AddBlob(const char *data, idx_t len) {
 	return insert_string;
 }
 
+string_t StringHeap::AddBlob(const string_t &data) {
+	return AddBlob(data.GetDataUnsafe(), data.GetSize());
+}
+
 string_t StringHeap::EmptyString(idx_t len) {
 	D_ASSERT(len >= string_t::INLINE_LENGTH);
 	if (!chunk || chunk->current_position + len >= chunk->maximum_size) {
