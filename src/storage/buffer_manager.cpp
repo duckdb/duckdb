@@ -2,6 +2,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
@@ -153,24 +154,19 @@ struct EvictionQueue {
 	eviction_queue_t q;
 };
 
+class TemporaryFileHandle;
+
 class TemporaryDirectoryHandle {
 public:
-	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p) : db(db), temp_directory(move(path_p)) {
-		auto &fs = FileSystem::GetFileSystem(db);
-		if (!temp_directory.empty()) {
-			fs.CreateDirectory(temp_directory);
-		}
-	}
-	~TemporaryDirectoryHandle() {
-		auto &fs = FileSystem::GetFileSystem(db);
-		if (!temp_directory.empty()) {
-			fs.RemoveDirectory(temp_directory);
-		}
-	}
+	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p);
+	~TemporaryDirectoryHandle();
+
+	TemporaryFileHandle &GetTempFile();
 
 private:
 	DatabaseInstance &db;
 	string temp_directory;
+	unique_ptr<TemporaryFileHandle> temp_file;
 };
 
 void BufferManager::SetTemporaryDirectory(string new_dir) {
@@ -431,6 +427,125 @@ void BufferManager::SetLimit(idx_t limit) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Temporary File Management
+//===--------------------------------------------------------------------===//
+unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, FileHandle &handle, idx_t position,
+                                                      idx_t size, block_id_t id,
+                                                      unique_ptr<FileBuffer> reusable_buffer) {
+	unique_ptr<ManagedBuffer> buffer;
+	if (reusable_buffer) {
+		// re-usable buffer: re-use it
+		buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, false, id);
+		reusable_buffer.reset();
+	} else {
+		// no re-usable buffer: allocate a new buffer
+		buffer = make_unique<ManagedBuffer>(db, size, false, id);
+	}
+	buffer->Read(handle, position);
+	return buffer;
+}
+
+class TemporaryFileHandle {
+public:
+	TemporaryFileHandle(DatabaseInstance &db, const string &temp_directory)
+	    : db(db), path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage.tmp")) {
+		max_index = 0;
+	}
+
+	void WriteTemporaryBuffer(ManagedBuffer &buffer) {
+		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
+		idx_t index;
+		{
+			lock_guard<mutex> lock(block_lock);
+			// open the file handle if it does not yet exist
+			CreateFileIfNotExists();
+			// fetch a new block index to write to
+			index = GetNewBlockIndex(buffer.id);
+			used_blocks[buffer.id] = index;
+		}
+		buffer.Write(*handle, GetPositionInFile(index));
+	}
+
+	bool HasTemporaryBuffer(block_id_t block_id) {
+		lock_guard<mutex> lock(block_lock);
+		return used_blocks.find(block_id) != used_blocks.end();
+	}
+
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
+		lock_guard<mutex> lock(block_lock);
+		D_ASSERT(handle);
+		auto index = GetTempBlockIndex(id);
+
+		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(index), Storage::BLOCK_SIZE, id,
+		                                          move(reusable_buffer));
+		RemoveTempBlockIndex(id, index);
+		return buffer;
+	}
+
+private:
+	void CreateFileIfNotExists() {
+		if (handle) {
+			return;
+		}
+		auto &fs = FileSystem::GetFileSystem(db);
+		handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_WRITE |
+		                               FileFlags::FILE_FLAGS_FILE_CREATE);
+	}
+
+	idx_t GetNewBlockIndex(block_id_t id) {
+		if (free_indexes.empty()) {
+			return max_index++;
+		}
+		auto entry = free_indexes.begin();
+		auto index = *entry;
+		free_indexes.erase(entry);
+		return index;
+	}
+
+	idx_t GetTempBlockIndex(block_id_t id) {
+		D_ASSERT(used_blocks.find(id) != used_blocks.end());
+		return used_blocks[id];
+	}
+
+	void RemoveTempBlockIndex(block_id_t block_id, idx_t index) {
+		used_blocks.erase(block_id);
+		free_indexes.insert(index);
+		// FIXME: truncate file if possible?
+	}
+
+	idx_t GetPositionInFile(idx_t index) {
+		return index * Storage::BLOCK_ALLOC_SIZE;
+	}
+
+private:
+	DatabaseInstance &db;
+	unique_ptr<FileHandle> handle;
+	string path;
+	mutex block_lock;
+	idx_t max_index;
+	set<idx_t> free_indexes;
+	unordered_map<block_id_t, idx_t> used_blocks;
+};
+
+TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
+    : db(db), temp_directory(move(path_p)), temp_file(make_unique<TemporaryFileHandle>(db, temp_directory)) {
+	auto &fs = FileSystem::GetFileSystem(db);
+	if (!temp_directory.empty()) {
+		fs.CreateDirectory(temp_directory);
+	}
+}
+TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
+	auto &fs = FileSystem::GetFileSystem(db);
+	if (!temp_directory.empty()) {
+		fs.RemoveDirectory(temp_directory);
+	}
+}
+
+TemporaryFileHandle &TemporaryDirectoryHandle::GetTempFile() {
+	return *temp_file;
+}
+
 string BufferManager::GetTemporaryPath(block_id_t id) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	return fs.JoinPath(temp_directory, to_string(id) + ".block");
@@ -451,8 +566,12 @@ void BufferManager::RequireTemporaryDirectory() {
 
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	RequireTemporaryDirectory();
+	if (buffer.size == Storage::BLOCK_SIZE) {
+		temp_directory_handle->GetTempFile().WriteTemporaryBuffer(buffer);
+		return;
+	}
 
-	D_ASSERT(buffer.size >= Storage::BLOCK_SIZE);
+	D_ASSERT(buffer.size > Storage::BLOCK_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
@@ -465,6 +584,9 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temp_directory.empty());
 	D_ASSERT(temp_directory_handle.get());
+	if (temp_directory_handle->GetTempFile().HasTemporaryBuffer(id)) {
+		return temp_directory_handle->GetTempFile().ReadTemporaryBuffer(id, move(reusable_buffer));
+	}
 	idx_t block_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
@@ -473,16 +595,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_
 	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	unique_ptr<ManagedBuffer> buffer;
-	if (reusable_buffer) {
-		// re-usable buffer: re-use it
-		buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, false, id);
-		reusable_buffer.reset();
-	} else {
-		// no re-usable buffer: allocate a new buffer
-		buffer = make_unique<ManagedBuffer>(db, block_size, false, id);
-	}
-	buffer->Read(*handle, sizeof(idx_t));
+	auto buffer = ReadTemporaryBufferInternal(db, *handle, sizeof(idx_t), block_size, id, move(reusable_buffer));
 
 	handle.reset();
 	DeleteTemporaryFile(id);
