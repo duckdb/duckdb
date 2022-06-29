@@ -36,7 +36,7 @@ void BaseAppender::Destructor() {
 }
 
 InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p)
-    : BaseAppender(Allocator::Get(context_p), table_p.GetTypes()), context(context_p), table(table_p) {
+    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes()), context(context_p), table(table_p) {
 }
 
 InternalAppender::~InternalAppender() {
@@ -44,7 +44,7 @@ InternalAppender::~InternalAppender() {
 }
 
 Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
-    : BaseAppender(Allocator::Get(*con.context)), context(con.context) {
+    : BaseAppender(Allocator::DefaultAllocator()), context(con.context) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found

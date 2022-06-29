@@ -41,7 +41,7 @@ BlockHandle::~BlockHandle() {
 	buffer_manager.UnregisterBlock(block_id, can_destroy);
 }
 
-unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
+unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(handle->buffer);
@@ -51,25 +51,33 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
+		unique_ptr<Block> block;
+		if (reusable_buffer) {
+			// re-usable buffer: re-use it
+			block = make_unique<Block>(*reusable_buffer, handle->block_id);
+			reusable_buffer.reset();
+		} else {
+			// no re-usable buffer: allocate a new block
+			block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
+		}
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
 		if (handle->can_destroy) {
 			return nullptr;
 		} else {
-			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id);
+			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;
 	return make_unique<BufferHandle>(handle, handle->buffer.get());
 }
 
-void BlockHandle::Unload() {
+unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (state == BlockState::BLOCK_UNLOADED) {
 		// already unloaded: nothing to do
-		return;
+		return nullptr;
 	}
 	D_ASSERT(CanUnload());
 	D_ASSERT(memory_usage >= Storage::BLOCK_ALLOC_SIZE);
@@ -78,9 +86,14 @@ void BlockHandle::Unload() {
 		// temporary block that cannot be destroyed: write to temporary file
 		buffer_manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
 	}
-	buffer.reset();
 	buffer_manager.current_memory -= memory_usage;
 	state = BlockState::BLOCK_UNLOADED;
+	return move(buffer);
+}
+
+void BlockHandle::Unload() {
+	auto block = UnloadAndTakeBlock();
+	block.reset();
 }
 
 bool BlockHandle::CanUnload() {
@@ -235,13 +248,21 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can_destroy) {
 	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
 	// first evict blocks until we have enough memory to store this buffer
-	if (!EvictBlocks(alloc_size, maximum_memory)) {
+	unique_ptr<FileBuffer> reusable_buffer;
+	if (!EvictBlocks(alloc_size, maximum_memory, &reusable_buffer)) {
 		throw OutOfMemoryException("could not allocate block of %lld bytes%s", alloc_size, InMemoryWarning());
 	}
 
-	// allocate the buffer
 	auto temp_id = ++temporary_id;
-	auto buffer = make_unique<ManagedBuffer>(db, block_size, can_destroy, temp_id);
+	unique_ptr<ManagedBuffer> buffer;
+	if (reusable_buffer) {
+		// re-use the buffer
+		buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, can_destroy, temp_id);
+		reusable_buffer.reset();
+	} else {
+		// allocate the buffer
+		buffer = make_unique<ManagedBuffer>(db, block_size, can_destroy, temp_id);
+	}
 
 	// create a new block pointer for this block
 	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
@@ -290,7 +311,8 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		required_memory = handle->memory_usage;
 	}
 	// evict blocks until we have space for the current block
-	if (!EvictBlocks(required_memory, maximum_memory)) {
+	unique_ptr<FileBuffer> reusable_buffer;
+	if (!EvictBlocks(required_memory, maximum_memory, &reusable_buffer)) {
 		throw OutOfMemoryException("failed to pin block of size %lld%s", required_memory, InMemoryWarning());
 	}
 	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
@@ -305,7 +327,7 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	// now we can actually load the current block
 	D_ASSERT(handle->readers == 0);
 	handle->readers = 1;
-	return handle->Load(handle);
+	return handle->Load(handle, move(reusable_buffer));
 }
 
 void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
@@ -324,7 +346,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	}
 }
 
-bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
+bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
 	PurgeQueue();
 
 	unique_ptr<BufferEvictionNode> node;
@@ -347,8 +369,14 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			continue;
 		}
 		// hooray, we can unload the block
-		// release the memory and mark the block as unloaded
-		handle->Unload();
+		if (buffer && handle->buffer->AllocSize() == extra_memory) {
+			// we can actually re-use the memory directly!
+			*buffer = handle->UnloadAndTakeBlock();
+			return true;
+		} else {
+			// release the memory and mark the block as unloaded
+			handle->Unload();
+		}
 	}
 	return true;
 }
@@ -434,7 +462,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	buffer.Write(*handle, sizeof(idx_t));
 }
 
-unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
+unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
 	D_ASSERT(!temp_directory.empty());
 	D_ASSERT(temp_directory_handle.get());
 	idx_t block_size;
@@ -445,7 +473,15 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = make_unique<ManagedBuffer>(db, block_size, false, id);
+	unique_ptr<ManagedBuffer> buffer;
+	if (reusable_buffer) {
+		// re-usable buffer: re-use it
+		buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, false, id);
+		reusable_buffer.reset();
+	} else {
+		// no re-usable buffer: allocate a new buffer
+		buffer = make_unique<ManagedBuffer>(db, block_size, false, id);
+	}
 	buffer->Read(*handle, sizeof(idx_t));
 
 	handle.reset();
@@ -491,8 +527,12 @@ void BufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data
 	return Allocator::Get(data.manager.db).FreeData(pointer, size);
 }
 
-data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	throw InternalException("FIXME: realloc not implemented for allocator realloc");
+data_ptr_t BufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+                                                 idx_t size) {
+	auto &data = (BufferAllocatorData &)*private_data;
+	data.manager.current_memory -= old_size;
+	data.manager.current_memory += size;
+	return Allocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
 }
 
 Allocator &BufferAllocator::Get(ClientContext &context) {

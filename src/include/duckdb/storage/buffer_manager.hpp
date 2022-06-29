@@ -82,7 +82,9 @@ public:
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
-	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit);
+	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
+	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
+	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue();
@@ -90,7 +92,7 @@ private:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(ManagedBuffer &buffer);
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id);
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr);
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
@@ -104,7 +106,8 @@ private:
 
 	static data_ptr_t BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
 	static void BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
-	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+	                                         idx_t size);
 
 private:
 	//! The database instance

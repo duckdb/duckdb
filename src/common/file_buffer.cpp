@@ -86,8 +86,9 @@ void FileBuffer::Construct(uint64_t bufsiz) {
 
 void FileBuffer::Resize(uint64_t bufsiz) {
 	D_ASSERT(type == FileBufferType::MANAGED_BUFFER);
+	auto old_size = malloced_size;
 	SetMallocedSize(bufsiz);
-	malloced_buffer = allocator.ReallocateData(malloced_buffer, malloced_size);
+	malloced_buffer = allocator.ReallocateData(malloced_buffer, old_size, malloced_size);
 	Construct(bufsiz);
 }
 

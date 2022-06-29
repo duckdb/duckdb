@@ -17,14 +17,19 @@ class DatabaseInstance;
 class ExecutionContext;
 class ThreadContext;
 
+struct AllocatorDebugInfo;
+
 struct PrivateAllocatorData {
-	virtual ~PrivateAllocatorData() {
-	}
+	PrivateAllocatorData();
+	virtual ~PrivateAllocatorData();
+
+	unique_ptr<AllocatorDebugInfo> debug_info;
 };
 
 typedef data_ptr_t (*allocate_function_ptr_t)(PrivateAllocatorData *private_data, idx_t size);
 typedef void (*free_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
-typedef data_ptr_t (*reallocate_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+typedef data_ptr_t (*reallocate_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+                                                idx_t size);
 
 class AllocatedData {
 public:
@@ -54,12 +59,12 @@ public:
 	DUCKDB_API Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
 	                     reallocate_function_ptr_t reallocate_function_p,
 	                     unique_ptr<PrivateAllocatorData> private_data);
-
-	DUCKDB_API Allocator &operator=(Allocator &&allocator) noexcept = default;
+	DUCKDB_API Allocator &operator=(Allocator &&allocator) noexcept = delete;
+	DUCKDB_API ~Allocator();
 
 	data_ptr_t AllocateData(idx_t size);
 	void FreeData(data_ptr_t pointer, idx_t size);
-	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t size);
+	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size);
 
 	unique_ptr<AllocatedData> Allocate(idx_t size) {
 		return make_unique<AllocatedData>(*this, AllocateData(size), size);
@@ -71,7 +76,8 @@ public:
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 		free(pointer);
 	}
-	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+	                                    idx_t size) {
 		return (data_ptr_t)realloc(pointer, size);
 	}
 	static Allocator &Get(ClientContext &context);
