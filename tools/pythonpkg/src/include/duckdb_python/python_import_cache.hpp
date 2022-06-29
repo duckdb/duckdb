@@ -33,24 +33,22 @@ public:
 	}
 
 public:
-	py::object &operator()(void);
+	py::handle operator()(void);
 	const string &Name() {
 		return name;
 	}
 
 protected:
-	py::object *LoadObject();
-
-protected:
 	//! Where to get the parent item from
 	PythonImportCacheItem &source;
 	//! The stored item
-	py::object *object;
+	PyObject *object;
 
 private:
-	py::object *AddCache(py::object object);
-	py::object *LoadModule();
-	py::object *LoadAttribute();
+	PyObject *AddCache(py::object object);
+	PyObject *LoadObject();
+	PyObject *LoadModule();
+	PyObject *LoadAttribute();
 
 private:
 	//! Name of the object
@@ -99,7 +97,7 @@ public:
 	DatetimeCacheItem datetime;
 
 public:
-	py::object *AddCache(py::object item);
+	PyObject *AddCache(py::object item);
 
 private:
 	vector<py::object> owned_objects;
@@ -113,7 +111,7 @@ private:
 // struct NdArrayCacheItem : public PythonImportCacheItem {
 // public:
 //	NdArrayCacheItem(PythonImportCacheItem& source, PythonImportCache& cache) : PythonImportCacheItem("ndarray", source,
-//cache), 		new_object("new_object", *this, cache)
+// cache), 		new_object("new_object", *this, cache)
 //	{}
 // public:
 //	PythonImportCacheItem new_object;
