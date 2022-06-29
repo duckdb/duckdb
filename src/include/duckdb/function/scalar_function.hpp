@@ -22,7 +22,7 @@ struct FunctionLocalState {
 	DUCKDB_API virtual ~FunctionLocalState();
 };
 
-enum FunctionNullHandling { NULL_IN_NULL_OUT, SPECIAL_HANDLING };
+enum class FunctionNullHandling : uint8_t { NULL_IN_NULL_OUT, SPECIAL_HANDLING };
 
 class Binder;
 class BoundFunctionExpression;
