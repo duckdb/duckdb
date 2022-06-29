@@ -12,7 +12,6 @@ src/Makevars.in
 ^tic\.R$
 ^_pkgdown\.yml$
 ^docs$
-build-*
 deploy-*
 CMakeLists.txt
 NEWS.md
