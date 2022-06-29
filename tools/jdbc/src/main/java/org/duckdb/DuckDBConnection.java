@@ -202,7 +202,7 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public String getSchema() throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return DuckDBNative.duckdb_jdbc_get_schema(conn_ref);
 	}
 
 	public void abort(Executor executor) throws SQLException {
