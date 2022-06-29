@@ -93,12 +93,12 @@ void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
 	Process(env);
 }
 
-static void task_execute(napi_env e, void *data) {
+static void TaskExecuteCallback(napi_env e, void *data) {
 	auto holder = (TaskHolder *)data;
 	holder->task->DoWork();
 }
 
-static void task_complete(napi_env e, napi_status status, void *data) {
+static void TaskCompleteCallback(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
 	holder->db->TaskComplete(e);
 	if (holder->task->callback.Value().IsFunction()) {
@@ -131,8 +131,8 @@ void Database::Process(Napi::Env env) {
 	holder->task = move(task);
 	holder->db = this;
 
-	napi_create_async_work(env, NULL, Napi::String::New(env, "duckdb.Database.Task"), task_execute, task_complete,
-	                       holder, &holder->request);
+	napi_create_async_work(env, nullptr, Napi::String::New(env, "duckdb.Database.Task"), TaskExecuteCallback,
+	                       TaskCompleteCallback, holder, &holder->request);
 
 	napi_queue_async_work(env, holder->request);
 }
@@ -157,7 +157,7 @@ Napi::Value Database::Serialize(const Napi::CallbackInfo &info) {
 }
 
 struct WaitTask : public Task {
-	WaitTask(Database &database_, Napi::Function callback_) : Task(database_, callback_) {
+	WaitTask(Database &database, Napi::Function callback) : Task(database, callback) {
 	}
 
 	void DoWork() override {
@@ -171,7 +171,7 @@ Napi::Value Database::Wait(const Napi::CallbackInfo &info) {
 }
 
 struct CloseTask : public Task {
-	CloseTask(Database &database_, Napi::Function callback_) : Task(database_, callback_) {
+	CloseTask(Database &database, Napi::Function callback) : Task(database, callback) {
 	}
 
 	void DoWork() override {
