@@ -2169,7 +2169,11 @@ public class TestDuckDBJDBC {
 
 		assertEquals(conn.getSchema(), "main");
 
-		conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:/alternate_schema");
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE SCHEMA alternate_schema;");
+			stmt.execute("SET search_path = \"alternate_schema\";");
+		}
+
 		assertEquals(conn.getSchema(), "alternate_schema");
 
 		conn.close();
