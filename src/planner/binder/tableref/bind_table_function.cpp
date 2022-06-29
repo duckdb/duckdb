@@ -1,21 +1,21 @@
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/binder.hpp"
+#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/tableref/bound_table_function.hpp"
-#include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/algorithm.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/tableref/bound_table_function.hpp"
 
 namespace duckdb {
 
@@ -192,6 +192,10 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
 		                                  table_function.function_info.get());
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
+		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
+			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
+			arrow_bind->external_dependency = move(ref.external_dependency);
+		}
 	}
 	if (return_types.size() != return_names.size()) {
 		throw InternalException(

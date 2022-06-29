@@ -171,6 +171,9 @@ void dump_seeds_ds(int t);
 #define MAX_SENT_LEN 256   /* max length of populated sentence */
 #define RNG_PER_SENT 27    /* max number of RNG calls per sentence */
 
+void init_text_pool PROTO((long bSize));
+void free_text_pool PROTO(());
+
 void dbg_text PROTO((char *t, int min, int max, int s));
 
 #ifdef DECLARER
