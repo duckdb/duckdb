@@ -56,6 +56,7 @@
 // right thing, so we use it.
 #define snprintf _snprintf
 #endif
+namespace duckdb{
 
 namespace google {
 namespace protobuf {
@@ -2477,3 +2478,4 @@ double NoLocaleStrtod(const char *str, char **endptr) {
 
 }  // namespace protobuf
 }  // namespace google
+} //namespace duckdb

@@ -88,6 +88,8 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &g
 	lstate.executor.Execute(input, sort);
 
 	// Sink the data into the local sort state
+	sort.Verify();
+	input.Verify();
 	local_sort_state.SinkChunk(sort, input);
 
 	// When sorting data reaches a certain size, we sort it

@@ -89,7 +89,28 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 			                      "dictionary, pfor, bitpacking or fsst");
 		}
 		return nullptr;
-	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
+	case duckdb_libpgquery::PG_CONSTR_FOREIGN: {
+		ForeignKeyInfo fk_info;
+		fk_info.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+		if (constraint->pktable->schemaname) {
+			fk_info.schema = constraint->pktable->schemaname;
+		} else {
+			fk_info.schema = "";
+		}
+		fk_info.table = constraint->pktable->relname;
+		vector<string> pk_columns, fk_columns;
+
+		fk_columns.emplace_back(column.Name().c_str());
+		if (constraint->pk_attrs) {
+			for (auto kc = constraint->pk_attrs->head; kc; kc = kc->next) {
+				pk_columns.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(kc->data.ptr_value)->val.str);
+			}
+		}
+		if (pk_columns.size() != fk_columns.size()) {
+			throw ParserException("The number of referencing and referenced columns for foreign keys must be the same");
+		}
+		return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, move(fk_info));
+	}
 	default:
 		throw NotImplementedException("Constraint not implemented!");
 	}

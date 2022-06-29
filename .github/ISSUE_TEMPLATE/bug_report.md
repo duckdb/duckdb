@@ -14,9 +14,16 @@ A short, clear and concise description of what the bug is.
 Steps to reproduce the behavior. Bonus points if those are only SQL queries.
 
 #### Environment (please complete the following information):
- - OS: [e.g. iOS]
+ - OS: (e.g. iOS)
  - DuckDB Version: [e.g. 22]
  - DuckDB Client: [e.g. Python]
+
+#### Identity Disclosure:
+ - Full Name: [e.g. John Doe]
+ - Affiliation: [e.g. Oracle]
+
+If the above is not given and is not obvious from your GitHub profile page, we might close your issue without further review. Please refer to the [reasoning behind this rule](https://berthub.eu/articles/posts/anonymous-help/) if you have questions.
+
 
 #### Before Submitting
 

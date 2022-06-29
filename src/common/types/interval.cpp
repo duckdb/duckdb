@@ -8,6 +8,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -285,6 +286,7 @@ int64_t Interval::GetNanoseconds(const interval_t &val) {
 }
 
 interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+	D_ASSERT(Timestamp::IsFinite(timestamp_1) && Timestamp::IsFinite(timestamp_2));
 	date_t date1, date2;
 	dtime_t time1, time2;
 
@@ -374,9 +376,15 @@ interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 }
 
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+	if (!Timestamp::IsFinite(timestamp_1) || !Timestamp::IsFinite(timestamp_2)) {
+		throw InvalidInputException("Cannot subtract infinite timestamps");
+	}
 	const auto us_1 = Timestamp::GetEpochMicroSeconds(timestamp_1);
 	const auto us_2 = Timestamp::GetEpochMicroSeconds(timestamp_2);
-	const auto delta_us = us_1 - us_2;
+	int64_t delta_us;
+	if (!TrySubtractOperator::Operation(us_1, us_2, delta_us)) {
+		throw ConversionException("Timestamp difference is out of bounds");
+	}
 	return FromMicro(delta_us);
 }
 

@@ -72,7 +72,7 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 
@@ -164,7 +164,7 @@ struct IsMovable
 //     // Only needs to be implemented if SpaceUsedExcludingSelf() is called.
 //     static int SpaceUsedLong(const Type&);
 //   };
-class PROTOBUF_EXPORT RepeatedPtrFieldBase {
+class  RepeatedPtrFieldBase {
  protected:
   constexpr RepeatedPtrFieldBase();
   explicit RepeatedPtrFieldBase(Arena* arena);
@@ -471,10 +471,10 @@ void GenericTypeHandler<std::string>::Merge(const std::string& from,
 // to allow proto2-lite (which includes this header) to be independent of
 // Message.
 template <>
-PROTOBUF_EXPORT Message* GenericTypeHandler<Message>::NewFromPrototype(
+ Message* GenericTypeHandler<Message>::NewFromPrototype(
     const Message* prototype, Arena* arena);
 template <>
-PROTOBUF_EXPORT Arena* GenericTypeHandler<Message>::GetOwningArena(
+ Arena* GenericTypeHandler<Message>::GetOwningArena(
     Message* value);
 
 class StringTypeHandler {
@@ -2003,12 +2003,12 @@ UnsafeArenaAllocatedRepeatedPtrFieldBackInserter(
       mutable_field);
 }
 
-extern template class PROTOBUF_EXPORT_TEMPLATE_DECLARE
+extern template class
     RepeatedPtrField<std::string>;
 
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_REPEATED_PTR_FIELD_H__
