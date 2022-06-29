@@ -282,7 +282,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_execute_arrow",    (DL_FUNC) &_duckdb_rapi_execute_arrow,    2},
     {"_duckdb_rapi_expr_constant",    (DL_FUNC) &_duckdb_rapi_expr_constant,    1},
  	{"_duckdb_rapi_get_substrait",     (DL_FUNC) &_duckdb_rapi_get_substrait,     2},
-{"_duckdb_rapi_prepare_substrait", (DL_FUNC) &_duckdb_rapi_prepare_substrait, 2},
+    {"_duckdb_rapi_prepare_substrait", (DL_FUNC) &_duckdb_rapi_prepare_substrait, 2},
     {"_duckdb_rapi_expr_function",    (DL_FUNC) &_duckdb_rapi_expr_function,    2},
     {"_duckdb_rapi_expr_reference",   (DL_FUNC) &_duckdb_rapi_expr_reference,   2},
     {"_duckdb_rapi_expr_set_alias",   (DL_FUNC) &_duckdb_rapi_expr_set_alias,   2},

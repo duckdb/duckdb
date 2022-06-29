@@ -1,5 +1,6 @@
 #' Query DuckDB using Substrait
-#' TODO document this
+#' Method for interpreting a Substrait BLOB plan as a DuckDB Query Plan
+#' It interprets and executes the query.
 #'
 #' @param conn A DuckDB connection, created by `dbConnect()`.
 #' @param query The Protobuf-encoded Substrait Query Plan. Qack!
@@ -20,7 +21,7 @@ duckdb_prepare_substrait <- function(conn, query, arrow = FALSE) {
 
 
 #' Get the Substrait plan for a SQL query
-#' TODO document this
+#' Transforms a SQL query into a raw vector containing the serialized Substrait query blob
 #'
 #' @param conn A DuckDB connection, created by `dbConnect()`.
 #' @param query The query string in SQL
