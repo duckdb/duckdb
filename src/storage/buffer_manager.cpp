@@ -525,7 +525,7 @@ private:
 		// check if we can truncate the file
 
 		// get the max_index in use right now
-		auto max_index_in_use = *indexes_in_use.rbegin();
+		auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin();
 		if (max_index_in_use < max_index) {
 			// max index in use is lower than the max_index
 			// truncate the file
