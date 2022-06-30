@@ -13,6 +13,7 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb_python/python_object_container.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -32,8 +33,8 @@ public:
 
 public:
 	LogicalType GetListType(py::handle &ele, bool &can_convert);
-	LogicalType DictToMap(py::handle &dict_values, bool &can_convert);
-	LogicalType DictToStruct(py::handle &dict_keys, py::handle &dict_values, idx_t size, bool &can_convert);
+	LogicalType DictToMap(const PyDictionary &dict, bool &can_convert);
+	LogicalType DictToStruct(const PyDictionary &dict, bool &can_convert);
 	LogicalType GetItemType(py::handle &ele, bool &can_convert);
 	bool Analyze(py::handle column);
 	LogicalType AnalyzedType() {

@@ -31,31 +31,51 @@ class TestResolveObjectColumns(object):
         converted_col = duckdb.query_df(df, "data", "SELECT * FROM data").df()
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    #def test_incorrect_struct_keys(self, duckdb_cursor):
-    #    x = pd.DataFrame(
-    #        [
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-    #            [{'a': 1, 'b': 3, 'c': 3, 'e': 7}], #'e' instead of 'd' as key
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
-    #        ]
-    #    )
-    #    with pytest.raises(Exception, match="Struct key on row 2 is incorrect, expected 'd' but encountered 'e'"):
-    #        converted_df = duckdb.query("SELECT * FROM x").df()
+    def test_incorrect_struct_keys(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'e': 7}], #'e' instead of 'd' as key
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
+            ]
+        )
+        converted_df = duckdb.query("SELECT * FROM x").df()
+        y = pd.DataFrame(
+            [
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'e'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+            ]
+        )
+        equal_df = duckdb.query("SELECT * FROM y").df()
+        pd.testing.assert_frame_equal(converted_df, equal_df)
 
-    #def test_incorrect_struct_key_amount(self, duckdb_cursor):
-    #    x = pd.DataFrame(
-    #        [
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-    #            [{'a': 1, 'b': 3, 'c': 3}],         #incorrect amount of keys
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-    #            [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
-    #        ]
-    #    )
-    #    with pytest.raises(Exception, match="Struct entries have differing amounts of fields"):
-    #        converted_df = duckdb.query("SELECT * FROM x").df()
+    def test_incorrect_struct_key_amount(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3}],         #incorrect amount of keys
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
+            ]
+        )
+        converted_df = duckdb.query("SELECT * FROM x").df()
+        y = pd.DataFrame(
+            [
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c'], 'value': [1, 3, 3]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+            ]
+        )
+        equal_df = duckdb.query("SELECT * FROM y").df()
+        pd.testing.assert_frame_equal(converted_df, equal_df)
 
     def test_struct_key_conversion(self, duckdb_cursor):
         x = pd.DataFrame(

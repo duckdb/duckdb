@@ -9,12 +9,25 @@
 
 namespace duckdb {
 
-bool DictionaryHasMapFormat(py::handle dict_values, idx_t len) {
-	if (len != 2) {
+PyDictionary::PyDictionary(py::object dict) {
+	keys = py::list(dict.attr("keys")());
+	values = py::list(dict.attr("values")());
+	len = py::len(keys);
+	this->dict = move(dict);
+}
+
+Value TransformListValue(py::handle ele);
+
+static Value EmptyMapValue() {
+	return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
+}
+
+bool DictionaryHasMapFormat(const PyDictionary &dict) {
+	if (dict.len != 2) {
 		return false;
 	}
-	auto keys = dict_values.attr("__getitem__")(0);
-	auto values = dict_values.attr("__getitem__")(1);
+	auto keys = dict.values.attr("__getitem__")(0);
+	auto values = dict.values.attr("__getitem__")(1);
 	// Dont check for 'py::list' to allow ducktyping
 	if (!py::hasattr(keys, "__getitem__") || !py::hasattr(keys, "__len__")) {
 		// throw std::runtime_error("Dictionary malformed, keys(index 0) found within 'dict.values' is not a list");
@@ -32,16 +45,59 @@ bool DictionaryHasMapFormat(py::handle dict_values, idx_t len) {
 	return true;
 }
 
-Value TransformDictionaryToMap(py::handle dict_values) {
-	auto keys = dict_values.attr("__getitem__")(0);
-	auto values = dict_values.attr("__getitem__")(1);
+vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type) {
+	vector<string> res;
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &struct_keys = StructType::GetChildTypes(type);
+		res.reserve(struct_keys.size());
+		for (idx_t i = 0; i < struct_keys.size(); i++) {
+			res.push_back(struct_keys[i].first);
+		}
+		return res;
+	}
+	res.reserve(size);
+	for (idx_t i = 0; i < size; i++) {
+		res.emplace_back(py::str(keys.attr("__getitem__")(i)));
+	}
+	return res;
+}
+
+Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
+	auto struct_keys = TransformStructKeys(dict.keys, dict.len, target_type);
+
+	child_list_t<Value> struct_values;
+	for (idx_t i = 0; i < dict.len; i++) {
+		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i));
+		struct_values.emplace_back(make_pair(move(struct_keys[i]), move(val)));
+	}
+	return Value::STRUCT(move(struct_values));
+}
+
+Value TransformStructFormatDictionaryToMap(const PyDictionary &dict) {
+	if (dict.len == 0) {
+		return EmptyMapValue();
+	}
+	auto keys = TransformListValue(dict.keys);
+	auto values = TransformListValue(dict.values);
+	return Value::MAP(move(keys), move(values));
+}
+
+Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
+	if (target_type.id() != LogicalTypeId::UNKNOWN && !DictionaryHasMapFormat(dict)) {
+		// dict == { 'k1': v1, 'k2': v2, ..., 'kn': vn }
+		return TransformStructFormatDictionaryToMap(dict);
+	}
+
+	auto keys = dict.values.attr("__getitem__")(0);
+	auto values = dict.values.attr("__getitem__")(1);
 
 	auto key_size = py::len(keys);
 	D_ASSERT(key_size == py::len(values));
 	if (key_size == 0) {
 		// dict == { 'key': [], 'value': [] }
-		return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
+		return EmptyMapValue();
 	}
+	// dict == { 'key': [ ... ], 'value' : [ ... ] }
 	auto key_list = TransformPythonValue(keys);
 	auto value_list = TransformPythonValue(values);
 	return Value::MAP(key_list, value_list);
@@ -67,7 +123,26 @@ Value TransformListValue(py::handle ele) {
 	return Value::LIST(element_type, values);
 }
 
-Value TransformPythonValue(py::handle ele) {
+Value TransformDictionary(const PyDictionary &dict) {
+	//! DICT -> MAP FORMAT
+	// keys() = [key, value]
+	// values() = [ [n keys] ], [ [n values] ]
+
+	//! DICT -> STRUCT FORMAT
+	// keys() = ['a', .., 'n']
+	// values() = [ val1, .., valn]
+	if (dict.len == 0) {
+		// dict == {}
+		return EmptyMapValue();
+	}
+
+	if (DictionaryHasMapFormat(dict)) {
+		return TransformDictionaryToMap(dict);
+	}
+	return TransformDictionaryToStruct(dict);
+}
+
+Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
@@ -126,31 +201,15 @@ Value TransformPythonValue(py::handle ele) {
 	} else if (py::isinstance<py::list>(ele)) {
 		return TransformListValue(ele);
 	} else if (py::isinstance<py::dict>(ele)) {
-		//! DICT -> MAP FORMAT
-		// keys() = [key, value]
-		// values() = [ [n keys] ], [ [n values] ]
-
-		//! DICT -> STRUCT FORMAT
-		// keys() = ['a', .., 'n']
-		// values() = [ val1, .., valn]
-		auto dict_values = py::list(ele.attr("values")());
-		auto value_size = py::len(dict_values);
-		if (value_size == 0) {
-			// dict == {}
-			return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
+		PyDictionary dict = PyDictionary(py::object(ele, true));
+		switch (target_type.id()) {
+		case LogicalTypeId::STRUCT:
+			return TransformDictionaryToStruct(dict, target_type);
+		case LogicalTypeId::MAP:
+			return TransformDictionaryToMap(dict, target_type);
+		default:
+			return TransformDictionary(dict);
 		}
-
-		if (DictionaryHasMapFormat(dict_values, value_size)) {
-			return TransformDictionaryToMap(dict_values);
-		}
-		auto dict_keys = py::list(ele.attr("keys")());
-		child_list_t<Value> struct_values;
-		for (idx_t i = 0; i < value_size; i++) {
-			auto key = string(py::str(dict_keys.attr("__getitem__")(i)));
-			auto val = TransformPythonValue(dict_values.attr("__getitem__")(i));
-			struct_values.emplace_back(make_pair(key, move(val)));
-		}
-		return Value::STRUCT(move(struct_values));
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return TransformPythonValue(ele.attr("tolist")());
 	} else {

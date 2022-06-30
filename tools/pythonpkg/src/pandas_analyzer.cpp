@@ -80,8 +80,8 @@ static LogicalType CheckTypeCompatibility(const LogicalType &left, const Logical
 			if (upgrade_possible) {
 				child_list_t<LogicalType> children;
 				// TODO: find a way to figure out actual type of the keys, not just the converted one
-				children.push_back(make_pair("key", LogicalType::VARCHAR));
-				children.push_back(make_pair("value", converted_value_type));
+				children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
+				children.push_back(make_pair("value", LogicalType::LIST(converted_value_type)));
 				return LogicalType::MAP(move(children));
 			}
 			compatible = false;
@@ -187,9 +187,9 @@ static bool VerifyStructValidity(vector<LogicalType> &structs) {
 	return true;
 }
 
-LogicalType PandasAnalyzer::DictToMap(py::handle &dict_values, bool &can_convert) {
-	auto keys = dict_values.attr("__getitem__")(0);
-	auto values = dict_values.attr("__getitem__")(1);
+LogicalType PandasAnalyzer::DictToMap(const PyDictionary &dict, bool &can_convert) {
+	auto keys = dict.values.attr("__getitem__")(0);
+	auto values = dict.values.attr("__getitem__")(1);
 
 	child_list_t<LogicalType> child_types;
 	auto key_type = GetListType(keys, can_convert);
@@ -207,17 +207,16 @@ LogicalType PandasAnalyzer::DictToMap(py::handle &dict_values, bool &can_convert
 }
 
 //! Python dictionaries don't allow duplicate keys, so we don't need to check this.
-LogicalType PandasAnalyzer::DictToStruct(py::handle &dict_keys, py::handle &dict_values, idx_t size,
-                                         bool &can_convert) {
+LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_convert) {
 	child_list_t<LogicalType> struct_children;
 
-	for (idx_t i = 0; i < size; i++) {
-		auto dict_key = dict_keys.attr("__getitem__")(i);
+	for (idx_t i = 0; i < dict.len; i++) {
+		auto dict_key = dict.keys.attr("__getitem__")(i);
 
 		//! Have to already transform here because the child_list needs a string as key
 		auto key = string(py::str(dict_key));
 
-		auto dict_val = dict_values.attr("__getitem__")(i);
+		auto dict_val = dict.values.attr("__getitem__")(i);
 		auto val = GetItemType(dict_val, can_convert);
 		struct_children.push_back(make_pair(key, move(val)));
 	}
@@ -281,18 +280,16 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance<py::list>(ele)) {
 		return GetListType(ele, can_convert);
 	} else if (py::isinstance<py::dict>(ele)) {
-		auto dict_keys = py::list(ele.attr("keys")());
-		auto dict_values = py::list(ele.attr("values")());
-		auto size = py::len(dict_values);
+		PyDictionary dict = PyDictionary(py::object(ele, true));
 		// Assuming keys and values are the same size
 
-		if (size == 0) {
+		if (dict.len == 0) {
 			return EmptyMap();
 		}
-		if (DictionaryHasMapFormat(dict_values, size)) {
-			return DictToMap(dict_values, can_convert);
+		if (DictionaryHasMapFormat(dict)) {
+			return DictToMap(dict, can_convert);
 		}
-		return DictToStruct(dict_keys, dict_values, size, can_convert);
+		return DictToStruct(dict, can_convert);
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		auto extended_type = GetPandasType(ele.attr("dtype"));
 		LogicalType ltype;

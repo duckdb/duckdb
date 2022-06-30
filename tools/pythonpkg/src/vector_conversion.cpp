@@ -142,7 +142,7 @@ void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t o
 		return;
 	}
 
-	auto val = TransformPythonValue(object);
+	auto val = TransformPythonValue(object, out.GetType());
 	// Check if the Value type is accepted for the LogicalType of Vector
 	out.SetValue(offset, val);
 }
