@@ -172,14 +172,15 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 	// cte_map
 	auto cte_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
-	unique_ptr<QueryNode> result;
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> new_map;
 	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
 		auto info = make_unique<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
 		info->query = SelectStatement::Deserialize(source);
-		result->cte_map.map[name] = move(info);
+		new_map[name] = move(info);
 	}
+	unique_ptr<QueryNode> result;
 	switch (type) {
 	case QueryNodeType::SELECT_NODE:
 		result = SelectNode::Deserialize(reader);
@@ -194,6 +195,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}
 	result->modifiers = move(modifiers);
+	result->cte_map.map = move(new_map);
 	reader.Finalize();
 	return result;
 }
