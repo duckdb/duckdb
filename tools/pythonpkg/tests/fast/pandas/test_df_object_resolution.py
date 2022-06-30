@@ -194,6 +194,55 @@ class TestResolveObjectColumns(object):
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
+    def test_list_correct(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                {'0': [5, 34, -245]}
+            ]
+        )
+        duckdb_col = duckdb.query("select [5, 34, -245] as '0'").df()
+        converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        pd.testing.assert_frame_equal(duckdb_col, converted_col)
+
+    def test_list_value_upgrade(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                {'0': ['5', 34, -245]}
+            ]
+        )
+        duckdb_col = duckdb.query("select ['5', '34', '-245'] as '0'").df()
+        converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        pd.testing.assert_frame_equal(duckdb_col, converted_col)
+
+    def test_list_column_value_upgrade(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [ [1, 25, 300] ],
+                [ [500, 345, 30] ],
+                [ [50, 'a', 67] ],
+            ]
+        )
+        x.rename(columns = {0 : 'a'}, inplace = True)
+        converted_col = duckdb.query("select * from x").df()
+        duckdb.query("""
+            CREATE TABLE tmp3(
+                a VARCHAR[]
+            );
+        """)
+        duckdb.query("""
+            INSERT INTO tmp3 VALUES (['1', '25', '300'])
+        """)
+        duckdb.query("""
+            INSERT INTO tmp3 VALUES (['500', '345', '30'])
+        """)
+        duckdb.query("""
+            INSERT INTO tmp3 VALUES (['50', 'a', '67'])
+        """)
+        duckdb_col = duckdb.query("select a from tmp3 AS '0'").df()
+        print(duckdb_col.columns)
+        print(converted_col.columns)
+        pd.testing.assert_frame_equal(converted_col, duckdb_col)
+
     def test_fallthrough_object_conversion(self, duckdb_cursor):
         x = pd.DataFrame(
             [
