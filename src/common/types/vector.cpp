@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/string_uncompressed.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -408,7 +409,10 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		case VectorType::FLAT_VECTOR:
 			finished = true;
 			break;
-			// dictionary: apply dictionary and forward to child
+		case VectorType::FSST_VECTOR:
+			finished = true;
+			break;
+		// dictionary: apply dictionary and forward to child
 		case VectorType::DICTIONARY_VECTOR: {
 			auto &sel_vector = DictionaryVector::SelVector(*vector);
 			auto &child = DictionaryVector::Child(*vector);
@@ -432,6 +436,27 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	if (!validity.RowIsValid(index)) {
 		return Value(vector->GetType());
 	}
+
+	if (vector->GetVectorType() == VectorType::FSST_VECTOR) {
+		if (vector->GetType().id() ==  LogicalTypeId::VARCHAR) {
+			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
+
+			auto str_compressed = ((string_t *)data)[index];
+			auto decompressed_string_size = fsst_decompress(
+			    FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+			    str_compressed.GetSize(),
+			    (unsigned char*)str_compressed.GetDataUnsafe(),
+			    StringUncompressed::STRING_BLOCK_LIMIT+1,
+			    &decompress_buffer[0]
+			);
+			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
+
+			return Value(string((char*)decompress_buffer, decompressed_string_size));
+		} else {
+			throw InternalException("FSST Vector with non-string datatype found!");
+		}
+	}
+
 	switch (vector->GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		return Value::BOOLEAN(((bool *)data)[index]);
