@@ -59,6 +59,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 		if (statament->type == StatementType::CREATE_STATEMENT) {
 			auto create_statement = (CreateStatement *)statament.get();
 			runner.has_temporary_element |= create_statement->info->temporary;
+			runner.has_sequency |= create_statement->info->type == CatalogType::SEQUENCE_ENTRY;
 		}
 		if (statament->type != StatementType::SELECT_STATEMENT) {
 			all_select = false;
@@ -73,7 +74,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 	}
 	if (!more_than_one_connection && !runner.has_temporary_element && !statements.empty() && !query_fail &&
 	    all_select && TestForceReload() && TestForceStorage() && !is_any_transaction_active &&
-	    connection->context->db->loaded_extensions.empty() && !runner.has_prepared_statement) {
+	    connection->context->db->loaded_extensions.empty() && !runner.has_prepared_statement && !runner.has_sequency) {
 		// We do a restart here to force the database to reload from disk
 		auto command = make_unique<RestartCommand>(runner);
 		// We must save the current configuration

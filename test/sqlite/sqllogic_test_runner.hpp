@@ -50,6 +50,7 @@ public:
 	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
 	bool has_prepared_statement = false;
 	bool has_temporary_element = false;
+	bool has_sequency = false;
 
 public:
 	void ExecuteFile(string script);

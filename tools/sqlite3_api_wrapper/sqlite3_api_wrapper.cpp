@@ -90,9 +90,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 	try {
 		pDb = new sqlite3();
 		DBConfig config;
-		config.access_mode = AccessMode::AUTOMATIC;
+		config.options.access_mode = AccessMode::AUTOMATIC;
 		if (flags & SQLITE_OPEN_READONLY) {
-			config.access_mode = AccessMode::READ_ONLY;
+			config.options.access_mode = AccessMode::READ_ONLY;
 		}
 		pDb->db = make_unique<DuckDB>(filename, &config);
 		pDb->con = make_unique<Connection>(*pDb->db);
