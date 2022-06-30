@@ -23,6 +23,8 @@ enum QueryNodeType : uint8_t {
 	RECURSIVE_CTE_NODE = 4
 };
 
+struct CommonTableExpressionInfo;
+
 class QueryNode {
 public:
 	explicit QueryNode(QueryNodeType type) : type(type) {
