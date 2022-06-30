@@ -31,6 +31,7 @@ bool QueryProfiler::IsDetailedEnabled() const {
 }
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
+	// EXPLAIN ANALYSE should not be outputted by the profiler
 	return is_explain_analyze ? ProfilerPrintFormat::NONE : ClientConfig::GetConfig(context).profiler_print_format;
 }
 
@@ -122,15 +123,7 @@ void QueryProfiler::EndQuery() {
 	auto automatic_print_format = GetPrintFormat();
 	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
-		// check if this query should be output based on the operator types
-		string query_info;
-		if (automatic_print_format == ProfilerPrintFormat::JSON) {
-			query_info = ToJSON();
-		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE) {
-			query_info = ToString();
-		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER) {
-			query_info = ToString(true);
-		}
+		string query_info = PrintAsString();
 		auto save_location = GetSaveLocation();
 		if (save_location.empty()) {
 			Printer::Print(query_info);
@@ -140,6 +133,22 @@ void QueryProfiler::EndQuery() {
 		}
 	}
 	this->is_explain_analyze = false;
+}
+string QueryProfiler::PrintAsString() const {
+	// Not calling GetPrintFormat to avoid analyze detection
+	const auto format = ClientConfig::GetConfig(context).profiler_print_format;
+	switch (format) {
+	case ProfilerPrintFormat::NONE:
+		return "";
+	case ProfilerPrintFormat::QUERY_TREE:
+		return ToString();
+	case ProfilerPrintFormat::JSON:
+		return ToJSON();
+	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
+		return ToString(true);
+	default:
+		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", format);
+	}
 }
 
 void QueryProfiler::StartPhase(string new_phase) {

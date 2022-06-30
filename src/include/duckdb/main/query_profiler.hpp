@@ -170,6 +170,11 @@ public:
 	DUCKDB_API void ToStream(std::ostream &str, bool print_optimizer_output = false) const;
 	DUCKDB_API void Print();
 
+	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
+	//! the return value is formatted based on the current print format (see GetPrintFormat()).
+	//! If the current print format is set to None, an empty string is returned.
+	DUCKDB_API string PrintAsString() const;
+
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
 
