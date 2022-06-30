@@ -24,14 +24,14 @@ class TestResolveObjectColumns(object):
         print(df_out)
         pd.testing.assert_frame_equal(df_expected_res, df_out)
 
-    def test_correct_struct(self, duckdb_cursor):
+    def test_struct_correct(self, duckdb_cursor):
         data = [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
         df = pd.DataFrame({'0': pd.Series(data=data)})
         duckdb_col = duckdb.query("SELECT {a: 1, b: 3, c: 3, d: 7} as '0'").df()
         converted_col = duckdb.query_df(df, "data", "SELECT * FROM data").df()
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    def test_incorrect_struct_keys(self, duckdb_cursor):
+    def test_map_fallback_different_keys(self, duckdb_cursor):
         x = pd.DataFrame(
             [
                 [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
@@ -54,7 +54,7 @@ class TestResolveObjectColumns(object):
         equal_df = duckdb.query("SELECT * FROM y").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
-    def test_incorrect_struct_key_amount(self, duckdb_cursor):
+    def test_map_fallback_incorrect_amount_of_keys(self, duckdb_cursor):
         x = pd.DataFrame(
             [
                 [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
@@ -76,6 +76,108 @@ class TestResolveObjectColumns(object):
         )
         equal_df = duckdb.query("SELECT * FROM y").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
+
+    def test_struct_value_upgrade(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 'string'}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
+            ]
+        )
+        y = pd.DataFrame(
+            [
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 'string'}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}]
+            ]
+        )
+        converted_df = duckdb.query("SELECT * FROM x").df()
+        equal_df = duckdb.query("SELECT * FROM y").df()
+        pd.testing.assert_frame_equal(converted_df, equal_df)
+
+    def test_map_fallback_value_upgrade(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 'test'}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
+            ]
+        )
+        y = pd.DataFrame(
+            [
+                [{'a': '1', 'b': '3', 'c': '3', 'd': 'test'}],
+                [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}],
+                [{'a': '1', 'b': '3', 'c': '3'}],
+                [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}],
+                [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}]
+            ]
+        )
+        converted_df = duckdb.query("SELECT * FROM x").df()
+        equal_df = duckdb.query("SELECT * FROM y").df()
+        pd.testing.assert_frame_equal(converted_df, equal_df)
+
+    def test_map_correct(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}]
+            ]
+        )
+        x.rename(columns = {0 : 'a'}, inplace = True)
+        converted_col = duckdb.query("select * from x as 'a'").df()
+        duckdb.query("""
+            CREATE TABLE tmp(
+                a MAP(VARCHAR, INTEGER)
+            );
+        """)
+        for _ in range(5):
+            duckdb.query("""
+                INSERT INTO tmp VALUES (MAP(['a', 'b', 'c', 'd'], [1, 3, 3, 7]))
+            """)
+        duckdb_col = duckdb.query("select a from tmp AS '0'").df()
+        print(duckdb_col.columns)
+        print(converted_col.columns)
+        pd.testing.assert_frame_equal(converted_col, duckdb_col)
+
+    def test_map_value_upgrade(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 'test']}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}]
+            ]
+        )
+        x.rename(columns = {0 : 'a'}, inplace = True)
+        converted_col = duckdb.query("select * from x").df()
+        duckdb.query("""
+            CREATE TABLE tmp(
+                a MAP(VARCHAR, VARCHAR)
+            );
+        """)
+        duckdb.query("""
+            INSERT INTO tmp VALUES (MAP(['a', 'b', 'c', 'd'], ['1', '3', '3', 'test']))
+        """)
+        for _ in range(4):
+            duckdb.query("""
+                INSERT INTO tmp VALUES (MAP(['a', 'b', 'c', 'd'], ['1', '3', '3', '7']))
+            """)
+        duckdb_col = duckdb.query("select a from tmp AS '0'").df()
+        print(duckdb_col.columns)
+        print(converted_col.columns)
+        pd.testing.assert_frame_equal(converted_col, duckdb_col)
+
 
     def test_struct_key_conversion(self, duckdb_cursor):
         x = pd.DataFrame(
