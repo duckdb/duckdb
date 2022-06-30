@@ -17,33 +17,33 @@ namespace duckdb {
 //! The ParserExtensionInfo holds static information relevant to the parser extension
 //! It is made available in the parse_function, and will be kept alive as long as the database system is kept alive
 struct ParserExtensionInfo {
-	DUCKDB_API virtual ~ParserExtensionInfo() {}
+	DUCKDB_API virtual ~ParserExtensionInfo() {
+	}
 };
 
 //===--------------------------------------------------------------------===//
 // Parse
 //===--------------------------------------------------------------------===//
-enum class ParserExtensionResultType : uint8_t {
-	PARSE_SUCCESSFUL,
-	DISPLAY_ORIGINAL_ERROR,
-	DISPLAY_EXTENSION_ERROR
-};
+enum class ParserExtensionResultType : uint8_t { PARSE_SUCCESSFUL, DISPLAY_ORIGINAL_ERROR, DISPLAY_EXTENSION_ERROR };
 
 //! The ParserExtensionParseData holds the result of a successful parse step
 //! It will be passed along to the subsequent plan function
 struct ParserExtensionParseData {
-	DUCKDB_API virtual ~ParserExtensionParseData() {}
+	DUCKDB_API virtual ~ParserExtensionParseData() {
+	}
 
 	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
 };
 
 struct ParserExtensionParseResult {
-	ParserExtensionParseResult() :
-		type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {}
-	ParserExtensionParseResult(string error_p) :
-		type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(move(error_p)) {}
-	ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p) :
-		type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(move(parse_data_p)) {}
+	ParserExtensionParseResult() : type(ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+	}
+	ParserExtensionParseResult(string error_p)
+	    : type(ParserExtensionResultType::DISPLAY_EXTENSION_ERROR), error(move(error_p)) {
+	}
+	ParserExtensionParseResult(unique_ptr<ParserExtensionParseData> parse_data_p)
+	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(move(parse_data_p)) {
+	}
 
 	//! Whether or not parsing was successful
 	ParserExtensionResultType type;
@@ -70,7 +70,8 @@ struct ParserExtensionPlanResult {
 	StatementReturnType return_type = StatementReturnType::NOTHING;
 };
 
-typedef ParserExtensionPlanResult (*plan_function_t)(ParserExtensionInfo *info, ClientContext &context, unique_ptr<ParserExtensionParseData> parse_data);
+typedef ParserExtensionPlanResult (*plan_function_t)(ParserExtensionInfo *info, ClientContext &context,
+                                                     unique_ptr<ParserExtensionParseData> parse_data);
 
 //===--------------------------------------------------------------------===//
 // ParserExtension
@@ -89,4 +90,4 @@ public:
 	shared_ptr<ParserExtensionInfo> parser_info;
 };
 
-}
+} // namespace duckdb
