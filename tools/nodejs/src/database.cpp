@@ -30,7 +30,7 @@ struct OpenTask : public Task {
 		try {
 			duckdb::DBConfig config;
 			if (read_only) {
-				config.access_mode = duckdb::AccessMode::READ_ONLY;
+				config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 			}
 			Get<Database>().database = duckdb::make_unique<duckdb::DuckDB>(filename, &config);
 			duckdb::ParquetExtension extension;

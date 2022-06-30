@@ -68,7 +68,7 @@ jobs:
 
 
  force-storage:
-    name: Force Storage
+    name: Force Storage and Reload
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -104,7 +104,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest "*" --force-storage
+      run: build/reldebug/test/unittest "*" --force-storage --force-reload
 
 
  linux-arrow:

@@ -6,6 +6,7 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "test_helpers.hpp"
 
 namespace duckdb {
 
@@ -89,6 +90,11 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 		connection->context->db->config.options = db_config_opt;
 		auto catalog_search_paths = client_data->catalog_search_path->GetSetPaths();
 		connection->context->client_data->catalog_search_path->Set(catalog_search_paths);
+		if (client_data->log_query_writer) {
+			connection->context->client_data->log_query_writer = make_unique<BufferedFileWriter>(
+			    FileSystem::GetFileSystem(*connection->context), client_data->log_query_writer->path, 1 << 1 | 1 << 5,
+			    connection->context->client_data->file_opener.get());
+		}
 		//		connection->context->client_data->prepared_statements = move(client_data->prepared_statements);
 
 		//		connection->context->client_data->catalog_search_path = move(client_data->catalog_search_path);
