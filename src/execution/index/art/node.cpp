@@ -121,22 +121,22 @@ void Node::InsertLeaf(Node *&node, uint8_t key, Node *new_node) {
 	}
 }
 
-void Node::Erase(Node *&node, idx_t pos) {
+void Node::Erase(Node *&node, idx_t pos, ART &art) {
 	switch (node->type) {
 	case NodeType::N4: {
-		Node4::Erase(node, pos);
+		Node4::Erase(node, pos, art);
 		break;
 	}
 	case NodeType::N16: {
-		Node16::Erase(node, pos);
+		Node16::Erase(node, pos, art);
 		break;
 	}
 	case NodeType::N48: {
-		Node48::Erase(node, pos);
+		Node48::Erase(node, pos, art);
 		break;
 	}
 	case NodeType::N256:
-		Node256::Erase(node, pos);
+		Node256::Erase(node, pos, art);
 		break;
 	default:
 		throw InternalException("Unrecognized leaf type for erase");

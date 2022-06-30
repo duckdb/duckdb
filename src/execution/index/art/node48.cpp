@@ -107,7 +107,7 @@ void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[child_index[pos]] = (uint64_t)node;
 }
 
-void Node48::Erase(Node *&node, int pos) {
+void Node48::Erase(Node *&node, int pos, ART &art) {
 	auto n = (Node48 *)(node);
 
 	if (!IsSwizzled(n->children[n->child_index[pos]])) {

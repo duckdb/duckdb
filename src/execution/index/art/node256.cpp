@@ -74,7 +74,7 @@ void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {
 	n->children[key_byte] = (uint64_t)child;
 }
 
-void Node256::Erase(Node *&node, int pos) {
+void Node256::Erase(Node *&node, int pos, ART &art) {
 	auto n = (Node256 *)(node);
 
 	if (!IsSwizzled(n->children[pos])) {

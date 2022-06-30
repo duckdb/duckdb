@@ -103,7 +103,7 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 	}
 }
 
-void Node4::Erase(Node *&node, int pos) {
+void Node4::Erase(Node *&node, int pos, ART &art) {
 	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
 	// erase the child and decrease the count
@@ -125,8 +125,7 @@ void Node4::Erase(Node *&node, int pos) {
 
 	// This is a one way node
 	if (n->count == 1) {
-		// FIXME need to get the swizzled
-		auto child_ref = (Node *)n->children_ptrs[0];
+		auto child_ref = n->GetChild(art, 0);
 		// concatenate prefixes
 		auto new_length = node->prefix_length + child_ref->prefix_length + 1;
 		// have to allocate space in our prefix array

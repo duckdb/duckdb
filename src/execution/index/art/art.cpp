@@ -438,7 +438,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 			leaf->Remove(row_id);
 			if (leaf->num_elements == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::Erase(node, pos);
+				Node::Erase(node, pos, *this);
 			}
 		} else {
 			// Recurse

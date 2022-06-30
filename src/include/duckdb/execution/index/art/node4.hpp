@@ -37,7 +37,7 @@ public:
 	//! Insert Leaf to the Node4
 	static void Insert(Node *&node, uint8_t key_byte, Node *new_child);
 	//! Remove Leaf from Node4
-	static void Erase(Node *&node, int pos);
+	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;

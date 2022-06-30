@@ -37,7 +37,7 @@ public:
 	static void Insert(Node *&node, uint8_t key_byte, Node *child);
 
 	//! Shrink to node 48
-	static void Erase(Node *&node, int pos);
+	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Serialize Node
 	std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
