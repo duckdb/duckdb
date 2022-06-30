@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+static bool UpgradeType(LogicalType &left, const LogicalType &right);
+
 static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 	if (a == b) {
 		return true;
@@ -34,36 +36,66 @@ static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 	return true;
 }
 
-//@return false if the two types are not logically compatible
-static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &right) {
+//@return potentially adjusted LogicalType of left
+static LogicalType CheckTypeCompatibility(const LogicalType &left, const LogicalType &right, bool &compatible) {
+	if (!compatible) {
+		return left;
+	}
 	if (!SameTypeRealm(left.id(), right.id())) {
-		return false;
+		compatible = false;
+		return left;
 	}
-	if (!(left.id() == LogicalTypeId::STRUCT && right.id() == left.id())) {
-		return true;
-	}
-	auto &left_children = StructType::GetChildTypes(left);
-	auto &right_children = StructType::GetChildTypes(right);
-	if (left_children.size() != right_children.size()) {
-		return false;
-	}
-	auto compare = CaseInsensitiveStringEquality();
-	for (idx_t i = 0; i < left_children.size(); i++) {
-		auto &left_child = left_children[i];
-		auto &right_child = right_children[i];
-		// keys in left and right don't match
-		if (!compare(left_child.first, right_child.first)) {
-			return false;
+	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
+		auto &left_children = StructType::GetChildTypes(left);
+		auto &right_children = StructType::GetChildTypes(right);
+		auto compare = CaseInsensitiveStringEquality();
+		//! Whether we want to upgrade this to map
+		bool upgrade = false;
+		//! Whether it's possible to upgrade
+		bool upgrade_possible = true;
+
+		if (left_children.size() != right_children.size()) {
+			upgrade = true;
 		}
-		if (!CheckTypeCompatibility(left_child.second, right_child.second)) {
-			return false;
+		LogicalType converted_value_type = LogicalType::SQLNULL;
+		for (idx_t i = 0; i < left_children.size(); i++) {
+			auto &left_child = left_children[i];
+			auto &right_child = right_children[i];
+			// keys in left and right don't match - upgrade to MAP
+			if (!compare(left_child.first, right_child.first)) {
+				upgrade = true;
+			}
+			// If values aren't compatible as structs, they wont be compatible as map either
+			(void)CheckTypeCompatibility(left_child.second, right_child.second, compatible);
+			if (!compatible) {
+				return left;
+			}
+			if (!UpgradeType(converted_value_type, left_child.second)) {
+				upgrade_possible = false;
+			}
+		}
+		// Struct is invalid, upgrade to map
+		if (upgrade) {
+			// All values are compatible with eachother
+			if (upgrade_possible) {
+				child_list_t<LogicalType> children;
+				// TODO: find a way to figure out actual type of the keys, not just the converted one
+				children.push_back(make_pair("key", LogicalType::VARCHAR));
+				children.push_back(make_pair("value", converted_value_type));
+				return LogicalType::MAP(move(children));
+			}
+			compatible = false;
+			return left;
 		}
 	}
-	return true;
+	compatible = true;
+	return left;
 }
 
 static bool UpgradeType(LogicalType &left, const LogicalType &right) {
-	if (!CheckTypeCompatibility(left, right)) {
+	bool compatible = true;
+	left = CheckTypeCompatibility(left, right, compatible);
+	if (!compatible) {
 		return false;
 	}
 	left = LogicalType::MaxLogicalType(left, right);
