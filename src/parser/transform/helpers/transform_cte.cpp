@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map) {
+void Transformer::TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause,
+                               unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map) {
 	// TODO: might need to update in case of future lawsuit
 	D_ASSERT(de_with_clause);
 
