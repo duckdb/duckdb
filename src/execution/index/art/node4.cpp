@@ -23,7 +23,7 @@ Node4::~Node4() {
 }
 
 void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
-	children_ptrs[pos] = (uint64_t)node;
+	AssignPointer(children_ptrs[pos], node);
 }
 
 idx_t Node4::GetChildPos(uint8_t k) {
@@ -84,7 +84,7 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 			}
 		}
 		n->key[pos] = key_byte;
-		n->children_ptrs[pos] = (uint64_t)new_child;
+		AssignPointer(n->children_ptrs[pos], new_child);
 		n->count++;
 	} else {
 		// Grow to Node16
@@ -93,7 +93,7 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 		CopyPrefix(node, new_node);
 		for (idx_t i = 0; i < 4; i++) {
 			new_node->key[i] = n->key[i];
-			new_node->children[i] = (uint64_t)n->children_ptrs[i];
+			new_node->children[i] = n->children_ptrs[i];
 			n->children_ptrs[i] = 0;
 		}
 		// Delete old node and replace it with new node
@@ -156,7 +156,7 @@ std::pair<idx_t, idx_t> Node4::Serialize(ART &art, duckdb::MetaBlockWriter &writ
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_ptr : children_ptrs) {
 		if (child_ptr) {
-			child_ptr = (uint64_t)GetChildSwizzled(art, child_ptr);
+			child_ptr = GetChildSwizzled(art, child_ptr);
 			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);

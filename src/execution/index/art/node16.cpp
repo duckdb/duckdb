@@ -66,7 +66,7 @@ idx_t Node16::GetMin() {
 }
 
 void Node16::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = (uint64_t)node;
+	AssignPointer(children[pos], node);
 }
 
 void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
@@ -85,7 +85,7 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 			}
 		}
 		n->key[pos] = key_byte;
-		n->children[pos] = (uint64_t)child;
+		AssignPointer(n->children[pos], child);
 		n->count++;
 	} else {
 		// Grow to Node48
@@ -109,7 +109,7 @@ std::pair<idx_t, idx_t> Node16::Serialize(ART &art, duckdb::MetaBlockWriter &wri
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_ptr : children) {
 		if (child_ptr) {
-			child_ptr = (uint64_t)GetChildSwizzled(art, child_ptr);
+			child_ptr = GetChildSwizzled(art, child_ptr);
 			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);

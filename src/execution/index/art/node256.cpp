@@ -50,7 +50,7 @@ idx_t Node256::GetMin() {
 }
 
 void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = (uint64_t)node;
+	AssignPointer(children[pos], node);
 }
 
 idx_t Node256::GetNextPos(idx_t pos) {
@@ -71,7 +71,7 @@ void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {
 	auto n = (Node256 *)(node);
 
 	n->count++;
-	n->children[key_byte] = (uint64_t)child;
+	AssignPointer(n->children[key_byte], child);
 }
 
 void Node256::Erase(Node *&node, int pos) {
@@ -103,7 +103,7 @@ std::pair<idx_t, idx_t> Node256::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 	vector<std::pair<idx_t, idx_t>> child_offsets;
 	for (auto &child_ptr : children) {
 		if (child_ptr) {
-			child_ptr = (uint64_t)GetChildSwizzled(art, child_ptr);
+			child_ptr = GetChildSwizzled(art, child_ptr);
 			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);

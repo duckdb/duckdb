@@ -34,11 +34,9 @@ uint64_t Node::GetChildSwizzled(ART &art, uint64_t pointer) {
 		// This means our pointer is not yet in memory, gotta deserialize this
 		// first we unset the bae
 		auto block_info = GetSwizzledBlockInfo(pointer);
-		return (uint64_t)Deserialize(art, block_info.first, block_info.second);
-
-	} else {
-		return pointer;
+		AssignPointer(pointer, Deserialize(art, block_info.first, block_info.second));
 	}
+	return pointer;
 }
 
 std::pair<idx_t, idx_t> Node::GetSwizzledBlockInfo(uint64_t pointer) {
@@ -140,6 +138,14 @@ void Node::Erase(Node *&node, idx_t pos) {
 		break;
 	default:
 		throw InternalException("Unrecognized leaf type for erase");
+	}
+}
+
+void Node::AssignPointer(uint64_t &to, Node *from) {
+	if (sizeof(from) == 4) {
+		to = (uint32_t)(size_t)from;
+	} else {
+		to = (uint64_t)from;
 	}
 }
 
