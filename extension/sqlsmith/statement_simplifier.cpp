@@ -123,21 +123,25 @@ void StatementSimplifier::Simplify(SetOperationNode &node) {
 	Simplify(*node.right);
 }
 
-void StatementSimplifier::Simplify(QueryNode &node) {
+void StatementSimplifier::Simplify(unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map) {
 	// remove individual CTEs
 	vector<string> cte_keys;
-	for (auto &kv : node.cte_map) {
+	for (auto &kv : cte_map) {
 		cte_keys.push_back(kv.first);
 	}
 	for (idx_t i = 0; i < cte_keys.size(); i++) {
-		auto n = move(node.cte_map[cte_keys[i]]);
-		node.cte_map.erase(cte_keys[i]);
+		auto n = move(cte_map[cte_keys[i]]);
+		cte_map.erase(cte_keys[i]);
 		Simplification();
-		node.cte_map[cte_keys[i]] = move(n);
+		cte_map[cte_keys[i]] = move(n);
 
 		// simplify individual ctes
-		Simplify(*node.cte_map[cte_keys[i]]->query->node);
+		Simplify(*cte_map[cte_keys[i]]->query->node);
 	}
+}
+
+void StatementSimplifier::Simplify(QueryNode &node) {
+	Simplify(node.cte_map);
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
 		Simplify((SelectNode &)node);
@@ -234,17 +238,21 @@ void StatementSimplifier::Simplify(SelectStatement &stmt) {
 }
 
 void StatementSimplifier::Simplify(InsertStatement &stmt) {
+	Simplify(stmt.cte_map);
 	Simplify(*stmt.select_statement);
 	SimplifyList(stmt.returning_list);
 }
 
 void StatementSimplifier::Simplify(DeleteStatement &stmt) {
+	Simplify(stmt.cte_map);
 	SimplifyOptional(stmt.condition);
 	SimplifyExpression(stmt.condition);
 	SimplifyList(stmt.using_clauses);
+	SimplifyList(stmt.returning_list);
 }
 
 void StatementSimplifier::Simplify(UpdateStatement &stmt) {
+	Simplify(stmt.cte_map);
 	if (stmt.from_table) {
 		Simplify(*stmt.from_table);
 	}
