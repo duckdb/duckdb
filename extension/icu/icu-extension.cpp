@@ -320,7 +320,7 @@ void ICUExtension::Load(DuckDB &db) {
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
-	config.set_variables["TimeZone"] = Value(tz_string);
+	config.options.set_variables["TimeZone"] = Value(tz_string);
 
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
@@ -337,7 +337,7 @@ void ICUExtension::Load(DuckDB &db) {
 	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);
 	UErrorCode status = U_ZERO_ERROR;
 	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
-	config.set_variables["Calendar"] = Value(cal->getType());
+	config.options.set_variables["Calendar"] = Value(cal->getType());
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(move(cal_names));

@@ -48,6 +48,8 @@ public:
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
 	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
+	bool has_prepared_statement = false;
+	bool has_temporary_element = false;
 
 public:
 	void ExecuteFile(string script);

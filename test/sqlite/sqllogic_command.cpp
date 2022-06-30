@@ -2,6 +2,10 @@
 #include "test_helper_extension.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 
@@ -47,14 +51,29 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 		query_fail = true;
 	}
 	bool all_select = true;
+
 	for (auto &statament : statements) {
+		if (statament->type == StatementType::PREPARE_STATEMENT) {
+			runner.has_prepared_statement = true;
+		}
+		if (statament->type == StatementType::CREATE_STATEMENT) {
+			auto create_statement = (CreateStatement *)statament.get();
+			runner.has_temporary_element |= create_statement->info->temporary;
+		}
 		if (statament->type != StatementType::SELECT_STATEMENT) {
 			all_select = false;
-			break;
 		}
 	}
-	if (!statements.empty() && !query_fail && all_select && TestForceReload() && TestForceStorage() &&
-	    !connection->HasActiveTransaction() && connection->context->db->loaded_extensions.empty()) {
+	bool is_any_transaction_active = false;
+	bool more_than_one_connection = connection->context->db->GetConnectionManager().connections.size() > 1;
+	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
+		if (conn.first->transaction.HasActiveTransaction()) {
+			is_any_transaction_active = true;
+		}
+	}
+	if (!more_than_one_connection && !runner.has_temporary_element && !statements.empty() && !query_fail &&
+	    all_select && TestForceReload() && TestForceStorage() && !is_any_transaction_active &&
+	    connection->context->db->loaded_extensions.empty() && !runner.has_prepared_statement) {
 		// We do a restart here to force the database to reload from disk
 		auto command = make_unique<RestartCommand>(runner);
 		// We must save the current configuration
@@ -62,10 +81,16 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 		DBConfigOptions db_config_opt = connection->context->db->config.options;
 		// We must reload all extensions afterwards
 		//		auto extensions = connection->context->db->loaded_extensions;
+		auto client_data = move(connection->context->client_data);
 		runner.ExecuteCommand(move(command));
-		connection = runner.con.get();
+		connection = CommandConnection();
 		connection->context->config = config;
 		connection->context->db->config.options = db_config_opt;
+		auto catalog_search_paths = client_data->catalog_search_path->GetSetPaths();
+		connection->context->client_data->catalog_search_path->Set(catalog_search_paths);
+		//		connection->context->client_data->prepared_statements = move(client_data->prepared_statements);
+
+		//		connection->context->client_data->catalog_search_path = move(client_data->catalog_search_path);
 		//		connection->context->db->loaded_extensions = extensions;
 		//		for (auto&extension:extensions){
 		//			connection->Query("LOAD " + extension);

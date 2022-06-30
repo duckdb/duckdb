@@ -344,7 +344,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	for (auto &column_id : info->column_ids) {
 		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(table_catalog->columns[column_id].GetName(),
 		                                                                    table_catalog->columns[column_id].GetType(),
-		                                                                    ColumnBinding(0, column_id)));
+		                                                                    ColumnBinding(0, key_nr)));
 
 		bound_expressions.push_back(
 		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].GetType(), key_nr++));

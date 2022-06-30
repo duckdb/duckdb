@@ -113,6 +113,8 @@ struct DBConfigOptions {
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
+	//! Database configuration variables as controlled by SET
+	case_insensitive_map_t<Value> set_variables;
 };
 struct DBConfig {
 	friend class DatabaseInstance;
@@ -128,8 +130,6 @@ public:
 	vector<ReplacementScan> replacement_scans;
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;
-	//! Database configuration variables as controlled by SET
-	case_insensitive_map_t<Value> set_variables;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
