@@ -57,11 +57,6 @@ typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
-struct ParserExtensionPlanData {
-	DUCKDB_API virtual ~ParserExtensionPlanData() {}
-};
-
-//! Input to plan_function_t
 struct ParserExtensionPlanResult {
 	//! The table function to execute
 	TableFunction function;
