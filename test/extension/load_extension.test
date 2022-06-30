@@ -17,9 +17,28 @@ statement error
 LOAD NULL;
 
 statement ok
-LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+LOAD 'build/debug/test/extension/loadable_extension_demo.duckdb_extension';
 
 query I
 SELECT hello('World');
 ----
 Hello, World
+
+query I
+QUACK QUACK QUACK
+----
+QUACK
+QUACK
+QUACK
+
+query I
+quACk QUaCk
+----
+QUACK
+QUACK
+
+statement error
+QUAC
+
+statement error
+QUACK NOT QUACK
