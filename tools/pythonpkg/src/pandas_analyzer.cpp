@@ -36,67 +36,76 @@ static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 	return true;
 }
 
-//@return potentially adjusted LogicalType of left
-static LogicalType CheckTypeCompatibility(const LogicalType &left, const LogicalType &right, bool &compatible) {
-	if (!compatible) {
-		return left;
-	}
-	if (!SameTypeRealm(left.id(), right.id())) {
-		compatible = false;
-		return left;
-	}
-	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
-		auto &left_children = StructType::GetChildTypes(left);
-		auto &right_children = StructType::GetChildTypes(right);
-		auto compare = CaseInsensitiveStringEquality();
-		//! Whether we want to upgrade this to map
-		bool upgrade = false;
-		//! Whether it's possible to upgrade
-		bool upgrade_possible = true;
+//@return Whether the two logicaltypes are compatible
+static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &right) {
+	return SameTypeRealm(left.id(), right.id());
+}
 
-		if (left_children.size() != right_children.size()) {
-			upgrade = true;
+struct StructToMapConvertData {
+	LogicalType map_value_type = LogicalType::SQLNULL;
+	bool is_valid_map = true;
+};
+
+//@return true if the struct is valid
+//@param valid_map Whether the format of the struct can be upgraded to map or not
+static bool IsStructColumnValid(const LogicalType &left, const LogicalType &right, StructToMapConvertData &data) {
+	//! Whether this is a valid struct
+	bool valid = true;
+
+	D_ASSERT(left.id() == LogicalTypeId::STRUCT && left.id() == right.id());
+
+	//! Child types of the two structs
+	auto &left_children = StructType::GetChildTypes(left);
+	auto &right_children = StructType::GetChildTypes(right);
+
+	if (left_children.size() != right_children.size()) {
+		valid = false;
+	}
+	//! Compare keys of struct case-insensitively
+	auto compare = CaseInsensitiveStringEquality();
+	for (idx_t i = 0; i < left_children.size(); i++) {
+		auto &left_child = left_children[i];
+		auto &right_child = right_children[i];
+
+		// keys in left and right don't match - upgrade to MAP
+		if (!compare(left_child.first, right_child.first)) {
+			valid = false;
 		}
-		LogicalType converted_value_type = LogicalType::SQLNULL;
-		for (idx_t i = 0; i < left_children.size(); i++) {
-			auto &left_child = left_children[i];
-			auto &right_child = right_children[i];
-			// keys in left and right don't match - upgrade to MAP
-			if (!compare(left_child.first, right_child.first)) {
-				upgrade = true;
-			}
-			// If values aren't compatible as structs, they wont be compatible as map either
-			(void)CheckTypeCompatibility(left_child.second, right_child.second, compatible);
-			if (!compatible) {
-				return left;
-			}
-			if (!UpgradeType(converted_value_type, left_child.second)) {
-				upgrade_possible = false;
-			}
+		// If values aren't compatible as structs, they wont be compatible as map either
+		if (!CheckTypeCompatibility(left_child.second, right_child.second)) {
+			data.is_valid_map = false;
+			return false;
 		}
-		// Struct is invalid, upgrade to map
-		if (upgrade) {
-			// All values are compatible with eachother
-			if (upgrade_possible) {
-				child_list_t<LogicalType> children;
-				// TODO: find a way to figure out actual type of the keys, not just the converted one
-				children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
-				children.push_back(make_pair("value", LogicalType::LIST(converted_value_type)));
-				return LogicalType::MAP(move(children));
-			}
-			compatible = false;
-			return left;
+		if (!UpgradeType(data.map_value_type, left_child.second)) {
+			data.is_valid_map = false;
+			//! Could still be a valid struct, so we don't return here
 		}
 	}
-	compatible = true;
-	return left;
+	return valid;
+}
+
+static LogicalType ConvertStructToMap(StructToMapConvertData &data) {
+	child_list_t<LogicalType> children;
+	// TODO: find a way to figure out actual type of the keys, not just the converted one
+	children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
+	children.push_back(make_pair("value", LogicalType::LIST(data.map_value_type)));
+	return LogicalType::MAP(move(children));
 }
 
 static bool UpgradeType(LogicalType &left, const LogicalType &right) {
-	bool compatible = true;
-	left = CheckTypeCompatibility(left, right, compatible);
+	bool compatible = CheckTypeCompatibility(left, right);
 	if (!compatible) {
 		return false;
+	}
+	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
+		StructToMapConvertData convert_data;
+		if (!IsStructColumnValid(left, right, convert_data)) {
+			if (convert_data.is_valid_map) {
+				left = ConvertStructToMap(convert_data);
+			} else {
+				return false;
+			}
+		}
 	}
 	left = LogicalType::MaxLogicalType(left, right);
 	return true;
