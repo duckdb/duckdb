@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 
 namespace duckdb {
 class ExpressionListRef;
