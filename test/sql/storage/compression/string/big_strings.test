@@ -23,10 +23,16 @@ INSERT INTO normal_string values (repeat('b', 3900));
 statement ok
 checkpoint
 
-query I
-SELECT compression FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+query III
+SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from normal_string
 ----
-Dictionary
+a	a	3900
+b	b	3900
+a	a	3900
+b	b	3900
+
+statement ok
+PRAGMA force_compression='uncompressed'
 
 # Big string, should disable dictionary compression
 statement ok
@@ -41,9 +47,18 @@ INSERT INTO big_string values (repeat('b', 8000));
 statement ok
 checkpoint
 
-query I
-SELECT compression FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+query III
+SELECT list_aggr(str_split(a,''),'min'), list_aggr(str_split(a,''),'min'), strlen(a)  from big_string
 ----
-Uncompressed
+a	a	8000
+b	b	8000
+a	a	8000
+b	b	8000
+
+statement ok
+DROP TABLE big_string;
+
+statement ok
+DROP TABLE normal_string;
 
 endloop

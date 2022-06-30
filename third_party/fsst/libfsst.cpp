@@ -375,7 +375,13 @@ static inline size_t compressSIMD(SymbolTable &symbolTable, u8* symbolBase, size
 
 // optimized adaptive *scalar* compression method
 static inline size_t compressBulk(SymbolTable &symbolTable, size_t nlines, size_t lenIn[], u8* strIn[], size_t size, u8* out, size_t lenOut[], u8* strOut[], bool noSuffixOpt, bool avoidBranch) {
-   u8 buf[512], *cur = NULL, *end =  NULL, *lim = out + size;
+   // TODO: PR this fix into main fsst REPO?
+   // - the issue is that for strings over the 512 buf size, the unaligned load will read past the end of the buf
+   //   due to the unaligned_load loading 64 bits, simply increasing the buffer size should be ok since the read word
+   //   is masked with 0xFFFF anyway
+   u8 buf[512 + 8];
+
+   u8 *cur = NULL, *end =  NULL, *lim = out + size;
    size_t curLine, suffixLim = symbolTable.suffixLim;
    u8 byteLim = symbolTable.nSymbols + symbolTable.zeroTerminated - symbolTable.lenHisto[0];
 
