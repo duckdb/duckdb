@@ -143,8 +143,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("limit", &DuckDBPyRelation::LimitDF, "Retrieve the first n rows from the Data.Frame df", py::arg("df"),
 	      py::arg("n"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("analyze_df", &DuckDBPyRelation::AnalyzeDF,
-	      "Scan Object Columns from the DF, when possible changes their type to a non-string type. ", py::arg("df"));
 	m.def("query_df", &DuckDBPyRelation::QueryDF,
 	      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
 	      "Data.Frame df",

@@ -22,4 +22,4 @@ public:
 	py::object obj;
 };
 
-} //namespace duckdb
+} // namespace duckdb

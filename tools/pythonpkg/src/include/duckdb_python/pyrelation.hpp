@@ -86,8 +86,6 @@ public:
 	static unique_ptr<DuckDBPyRelation> ProjectDf(const py::object &df, const string &expr,
 	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	static void AnalyzeDF(const py::object &df);
-
 	py::str GetAlias();
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);

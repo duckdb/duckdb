@@ -603,6 +603,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	auto res = make_shared<DuckDBPyConnection>();
 
 	DBConfig config;
+
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
 	}
@@ -623,6 +624,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		extra_data->registered_objects = &res->connection->context->external_dependencies;
 		cur_config.replacement_scans.emplace_back(ScanReplacement, move(extra_data));
 	}
+
+	auto &db_config = res->database->instance->config;
+	db_config.AddExtensionOption("analyze_sample_percentage",
+	                             "The percentage of rows to sample when analyzing a pandas object column.",
+	                             LogicalType::DOUBLE);
+	db_config.AddExtensionOption("analyze_sample_minimum",
+	                             "The minimum number of rows to sample when analyzing a pandas object column."
+	                             "Comes into effect only after 'analyze_sample_percentage'",
+	                             LogicalType::UBIGINT);
+	db_config.set_variables["analyze_sample_percentage"] = Value::DOUBLE(10.0);
+	db_config.set_variables["analyze_sample_minimum"] = Value::UBIGINT(100);
 
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);

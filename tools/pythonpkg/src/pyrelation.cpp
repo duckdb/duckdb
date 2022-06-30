@@ -618,8 +618,4 @@ py::list DuckDBPyRelation::ColumnTypes() {
 	return res;
 }
 
-void DuckDBPyRelation::AnalyzeDF(const py::object &df) {
-	VectorConversion::Analyze(df);
-}
-
 } // namespace duckdb
