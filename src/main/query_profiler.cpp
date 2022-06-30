@@ -31,8 +31,7 @@ bool QueryProfiler::IsDetailedEnabled() const {
 }
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
-	// EXPLAIN ANALYSE should not be outputted by the profiler
-	return is_explain_analyze ? ProfilerPrintFormat::NONE : ClientConfig::GetConfig(context).profiler_print_format;
+	return ClientConfig::GetConfig(context).profiler_print_format;
 }
 
 string QueryProfiler::GetSaveLocation() const {
@@ -120,9 +119,9 @@ void QueryProfiler::EndQuery() {
 		Finalize(*root);
 	}
 	this->running = false;
-	auto automatic_print_format = GetPrintFormat();
-	// print or output the query profiling after termination, if this is enabled
-	if (automatic_print_format != ProfilerPrintFormat::NONE) {
+	// print or output the query profiling after termination
+	// EXPLAIN ANALYSE should not be outputted by the profiler
+	if (IsEnabled() && !is_explain_analyze) {
 		string query_info = PrintAsString();
 		auto save_location = GetSaveLocation();
 		if (save_location.empty()) {
@@ -135,11 +134,8 @@ void QueryProfiler::EndQuery() {
 	this->is_explain_analyze = false;
 }
 string QueryProfiler::PrintAsString() const {
-	// Not calling GetPrintFormat to avoid analyze detection
-	const auto format = ClientConfig::GetConfig(context).profiler_print_format;
+	const auto format = GetPrintFormat();
 	switch (format) {
-	case ProfilerPrintFormat::NONE:
-		return "";
 	case ProfilerPrintFormat::QUERY_TREE:
 		return ToString();
 	case ProfilerPrintFormat::JSON:

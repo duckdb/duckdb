@@ -296,8 +296,6 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 		return Value();
 	}
 	switch (config.profiler_print_format) {
-	case ProfilerPrintFormat::NONE:
-		return Value("none");
 	case ProfilerPrintFormat::JSON:
 		return Value("json");
 	case ProfilerPrintFormat::QUERY_TREE:

@@ -172,7 +172,6 @@ public:
 
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
 	//! the return value is formatted based on the current print format (see GetPrintFormat()).
-	//! If the current print format is set to None, an empty string is returned.
 	DUCKDB_API string PrintAsString() const;
 
 	DUCKDB_API string ToJSON() const;
