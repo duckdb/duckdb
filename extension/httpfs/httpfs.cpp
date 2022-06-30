@@ -353,9 +353,9 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 		read_buffer = std::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
 	}
 
-	length = std::atoll(res->headers["Content-Length"].c_str());
+	length = std::stoll(res->get_header_value("Content-Length", 0));
 
-	auto last_modified = res->headers["Last-Modified"];
+	auto last_modified = res->get_header_value("Last-Modified", 0);
 	if (last_modified.empty()) {
 		return res;
 	}
