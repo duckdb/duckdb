@@ -6,6 +6,70 @@
 
 namespace duckdb {
 
+static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
+	if (a == b) {
+		return true;
+	}
+	if (a > b) {
+		return SameTypeRealm(b, a);
+	}
+	D_ASSERT(a < b);
+
+	// anything ANY and under can transform to anything
+	if (a <= LogicalTypeId::ANY) {
+		return true;
+	}
+	// Both a and b are not nested
+	if (b < LogicalTypeId::STRUCT) {
+		return true;
+	}
+	// Non-nested -> Nested is not possible
+	if (a < LogicalTypeId::STRUCT) {
+		return false;
+	}
+	// STRUCT -> LIST is not possible
+	if (b == LogicalTypeId::LIST) {
+		return false;
+	}
+	return true;
+}
+
+//@return false if the two types are not logically compatible
+static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &right) {
+	if (!SameTypeRealm(left.id(), right.id())) {
+		return false;
+	}
+	if (!(left.id() == LogicalTypeId::STRUCT && right.id() == left.id())) {
+		return true;
+	}
+	auto &left_children = StructType::GetChildTypes(left);
+	auto &right_children = StructType::GetChildTypes(right);
+	if (left_children.size() != right_children.size()) {
+		return false;
+	}
+	auto compare = CaseInsensitiveStringEquality();
+	for (idx_t i = 0; i < left_children.size(); i++) {
+		auto &left_child = left_children[i];
+		auto &right_child = right_children[i];
+		// keys in left and right don't match
+		if (!compare(left_child.first, right_child.first)) {
+			return false;
+		}
+		if (!CheckTypeCompatibility(left_child.second, right_child.second)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool UpgradeType(LogicalType &left, const LogicalType &right) {
+	if (!CheckTypeCompatibility(left, right)) {
+		return false;
+	}
+	left = LogicalType::MaxLogicalType(left, right);
+	return true;
+}
+
 static py::object GetItem(py::handle &column, idx_t index) {
 	return column.attr("__getitem__")(index);
 }
@@ -24,7 +88,9 @@ LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
 		if (!i) {
 			list_type = item_type;
 		} else {
-			list_type = LogicalType::MaxLogicalType(list_type, item_type);
+			if (!UpgradeType(list_type, item_type)) {
+				can_convert = false;
+			}
 		}
 		if (!can_convert) {
 			break;
@@ -260,10 +326,10 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 		auto next_item = GetItem(column, i);
 		auto next_item_type = GetItemType(next_item, can_convert);
 		types.push_back(next_item_type);
-		if (!can_convert) {
+
+		if (!can_convert || !UpgradeType(item_type, next_item_type)) {
 			return next_item_type;
 		}
-		item_type = LogicalType::MaxLogicalType(item_type, next_item_type);
 	}
 
 	if (item_type.id() == LogicalTypeId::STRUCT) {
