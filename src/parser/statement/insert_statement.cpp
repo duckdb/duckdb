@@ -11,11 +11,20 @@ InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other),
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
       columns(other.columns), table(other.table), schema(other.schema) {
+	for (auto &kv : other.cte_map) {
+		auto kv_info = make_unique<CommonTableExpressionInfo>();
+		for (auto &al : kv.second->aliases) {
+			kv_info->aliases.push_back(al);
+		}
+		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		cte_map[kv.first] = move(kv_info);
+	}
 }
 
 string InsertStatement::ToString() const {
 	string result;
-	result = "INSERT INTO ";
+	result = QueryNode::CTEToString(cte_map);
+	result += "INSERT INTO ";
 	if (!schema.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}

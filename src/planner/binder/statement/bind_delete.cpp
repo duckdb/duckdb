@@ -31,6 +31,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		properties.read_only = false;
 	}
 
+	// Add CTEs as bindable
+	for (auto &cte_it : stmt.cte_map) {
+		AddCTE(cte_it.first, cte_it.second.get());
+	}
+
 	// plan any tables from the various using clauses
 	if (!stmt.using_clauses.empty()) {
 		unique_ptr<LogicalOperator> child_operator;

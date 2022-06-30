@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -16,11 +17,20 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 	for (auto &expr : other.expressions) {
 		expressions.emplace_back(expr->Copy());
 	}
+	for (auto &kv : other.cte_map) {
+		auto kv_info = make_unique<CommonTableExpressionInfo>();
+		for (auto &al : kv.second->aliases) {
+			kv_info->aliases.push_back(al);
+		}
+		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		cte_map[kv.first] = move(kv_info);
+	}
 }
 
 string UpdateStatement::ToString() const {
 	string result;
-	result = "UPDATE ";
+	result = QueryNode::CTEToString(cte_map);
+	result += "UPDATE ";
 	result += table->ToString();
 	result += " SET ";
 	D_ASSERT(columns.size() == expressions.size());

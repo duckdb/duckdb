@@ -8,7 +8,7 @@
 
 namespace duckdb {
 
-string QueryNode::CTEToString() const {
+string QueryNode::CTEToString(const unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map) {
 	if (cte_map.empty()) {
 		return string();
 	}

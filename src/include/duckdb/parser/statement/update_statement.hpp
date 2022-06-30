@@ -26,6 +26,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> expressions;
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
+	//! CTEs
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
 
 protected:
 	UpdateStatement(const UpdateStatement &other);

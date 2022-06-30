@@ -22,6 +22,8 @@ public:
 	unique_ptr<TableRef> table;
 	vector<unique_ptr<TableRef>> using_clauses;
 	vector<unique_ptr<ParsedExpression>> returning_list;
+	//! CTEs
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
 
 protected:
 	DeleteStatement(const DeleteStatement &other);

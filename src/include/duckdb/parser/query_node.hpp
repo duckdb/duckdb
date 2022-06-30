@@ -54,7 +54,7 @@ public:
 	//! Deserializes a blob back into a QueryNode
 	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
-	string CTEToString() const;
+	static string CTEToString(const unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map);
 	string ResultModifiersToString() const;
 
 protected:
