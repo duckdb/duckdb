@@ -82,6 +82,8 @@ public:
 	static void InsertLeaf(Node *&node, uint8_t key, Node *new_node);
 	//! Erase entry from node
 	static void Erase(Node *&node, idx_t pos, ART &art);
+	//! Transforms from Node* to uint64_t
+	static void AssignPointer(uint64_t &to, Node *from);
 
 protected:
 	//! Copies the prefix from the source to the destination node
