@@ -46,7 +46,7 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -56,14 +56,14 @@ struct BitAndOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			mask.SetInvalid(idx);
 		} else {
@@ -72,7 +72,7 @@ struct BitAndOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
@@ -106,7 +106,7 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -116,14 +116,14 @@ struct BitOrOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			mask.SetInvalid(idx);
 		} else {
@@ -132,7 +132,7 @@ struct BitOrOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
@@ -166,7 +166,7 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			state->is_set = true;
 			state->value = input[idx];
@@ -176,14 +176,14 @@ struct BitXorOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		//  count is irrelevant
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set) {
 			mask.SetInvalid(idx);
 		} else {
@@ -192,7 +192,7 @@ struct BitXorOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;

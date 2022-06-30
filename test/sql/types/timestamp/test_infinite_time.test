@@ -288,3 +288,30 @@ FROM specials;
 1	1	1
 1	1	1
 0	0	0
+
+# Casts
+
+query III
+select ts::VARCHAR, tstz::VARCHAR, dt::VARCHAR FROM specials
+----
+infinity	infinity	infinity
+-infinity	-infinity	-infinity
+1970-01-01 00:00:00	1970-01-01 00:00:00+00	1970-01-01
+
+statement error
+select ts::TIME, tstz::TIME, dt::TIME FROM specials
+
+statement error
+select 'infinity'::TIME;
+
+# infinite subtract
+statement error
+select
+  subtract(
+    cast('infinity' as timestamp), timestamp '1970-01-01')
+
+statement error
+select
+  subtract(
+    timestamp '1970-01-01',
+    cast('-infinity' as timestamp))

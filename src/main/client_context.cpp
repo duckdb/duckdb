@@ -908,6 +908,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		} catch (std::exception &ex) {
 			results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
 		}
+		interrupted = false;
 	}
 	config.enable_optimizer = optimizer_enabled;
 
@@ -918,6 +919,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		try {
 			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
+			interrupted = false;
 			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
 		} // LCOV_EXCL_STOP
 	}

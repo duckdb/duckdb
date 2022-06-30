@@ -152,6 +152,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
 	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
+	AggregateInputData aggr_input_data(aggr.bind_info.get());
 
 	D_ASSERT(aggr.function.update);
 
@@ -209,7 +210,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 				// update the aggregate state(s)
 				Vector slice = Vector(child_vector, sel_vector, states_idx);
-				aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
@@ -225,12 +226,12 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
 		Vector slice = Vector(child_vector, sel_vector, states_idx);
-		aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+		aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 	}
 
 	if (IS_AGGR) {
 		// finalize all the aggregate states
-		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+		aggr.function.finalize(state_vector.state_vector, aggr_input_data, result, count, 0);
 
 	} else {
 		// finalize manually to use the map

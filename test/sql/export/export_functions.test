@@ -1,0 +1,27 @@
+# name: test/sql/export/export_functions.test
+# description: Test export functions
+# group: [export]
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE tbl(
+    d DATE DEFAULT CURRENT_DATE,
+    t TIME DEFAULT CURRENT_TIME,
+    ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cur_user VARCHAR DEFAULT CURRENT_USER,
+    "user" VARCHAR DEFAULT USER,
+    sess_user VARCHAR DEFAULT SESSION_USER,
+    cur_catalog VARCHAR DEFAULT CURRENT_CATALOG,
+    cur_schema VARCHAR DEFAULT CURRENT_SCHEMA
+);
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_special_functions' (FORMAT CSV)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_special_functions'

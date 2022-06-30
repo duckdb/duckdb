@@ -454,7 +454,7 @@ static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &inp
 }
 
 static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_chunk, const idx_t partition_cols) {
-	const vector<LogicalType> hash_types(1, LogicalTypeId::HASH);
+	const vector<LogicalType> hash_types(1, LogicalType::HASH);
 	hash_chunk.Initialize(hash_types);
 	hash_chunk.SetCardinality(sort_chunk);
 	auto &hash_vector = hash_chunk.data[0];

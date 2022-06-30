@@ -1,0 +1,23 @@
+# name: test/fuzzer/sqlsmith/struct_verify_crash.test
+# description: Fuzzer #52: AddressSanitizer error in duckdb::string_t::VerifyNull() string_type.cpp:30
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(array_of_structs STRUCT(a INTEGER, b VARCHAR)[]);
+
+statement ok
+INSERT INTO tbl VALUES([]);
+
+statement ok
+INSERT INTO tbl VALUES([{'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}]);
+
+query I
+SELECT EXISTS(SELECT ref_1.array_of_structs AS c1) FROM tbl AS ref_0, tbl AS ref_1
+----
+true
+true
+true
+true

@@ -124,6 +124,8 @@ public:
 	//! Verify that the Vector is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify(idx_t count);
+	//! Asserts that the CheckMapValidity returns MapInvalidReason::VALID
+	DUCKDB_API static void VerifyMap(Vector &map, const SelectionVector &sel, idx_t count);
 	DUCKDB_API static void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
 	DUCKDB_API void UTFVerify(idx_t count);
 	DUCKDB_API void UTFVerify(const SelectionVector &sel, idx_t count);

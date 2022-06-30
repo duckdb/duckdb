@@ -38,6 +38,7 @@ enum class RType {
 
 struct RApiTypes {
 	static RType DetectRType(SEXP v);
+	static string DetectLogicalType(const LogicalType &stype, const char *caller);
 	static Value SexpToValue(SEXP valsexp, R_len_t idx);
 	static SEXP ValueToSexp(Value &val, string &timezone_config);
 };

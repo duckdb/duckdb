@@ -1793,6 +1793,30 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_appender_string_with_emoji() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (str_value VARCHAR(10))");
+		String expectedValue = "䭔\uD86D\uDF7C🔥\uD83D\uDE1C";
+		try (DuckDBAppender appender = conn.createAppender("main", "data")) {
+			appender.beginRow();
+			appender.append(expectedValue);
+			appender.endRow();
+		}
+
+		ResultSet rs = stmt.executeQuery("SELECT str_value FROM data");
+		assertFalse(rs.isClosed());
+		assertTrue(rs.next());
+
+		String appendedValue = rs.getString(1);
+		assertEquals(appendedValue, expectedValue);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_appender_table_does_not_exist() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
