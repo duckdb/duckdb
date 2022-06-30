@@ -742,41 +742,7 @@ FN_OID_GET_ATTR2(mbedtls_oid_get_pkcs12_pbe_alg, oid_pkcs12_pbe_alg_t, pkcs12_pb
 int mbedtls_oid_get_numeric_string( char *buf, size_t size,
                             const mbedtls_asn1_buf *oid )
 {
-    int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
-    size_t i, n;
-    unsigned int value;
-    char *p;
-
-    p = buf;
-    n = size;
-
-    /* First byte contains first two dots */
-    if( oid->len > 0 )
-    {
-        ret = mbedtls_snprintf( p, n, "%d.%d", oid->p[0] / 40, oid->p[0] % 40 );
-        OID_SAFE_SNPRINTF;
-    }
-
-    value = 0;
-    for( i = 1; i < oid->len; i++ )
-    {
-        /* Prevent overflow in value. */
-        if( ( ( value << 7 ) >> 7 ) != value )
-            return( MBEDTLS_ERR_OID_BUF_TOO_SMALL );
-
-        value <<= 7;
-        value += oid->p[i] & 0x7F;
-
-        if( !( oid->p[i] & 0x80 ) )
-        {
-            /* Last byte */
-            ret = mbedtls_snprintf( p, n, ".%u", value );
-            OID_SAFE_SNPRINTF;
-            value = 0;
-        }
-    }
-
-    return( (int) ( size - n ) );
+   return MBEDTLS_ERR_ERROR_GENERIC_ERROR; // patched because it used to require printf which would fail on Windows
 }
 
 #endif /* MBEDTLS_OID_C */
