@@ -149,34 +149,34 @@ class TestResolveObjectColumns(object):
         print(converted_col.columns)
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
-    #def test_map_value_upgrade(self, duckdb_cursor):
-    #    x = pd.DataFrame(
-    #        [
-    #            [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 'test']}],
-    #            [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-    #            [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-    #            [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-    #            [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}]
-    #        ]
-    #    )
-    #    x.rename(columns = {0 : 'a'}, inplace = True)
-    #    converted_col = duckdb.query("select * from x").df()
-    #    duckdb.query("""
-    #        CREATE TABLE tmp(
-    #            a MAP(VARCHAR, VARCHAR)
-    #        );
-    #    """)
-    #    duckdb.query("""
-    #        INSERT INTO tmp VALUES (MAP(['a', 'b', 'c', 'd'], ['1', '3', '3', 'test']))
-    #    """)
-    #    for _ in range(4):
-    #        duckdb.query("""
-    #            INSERT INTO tmp VALUES (MAP(['a', 'b', 'c', 'd'], ['1', '3', '3', '7']))
-    #        """)
-    #    duckdb_col = duckdb.query("select a from tmp AS '0'").df()
-    #    print(duckdb_col.columns)
-    #    print(converted_col.columns)
-    #    pd.testing.assert_frame_equal(converted_col, duckdb_col)
+    def test_map_value_upgrade(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 'test']}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}]
+            ]
+        )
+        x.rename(columns = {0 : 'a'}, inplace = True)
+        converted_col = duckdb.query("select * from x").df()
+        duckdb.query("""
+            CREATE TABLE tmp2(
+                a MAP(VARCHAR, VARCHAR)
+            );
+        """)
+        duckdb.query("""
+            INSERT INTO tmp2 VALUES (MAP(['a', 'b', 'c', 'd'], ['1', '3', '3', 'test']))
+        """)
+        for _ in range(4):
+            duckdb.query("""
+                INSERT INTO tmp2 VALUES (MAP(['a', 'b', 'c', 'd'], ['1', '3', '3', '7']))
+            """)
+        duckdb_col = duckdb.query("select a from tmp2 AS '0'").df()
+        print(duckdb_col.columns)
+        print(converted_col.columns)
+        pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
 
     def test_struct_key_conversion(self, duckdb_cursor):

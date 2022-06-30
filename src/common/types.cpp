@@ -679,7 +679,8 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
 			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
 		}
-		return LogicalType::STRUCT(move(child_types));
+		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
+		                                        : LogicalType::MAP(move(child_types));
 	}
 	// types are equal but no extra specifier: just return the type
 	return left;
