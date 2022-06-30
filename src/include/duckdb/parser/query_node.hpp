@@ -25,6 +25,17 @@ enum QueryNodeType : uint8_t {
 
 struct CommonTableExpressionInfo;
 
+class CommonTableExpressionMap {
+public:
+	CommonTableExpressionMap();
+	CommonTableExpressionMap(const CommonTableExpressionMap &other);
+
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> map;
+
+public:
+	string CTEToString() const;
+};
+
 class QueryNode {
 public:
 	explicit QueryNode(QueryNodeType type) : type(type) {
@@ -37,7 +48,7 @@ public:
 	//! The set of result modifiers associated with this query node
 	vector<unique_ptr<ResultModifier>> modifiers;
 	//! CTEs (used by SelectNode and SetOperationNode)
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
+	CommonTableExpressionMap cte_map;
 
 	virtual const vector<unique_ptr<ParsedExpression>> &GetSelectList() const = 0;
 
@@ -56,7 +67,6 @@ public:
 	//! Deserializes a blob back into a QueryNode
 	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
-	static string CTEToString(const unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map);
 	string ResultModifiersToString() const;
 
 protected:

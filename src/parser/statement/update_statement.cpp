@@ -7,7 +7,7 @@ UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMEN
 }
 
 UpdateStatement::UpdateStatement(const UpdateStatement &other)
-    : SQLStatement(other), table(other.table->Copy()), columns(other.columns) {
+    : SQLStatement(other), table(other.table->Copy()), columns(other.columns), cte_map(other.cte_map) {
 	if (other.condition) {
 		condition = other.condition->Copy();
 	}
@@ -17,19 +17,11 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 	for (auto &expr : other.expressions) {
 		expressions.emplace_back(expr->Copy());
 	}
-	for (auto &kv : other.cte_map) {
-		auto kv_info = make_unique<CommonTableExpressionInfo>();
-		for (auto &al : kv.second->aliases) {
-			kv_info->aliases.push_back(al);
-		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
-		cte_map[kv.first] = move(kv_info);
-	}
 }
 
 string UpdateStatement::ToString() const {
 	string result;
-	result = QueryNode::CTEToString(cte_map);
+	result = cte_map.CTEToString();
 	result += "UPDATE ";
 	result += table->ToString();
 	result += " SET ";

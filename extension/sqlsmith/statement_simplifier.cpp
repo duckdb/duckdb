@@ -123,20 +123,20 @@ void StatementSimplifier::Simplify(SetOperationNode &node) {
 	Simplify(*node.right);
 }
 
-void StatementSimplifier::Simplify(unordered_map<string, unique_ptr<CommonTableExpressionInfo>> &cte_map) {
+void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
 	// remove individual CTEs
 	vector<string> cte_keys;
-	for (auto &kv : cte_map) {
+	for (auto &kv : cte.map) {
 		cte_keys.push_back(kv.first);
 	}
 	for (idx_t i = 0; i < cte_keys.size(); i++) {
-		auto n = move(cte_map[cte_keys[i]]);
-		cte_map.erase(cte_keys[i]);
+		auto n = move(cte.map[cte_keys[i]]);
+		cte.map.erase(cte_keys[i]);
 		Simplification();
-		cte_map[cte_keys[i]] = move(n);
+		cte.map[cte_keys[i]] = move(n);
 
 		// simplify individual ctes
-		Simplify(*cte_map[cte_keys[i]]->query->node);
+		Simplify(*cte.map[cte_keys[i]]->query->node);
 	}
 }
 

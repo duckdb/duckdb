@@ -11,7 +11,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
-#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -24,7 +24,7 @@ public:
 	vector<unique_ptr<TableRef>> using_clauses;
 	vector<unique_ptr<ParsedExpression>> returning_list;
 	//! CTEs
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
+	CommonTableExpressionMap cte_map;
 
 protected:
 	DeleteStatement(const DeleteStatement &other);

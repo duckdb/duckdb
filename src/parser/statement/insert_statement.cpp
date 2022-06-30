@@ -10,20 +10,12 @@ InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMEN
 InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other),
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
-      columns(other.columns), table(other.table), schema(other.schema) {
-	for (auto &kv : other.cte_map) {
-		auto kv_info = make_unique<CommonTableExpressionInfo>();
-		for (auto &al : kv.second->aliases) {
-			kv_info->aliases.push_back(al);
-		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
-		cte_map[kv.first] = move(kv_info);
-	}
+      columns(other.columns), table(other.table), schema(other.schema), cte_map(other.cte_map) {
 }
 
 string InsertStatement::ToString() const {
 	string result;
-	result = QueryNode::CTEToString(cte_map);
+	result = cte_map.CTEToString();
 	result += "INSERT INTO ";
 	if (!schema.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
@@ -71,7 +63,7 @@ ExpressionListRef *InsertStatement::GetValuesList() const {
 	if (node.where_clause || node.qualify || node.having) {
 		return nullptr;
 	}
-	if (!node.cte_map.empty()) {
+	if (!node.cte_map.map.empty()) {
 		return nullptr;
 	}
 	if (!node.groups.grouping_sets.empty()) {

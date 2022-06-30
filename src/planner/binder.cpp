@@ -85,7 +85,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	// first we visit the set of CTEs and add them to the bind context
-	for (auto &cte_it : node.cte_map) {
+	for (auto &cte_it : node.cte_map.map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
 	// now we bind the node

@@ -6,26 +6,19 @@ namespace duckdb {
 DeleteStatement::DeleteStatement() : SQLStatement(StatementType::DELETE_STATEMENT) {
 }
 
-DeleteStatement::DeleteStatement(const DeleteStatement &other) : SQLStatement(other), table(other.table->Copy()) {
+DeleteStatement::DeleteStatement(const DeleteStatement &other)
+    : SQLStatement(other), table(other.table->Copy()), cte_map(other.cte_map) {
 	if (other.condition) {
 		condition = other.condition->Copy();
 	}
 	for (const auto &using_clause : other.using_clauses) {
 		using_clauses.push_back(using_clause->Copy());
 	}
-	for (auto &kv : other.cte_map) {
-		auto kv_info = make_unique<CommonTableExpressionInfo>();
-		for (auto &al : kv.second->aliases) {
-			kv_info->aliases.push_back(al);
-		}
-		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
-		cte_map[kv.first] = move(kv_info);
-	}
 }
 
 string DeleteStatement::ToString() const {
 	string result;
-	result = QueryNode::CTEToString(cte_map);
+	result = cte_map.CTEToString();
 	result += "DELETE FROM ";
 	result += table->ToString();
 	if (!using_clauses.empty()) {
