@@ -96,13 +96,14 @@ struct DatetimeCacheItem : public PythonImportCacheItem {
 public:
 	DatetimeCacheItem(PythonImportCache &cache)
 	    : PythonImportCacheItem("datetime", cache), datetime("datetime", *this, cache), date("date", *this, cache),
-	      time("time", *this, cache) {
+	      time("time", *this, cache), timedelta("timedelta", *this, cache) {
 	}
 
 public:
 	PythonImportCacheItem datetime;
 	PythonImportCacheItem date;
 	PythonImportCacheItem time;
+	PythonImportCacheItem timedelta;
 };
 
 //===--------------------------------------------------------------------===//

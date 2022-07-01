@@ -4,6 +4,9 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 #include "datetime.h" //From Python
 
@@ -15,6 +18,78 @@ PyDictionary::PyDictionary(py::object dict) {
 	len = py::len(keys);
 	this->dict = move(dict);
 }
+
+struct PyTimeDelta {
+public:
+	PyTimeDelta(py::handle &obj) {
+		auto ptr = obj.ptr();
+		days = PyDateTime_TIMEDELTA_GET_DAYS(ptr);
+		seconds = PyDateTime_TIMEDELTA_GET_SECONDS(ptr);
+		microseconds = PyDateTime_TIMEDELTA_GET_MICROSECONDS(ptr);
+	}
+	uint64_t days;
+	uint32_t seconds;
+	uint32_t microseconds;
+
+public:
+	interval_t ToInterval() {
+		interval_t interval;
+
+		//! Timedelta stores any amount of seconds lower than a day only
+		D_ASSERT(seconds < Interval::SECS_PER_DAY);
+
+		//! Convert overflow of days to months
+		interval.months = days / Interval::DAYS_PER_MONTH;
+		days -= interval.months * Interval::DAYS_PER_MONTH;
+
+		microseconds += seconds * Interval::MICROS_PER_SEC;
+		interval.days = days;
+		interval.micros = microseconds;
+		return interval;
+	}
+};
+
+struct PyDateTime {
+public:
+	PyDateTime(py::handle &obj) : obj(obj) {
+		auto ptr = obj.ptr();
+		year = PyDateTime_GET_YEAR(ptr);
+		month = PyDateTime_GET_MONTH(ptr);
+		day = PyDateTime_GET_DAY(ptr);
+		hour = PyDateTime_DATE_GET_HOUR(ptr);
+		minute = PyDateTime_DATE_GET_MINUTE(ptr);
+		second = PyDateTime_DATE_GET_SECOND(ptr);
+		micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
+		auto timezone = PyDateTime_DATE_GET_TZINFO(ptr);
+		if (timezone != Py_None) {
+			AdjustToUTC(timezone);
+		}
+	}
+	py::handle &obj;
+	int32_t year;
+	int32_t month;
+	int32_t day;
+	int32_t hour;
+	int32_t minute;
+	int32_t second;
+	int32_t micros;
+
+public:
+	void AdjustToUTC(PyObject *timezone) {
+		auto tzinfo = py::object(timezone, true);
+		//! Get the timedelta of the difference
+		auto offset = tzinfo.attr("utcoffset")(obj);
+	}
+	date_t ToDate() {
+		return Date::FromDate(year, month, day);
+	}
+	dtime_t ToTime() {
+		return Time::FromTime(hour, minute, second, micros);
+	}
+	Value ToTimestamp() {
+		return Value::TIMESTAMP(ToDate(), ToTime());
+	}
+};
 
 Value TransformListValue(py::handle ele);
 
@@ -162,21 +237,18 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 		auto string_val = py::str(ele).cast<string>();
 		return Value::UUID(string_val);
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		auto hour = PyDateTime_DATE_GET_HOUR(ptr);
-		auto minute = PyDateTime_DATE_GET_MINUTE(ptr);
-		auto second = PyDateTime_DATE_GET_SECOND(ptr);
-		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-		return Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
+		auto datetime = PyDateTime(ele);
+		return datetime.ToTimestamp();
 	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		auto ptr = ele.ptr();
 		auto hour = PyDateTime_TIME_GET_HOUR(ptr);
 		auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
 		auto second = PyDateTime_TIME_GET_SECOND(ptr);
 		auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
+		auto tzinfo = PyDateTime_TIME_GET_TZINFO(ptr);
+		// if (tzinfo != Py_None) {
+		//	return Value::TIMETZ(Time::FromTime(hour, minute, second, micros));
+		// }
 		return Value::TIME(hour, minute, second, micros);
 	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		auto ptr = ele.ptr();
@@ -184,6 +256,9 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 		auto month = PyDateTime_GET_MONTH(ptr);
 		auto day = PyDateTime_GET_DAY(ptr);
 		return Value::DATE(year, month, day);
+	} else if (py::isinstance(ele, import_cache.datetime.timedelta())) {
+		auto timedelta = PyTimeDelta(ele);
+		return Value::INTERVAL(timedelta.ToInterval());
 	} else if (py::isinstance<py::str>(ele)) {
 		return ele.cast<string>();
 	} else if (py::isinstance<py::bytearray>(ele)) {

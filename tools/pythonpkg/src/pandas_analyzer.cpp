@@ -253,28 +253,24 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return LogicalType::VARCHAR; // Might be float64 actually? //or DECIMAL
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
-		// auto ptr = ele.ptr();
-		// auto year = PyDateTime_GET_YEAR(ptr);
-		// auto month = PyDateTime_GET_MONTH(ptr);
-		// auto day = PyDateTime_GET_DAY(ptr);
-		// auto hour = PyDateTime_DATE_GET_HOUR(ptr);
-		// auto minute = PyDateTime_DATE_GET_MINUTE(ptr);
-		// auto second = PyDateTime_DATE_GET_SECOND(ptr);
-		// auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-		// This probably needs to be more precise ..
+		auto ptr = ele.ptr();
+		auto second = PyDateTime_DATE_GET_SECOND(ptr);
+		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
+		if (micros != 0) {
+			return LogicalType::TIMESTAMP_MS;
+		}
+		if (second != 0) {
+			return LogicalType::TIMESTAMP_S;
+		}
 		return LogicalType::TIMESTAMP;
 	} else if (py::isinstance(ele, import_cache.datetime.time())) {
-		// auto ptr = ele.ptr();
-		// auto hour = PyDateTime_TIME_GET_HOUR(ptr);
-		// auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
-		// auto second = PyDateTime_TIME_GET_SECOND(ptr);
-		// auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
+		auto ptr = ele.ptr();
+		auto tzinfo = PyDateTime_TIME_GET_TZINFO(ptr);
+		if (tzinfo == Py_None) {
+			return LogicalType::TIME_TZ;
+		}
 		return LogicalType::TIME;
 	} else if (py::isinstance(ele, import_cache.datetime.date())) {
-		// auto ptr = ele.ptr();
-		// auto year = PyDateTime_GET_YEAR(ptr);
-		// auto month = PyDateTime_GET_MONTH(ptr);
-		// auto day = PyDateTime_GET_DAY(ptr);
 		return LogicalType::DATE;
 	} else if (py::isinstance<py::str>(ele)) {
 		return LogicalType::VARCHAR;
