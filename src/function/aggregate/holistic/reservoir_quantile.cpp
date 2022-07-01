@@ -77,16 +77,17 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *data, ValidityMask &mask,
+	                      idx_t idx) {
+		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
 		D_ASSERT(bind_data);
 		if (state->pos == 0) {
 			state->Resize(bind_data->sample_size);
@@ -99,7 +100,7 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.pos == 0) {
 			return;
 		}
@@ -133,15 +134,15 @@ struct ReservoirQuantileOperation {
 
 struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, TARGET_TYPE *target,
+	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, TARGET_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 		if (state->pos == 0) {
 			mask.SetInvalid(idx);
 			return;
 		}
 		D_ASSERT(state->v);
-		D_ASSERT(bind_data_p);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
 		auto v_t = state->v;
 		D_ASSERT(bind_data->quantiles.size() == 1);
 		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[0]);
@@ -193,15 +194,15 @@ template <class CHILD_TYPE>
 struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
+	static void Finalize(Vector &result_list, AggregateInputData &aggr_input_data, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
 		if (state->pos == 0) {
 			mask.SetInvalid(idx);
 			return;
 		}
 
-		D_ASSERT(bind_data_p);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
@@ -225,12 +226,12 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE>
-	static void FinalizeList(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, // NOLINT
+	static void FinalizeList(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, // NOLINT
 	                         idx_t offset) {
 		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-		D_ASSERT(bind_data_p);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
+		D_ASSERT(aggr_input_data.bind_data);
+		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
 
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -239,7 +240,7 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
 			auto &mask = ConstantVector::Validity(result);
-			Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[0], rdata, mask, 0);
+			Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -249,7 +250,7 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 			auto &mask = FlatVector::Validity(result);
 			for (idx_t i = 0; i < count; i++) {
-				Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i + offset);
+				Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
 			}
 		}
 

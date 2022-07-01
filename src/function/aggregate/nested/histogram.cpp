@@ -73,7 +73,7 @@ struct HistogramFunction {
 };
 
 template <class OP, class T, class MAP_TYPE>
-static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector,
+static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector,
                                     idx_t count) {
 
 	D_ASSERT(input_count == 1);
@@ -88,7 +88,7 @@ static void HistogramUpdateFunction(Vector inputs[], FunctionData *, idx_t input
 }
 
 template <class T, class MAP_TYPE>
-static void HistogramCombineFunction(Vector &state, Vector &combined, FunctionData *bind_data, idx_t count) {
+static void HistogramCombineFunction(Vector &state, Vector &combined, AggregateInputData &, idx_t count) {
 
 	VectorData sdata;
 	state.Orrify(count, sdata);
@@ -113,7 +113,8 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, FunctionDa
 }
 
 template <class OP, class T, class MAP_TYPE>
-static void HistogramFinalizeFunction(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
+static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count,
+                                      idx_t offset) {
 
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);

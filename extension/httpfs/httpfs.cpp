@@ -311,7 +311,7 @@ bool HTTPFileSystem::FileExists(const string &filename) {
 		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
 		auto &sfh = (HTTPFileHandle &)handle;
 		if (sfh.length == 0) {
-			throw std::runtime_error("not there this file");
+			return false;
 		}
 		return true;
 	} catch (...) {
