@@ -448,6 +448,13 @@ unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, File
 
 class TemporaryFileHandle {
 public:
+	struct TemporaryFileLock {
+		TemporaryFileLock(mutex &mutex) : lock(mutex) {
+		}
+
+		lock_guard<mutex> lock;
+	};
+
 	TemporaryFileHandle(DatabaseInstance &db, const string &temp_directory)
 	    : db(db), path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage.tmp")) {
 		max_index = 0;
@@ -457,11 +464,11 @@ public:
 		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
 		idx_t index;
 		{
-			lock_guard<mutex> lock(block_lock);
+			TemporaryFileLock lock(block_lock);
 			// open the file handle if it does not yet exist
-			CreateFileIfNotExists();
+			CreateFileIfNotExists(lock);
 			// fetch a new block index to write to
-			index = GetNewBlockIndex(buffer.id);
+			index = GetNewBlockIndex(lock, buffer.id);
 			used_blocks[buffer.id] = index;
 			indexes_in_use.insert(index);
 		}
@@ -476,24 +483,24 @@ public:
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
 		idx_t index;
 		{
-			lock_guard<mutex> lock(block_lock);
+			TemporaryFileLock lock(block_lock);
 			D_ASSERT(handle);
-			index = GetTempBlockIndex(id);
+			index = GetTempBlockIndex(lock, id);
 		}
 
 		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(index), Storage::BLOCK_SIZE, id,
 		                                          move(reusable_buffer));
 		{
 			// remove the block (and potentially truncate the temp file)
-			lock_guard<mutex> lock(block_lock);
+			TemporaryFileLock lock(block_lock);
 			D_ASSERT(handle);
-			RemoveTempBlockIndex(id, index);
+			RemoveTempBlockIndex(lock, id, index);
 		}
 		return buffer;
 	}
 
 private:
-	void CreateFileIfNotExists() {
+	void CreateFileIfNotExists(TemporaryFileLock &) {
 		if (handle) {
 			return;
 		}
@@ -502,7 +509,7 @@ private:
 		                               FileFlags::FILE_FLAGS_FILE_CREATE);
 	}
 
-	idx_t GetNewBlockIndex(block_id_t id) {
+	idx_t GetNewBlockIndex(TemporaryFileLock &, block_id_t id) {
 		if (free_indexes.empty()) {
 			return max_index++;
 		}
@@ -512,12 +519,12 @@ private:
 		return index;
 	}
 
-	idx_t GetTempBlockIndex(block_id_t id) {
+	idx_t GetTempBlockIndex(TemporaryFileLock &, block_id_t id) {
 		D_ASSERT(used_blocks.find(id) != used_blocks.end());
 		return used_blocks[id];
 	}
 
-	void RemoveTempBlockIndex(block_id_t block_id, idx_t index) {
+	void RemoveTempBlockIndex(TemporaryFileLock &, block_id_t block_id, idx_t index) {
 		// remove this block from the set of blocks
 		used_blocks.erase(block_id);
 		indexes_in_use.erase(index);
@@ -530,7 +537,7 @@ private:
 			// max index in use is lower than the max_index
 			// truncate the file
 			auto &fs = FileSystem::GetFileSystem(db);
-			max_index = max_index_in_use;
+			max_index = max_index_in_use + 1;
 			fs.Truncate(*handle, GetPositionInFile(max_index + 1));
 			// we can remove any free_indexes that are larger than the current max_index
 			while (!free_indexes.empty()) {
