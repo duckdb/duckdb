@@ -461,16 +461,89 @@ unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, File
 }
 
 struct TemporaryFileIndex {
+	TemporaryFileIndex(idx_t file_index = DConstants::INVALID_INDEX, idx_t block_index = DConstants::INVALID_INDEX)
+	    : file_index(file_index), block_index(block_index) {
+	}
+
 	idx_t file_index;
 	idx_t block_index;
+
+public:
+	bool IsValid() {
+		return block_index != DConstants::INVALID_INDEX;
+	}
+};
+
+struct BlockIndexManager {
+	BlockIndexManager() : max_index(0) {
+	}
+
+public:
+	//! Obtains a new block index from the index manager
+	idx_t GetNewBlockIndex() {
+		auto index = GetNewBlockIndexInternal();
+		indexes_in_use.insert(index);
+		return index;
+	}
+
+	//! Removes an index from the block manager
+	//! Returns true if the max_index has been altered
+	bool RemoveIndex(idx_t index) {
+		// remove this block from the set of blocks
+		indexes_in_use.erase(index);
+		free_indexes.insert(index);
+		// check if we can truncate the file
+
+		// get the max_index in use right now
+		auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin();
+		if (max_index_in_use < max_index) {
+			// max index in use is lower than the max_index
+			// reduce the max_index
+			max_index = max_index_in_use + 1;
+			// we can remove any free_indexes that are larger than the current max_index
+			while (!free_indexes.empty()) {
+				auto max_entry = *free_indexes.rbegin();
+				if (max_entry < max_index) {
+					break;
+				}
+				free_indexes.erase(max_entry);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	idx_t GetMaxIndex() {
+		return max_index;
+	}
+
+	bool HasFreeBlocks() {
+		return !free_indexes.empty();
+	}
+
+private:
+	idx_t GetNewBlockIndexInternal() {
+		if (free_indexes.empty()) {
+			return max_index++;
+		}
+		auto entry = free_indexes.begin();
+		auto index = *entry;
+		free_indexes.erase(entry);
+		return index;
+	}
+
+	idx_t max_index;
+	set<idx_t> free_indexes;
+	set<idx_t> indexes_in_use;
 };
 
 class TemporaryFileHandle {
+	constexpr static idx_t MAX_ALLOWED_INDEX = 4000;
+
 public:
 	TemporaryFileHandle(DatabaseInstance &db, const string &temp_directory, idx_t index)
 	    : db(db), file_index(index), path(FileSystem::GetFileSystem(db).JoinPath(
-	                                     temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")),
-	      max_index(0) {
+	                                     temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")) {
 	}
 
 public:
@@ -482,20 +555,22 @@ public:
 	};
 
 public:
-	TemporaryFileIndex WriteTemporaryBuffer(ManagedBuffer &buffer) {
-		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
-		TemporaryFileIndex index;
-		index.file_index = file_index;
-		{
-			TemporaryFileLock lock(file_lock);
-			// open the file handle if it does not yet exist
-			CreateFileIfNotExists(lock);
-			// fetch a new block index to write to
-			index.block_index = GetNewBlockIndex(lock, buffer.id);
-			indexes_in_use.insert(index.block_index);
+	TemporaryFileIndex TryGetBlockIndex() {
+		TemporaryFileLock lock(file_lock);
+		if (index_manager.GetMaxIndex() >= MAX_ALLOWED_INDEX && index_manager.HasFreeBlocks()) {
+			// file is at capacity
+			return TemporaryFileIndex();
 		}
+		// open the file handle if it does not yet exist
+		CreateFileIfNotExists(lock);
+		// fetch a new block index to write to
+		auto block_index = index_manager.GetNewBlockIndex();
+		return TemporaryFileIndex(file_index, block_index);
+	}
+
+	void WriteTemporaryFile(ManagedBuffer &buffer, TemporaryFileIndex index) {
+		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
 		buffer.Write(*handle, GetPositionInFile(index.block_index));
-		return index;
 	}
 
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, idx_t block_index,
@@ -511,6 +586,19 @@ public:
 		return buffer;
 	}
 
+	bool DeleteIfEmpty() {
+		TemporaryFileLock lock(file_lock);
+		if (index_manager.GetMaxIndex() > 0) {
+			// there are still blocks in this file
+			return false;
+		}
+		// the file is empty: delete it
+		handle.reset();
+		auto &fs = FileSystem::GetFileSystem(db);
+		fs.RemoveFile(path);
+		return true;
+	}
+
 private:
 	void CreateFileIfNotExists(TemporaryFileLock &) {
 		if (handle) {
@@ -521,38 +609,14 @@ private:
 		                               FileFlags::FILE_FLAGS_FILE_CREATE);
 	}
 
-	idx_t GetNewBlockIndex(TemporaryFileLock &, block_id_t id) {
-		if (free_indexes.empty()) {
-			return max_index++;
-		}
-		auto entry = free_indexes.begin();
-		auto index = *entry;
-		free_indexes.erase(entry);
-		return index;
-	}
-
 	void RemoveTempBlockIndex(TemporaryFileLock &, idx_t index) {
-		// remove this block from the set of blocks
-		indexes_in_use.erase(index);
-		free_indexes.insert(index);
-		// check if we can truncate the file
-
-		// get the max_index in use right now
-		auto max_index_in_use = indexes_in_use.empty() ? 0 : *indexes_in_use.rbegin();
-		if (max_index_in_use < max_index) {
-			// max index in use is lower than the max_index
-			// truncate the file
+		// remove the block index from the index manager
+		if (index_manager.RemoveIndex(index)) {
+			// the max_index that is currently in use has decreased
+			// as a result we can truncate the file
+			auto max_index = index_manager.GetMaxIndex();
 			auto &fs = FileSystem::GetFileSystem(db);
-			max_index = max_index_in_use + 1;
 			fs.Truncate(*handle, GetPositionInFile(max_index + 1));
-			// we can remove any free_indexes that are larger than the current max_index
-			while (!free_indexes.empty()) {
-				auto max_entry = *free_indexes.rbegin();
-				if (max_entry < max_index) {
-					break;
-				}
-				free_indexes.erase(max_entry);
-			}
 		}
 	}
 
@@ -566,9 +630,7 @@ private:
 	idx_t file_index;
 	string path;
 	mutex file_lock;
-	idx_t max_index;
-	set<idx_t> free_indexes;
-	set<idx_t> indexes_in_use;
+	BlockIndexManager index_manager;
 };
 
 class TemporaryFileManager {
@@ -587,8 +649,35 @@ public:
 
 	void WriteTemporaryBuffer(ManagedBuffer &buffer) {
 		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
-		// FIXME: pick a file, or create a new file
-		// write to file and add to used blocks
+		TemporaryFileIndex index;
+		TemporaryFileHandle *handle = nullptr;
+
+		{
+			TemporaryManagerLock lock(manager_lock);
+			// first check if we can write to an open existing file
+			for (auto &entry : files) {
+				auto &temp_file = entry.second;
+				index = temp_file->TryGetBlockIndex();
+				if (index.IsValid()) {
+					handle = entry.second.get();
+					break;
+				}
+			}
+			if (!handle) {
+				// no existing handle to write to; we need to create & open a new file
+				auto new_file_index = index_manager.GetNewBlockIndex();
+				auto new_file = make_unique<TemporaryFileHandle>(db, temp_directory, new_file_index);
+				handle = new_file.get();
+				files[new_file_index] = move(new_file);
+
+				index = handle->TryGetBlockIndex();
+			}
+			D_ASSERT(used_blocks.find(buffer.id) == used_blocks.end());
+			used_blocks[buffer.id] = index;
+		}
+		D_ASSERT(handle);
+		D_ASSERT(index.IsValid());
+		handle->WriteTemporaryFile(buffer, index);
 	}
 
 	bool HasTemporaryBuffer(block_id_t block_id) {
@@ -598,31 +687,50 @@ public:
 
 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
 		TemporaryFileIndex index;
+		TemporaryFileHandle *handle;
 		{
 			TemporaryManagerLock lock(manager_lock);
 			index = GetTempBlockIndex(lock, id);
+			handle = GetFileHandle(lock, index.file_index);
 		}
-		auto buffer = files[index.file_index].ReadTemporaryBuffer(id, index.block_index, move(reusable_buffer));
+		auto buffer = handle->ReadTemporaryBuffer(id, index.block_index, move(reusable_buffer));
 		{
-			// remove the block (and potentially truncate the temp file)
+			// remove the block (and potentially erase the temp file)
 			TemporaryManagerLock lock(manager_lock);
 			used_blocks.erase(id);
+			if (handle->DeleteIfEmpty()) {
+				EraseFileHandle(lock, index.file_index);
+			}
 		}
 		return buffer;
 	}
 
 private:
+	TemporaryFileHandle *GetFileHandle(TemporaryManagerLock &, idx_t index) {
+		return files[index].get();
+	}
+
 	TemporaryFileIndex GetTempBlockIndex(TemporaryManagerLock &, block_id_t id) {
 		D_ASSERT(used_blocks.find(id) != used_blocks.end());
 		return used_blocks[id];
 	}
 
+	void EraseFileHandle(TemporaryManagerLock &, idx_t file_index) {
+		files.erase(file_index);
+		index_manager.RemoveIndex(file_index);
+	}
+
 private:
 	DatabaseInstance &db;
-	vector<TemporaryFileHandle> files;
 	mutex manager_lock;
+	//! The temporary directory
 	string temp_directory;
+	//! The set of active temporary file handles
+	unordered_map<idx_t, unique_ptr<TemporaryFileHandle>> files;
+	//! map of block_id -> temporary file position
 	unordered_map<block_id_t, TemporaryFileIndex> used_blocks;
+	//! Manager of in-use temporary file indexes
+	BlockIndexManager index_manager;
 };
 
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
