@@ -326,7 +326,7 @@ int main(int argc, char **argv) {
 		logfile.open(logfile_name, std::ios_base::app);
 	}
 
-	config.maximum_memory = 10737418240;
+	config.options.maximum_memory = 10737418240;
 
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
 
