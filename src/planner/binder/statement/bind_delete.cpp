@@ -32,9 +32,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	}
 
 	// Add CTEs as bindable
-	for (auto &cte_it : stmt.cte_map.map) {
-		AddCTE(cte_it.first, cte_it.second.get());
-	}
+	AddCTEMap(stmt.cte_map);
 
 	// plan any tables from the various using clauses
 	if (!stmt.using_clauses.empty()) {

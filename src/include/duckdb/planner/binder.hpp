@@ -17,6 +17,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
@@ -288,6 +289,7 @@ private:
 	string RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *current_set, const string &column_name,
 	                            const string &join_side, UsingColumnSet *new_set);
 
+	void AddCTEMap(CommonTableExpressionMap &cte_map);
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder
