@@ -411,48 +411,103 @@ void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct FSSTScanState : public StringScanState {
+	FSSTScanState() {
+		ResetStoredDelta();
+	}
+
 	buffer_ptr<fsst_decoder_t> fsst_decoder;
 	bitpacking_width_t current_width;
 
 	// To speed up delta decoding we store the last index
-	uint32_t last_known_index = 0;
-	uint32_t last_known_row = 0;
-	bool last_known_isset = false;
+	uint32_t last_known_index;
+	int64_t last_known_row;
+
+	void StoreLastDelta(uint32_t value, int64_t row) {
+		last_known_index = value;
+		last_known_row = row;
+	}
+	void ResetStoredDelta() {
+		last_known_index = 0;
+		last_known_row = -1;
+	}
 };
+
+// Returns false if no symbol table was found. This means all strings are either empty or null
+bool ParseFSSTSegmentHeader(data_ptr_t base_ptr, fsst_decoder_t *decoder_out, bitpacking_width_t* width_out) {
+	auto header_ptr = (fsst_compression_header_t *)base_ptr;
+	auto fsst_symbol_table_offset = Load<uint32_t>((data_ptr_t)&header_ptr->fsst_symbol_table_offset);
+	*width_out = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
+	return fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset);;
+}
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
 	auto state = make_unique<FSSTScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
+	auto base_ptr = state->handle->node->buffer + segment.GetBlockOffset();
 
-	auto baseptr = state->handle->node->buffer + segment.GetBlockOffset();
-	auto header_ptr = (fsst_compression_header_t *)baseptr;
-	auto fsst_symbol_table_offset = Load<uint32_t>((data_ptr_t)&header_ptr->fsst_symbol_table_offset);
-	state->current_width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
-
-	// Import fsst decoder
 	state->fsst_decoder = make_buffer<fsst_decoder_t>();
-	auto retval = fsst_import(state->fsst_decoder.get(), baseptr + fsst_symbol_table_offset);
-	if (retval == 0) {
+	auto retval = ParseFSSTSegmentHeader(base_ptr, state->fsst_decoder.get(), &state->current_width);
+	if (!retval) {
 		state->fsst_decoder = nullptr;
 	}
 
 	return move(state);
 }
 
-unique_ptr<uint32_t[]> DeltaDecodeIndices(uint32_t* bitunpack_buffer, idx_t total_delta_decode_count, idx_t delta_decode_offset, uint32_t last_known_index, bool start_from_zero) {
-
-	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[total_delta_decode_count]);
-	delta_decode_buffer[0] = bitunpack_buffer[delta_decode_offset];
-	if (!start_from_zero) {
-		delta_decode_buffer[0] += last_known_index;
+void DeltaDecodeIndices(uint32_t*buffer_in, uint32_t*buffer_out, idx_t decode_count, uint32_t last_known_value) {
+	buffer_out[0] = buffer_in[0];
+	buffer_out[0] += last_known_value;
+	for (idx_t i = 1; i < decode_count; i++) {
+		buffer_out[i] = buffer_in[i] + buffer_out[i-1];
 	}
-	for (idx_t i = 1; i < total_delta_decode_count; i++) {
-		delta_decode_buffer[i] = bitunpack_buffer[delta_decode_offset + i] + delta_decode_buffer[i-1];
-	}
-
-	return move(delta_decode_buffer);
 }
+
+void BitUnpackRange(data_ptr_t src_ptr, data_ptr_t dst_ptr, idx_t count, idx_t row, bitpacking_width_t width) {
+	auto bitunpack_src_ptr = &src_ptr[(row * width) / 8];
+	BitpackingPrimitives::UnPackBuffer<uint32_t>(dst_ptr, bitunpack_src_ptr, count, width);
+}
+
+typedef struct BPDeltaDecodeOffsets {
+	idx_t delta_decode_start_row;
+	idx_t bitunpack_alignment_offset;
+	idx_t bitunpack_start_row;
+	idx_t unused_delta_decoded_values;
+	idx_t scan_offset;
+	idx_t total_delta_decode_count;
+	idx_t total_bitunpack_count;
+} bp_delta_offsets_t;
+
+// The calculation of offsets and counts is a bit tricky, due to:
+// - bitunpacking needs to be aligned to BITPACKING_ALGORITHM_GROUP_SIZE
+// - delta decoding may use the stored last known value.
+//
+// To help visualize:
+//   | 											ColumnSegment buffer											   |
+//   |  untouched  |  bp alignment  |  unused delta values  |  values to scan  |  bitpack alignment  |  untouched  |
+// 1:							    X
+// 2:			   < -------------- >
+// 3:			   X
+// 4:              					< --------------------- >
+// 5:			   < -------------------------------------- >
+// 6:			   					< ---------------------------------------- >
+// 7:			   < ------------------------------------------------------------------------------- >
+bp_delta_offsets_t CalculateBpDeltaOffsets(idx_t last_known_row, idx_t start, idx_t scan_count) {
+	D_ASSERT((idx_t)(last_known_row + 1) <= start);
+	bp_delta_offsets_t result;
+
+	result.delta_decode_start_row = (last_known_row+1); // 1
+	result.bitunpack_alignment_offset = result.delta_decode_start_row % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; // 2
+	result.bitunpack_start_row = result.delta_decode_start_row - result.bitunpack_alignment_offset; // 3
+	result.unused_delta_decoded_values = start - result.delta_decode_start_row; // 4
+	result.scan_offset = result.bitunpack_alignment_offset + result.unused_delta_decoded_values; // 5
+	result.total_delta_decode_count = scan_count + result.unused_delta_decoded_values; // 6
+	result.total_bitunpack_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + result.scan_offset); // 7
+
+	D_ASSERT(result.total_delta_decode_count + result.bitunpack_alignment_offset <= result.total_bitunpack_count);
+	return result;
+}
+
 
 //===--------------------------------------------------------------------===//
 // Scan base data
@@ -489,71 +544,31 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		result_data = FSSTVector::GetCompressedData<string_t>(*output_vector);
 	}
 
-	// Offset into segment where we should start bitunpacking
-	idx_t bitunpack_offset;
-	// The offset into the bitunpacked buffer to the first value we need to delta decode
-	uint32_t delta_decode_offset;
-	// This is the offset into the decoded dict offsets where the scan will need to start
-	idx_t scan_offset;
-	// The number of values we need to delta decode in order to be able to scan what we want
-	idx_t unused_delta_decoded_values;
-
-	// TODO GTE should be GT and handle edge case?
-	bool start_from_zero = start == 0 || !scan_state.last_known_isset || scan_state.last_known_row >= start;
-
-	if (start_from_zero) {
-		// We cannot a cached value for the delta decoding, start at the beginning
-		bitunpack_offset = 0;
-		delta_decode_offset = 0;
-		unused_delta_decoded_values = start;
-		scan_offset = start;
-	} else {
-		D_ASSERT(scan_state.last_known_row < start);
-		idx_t first_row_to_delta_decode = (scan_state.last_known_row+1);
-		idx_t bitunpack_alignment_count = first_row_to_delta_decode % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-		unused_delta_decoded_values = start - first_row_to_delta_decode;
-
-		// Start bitunpacking at nearest BITPACKING_ALGORITHM_GROUP_SIZE aligned value
-		bitunpack_offset = start - bitunpack_alignment_count;
-		// Offset to the first delta to decode will be equal to the amount of padding required
-		delta_decode_offset = bitunpack_alignment_count;
-		scan_offset = bitunpack_alignment_count + unused_delta_decoded_values;
+	// TODO what if the segment changes? It may go wrong?
+	if (start == 0 || scan_state.last_known_row >= (int64_t)start) {
+		scan_state.ResetStoredDelta();
 	}
 
-	// Bitunpack + delta-decode count
-	idx_t total_bitunpack_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + scan_offset);
+	auto offsets = CalculateBpDeltaOffsets(scan_state.last_known_row, start, scan_count);
 
-	idx_t total_delta_decode_count = scan_count + unused_delta_decoded_values;
-	D_ASSERT(total_delta_decode_count + delta_decode_offset <= total_bitunpack_count);
+	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
+	BitUnpackRange(base_data, (data_ptr_t)bitunpack_buffer.get(), offsets.total_bitunpack_count, offsets.bitunpack_start_row, scan_state.current_width);
+	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
+	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(), offsets.total_delta_decode_count, scan_state.last_known_index);
 
-	// Decompression buffer for all dict offsets we need to calculate
-	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[total_bitunpack_count]);
-	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[total_delta_decode_count]);
-	auto src = &base_data[(bitunpack_offset * scan_state.current_width) / 8];
-
-	BitpackingPrimitives::UnPackBuffer<uint32_t>((data_ptr_t)bitunpack_buffer.get(), src, total_bitunpack_count, scan_state.current_width);
-
-	delta_decode_buffer[0] = bitunpack_buffer[delta_decode_offset];
-	if (!start_from_zero) {
-		delta_decode_buffer[0] += scan_state.last_known_index;
-	}
-	for (idx_t i = 1; i < total_delta_decode_count; i++) {
-		delta_decode_buffer[i] = bitunpack_buffer[delta_decode_offset + i] + delta_decode_buffer[i-1];
-	}
+	// Lookup decompressed offsets in dict
 	for (idx_t i = 0; i < scan_count; i++) {
-		uint32_t string_length = bitunpack_buffer[i + scan_offset];
+		uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
 		result_data[i] =
-		    UncompressedStringStorage::FetchStringFromDict(segment, dict, result, baseptr, delta_decode_buffer[i + unused_delta_decoded_values], string_length);
+		    UncompressedStringStorage::FetchStringFromDict(segment, dict, result, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values], string_length);
 	}
 
-	// Store last scanned row:
-	scan_state.last_known_row = start + scan_count - 1;
-	scan_state.last_known_index = delta_decode_buffer[scan_count + unused_delta_decoded_values - 1];
-	scan_state.last_known_isset = true;
+	scan_state.StoreLastDelta(delta_decode_buffer[scan_count + offsets.unused_delta_decoded_values - 1],
+	                          start + scan_count - 1);
 
 	if (!ALLOW_FSST_VECTORS) {
-		// Decompress the FSST Vector by copying it to a flat vector
 		VectorOperations::Copy(*output_vector, result, scan_count, 0, result_offset);
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
 }
 
@@ -567,28 +582,49 @@ void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
 
-	// For now a stringFetch is just a ScanPartial of 1
-//	auto scan_state = FSSTStorage::StringInitScan(segment);
-//	FSSTStorage::StringScanPartial<false>(segment, scan_state, 1, result, result_idx);
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	auto handle = buffer_manager.Pin(segment.block);
+	auto base_ptr = handle->node->buffer + segment.GetBlockOffset();
+	auto base_data = (data_ptr_t)(base_ptr + sizeof(fsst_compression_header_t));
+	auto dict = GetDictionary(segment, *handle);
 
-//	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-//	auto handle = buffer_manager.Pin(segment.block);
-//
-//	auto baseptr = handle->node->buffer + segment.GetBlockOffset();
-//	auto header_ptr = (fsst_compression_header_t *)baseptr;
-//	auto fsst_symbol_table_offset = Load<uint32_t>((data_ptr_t)&header_ptr->fsst_symbol_table_offset);
-//	auto current_width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
-//	// Import fsst decoder
-//	fsst_decoder_t fsst_decoder;
-//	auto retval = fsst_import(&fsst_decoder, baseptr + fsst_symbol_table_offset);
-//	if (retval == 0) {
-//		// There's no fsst symtable, we can just emit strings regularly
-//	} else {
-//		// There is, do the same delta decode + bitunpack thing as in a scan.
-//	}
+	fsst_decoder_t decoder;
+	bitpacking_width_t width;
+	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width);
 
+	auto result_data = FlatVector::GetData<string_t>(result);
+	unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
 
-	throw std::runtime_error("FSST FETCH NOT IMPLEMENTED");
+	if (have_symbol_table) {
+		// We basically just do a scan of 1 which is kinda expensive as we need to repeatedly delta decode until we
+		// reach the row we want, we could consider a more clever caching trick if this is slow
+		auto offsets = CalculateBpDeltaOffsets(-1, row_id, 1);
+
+		auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
+		BitUnpackRange(base_data, (data_ptr_t)bitunpack_buffer.get(), offsets.total_bitunpack_count, offsets.bitunpack_start_row, width);
+		auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
+		DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(), offsets.total_delta_decode_count, 0);
+
+		uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
+
+		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
+
+		auto decompressed_string_size = fsst_decompress(
+		    &decoder,
+		    compressed_string.GetSize(),
+		    (unsigned char*)compressed_string.GetDataUnsafe(),
+		    StringUncompressed::STRING_BLOCK_LIMIT+1,
+		    &decompress_buffer[0]
+		);
+
+		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
+
+		auto decompressed_string = StringVector::AddString(result, (char*)decompress_buffer, decompressed_string_size);
+		result_data[result_idx] = decompressed_string;
+	} else {
+		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
+		result_data[result_idx] = string_t(nullptr, 0);
+	}
 }
 
 //===--------------------------------------------------------------------===//
