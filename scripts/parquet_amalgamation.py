@@ -70,14 +70,3 @@ def generate_parquet_amalgamation(source_file, header_file):
         pass
 
 generate_parquet_amalgamation(parquet_source_file, parquet_header_file)
-
-script_path = os.path.dirname(os.path.realpath(__file__))
-modify_script = os.path.join(script_path, "modify_include_guards.sh")
-modify_command1 = modify_script + " " + parquet_header_file
-modify_command2 = modify_script + " " + parquet_source_file
-
-print(modify_command1)
-print(modify_command2)
-
-os.system(modify_command1)
-os.system(modify_command2)
