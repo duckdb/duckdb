@@ -122,7 +122,7 @@ void QueryProfiler::EndQuery() {
 	// print or output the query profiling after termination
 	// EXPLAIN ANALYSE should not be outputted by the profiler
 	if (IsEnabled() && !is_explain_analyze) {
-		string query_info = PrintAsString();
+		string query_info = ToString();
 		auto save_location = GetSaveLocation();
 #ifdef DEBUG
 		if (save_location.compare(PROFILER_SHADOW_LOCATION) == 0) {
@@ -138,15 +138,15 @@ void QueryProfiler::EndQuery() {
 	}
 	this->is_explain_analyze = false;
 }
-string QueryProfiler::PrintAsString() const {
+string QueryProfiler::ToString() const {
 	const auto format = GetPrintFormat();
 	switch (format) {
 	case ProfilerPrintFormat::QUERY_TREE:
-		return ToString();
+		return QueryTreeToString();
 	case ProfilerPrintFormat::JSON:
 		return ToJSON();
 	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
-		return ToString(true);
+		return QueryTreeToString(true);
 	default:
 		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", format);
 	}
@@ -342,13 +342,13 @@ static string RenderTiming(double timing) {
 	return timing_s + "s";
 }
 
-string QueryProfiler::ToString(bool print_optimizer_output) const {
+string QueryProfiler::QueryTreeToString(bool print_optimizer_output) const {
 	std::stringstream str;
-	ToStream(str, print_optimizer_output);
+	QueryTreeToStream(str, print_optimizer_output);
 	return str.str();
 }
 
-void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) const {
+void QueryProfiler::QueryTreeToStream(std::ostream &ss, bool print_optimizer_output) const {
 	if (!IsEnabled()) {
 		ss << "Query profiling is disabled. Call "
 		      "Connection::EnableProfiling() to enable profiling!";
@@ -599,7 +599,7 @@ void QueryProfiler::Render(const QueryProfiler::TreeNode &node, std::ostream &ss
 }
 
 void QueryProfiler::Print() {
-	Printer::Print(ToString());
+	Printer::Print(QueryTreeToString());
 }
 
 vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {

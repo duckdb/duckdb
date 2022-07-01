@@ -36,7 +36,7 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (format == ProfilerPrintFormat::JSON) {
 		return profiler.ToJSON();
 	} else {
-		return profiler.ToString();
+		return profiler.QueryTreeToString();
 	}
 }
 
