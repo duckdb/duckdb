@@ -125,7 +125,7 @@ void QueryProfiler::EndQuery() {
 		string query_info = ToString();
 		auto save_location = GetSaveLocation();
 #ifdef DEBUG
-		if (save_location.compare(PROFILER_SHADOW_LOCATION) == 0) {
+		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
 			// disable output
 		} else
 #endif

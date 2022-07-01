@@ -226,12 +226,6 @@ private:
 	//! Check whether or not an operator type requires query profiling. If none of the ops in a query require profiling
 	//! no profiling information is output.
 	bool OperatorRequiresProfiling(PhysicalOperatorType op_type);
-
-#ifdef DEBUG
-public:
-	// a special marker used to allow running the profiler during testing, without it outputting anything
-	static constexpr char const *PROFILER_SHADOW_LOCATION = "//SHADOW_PROFILER//";
-#endif
 };
 
 //! The QueryProfilerHistory can be used to access the profiler of previous queries

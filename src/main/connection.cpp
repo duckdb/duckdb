@@ -20,7 +20,7 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();
-	context->config.profiler_save_location = QueryProfiler::PROFILER_SHADOW_LOCATION;
+	context->config.emit_profiler_output = false;
 #endif
 }
 
