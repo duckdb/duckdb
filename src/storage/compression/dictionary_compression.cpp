@@ -332,8 +332,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
-struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompressionState {
-	DictionaryCompressionAnalyzeState()
+struct DictionaryAnalyzeState : public DictionaryCompressionState {
+	DictionaryAnalyzeState()
 	    : segment_count(0), current_tuple_count(0), current_unique_count(0), current_dict_size(0), current_width(0),
 	      next_width(0) {
 	}
@@ -393,17 +393,25 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	void Verify() override {};
 };
 
+struct DictionaryCompressionAnalyzeState : public AnalyzeState {
+	DictionaryCompressionAnalyzeState() : analyze_state(make_unique<DictionaryAnalyzeState>()) {
+	}
+
+	unique_ptr<DictionaryAnalyzeState> analyze_state;
+};
+
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	return make_unique<DictionaryCompressionAnalyzeState>();
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
-	return state.UpdateState(input, count);
+	return state.analyze_state->UpdateState(input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &analyze_state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &state = *analyze_state.analyze_state;
 
 	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
 	auto req_space =
