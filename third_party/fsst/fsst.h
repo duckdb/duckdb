@@ -68,6 +68,17 @@ extern "C" {
 #define FSST_FALLTHROUGH 
 #endif
 
+#ifndef __has_cpp_attribute // For backwards compatibility
+#define __has_cpp_attribute(x) 0
+#endif
+#if __has_cpp_attribute(clang::fallthrough)
+#define DUCKDB_FSST_EXPLICIT_FALLTHROUGH [[clang::fallthrough]]
+#elif __has_cpp_attribute(gnu::fallthrough)
+#define DUCKDB_FSST_EXPLICIT_FALLTHROUGH [[gnu::fallthrough]]
+#else
+#define DUCKDB_FSST_EXPLICIT_FALLTHROUGH
+#endif
+
 #include <stddef.h>
 
 /* A compressed string is simply a string of 1-byte codes; except for code 255, which is followed by an uncompressed byte. */
@@ -168,8 +179,11 @@ fsst_decompress(
          unsigned long firstEscapePos=__builtin_ctzl((unsigned long long) escapeMask)>>3;
          switch(firstEscapePos) { /* Duff's device */
          case 3: code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code];
+			 DUCKDB_FSST_EXPLICIT_FALLTHROUGH;
          case 2: code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code];
+			 DUCKDB_FSST_EXPLICIT_FALLTHROUGH;
          case 1: code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code];
+			 DUCKDB_FSST_EXPLICIT_FALLTHROUGH;
          case 0: posIn+=2; strOut[posOut++] = strIn[posIn-1]; /* decompress an escaped byte */
          }
       }

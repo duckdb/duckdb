@@ -34,7 +34,8 @@ set_source_files_properties(
 )
 endif()
 
-add_library(duckdb_fsst libfsst.cpp fsst_avx512.cpp fsst_avx512_unroll1.inc fsst_avx512_unroll2.inc fsst_avx512_unroll3.inc fsst_avx512_unroll4.inc)
+add_library(duckdb_fsst libfsst.cpp fsst_avx512.cpp)
+#add_library(duckdb_fsst libfsst.cpp fsst_avx512.cpp fsst_avx512_unroll1.inc fsst_avx512_unroll2.inc fsst_avx512_unroll3.inc fsst_avx512_unroll4.inc)
 #add_executable(binary fsst.cpp)
 #target_link_libraries (binary LINK_PUBLIC fsst)
 #target_link_libraries (binary LINK_PUBLIC Threads::Threads)

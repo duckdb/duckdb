@@ -17,26 +17,26 @@
 // You can contact the authors via the FSST source repository : https://github.com/cwida/fsst
 #include "libfsst.hpp"
 
-#if defined(__x86_64__) || defined(_M_X64)
-#include <immintrin.h>
-
-#ifdef _WIN32
-bool fsst_hasAVX512() {
-   int info[4];
-   __cpuidex(info, 0x00000007, 0);
-   return (info[1]>>16)&1;
-}
-#else
-#include <cpuid.h>
-bool fsst_hasAVX512() {
-   int info[4];
-    __cpuid_count(0x00000007, 0, info[0], info[1], info[2], info[3]);
-   return (info[1]>>16)&1;
-}
-#endif
-#else
+//#if defined(__x86_64__) || defined(_M_X64)
+//#include <immintrin.h>
+//
+//#ifdef _WIN32
+//bool fsst_hasAVX512() {
+//   int info[4];
+//   __cpuidex(info, 0x00000007, 0);
+//   return (info[1]>>16)&1;
+//}
+//#else
+//#include <cpuid.h>
+//bool fsst_hasAVX512() {
+//   int info[4];
+//    __cpuid_count(0x00000007, 0, info[0], info[1], info[2], info[3]);
+//   return (info[1]>>16)&1;
+//}
+//#endif
+//#else
 bool fsst_hasAVX512() { return false; }
-#endif
+//#endif
 
 // BULK COMPRESSION OF STRINGS
 //
@@ -73,61 +73,61 @@ bool fsst_hasAVX512() { return false; }
 size_t fsst_compressAVX512(SymbolTable &symbolTable, u8* codeBase, u8* symbolBase, SIMDjob *input, SIMDjob *output, size_t n, size_t unroll) {
    size_t processed = 0;
    // define some constants (all_x means that all 8 lanes contain 64-bits value X)
-#ifdef __AVX512F__
- //__m512i all_suffixLim= _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) symbolTable->suffixLim)); -- for variants b,c
-   __m512i all_MASK     = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) -1));
-   __m512i all_PRIME    = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) FSST_HASH_PRIME));
-   __m512i all_ICL_FREE = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) FSST_ICL_FREE));
-#define    all_HASH       _mm512_srli_epi64(all_MASK, 64-FSST_HASH_LOG2SIZE)
-#define    all_ONE        _mm512_srli_epi64(all_MASK, 63)
-#define    all_M19        _mm512_srli_epi64(all_MASK, 45)
-#define    all_M18        _mm512_srli_epi64(all_MASK, 46)
-#define    all_M28        _mm512_srli_epi64(all_MASK, 36)
-#define    all_FFFFFF     _mm512_srli_epi64(all_MASK, 40)
-#define    all_FFFF       _mm512_srli_epi64(all_MASK, 48)
-#define    all_FF         _mm512_srli_epi64(all_MASK, 56)
-
-   SIMDjob *inputEnd = input+n;
-   assert(n >= unroll*8 && n <= 512); // should be close to 512 
-   __m512i job1, job2, job3, job4; // will contain current jobs, for each unroll 1,2,3,4
-   __mmask8 loadmask1 = 255, loadmask2 = 255*(unroll>1), loadmask3 = 255*(unroll>2), loadmask4 = 255*(unroll>3); // 2b loaded new strings bitmask per unroll
-   u32 delta1 = 8, delta2 = 8*(unroll>1), delta3 = 8*(unroll>2), delta4 = 8*(unroll>3); // #new loads this SIMD iteration per unroll
-
-   if (unroll >= 4) {
-      while (input+delta1+delta2+delta3+delta4 < inputEnd) {
-         #include "fsst_avx512_unroll4.inc"
-      }
-   } else if (unroll == 3) {
-      while (input+delta1+delta2+delta3 < inputEnd) {
-         #include "fsst_avx512_unroll3.inc"
-      }
-   } else if (unroll == 2) {
-      while (input+delta1+delta2 < inputEnd) {
-         #include "fsst_avx512_unroll2.inc"
-      }
-   } else {
-      while (input+delta1 < inputEnd) {
-         #include "fsst_avx512_unroll1.inc"
-      }
-   }
-
-   // flush the job states of the unfinished strings at the end of output[] 
-   processed = n - (inputEnd - input);
-   u32 unfinished = 0;
-   if (unroll > 1) { 
-      if (unroll > 2) { 
-         if (unroll > 3) { 
-            _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask4=~loadmask4, job4); 
-            unfinished += _mm_popcnt_u32((int) loadmask4);
-         }
-         _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask3=~loadmask3, job3); 
-         unfinished += _mm_popcnt_u32((int) loadmask3);
-      }
-      _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask2=~loadmask2, job2); 
-      unfinished += _mm_popcnt_u32((int) loadmask2);
-   }
-   _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask1=~loadmask1, job1); 
-#else
+//#ifdef __AVX512F__
+// //__m512i all_suffixLim= _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) symbolTable->suffixLim)); -- for variants b,c
+//   __m512i all_MASK     = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) -1));
+//   __m512i all_PRIME    = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) FSST_HASH_PRIME));
+//   __m512i all_ICL_FREE = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) FSST_ICL_FREE));
+//#define    all_HASH       _mm512_srli_epi64(all_MASK, 64-FSST_HASH_LOG2SIZE)
+//#define    all_ONE        _mm512_srli_epi64(all_MASK, 63)
+//#define    all_M19        _mm512_srli_epi64(all_MASK, 45)
+//#define    all_M18        _mm512_srli_epi64(all_MASK, 46)
+//#define    all_M28        _mm512_srli_epi64(all_MASK, 36)
+//#define    all_FFFFFF     _mm512_srli_epi64(all_MASK, 40)
+//#define    all_FFFF       _mm512_srli_epi64(all_MASK, 48)
+//#define    all_FF         _mm512_srli_epi64(all_MASK, 56)
+//
+//   SIMDjob *inputEnd = input+n;
+//   assert(n >= unroll*8 && n <= 512); // should be close to 512
+//   __m512i job1, job2, job3, job4; // will contain current jobs, for each unroll 1,2,3,4
+//   __mmask8 loadmask1 = 255, loadmask2 = 255*(unroll>1), loadmask3 = 255*(unroll>2), loadmask4 = 255*(unroll>3); // 2b loaded new strings bitmask per unroll
+//   u32 delta1 = 8, delta2 = 8*(unroll>1), delta3 = 8*(unroll>2), delta4 = 8*(unroll>3); // #new loads this SIMD iteration per unroll
+//
+//   if (unroll >= 4) {
+//      while (input+delta1+delta2+delta3+delta4 < inputEnd) {
+//         #include "fsst_avx512_unroll4.inc"
+//      }
+//   } else if (unroll == 3) {
+//      while (input+delta1+delta2+delta3 < inputEnd) {
+//         #include "fsst_avx512_unroll3.inc"
+//      }
+//   } else if (unroll == 2) {
+//      while (input+delta1+delta2 < inputEnd) {
+//         #include "fsst_avx512_unroll2.inc"
+//      }
+//   } else {
+//      while (input+delta1 < inputEnd) {
+//         #include "fsst_avx512_unroll1.inc"
+//      }
+//   }
+//
+//   // flush the job states of the unfinished strings at the end of output[]
+//   processed = n - (inputEnd - input);
+//   u32 unfinished = 0;
+//   if (unroll > 1) {
+//      if (unroll > 2) {
+//         if (unroll > 3) {
+//            _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask4=~loadmask4, job4);
+//            unfinished += _mm_popcnt_u32((int) loadmask4);
+//         }
+//         _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask3=~loadmask3, job3);
+//         unfinished += _mm_popcnt_u32((int) loadmask3);
+//      }
+//      _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask2=~loadmask2, job2);
+//      unfinished += _mm_popcnt_u32((int) loadmask2);
+//   }
+//   _mm512_mask_compressstoreu_epi64(output+unfinished, loadmask1=~loadmask1, job1);
+//#else
    (void) symbolTable;
    (void) codeBase;
    (void) symbolBase;
@@ -135,6 +135,6 @@ size_t fsst_compressAVX512(SymbolTable &symbolTable, u8* codeBase, u8* symbolBas
    (void) output;
    (void) n;
    (void) unroll;
-#endif
+//#endif
    return processed;
 }
