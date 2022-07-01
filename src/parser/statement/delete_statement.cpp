@@ -18,7 +18,7 @@ DeleteStatement::DeleteStatement(const DeleteStatement &other)
 
 string DeleteStatement::ToString() const {
 	string result;
-	result = cte_map.CTEToString();
+	result = cte_map.ToString();
 	result += "DELETE FROM ";
 	result += table->ToString();
 	if (!using_clauses.empty()) {

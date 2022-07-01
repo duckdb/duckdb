@@ -33,7 +33,7 @@ public:
 	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> map;
 
 public:
-	string CTEToString() const;
+	string ToString() const;
 };
 
 class QueryNode {

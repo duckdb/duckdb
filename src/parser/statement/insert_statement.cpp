@@ -15,7 +15,7 @@ InsertStatement::InsertStatement(const InsertStatement &other)
 
 string InsertStatement::ToString() const {
 	string result;
-	result = cte_map.CTEToString();
+	result = cte_map.ToString();
 	result += "INSERT INTO ";
 	if (!schema.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";

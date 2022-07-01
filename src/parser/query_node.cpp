@@ -22,7 +22,7 @@ CommonTableExpressionMap::CommonTableExpressionMap(const CommonTableExpressionMa
 	}
 }
 
-string CommonTableExpressionMap::CTEToString() const {
+string CommonTableExpressionMap::ToString() const {
 	if (map.empty()) {
 		return string();
 	}

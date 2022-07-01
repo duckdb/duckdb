@@ -21,7 +21,7 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 
 string UpdateStatement::ToString() const {
 	string result;
-	result = cte_map.CTEToString();
+	result = cte_map.ToString();
 	result += "UPDATE ";
 	result += table->ToString();
 	result += " SET ";
