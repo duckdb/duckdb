@@ -39,7 +39,8 @@ enum class StatementType : uint8_t {
 	CALL_STATEMENT,         // CALL statement type
 	SET_STATEMENT,          // SET statement type
 	LOAD_STATEMENT,         // LOAD statement type
-	RELATION_STATEMENT
+	RELATION_STATEMENT,
+	EXTENSION_STATEMENT
 };
 
 string StatementTypeToString(StatementType type);
