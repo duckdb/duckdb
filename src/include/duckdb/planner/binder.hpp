@@ -290,6 +290,7 @@ private:
 	                            const string &join_side, UsingColumnSet *new_set);
 
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
+
 public:
 	// This should really be a private constructor, but make_shared does not allow it...
 	// If you are thinking about calling this, you should probably call Binder::CreateBinder

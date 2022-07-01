@@ -6,8 +6,7 @@ namespace duckdb {
 DeleteStatement::DeleteStatement() : SQLStatement(StatementType::DELETE_STATEMENT) {
 }
 
-DeleteStatement::DeleteStatement(const DeleteStatement &other)
-    : SQLStatement(other), table(other.table->Copy()) {
+DeleteStatement::DeleteStatement(const DeleteStatement &other) : SQLStatement(other), table(other.table->Copy()) {
 	if (other.condition) {
 		condition = other.condition->Copy();
 	}
