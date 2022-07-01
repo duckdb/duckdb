@@ -214,7 +214,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 #ifndef DUCKDB_NO_THREADS
 		config.options.maximum_threads = std::thread::hardware_concurrency();
 #else
-		config.maximum_threads = 1;
+		config.options.maximum_threads = 1;
 #endif
 	} else {
 		config.options.maximum_threads = new_config.options.maximum_threads;

@@ -71,7 +71,6 @@ public:
 class RestartCommand : public Command {
 public:
 	RestartCommand(SQLLogicTestRunner &runner);
-
 	void ExecuteInternal() override;
 };
 

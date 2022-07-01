@@ -39,6 +39,7 @@ public:
 	bool original_sqlite_test = false;
 	bool output_sql = false;
 	bool enable_verification = false;
+	bool skip_reload = false;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
 	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
@@ -48,9 +49,6 @@ public:
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
 	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
-	bool has_prepared_statement = false;
-	bool has_temporary_element = false;
-	bool has_sequency = false;
 
 public:
 	void ExecuteFile(string script);

@@ -2,6 +2,9 @@
 # description: Test updates mix with a big table and NULL values
 # group: [wal]
 
+require skip_reload
+
+
 # load the DB from disk
 load __TEST_DIR__/test_store_updates.db
 

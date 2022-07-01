@@ -2,6 +2,9 @@
 # description: Use sequences over different runs
 # group: [catalog]
 
+require skip_reload
+
+
 load __TEST_DIR__/store_sequences.db
 
 # standard sequence

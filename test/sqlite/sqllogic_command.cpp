@@ -54,54 +54,21 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 	bool all_select = true;
 
 	for (auto &statament : statements) {
-		if (statament->type == StatementType::PREPARE_STATEMENT) {
-			runner.has_prepared_statement = true;
-		}
-		if (statament->type == StatementType::CREATE_STATEMENT) {
-			auto create_statement = (CreateStatement *)statament.get();
-			runner.has_temporary_element |= create_statement->info->temporary;
-			runner.has_sequency |= create_statement->info->type == CatalogType::SEQUENCE_ENTRY;
-		}
 		if (statament->type != StatementType::SELECT_STATEMENT) {
 			all_select = false;
 		}
 	}
 	bool is_any_transaction_active = false;
-	bool more_than_one_connection = connection->context->db->GetConnectionManager().connections.size() > 1;
 	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
 		if (conn.first->transaction.HasActiveTransaction()) {
 			is_any_transaction_active = true;
 		}
 	}
-	if (!more_than_one_connection && !runner.has_temporary_element && !statements.empty() && !query_fail &&
-	    all_select && TestForceReload() && TestForceStorage() && !is_any_transaction_active &&
-	    connection->context->db->loaded_extensions.empty() && !runner.has_prepared_statement && !runner.has_sequency) {
-		// We do a restart here to force the database to reload from disk
+	if (!statements.empty() && !query_fail && all_select && TestForceReload() && TestForceStorage() &&
+	    !is_any_transaction_active && !runner.skip_reload) {
 		auto command = make_unique<RestartCommand>(runner);
-		// We must save the current configuration
-		auto config = connection->context->config;
-		DBConfigOptions db_config_opt = connection->context->db->config.options;
-		// We must reload all extensions afterwards
-		//		auto extensions = connection->context->db->loaded_extensions;
-		auto client_data = move(connection->context->client_data);
 		runner.ExecuteCommand(move(command));
 		connection = CommandConnection();
-		connection->context->config = config;
-		connection->context->db->config.options = db_config_opt;
-		auto catalog_search_paths = client_data->catalog_search_path->GetSetPaths();
-		connection->context->client_data->catalog_search_path->Set(catalog_search_paths);
-		if (client_data->log_query_writer) {
-			connection->context->client_data->log_query_writer = make_unique<BufferedFileWriter>(
-			    FileSystem::GetFileSystem(*connection->context), client_data->log_query_writer->path, 1 << 1 | 1 << 5,
-			    connection->context->client_data->file_opener.get());
-		}
-		//		connection->context->client_data->prepared_statements = move(client_data->prepared_statements);
-
-		//		connection->context->client_data->catalog_search_path = move(client_data->catalog_search_path);
-		//		connection->context->db->loaded_extensions = extensions;
-		//		for (auto&extension:extensions){
-		//			connection->Query("LOAD " + extension);
-		//		}
 	}
 
 	auto result = connection->Query(sql_query);
@@ -202,7 +169,28 @@ void Query::ExecuteInternal() {
 }
 
 void RestartCommand::ExecuteInternal() {
+	// We save the main connection configurations to pass it to the new connection
+	runner.config->options = runner.con->context->db->config.options;
+	auto client_config = runner.con->context->config;
+	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
+	string low_query_writer_path;
+	if (runner.con->context->client_data->log_query_writer) {
+		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
+	}
+
+	auto prepared_statements = move(runner.con->context->client_data->prepared_statements);
+
 	runner.LoadDatabase(runner.dbpath);
+
+	runner.con->context->config = client_config;
+
+	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	if (!low_query_writer_path.empty()) {
+		runner.con->context->client_data->log_query_writer =
+		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
+		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
+	}
+	runner.con->context->client_data->prepared_statements = move(prepared_statements);
 }
 
 void Statement::ExecuteInternal() {

@@ -2,6 +2,9 @@
 # description: Test ART index on table with updates to other columns
 # group: [art]
 
+require skip_reload
+
+
 statement ok con1
 CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR)
 
