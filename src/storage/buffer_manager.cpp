@@ -42,6 +42,44 @@ BlockHandle::~BlockHandle() {
 	buffer_manager.UnregisterBlock(block_id, can_destroy);
 }
 
+unique_ptr<Block> AllocateBlock(Allocator &allocator, unique_ptr<FileBuffer> reusable_buffer, block_id_t block_id) {
+	if (reusable_buffer) {
+		// re-usable buffer: re-use it
+		if (reusable_buffer->type == FileBufferType::BLOCK) {
+			// we can reuse the buffer entirely
+			auto &block = (Block &)*reusable_buffer;
+			block.id = block_id;
+			return unique_ptr_cast<FileBuffer, Block>(move(reusable_buffer));
+		}
+		auto block = make_unique<Block>(*reusable_buffer, block_id);
+		reusable_buffer.reset();
+		return block;
+	} else {
+		// no re-usable buffer: allocate a new block
+		return make_unique<Block>(allocator, block_id);
+	}
+}
+
+unique_ptr<ManagedBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr<FileBuffer> reusable_buffer,
+                                                idx_t size, bool can_destroy, block_id_t id) {
+	if (reusable_buffer) {
+		// re-usable buffer: re-use it
+		if (reusable_buffer->type == FileBufferType::MANAGED_BUFFER) {
+			// we can reuse the buffer entirely
+			auto &managed = (ManagedBuffer &)*reusable_buffer;
+			managed.id = id;
+			managed.can_destroy = can_destroy;
+			return unique_ptr_cast<FileBuffer, ManagedBuffer>(move(reusable_buffer));
+		}
+		auto buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, can_destroy, id);
+		reusable_buffer.reset();
+		return buffer;
+	} else {
+		// no re-usable buffer: allocate a new buffer
+		return make_unique<ManagedBuffer>(db, size, can_destroy, id);
+	}
+}
+
 unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// already loaded
@@ -52,15 +90,7 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle, uniq
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		unique_ptr<Block> block;
-		if (reusable_buffer) {
-			// re-usable buffer: re-use it
-			block = make_unique<Block>(*reusable_buffer, handle->block_id);
-			reusable_buffer.reset();
-		} else {
-			// no re-usable buffer: allocate a new block
-			block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
-		}
+		auto block = AllocateBlock(Allocator::Get(handle->db), move(reusable_buffer), handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
@@ -250,15 +280,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	}
 
 	auto temp_id = ++temporary_id;
-	unique_ptr<ManagedBuffer> buffer;
-	if (reusable_buffer) {
-		// re-use the buffer
-		buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, can_destroy, temp_id);
-		reusable_buffer.reset();
-	} else {
-		// allocate the buffer
-		buffer = make_unique<ManagedBuffer>(db, block_size, can_destroy, temp_id);
-	}
+	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), block_size, can_destroy, temp_id);
 
 	// create a new block pointer for this block
 	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
@@ -433,15 +455,7 @@ void BufferManager::SetLimit(idx_t limit) {
 unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, FileHandle &handle, idx_t position,
                                                       idx_t size, block_id_t id,
                                                       unique_ptr<FileBuffer> reusable_buffer) {
-	unique_ptr<ManagedBuffer> buffer;
-	if (reusable_buffer) {
-		// re-usable buffer: re-use it
-		buffer = make_unique<ManagedBuffer>(db, *reusable_buffer, false, id);
-		reusable_buffer.reset();
-	} else {
-		// no re-usable buffer: allocate a new buffer
-		buffer = make_unique<ManagedBuffer>(db, size, false, id);
-	}
+	auto buffer = AllocateManagedBuffer(db, move(reusable_buffer), size, false, id);
 	buffer->Read(handle, position);
 	return buffer;
 }
