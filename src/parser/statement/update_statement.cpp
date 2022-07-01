@@ -7,7 +7,7 @@ UpdateStatement::UpdateStatement() : SQLStatement(StatementType::UPDATE_STATEMEN
 }
 
 UpdateStatement::UpdateStatement(const UpdateStatement &other)
-    : SQLStatement(other), table(other.table->Copy()), columns(other.columns), cte_map(other.cte_map) {
+    : SQLStatement(other), table(other.table->Copy()), columns(other.columns) {
 	if (other.condition) {
 		condition = other.condition->Copy();
 	}
@@ -17,6 +17,7 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 	for (auto &expr : other.expressions) {
 		expressions.emplace_back(expr->Copy());
 	}
+	cte_map = other.cte_map.Copy();
 }
 
 string UpdateStatement::ToString() const {

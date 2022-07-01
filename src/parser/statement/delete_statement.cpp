@@ -7,13 +7,14 @@ DeleteStatement::DeleteStatement() : SQLStatement(StatementType::DELETE_STATEMEN
 }
 
 DeleteStatement::DeleteStatement(const DeleteStatement &other)
-    : SQLStatement(other), table(other.table->Copy()), cte_map(other.cte_map) {
+    : SQLStatement(other), table(other.table->Copy()) {
 	if (other.condition) {
 		condition = other.condition->Copy();
 	}
 	for (const auto &using_clause : other.using_clauses) {
 		using_clauses.push_back(using_clause->Copy());
 	}
+	cte_map = other.cte_map.Copy();
 }
 
 string DeleteStatement::ToString() const {

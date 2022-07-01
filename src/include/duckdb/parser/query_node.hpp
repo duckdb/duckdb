@@ -28,12 +28,12 @@ struct CommonTableExpressionInfo;
 class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
-	CommonTableExpressionMap(const CommonTableExpressionMap &other);
 
 	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> map;
 
 public:
 	string ToString() const;
+	CommonTableExpressionMap Copy() const;
 };
 
 class QueryNode {

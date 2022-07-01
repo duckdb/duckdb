@@ -10,7 +10,8 @@ InsertStatement::InsertStatement() : SQLStatement(StatementType::INSERT_STATEMEN
 InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other),
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
-      columns(other.columns), table(other.table), schema(other.schema), cte_map(other.cte_map) {
+      columns(other.columns), table(other.table), schema(other.schema) {
+	cte_map = other.cte_map.Copy();
 }
 
 string InsertStatement::ToString() const {

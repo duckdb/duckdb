@@ -11,15 +11,17 @@ namespace duckdb {
 CommonTableExpressionMap::CommonTableExpressionMap() {
 }
 
-CommonTableExpressionMap::CommonTableExpressionMap(const CommonTableExpressionMap &other) {
-	for (auto &kv : other.map) {
+CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
+	CommonTableExpressionMap res;
+	for (auto &kv : this->map) {
 		auto kv_info = make_unique<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
-		map[kv.first] = move(kv_info);
+		res.map[kv.first] = move(kv_info);
 	}
+	return res;
 }
 
 string CommonTableExpressionMap::ToString() const {
