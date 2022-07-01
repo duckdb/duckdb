@@ -124,7 +124,12 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		string query_info = PrintAsString();
 		auto save_location = GetSaveLocation();
-		if (save_location.empty()) {
+#ifdef DEBUG
+		if (save_location.compare(PROFILER_SHADOW_LOCATION) == 0) {
+			// disable output
+		} else
+#endif
+		    if (save_location.empty()) {
 			Printer::Print(query_info);
 			Printer::Print("\n");
 		} else {
