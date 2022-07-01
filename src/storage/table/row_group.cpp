@@ -666,6 +666,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
+		// FIXME: should be able to just steal the statistics here, no need to copy (twice?!)
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 

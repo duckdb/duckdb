@@ -184,19 +184,19 @@ struct EvictionQueue {
 	eviction_queue_t q;
 };
 
-class TemporaryFileHandle;
+class TemporaryFileManager;
 
 class TemporaryDirectoryHandle {
 public:
 	TemporaryDirectoryHandle(DatabaseInstance &db, string path_p);
 	~TemporaryDirectoryHandle();
 
-	TemporaryFileHandle &GetTempFile();
+	TemporaryFileManager &GetTempFile();
 
 private:
 	DatabaseInstance &db;
 	string temp_directory;
-	unique_ptr<TemporaryFileHandle> temp_file;
+	unique_ptr<TemporaryFileManager> temp_file;
 };
 
 void BufferManager::SetTemporaryDirectory(string new_dir) {
@@ -460,7 +460,19 @@ unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, File
 	return buffer;
 }
 
+struct TemporaryFileIndex {
+	idx_t file_index;
+	idx_t block_index;
+};
+
 class TemporaryFileHandle {
+public:
+	TemporaryFileHandle(DatabaseInstance &db, const string &temp_directory, idx_t index)
+	    : db(db), file_index(index), path(FileSystem::GetFileSystem(db).JoinPath(
+	                                     temp_directory, "duckdb_temp_storage-" + to_string(index) + ".tmp")),
+	      max_index(0) {
+	}
+
 public:
 	struct TemporaryFileLock {
 		TemporaryFileLock(mutex &mutex) : lock(mutex) {
@@ -469,46 +481,32 @@ public:
 		lock_guard<mutex> lock;
 	};
 
-	TemporaryFileHandle(DatabaseInstance &db, const string &temp_directory)
-	    : db(db), path(FileSystem::GetFileSystem(db).JoinPath(temp_directory, "duckdb_temp_storage.tmp")) {
-		max_index = 0;
-	}
-
-	void WriteTemporaryBuffer(ManagedBuffer &buffer) {
+public:
+	TemporaryFileIndex WriteTemporaryBuffer(ManagedBuffer &buffer) {
 		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
-		idx_t index;
+		TemporaryFileIndex index;
+		index.file_index = file_index;
 		{
-			TemporaryFileLock lock(block_lock);
+			TemporaryFileLock lock(file_lock);
 			// open the file handle if it does not yet exist
 			CreateFileIfNotExists(lock);
 			// fetch a new block index to write to
-			index = GetNewBlockIndex(lock, buffer.id);
-			used_blocks[buffer.id] = index;
-			indexes_in_use.insert(index);
+			index.block_index = GetNewBlockIndex(lock, buffer.id);
+			indexes_in_use.insert(index.block_index);
 		}
-		buffer.Write(*handle, GetPositionInFile(index));
+		buffer.Write(*handle, GetPositionInFile(index.block_index));
+		return index;
 	}
 
-	bool HasTemporaryBuffer(block_id_t block_id) {
-		lock_guard<mutex> lock(block_lock);
-		return used_blocks.find(block_id) != used_blocks.end();
-	}
-
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
-		idx_t index;
-		{
-			TemporaryFileLock lock(block_lock);
-			D_ASSERT(handle);
-			index = GetTempBlockIndex(lock, id);
-		}
-
-		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(index), Storage::BLOCK_SIZE, id,
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, idx_t block_index,
+	                                           unique_ptr<FileBuffer> reusable_buffer) {
+		auto buffer = ReadTemporaryBufferInternal(db, *handle, GetPositionInFile(block_index), Storage::BLOCK_SIZE, id,
 		                                          move(reusable_buffer));
 		{
 			// remove the block (and potentially truncate the temp file)
-			TemporaryFileLock lock(block_lock);
+			TemporaryFileLock lock(file_lock);
 			D_ASSERT(handle);
-			RemoveTempBlockIndex(lock, id, index);
+			RemoveTempBlockIndex(lock, block_index);
 		}
 		return buffer;
 	}
@@ -533,14 +531,8 @@ private:
 		return index;
 	}
 
-	idx_t GetTempBlockIndex(TemporaryFileLock &, block_id_t id) {
-		D_ASSERT(used_blocks.find(id) != used_blocks.end());
-		return used_blocks[id];
-	}
-
-	void RemoveTempBlockIndex(TemporaryFileLock &, block_id_t block_id, idx_t index) {
+	void RemoveTempBlockIndex(TemporaryFileLock &, idx_t index) {
 		// remove this block from the set of blocks
-		used_blocks.erase(block_id);
 		indexes_in_use.erase(index);
 		free_indexes.insert(index);
 		// check if we can truncate the file
@@ -571,16 +563,70 @@ private:
 private:
 	DatabaseInstance &db;
 	unique_ptr<FileHandle> handle;
+	idx_t file_index;
 	string path;
-	mutex block_lock;
+	mutex file_lock;
 	idx_t max_index;
 	set<idx_t> free_indexes;
 	set<idx_t> indexes_in_use;
-	unordered_map<block_id_t, idx_t> used_blocks;
+};
+
+class TemporaryFileManager {
+public:
+	TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p)
+	    : db(db), temp_directory(temp_directory_p) {
+	}
+
+public:
+	struct TemporaryManagerLock {
+		TemporaryManagerLock(mutex &mutex) : lock(mutex) {
+		}
+
+		lock_guard<mutex> lock;
+	};
+
+	void WriteTemporaryBuffer(ManagedBuffer &buffer) {
+		D_ASSERT(buffer.size == Storage::BLOCK_SIZE);
+		// FIXME: pick a file, or create a new file
+		// write to file and add to used blocks
+	}
+
+	bool HasTemporaryBuffer(block_id_t block_id) {
+		lock_guard<mutex> lock(manager_lock);
+		return used_blocks.find(block_id) != used_blocks.end();
+	}
+
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer) {
+		TemporaryFileIndex index;
+		{
+			TemporaryManagerLock lock(manager_lock);
+			index = GetTempBlockIndex(lock, id);
+		}
+		auto buffer = files[index.file_index].ReadTemporaryBuffer(id, index.block_index, move(reusable_buffer));
+		{
+			// remove the block (and potentially truncate the temp file)
+			TemporaryManagerLock lock(manager_lock);
+			used_blocks.erase(id);
+		}
+		return buffer;
+	}
+
+private:
+	TemporaryFileIndex GetTempBlockIndex(TemporaryManagerLock &, block_id_t id) {
+		D_ASSERT(used_blocks.find(id) != used_blocks.end());
+		return used_blocks[id];
+	}
+
+private:
+	DatabaseInstance &db;
+	vector<TemporaryFileHandle> files;
+	mutex manager_lock;
+	string temp_directory;
+	unordered_map<block_id_t, TemporaryFileIndex> used_blocks;
 };
 
 TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string path_p)
-    : db(db), temp_directory(move(path_p)), temp_file(make_unique<TemporaryFileHandle>(db, temp_directory)) {
+    : db(db), temp_directory(move(path_p)), temp_file(make_unique<TemporaryFileManager>(db, temp_directory)) {
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		fs.CreateDirectory(temp_directory);
@@ -593,7 +639,7 @@ TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
 	}
 }
 
-TemporaryFileHandle &TemporaryDirectoryHandle::GetTempFile() {
+TemporaryFileManager &TemporaryDirectoryHandle::GetTempFile() {
 	return *temp_file;
 }
 
