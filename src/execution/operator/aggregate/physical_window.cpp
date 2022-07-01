@@ -412,10 +412,11 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 }
 
 void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
-	lock_guard<mutex> glock(gstate.lock);
 
 	// OVER()
 	if (over_chunk.ColumnCount() == 0) {
+		// Only one partition again, so need a global lock.
+		lock_guard<mutex> glock(gstate.lock);
 		if (gstate.rows) {
 			if (rows) {
 				gstate.rows->Merge(*rows);
