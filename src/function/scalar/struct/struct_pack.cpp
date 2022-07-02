@@ -74,7 +74,7 @@ void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("struct_pack", {}, LogicalTypeId::STRUCT, StructPackFunction, false, StructPackBind, nullptr,
 	                   StructPackStats);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = SPECIAL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 	fun.name = "row";
 	set.AddFunction(fun);

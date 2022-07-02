@@ -59,14 +59,14 @@ public:
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
 	                          bool propagate_null_values = false,
-	                          FunctionNullHandling null_handling = NULL_IN_NULL_OUT);
+	                          FunctionNullHandling null_handling = FunctionNullHandling::NULL_IN_NULL_OUT);
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	                          bool propagate_null_values = false, bool has_side_effects = false,
 	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                          FunctionNullHandling null_handling = NULL_IN_NULL_OUT);
+	                          FunctionNullHandling null_handling = FunctionNullHandling::NULL_IN_NULL_OUT);
 
 	//! The main scalar function to execute
 	scalar_function_t function;

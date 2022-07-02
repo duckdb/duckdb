@@ -487,7 +487,7 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
 	// found a matching function!
 	auto &bound_function = func.functions[best_function];
 
-	if (bound_function.null_handling == NULL_IN_NULL_OUT) {
+	if (bound_function.null_handling == FunctionNullHandling::NULL_IN_NULL_OUT) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
 				if (binder) {

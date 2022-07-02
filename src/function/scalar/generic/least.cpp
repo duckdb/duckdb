@@ -97,7 +97,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 template <typename T, class OP>
 ScalarFunction GetLeastGreatestFunction(const LogicalType &type) {
 	return ScalarFunction({type}, type, LeastGreatestFunction<T, OP>, true, false, nullptr, nullptr, nullptr, nullptr,
-	                      type, SPECIAL_HANDLING);
+	                      type, FunctionNullHandling::SPECIAL_HANDLING);
 }
 
 template <class OP>
@@ -105,16 +105,16 @@ static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name)
 	ScalarFunctionSet fun_set(fun_name);
 	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, LeastGreatestFunction<int64_t, OP>,
 	                                   true, false, nullptr, nullptr, nullptr, nullptr, LogicalType::BIGINT,
-	                                   SPECIAL_HANDLING));
+	                                   FunctionNullHandling::SPECIAL_HANDLING));
 	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT,
 	                                   LeastGreatestFunction<hugeint_t, OP>, true, false, nullptr, nullptr, nullptr,
-	                                   nullptr, LogicalType::HUGEINT, SPECIAL_HANDLING));
+	                                   nullptr, LogicalType::HUGEINT, FunctionNullHandling::SPECIAL_HANDLING));
 	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, LeastGreatestFunction<double, OP>,
 	                                   true, false, nullptr, nullptr, nullptr, nullptr, LogicalType::DOUBLE,
-	                                   SPECIAL_HANDLING));
+	                                   FunctionNullHandling::SPECIAL_HANDLING));
 	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                   LeastGreatestFunction<string_t, OP, true>, true, false, nullptr, nullptr,
-	                                   nullptr, nullptr, LogicalType::VARCHAR, SPECIAL_HANDLING));
+	                                   nullptr, nullptr, LogicalType::VARCHAR, FunctionNullHandling::SPECIAL_HANDLING));
 
 	fun_set.AddFunction(GetLeastGreatestFunction<timestamp_t, OP>(LogicalType::TIMESTAMP));
 	fun_set.AddFunction(GetLeastGreatestFunction<time_t, OP>(LogicalType::TIME));

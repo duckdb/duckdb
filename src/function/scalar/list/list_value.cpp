@@ -66,7 +66,7 @@ void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, false, ListValueBind, nullptr,
 	                   ListValueStats);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = SPECIAL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 	fun.name = "list_pack";
 	set.AddFunction(fun);

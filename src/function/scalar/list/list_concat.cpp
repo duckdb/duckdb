@@ -123,7 +123,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
 	                          LogicalType::LIST(LogicalType::ANY), ListConcatFunction, false, false, ListConcatBind,
 	                          nullptr, ListConcatStats);
-	fun.null_handling = SPECIAL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 

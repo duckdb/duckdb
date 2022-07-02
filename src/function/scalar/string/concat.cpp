@@ -245,7 +245,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// concat_ws(',', '', '') = ","
 	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatFunction);
 	concat.varargs = LogicalType::VARCHAR;
-	concat.null_handling = SPECIAL_HANDLING;
+	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat);
 
 	ScalarFunctionSet concat_op("||");
@@ -254,14 +254,14 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	concat_op.AddFunction(ListConcatFun::GetFunction());
 	for (auto &fun : concat_op.functions) {
-		fun.null_handling = SPECIAL_HANDLING;
+		fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	}
 	set.AddFunction(concat_op);
 
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, ConcatWSFunction);
 	concat_ws.varargs = LogicalType::VARCHAR;
-	concat_ws.null_handling = SPECIAL_HANDLING;
+	concat_ws.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_ws);
 }
 

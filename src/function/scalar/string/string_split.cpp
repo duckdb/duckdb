@@ -251,12 +251,12 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 
 	auto regular_fun =
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction);
-	regular_fun.null_handling = SPECIAL_HANDLING;
+	regular_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"string_split", "str_split", "string_to_array", "split"}, regular_fun);
 
 	auto regex_fun =
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction);
-	regex_fun.null_handling = SPECIAL_HANDLING;
+	regex_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"string_split_regex", "str_split_regex", "regexp_split_to_array"}, regex_fun);
 }
 

@@ -201,7 +201,7 @@ void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, false, false, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
-	fun.null_handling = SPECIAL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"array_slice", "list_slice"}, fun);
 }
 
