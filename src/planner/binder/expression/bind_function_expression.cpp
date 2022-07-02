@@ -121,7 +121,6 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	// bind the lambda parameter
 	auto &lambda_expr = (LambdaExpression &)*function.children[1];
 	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
-	idx_t num_params = lambda_expr.params.size();
 
 	if (bind_lambda_result.HasError()) {
 		error = bind_lambda_result.error;
@@ -153,21 +152,29 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		children.push_back(move(child.expr));
 	}
 
-	// iterate and transform the children of the lambda expression
-	auto bound_lambda_expr = move(children.back());
-	children.pop_back();
-	IterateLambdaExprChildren(children, list_child_type, bound_lambda_expr);
-	children.push_back(move(bound_lambda_expr));
-
-	// NOTE: this is super hacky
-	// the alias of the lambda expression contains the number of lambda parameters
-	children[children.size() - 1]->alias = to_string(num_params);
+	// capture the (lambda) columns
+	auto &bound_lambda_expr = (BoundLambdaExpression &)*children.back();
+	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr,
+	                     children[0]->alias);
 
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
+
+	// remove the lambda expression from the children
+	auto &bound_function_expr = (BoundFunctionExpression &)*result;
+	auto lambda = move(bound_function_expr.children.back());
+	bound_function_expr.children.pop_back();
+	auto &bound_lambda = (BoundLambdaExpression &)*lambda;
+
+	// push back the captures into the children vector and the correct return types into the bound_function arguments
+	for (auto &capture : bound_lambda.captures) {
+		bound_function_expr.function.arguments.push_back(capture->return_type);
+		bound_function_expr.children.push_back(move(capture));
+	}
+
 	return BindResult(move(result));
 }
 

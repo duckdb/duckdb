@@ -125,10 +125,11 @@ protected:
 	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
-	void TransformLambdaExprChild(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
-	                              vector<unique_ptr<Expression>> &arguments, LogicalType &list_child_type);
-	void IterateLambdaExprChildren(vector<unique_ptr<Expression>> &arguments, LogicalType &list_child_type,
-	                               unique_ptr<Expression> &expr);
+	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
+	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                                   string &alias);
+	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                          unique_ptr<Expression> &expr, string &alias);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);

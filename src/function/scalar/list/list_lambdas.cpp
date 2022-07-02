@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_lambda_expression.hpp"
 
 namespace duckdb {
 
@@ -291,20 +292,15 @@ template <int64_t LAMBDA_PARAM_CNT>
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
-	// this is pretty ugly, but I did not come up with a better way to ensure the correct number of
-	// lhs lambda parameters, and to ensure that the lambda expression is not NULL
-	idx_t num_params = 0;
-	if (!arguments[arguments.size() - 1]->alias.empty()) {
-		num_params = stoi(arguments[arguments.size() - 1]->alias);
+	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
+		throw BinderException("Invalid lambda expression!");
 	}
-	if (num_params != LAMBDA_PARAM_CNT) {
+
+	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	if (bound_lambda_expr.parameter_count != LAMBDA_PARAM_CNT) {
 		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name +
 		                      " expects " + to_string(LAMBDA_PARAM_CNT) + " parameter(s).");
 	}
-
-	// remove the lambda function
-	auto lambda_expr = move(arguments.back());
-	arguments.pop_back();
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments.emplace_back(LogicalType::SQLNULL);
@@ -320,11 +316,8 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 
-	// push back the correct return types into the bound_function arguments
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		bound_function.arguments.push_back(arguments[i]->return_type);
-	}
-
+	// get the lambda expression and put it in the bind info
+	auto lambda_expr = move(bound_lambda_expr.lambda_expr);
 	return make_unique<ListLambdaBindData>(bound_function.return_type, move(lambda_expr));
 }
 
@@ -332,7 +325,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 
 	// at least the list column and the lambda function
-	if (arguments.size() < 2) {
+	if (arguments.size() != 2) {
 		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
 	}
 
@@ -344,7 +337,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
                                                vector<unique_ptr<Expression>> &arguments) {
 
 	// at least the list column and the lambda function
-	if (arguments.size() < 2) {
+	if (arguments.size() != 2) {
 		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
 	}
 

@@ -29,6 +29,9 @@ statement error
 SELECT ${func_name}(NULL, x)
 
 statement error
+SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
+
+statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test
 
 statement error
