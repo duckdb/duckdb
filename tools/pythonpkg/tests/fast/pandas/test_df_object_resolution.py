@@ -41,6 +41,7 @@ class TestResolveObjectColumns(object):
                 [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
             ]
         )
+
         converted_df = duckdb.query("SELECT * FROM x").df()
         y = pd.DataFrame(
             [
@@ -119,8 +120,8 @@ class TestResolveObjectColumns(object):
                 [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}]
             ]
         )
-        converted_df = duckdb.query("SELECT * FROM x").df()
-        equal_df = duckdb.query("SELECT * FROM y").df()
+        converted_df = duckdb.query_df("df", "SELECT * FROM df").df()
+        equal_df = duckdb.query_df("df", "SELECT * FROM df").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
     def test_map_correct(self, duckdb_cursor):

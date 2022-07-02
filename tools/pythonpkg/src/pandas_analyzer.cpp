@@ -272,6 +272,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 		return LogicalType::TIME;
 	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		return LogicalType::DATE;
+	} else if (py::isinstance(ele, import_cache.datetime.timedelta())) {
+		return LogicalType::INTERVAL;
 	} else if (py::isinstance<py::str>(ele)) {
 		return LogicalType::VARCHAR;
 	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
