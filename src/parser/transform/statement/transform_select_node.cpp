@@ -19,7 +19,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 		node = make_unique<SelectNode>();
 		auto result = (SelectNode *)node.get();
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), *node);
+			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
 		}
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -81,7 +81,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 		node = make_unique<SetOperationNode>();
 		auto result = (SetOperationNode *)node.get();
 		if (stmt->withClause) {
-			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), *node);
+			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map);
 		}
 		result->left = TransformSelectNode(stmt->larg);
 		result->right = TransformSelectNode(stmt->rarg);

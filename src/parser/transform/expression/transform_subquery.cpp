@@ -31,12 +31,14 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 			    string((reinterpret_cast<duckdb_libpgquery::PGValue *>(root->operName->head->data.ptr_value))->val.str);
 			subquery_expr->comparison_type = OperatorToExpressionType(operator_name);
 		}
-		D_ASSERT(subquery_expr->comparison_type == ExpressionType::COMPARE_EQUAL ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_NOTEQUAL ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHAN ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHAN ||
-		         subquery_expr->comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		if (subquery_expr->comparison_type != ExpressionType::COMPARE_EQUAL &&
+		    subquery_expr->comparison_type != ExpressionType::COMPARE_NOTEQUAL &&
+		    subquery_expr->comparison_type != ExpressionType::COMPARE_GREATERTHAN &&
+		    subquery_expr->comparison_type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
+		    subquery_expr->comparison_type != ExpressionType::COMPARE_LESSTHAN &&
+		    subquery_expr->comparison_type != ExpressionType::COMPARE_LESSTHANOREQUALTO) {
+			throw ParserException("ANY and ALL operators require one of =,<>,>,<,>=,<= comparisons!");
+		}
 		if (root->subLinkType == duckdb_libpgquery::PG_ALL_SUBLINK) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
 			// e.g. [= ALL()] is equivalent to [NOT(<> ANY())]
