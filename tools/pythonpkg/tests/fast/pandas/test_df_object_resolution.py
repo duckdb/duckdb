@@ -120,8 +120,8 @@ class TestResolveObjectColumns(object):
                 [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}]
             ]
         )
-        converted_df = duckdb.query_df("df", "SELECT * FROM df").df()
-        equal_df = duckdb.query_df("df", "SELECT * FROM df").df()
+        converted_df = duckdb.query_df(x, "df", "SELECT * FROM df").df()
+        equal_df = duckdb.query_df(y, "df", "SELECT * FROM df").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
     def test_map_correct(self, duckdb_cursor):
