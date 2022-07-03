@@ -179,6 +179,30 @@ class TestResolveObjectColumns(object):
         print(converted_col.columns)
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
+    def test_map_duplicate(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': ['a', 'a', 'b'], 'value': [4, 0, 4]}]
+            ]
+        )
+        converted_col = duckdb.query_df(x, "x", "select * from x").df()
+
+    def test_map_nullkey(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': [None, 'a', 'b'], 'value': [4, 0, 4]}]
+            ]
+        )
+        converted_col = duckdb.query_df(x, "x", "select * from x").df()
+
+    def test_map_fallback_nullkey(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'a': 4, None: 0, 'c': 4}],
+                [{'a': 4, None: 0, 'd': 4}]
+            ]
+        )
+        converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_struct_key_conversion(self, duckdb_cursor):
         x = pd.DataFrame(
