@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -18,15 +19,13 @@ namespace duckdb {
 class Hugeint {
 public:
 	//! Convert a string to a hugeint object
-	static bool FromString(string str, hugeint_t &result);
-	//! Convert a string to a hugeint object
 	static bool FromCString(const char *str, idx_t len, hugeint_t &result);
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
 
 	static hugeint_t FromString(string str) {
 		hugeint_t result;
-		FromString(str, result);
+		UUID::FromString(str, result);
 		return result;
 	}
 

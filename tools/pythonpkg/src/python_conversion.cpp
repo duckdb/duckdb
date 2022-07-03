@@ -7,6 +7,8 @@
 
 #include "datetime.h" //From Python
 
+#include <limits>
+
 namespace duckdb {
 
 Value TransformListValue(py::handle ele);
@@ -148,6 +150,45 @@ Value TransformDictionary(const PyDictionary &dict) {
 	return TransformDictionaryToStruct(dict);
 }
 
+Value TransformPythonIntegerToHugeint(py::handle ele) {
+	auto hugeint_str = string(py::str(ele));
+	hugeint_t hugeint_val = Hugeint::FromString(hugeint_str);
+	return Value::HUGEINT(hugeint_val);
+}
+
+// TODO: add support for UTINYINT, USMALLINT, UINTEGER maybe
+bool TryTransformPythonInteger(Value &res, py::handle ele) {
+	auto ptr = ele.ptr();
+	int overflow;
+	int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
+	if (overflow == -1) {
+		res = TransformPythonIntegerToHugeint(ele);
+		return true;
+	} else if (overflow == 1) {
+		uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
+		if (PyErr_Occurred()) {
+			res = TransformPythonIntegerToHugeint(ele);
+		} else {
+			res = Value::UBIGINT(unsigned_value);
+		}
+		return true;
+	} else if (value == -1 && PyErr_Occurred()) {
+		return false;
+	}
+	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
+		res = Value::BIGINT(value);
+	} else if (value < (int32_t)std::numeric_limits<int16_t>::min() ||
+	           value > (int32_t)std::numeric_limits<int16_t>::max()) {
+		res = Value::INTEGER(value);
+	} else if (value < (int16_t)std::numeric_limits<int8_t>::min() ||
+	           value > (int16_t)std::numeric_limits<int8_t>::max()) {
+		res = Value::SMALLINT(value);
+	} else {
+		res = Value::TINYINT(value);
+	}
+	return true;
+}
+
 Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
@@ -156,7 +197,11 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return Value::BOOLEAN(ele.cast<bool>());
 	} else if (py::isinstance<py::int_>(ele)) {
-		return Value::BIGINT(ele.cast<int64_t>());
+		Value integer;
+		if (!TryTransformPythonInteger(integer, ele)) {
+			throw std::runtime_error("An error occurred attempting to convert a python integer");
+		}
+		return integer;
 	} else if (py::isinstance<py::float_>(ele)) {
 		if (std::isnan(PyFloat_AsDouble(ele.ptr()))) {
 			return Value();

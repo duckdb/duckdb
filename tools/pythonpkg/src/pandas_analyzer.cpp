@@ -244,7 +244,12 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance<py::bool_>(ele)) {
 		return LogicalType::BOOLEAN;
 	} else if (py::isinstance<py::int_>(ele)) {
-		return LogicalType::BIGINT;
+		Value integer;
+		if (!TryTransformPythonInteger(integer, ele)) {
+			can_convert = false;
+			return LogicalType::SQLNULL;
+		}
+		return integer.type();
 	} else if (py::isinstance<py::float_>(ele)) {
 		if (std::isnan(PyFloat_AsDouble(ele.ptr()))) {
 			return LogicalType::SQLNULL;
