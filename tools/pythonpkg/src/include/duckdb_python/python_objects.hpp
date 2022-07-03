@@ -39,9 +39,9 @@ private:
 struct PyTimeDelta {
 public:
 	PyTimeDelta(py::handle &obj);
-	uint64_t days;
-	uint32_t seconds;
-	uint32_t microseconds;
+	int64_t days;
+	int64_t seconds;
+	int64_t microseconds;
 
 public:
 	interval_t ToInterval();
@@ -50,12 +50,13 @@ public:
 struct PyTime {
 public:
 	PyTime(py::handle &obj);
-	py::handle& obj;
+	py::handle &obj;
 	int32_t hour;
 	int32_t minute;
 	int32_t second;
 	int32_t microsecond;
-	PyObject* timezone;
+	PyObject *timezone;
+
 public:
 	dtime_t ToTime();
 	Value ToValue();
@@ -72,7 +73,7 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t micros;
-	PyObject* timezone;
+	PyObject *timezone;
 
 public:
 	timestamp_t ToTimestamp();
@@ -83,10 +84,11 @@ public:
 
 struct PyDate {
 public:
-	PyDate(py::handle& ele);
+	PyDate(py::handle &ele);
 	int32_t year;
 	int32_t month;
 	int32_t day;
+
 public:
 	Value ToValue();
 };
@@ -94,9 +96,10 @@ public:
 struct PyTimezone {
 public:
 	PyTimezone() = delete;
+
 public:
-	static interval_t GetUTCOffset(PyObject* timezone, PyTime& time);
-	static interval_t GetUTCOffset(PyObject* timezone, PyDateTime& time);
+	static interval_t GetUTCOffset(PyObject *timezone, PyTime &time);
+	static interval_t GetUTCOffset(PyObject *timezone, PyDateTime &time);
 };
 
-} //namespace duckdb
+} // namespace duckdb

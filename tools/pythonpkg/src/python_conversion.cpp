@@ -15,10 +15,40 @@ static Value EmptyMapValue() {
 	return Value::MAP(Value::EMPTYLIST(LogicalType::SQLNULL), Value::EMPTYLIST(LogicalType::SQLNULL));
 }
 
+vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type = LogicalType::UNKNOWN) {
+	vector<string> res;
+	if (type.id() == LogicalTypeId::STRUCT) {
+		auto &struct_keys = StructType::GetChildTypes(type);
+		res.reserve(struct_keys.size());
+		for (idx_t i = 0; i < struct_keys.size(); i++) {
+			res.push_back(struct_keys[i].first);
+		}
+		return res;
+	}
+	res.reserve(size);
+	for (idx_t i = 0; i < size; i++) {
+		res.emplace_back(py::str(keys.attr("__getitem__")(i)));
+	}
+	return res;
+}
+
 bool DictionaryHasMapFormat(const PyDictionary &dict) {
 	if (dict.len != 2) {
 		return false;
 	}
+
+	//{ 'key': [ .. keys .. ], 'value': [ .. values .. ]}
+	auto map_keys = TransformStructKeys(dict.keys, dict.len);
+	if (map_keys.size() != 2) {
+		return false;
+	}
+	if (map_keys[0] != "key") {
+		return false;
+	}
+	if (map_keys[1] != "value") {
+		return false;
+	}
+
 	auto keys = dict.values.attr("__getitem__")(0);
 	auto values = dict.values.attr("__getitem__")(1);
 	// Dont check for 'py::list' to allow ducktyping
@@ -36,23 +66,6 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 		return false;
 	}
 	return true;
-}
-
-vector<string> TransformStructKeys(py::handle keys, idx_t size, const LogicalType &type) {
-	vector<string> res;
-	if (type.id() == LogicalTypeId::STRUCT) {
-		auto &struct_keys = StructType::GetChildTypes(type);
-		res.reserve(struct_keys.size());
-		for (idx_t i = 0; i < struct_keys.size(); i++) {
-			res.push_back(struct_keys[i].first);
-		}
-		return res;
-	}
-	res.reserve(size);
-	for (idx_t i = 0; i < size; i++) {
-		res.emplace_back(py::str(keys.attr("__getitem__")(i)));
-	}
-	return res;
 }
 
 Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {

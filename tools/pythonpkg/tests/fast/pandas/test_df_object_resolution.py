@@ -42,7 +42,7 @@ class TestResolveObjectColumns(object):
             ]
         )
 
-        converted_df = duckdb.query("SELECT * FROM x").df()
+        converted_df = duckdb.query_df(x, "x", "SELECT * FROM x").df()
         y = pd.DataFrame(
             [
                 [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
@@ -52,7 +52,7 @@ class TestResolveObjectColumns(object):
                 [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
             ]
         )
-        equal_df = duckdb.query("SELECT * FROM y").df()
+        equal_df = duckdb.query_df(y, "y", "SELECT * FROM y").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
     def test_map_fallback_incorrect_amount_of_keys(self, duckdb_cursor):
@@ -65,7 +65,7 @@ class TestResolveObjectColumns(object):
                 [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
             ]
         )
-        converted_df = duckdb.query("SELECT * FROM x").df()
+        converted_df = duckdb.query_df(x, "x", "SELECT * FROM x").df()
         y = pd.DataFrame(
             [
                 [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
@@ -75,7 +75,7 @@ class TestResolveObjectColumns(object):
                 [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
             ]
         )
-        equal_df = duckdb.query("SELECT * FROM y").df()
+        equal_df = duckdb.query_df(y, "y", "SELECT * FROM y").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
     def test_struct_value_upgrade(self, duckdb_cursor):
@@ -97,8 +97,8 @@ class TestResolveObjectColumns(object):
                 [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}]
             ]
         )
-        converted_df = duckdb.query("SELECT * FROM x").df()
-        equal_df = duckdb.query("SELECT * FROM y").df()
+        converted_df = duckdb.query_df(x, "x", "SELECT * FROM x").df()
+        equal_df = duckdb.query_df(y, "y", "SELECT * FROM y").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
     def test_map_fallback_value_upgrade(self, duckdb_cursor):
@@ -135,7 +135,7 @@ class TestResolveObjectColumns(object):
             ]
         )
         x.rename(columns = {0 : 'a'}, inplace = True)
-        converted_col = duckdb.query("select * from x as 'a'").df()
+        converted_col = duckdb.query_df(x, "x", "select * from x as 'a'").df()
         duckdb.query("""
             CREATE TABLE tmp(
                 a MAP(VARCHAR, INTEGER)
@@ -161,7 +161,7 @@ class TestResolveObjectColumns(object):
             ]
         )
         x.rename(columns = {0 : 'a'}, inplace = True)
-        converted_col = duckdb.query("select * from x").df()
+        converted_col = duckdb.query_df(x, "x", "select * from x").df()
         duckdb.query("""
             CREATE TABLE tmp2(
                 a MAP(VARCHAR, VARCHAR)
@@ -224,7 +224,7 @@ class TestResolveObjectColumns(object):
             ]
         )
         x.rename(columns = {0 : 'a'}, inplace = True)
-        converted_col = duckdb.query("select * from x").df()
+        converted_col = duckdb.query_df(x, "x", "select * from x").df()
         duckdb.query("""
             CREATE TABLE tmp3(
                 a VARCHAR[]
@@ -252,6 +252,6 @@ class TestResolveObjectColumns(object):
                 [IntString(0)],
             ]
         )
-        duckdb_col = duckdb.query("select * from x").df()
+        duckdb_col = duckdb.query_df(x, "x", "select * from x").df()
         df_expected_res = pd.DataFrame({'0': pd.Series(['4','2','0'])})
         pd.testing.assert_frame_equal(duckdb_col, df_expected_res)
