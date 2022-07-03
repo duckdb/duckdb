@@ -7,13 +7,13 @@ namespace duckdb {
 
 Node4::Node4(size_t compression_length) : Node(NodeType::N4, compression_length) {
 	memset(key, 0, sizeof(key));
-	for (auto &child : children_ptrs) {
+	for (auto &child : children) {
 		child = 0;
 	}
 }
 
 Node4::~Node4() {
-	for (auto &child : children_ptrs) {
+	for (auto &child : children) {
 		if (child) {
 			if (!IsSwizzled(child)) {
 				delete (Node *)child;
@@ -23,7 +23,7 @@ Node4::~Node4() {
 }
 
 void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
-	AssignPointer(children_ptrs[pos], node);
+	AssignPointer(children[pos], node);
 }
 
 idx_t Node4::GetChildPos(uint8_t k) {
@@ -63,8 +63,8 @@ idx_t Node4::GetNextPos(idx_t pos) {
 
 Node *Node4::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	children_ptrs[pos] = Node::GetChildSwizzled(art, children_ptrs[pos]);
-	return (Node *)children_ptrs[pos];
+	children[pos] = Node::GetChildSwizzled(art, children[pos]);
+	return (Node *)children[pos];
 }
 
 void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
@@ -77,14 +77,14 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 		while ((pos < node->count) && (n->key[pos] < key_byte)) {
 			pos++;
 		}
-		if (n->children_ptrs[pos] != 0) {
+		if (n->children[pos] != 0) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
-				n->children_ptrs[i] = n->children_ptrs[i - 1];
+				n->children[i] = n->children[i - 1];
 			}
 		}
 		n->key[pos] = key_byte;
-		AssignPointer(n->children_ptrs[pos], new_child);
+		AssignPointer(n->children[pos], new_child);
 		n->count++;
 	} else {
 		// Grow to Node16
@@ -93,8 +93,8 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 		CopyPrefix(node, new_node);
 		for (idx_t i = 0; i < 4; i++) {
 			new_node->key[i] = n->key[i];
-			new_node->children[i] = n->children_ptrs[i];
-			n->children_ptrs[i] = 0;
+			new_node->children[i] = n->children[i];
+			n->children[i] = 0;
 		}
 		// Delete old node and replace it with new node
 		delete node;
@@ -107,20 +107,19 @@ void Node4::Erase(Node *&node, int pos, ART &art) {
 	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
 	// erase the child and decrease the count
-	// FIXME need a swizzled node method for deletes
-	if (!IsSwizzled(n->children_ptrs[pos])) {
-		delete (Node *)n->children_ptrs[pos];
+	if (!IsSwizzled(n->children[pos])) {
+		delete (Node *)n->children[pos];
 	}
-	n->children_ptrs[pos] = 0;
+	n->children[pos] = 0;
 	n->count--;
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
 		n->key[pos] = n->key[pos + 1];
-		n->children_ptrs[pos] = n->children_ptrs[pos + 1];
+		n->children[pos] = n->children[pos + 1];
 	}
 	// set any remaining nodes as nullptr
 	for (; pos < 4; pos++) {
-		n->children_ptrs[pos] = 0;
+		n->children[pos] = 0;
 	}
 
 	// This is a one way node
@@ -144,7 +143,7 @@ void Node4::Erase(Node *&node, int pos, ART &art) {
 		//! set new prefix and move the child
 		child_ref->prefix = move(new_prefix);
 		child_ref->prefix_length = new_length;
-		n->children_ptrs[0] = 0;
+		n->children[0] = 0;
 		delete node;
 		node = child_ref;
 	}
@@ -153,7 +152,7 @@ void Node4::Erase(Node *&node, int pos, ART &art) {
 std::pair<idx_t, idx_t> Node4::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
 	vector<std::pair<idx_t, idx_t>> child_offsets;
-	for (auto &child_ptr : children_ptrs) {
+	for (auto &child_ptr : children) {
 		if (child_ptr) {
 			child_ptr = GetChildSwizzled(art, child_ptr);
 			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
@@ -202,7 +201,7 @@ Node4 *Node4::Deserialize(duckdb::MetaBlockReader &reader) {
 	for (idx_t i = 0; i < 4; i++) {
 		idx_t block_id = reader.Read<idx_t>();
 		idx_t offset = reader.Read<idx_t>();
-		node4->children_ptrs[i] = Node::GenerateSwizzledPointer(block_id, offset);
+		node4->children[i] = Node::GenerateSwizzledPointer(block_id, offset);
 	}
 
 	return node4;

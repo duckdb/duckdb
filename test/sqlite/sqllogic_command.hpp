@@ -42,6 +42,9 @@ public:
 
 	virtual void ExecuteInternal() = 0;
 	void Execute();
+
+private:
+	void RestartDatabase(Connection *&connection, string sql_query);
 };
 
 class Statement : public Command {

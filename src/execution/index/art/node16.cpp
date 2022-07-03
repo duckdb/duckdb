@@ -187,7 +187,7 @@ void Node16::Erase(Node *&node, int pos, ART &art) {
 		auto new_node = new Node4(n->prefix_length);
 		for (unsigned i = 0; i < n->count; i++) {
 			new_node->key[new_node->count] = n->key[i];
-			new_node->children_ptrs[new_node->count++] = n->children[i];
+			new_node->children[new_node->count++] = n->children[i];
 			n->children[i] = 0;
 		}
 		CopyPrefix(n, new_node);

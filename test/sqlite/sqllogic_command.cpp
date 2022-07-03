@@ -41,9 +41,7 @@ Connection *Command::CommandConnection() {
 	}
 }
 
-unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
-                                                          string sql_query) {
-	query_break(query_line);
+void Command::RestartDatabase(Connection *&connection, string sql_query) {
 	vector<unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
@@ -51,24 +49,25 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 	} catch (...) {
 		query_fail = true;
 	}
-	bool all_select = true;
-
-	for (auto &statament : statements) {
-		if (statament->type != StatementType::SELECT_STATEMENT) {
-			all_select = false;
-		}
-	}
 	bool is_any_transaction_active = false;
 	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
 		if (conn.first->transaction.HasActiveTransaction()) {
 			is_any_transaction_active = true;
 		}
 	}
-	if (!statements.empty() && !query_fail && all_select && TestForceReload() && TestForceStorage() &&
-	    !is_any_transaction_active && !runner.skip_reload) {
+	if (!query_fail && !is_any_transaction_active && !runner.skip_reload) {
+		// We basically restart the database if no transaction is active and if the query is valid
 		auto command = make_unique<RestartCommand>(runner);
 		runner.ExecuteCommand(move(command));
 		connection = CommandConnection();
+	}
+}
+
+unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
+                                                          string sql_query) {
+	query_break(query_line);
+	if (TestForceReload() && TestForceStorage()) {
+		RestartDatabase(connection, sql_query);
 	}
 
 	auto result = connection->Query(sql_query);

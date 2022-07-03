@@ -728,7 +728,7 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
 	case NodeType::N4:
-		next = (Node *)Node::GetChildSwizzled(*this, ((Node4 &)node).children_ptrs[0]);
+		next = (Node *)Node::GetChildSwizzled(*this, ((Node4 &)node).children[0]);
 		break;
 	case NodeType::N16:
 		next = (Node *)Node::GetChildSwizzled(*this, ((Node16 &)node).children[0]);
