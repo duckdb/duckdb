@@ -516,10 +516,7 @@ py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) co
 	}
 	return result->FetchRecordBatchReader(chunk_size);
 }
-static unique_ptr<TableFunctionRef>
-TryReplacement(py::dict &dict, py::str &table_name,
-               unordered_map<string, vector<shared_ptr<ExternalDependency>>> &registered_objects,
-               ClientConfig &config) {
+static unique_ptr<TableFunctionRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
@@ -533,12 +530,8 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
 		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
-		// keep a reference
-		vector<shared_ptr<ExternalDependency>> external_dependency;
-		auto object = make_shared<PythonDependencies>(make_unique<RegisteredObject>(entry),
-		                                              make_unique<RegisteredObject>(new_df));
-		external_dependency.push_back(move(object));
-		registered_objects[name] = move(external_dependency);
+		table_function->external_dependency = make_unique<PythonDependencies>(make_unique<RegisteredObject>(entry),
+		                                                                      make_unique<RegisteredObject>(new_df));
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(py_object_type)) {
 		string name = "arrow_" + GenerateRandomName();
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
@@ -550,25 +543,17 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
 		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
 		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
-		vector<shared_ptr<ExternalDependency>> external_dependency;
-		auto object = make_shared<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
-		external_dependency.push_back(move(object));
-		registered_objects[name] = move(external_dependency);
+		table_function->external_dependency =
+		    make_unique<PythonDependencies>(make_unique<RegisteredArrow>(move(stream_factory), entry));
 	} else {
 		throw std::runtime_error("Python Object " + py_object_type + " not suitable for replacement scans");
 	}
 	return table_function;
 }
 
-struct ReplacementRegisteredObjects : public ReplacementScanData {
-	unordered_map<string, vector<shared_ptr<ExternalDependency>>> *registered_objects;
-};
-
 static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, const string &table_name,
                                                     ReplacementScanData *data) {
 	py::gil_scoped_acquire acquire;
-	auto &registered_data = (ReplacementRegisteredObjects &)*data;
-	auto registered_objects = registered_data.registered_objects;
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
@@ -576,7 +561,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
 		if (local_dict) {
-			auto result = TryReplacement(local_dict, py_table_name, *registered_objects, context.config);
+			auto result = TryReplacement(local_dict, py_table_name, context.config);
 			if (result) {
 				return result;
 			}
@@ -584,7 +569,7 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
 		if (global_dict) {
-			auto result = TryReplacement(global_dict, py_table_name, *registered_objects, context.config);
+			auto result = TryReplacement(global_dict, py_table_name, context.config);
 			if (result) {
 				return result;
 			}
@@ -615,10 +600,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
 	if (config.options.enable_external_access) {
-		DBConfig &cur_config = res->database->instance->config;
-		auto extra_data = make_unique<ReplacementRegisteredObjects>();
-		extra_data->registered_objects = &res->connection->context->external_dependencies;
-		cur_config.replacement_scans.emplace_back(ScanReplacement, move(extra_data));
+		res->database->instance->config.replacement_scans.emplace_back(ScanReplacement);
 	}
 
 	PandasScanFunction scan_fun;

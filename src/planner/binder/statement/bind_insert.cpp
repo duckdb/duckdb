@@ -39,6 +39,9 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 
 	auto insert = make_unique<LogicalInsert>(table);
 
+	// Add CTEs as bindable
+	AddCTEMap(stmt.cte_map);
+
 	idx_t generated_column_count = 0;
 	vector<idx_t> named_column_map;
 	if (!stmt.columns.empty()) {

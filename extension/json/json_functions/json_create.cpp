@@ -376,7 +376,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		yyjson_mut_doc_set_root(*doc, objs[i]);
-		objects[i] = JSONCommon::WriteVal(*doc, result);
+		objects[i] = JSONCommon::WriteDoc(*doc, result);
 	}
 }
 
@@ -403,7 +403,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		yyjson_mut_doc_set_root(*doc, arrs[i]);
-		objects[i] = JSONCommon::WriteVal(*doc, result);
+		objects[i] = JSONCommon::WriteDoc(*doc, result);
 	}
 }
 
@@ -424,7 +424,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
 			yyjson_mut_doc_set_root(*doc, vals[i]);
-			objects[i] = JSONCommon::WriteVal(*doc, result);
+			objects[i] = JSONCommon::WriteDoc(*doc, result);
 		} else {
 			result_validity.SetInvalid(i);
 		}

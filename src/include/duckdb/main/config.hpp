@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -136,6 +137,8 @@ public:
 	//! Database configuration options
 	DBConfigOptions options;
 
+	//! Extensions made to the parser
+	vector<ParserExtension> parser_extensions;
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
 	                                   set_option_callback_t function = nullptr);
 

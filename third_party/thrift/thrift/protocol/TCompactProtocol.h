@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_H_
-#define _THRIFT_PROTOCOL_TCOMPACTPROTOCOL_H_ 1
+#ifndef _DUCKDB_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_H_
+#define _DUCKDB_THRIFT_PROTOCOL_TCOMPACTPROTOCOL_H_ 1
 
 #include "thrift/protocol/TVirtualProtocol.h"
 

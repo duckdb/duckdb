@@ -765,7 +765,7 @@ const char *sqlite3_errmsg(sqlite3 *db) {
 }
 
 void sqlite3_interrupt(sqlite3 *db) {
-	if (db) {
+	if (db && db->con) {
 		db->con->Interrupt();
 	}
 }
