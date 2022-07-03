@@ -22,6 +22,7 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/enums/set_scope.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -127,6 +128,8 @@ public:
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
+	//! Extensions made to the parser
+	vector<ParserExtension> parser_extensions;
 
 	//! Extra parameters that can be SET for loaded extensions
 	case_insensitive_map_t<ExtensionOption> extension_parameters;

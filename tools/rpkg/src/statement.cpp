@@ -10,6 +10,8 @@
 #include "duckdb/common/result_arrow_wrapper.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 
+#include "duckdb/parser/statement/relation_statement.hpp"
+
 using namespace duckdb;
 using namespace cpp11::literals;
 
@@ -29,6 +31,76 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	if (stmt_ptr) {
 		delete stmt_ptr;
 	}
+}
+
+[[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query) {
+
+	if (!conn || !conn->conn) {
+		cpp11::stop("rapi_prepare_substrait: Invalid connection");
+	}
+
+	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)});
+	auto res = rel->Execute();
+	auto chunk = res->Fetch();
+	auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
+
+	SEXP rawval = NEW_RAW(blob_string.size());
+	if (!rawval) {
+		throw std::bad_alloc();
+	}
+	memcpy(RAW_POINTER(rawval), blob_string.data(), blob_string.size());
+
+	return rawval;
+}
+
+static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
+
+	cpp11::writable::list retlist;
+	retlist.reserve(6);
+	retlist.push_back({"str"_nm = query});
+
+	auto stmtholder = new RStatement();
+	stmtholder->stmt = move(stmt);
+
+	retlist.push_back({"ref"_nm = stmt_eptr_t(stmtholder)});
+	retlist.push_back({"type"_nm = StatementTypeToString(stmtholder->stmt->GetStatementType())});
+	retlist.push_back({"names"_nm = cpp11::as_sexp(stmtholder->stmt->GetNames())});
+
+	cpp11::writable::strings rtypes;
+	rtypes.reserve(stmtholder->stmt->GetTypes().size());
+
+	for (auto &stype : stmtholder->stmt->GetTypes()) {
+		string rtype = RApiTypes::DetectLogicalType(stype, "rapi_prepare");
+		rtypes.push_back(rtype);
+	}
+
+	retlist.push_back({"rtypes"_nm = rtypes});
+	retlist.push_back({"n_param"_nm = n_param});
+	retlist.push_back(
+	    {"return_type"_nm = StatementReturnTypeToString(stmtholder->stmt->GetStatementProperties().return_type)});
+
+	return retlist;
+}
+
+[[cpp11::register]] cpp11::list rapi_prepare_substrait(duckdb::conn_eptr_t conn, cpp11::sexp query) {
+	if (!conn || !conn->conn) {
+		cpp11::stop("rapi_prepare_substrait: Invalid connection");
+	}
+
+	if (!IS_RAW(query)) {
+		cpp11::stop("rapi_prepare_substrait: Query is not a raw()/BLOB");
+	}
+
+	auto rel = conn->conn->TableFunction("from_substrait", {Value::BLOB(RAW_POINTER(query), LENGTH(query))});
+	auto relation_stmt = make_unique<RelationStatement>(rel);
+	relation_stmt->n_param = 0;
+	relation_stmt->query = "";
+	auto stmt = conn->conn->Prepare(move(relation_stmt));
+	if (!stmt->success) {
+		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.c_str());
+	}
+
+	return construct_retlist(move(stmt), "", 0);
 }
 
 [[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
@@ -53,32 +125,8 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	if (!stmt->success) {
 		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.c_str());
 	}
-
-	cpp11::writable::list retlist;
-	retlist.reserve(6);
-	retlist.push_back({"str"_nm = query});
-
-	auto stmtholder = new RStatement();
-	stmtholder->stmt = move(stmt);
-
-	retlist.push_back({"ref"_nm = stmt_eptr_t(stmtholder)});
-	retlist.push_back({"type"_nm = StatementTypeToString(stmtholder->stmt->GetStatementType())});
-	retlist.push_back({"names"_nm = cpp11::as_sexp(stmtholder->stmt->GetNames())});
-
-	cpp11::writable::strings rtypes;
-	rtypes.reserve(stmtholder->stmt->GetTypes().size());
-
-	for (auto &stype : stmtholder->stmt->GetTypes()) {
-		string rtype = RApiTypes::DetectLogicalType(stype, "rapi_prepare");
-		rtypes.push_back(rtype);
-	}
-
-	retlist.push_back({"rtypes"_nm = rtypes});
-	retlist.push_back({"n_param"_nm = stmtholder->stmt->n_param});
-	retlist.push_back(
-	    {"return_type"_nm = StatementReturnTypeToString(stmtholder->stmt->GetStatementProperties().return_type)});
-
-	return retlist;
+	auto n_param = stmt->n_param;
+	return construct_retlist(move(stmt), query, n_param);
 }
 
 [[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow) {

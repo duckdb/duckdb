@@ -80,17 +80,23 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((SetStatement &)statement);
 	case StatementType::LOAD_STATEMENT:
 		return Bind((LoadStatement &)statement);
+	case StatementType::EXTENSION_STATEMENT:
+		return Bind((ExtensionStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
 	} // LCOV_EXCL_STOP
 }
 
-unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
-	// first we visit the set of CTEs and add them to the bind context
-	for (auto &cte_it : node.cte_map) {
+void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
+	for (auto &cte_it : cte_map.map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
+}
+
+unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
+	// first we visit the set of CTEs and add them to the bind context
+	AddCTEMap(node.cte_map);
 	// now we bind the node
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {

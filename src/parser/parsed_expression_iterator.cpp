@@ -280,7 +280,7 @@ void ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		EnumerateQueryNodeModifiers(node, callback);
 	}
 
-	for (auto &kv : node.cte_map) {
+	for (auto &kv : node.cte_map.map) {
 		EnumerateQueryNodeChildren(*kv.second->query->node, callback);
 	}
 }

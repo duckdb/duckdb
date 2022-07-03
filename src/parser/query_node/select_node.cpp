@@ -11,7 +11,7 @@ SelectNode::SelectNode()
 
 string SelectNode::ToString() const {
 	string result;
-	result = CTEToString();
+	result = cte_map.ToString();
 	result += "SELECT ";
 
 	// search for a distinct modifier
