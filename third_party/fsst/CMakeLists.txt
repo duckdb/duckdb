@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.0)
 
-project(fsst)
+if(POLICY CMP0063)
+    cmake_policy(SET CMP0063 NEW)
+endif()
 
 find_package(Threads REQUIRED)
 
@@ -41,6 +43,9 @@ add_library(duckdb_fsst libfsst.cpp fsst_avx512.cpp)
 #target_link_libraries (binary LINK_PUBLIC Threads::Threads)
 #set_target_properties(binary PROPERTIES OUTPUT_NAME fsst)
 
+target_include_directories(
+        duckdb_fastpforlib
+        PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 set_target_properties(duckdb_fsst PROPERTIES EXPORT_NAME duckdb_fsst)
 install(TARGETS duckdb_fsst
         EXPORT "${DUCKDB_EXPORT_SET}"
