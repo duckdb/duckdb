@@ -52,7 +52,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	}
 
 	for (auto &index_expression : info->expressions) {
-		info->parsed_expressions.push_back(index_expression->Copy());
+		info->unbound_expressions.push_back(index_expression->Copy());
 	}
 
 	info->index_type = StringToIndexType(string(stmt->accessMethod));

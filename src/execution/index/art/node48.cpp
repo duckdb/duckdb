@@ -8,16 +8,13 @@ Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_leng
 	for (idx_t i = 0; i < 256; i++) {
 		child_index[i] = Node::EMPTY_MARKER;
 	}
-	for (auto &child : children) {
-		child = 0;
-	}
 }
 
 Node48::~Node48() {
 	for (auto &child : children) {
-		if (child) {
-			if (!IsSwizzled(child)) {
-				delete (Node *)child;
+		if (child.pointer) {
+			if (!child.IsSwizzled()) {
+				delete (Node *)child.pointer;
 			}
 		}
 	}
@@ -56,8 +53,8 @@ idx_t Node48::GetNextPos(idx_t pos) {
 
 Node *Node48::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(child_index[pos] != Node::EMPTY_MARKER);
-	children[child_index[pos]] = Node::GetChildSwizzled(art, children[child_index[pos]]);
-	return (Node *)children[child_index[pos]];
+	Node::UnswizzleChild(art, children[child_index[pos]]);
+	return (Node *)children[child_index[pos]].pointer;
 }
 
 idx_t Node48::GetMin() {
@@ -76,10 +73,10 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 	if (node->count < 48) {
 		// Insert element
 		idx_t pos = n->count;
-		if (n->children[pos]) {
+		if (n->children[pos].pointer) {
 			// find an empty position in the node list if the current position is occupied
 			pos = 0;
-			while (n->children[pos]) {
+			while (n->children[pos].pointer) {
 				pos++;
 			}
 		}
@@ -110,8 +107,8 @@ void Node48::ReplaceChildPointer(idx_t pos, Node *node) {
 void Node48::Erase(Node *&node, int pos, ART &art) {
 	auto n = (Node48 *)(node);
 
-	if (!IsSwizzled(n->children[n->child_index[pos]])) {
-		delete (Node *)n->children[n->child_index[pos]];
+	if (!n->children[n->child_index[pos]].IsSwizzled()) {
+		delete (Node *)n->children[n->child_index[pos]].pointer;
 	}
 	n->children[n->child_index[pos]] = 0;
 	n->child_index[pos] = Node::EMPTY_MARKER;
@@ -131,13 +128,13 @@ void Node48::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
-std::pair<idx_t, idx_t> Node48::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
+DiskPosition Node48::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	// Iterate through children and annotate their offsets
-	vector<std::pair<idx_t, idx_t>> child_offsets;
+	vector<DiskPosition> child_offsets;
 	for (auto &child_ptr : children) {
-		if (child_ptr) {
-			child_ptr = GetChildSwizzled(art, child_ptr);
-			child_offsets.push_back(((Node *)child_ptr)->Serialize(art, writer));
+		if (child_ptr.pointer) {
+			UnswizzleChild(art, child_ptr);
+			child_offsets.push_back(((Node *)child_ptr.pointer)->Serialize(art, writer));
 		} else {
 			child_offsets.emplace_back(DConstants::INVALID_INDEX, DConstants::INVALID_INDEX);
 		}
@@ -158,8 +155,8 @@ std::pair<idx_t, idx_t> Node48::Serialize(ART &art, duckdb::MetaBlockWriter &wri
 	}
 	// Write child offsets
 	for (auto &offsets : child_offsets) {
-		writer.Write(offsets.first);
-		writer.Write(offsets.second);
+		writer.Write(offsets.block_id);
+		writer.Write(offsets.offset);
 	}
 	return {block_id, offset};
 }
@@ -184,7 +181,7 @@ Node48 *Node48::Deserialize(duckdb::MetaBlockReader &reader) {
 	for (idx_t i = 0; i < 48; i++) {
 		idx_t block_id = reader.Read<idx_t>();
 		idx_t offset = reader.Read<idx_t>();
-		node48->children[i] = Node::GenerateSwizzledPointer(block_id, offset);
+		node48->children[i] = SwizzleablePointer(block_id, offset);
 	}
 	return node48;
 }

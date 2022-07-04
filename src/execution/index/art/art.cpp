@@ -727,26 +727,32 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 	case NodeType::NLeaf:
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
-	case NodeType::N4:
-		next = (Node *)Node::GetChildSwizzled(*this, ((Node4 &)node).children[0]);
+	case NodeType::N4: {
+		Node::UnswizzleChild(*this, ((Node4 &)node).children[0]);
+		next = (Node *)((Node4 &)node).children[0].pointer;
 		break;
-	case NodeType::N16:
-		next = (Node *)Node::GetChildSwizzled(*this, ((Node16 &)node).children[0]);
+	}
+	case NodeType::N16: {
+		Node::UnswizzleChild(*this, ((Node16 &)node).children[0]);
+		next = (Node *)((Node16 &)node).children[0].pointer;
 		break;
+	}
 	case NodeType::N48: {
 		auto &n48 = (Node48 &)node;
 		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		next = (Node *)Node::GetChildSwizzled(*this, n48.children[n48.child_index[pos]]);
+		Node::UnswizzleChild(*this, n48.children[n48.child_index[pos]]);
+		next = (Node *)n48.children[n48.child_index[pos]].pointer;
 		break;
 	}
 	case NodeType::N256: {
 		auto &n256 = (Node256 &)node;
-		while (!n256.children[pos]) {
+		while (!n256.children[pos].pointer) {
 			pos++;
 		}
-		next = (Node *)Node::GetChildSwizzled(*this, n256.children[pos]);
+		Node::UnswizzleChild(*this, n256.children[pos]);
+		next = (Node *)n256.children[pos].pointer;
 		break;
 	}
 	}
@@ -926,12 +932,12 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	}
 }
 
-std::pair<idx_t, idx_t> ART::Serialize(duckdb::MetaBlockWriter &writer) {
+DiskPosition ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	if (tree) {
 		return tree->Serialize(*this, writer);
 	}
-	return {DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
+	return {(block_id_t)DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
 }
 
 } // namespace duckdb

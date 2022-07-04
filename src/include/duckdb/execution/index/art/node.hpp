@@ -17,6 +17,19 @@ namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 class ART;
 
+struct SwizzleablePointer {
+	~SwizzleablePointer() {};
+	SwizzleablePointer(idx_t block_id, idx_t offset);
+	SwizzleablePointer() : pointer(0) {};
+	uint64_t pointer;
+	SwizzleablePointer &operator=(const uint64_t &ptr);
+	friend bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr);
+
+public:
+	DiskPosition GetSwizzledBlockInfo();
+	bool IsSwizzled();
+};
+
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
@@ -50,7 +63,7 @@ public:
 	virtual idx_t GetMin();
 
 	//! Serialize this Node
-	virtual std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) = 0;
+	virtual DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) = 0;
 
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
@@ -68,13 +81,7 @@ public:
 
 	//! Tries to get a child from a given address, checks if the address is pointing to a memory space
 	//! Or if its a swizzled pointer.
-	static uint64_t GetChildSwizzled(ART &art, uint64_t pointer);
-
-	static std::pair<idx_t, idx_t> GetSwizzledBlockInfo(uint64_t pointer);
-	//! Checks if a given pointer is a swizzled pointer or not.
-	static bool IsSwizzled(uint64_t pointer);
-	//! Generate Swizzled Pointer from block id and offset
-	static uint64_t GenerateSwizzledPointer(idx_t block_id, idx_t offset);
+	static void UnswizzleChild(ART &art, SwizzleablePointer &pointer);
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);
@@ -83,7 +90,7 @@ public:
 	//! Erase entry from node
 	static void Erase(Node *&node, idx_t pos, ART &art);
 	//! Transforms from Node* to uint64_t
-	static void AssignPointer(uint64_t &to, Node *from);
+	static void AssignPointer(SwizzleablePointer &to, Node *from);
 
 protected:
 	//! Copies the prefix from the source to the destination node

@@ -29,44 +29,13 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
-uint64_t Node::GetChildSwizzled(ART &art, uint64_t pointer) {
-	if (IsSwizzled(pointer)) {
+void Node::UnswizzleChild(ART &art, SwizzleablePointer &pointer) {
+	if (pointer.IsSwizzled()) {
 		// This means our pointer is not yet in memory, gotta deserialize this
 		// first we unset the bae
-		auto block_info = GetSwizzledBlockInfo(pointer);
-		AssignPointer(pointer, Deserialize(art, block_info.first, block_info.second));
+		auto block_info = pointer.GetSwizzledBlockInfo();
+		AssignPointer(pointer, Deserialize(art, block_info.block_id, block_info.offset));
 	}
-	return pointer;
-}
-
-std::pair<idx_t, idx_t> Node::GetSwizzledBlockInfo(uint64_t pointer) {
-	D_ASSERT(IsSwizzled(pointer));
-	idx_t pointer_size = sizeof(pointer) * 8;
-	pointer = pointer & ~(1ULL << (pointer_size - 1));
-	uint32_t block_id = pointer >> (pointer_size / 2);
-	uint32_t offset = pointer & 0xffffffff;
-	return {block_id, offset};
-}
-
-bool Node::IsSwizzled(uint64_t pointer) {
-	idx_t pointer_size = sizeof(pointer) * 8;
-	return (pointer >> (pointer_size - 1)) & 1;
-}
-
-uint64_t Node::GenerateSwizzledPointer(idx_t block_id, idx_t offset) {
-	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
-		return 0;
-	}
-	uint64_t pointer;
-	idx_t pointer_size = sizeof(pointer) * 8;
-	pointer = block_id;
-	pointer = pointer << (pointer_size / 2);
-	pointer += offset;
-	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
-	uint64_t mask = 1;
-	mask = mask << (pointer_size - 1);
-	pointer |= mask;
-	return pointer;
 }
 
 Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
@@ -141,12 +110,49 @@ void Node::Erase(Node *&node, idx_t pos, ART &art) {
 	}
 }
 
-void Node::AssignPointer(uint64_t &to, Node *from) {
+void Node::AssignPointer(SwizzleablePointer &to, Node *from) {
 	if (sizeof(from) == 4) {
-		to = (uint32_t)(size_t)from;
+		to.pointer = (uint32_t)(size_t)from;
 	} else {
-		to = (uint64_t)from;
+		to.pointer = (uint64_t)from;
 	}
+}
+
+SwizzleablePointer::SwizzleablePointer(idx_t block_id, idx_t offset) {
+	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
+		pointer = 0;
+		return;
+	}
+	idx_t pointer_size = sizeof(pointer) * 8;
+	pointer = block_id;
+	pointer = pointer << (pointer_size / 2);
+	pointer += offset;
+	// Set the left most bit to indicate this is a swizzled pointer and send it back to the mother-ship
+	uint64_t mask = 1;
+	mask = mask << (pointer_size - 1);
+	pointer |= mask;
+}
+
+SwizzleablePointer &SwizzleablePointer::operator=(const uint64_t &ptr) {
+	pointer = ptr;
+	return *this;
+}
+
+bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr) {
+	return (s_ptr.pointer != ptr);
+}
+
+DiskPosition SwizzleablePointer::GetSwizzledBlockInfo() {
+	D_ASSERT(IsSwizzled());
+	idx_t pointer_size = sizeof(pointer) * 8;
+	pointer = pointer & ~(1ULL << (pointer_size - 1));
+	uint32_t block_id = pointer >> (pointer_size / 2);
+	uint32_t offset = pointer & 0xffffffff;
+	return {block_id, offset};
+}
+bool SwizzleablePointer::IsSwizzled() {
+	idx_t pointer_size = sizeof(pointer) * 8;
+	return (pointer >> (pointer_size - 1)) & 1;
 }
 
 } // namespace duckdb

@@ -7,7 +7,7 @@ namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
     : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
-	for (auto &index_expressions : info->parsed_expressions) {
+	for (auto &index_expressions : info->unbound_expressions) {
 		expressions.push_back(index_expressions->Copy());
 	}
 }
@@ -64,9 +64,6 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source)
 	create_index_info->index_type = IndexType(reader.ReadRequired<uint8_t>());
 	create_index_info->constraint_type = IndexConstraintType(reader.ReadRequired<uint8_t>());
 	create_index_info->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
-	for (auto &expr : create_index_info->expressions) {
-		create_index_info->parsed_expressions.push_back(expr->Copy());
-	}
 	create_index_info->column_ids = reader.ReadRequiredList<idx_t>();
 	reader.Finalize();
 	return create_index_info;

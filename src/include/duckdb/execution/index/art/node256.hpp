@@ -16,7 +16,7 @@ public:
 	explicit Node256(size_t compression_length);
 
 	~Node256();
-	uint64_t children[256];
+	SwizzleablePointer children[256];
 
 public:
 	//! Get position of a specific byte, returns DConstants::INVALID_INDEX if not exists
@@ -40,7 +40,7 @@ public:
 	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Serialize Node
-	std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
+	DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
 
 	static Node256 *Deserialize(duckdb::MetaBlockReader &source);
 };

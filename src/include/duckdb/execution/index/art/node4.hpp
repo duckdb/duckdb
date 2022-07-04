@@ -17,7 +17,7 @@ public:
 	~Node4() override;
 	uint8_t key[4];
 	// Pointers to the child nodes
-	uint64_t children[4];
+	SwizzleablePointer children[4];
 
 public:
 	//! Get position of a byte, returns -1 if not exists
@@ -40,7 +40,7 @@ public:
 	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Serialize Node
-	std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
+	DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
 	static Node4 *Deserialize(duckdb::MetaBlockReader &reader);
 };
 } // namespace duckdb

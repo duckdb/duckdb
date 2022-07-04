@@ -1354,8 +1354,8 @@ void DataTable::Checkpoint(TableDataWriter &writer) {
 	// Write-off block ids and offsets of indexes
 	metadata_writer.Write<idx_t>(blocks_info.size());
 	for (auto &block_info : blocks_info) {
-		metadata_writer.Write<idx_t>(block_info.first);
-		metadata_writer.Write<idx_t>(block_info.second);
+		metadata_writer.Write<idx_t>(block_info.block_id);
+		metadata_writer.Write<idx_t>(block_info.offset);
 	}
 }
 

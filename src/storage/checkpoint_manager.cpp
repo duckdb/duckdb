@@ -317,8 +317,8 @@ void CheckpointManager::WriteIndex(IndexCatalogEntry &index_catalog) {
 	auto root_offset = index_catalog.index->Serialize(*tabledata_writer);
 	index_catalog.Serialize(*metadata_writer);
 	// Serialize the Block id and offset of root node
-	metadata_writer->Write(root_offset.first);
-	metadata_writer->Write(root_offset.second);
+	metadata_writer->Write(root_offset.block_id);
+	metadata_writer->Write(root_offset.offset);
 }
 
 void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reader) {

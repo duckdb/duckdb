@@ -41,8 +41,8 @@ Index *TableIndex::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyT
 	return result;
 }
 
-vector<std::pair<idx_t, idx_t>> TableIndex::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
-	vector<std::pair<idx_t, idx_t>> blocks_info;
+vector<DiskPosition> TableIndex::SerializeIndexes(duckdb::MetaBlockWriter &writer) {
+	vector<DiskPosition> blocks_info;
 	for (auto &index : indexes) {
 		blocks_info.emplace_back(index->Serialize(writer));
 	}

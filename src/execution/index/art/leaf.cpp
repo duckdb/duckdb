@@ -37,7 +37,7 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[num_elements++] = row_id;
 }
 
-std::pair<idx_t, idx_t> Leaf::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
+DiskPosition Leaf::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	auto block_id = writer.block->id;
 	auto offset = writer.offset;
 	// Write Node Type

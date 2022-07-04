@@ -112,7 +112,7 @@ public:
 	//! Search Equal used for Joins that do not need to fetch data
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 	//! Serialized the ART
-	std::pair<idx_t, idx_t> Serialize(duckdb::MetaBlockWriter &writer) override;
+	DiskPosition Serialize(duckdb::MetaBlockWriter &writer) override;
 
 private:
 	DataChunk expression_result;

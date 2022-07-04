@@ -43,7 +43,6 @@ public:
 	idx_t NumberOfThreads();
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
-	unordered_set<std::string> loaded_extensions;
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
 
@@ -59,6 +58,7 @@ private:
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
+	unordered_set<std::string> loaded_extensions;
 };
 
 //! The database object. This object holds the catalog and all the

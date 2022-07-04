@@ -16,7 +16,7 @@ public:
 	explicit Node16(size_t compression_length);
 	~Node16() override;
 	uint8_t key[16];
-	uint64_t children[16];
+	SwizzleablePointer children[16];
 
 public:
 	//! Get position of a byte, returns -1 if not exists
@@ -40,7 +40,7 @@ public:
 	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Serialize Node
-	std::pair<idx_t, idx_t> Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
+	DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
 
 	static Node16 *Deserialize(duckdb::MetaBlockReader &source);
 };
