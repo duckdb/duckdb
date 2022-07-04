@@ -28,9 +28,15 @@ namespace duckdb {
 struct PyDictionary {
 public:
 	PyDictionary(py::object dict);
+	// FIXME: should probably remove these, as they aren't used if the dictionary has MAP format
 	py::object keys;
 	py::object values;
 	idx_t len;
+
+public:
+	PyObject *operator[](const py::object &obj) const {
+		return PyDict_GetItem(dict.ptr(), obj.ptr());
+	}
 
 private:
 	py::object dict;

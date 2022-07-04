@@ -41,19 +41,14 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 	}
 
 	//{ 'key': [ .. keys .. ], 'value': [ .. values .. ]}
-	auto map_keys = TransformStructKeys(dict.keys, dict.len);
-	if (map_keys.size() != 2) {
-		return false;
-	}
-	if (map_keys[0] != "key") {
-		return false;
-	}
-	if (map_keys[1] != "value") {
+	auto keys_key = py::str("key");
+	auto values_key = py::str("value");
+	auto keys = dict[keys_key];
+	auto values = dict[values_key];
+	if (!keys || !values) {
 		return false;
 	}
 
-	auto keys = dict.values.attr("__getitem__")(0);
-	auto values = dict.values.attr("__getitem__")(1);
 	// Dont check for 'py::list' to allow ducktyping
 	if (!py::hasattr(keys, "__getitem__") || !py::hasattr(keys, "__len__")) {
 		// throw std::runtime_error("Dictionary malformed, keys(index 0) found within 'dict.values' is not a list");
