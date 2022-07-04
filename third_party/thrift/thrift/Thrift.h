@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_THRIFT_H_
-#define _THRIFT_THRIFT_H_ 1
+#ifndef _DUCKDB_THRIFT_THRIFT_H_
+#define _DUCKDB_THRIFT_THRIFT_H_ 1
 
 #include "thrift/transport/PlatformSocket.h"
 
@@ -130,4 +130,4 @@ void profile_write_pprof(FILE* gen_calls_f, FILE* virtual_calls_f);
 }
 } // duckdb_apache::thrift
 
-#endif // #ifndef _THRIFT_THRIFT_H_
+#endif // #ifndef _DUCKDB_THRIFT_THRIFT_H_

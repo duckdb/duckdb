@@ -135,7 +135,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
-	    .def("__repr__", &DuckDBPyRelation::Print);
+	    .def("__repr__", &DuckDBPyRelation::Print)
+	    .def("explain", &DuckDBPyRelation::Explain);
 }
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
@@ -589,6 +590,10 @@ string DuckDBPyRelation::Print() {
 
 	return rel->ToString() + "\n---------------------\n-- Result Preview  --\n---------------------\n" +
 	       rel_res_string + "\n";
+}
+
+string DuckDBPyRelation::Explain() {
+	return rel->ToString(0);
 }
 
 // TODO: RelationType to a python enum

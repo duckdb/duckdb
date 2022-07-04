@@ -216,6 +216,8 @@ public:
 
 	string Print();
 
+	string Explain();
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",

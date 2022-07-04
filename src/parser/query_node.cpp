@@ -8,13 +8,29 @@
 
 namespace duckdb {
 
-string QueryNode::CTEToString() const {
-	if (cte_map.empty()) {
+CommonTableExpressionMap::CommonTableExpressionMap() {
+}
+
+CommonTableExpressionMap CommonTableExpressionMap::Copy() const {
+	CommonTableExpressionMap res;
+	for (auto &kv : this->map) {
+		auto kv_info = make_unique<CommonTableExpressionInfo>();
+		for (auto &al : kv.second->aliases) {
+			kv_info->aliases.push_back(al);
+		}
+		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
+		res.map[kv.first] = move(kv_info);
+	}
+	return res;
+}
+
+string CommonTableExpressionMap::ToString() const {
+	if (map.empty()) {
 		return string();
 	}
 	// check if there are any recursive CTEs
 	bool has_recursive = false;
-	for (auto &kv : cte_map) {
+	for (auto &kv : map) {
 		if (kv.second->query->node->type == QueryNodeType::RECURSIVE_CTE_NODE) {
 			has_recursive = true;
 			break;
@@ -25,7 +41,7 @@ string QueryNode::CTEToString() const {
 		result += "RECURSIVE ";
 	}
 	bool first_cte = true;
-	for (auto &kv : cte_map) {
+	for (auto &kv : map) {
 		if (!first_cte) {
 			result += ", ";
 		}
@@ -102,12 +118,12 @@ bool QueryNode::Equals(const QueryNode *other) const {
 		}
 	}
 	// WITH clauses (CTEs)
-	if (cte_map.size() != other->cte_map.size()) {
+	if (cte_map.map.size() != other->cte_map.map.size()) {
 		return false;
 	}
-	for (auto &entry : cte_map) {
-		auto other_entry = other->cte_map.find(entry.first);
-		if (other_entry == other->cte_map.end()) {
+	for (auto &entry : cte_map.map) {
+		auto other_entry = other->cte_map.map.find(entry.first);
+		if (other_entry == other->cte_map.map.end()) {
 			return false;
 		}
 		if (entry.second->aliases != other_entry->second->aliases) {
@@ -124,13 +140,13 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 	for (auto &modifier : modifiers) {
 		other.modifiers.push_back(modifier->Copy());
 	}
-	for (auto &kv : cte_map) {
+	for (auto &kv : cte_map.map) {
 		auto kv_info = make_unique<CommonTableExpressionInfo>();
 		for (auto &al : kv.second->aliases) {
 			kv_info->aliases.push_back(al);
 		}
 		kv_info->query = unique_ptr_cast<SQLStatement, SelectStatement>(kv.second->query->Copy());
-		other.cte_map[kv.first] = move(kv_info);
+		other.cte_map.map[kv.first] = move(kv_info);
 	}
 }
 
@@ -139,9 +155,9 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	writer.WriteField<QueryNodeType>(type);
 	writer.WriteSerializableList(modifiers);
 	// cte_map
-	writer.WriteField<uint32_t>((uint32_t)cte_map.size());
+	writer.WriteField<uint32_t>((uint32_t)cte_map.map.size());
 	auto &serializer = writer.GetSerializer();
-	for (auto &cte : cte_map) {
+	for (auto &cte : cte_map.map) {
 		serializer.WriteString(cte.first);
 		serializer.WriteStringVector(cte.second->aliases);
 		cte.second->query->Serialize(serializer);
@@ -158,15 +174,14 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 	// cte_map
 	auto cte_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> cte_map;
+	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> new_map;
 	for (idx_t i = 0; i < cte_count; i++) {
 		auto name = source.Read<string>();
 		auto info = make_unique<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
 		info->query = SelectStatement::Deserialize(source);
-		cte_map[name] = move(info);
+		new_map[name] = move(info);
 	}
-
 	unique_ptr<QueryNode> result;
 	switch (type) {
 	case QueryNodeType::SELECT_NODE:
@@ -182,7 +197,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 		throw SerializationException("Could not deserialize Query Node: unknown type!");
 	}
 	result->modifiers = move(modifiers);
-	result->cte_map = move(cte_map);
+	result->cte_map.map = move(new_map);
 	reader.Finalize();
 	return result;
 }

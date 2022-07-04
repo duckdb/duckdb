@@ -700,7 +700,7 @@ bool ApproxEqual(float ldecimal, float rdecimal) {
 	if (!Value::FloatIsFinite(ldecimal) || !Value::FloatIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	float epsilon = std::fabs(rdecimal) * 0.01;
+	float epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
@@ -711,7 +711,7 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	if (!Value::DoubleIsFinite(ldecimal) || !Value::DoubleIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	double epsilon = std::fabs(rdecimal) * 0.01;
+	double epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 

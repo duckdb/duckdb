@@ -48,7 +48,8 @@ void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t co
 
 void RowOperations::UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx,
                                  idx_t count) {
-	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr.bind_data, aggr.child_count,
+	AggregateInputData aggr_input_data(aggr.bind_data);
+	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data, aggr.child_count,
 	                     addresses, count);
 }
 
@@ -78,7 +79,8 @@ void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &ta
 	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
-		aggr.function.combine(sources, targets, aggr.bind_data, count);
+		AggregateInputData aggr_input_data(aggr.bind_data);
+		aggr.function.combine(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
@@ -94,7 +96,8 @@ void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChu
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, result.size(), 0);
+		AggregateInputData aggr_input_data(aggr.bind_data);
+		aggr.function.finalize(addresses, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
