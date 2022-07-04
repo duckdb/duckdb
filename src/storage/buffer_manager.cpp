@@ -817,9 +817,18 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_
 }
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {
-	if (temp_directory.empty() || !temp_directory_handle) {
+	if (temp_directory.empty()) {
+		// no temporary directory specified: nothing to delete
 		return;
 	}
+	{
+		lock_guard<mutex> temp_handle_guard(temp_handle_lock);
+		if (!temp_directory_handle) {
+			// temporary directory was not initialized yet: nothing to delete
+			return;
+		}
+	}
+	// check if we should delete the file from the shared pool of files, or from the general file system
 	if (temp_directory_handle->GetTempFile().HasTemporaryBuffer(id)) {
 		temp_directory_handle->GetTempFile().DeleteTemporaryBuffer(id);
 		return;
