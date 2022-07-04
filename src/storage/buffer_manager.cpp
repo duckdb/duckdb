@@ -695,15 +695,26 @@ public:
 		{
 			// remove the block (and potentially erase the temp file)
 			TemporaryManagerLock lock(manager_lock);
-			used_blocks.erase(id);
-			if (handle->DeleteIfEmpty()) {
-				EraseFileHandle(lock, index.file_index);
-			}
+			EraseUsedBlock(lock, id, handle, index.file_index);
 		}
 		return buffer;
 	}
 
+	void DeleteTemporaryBuffer(block_id_t id) {
+		TemporaryManagerLock lock(manager_lock);
+		auto index = GetTempBlockIndex(lock, id);
+		auto handle = GetFileHandle(lock, index.file_index);
+		EraseUsedBlock(lock, id, handle, index.file_index);
+	}
+
 private:
+	void EraseUsedBlock(TemporaryManagerLock &lock, block_id_t id, TemporaryFileHandle *handle, idx_t file_index) {
+		used_blocks.erase(id);
+		if (handle->DeleteIfEmpty()) {
+			EraseFileHandle(lock, file_index);
+		}
+	}
+
 	TemporaryFileHandle *GetFileHandle(TemporaryManagerLock &, idx_t index) {
 		return files[index].get();
 	}
@@ -807,6 +818,10 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id, unique_
 
 void BufferManager::DeleteTemporaryFile(block_id_t id) {
 	if (temp_directory.empty() || !temp_directory_handle) {
+		return;
+	}
+	if (temp_directory_handle->GetTempFile().HasTemporaryBuffer(id)) {
+		temp_directory_handle->GetTempFile().DeleteTemporaryBuffer(id);
 		return;
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
