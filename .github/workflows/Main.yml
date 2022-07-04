@@ -104,7 +104,7 @@ jobs:
 
     - name: Test
       shell: bash
-      run: build/reldebug/test/unittest "*" --force-storage --force-reload
+      run: build/reldebug/test/unittest "*" --force-storage
 
  force-restart:
     name: Force Restart
