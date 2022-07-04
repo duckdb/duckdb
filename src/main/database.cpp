@@ -233,6 +233,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.replacement_scans = move(new_config.replacement_scans);
 	config.initialize_default_database = new_config.initialize_default_database;
 	config.disabled_optimizers = move(new_config.disabled_optimizers);
+	config.parser_extensions = move(new_config.parser_extensions);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
