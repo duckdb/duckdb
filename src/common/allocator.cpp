@@ -2,8 +2,6 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
-#include "mimalloc.h"
-
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -83,17 +81,6 @@ Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_
 }
 
 Allocator::~Allocator() {
-}
-
-data_ptr_t Allocator::DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	return (data_ptr_t)mi_malloc(size);
-}
-void Allocator::DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	mi_free(pointer);
-}
-data_ptr_t Allocator::DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-									idx_t size) {
-	return (data_ptr_t)mi_realloc(pointer, size);
 }
 
 data_ptr_t Allocator::AllocateData(idx_t size) {

@@ -70,10 +70,16 @@ public:
 		return make_unique<AllocatedData>(*this, AllocateData(size), size);
 	}
 
-	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size);
-	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
+		return (data_ptr_t)malloc(size);
+	}
+	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+		free(pointer);
+	}
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	                                    idx_t size);
+	                                    idx_t size) {
+		return (data_ptr_t)realloc(pointer, size);
+	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
 

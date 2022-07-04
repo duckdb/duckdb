@@ -401,7 +401,6 @@ include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
 include_directories(third_party/miniparquet)
 include_directories(third_party/concurrentqueue)
-include_directories(third_party/mimalloc/include)
 include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
 
