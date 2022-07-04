@@ -433,7 +433,7 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 	}
 
 	// Try to allocate a buffer from the buffer manager
-	unique_ptr<BufferHandle> duckdb_buffer;
+	BufferHandle duckdb_buffer;
 	bool set_waiting_for_memory = false;
 
 	while (true) {

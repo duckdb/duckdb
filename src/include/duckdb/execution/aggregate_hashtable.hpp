@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 class BlockHandle;
@@ -124,11 +125,11 @@ private:
 	//! The amount of entries stored in the HT currently
 	idx_t entries;
 	//! The data of the HT
-	vector<unique_ptr<BufferHandle>> payload_hds;
+	vector<BufferHandle> payload_hds;
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
-	unique_ptr<BufferHandle> hashes_hdl;
+	BufferHandle hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes
 	idx_t hash_offset;         // Offset into the layout of the hash column

@@ -48,8 +48,8 @@ class S3FileSystem;
 // Holds the buffered data for 1 part of an S3 Multipart upload
 class S3WriteBuffer {
 public:
-	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, unique_ptr<BufferHandle> &buffer)
-	    : idx(0), buffer_start(buffer_start), buffer(std::move(buffer)) {
+	explicit S3WriteBuffer(idx_t buffer_start, size_t buffer_size, BufferHandle buffer_p)
+	    : idx(0), buffer_start(buffer_start), buffer(move(buffer_p)) {
 		buffer_end = buffer_start + buffer_size;
 		part_no = buffer_start / buffer_size;
 		uploading = false;
@@ -65,7 +65,7 @@ public:
 	idx_t idx;
 	idx_t buffer_start;
 	idx_t buffer_end;
-	unique_ptr<BufferHandle> buffer;
+	BufferHandle buffer;
 	std::atomic<bool> uploading;
 };
 

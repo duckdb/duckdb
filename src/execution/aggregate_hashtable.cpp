@@ -54,7 +54,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, Buffe
 	D_ASSERT(tuple_size <= Storage::BLOCK_SIZE);
 	tuples_per_block = Storage::BLOCK_SIZE / tuple_size;
 	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
-	hashes_hdl_ptr = hashes_hdl->Ptr();
+	hashes_hdl_ptr = hashes_hdl.Ptr();
 
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64: {
@@ -123,7 +123,7 @@ void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 void GroupedAggregateHashTable::NewBlock() {
 	auto pin = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	payload_hds.push_back(move(pin));
-	payload_hds_ptrs.push_back(payload_hds.back()->Ptr());
+	payload_hds_ptrs.push_back(payload_hds.back().Ptr());
 	payload_page_offset = 0;
 }
 
@@ -223,7 +223,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	auto byte_size = size * sizeof(ENTRY);
 	if (byte_size > (idx_t)Storage::BLOCK_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(byte_size);
-		hashes_hdl_ptr = hashes_hdl->Ptr();
+		hashes_hdl_ptr = hashes_hdl.Ptr();
 	}
 	memset(hashes_hdl_ptr, 0, byte_size);
 	hashes_end_ptr = hashes_hdl_ptr + byte_size;
@@ -692,7 +692,7 @@ void GroupedAggregateHashTable::Finalize() {
 	}
 
 	// early release hashes, not needed for partition/scan
-	hashes_hdl.reset();
+	hashes_hdl.Destroy();
 	is_finalized = true;
 }
 

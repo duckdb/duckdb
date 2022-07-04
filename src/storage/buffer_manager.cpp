@@ -80,11 +80,11 @@ unique_ptr<ManagedBuffer> AllocateManagedBuffer(DatabaseInstance &db, unique_ptr
 	}
 }
 
-unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
+BufferHandle BlockHandle::Load(shared_ptr<BlockHandle> &handle, unique_ptr<FileBuffer> reusable_buffer) {
 	if (handle->state == BlockState::BLOCK_LOADED) {
 		// already loaded
 		D_ASSERT(handle->buffer);
-		return make_unique<BufferHandle>(handle, handle->buffer.get());
+		return BufferHandle(handle, handle->buffer.get());
 	}
 
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
@@ -95,13 +95,13 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle, uniq
 		handle->buffer = move(block);
 	} else {
 		if (handle->can_destroy) {
-			return nullptr;
+			return BufferHandle();
 		} else {
 			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id, move(reusable_buffer));
 		}
 	}
 	handle->state = BlockState::BLOCK_LOADED;
-	return make_unique<BufferHandle>(handle, handle->buffer.get());
+	return BufferHandle(handle, handle->buffer.get());
 }
 
 unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock() {
@@ -258,7 +258,7 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 	old_block->buffer.reset();
 	old_block->state = BlockState::BLOCK_UNLOADED;
 	old_block->memory_usage = 0;
-	old_handle.reset();
+	old_handle.Destroy();
 	old_block.reset();
 
 	// persist the new block to disk
@@ -284,7 +284,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
 }
 
-unique_ptr<BufferHandle> BufferManager::Allocate(idx_t block_size) {
+BufferHandle BufferManager::Allocate(idx_t block_size) {
 	auto block = RegisterMemory(block_size, true);
 	return Pin(block);
 }
@@ -313,7 +313,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	handle->memory_usage = alloc_size;
 }
 
-unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
+BufferHandle BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	idx_t required_memory;
 	{
 		// lock the block

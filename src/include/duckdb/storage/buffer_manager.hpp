@@ -47,12 +47,12 @@ public:
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	DUCKDB_API unique_ptr<BufferHandle> Allocate(idx_t block_size);
+	DUCKDB_API BufferHandle Allocate(idx_t block_size);
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size);
 
-	unique_ptr<BufferHandle> Pin(shared_ptr<BlockHandle> &handle);
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle);
 	void Unpin(shared_ptr<BlockHandle> &handle);
 
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);

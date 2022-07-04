@@ -101,7 +101,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			// pin the new block
 			auto new_handle = buffer_manager.Pin(partial_block->block);
 			// memcpy the contents of the old block to the new block
-			memcpy(new_handle->Ptr() + offset_in_block, old_handle->Ptr(), segment_size);
+			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
 		} else {
 			// convert the segment into a persistent segment that points to this block
 			segment->ConvertToPersistent(block_id);

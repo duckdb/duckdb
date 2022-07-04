@@ -307,7 +307,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && state.external) {
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
+		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(),
 		                                 addr_count);
 	}
 
