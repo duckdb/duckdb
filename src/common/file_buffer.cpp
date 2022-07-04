@@ -35,6 +35,9 @@ FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(so
 }
 
 FileBuffer::~FileBuffer() {
+	if (!malloced_buffer) {
+		return;
+	}
 	allocator.FreeData(malloced_buffer, malloced_size);
 }
 

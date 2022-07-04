@@ -147,6 +147,8 @@ bool BlockHandle::CanUnload() {
 }
 
 struct BufferEvictionNode {
+	BufferEvictionNode() {
+	}
 	BufferEvictionNode(weak_ptr<BlockHandle> handle_p, idx_t timestamp_p)
 	    : handle(move(handle_p)), timestamp(timestamp_p) {
 		D_ASSERT(!handle.expired());
@@ -178,7 +180,7 @@ struct BufferEvictionNode {
 	}
 };
 
-typedef duckdb_moodycamel::ConcurrentQueue<unique_ptr<BufferEvictionNode>> eviction_queue_t;
+typedef duckdb_moodycamel::ConcurrentQueue<BufferEvictionNode> eviction_queue_t;
 
 struct EvictionQueue {
 	eviction_queue_t q;
@@ -348,7 +350,7 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
 	PurgeQueue();
-	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
+	queue->q.enqueue(BufferEvictionNode(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
 }
 
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
@@ -363,7 +365,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
 	PurgeQueue();
 
-	unique_ptr<BufferEvictionNode> node;
+	BufferEvictionNode node;
 	current_memory += extra_memory;
 	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
@@ -372,13 +374,13 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_p
 			return false;
 		}
 		// get a reference to the underlying block pointer
-		auto handle = node->TryGetBlockHandle();
+		auto handle = node.TryGetBlockHandle();
 		if (!handle) {
 			continue;
 		}
 		// we might be able to free this block: grab the mutex and check if we can free it
 		lock_guard<mutex> lock(handle->lock);
-		if (!node->CanUnload(*handle)) {
+		if (!node.CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
 			continue;
 		}
@@ -396,12 +398,12 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_p
 }
 
 void BufferManager::PurgeQueue() {
-	unique_ptr<BufferEvictionNode> node;
+	BufferEvictionNode node;
 	while (true) {
 		if (!queue->q.try_dequeue(node)) {
 			break;
 		}
-		auto handle = node->TryGetBlockHandle();
+		auto handle = node.TryGetBlockHandle();
 		if (!handle) {
 			continue;
 		} else {
