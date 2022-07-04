@@ -15,18 +15,27 @@ class TestManyConnectionSameFile(object):
         con1.close()
         con3 = duckdb.connect("test.db")
         tbls = con3.execute("select * from information_schema.tables").fetchall()
-        os.remove('test.db') 
         assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
+        con3.close()
+        del con1
+        del con2
+        del con3
+        os.remove('test.db') 
 
     def test_diff_config(self, duckdb_cursor):
         con1 = duckdb.connect("test.db")
         with pytest.raises(Exception, match="Can't open a connection to same database file with a different configuration than existing connections"):
             con2 = duckdb.connect("test.db",True)
         con1.close()
+        del con1
 
         con1 = duckdb.connect("test.db", config={'default_order': 'desc'})
 
         with pytest.raises(Exception, match="Can't open a connection to same database file with a different configuration than existing connections"):
             con2 = duckdb.connect("test.db", config={'default_order': 'asc'})
-            os.remove('test.db') 
+        
         con2 = duckdb.connect("test.db", config={'default_order': 'desc'})
+        con1.close()
+        con2.close()
+        del con1
+        del con2
