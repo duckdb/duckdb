@@ -11,23 +11,14 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
 //! The Hugeint class contains static operations for the INT128 type
 class Hugeint {
 public:
-	//! Convert a string to a hugeint object
-	static bool FromCString(const char *str, idx_t len, hugeint_t &result);
 	//! Convert a hugeint object to a string
 	static string ToString(hugeint_t input);
-
-	static hugeint_t FromString(string str) {
-		hugeint_t result;
-		UUID::FromString(str, result);
-		return result;
-	}
 
 	template <class T>
 	static bool TryCast(hugeint_t input, T &result);
