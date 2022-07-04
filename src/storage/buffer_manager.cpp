@@ -255,10 +255,10 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 	new_block->buffer = make_unique<Block>(*old_block->buffer, block_id);
 
 	// clear the old buffer and unload it
-	old_handle.reset();
 	old_block->buffer.reset();
 	old_block->state = BlockState::BLOCK_UNLOADED;
 	old_block->memory_usage = 0;
+	old_handle.reset();
 	old_block.reset();
 
 	// persist the new block to disk
