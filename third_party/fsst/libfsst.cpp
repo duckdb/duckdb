@@ -17,12 +17,6 @@
 // You can contact the authors via the FSST source repository : https://github.com/cwida/fsst
 #include "libfsst.hpp"
 
-inline uint64_t fsst_unaligned_load(u8 const* V) {
-  uint64_t Ret;
-  memcpy(&Ret, V, sizeof(uint64_t)); // compiler will generate efficient code (unaligned load, where possible)
-  return Ret;
-}
-
 Symbol concat(Symbol a, Symbol b) {
    Symbol s;
    u32 length = a.length()+b.length();
