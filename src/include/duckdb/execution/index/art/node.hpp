@@ -12,6 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };

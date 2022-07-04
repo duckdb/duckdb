@@ -30,8 +30,6 @@ struct CreateIndexInfo : public CreateInfo {
 	unique_ptr<BaseTableRef> table;
 	//! Set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;
-	//! These should never be bound
-	vector<unique_ptr<ParsedExpression>> unbound_expressions;
 
 	vector<idx_t> column_ids;
 
@@ -45,9 +43,6 @@ public:
 		result->table = unique_ptr_cast<TableRef, BaseTableRef>(table->Copy());
 		for (auto &expr : expressions) {
 			result->expressions.push_back(expr->Copy());
-		}
-		for (auto &expr : unbound_expressions) {
-			result->unbound_expressions.push_back(expr->Copy());
 		}
 		result->column_ids = column_ids;
 		return move(result);

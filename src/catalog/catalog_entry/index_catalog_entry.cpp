@@ -7,9 +7,6 @@ namespace duckdb {
 
 IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
     : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
-	for (auto &index_expressions : info->unbound_expressions) {
-		expressions.push_back(index_expressions->Copy());
-	}
 }
 
 IndexCatalogEntry::~IndexCatalogEntry() {

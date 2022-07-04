@@ -51,10 +51,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 		}
 	}
 
-	for (auto &index_expression : info->expressions) {
-		info->unbound_expressions.push_back(index_expression->Copy());
-	}
-
 	info->index_type = StringToIndexType(string(stmt->accessMethod));
 	auto tableref = make_unique<BaseTableRef>();
 	tableref->table_name = stmt->relation->relname;
