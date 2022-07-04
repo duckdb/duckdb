@@ -48,7 +48,7 @@ dtime_t PyTime::ToTime() {
 Value PyTime::ToValue() {
 	auto time = ToTime();
 	if (timezone != Py_None) {
-		auto utc_offset = PyTimezone::GetUTCOffset(timezone, *this);
+		auto utc_offset = PyTimezone::GetUTCOffset(timezone);
 		//! 'Add' requires a date_t for overflows
 		date_t ignore;
 		utc_offset = Interval::Invert(utc_offset);
@@ -57,16 +57,10 @@ Value PyTime::ToValue() {
 	return Value::TIME(time);
 }
 
-interval_t PyTimezone::GetUTCOffset(PyObject *timezone, PyTime &time) {
+interval_t PyTimezone::GetUTCOffset(PyObject *timezone) {
 	py::object tzinfo(timezone, true);
-	auto res = tzinfo.attr("utcoffset")(time.obj);
-	auto timedelta = PyTimeDelta(res);
-	return timedelta.ToInterval();
-}
-
-interval_t PyTimezone::GetUTCOffset(PyObject *timezone, PyDateTime &datetime) {
-	py::object tzinfo(timezone, true);
-	auto res = tzinfo.attr("utcoffset")(datetime.obj);
+	py::object ignored_dt(Py_None, true);
+	auto res = tzinfo.attr("utcoffset")(ignored_dt);
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }
@@ -92,7 +86,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 Value PyDateTime::ToValue() {
 	auto timestamp = ToTimestamp();
 	if (timezone != Py_None) {
-		auto utc_offset = PyTimezone::GetUTCOffset(timezone, *this);
+		auto utc_offset = PyTimezone::GetUTCOffset(timezone);
 		//! Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);

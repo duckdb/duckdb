@@ -98,8 +98,7 @@ public:
 	PyTimezone() = delete;
 
 public:
-	static interval_t GetUTCOffset(PyObject *timezone, PyTime &time);
-	static interval_t GetUTCOffset(PyObject *timezone, PyDateTime &time);
+	static interval_t GetUTCOffset(PyObject *timezone);
 };
 
 } // namespace duckdb
