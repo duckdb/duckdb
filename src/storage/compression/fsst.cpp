@@ -25,7 +25,7 @@ struct FSSTStorage {
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
-	template <bool ALLOW_FSST_VECTORS>
+	template <bool ALLOW_FSST_VECTORS=false>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                                    idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -512,8 +512,9 @@ bp_delta_offsets_t CalculateBpDeltaOffsets(idx_t last_known_row, idx_t start, id
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <bool ALLOW_FSST_VECTORS=false>
+template <bool ALLOW_FSST_VECTORS>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+
                                     idx_t result_offset) {
 
 	auto &scan_state = (FSSTScanState &)*state.scan_state;
