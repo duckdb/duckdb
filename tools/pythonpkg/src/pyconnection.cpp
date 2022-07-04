@@ -20,12 +20,14 @@
 #include "duckdb/parser/parser.hpp"
 
 #include "datetime.h" // from Python
+#include "duckdb/main/connection_manager.hpp"
 
 #include <random>
 
 namespace duckdb {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
+unordered_map<string, weak_ptr<DuckDB>> db_instances;
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
@@ -580,11 +582,39 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 	return nullptr;
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
-	auto res = make_shared<DuckDBPyConnection>();
+string GetDBAbsolutePath(const string &database) {
+	if (database == ":memory:" || database.empty()) {
+		return ":memory:";
+	}
+	py::object abspath = py::module_::import("os.path").attr("abspath");
+	return py::str(abspath(database));
+}
 
+bool IsConfigurationSame(ClientContext *context, DBConfig &config, const py::dict &config_dict, bool read_only) {
+	if (read_only) {
+		if (config.access_mode != AccessMode::READ_ONLY) {
+			return false;
+		}
+	} else {
+		if (config.access_mode == AccessMode::READ_ONLY) {
+			return false;
+		}
+	}
+	for (auto &kv : config_dict) {
+		string key = py::str(kv.first);
+		auto val = Value(py::str(kv.second));
+		auto cur_val = config.GetOptionByName(key)->get_setting(*context);
+		if (cur_val != val) {
+			return false;
+		}
+	}
+	return true;
+}
+shared_ptr<DuckDB> DuckDBPyConnection::GetDBInstance(const string &database, const py::dict &config_dict,
+                                                     bool read_only, bool &new_instance) {
+	new_instance = false;
 	DBConfig config;
+	auto abs_path = GetDBAbsolutePath(database);
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
 	}
@@ -597,25 +627,54 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		}
 		config.SetOption(*config_property, Value(val));
 	}
-	res->database = make_unique<DuckDB>(database, &config);
-	res->connection = make_unique<Connection>(*res->database);
+
 	if (config.enable_external_access) {
-		res->database->instance->config.replacement_scans.emplace_back(ScanReplacement);
+		config.replacement_scans.emplace_back(ScanReplacement);
 	}
+	if (abs_path == ":memory:") {
+		new_instance = true;
+		return make_shared<DuckDB>(database, &config);
+	}
+	shared_ptr<DuckDB> db_instance;
+	if (db_instances.find(abs_path) != db_instances.end()) {
+		db_instance = db_instances[abs_path].lock();
+		if (db_instance) {
+			auto existing_context = db_instance->instance->GetConnectionManager().GetConnectionList().front().get();
+			if (!IsConfigurationSame(existing_context, db_instance->instance->config, config_dict, read_only)) {
+				throw std::runtime_error("Can't open a connection to same database file with a different configuration "
+				                         "than existing connections");
+			}
+		}
 
-	PandasScanFunction scan_fun;
-	CreateTableFunctionInfo scan_info(scan_fun);
+		db_instance = db_instances[abs_path].lock();
+	}
+	if (!db_instance) {
+		new_instance = true;
+		db_instance = make_shared<DuckDB>(database, &config);
+		db_instances[abs_path] = db_instance;
+	}
+	return db_instance;
+}
 
-	MapFunction map_fun;
-	CreateTableFunctionInfo map_info(map_fun);
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
+                                                           const py::dict &config_dict) {
+	auto res = make_shared<DuckDBPyConnection>();
+	bool new_instance;
+	res->database = GetDBInstance(database, config_dict, read_only, new_instance);
+	res->connection = make_unique<Connection>(*res->database);
 
 	auto &context = *res->connection->context;
-	auto &catalog = Catalog::GetCatalog(context);
-	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &scan_info);
-	catalog.CreateTableFunction(context, &map_info);
-
-	context.transaction.Commit();
+	if (new_instance) {
+		PandasScanFunction scan_fun;
+		CreateTableFunctionInfo scan_info(scan_fun);
+		MapFunction map_fun;
+		CreateTableFunctionInfo map_info(map_fun);
+		auto &catalog = Catalog::GetCatalog(context);
+		context.transaction.BeginTransaction();
+		catalog.CreateTableFunction(context, &scan_info);
+		catalog.CreateTableFunction(context, &map_info);
+		context.transaction.Commit();
+	}
 
 	return res;
 }

@@ -141,6 +141,8 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
+	static shared_ptr<DuckDB> GetDBInstance(const string &database, const py::dict &config_dict, bool read_only,
+	                                        bool &new_instance);
 };
 
 } // namespace duckdb
