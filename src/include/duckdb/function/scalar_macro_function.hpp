@@ -28,6 +28,8 @@ public:
 
 public:
 	unique_ptr<MacroFunction> Copy() override;
+
+	string ToSQL(const string &schema, const string &name) override;
 };
 
 } // namespace duckdb
