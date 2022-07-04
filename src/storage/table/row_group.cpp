@@ -656,6 +656,7 @@ void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 }
 
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupPointer row_group_pointer;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 
@@ -666,17 +667,16 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
-		// FIXME: should be able to just steal the statistics here, no need to copy (twice?!)
 		auto stats = checkpoint_state->GetStatistics();
 		D_ASSERT(stats);
 
 		global_stats[column_idx]->Merge(*stats);
+		row_group_pointer.statistics.push_back(move(stats));
 		states.push_back(move(checkpoint_state));
 	}
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(states.size() == columns.size());
-	RowGroupPointer row_group_pointer;
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	for (auto &state : states) {
@@ -686,7 +686,6 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
-		row_group_pointer.statistics.push_back(state->GetStatistics());
 
 		// now flush the actual column data to disk
 		state->FlushToDisk();

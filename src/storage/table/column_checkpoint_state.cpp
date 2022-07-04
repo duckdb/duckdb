@@ -21,6 +21,11 @@ ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &co
 ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
+unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
+	D_ASSERT(global_stats);
+	return move(global_stats);
+}
+
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
 	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
 	auto tuple_count = segment->count.load();
