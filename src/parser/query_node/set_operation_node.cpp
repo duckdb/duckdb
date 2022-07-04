@@ -5,7 +5,7 @@ namespace duckdb {
 
 string SetOperationNode::ToString() const {
 	string result;
-	result = CTEToString();
+	result = cte_map.ToString();
 	result += "(" + left->ToString() + ") ";
 	bool is_distinct = false;
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {

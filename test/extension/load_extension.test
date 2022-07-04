@@ -23,3 +23,22 @@ query I
 SELECT hello('World');
 ----
 Hello, World
+
+query I
+QUACK QUACK QUACK
+----
+QUACK
+QUACK
+QUACK
+
+query I
+quACk QUaCk
+----
+QUACK
+QUACK
+
+statement error
+QUAC
+
+statement error
+QUACK NOT QUACK

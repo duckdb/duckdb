@@ -11,11 +11,13 @@ InsertStatement::InsertStatement(const InsertStatement &other)
     : SQLStatement(other),
       select_statement(unique_ptr_cast<SQLStatement, SelectStatement>(other.select_statement->Copy())),
       columns(other.columns), table(other.table), schema(other.schema) {
+	cte_map = other.cte_map.Copy();
 }
 
 string InsertStatement::ToString() const {
 	string result;
-	result = "INSERT INTO ";
+	result = cte_map.ToString();
+	result += "INSERT INTO ";
 	if (!schema.empty()) {
 		result += KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 	}
@@ -62,7 +64,7 @@ ExpressionListRef *InsertStatement::GetValuesList() const {
 	if (node.where_clause || node.qualify || node.having) {
 		return nullptr;
 	}
-	if (!node.cte_map.empty()) {
+	if (!node.cte_map.map.empty()) {
 		return nullptr;
 	}
 	if (!node.groups.grouping_sets.empty()) {
