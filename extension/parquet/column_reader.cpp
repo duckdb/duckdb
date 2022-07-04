@@ -698,16 +698,26 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_filter.set();
 }
 
-// ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-//                             Vector &result_out)
 void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
-	parquet_filter_t filter;
 	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	Vector result_out(Type());
-	Read(num_values, filter, define_out.get(), repeat_out.get(), result_out);
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while (remaining) {
+		Vector result_out(Type());
+		parquet_filter_t filter;
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read += Read(to_read, filter, define_out.get(), repeat_out.get(), result_out);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
+		throw InternalException("Not all skips done!");
+	}
 }
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
