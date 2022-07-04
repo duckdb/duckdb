@@ -1,5 +1,6 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/common/pair.hpp"
 #include "miniz_wrapper.hpp"
 
 namespace duckdb {
@@ -106,7 +107,7 @@ BufferHandle &ColumnFetchState::GetOrInsertHandle(ColumnSegment &segment) {
 		// not pinned yet: pin it
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-		auto entry = handles.insert({primary_id, move(handle)});
+		auto entry = handles.insert(make_pair(primary_id, move(handle)));
 		return entry.first->second;
 	} else {
 		// already pinned: use the pinned handle
