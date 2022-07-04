@@ -4,6 +4,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include "datetime.h" //From Python
 
@@ -150,27 +151,33 @@ Value TransformDictionary(const PyDictionary &dict) {
 	return TransformDictionaryToStruct(dict);
 }
 
-Value TransformPythonIntegerToHugeint(py::handle ele) {
-	auto hugeint_str = string(py::str(ele));
-	hugeint_t hugeint_val = Hugeint::FromString(hugeint_str);
-	return Value::HUGEINT(hugeint_val);
+bool TryTransformPythonIntegerToDouble(Value &res, py::handle ele) {
+	double number = PyLong_AsDouble(ele.ptr());
+	if (number == -1.0 && PyErr_Occurred()) {
+		PyErr_Clear();
+		return false;
+	}
+	res = Value::DOUBLE(number);
+	return true;
 }
 
-// TODO: add support for UTINYINT, USMALLINT, UINTEGER maybe
+// TODO: add support for HUGEINT, UTINYINT, USMALLINT, UINTEGER maybe
 bool TryTransformPythonInteger(Value &res, py::handle ele) {
 	auto ptr = ele.ptr();
 	int overflow;
 	int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
 	if (overflow == -1) {
-		res = TransformPythonIntegerToHugeint(ele);
-		return true;
+		PyErr_Clear();
+		return TryTransformPythonIntegerToDouble(res, ele);
 	} else if (overflow == 1) {
 		uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
 		if (PyErr_Occurred()) {
-			res = TransformPythonIntegerToHugeint(ele);
+			PyErr_Clear();
+			return TryTransformPythonIntegerToDouble(res, ele);
 		} else {
 			res = Value::UBIGINT(unsigned_value);
 		}
+		PyErr_Clear();
 		return true;
 	} else if (value == -1 && PyErr_Occurred()) {
 		return false;
