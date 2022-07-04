@@ -1,6 +1,8 @@
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/main/config.hpp"
 #include "miniz_wrapper.hpp"
 #include <iostream>
 
@@ -41,6 +43,12 @@ struct FSSTStorage {
 //===--------------------------------------------------------------------===//
 struct FSSTAnalyzeState : public AnalyzeState {
 	FSSTAnalyzeState() : count(0), fsst_string_total_size(0), empty_strings(0) {
+	}
+
+	~FSSTAnalyzeState() override {
+		if (fsst_encoder) {
+			fsst_destroy(fsst_encoder);
+		}
 	}
 
 	fsst_encoder_t *fsst_encoder = nullptr;
@@ -151,6 +159,12 @@ public:
 		auto &config = DBConfig::GetConfig(db);
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_FSST, PhysicalType::VARCHAR);
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	}
+
+	~FSSTCompressionState() override {
+		if (fsst_encoder) {
+			fsst_destroy(fsst_encoder);
+		}
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -326,6 +340,7 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer
 		compression_state->fsst_encoder = analyze_state->fsst_encoder;
 		compression_state->fsst_serialized_symbol_table_size =
 		    fsst_export(compression_state->fsst_encoder, &compression_state->fsst_serialized_symbol_table[0]);
+		analyze_state->fsst_encoder = nullptr;
 	}
 
 	return compression_state;
@@ -404,7 +419,6 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
 	auto &state = (FSSTCompressionState &)state_p;
 	state.Flush(true);
-	fsst_destroy(state.fsst_encoder);
 }
 
 //===--------------------------------------------------------------------===//
