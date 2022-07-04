@@ -248,10 +248,6 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 	D_ASSERT(new_block->state == BlockState::BLOCK_UNLOADED);
 	D_ASSERT(new_block->readers == 0);
 
-#ifdef DEBUG
-	lock_guard<mutex> b_lock(blocks_lock);
-#endif
-
 	// move the data from the old block into data for the new block
 	new_block->state = BlockState::BLOCK_LOADED;
 	new_block->buffer = make_unique<Block>(*old_block->buffer, block_id);

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/batched_allocator.hpp
+// duckdb/storage/arena_allocator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -25,13 +25,15 @@ struct ArenaChunk {
 };
 
 class ArenaAllocator {
-	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 4096;
+	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 
 public:
 	ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
 	~ArenaAllocator();
 
 	data_ptr_t Allocate(idx_t size);
+	void Destroy();
+	void Move(ArenaAllocator &allocator);
 
 	ArenaChunk *GetHead();
 	ArenaChunk *GetTail();

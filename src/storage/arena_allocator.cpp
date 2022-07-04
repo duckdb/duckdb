@@ -46,6 +46,20 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 	return result;
 }
 
+void ArenaAllocator::Destroy() {
+	head = nullptr;
+	tail = nullptr;
+	current_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY;
+}
+
+void ArenaAllocator::Move(ArenaAllocator &other) {
+	D_ASSERT(!other.head);
+	other.tail = tail;
+	other.head = move(head);
+	other.current_capacity = current_capacity;
+	Destroy();
+}
+
 ArenaChunk *ArenaAllocator::GetHead() {
 	return head.get();
 }
