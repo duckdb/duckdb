@@ -9,6 +9,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas_analyzer.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -147,6 +148,33 @@ void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t o
 	out.SetValue(offset, val);
 }
 
+static void VerifyMapConstraints(Vector &vec, idx_t count) {
+	auto invalid_reason = CheckMapValidity(vec, count);
+	switch (invalid_reason) {
+	case MapInvalidReason::VALID:
+		return;
+	case MapInvalidReason::DUPLICATE_KEY:
+		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains duplicates");
+	case MapInvalidReason::NULL_KEY_LIST:
+		throw std::runtime_error("Dict->Map conversion failed because 'key' list is None");
+	case MapInvalidReason::NULL_KEY:
+		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains None");
+	default:
+		throw std::runtime_error("Option not implemented for MapInvalidReason");
+	}
+}
+
+void VerifyTypeConstraints(Vector &vec, idx_t count) {
+	switch (vec.GetType().id()) {
+	case LogicalTypeId::MAP: {
+		VerifyMapConstraints(vec, count);
+		break;
+	}
+	default:
+		return;
+	}
+}
+
 void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
@@ -155,6 +183,7 @@ void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx
 	for (idx_t i = 0; i < count; i++) {
 		ScanPandasObject(bind_data, col[i], i, out);
 	}
+	VerifyTypeConstraints(out, count);
 }
 
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,

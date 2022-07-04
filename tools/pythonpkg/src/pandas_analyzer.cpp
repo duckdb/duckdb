@@ -76,7 +76,12 @@ static bool IsStructColumnValid(const LogicalType &left, const LogicalType &righ
 			data.is_valid_map = false;
 			return false;
 		}
+		// Create the (potential) map's value from both the structs left and right child types
 		if (!UpgradeType(data.map_value_type, left_child.second)) {
+			data.is_valid_map = false;
+			//! Could still be a valid struct, so we don't return here
+		}
+		if (!UpgradeType(data.map_value_type, right_child.second)) {
 			data.is_valid_map = false;
 			//! Could still be a valid struct, so we don't return here
 		}
@@ -97,6 +102,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	if (!compatible) {
 		return false;
 	}
+	// If struct constraints are not respected, left will be set to MAP
 	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
 		StructToMapConvertData convert_data;
 		if (!IsStructColumnValid(left, right, convert_data)) {
@@ -107,6 +113,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 			}
 		}
 	}
+	// If one of the types is map, this will set the resulting type to map
 	left = LogicalType::MaxLogicalType(left, right);
 	return true;
 }
@@ -373,7 +380,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 		}
 	}
 
-	if (item_type.id() == LogicalTypeId::STRUCT) {
+	if (can_convert && item_type.id() == LogicalTypeId::STRUCT) {
 		can_convert = VerifyStructValidity(types);
 	}
 

@@ -185,7 +185,8 @@ class TestResolveObjectColumns(object):
                 [{'key': ['a', 'a', 'b'], 'value': [4, 0, 4]}]
             ]
         )
-        converted_col = duckdb.query_df(x, "x", "select * from x").df()
+        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains duplicates"):
+            converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_map_nullkey(self, duckdb_cursor):
         x = pd.DataFrame(
@@ -193,7 +194,19 @@ class TestResolveObjectColumns(object):
                 [{'key': [None, 'a', 'b'], 'value': [4, 0, 4]}]
             ]
         )
+        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+            converted_col = duckdb.query_df(x, "x", "select * from x").df()
+
+    def test_map_nullkeylist(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': None, 'value': None}]
+            ]
+        )
+        # Isn't actually converted to MAP because isinstance(None, list) != True
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
+        duckdb_col = duckdb.query("SELECT {key: NULL, value: NULL} as '0'").df()
+        pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_map_fallback_nullkey(self, duckdb_cursor):
         x = pd.DataFrame(
@@ -202,7 +215,18 @@ class TestResolveObjectColumns(object):
                 [{'a': 4, None: 0, 'd': 4}]
             ]
         )
-        converted_col = duckdb.query_df(x, "x", "select * from x").df()
+        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+            converted_col = duckdb.query_df(x, "x", "select * from x").df()
+
+    def test_map_fallback_nullkey_coverage(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [{'key': None, 'value': None}],
+                [{'key': None, None: 5}],
+            ]
+        )
+        with pytest.raises(Exception, match="Dict->Map conversion failed because 'key' list contains None"):
+            converted_col = duckdb.query_df(x, "x", "select * from x").df()
 
     def test_struct_key_conversion(self, duckdb_cursor):
         x = pd.DataFrame(
