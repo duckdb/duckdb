@@ -288,9 +288,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
 	}
 	config.enable_profiler = true;
-#ifdef DEBUG
 	config.emit_profiler_output = true;
-#endif
 }
 
 Value EnableProfilingSetting::GetSetting(ClientContext &context) {

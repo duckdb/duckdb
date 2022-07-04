@@ -33,11 +33,9 @@ struct ClientConfig {
 	//! (empty = print to console)
 	string profiler_save_location;
 
-#ifdef DEBUG
-	//! Allow suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
+	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
 	//! to output anything
 	bool emit_profiler_output = true;
-#endif
 
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;

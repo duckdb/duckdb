@@ -124,12 +124,9 @@ void QueryProfiler::EndQuery() {
 	if (IsEnabled() && !is_explain_analyze) {
 		string query_info = ToString();
 		auto save_location = GetSaveLocation();
-#ifdef DEBUG
 		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
 			// disable output
-		} else
-#endif
-		    if (save_location.empty()) {
+		} else if (save_location.empty()) {
 			Printer::Print(query_info);
 			Printer::Print("\n");
 		} else {
