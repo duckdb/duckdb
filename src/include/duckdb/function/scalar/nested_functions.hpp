@@ -123,5 +123,6 @@ struct StructExtractFun {
 
 MapInvalidReason CheckMapValidity(Vector &map, idx_t count,
                                   const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+void MapConversionVerify(Vector &vector, idx_t count);
 
 } // namespace duckdb

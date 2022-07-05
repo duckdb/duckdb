@@ -55,7 +55,7 @@ MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVecto
 	return MapInvalidReason::VALID;
 }
 
-static void MapConversionVerify(Vector &vector, idx_t count) {
+void MapConversionVerify(Vector &vector, idx_t count) {
 	auto valid_check = CheckMapValidity(vector, count);
 	switch (valid_check) {
 	case MapInvalidReason::VALID:

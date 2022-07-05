@@ -16,13 +16,15 @@ static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 	D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(!element.IsNull());
 	auto &key_value = StructValue::GetChildren(element);
+	auto& key = key_value[0];
+	auto& value = key_value[1];
 
-	if (key_value[0].IsNull()) {
+	if (key.IsNull()) {
 		throw InvalidInputException("None of the keys of the map can be NULL");
 	}
 	// Add to the inner key/value lists of the resulting map
-	ListVector::PushBack(keys.container, key_value[0]);
-	ListVector::PushBack(values.container, key_value[1]);
+	ListVector::PushBack(keys.container, key);
+	ListVector::PushBack(values.container, value);
 }
 
 // FIXME: this operation has a time complexity of O(n^2)
@@ -56,9 +58,10 @@ static bool MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 	values.data.offset = offset;
 	// Loop over the list of structs
 	idx_t inserted_values = 0;
-	for (idx_t i = offset; i < offset + pair_amount; i++) {
+	for (idx_t i = 0; i < pair_amount; i++) {
+		auto index = i + offset;
 		// Get the struct using the offset and the index;
-		auto element = list.container.GetValue(i);
+		auto element = list.container.GetValue(index);
 		if (element.IsNull()) {
 			continue;
 		}
@@ -71,7 +74,6 @@ static bool MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
 	// Set the length of the key value lists
 	keys.data.length = inserted_values;
 	values.data.length = inserted_values;
-	// CheckKeyUniqueness(keys);
 	return true;
 }
 
@@ -81,46 +83,47 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	result.SetVectorType(duckdb::VectorType::FLAT_VECTOR);
 
 	// Get the arguments vector
-	auto &array = args.data[0];
-	auto arg_data = FlatVector::GetData<list_entry_t>(array);
-	auto &entries = ListVector::GetEntry(array);
+	auto &input_list = args.data[0];
+	auto arg_data = FlatVector::GetData<list_entry_t>(input_list);
+	auto &entries = ListVector::GetEntry(input_list);
 
 	// Prepare the result vectors
 	auto &child_entries = StructVector::GetEntries(result);
 	D_ASSERT(child_entries.size() == 2);
-	auto &key_vector = child_entries[0];
-	auto &value_vector = child_entries[1];
+	auto &key_vector = *child_entries[0];
+	auto &value_vector = *child_entries[1];
+	auto &result_validity = FlatVector::Validity(result);
 
 	// Get the offset+length data for the list(s)
-	auto key_data = FlatVector::GetData<list_entry_t>(*key_vector);
-	auto value_data = FlatVector::GetData<list_entry_t>(*value_vector);
-	auto &result_validity = FlatVector::Validity(result);
-	auto &key_validity = FlatVector::Validity(*key_vector);
-	auto &value_validity = FlatVector::Validity(*value_vector);
+	auto key_data = FlatVector::GetData<list_entry_t>(key_vector);
+	auto value_data = FlatVector::GetData<list_entry_t>(value_vector);
 
-	ListVector::GetEntry(*key_vector);
-	VectorData list_data;
-	// auto count = ListVector::GetListSize(array);
-	args.data[0].Orrify(args.size(), list_data);
+	auto &key_validity = FlatVector::Validity(key_vector);
+	auto &value_validity = FlatVector::Validity(value_vector);
+
+	auto count = args.size();
+
+	ListVector::GetEntry(key_vector);
+	VectorData input_list_data;
+	input_list.Orrify(count, input_list_data);
 
 	// Transform to mapped values
-	for (idx_t i = 0; i < args.size(); i++) {
-		VectorInfo list {entries, arg_data[i]};
-		VectorInfo keys {*key_vector, key_data[i]};
-		VectorInfo values {*value_vector, value_data[i]};
+	for (idx_t i = 0; i < count; i++) {
+		VectorInfo input {entries, arg_data[i]};
+		VectorInfo keys {key_vector, key_data[i]};
+		VectorInfo values {value_vector, value_data[i]};
 
-		bool row_valid = MapSingleList(list, keys, values);
+		bool row_valid = MapSingleList(input, keys, values);
 
 		// Check validity
-
-		if (!row_valid || !list_data.validity.RowIsValid(i)) {
+		if (!row_valid || !input_list_data.validity.RowIsValid(i)) {
 			key_validity.SetInvalid(i);
 			value_validity.SetInvalid(i);
 			result_validity.SetInvalid(i);
 		}
 	}
-
-	result.Verify(args.size());
+	MapConversionVerify(result, count);
+	result.Verify(count);
 }
 
 static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, ScalarFunction &bound_function,
