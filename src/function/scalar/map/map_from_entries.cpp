@@ -16,8 +16,8 @@ static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 	D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(!element.IsNull());
 	auto &key_value = StructValue::GetChildren(element);
-	auto& key = key_value[0];
-	auto& value = key_value[1];
+	auto &key = key_value[0];
+	auto &value = key_value[1];
 
 	if (key.IsNull()) {
 		throw InvalidInputException("None of the keys of the map can be NULL");
@@ -101,7 +101,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	VectorData input_list_data;
 	input_list.Orrify(count, input_list_data);
 
-	//Current offset into the keys/values list
+	// Current offset into the keys/values list
 	idx_t offset = 0;
 
 	// Transform to mapped values
