@@ -79,7 +79,7 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t micros;
-	PyObject *timezone;
+	PyObject *tzone_obj;
 
 public:
 	timestamp_t ToTimestamp();
@@ -104,7 +104,7 @@ public:
 	PyTimezone() = delete;
 
 public:
-	DUCKDB_API static interval_t GetUTCOffset(PyObject *timezone);
+	DUCKDB_API static interval_t GetUTCOffset(PyObject *tzone_obj);
 };
 
 } // namespace duckdb

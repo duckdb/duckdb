@@ -57,8 +57,8 @@ Value PyTime::ToDuckValue() {
 	return Value::TIME(duckdb_time);
 }
 
-interval_t PyTimezone::GetUTCOffset(PyObject *timezone) {
-	py::object tzinfo(timezone, true);
+interval_t PyTimezone::GetUTCOffset(PyObject *tzone_obj) {
+	py::object tzinfo(tzone_obj, true);
 	py::object ignored_dt(Py_None, true);
 	auto res = tzinfo.attr("utcoffset")(ignored_dt);
 	auto timedelta = PyTimeDelta(res);
@@ -74,7 +74,7 @@ PyDateTime::PyDateTime(py::handle &obj) : obj(obj) {
 	minute = PyDateTime_DATE_GET_MINUTE(ptr);
 	second = PyDateTime_DATE_GET_SECOND(ptr);
 	micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-	timezone = PyDateTime_DATE_GET_TZINFO(ptr);
+	tzone_obj = PyDateTime_DATE_GET_TZINFO(ptr);
 }
 
 timestamp_t PyDateTime::ToTimestamp() {
@@ -85,8 +85,8 @@ timestamp_t PyDateTime::ToTimestamp() {
 
 Value PyDateTime::ToDuckValue() {
 	auto timestamp = ToTimestamp();
-	if (timezone != Py_None) {
-		auto utc_offset = PyTimezone::GetUTCOffset(timezone);
+	if (tzone_obj != Py_None) {
+		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
 		//! Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
 		timestamp = Interval::Add(timestamp, utc_offset);
