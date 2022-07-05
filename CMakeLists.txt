@@ -517,13 +517,13 @@ function(add_extension_definitions)
   endif()
 
   if(${BUILD_FTS_EXTENSION})
-    include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
+    include_directories(${PROJECT_SOURCE_DIR}/extension/fts/include)
     add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
   endif()
 
   if(${BUILD_HTTPFS_EXTENSION})
     find_package(OpenSSL REQUIRED)
-    include_directories(${CMAKE_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
     add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
   endif()
 
@@ -807,5 +807,7 @@ endif()
 
 # build out-of-tree extensions on demand
 if(NOT "${EXTERNAL_EXTENSION_DIRECTORY}" STREQUAL "")
-  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} external_extension_build)
+  # the build path seems to get ignored on windows in just the right way. no idea why.
+  get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
+  add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
 endif()

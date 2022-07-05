@@ -39,6 +39,7 @@ void CardinalityFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("cardinality", {LogicalType::ANY}, LogicalType::UBIGINT, CardinalityFunction, false,
 	                   CardinalityBind);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 }
 

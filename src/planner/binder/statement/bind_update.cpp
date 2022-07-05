@@ -131,6 +131,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	auto &table_binding = (BoundBaseTableRef &)*bound_table;
 	auto table = table_binding.table;
 
+	// Add CTEs as bindable
+	AddCTEMap(stmt.cte_map);
+
 	if (stmt.from_table) {
 		BoundCrossProductRef bound_crossproduct;
 		bound_crossproduct.left = move(bound_table);

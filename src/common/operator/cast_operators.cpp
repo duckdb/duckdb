@@ -1133,6 +1133,9 @@ bool TryCast::Operation(timestamp_t input, date_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
+	if (!Timestamp::IsFinite(input)) {
+		return false;
+	}
 	result = Timestamp::GetTime(input);
 	return true;
 }

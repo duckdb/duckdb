@@ -110,9 +110,9 @@ struct SortedAggregateFunction {
 		sort_chunk.SetCardinality(count);
 	}
 
-	static void SimpleUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
+	static void SimpleUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
 	                         idx_t count) {
-		const auto order_bind = (SortedAggregateBindData *)bind_data;
+		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
 		DataChunk arg_chunk;
 		DataChunk sort_chunk;
 		ProjectInputs(inputs, order_bind, input_count, count, arg_chunk, sort_chunk);
@@ -122,14 +122,14 @@ struct SortedAggregateFunction {
 		order_state->ordering.Append(sort_chunk);
 	}
 
-	static void ScatterUpdate(Vector inputs[], FunctionData *bind_data, idx_t input_count, Vector &states,
+	static void ScatterUpdate(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                          idx_t count) {
 		if (!count) {
 			return;
 		}
 
 		// Append the arguments to the two sub-collections
-		const auto order_bind = (SortedAggregateBindData *)bind_data;
+		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
 		DataChunk arg_inputs;
 		DataChunk sort_inputs;
 		ProjectInputs(inputs, order_bind, input_count, count, arg_inputs, sort_inputs);
@@ -174,7 +174,7 @@ struct SortedAggregateFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.arguments.Count() == 0) {
 			return;
 		}
@@ -182,8 +182,9 @@ struct SortedAggregateFunction {
 		target->ordering.Append(const_cast<ChunkCollection &>(source.ordering));
 	}
 
-	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset) {
-		const auto order_bind = (SortedAggregateBindData *)bind_data;
+	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                     idx_t offset) {
+		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
 
 		//	 Reusable inner state
 		vector<data_t> agg_state(order_bind->function.state_size());
@@ -195,6 +196,7 @@ struct SortedAggregateFunction {
 		// State variables
 		const auto input_count = order_bind->function.arguments.size();
 		auto bind_info = order_bind->bind_info.get();
+		AggregateInputData aggr_bind_info(bind_info);
 
 		// Inner aggregate APIs
 		auto initialize = order_bind->function.initialize;
@@ -219,17 +221,17 @@ struct SortedAggregateFunction {
 			for (auto &chunk : state->arguments.Chunks()) {
 				// These are all simple updates, so use it if available
 				if (simple_update) {
-					simple_update(chunk->data.data(), bind_info, input_count, agg_state.data(), chunk->size());
+					simple_update(chunk->data.data(), aggr_bind_info, input_count, agg_state.data(), chunk->size());
 				} else {
 					// We are only updating a constant state
 					agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-					update(chunk->data.data(), bind_info, input_count, agg_state_vec, chunk->size());
+					update(chunk->data.data(), aggr_bind_info, input_count, agg_state_vec, chunk->size());
 				}
 			}
 
 			// Finalize a single value at the next offset
 			agg_state_vec.SetVectorType(states.GetVectorType());
-			finalize(agg_state_vec, bind_info, result, 1, i + offset);
+			finalize(agg_state_vec, aggr_bind_info, result, 1, i + offset);
 
 			if (destructor) {
 				destructor(agg_state_vec, 1);

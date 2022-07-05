@@ -48,6 +48,7 @@
 
 
 #include <google/protobuf/port_def.inc>
+namespace duckdb{
 
 namespace google {
 namespace protobuf {
@@ -780,5 +781,5 @@ size_t WireFormatLite::SInt64Size(const RepeatedField<int64_t>& value) {
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>

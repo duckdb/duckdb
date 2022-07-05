@@ -205,7 +205,10 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.maximum_memory = new_config.maximum_memory;
 	if (config.maximum_memory == (idx_t)-1) {
-		config.maximum_memory = FileSystem::GetAvailableMemory() * 8 / 10;
+		auto memory = FileSystem::GetAvailableMemory();
+		if (memory != DConstants::INVALID_INDEX) {
+			config.maximum_memory = memory * 8 / 10;
+		}
 	}
 	if (new_config.maximum_threads == (idx_t)-1) {
 #ifndef DUCKDB_NO_THREADS
@@ -230,6 +233,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.replacement_scans = move(new_config.replacement_scans);
 	config.initialize_default_database = new_config.initialize_default_database;
 	config.disabled_optimizers = move(new_config.disabled_optimizers);
+	config.parser_extensions = move(new_config.parser_extensions);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
@@ -238,6 +242,10 @@ DBConfig &DBConfig::GetConfig(ClientContext &context) {
 
 idx_t DatabaseInstance::NumberOfThreads() {
 	return scheduler->NumberOfThreads();
+}
+
+const unordered_set<std::string> &DatabaseInstance::LoadedExtensions() {
+	return loaded_extensions;
 }
 
 idx_t DuckDB::NumberOfThreads() {

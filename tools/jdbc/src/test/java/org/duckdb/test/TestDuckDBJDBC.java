@@ -21,6 +21,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.sql.SQLWarning;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
@@ -38,8 +39,11 @@ import org.duckdb.DuckDBResultSetMetaData;
 public class TestDuckDBJDBC {
 
 	private static void assertTrue(boolean val) throws Exception {
+		assertTrue(val, null);
+	}
+	private static void assertTrue(boolean val, String message) throws Exception {
 		if (!val) {
-			throw new Exception();
+			throw new Exception(message);
 		}
 	}
 
@@ -51,7 +55,7 @@ public class TestDuckDBJDBC {
 		if (a == null && b == null) {
 			return;
 		}
-		assertTrue(a.equals(b));
+		assertTrue(a.equals(b), String.format("%s should equal %s", a, b));
 	}
 
 	private static void assertNull(Object a) throws Exception {
@@ -1793,6 +1797,30 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_appender_string_with_emoji() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		stmt.execute("CREATE TABLE data (str_value VARCHAR(10))");
+		String expectedValue = "䭔\uD86D\uDF7C🔥\uD83D\uDE1C";
+		try (DuckDBAppender appender = conn.createAppender("main", "data")) {
+			appender.beginRow();
+			appender.append(expectedValue);
+			appender.endRow();
+		}
+
+		ResultSet rs = stmt.executeQuery("SELECT str_value FROM data");
+		assertFalse(rs.isClosed());
+		assertTrue(rs.next());
+
+		String appendedValue = rs.getString(1);
+		assertEquals(appendedValue, expectedValue);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_appender_table_does_not_exist() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -2135,14 +2163,51 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+
+	public static void test_get_schema() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+
+		assertEquals(conn.getSchema(), "main");
+
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE SCHEMA alternate_schema;");
+			stmt.execute("SET search_path = \"alternate_schema\";");
+		}
+
+		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.close();
+
+		try {
+			conn.getSchema();
+			fail();
+		} catch (SQLException e) {
+			assertEquals(e.getMessage(), "Invalid connection");
+		}
+	}
+
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
+		boolean anyFailed = false;
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
-				m.invoke(null);
+				System.out.print(m.getName() + " ");
+
+				LocalDateTime start = LocalDateTime.now();
+				try {
+					m.invoke(null);
+					System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() + " seconds");
+				} catch (Throwable t) {
+					System.out.println("failed with " + t);
+					t.printStackTrace(System.out);
+					anyFailed = true;
+				}
 			}
 		}
 		System.out.println("OK");
+
+		System.exit(anyFailed ? 1 : 0);
 	}
 }

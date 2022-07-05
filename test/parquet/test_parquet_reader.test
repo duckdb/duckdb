@@ -345,7 +345,7 @@ query I
 SELECT * FROM parquet_scan('data/parquet-testing/struct.parquet') limit 50;
 ----
 {'str_field': hello, 'f64_field': NULL}
-{'str_field': NULL, 'f64_field': 1.230000}
+{'str_field': NULL, 'f64_field': 1.23}
 
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/byte_array_decimal.parquet') limit 50;
@@ -563,7 +563,7 @@ query I
 SELECT * FROM parquet_scan('data/parquet-testing/bug1618_struct_strings.parquet') limit 50;
 ----
 {'str_field': hello, 'f64_field': NULL}
-{'str_field': NULL, 'f64_field': 1.230000}
+{'str_field': NULL, 'f64_field': 1.23}
 
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/single_nan.parquet') limit 50;

@@ -49,9 +49,9 @@ select json_object('nested', map(['duck', 'goose'], [42, 7]))
 {"nested":{"duck":42,"goose":7}}
 
 query T
-select json_object('nested', map([NULL, 'goose'], [42, 7]))
+select json_object('nested', map([0, 'goose'], [42, 7]))
 ----
-{"nested":{"goose":7}}
+{"nested":{"0":42,"goose":7}}
 
 query T
 select json_object('nested', map(['duck', 'goose'], [NULL, 7]))
@@ -78,58 +78,63 @@ create table test (a int, b double, c varchar, d int[], e uinteger)
 
 statement ok
 insert into test values
-    (NULL, 0.5, 'short', [0, 1, 2, 3, 4, 5, 6, 7, 9], 33),
-    (42, NULL, 'looooooooooooooong', [], 42),
-    (-42, 0.42, NULL, [1, 2, 3], 1111),
-    (777, 19.96, 'duck', NULL, 1),
-    (-777, 4.2, 'goose', [4, 2], NULL)
+    (0,		0.5,	'short',				[0, 1, 2, 3, 4, 5, 6, 7, 9],	33),
+    (42,	1,		'looooooooooooooong',	[],								42),
+    (-42,	0.42,	2,						[1, 2, 3],						1111),
+    (777,	19.96,	'duck',					NULL,							1),
+    (-777,	4.2,	'goose',				[4, 2],							NULL)
+#	a		b		c						d								e
 
 query T
 select json_quote(row(a, b, c, d, e)) from test
 ----
-{"a":null,"b":0.5,"c":"short","d":[0,1,2,3,4,5,6,7,9],"e":33}
-{"a":42,"b":null,"c":"looooooooooooooong","d":[],"e":42}
-{"a":-42,"b":0.42,"c":null,"d":[1,2,3],"e":1111}
+{"a":0,"b":0.5,"c":"short","d":[0,1,2,3,4,5,6,7,9],"e":33}
+{"a":42,"b":1.0,"c":"looooooooooooooong","d":[],"e":42}
+{"a":-42,"b":0.42,"c":"2","d":[1,2,3],"e":1111}
 {"a":777,"b":19.96,"c":"duck","d":null,"e":1}
 {"a":-777,"b":4.2,"c":"goose","d":[4,2],"e":null}
 
 query T
 select json_array(a, b, c, d, e) from test
 ----
-[null,0.5,"short",[0,1,2,3,4,5,6,7,9],33]
-[42,null,"looooooooooooooong",[],42]
-[-42,0.42,null,[1,2,3],1111]
+[0,0.5,"short",[0,1,2,3,4,5,6,7,9],33]
+[42,1.0,"looooooooooooooong",[],42]
+[-42,0.42,"2",[1,2,3],1111]
 [777,19.96,"duck",null,1]
 [-777,4.2,"goose",[4,2],null]
 
 query T
 select json_object(a, a, b, b, c, c, d, d, e, e) from test
 ----
-{"0.5":0.5,"short":"short","[0, 1, 2, 3, 4, 5, 6, 7, 9]":[0,1,2,3,4,5,6,7,9],"33":33}
-{"42":42,"looooooooooooooong":"looooooooooooooong","[]":[],"42":42}
-{"-42":-42,"0.42":0.42,"[1, 2, 3]":[1,2,3],"1111":1111}
+{"0":0,"0.5":0.5,"short":"short","[0, 1, 2, 3, 4, 5, 6, 7, 9]":[0,1,2,3,4,5,6,7,9],"33":33}
+{"42":42,"1.0":1.0,"looooooooooooooong":"looooooooooooooong","[]":[],"42":42}
+{"-42":-42,"0.42":0.42,"2":"2","[1, 2, 3]":[1,2,3],"1111":1111}
 {"777":777,"19.96":19.96,"duck":"duck","1":1}
 {"-777":-777,"4.2":4.2,"goose":"goose","[4, 2]":[4,2]}
 
 query T
 select json_quote(map(list(a), list(b))) from test
 ----
-{"42":null,"-42":0.42,"777":19.96,"-777":4.2}
+{"0":0.5,"42":1.0,"-42":0.42,"777":19.96,"-777":4.2}
 
 query T
 select json_quote(map(list(b), list(c))) from test
 ----
-{"0.5":"short","0.42":null,"19.96":"duck","4.2":"goose"}
+{"0.5":"short","1.0":"looooooooooooooong","0.42":"2","19.96":"duck","4.2":"goose"}
 
 query T
 select json_quote(map(list(c), list(d))) from test
 ----
-{"short":[0,1,2,3,4,5,6,7,9],"looooooooooooooong":[],"duck":null,"goose":[4,2]}
+{"short":[0,1,2,3,4,5,6,7,9],"looooooooooooooong":[],"2":[1,2,3],"duck":null,"goose":[4,2]}
+
+# Histogram not implemented for INT[]
+statement error
+select json_quote(map(list(d), list(e))) from test
 
 query T
-select json_quote(map(list(d), list(e))) from test
+select json_quote(map(list(c), list(e))) from test
 ----
-{"[0, 1, 2, 3, 4, 5, 6, 7, 9]":33,"[]":42,"[1, 2, 3]":1111,"[4, 2]":null}
+{"short":33,"looooooooooooooong":42,"2":1111,"duck":1,"goose":null}
 
 # some postgres aliases
 query T
@@ -260,4 +265,4 @@ SELECT json_array(
   'abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ',
   99);
 ----
-[-9223372036854775808,9223372036854775807,0,1,-1,0.0,1.0,-1.0,-1.e99,2.e100,"one","two","three",4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,null,21,22,23,24,25,26,27,28,29,30,31,"abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ",99]
+[-9223372036854775808,9223372036854775807,0,1,-1,0.0,1.0,-1.0,-1e99,2e100,"one","two","three",4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,null,21,22,23,24,25,26,27,28,29,30,31,"abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ",99]

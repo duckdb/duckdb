@@ -69,6 +69,8 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
 
+	protected static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
+
 	// returns stmt_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
 
@@ -113,6 +115,7 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_appender_append_double(ByteBuffer appender_ref, double value) throws SQLException;
 
-	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, String value) throws SQLException;
+	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value) throws SQLException;
 
+	protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
 }

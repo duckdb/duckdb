@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -495,8 +496,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 	}
-	case LogicalTypeId::HASH:
-		return Value::HASH(((hash_t *)data)[index]);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(((uintptr_t *)data)[index]);
 	case LogicalTypeId::FLOAT:
@@ -992,6 +991,14 @@ void Vector::UTFVerify(idx_t count) {
 	UTFVerify(*flat_sel, count);
 }
 
+void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
+#ifdef DEBUG
+	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::MAP);
+	auto valid_check = CheckMapValidity(vector_p, count, sel_p);
+	D_ASSERT(valid_check == MapInvalidReason::VALID);
+#endif // DEBUG
+}
+
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {
@@ -1044,7 +1051,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		D_ASSERT(child_types.size() == children.size());
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-			children[child_idx]->Verify(count);
+			Vector::Verify(*children[child_idx], sel_p, count);
 			if (vtype == VectorType::CONSTANT_VECTOR) {
 				D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
 				if (ConstantVector::IsNull(*vector)) {
@@ -1082,6 +1089,9 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 					D_ASSERT(!child_validity->RowIsValid(child_index));
 				}
 			}
+		}
+		if (vector->GetType().id() == LogicalTypeId::MAP) {
+			VerifyMap(*vector, *sel, count);
 		}
 	}
 
