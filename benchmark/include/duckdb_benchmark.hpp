@@ -30,17 +30,17 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 		D_ASSERT(res->success);
 		string profiling_mode;
 		switch (instance.configuration.profile_info) {
-			case BenchmarkProfileInfo::NONE:
-				profiling_mode = "";
-				break;
-			case BenchmarkProfileInfo::NORMAL:
-				profiling_mode = "standard";
-				break;
-			case BenchmarkProfileInfo::DETAILED:
-				profiling_mode = "detailed";
-				break;
-			default:
-				throw InternalException("Unknown profiling option ""%s""", instance.configuration.profile_info);
+		case BenchmarkProfileInfo::NONE:
+			profiling_mode = "";
+			break;
+		case BenchmarkProfileInfo::NORMAL:
+			profiling_mode = "standard";
+			break;
+		case BenchmarkProfileInfo::DETAILED:
+			profiling_mode = "detailed";
+			break;
+		default:
+			throw InternalException("Unknown profiling option \"%s\"", instance.configuration.profile_info);
 		}
 		if (!profiling_mode.empty()) {
 			res = conn.Query("PRAGMA profiling_mode=" + profiling_mode);
