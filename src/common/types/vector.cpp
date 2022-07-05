@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
 
@@ -443,7 +444,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 
 			auto str_compressed = ((string_t *)data)[index];
 			auto decompressed_string_size = fsst_decompress(
-			    FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+			    (fsst_decoder_t*)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
 			    str_compressed.GetSize(),
 			    (unsigned char*)str_compressed.GetDataUnsafe(),
 			    StringUncompressed::STRING_BLOCK_LIMIT+1,
@@ -619,7 +620,7 @@ string Vector::ToString(idx_t count) const {
 				string_t compressed_string = ((string_t *)data)[i];
 				unsigned char decompress_buffer[1000]; // variable size
 				auto decompressed_string_size =
-					fsst_decompress(FSSTVector::GetDecoder(
+					fsst_decompress((fsst_decoder_t*)FSSTVector::GetDecoder(
 									const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
 									compressed_string.GetSize(),       /* IN: byte-length of compressed string. */
 									(unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
@@ -1417,17 +1418,17 @@ string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 	return fsst_string_buffer.AddBlob(data);
 }
 
-fsst_decoder_t* FSSTVector::GetDecoder(Vector &vector) {
+void* FSSTVector::GetDecoder(Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		throw InternalException("GetDecoder called on FSST Vector without registered buffer");
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
-	return fsst_string_buffer.GetDecoder();
+	return (fsst_decoder_t*)fsst_string_buffer.GetDecoder();
 }
 
-void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<fsst_decoder_t>& fsst_decoder) {
+void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void>& fsst_decoder) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (!vector.auxiliary) {

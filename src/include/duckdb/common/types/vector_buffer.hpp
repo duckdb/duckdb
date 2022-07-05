@@ -12,7 +12,6 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "fsst.h"
 
 namespace duckdb {
 
@@ -166,15 +165,14 @@ public:
 	VectorFSSTStringBuffer();
 
 public:
-	void AddDecoder(buffer_ptr<fsst_decoder_t>& fsst_decoder_p) {
+	void AddDecoder(buffer_ptr<void>& fsst_decoder_p) {
 		fsst_decoder = fsst_decoder_p;
 	}
-	fsst_decoder_t * GetDecoder() {
+	void* GetDecoder() {
 		return fsst_decoder.get();
 	}
-
 private:
-	buffer_ptr<fsst_decoder_t> fsst_decoder;
+	buffer_ptr<void> fsst_decoder;
 };
 
 class VectorStructBuffer : public VectorBuffer {

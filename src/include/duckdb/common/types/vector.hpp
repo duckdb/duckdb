@@ -16,7 +16,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "fsst.h"
 
 namespace duckdb {
 
@@ -368,8 +367,8 @@ struct FSSTVector {
 	}
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, string_t data);
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, const char *data, idx_t len);
-	DUCKDB_API static void RegisterDecoder(Vector &vector, buffer_ptr<fsst_decoder_t> &fsst_decoder);
-	DUCKDB_API static fsst_decoder_t* GetDecoder(Vector &vector);
+	DUCKDB_API static void RegisterDecoder(Vector &vector, buffer_ptr<void> &fsst_decoder);
+	DUCKDB_API static void* GetDecoder(Vector &vector);
 };
 
 struct StructVector {

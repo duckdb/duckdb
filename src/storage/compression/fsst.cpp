@@ -1,11 +1,12 @@
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "miniz_wrapper.hpp"
+#include "fsst.h"
 #include <iostream>
-
 
 namespace duckdb {
 
@@ -429,7 +430,7 @@ struct FSSTScanState : public StringScanState {
 		ResetStoredDelta();
 	}
 
-	buffer_ptr<fsst_decoder_t> fsst_decoder;
+	buffer_ptr<void> fsst_decoder;
 	bitpacking_width_t current_width;
 
 	// To speed up delta decoding we store the last index
@@ -461,7 +462,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	auto base_ptr = state->handle->node->buffer + segment.GetBlockOffset();
 
 	state->fsst_decoder = make_buffer<fsst_decoder_t>();
-	auto retval = ParseFSSTSegmentHeader(base_ptr, state->fsst_decoder.get(), &state->current_width);
+	auto retval = ParseFSSTSegmentHeader(base_ptr, (fsst_decoder_t*)state->fsst_decoder.get(), &state->current_width);
 	if (!retval) {
 		state->fsst_decoder = nullptr;
 	}

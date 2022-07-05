@@ -8,8 +8,8 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "fsst.h"
 
 namespace duckdb {
 
@@ -129,7 +129,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
 
 				auto decompressed_string_size = fsst_decompress(
-				    FSSTVector::GetDecoder(const_cast<Vector &>(*source)),  	/* IN: use this symbol table for compression. */
+				    (fsst_decoder_t*)FSSTVector::GetDecoder(const_cast<Vector &>(*source)),  	/* IN: use this symbol table for compression. */
 				    compressed_string.GetSize(),        						/* IN: byte-length of compressed string. */
 				    (unsigned char*)compressed_string.GetDataUnsafe(),  		/* IN: compressed string. */
 				    StringUncompressed::STRING_BLOCK_LIMIT+1,              									/* IN: byte-length of output buffer. */
