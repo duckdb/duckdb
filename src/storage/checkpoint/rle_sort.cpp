@@ -3,7 +3,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint/rle_sort_options.hpp"
 #include "duckdb/storage/table/column_data.hpp"
-#include <iostream>
 
 namespace duckdb {
 
