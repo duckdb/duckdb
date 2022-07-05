@@ -95,7 +95,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		throw BinderException(result.error);
 	}
 
-	return BindResult(make_unique<BoundLambdaExpression>(result.expression->type, result.expression->return_type,
+	return BindResult(make_unique<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
 	                                                     move(result.expression), params_strings.size()));
 }
 

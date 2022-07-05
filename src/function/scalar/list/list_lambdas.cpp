@@ -292,10 +292,6 @@ template <int64_t LAMBDA_PARAM_CNT>
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 
-	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
-		throw BinderException("Invalid lambda expression!");
-	}
-
 	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
 	if (bound_lambda_expr.parameter_count != LAMBDA_PARAM_CNT) {
 		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name +
@@ -303,13 +299,15 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments.emplace_back(LogicalType::SQLNULL);
+		bound_function.arguments.pop_back();
+		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
 		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		bound_function.arguments.emplace_back(LogicalType(LogicalTypeId::UNKNOWN));
+		bound_function.arguments.pop_back();
+		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
 		bound_function.return_type = LogicalType::SQLNULL;
 		return nullptr;
 	}
@@ -329,7 +327,12 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
 	}
 
-	bound_function.return_type = LogicalType::LIST(arguments[arguments.size() - 1]->return_type);
+	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
+		throw BinderException("Invalid lambda expression!");
+	}
+
+	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
 
@@ -341,15 +344,19 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
 	}
 
+	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
+		throw BinderException("Invalid lambda expression!");
+	}
+
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
 
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 
-	ScalarFunction fun("list_transform", {}, LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false,
-	                   ListTransformBind, nullptr, nullptr);
-	fun.varargs = LogicalType::ANY;
+	ScalarFunction fun("list_transform", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
+	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false, ListTransformBind, nullptr,
+	                   nullptr);
 	set.AddFunction(fun);
 
 	fun.name = "array_transform";
@@ -362,9 +369,9 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 
-	ScalarFunction fun("list_filter", {}, LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false,
-	                   ListFilterBind, nullptr, nullptr);
-	fun.varargs = LogicalType::ANY;
+	ScalarFunction fun("list_filter", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
+	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false, ListFilterBind, nullptr,
+	                   nullptr);
 	set.AddFunction(fun);
 
 	fun.name = "array_filter";

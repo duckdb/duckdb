@@ -449,8 +449,12 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		target_type.Verify();
-		// check if the source type is a paramter, and we have disabled casting of parameters
+		// check if the source type is a parameter, and if we have disabled casting of parameters
 		if (children[i]->return_type.id() == LogicalTypeId::UNKNOWN && !cast_parameter_expressions) {
+			continue;
+		}
+		// don't cast lambda children, they get removed anyways
+		if (children[i]->return_type.id() == LogicalTypeId::LAMBDA) {
 			continue;
 		}
 		// check if the type of child matches the type of function argument

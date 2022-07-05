@@ -6,7 +6,7 @@ namespace duckdb {
 
 BoundLambdaExpression::BoundLambdaExpression(ExpressionType type_p, LogicalType return_type_p,
                                              unique_ptr<Expression> lambda_expr_p, idx_t parameter_count_p)
-    : Expression(type_p, ExpressionClass::BOUND_LAMBDA, return_type_p), lambda_expr(move(lambda_expr_p)),
+    : Expression(type_p, ExpressionClass::BOUND_LAMBDA, move(return_type_p)), lambda_expr(move(lambda_expr_p)),
       parameter_count(parameter_count_p) {
 }
 
