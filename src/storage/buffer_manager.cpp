@@ -751,6 +751,9 @@ TemporaryDirectoryHandle::TemporaryDirectoryHandle(DatabaseInstance &db, string 
 	}
 }
 TemporaryDirectoryHandle::~TemporaryDirectoryHandle() {
+	// first release any temporary files
+	temp_file.reset();
+	// then delete the temporary file directory
 	auto &fs = FileSystem::GetFileSystem(db);
 	if (!temp_directory.empty()) {
 		fs.RemoveDirectory(temp_directory);
