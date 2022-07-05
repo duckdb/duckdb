@@ -357,6 +357,7 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("list_transform", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
 	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false, ListTransformBind, nullptr,
 	                   nullptr);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 
 	fun.name = "array_transform";
@@ -372,6 +373,7 @@ void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("list_filter", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
 	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false, ListFilterBind, nullptr,
 	                   nullptr);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 
 	fun.name = "array_filter";

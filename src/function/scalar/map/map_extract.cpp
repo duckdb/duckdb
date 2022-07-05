@@ -70,6 +70,7 @@ void MapExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("map_extract", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, MapExtractFunction, false,
 	                   MapExtractBind);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 	fun.name = "element_at";
 	set.AddFunction(fun);

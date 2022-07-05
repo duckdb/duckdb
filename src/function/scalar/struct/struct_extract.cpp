@@ -43,12 +43,6 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL ||
-	    arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::SQLNULL;
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		return make_unique<StructExtractBindData>("", 0, LogicalType::SQLNULL);
-	}
 	D_ASSERT(LogicalTypeId::STRUCT == arguments[0]->return_type.id());
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
 	if (struct_children.empty()) {

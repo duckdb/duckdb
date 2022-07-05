@@ -1,15 +1,13 @@
-#include "duckdb/function/scalar/string_functions.hpp"
-#include "duckdb/function/scalar/regexp.hpp"
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/pair.hpp"
-
-#include "utf8proc_wrapper.hpp"
+#include "duckdb/function/scalar/regexp.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 #include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -251,12 +249,15 @@ static void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Ve
 void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
-	set.AddFunction(
-	    {"string_split", "str_split", "string_to_array", "split"},
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction));
-	set.AddFunction(
-	    {"string_split_regex", "str_split_regex", "regexp_split_to_array"},
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction));
+	auto regular_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction);
+	regular_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction({"string_split", "str_split", "string_to_array", "split"}, regular_fun);
+
+	auto regex_fun =
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction);
+	regex_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction({"string_split_regex", "str_split_regex", "regexp_split_to_array"}, regex_fun);
 }
 
 } // namespace duckdb

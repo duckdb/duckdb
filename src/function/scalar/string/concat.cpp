@@ -1,10 +1,9 @@
-#include "duckdb/function/scalar/string_functions.hpp"
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
 
 #include <string.h>
 
@@ -246,6 +245,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	// concat_ws(',', '', '') = ","
 	ScalarFunction concat = ScalarFunction("concat", {LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatFunction);
 	concat.varargs = LogicalType::VARCHAR;
+	concat.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat);
 
 	ScalarFunctionSet concat_op("||");
@@ -253,11 +253,15 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, ConcatOperator));
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	concat_op.AddFunction(ListConcatFun::GetFunction());
+	for (auto &fun : concat_op.functions) {
+		fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	}
 	set.AddFunction(concat_op);
 
 	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                          LogicalType::VARCHAR, ConcatWSFunction);
 	concat_ws.varargs = LogicalType::VARCHAR;
+	concat_ws.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(concat_ws);
 }
 

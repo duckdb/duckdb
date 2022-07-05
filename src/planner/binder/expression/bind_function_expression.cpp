@@ -77,7 +77,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(move(child.expr));
 	}
 	unique_ptr<Expression> result =
-	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
+	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
@@ -158,7 +158,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	                     children[0]->alias);
 
 	unique_ptr<Expression> result =
-	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
+	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator, &binder);
 	if (!result) {
 		throw BinderException(binder.FormatError(function, error));
 	}
