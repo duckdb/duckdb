@@ -323,10 +323,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 
 	// at least the list column and the lambda function
-	if (arguments.size() != 2) {
-		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
-	}
-
+	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
@@ -340,10 +337,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
                                                vector<unique_ptr<Expression>> &arguments) {
 
 	// at least the list column and the lambda function
-	if (arguments.size() != 2) {
-		throw BinderException(bound_function.name + " takes two parameters (LIST, LAMBDA).");
-	}
-
+	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}

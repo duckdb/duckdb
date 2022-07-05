@@ -93,9 +93,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	if (function.children.size() != 2) {
 		throw BinderException("Invalid function arguments!");
 	}
-	if (function.children[1]->GetExpressionClass() != ExpressionClass::LAMBDA) {
-		throw BinderException("Invalid lambda expression!");
-	}
+	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	// bind the list parameter
 	BindChild(function.children[0], depth, error);
