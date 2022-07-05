@@ -122,7 +122,7 @@ bool TryCast(const py::object stuf, T &value) {
 	try {
 		value = stuf.cast<T>();
 		return true;
-	} catch (py::cast_error) {
+	} catch (py::cast_error &e) {
 		return false;
 	}
 }
@@ -298,10 +298,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
 		}
 
-		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
-		}
-
 		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
@@ -314,7 +310,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
-				LogicalType ltype = out.GetType();
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
@@ -404,7 +399,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 }
 
-bool ColumnIsMasked(pybind11::detail::accessor<pybind11::detail::accessor_policies::list_item> column,
+bool ColumnIsMasked(const pybind11::detail::accessor<pybind11::detail::accessor_policies::list_item> &column,
                     const PandasType &type) {
 	bool masked = py::hasattr(column, "mask");
 	return (masked || type == PandasType::PANDA_INT8 || type == PandasType::PANDA_INT16 ||
