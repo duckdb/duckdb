@@ -20,6 +20,7 @@ Connection::Connection(DatabaseInstance &database) : context(make_shared<ClientC
 	ConnectionManager::Get(database).AddConnection(*context);
 #ifdef DEBUG
 	EnableProfiling();
+	context->config.emit_profiler_output = false;
 #endif
 }
 
@@ -35,7 +36,7 @@ string Connection::GetProfilingInformation(ProfilerPrintFormat format) {
 	if (format == ProfilerPrintFormat::JSON) {
 		return profiler.ToJSON();
 	} else {
-		return profiler.ToString();
+		return profiler.QueryTreeToString();
 	}
 }
 
