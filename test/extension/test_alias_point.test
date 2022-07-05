@@ -1,6 +1,6 @@
-# name: test/alias/test_alias_point.test
+# name: test/extension/test_alias_point.test
 # description: Enable Test alias for point.
-# group: [alias]
+# group: [extension]
 
 require test_alias
 
@@ -96,31 +96,3 @@ NULL
 NULL
 NULL
 NULL
-
-statement error
-SELECT add_struct(point, point) from points;
-
-statement error
-SELECT sub_struct(point, point) from points;
-
-query I
-SELECT add_struct(pt, pt) from points;
-----
-{'x': 6, 'y': 2}
-{'x': 10, 'y': 8}
-NULL
-{'x': 20, 'y': 200}
-
-query I
-SELECT sub_struct(pt, pt) from points;
-----
-{'x': 0, 'y': 0}
-{'x': 0, 'y': 0}
-NULL
-{'x': 0, 'y': 0}
-
-statement error
-SELECT add_struct(point) from points;
-
-statement error
-SELECT sub_struct(point) from points;
