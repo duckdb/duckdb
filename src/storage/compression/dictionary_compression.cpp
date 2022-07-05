@@ -31,9 +31,6 @@ using string_set_t = unordered_set<string_t, StringHash, StringEquality>;
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
 public:
-	virtual ~DictionaryCompressionState() {
-	}
-
 	bool UpdateState(Vector &scan_vector, idx_t count) {
 		VectorData vdata;
 		scan_vector.Orrify(count, vdata);

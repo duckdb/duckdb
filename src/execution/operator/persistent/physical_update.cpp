@@ -15,7 +15,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	UpdateGlobalState(Allocator &allocator)
+	explicit UpdateGlobalState(Allocator &allocator)
 	    : updated_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
 	}
 

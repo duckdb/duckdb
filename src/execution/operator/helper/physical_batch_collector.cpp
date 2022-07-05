@@ -13,7 +13,7 @@ PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : Ph
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(Allocator &allocator) : data(allocator) {
+	explicit BatchCollectorGlobalState(Allocator &allocator) : data(allocator) {
 	}
 
 	mutex glock;
@@ -23,7 +23,7 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(Allocator &allocator) : data(allocator) {
+	explicit BatchCollectorLocalState(Allocator &allocator) : data(allocator) {
 	}
 
 	BatchedChunkCollection data;

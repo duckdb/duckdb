@@ -195,7 +195,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
-	PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator) {
+	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator) {
 	}
 
 	DataChunk join_keys;

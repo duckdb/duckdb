@@ -116,8 +116,8 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 }
 
 Allocator &Allocator::DefaultAllocator() {
-	static Allocator allocator;
-	return allocator;
+	static Allocator DEFAULT_ALLOCATOR;
+	return DEFAULT_ALLOCATOR;
 }
 
 //===--------------------------------------------------------------------===//

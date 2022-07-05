@@ -128,7 +128,8 @@ public:
 
 class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
-	NestedLoopJoinGlobalState(Allocator &allocator) : right_data(allocator), right_chunks(allocator), has_null(false) {
+	explicit NestedLoopJoinGlobalState(Allocator &allocator)
+	    : right_data(allocator), right_chunks(allocator), has_null(false) {
 	}
 
 	mutex nj_lock;

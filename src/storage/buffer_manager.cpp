@@ -459,7 +459,8 @@ unique_ptr<ManagedBuffer> ReadTemporaryBufferInternal(DatabaseInstance &db, File
 }
 
 struct TemporaryFileIndex {
-	TemporaryFileIndex(idx_t file_index = DConstants::INVALID_INDEX, idx_t block_index = DConstants::INVALID_INDEX)
+	explicit TemporaryFileIndex(idx_t file_index = DConstants::INVALID_INDEX,
+	                            idx_t block_index = DConstants::INVALID_INDEX)
 	    : file_index(file_index), block_index(block_index) {
 	}
 
@@ -546,7 +547,7 @@ public:
 
 public:
 	struct TemporaryFileLock {
-		TemporaryFileLock(mutex &mutex) : lock(mutex) {
+		explicit TemporaryFileLock(mutex &mutex) : lock(mutex) {
 		}
 
 		lock_guard<mutex> lock;
@@ -639,7 +640,7 @@ public:
 
 public:
 	struct TemporaryManagerLock {
-		TemporaryManagerLock(mutex &mutex) : lock(mutex) {
+		explicit TemporaryManagerLock(mutex &mutex) : lock(mutex) {
 		}
 
 		lock_guard<mutex> lock;

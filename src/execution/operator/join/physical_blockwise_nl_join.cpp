@@ -29,7 +29,7 @@ public:
 
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
-	BlockwiseNLJoinGlobalState(Allocator &allocator) : right_chunks(allocator) {
+	explicit BlockwiseNLJoinGlobalState(Allocator &allocator) : right_chunks(allocator) {
 	}
 
 	mutex lock;

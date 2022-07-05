@@ -58,7 +58,7 @@ public:
 
 class DelimJoinLocalState : public LocalSinkState {
 public:
-	DelimJoinLocalState(Allocator &allocator) : lhs_data(allocator) {
+	explicit DelimJoinLocalState(Allocator &allocator) : lhs_data(allocator) {
 	}
 
 	unique_ptr<LocalSinkState> distinct_state;

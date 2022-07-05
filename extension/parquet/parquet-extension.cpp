@@ -367,7 +367,7 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	ParquetWriteLocalState(Allocator &allocator) {
+	explicit ParquetWriteLocalState(Allocator &allocator) {
 		buffer = make_unique<ChunkCollection>(allocator);
 	}
 

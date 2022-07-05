@@ -22,7 +22,7 @@ public:
 };
 
 struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
-	ParquetMetaDataOperatorData(Allocator &allocator) : collection(allocator) {
+	explicit ParquetMetaDataOperatorData(Allocator &allocator) : collection(allocator) {
 	}
 
 	idx_t file_index;

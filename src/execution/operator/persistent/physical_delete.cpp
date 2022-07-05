@@ -13,7 +13,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class DeleteGlobalState : public GlobalSinkState {
 public:
-	DeleteGlobalState(Allocator &allocator)
+	explicit DeleteGlobalState(Allocator &allocator)
 	    : deleted_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
 	}
 
@@ -25,7 +25,7 @@ public:
 
 class DeleteLocalState : public LocalSinkState {
 public:
-	explicit DeleteLocalState(Allocator &allocator, const vector<LogicalType> &table_types) {
+	DeleteLocalState(Allocator &allocator, const vector<LogicalType> &table_types) {
 		delete_chunk.Initialize(allocator, table_types);
 	}
 	DataChunk delete_chunk;
