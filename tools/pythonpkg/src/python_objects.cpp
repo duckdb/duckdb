@@ -47,8 +47,8 @@ dtime_t PyTime::ToTime() {
 }
 Value PyTime::ToValue() {
 	auto time = ToTime();
-	if (timezone != Py_None) {
-		auto utc_offset = PyTimezone::GetUTCOffset(timezone);
+	if (this->timezone != Py_None) {
+		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone);
 		//! 'Add' requires a date_t for overflows
 		date_t ignore;
 		utc_offset = Interval::Invert(utc_offset);

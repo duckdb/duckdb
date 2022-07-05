@@ -269,20 +269,40 @@ class TestResolveObjectColumns(object):
     def test_list_correct(self, duckdb_cursor):
         x = pd.DataFrame(
             [
-                {'0': [5, 34, -245]}
+                {'0': [[5], [34], [-245]]}
             ]
         )
-        duckdb_col = duckdb.query("select [5, 34, -245] as '0'").df()
+        duckdb_col = duckdb.query("select [[5], [34], [-245]] as '0'").df()
+        converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        pd.testing.assert_frame_equal(duckdb_col, converted_col)
+
+    def test_list_contains_null(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                {'0': [[5], None, [-245]]}
+            ]
+        )
+        duckdb_col = duckdb.query("select [[5], NULL, [-245]] as '0'").df()
+        converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
+        pd.testing.assert_frame_equal(duckdb_col, converted_col)
+
+    def test_list_starts_with_null(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                {'0': [None, [5], [-245]]}
+            ]
+        )
+        duckdb_col = duckdb.query("select [NULL, [5], [-245]] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
     def test_list_value_upgrade(self, duckdb_cursor):
         x = pd.DataFrame(
             [
-                {'0': ['5', 34, -245]}
+                {'0': [['5'], [34], [-245]]}
             ]
         )
-        duckdb_col = duckdb.query("select ['5', '34', '-245'] as '0'").df()
+        duckdb_col = duckdb.query("select [['5'], ['34'], ['-245']] as '0'").df()
         converted_col = duckdb.query_df(x, "tbl", "select * from tbl").df()
         pd.testing.assert_frame_equal(duckdb_col, converted_col)
 
