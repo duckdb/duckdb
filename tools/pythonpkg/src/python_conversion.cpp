@@ -216,13 +216,13 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 		return Value::UUID(string_val);
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		auto datetime = PyDateTime(ele);
-		return datetime.ToValue();
+		return datetime.ToDuckValue();
 	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		auto time = PyTime(ele);
-		return time.ToValue();
+		return time.ToDuckValue();
 	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		auto date = PyDate(ele);
-		return date.ToValue();
+		return date.ToDuckValue();
 	} else if (py::isinstance(ele, import_cache.datetime.timedelta())) {
 		auto timedelta = PyTimeDelta(ele);
 		return Value::INTERVAL(timedelta.ToInterval());

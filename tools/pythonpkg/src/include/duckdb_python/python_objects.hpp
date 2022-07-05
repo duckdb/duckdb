@@ -61,11 +61,11 @@ public:
 	int32_t minute;
 	int32_t second;
 	int32_t microsecond;
-	PyObject *timezone;
+	PyObject *timezone_obj;
 
 public:
-	dtime_t ToTime();
-	Value ToValue();
+	dtime_t ToDuckTime();
+	Value ToDuckValue();
 };
 
 struct PyDateTime {
@@ -84,8 +84,8 @@ public:
 public:
 	timestamp_t ToTimestamp();
 	date_t ToDate();
-	dtime_t ToTime();
-	Value ToValue();
+	dtime_t ToDuckTime();
+	Value ToDuckValue();
 };
 
 struct PyDate {
@@ -96,7 +96,7 @@ public:
 	int32_t day;
 
 public:
-	Value ToValue();
+	Value ToDuckValue();
 };
 
 struct PyTimezone {
@@ -104,7 +104,7 @@ public:
 	PyTimezone() = delete;
 
 public:
-	DUCKDB_API static interval_t GetUTCOffset(PyObject* timezone);
+	DUCKDB_API static interval_t GetUTCOffset(PyObject *timezone);
 };
 
 } // namespace duckdb

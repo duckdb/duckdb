@@ -40,21 +40,21 @@ PyTime::PyTime(py::handle &obj) : obj(obj) {
 	minute = PyDateTime_TIME_GET_MINUTE(ptr);
 	second = PyDateTime_TIME_GET_SECOND(ptr);
 	microsecond = PyDateTime_TIME_GET_MICROSECOND(ptr);
-	timezone = PyDateTime_TIME_GET_TZINFO(ptr);
+	timezone_obj = PyDateTime_TIME_GET_TZINFO(ptr);
 }
-dtime_t PyTime::ToTime() {
+dtime_t PyTime::ToDuckTime() {
 	return Time::FromTime(hour, minute, second, microsecond);
 }
-Value PyTime::ToValue() {
-	auto time = ToTime();
-	if (this->timezone != Py_None) {
-		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone);
+Value PyTime::ToDuckValue() {
+	auto duckdb_time = this->ToDuckTime();
+	if (this->timezone_obj != Py_None) {
+		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone_obj);
 		//! 'Add' requires a date_t for overflows
-		date_t ignore;
+		date_t ignored_date;
 		utc_offset = Interval::Invert(utc_offset);
-		time = Interval::Add(time, utc_offset, ignore);
+		duckdb_time = Interval::Add(duckdb_time, utc_offset, ignored_date);
 	}
-	return Value::TIME(time);
+	return Value::TIME(duckdb_time);
 }
 
 interval_t PyTimezone::GetUTCOffset(PyObject *timezone) {
@@ -79,11 +79,11 @@ PyDateTime::PyDateTime(py::handle &obj) : obj(obj) {
 
 timestamp_t PyDateTime::ToTimestamp() {
 	auto date = ToDate();
-	auto time = ToTime();
+	auto time = ToDuckTime();
 	return Timestamp::FromDatetime(date, time);
 }
 
-Value PyDateTime::ToValue() {
+Value PyDateTime::ToDuckValue() {
 	auto timestamp = ToTimestamp();
 	if (timezone != Py_None) {
 		auto utc_offset = PyTimezone::GetUTCOffset(timezone);
@@ -97,7 +97,7 @@ Value PyDateTime::ToValue() {
 date_t PyDateTime::ToDate() {
 	return Date::FromDate(year, month, day);
 }
-dtime_t PyDateTime::ToTime() {
+dtime_t PyDateTime::ToDuckTime() {
 	return Time::FromTime(hour, minute, second, micros);
 }
 
@@ -108,7 +108,7 @@ PyDate::PyDate(py::handle &ele) {
 	day = PyDateTime_GET_DAY(ptr);
 }
 
-Value PyDate::ToValue() {
+Value PyDate::ToDuckValue() {
 	return Value::DATE(year, month, day);
 }
 
