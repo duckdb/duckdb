@@ -48,7 +48,7 @@ public:
 	                   vector<unique_ptr<Task>> &tasks) const;
 
 	//! Source interface
-	unique_ptr<GlobalSourceState> GetGlobalSourceState() const;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
 	             GlobalSourceState &gstate_p) const;
 

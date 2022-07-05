@@ -687,7 +687,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), read_cache(ListType::GetChildType(Type())),
+      child_column_reader(move(child_column_reader_p)), read_cache(reader.allocator, ListType::GetChildType(Type())),
       read_vector(read_cache), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -727,7 +727,7 @@ CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, Logi
                    child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
       child_reader(move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
-	intermediate_chunk.Initialize(intermediate_types);
+	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
 unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {

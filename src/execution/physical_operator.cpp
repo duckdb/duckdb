@@ -38,7 +38,7 @@ vector<PhysicalOperator *> PhysicalOperator::GetChildren() const {
 // Operator
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ClientContext &context) const {
+unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ExecutionContext &context) const {
 	return make_unique<OperatorState>();
 }
 

@@ -105,7 +105,7 @@ void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct FixedSizeScanState : public SegmentScanState {
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 };
 
 unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
@@ -124,7 +124,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
 	// copy the data from the base table
@@ -137,7 +137,7 @@ void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_co
 	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -160,7 +160,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 	auto handle = buffer_manager.Pin(segment.block);
 
 	// first fetch the data from the base table
-	auto data_ptr = handle->node->buffer + segment.GetBlockOffset() + row_id * sizeof(T);
+	auto data_ptr = handle.Ptr() + segment.GetBlockOffset() + row_id * sizeof(T);
 
 	memcpy(FlatVector::GetData(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
 }
@@ -215,7 +215,7 @@ idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorDa
 	auto handle = buffer_manager.Pin(segment.block);
 	D_ASSERT(segment.GetBlockOffset() == 0);
 
-	auto target_ptr = handle->node->buffer;
+	auto target_ptr = handle.Ptr();
 	idx_t max_tuple_count = Storage::BLOCK_SIZE / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 

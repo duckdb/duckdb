@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,7 @@ public:
 	static unique_ptr<FunctionData> MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names);
 
-	static OperatorResultType MapFunctionExec(ClientContext &context, TableFunctionInput &data, DataChunk &input,
+	static OperatorResultType MapFunctionExec(ExecutionContext &context, TableFunctionInput &data, DataChunk &input,
 	                                          DataChunk &output);
 };
 

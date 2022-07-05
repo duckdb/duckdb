@@ -21,7 +21,7 @@ PhysicalLimit::PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offse
 //===--------------------------------------------------------------------===//
 class LimitGlobalState : public GlobalSinkState {
 public:
-	explicit LimitGlobalState(const PhysicalLimit &op) {
+	explicit LimitGlobalState(Allocator &allocator, const PhysicalLimit &op) : data(allocator) {
 		limit = 0;
 		offset = 0;
 	}
@@ -34,7 +34,7 @@ public:
 
 class LimitLocalState : public LocalSinkState {
 public:
-	explicit LimitLocalState(const PhysicalLimit &op) : current_offset(0) {
+	explicit LimitLocalState(Allocator &allocator, const PhysicalLimit &op) : current_offset(0), data(allocator) {
 		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
 		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
 	}
@@ -46,15 +46,16 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitGlobalState>(*this);
+	return make_unique<LimitGlobalState>(Allocator::Get(context), *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalLimit::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<LimitLocalState>(*this);
+	return make_unique<LimitLocalState>(Allocator::Get(context.client), *this);
 }
 
-bool PhysicalLimit::ComputeOffset(DataChunk &input, idx_t &limit, idx_t &offset, idx_t current_offset,
-                                  idx_t &max_element, Expression *limit_expression, Expression *offset_expression) {
+bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
+                                  idx_t current_offset, idx_t &max_element, Expression *limit_expression,
+                                  Expression *offset_expression) {
 	if (limit != DConstants::INVALID_INDEX && offset != DConstants::INVALID_INDEX) {
 		max_element = limit + offset;
 		if ((limit == 0 || current_offset >= max_element) && !(limit_expression || offset_expression)) {
@@ -65,7 +66,7 @@ bool PhysicalLimit::ComputeOffset(DataChunk &input, idx_t &limit, idx_t &offset,
 	// get the next chunk from the child
 	if (limit == DConstants::INVALID_INDEX) {
 		limit = 1ULL << 62ULL;
-		Value val = GetDelimiter(input, limit_expression);
+		Value val = GetDelimiter(context, input, limit_expression);
 		if (!val.IsNull()) {
 			limit = val.GetValue<idx_t>();
 		}
@@ -75,7 +76,7 @@ bool PhysicalLimit::ComputeOffset(DataChunk &input, idx_t &limit, idx_t &offset,
 	}
 	if (offset == DConstants::INVALID_INDEX) {
 		offset = 0;
-		Value val = GetDelimiter(input, offset_expression);
+		Value val = GetDelimiter(context, input, offset_expression);
 		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
@@ -99,7 +100,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	auto &offset = state.offset;
 
 	idx_t max_element;
-	if (!ComputeOffset(input, limit, offset, state.current_offset, max_element, limit_expression.get(),
+	if (!ComputeOffset(context, input, limit, offset, state.current_offset, max_element, limit_expression.get(),
 	                   offset_expression.get())) {
 		return SinkResultType::FINISHED;
 	}
@@ -198,11 +199,12 @@ bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t 
 	return true;
 }
 
-Value PhysicalLimit::GetDelimiter(DataChunk &input, Expression *expr) {
+Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, Expression *expr) {
 	DataChunk limit_chunk;
 	vector<LogicalType> types {expr->return_type};
-	limit_chunk.Initialize(types);
-	ExpressionExecutor limit_executor(expr);
+	auto &allocator = Allocator::Get(context.client);
+	limit_chunk.Initialize(allocator, types);
+	ExpressionExecutor limit_executor(allocator, expr);
 	auto input_size = input.size();
 	input.SetCardinality(1);
 	limit_executor.Execute(input, limit_chunk);

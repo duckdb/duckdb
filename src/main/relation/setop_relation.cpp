@@ -1,6 +1,7 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,9 @@ SetOpRelation::SetOpRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> r
 
 unique_ptr<QueryNode> SetOpRelation::GetQueryNode() {
 	auto result = make_unique<SetOperationNode>();
+	if (setop_type == SetOperationType::EXCEPT || setop_type == SetOperationType::INTERSECT) {
+		result->modifiers.push_back(make_unique<DistinctModifier>());
+	}
 	result->left = left->GetQueryNode();
 	result->right = right->GetQueryNode();
 	result->setop_type = setop_type;
