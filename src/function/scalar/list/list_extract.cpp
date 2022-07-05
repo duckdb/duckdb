@@ -222,10 +222,9 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Funct
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
-	                    ListExtractFunction, false, false, ListExtractBind, nullptr, ListExtractStats);
+	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction, false,
-	                    false, nullptr);
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 
 	ScalarFunctionSet list_extract("list_extract");
 	list_extract.AddFunction(lfun);

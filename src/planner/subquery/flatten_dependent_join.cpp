@@ -77,14 +77,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	if (!entry->second) {
 		// we reached a node without correlated expressions
 		// we can eliminate the dependent join now and create a simple cross product
-		auto cross_product = make_unique<LogicalCrossProduct>();
 		// now create the duplicate eliminated scan for this node
 		auto delim_index = binder.GenerateTableIndex();
 		this->base_binding = ColumnBinding(delim_index, 0);
 		auto delim_scan = make_unique<LogicalDelimGet>(delim_index, delim_types);
-		cross_product->children.push_back(move(delim_scan));
-		cross_product->children.push_back(move(plan));
-		return move(cross_product);
+		return LogicalCrossProduct::Create(move(delim_scan), move(plan));
 	}
 	switch (plan->type) {
 	case LogicalOperatorType::LOGICAL_UNNEST:

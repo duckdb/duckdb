@@ -90,23 +90,23 @@ unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, S
 }
 
 void EnumFirst::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_first", {LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, false,
-	                               BindEnumFunction));
+	set.AddFunction(
+	    ScalarFunction("enum_first", {LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction));
 }
 
 void EnumLast::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_last", {LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, false,
-	                               BindEnumFunction));
+	set.AddFunction(
+	    ScalarFunction("enum_last", {LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction));
 }
 
 void EnumRange::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("enum_range", {LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
-	                               EnumRangeFunction, false, BindEnumFunction));
+	                               EnumRangeFunction, BindEnumFunction));
 }
 
 void EnumRangeBoundary::RegisterFunction(BuiltinFunctions &set) {
 	auto fun = ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
-	                          LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction, false,
+	                          LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction,
 	                          BindEnumRangeBoundaryFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
