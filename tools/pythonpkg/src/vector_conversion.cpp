@@ -132,14 +132,24 @@ T Cast(const py::object obj) {
 	return obj.cast<T>();
 }
 
+static void SetInvalidRecursive(Vector &out, idx_t index) {
+	auto &validity = FlatVector::Validity(out);
+	validity.SetInvalid(index);
+	if (out.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &children = StructVector::GetEntries(out);
+		for (idx_t i = 0; i < children.size(); i++) {
+			SetInvalidRecursive(*children[i], index);
+		}
+	}
+}
+
 //! 'count' is the amount of rows in the 'out' vector
 //! offset is the current row number within this vector
 void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
 
 	// handle None
 	if (object == Py_None) {
-		auto &validity = FlatVector::Validity(out);
-		validity.SetInvalid(offset);
+		SetInvalidRecursive(out, offset);
 		return;
 	}
 

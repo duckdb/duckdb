@@ -101,6 +101,29 @@ class TestResolveObjectColumns(object):
         equal_df = duckdb.query_df(y, "y", "SELECT * FROM y").df()
         pd.testing.assert_frame_equal(converted_df, equal_df)
 
+    def test_struct_null(self, duckdb_cursor):
+        x = pd.DataFrame(
+            [
+                [None],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
+            ]
+        )
+        y = pd.DataFrame(
+            [
+                [None],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
+            ]
+        )
+        converted_df = duckdb.query_df(x, "x", "SELECT * FROM x").df()
+        equal_df = duckdb.query_df(y, "y", "SELECT * FROM y").df()
+        pd.testing.assert_frame_equal(converted_df, equal_df)
+
     def test_map_fallback_value_upgrade(self, duckdb_cursor):
         x = pd.DataFrame(
             [

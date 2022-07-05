@@ -41,17 +41,7 @@ static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &r
 	return SameTypeRealm(left.id(), right.id());
 }
 
-struct StructToMapConvertData {
-	LogicalType map_value_type = LogicalType::SQLNULL;
-	bool is_valid_map = true;
-};
-
-//@return true if the struct is valid
-//@param valid_map Whether the format of the struct can be upgraded to map or not
-static bool IsStructColumnValid(const LogicalType &left, const LogicalType &right, StructToMapConvertData &data) {
-	//! Whether this is a valid struct
-	bool valid = true;
-
+static bool IsStructColumnValid(const LogicalType &left, const LogicalType &right) {
 	D_ASSERT(left.id() == LogicalTypeId::STRUCT && left.id() == right.id());
 
 	//! Child types of the two structs
@@ -59,7 +49,7 @@ static bool IsStructColumnValid(const LogicalType &left, const LogicalType &righ
 	auto &right_children = StructType::GetChildTypes(right);
 
 	if (left_children.size() != right_children.size()) {
-		valid = false;
+		return false;
 	}
 	//! Compare keys of struct case-insensitively
 	auto compare = CaseInsensitiveStringEquality();
@@ -67,33 +57,43 @@ static bool IsStructColumnValid(const LogicalType &left, const LogicalType &righ
 		auto &left_child = left_children[i];
 		auto &right_child = right_children[i];
 
-		// keys in left and right don't match - upgrade to MAP
+		// keys in left and right don't match
 		if (!compare(left_child.first, right_child.first)) {
-			valid = false;
-		}
-		// If values aren't compatible as structs, they wont be compatible as map either
-		if (!CheckTypeCompatibility(left_child.second, right_child.second)) {
-			data.is_valid_map = false;
 			return false;
 		}
-		// Create the (potential) map's value from both the structs left and right child types
-		if (!UpgradeType(data.map_value_type, left_child.second)) {
-			data.is_valid_map = false;
-			//! Could still be a valid struct, so we don't return here
-		}
-		if (!UpgradeType(data.map_value_type, right_child.second)) {
-			data.is_valid_map = false;
-			//! Could still be a valid struct, so we don't return here
+		// Types are not compatible with each other
+		if (!CheckTypeCompatibility(left_child.second, right_child.second)) {
+			return false;
 		}
 	}
-	return valid;
+	return true;
 }
 
-static LogicalType ConvertStructToMap(StructToMapConvertData &data) {
+static bool SatisfiesMapConstraints(const LogicalType &left, const LogicalType &right, LogicalType &map_value_type) {
+	D_ASSERT(left.id() == LogicalTypeId::STRUCT && left.id() == right.id());
+
+	//! Child types of the two structs
+	auto &left_children = StructType::GetChildTypes(left);
+	auto &right_children = StructType::GetChildTypes(right);
+
+	for (auto &type : left_children) {
+		if (!UpgradeType(map_value_type, type.second)) {
+			return false;
+		}
+	}
+	for (auto &type : right_children) {
+		if (!UpgradeType(map_value_type, type.second)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static LogicalType ConvertStructToMap(LogicalType &map_value_type) {
 	child_list_t<LogicalType> children;
 	// TODO: find a way to figure out actual type of the keys, not just the converted one
 	children.push_back(make_pair("key", LogicalType::LIST(LogicalType::VARCHAR)));
-	children.push_back(make_pair("value", LogicalType::LIST(data.map_value_type)));
+	children.push_back(make_pair("value", LogicalType::LIST(map_value_type)));
 	return LogicalType::MAP(move(children));
 }
 
@@ -104,10 +104,10 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	}
 	// If struct constraints are not respected, left will be set to MAP
 	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
-		StructToMapConvertData convert_data;
-		if (!IsStructColumnValid(left, right, convert_data)) {
-			if (convert_data.is_valid_map) {
-				left = ConvertStructToMap(convert_data);
+		if (!IsStructColumnValid(left, right)) {
+			LogicalType map_value_type = LogicalType::SQLNULL;
+			if (SatisfiesMapConstraints(left, right, map_value_type)) {
+				left = ConvertStructToMap(map_value_type);
 			} else {
 				return false;
 			}
@@ -184,7 +184,7 @@ static bool VerifyStructValidity(vector<LogicalType> &structs) {
 	if (reference_entry == structs.size()) {
 		return true;
 	}
-	auto reference_type = structs[0];
+	auto reference_type = structs[reference_entry];
 	auto reference_children = StructType::GetChildTypes(reference_type);
 
 	for (idx_t i = reference_entry + 1; i < structs.size(); i++) {
@@ -265,22 +265,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return LogicalType::VARCHAR; // Might be float64 actually? //or DECIMAL
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
-		auto ptr = ele.ptr();
-		auto second = PyDateTime_DATE_GET_SECOND(ptr);
-		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-		if (micros != 0) {
-			return LogicalType::TIMESTAMP_MS;
-		}
-		if (second != 0) {
-			return LogicalType::TIMESTAMP_S;
-		}
 		return LogicalType::TIMESTAMP;
 	} else if (py::isinstance(ele, import_cache.datetime.time())) {
-		auto ptr = ele.ptr();
-		auto tzinfo = PyDateTime_TIME_GET_TZINFO(ptr);
-		if (tzinfo == Py_None) {
-			return LogicalType::TIME_TZ;
-		}
 		return LogicalType::TIME;
 	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		return LogicalType::DATE;
@@ -375,6 +361,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 		auto next_item_type = GetItemType(next_item, can_convert);
 		types.push_back(next_item_type);
 
+		D_ASSERT(item_type.id() != LogicalTypeId::TIMESTAMP_TZ && next_item_type.id() != LogicalTypeId::TIMESTAMP_TZ);
 		if (!can_convert || !UpgradeType(item_type, next_item_type)) {
 			return next_item_type;
 		}
