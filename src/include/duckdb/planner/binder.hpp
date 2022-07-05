@@ -159,6 +159,9 @@ public:
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
 
+	//! Removes the BoundParameterExpressions from Binder::parameters if they occur in 'expressions'
+	void RemoveParameters(vector<unique_ptr<Expression>> &expressions);
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
