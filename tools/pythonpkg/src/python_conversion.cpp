@@ -243,7 +243,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 	} else if (py::isinstance<py::list>(ele)) {
 		return TransformListValue(ele);
 	} else if (py::isinstance<py::dict>(ele)) {
-		PyDictionary dict = PyDictionary(py::object(ele, true));
+		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		switch (target_type.id()) {
 		case LogicalTypeId::STRUCT:
 			return TransformDictionaryToStruct(dict, target_type);

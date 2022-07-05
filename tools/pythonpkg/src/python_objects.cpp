@@ -58,9 +58,8 @@ Value PyTime::ToDuckValue() {
 }
 
 interval_t PyTimezone::GetUTCOffset(PyObject *tzone_obj) {
-	py::object tzinfo(tzone_obj, true);
-	py::object ignored_dt(Py_None, true);
-	auto res = tzinfo.attr("utcoffset")(ignored_dt);
+	auto tzinfo = py::reinterpret_borrow<py::object>(tzone_obj);
+	auto res = tzinfo.attr("utcoffset")(py::none());
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }

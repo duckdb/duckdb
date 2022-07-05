@@ -285,7 +285,7 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 	} else if (py::isinstance<py::list>(ele)) {
 		return GetListType(ele, can_convert);
 	} else if (py::isinstance<py::dict>(ele)) {
-		PyDictionary dict = PyDictionary(py::object(ele, true));
+		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		// Assuming keys and values are the same size
 
 		if (dict.len == 0) {
