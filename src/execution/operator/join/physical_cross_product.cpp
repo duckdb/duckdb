@@ -17,7 +17,7 @@ PhysicalCrossProduct::PhysicalCrossProduct(vector<LogicalType> types, unique_ptr
 //===--------------------------------------------------------------------===//
 class CrossProductGlobalState : public GlobalSinkState {
 public:
-	CrossProductGlobalState(ClientContext &context) : rhs_materialized(BufferAllocator::Get(context)) {
+	explicit CrossProductGlobalState(ClientContext &context) : rhs_materialized(BufferAllocator::Get(context)) {
 	}
 
 	ChunkCollection rhs_materialized;
