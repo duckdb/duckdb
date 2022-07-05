@@ -48,33 +48,27 @@ void CheckKeyUniqueness(VectorInfo keys) {
 	}
 }
 
-static bool MapSingleList(VectorInfo list, VectorInfo keys, VectorInfo values) {
+static bool MapSingleList(VectorInfo input, VectorInfo keys, VectorInfo values) {
 	// Get the length and offset of this list from the argument data
-	auto pair_amount = list.data.length;
-	auto offset = list.data.offset;
+	auto pair_amount = input.data.length;
+	auto input_offset = input.data.offset;
 
-	// Set the offset within the key/value list to mark where this row starts
-	keys.data.offset = offset;
-	values.data.offset = offset;
 	// Loop over the list of structs
 	idx_t inserted_values = 0;
 	for (idx_t i = 0; i < pair_amount; i++) {
-		auto index = i + offset;
+		auto index = i + input_offset;
 		// Get the struct using the offset and the index;
-		auto element = list.container.GetValue(index);
+		auto element = input.container.GetValue(index);
 		if (element.IsNull()) {
 			continue;
 		}
 		MapStruct(element, keys, values);
 		inserted_values++;
 	}
-	if (inserted_values == 0) {
-		return false;
-	}
 	// Set the length of the key value lists
 	keys.data.length = inserted_values;
 	values.data.length = inserted_values;
-	return true;
+	return inserted_values != 0;
 }
 
 static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -107,13 +101,19 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 	VectorData input_list_data;
 	input_list.Orrify(count, input_list_data);
 
+	//Current offset into the keys/values list
+	idx_t offset = 0;
+
 	// Transform to mapped values
 	for (idx_t i = 0; i < count; i++) {
 		VectorInfo input {entries, arg_data[i]};
 		VectorInfo keys {key_vector, key_data[i]};
 		VectorInfo values {value_vector, value_data[i]};
 
+		keys.data.offset = offset;
+		values.data.offset = offset;
 		bool row_valid = MapSingleList(input, keys, values);
+		offset += keys.data.length;
 
 		// Check validity
 		if (!row_valid || !input_list_data.validity.RowIsValid(i)) {
