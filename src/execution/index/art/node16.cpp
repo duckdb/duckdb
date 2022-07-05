@@ -161,7 +161,7 @@ Node16 *Node16::Deserialize(duckdb::MetaBlockReader &reader) {
 void Node16::Erase(Node *&node, int pos, ART &art) {
 	auto n = (Node16 *)node;
 	// erase the child and decrease the count
-	if (!n->children[pos].pointer) {
+	if (!n->children[pos].IsSwizzled()) {
 		delete (Node *)n->children[pos].pointer;
 	}
 	n->children[pos] = 0;
