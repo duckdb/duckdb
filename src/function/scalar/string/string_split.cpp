@@ -232,8 +232,7 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	}
 
 	D_ASSERT(ListVector::GetListSize(result) == total_len);
-	if (args.data[0].GetVectorType() == VectorType::CONSTANT_VECTOR &&
-	    args.data[1].GetVectorType() == VectorType::CONSTANT_VECTOR) {
+	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }

@@ -74,6 +74,10 @@ public:
 		return max_cardinality;
 	}
 
+	virtual bool RequireOptimizer() const {
+		return true;
+	}
+
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;

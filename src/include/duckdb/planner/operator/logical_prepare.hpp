@@ -31,5 +31,12 @@ protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);
 	}
+
+	bool RequireOptimizer() const override {
+		if (!prepared->properties.bound_all_parameters) {
+			return false;
+		}
+		return children[0]->RequireOptimizer();
+	}
 };
 } // namespace duckdb
