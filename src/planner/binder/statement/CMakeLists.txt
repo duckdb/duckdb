@@ -9,6 +9,7 @@ add_library_unity(
   bind_drop.cpp
   bind_explain.cpp
   bind_export.cpp
+  bind_extension.cpp
   bind_insert.cpp
   bind_load.cpp
   bind_pragma.cpp

@@ -1,12 +1,12 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
@@ -198,14 +198,9 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-	} else {
-		D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-		// list extract returns the child type of the list as return type
-		bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
-	}
+	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
+	// list extract returns the child type of the list as return type
+	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
