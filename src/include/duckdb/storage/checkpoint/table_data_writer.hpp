@@ -47,7 +47,7 @@ private:
 	TableCatalogEntry &table;
 	// Writes the actual table data
 	MetaBlockWriter &table_data_writer;
-	// Writes the actual table data
+	// Writes the metadata of the table
 	MetaBlockWriter &meta_data_writer;
 };
 

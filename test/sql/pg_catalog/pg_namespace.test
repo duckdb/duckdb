@@ -37,5 +37,5 @@ CREATE SCHEMA test
 statement ok
 CREATE SCHEMA myschema33
 
-#query I nosort pgmyschema
-#SELECT * FROM pg_namespace WHERE nspname='myschema'
+query I nosort pgmyschema
+SELECT * FROM pg_namespace WHERE nspname='myschema'

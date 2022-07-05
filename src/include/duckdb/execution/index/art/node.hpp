@@ -17,24 +17,33 @@
 namespace duckdb {
 enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
 class ART;
+class Node;
 
 struct SwizzleablePointer {
-	~SwizzleablePointer() {};
-	SwizzleablePointer(idx_t block_id, idx_t offset);
+	~SwizzleablePointer();
+	SwizzleablePointer(duckdb::MetaBlockReader &reader);
 	SwizzleablePointer() : pointer(0) {};
+
 	uint64_t pointer;
-	SwizzleablePointer &operator=(const uint64_t &ptr);
+
+	//! Transforms from Node* to uint64_t
+	SwizzleablePointer &operator=(const Node *ptr);
 	friend bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr);
 
 public:
-	DiskPosition GetSwizzledBlockInfo();
+	//! Extracts block info from swizzled pointer
+	BlockPointer GetSwizzledBlockInfo();
+	//! Checks if pointer is swizzled
 	bool IsSwizzled();
+	//! Deletes the underlying object (if necessary) and set the pointer to null_ptr
+	void Reset();
+	//! Unswizzle the pointer (if possible)
+	Node *Unswizzle(ART &art);
 };
 
 class Node {
 public:
 	static const uint8_t EMPTY_MARKER = 48;
-	duckdb::Deserializer *source;
 
 public:
 	Node(NodeType type, size_t compressed_prefix_size);
@@ -64,7 +73,7 @@ public:
 	virtual idx_t GetMin();
 
 	//! Serialize this Node
-	virtual DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) = 0;
+	virtual BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer) = 0;
 
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
@@ -80,18 +89,12 @@ public:
 	//! Replaces the pointer
 	virtual void ReplaceChildPointer(idx_t pos, Node *node);
 
-	//! Tries to get a child from a given address, checks if the address is pointing to a memory space
-	//! Or if its a swizzled pointer.
-	static void UnswizzleChild(ART &art, SwizzleablePointer &pointer);
-
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);
 	//! Insert leaf into inner node
 	static void InsertLeaf(Node *&node, uint8_t key, Node *new_node);
 	//! Erase entry from node
 	static void Erase(Node *&node, idx_t pos, ART &art);
-	//! Transforms from Node* to uint64_t
-	static void AssignPointer(SwizzleablePointer &to, Node *from);
 
 protected:
 	//! Copies the prefix from the source to the destination node

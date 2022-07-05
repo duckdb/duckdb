@@ -29,15 +29,6 @@ idx_t Node::GetMin() {
 }
 // LCOV_EXCL_STOP
 
-void Node::UnswizzleChild(ART &art, SwizzleablePointer &pointer) {
-	if (pointer.IsSwizzled()) {
-		// This means our pointer is not yet in memory, gotta deserialize this
-		// first we unset the bae
-		auto block_info = pointer.GetSwizzledBlockInfo();
-		AssignPointer(pointer, Deserialize(art, block_info.block_id, block_info.offset));
-	}
-}
-
 Node *Node::Deserialize(ART &art, idx_t block_id, idx_t offset) {
 	MetaBlockReader reader(art.db, block_id);
 	reader.offset = offset;
@@ -110,15 +101,17 @@ void Node::Erase(Node *&node, idx_t pos, ART &art) {
 	}
 }
 
-void Node::AssignPointer(SwizzleablePointer &to, Node *from) {
-	if (sizeof(from) == 4) {
-		to.pointer = (uint32_t)(size_t)from;
-	} else {
-		to.pointer = (uint64_t)from;
+SwizzleablePointer::~SwizzleablePointer() {
+	if (pointer) {
+		if (!IsSwizzled()) {
+			delete (Node *)pointer;
+		}
 	}
 }
 
-SwizzleablePointer::SwizzleablePointer(idx_t block_id, idx_t offset) {
+SwizzleablePointer::SwizzleablePointer(duckdb::MetaBlockReader &reader) {
+	idx_t block_id = reader.Read<block_id_t>();
+	idx_t offset = reader.Read<uint32_t>();
 	if (block_id == DConstants::INVALID_INDEX || offset == DConstants::INVALID_INDEX) {
 		pointer = 0;
 		return;
@@ -133,8 +126,12 @@ SwizzleablePointer::SwizzleablePointer(idx_t block_id, idx_t offset) {
 	pointer |= mask;
 }
 
-SwizzleablePointer &SwizzleablePointer::operator=(const uint64_t &ptr) {
-	pointer = ptr;
+SwizzleablePointer &SwizzleablePointer::operator=(const Node *ptr) {
+	if (sizeof(ptr) == 4) {
+		pointer = (uint32_t)(size_t)ptr;
+	} else {
+		pointer = (uint64_t)ptr;
+	}
 	return *this;
 }
 
@@ -142,7 +139,7 @@ bool operator!=(const SwizzleablePointer &s_ptr, const uint64_t &ptr) {
 	return (s_ptr.pointer != ptr);
 }
 
-DiskPosition SwizzleablePointer::GetSwizzledBlockInfo() {
+BlockPointer SwizzleablePointer::GetSwizzledBlockInfo() {
 	D_ASSERT(IsSwizzled());
 	idx_t pointer_size = sizeof(pointer) * 8;
 	pointer = pointer & ~(1ULL << (pointer_size - 1));
@@ -153,6 +150,25 @@ DiskPosition SwizzleablePointer::GetSwizzledBlockInfo() {
 bool SwizzleablePointer::IsSwizzled() {
 	idx_t pointer_size = sizeof(pointer) * 8;
 	return (pointer >> (pointer_size - 1)) & 1;
+}
+
+void SwizzleablePointer::Reset() {
+	if (pointer) {
+		if (IsSwizzled()) {
+			delete (Node *)pointer;
+		}
+	}
+	*this = nullptr;
+}
+
+Node *SwizzleablePointer::Unswizzle(ART &art) {
+	if (IsSwizzled()) {
+		// This means our pointer is not yet in memory, gotta deserialize this
+		// first we unset the bae
+		auto block_info = GetSwizzledBlockInfo();
+		*this = Node::Deserialize(art, block_info.block_id, block_info.offset);
+	}
+	return (Node *)pointer;
 }
 
 } // namespace duckdb

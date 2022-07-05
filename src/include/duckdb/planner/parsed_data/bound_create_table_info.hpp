@@ -47,7 +47,7 @@ struct BoundCreateTableInfo {
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table <Block_ID, Offset>
-	vector<DiskPosition> indexes;
+	vector<BlockPointer> indexes;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

@@ -728,13 +728,11 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
 	case NodeType::N4: {
-		Node::UnswizzleChild(*this, ((Node4 &)node).children[0]);
-		next = (Node *)((Node4 &)node).children[0].pointer;
+		next = ((Node4 &)node).children[0].Unswizzle(*this);
 		break;
 	}
 	case NodeType::N16: {
-		Node::UnswizzleChild(*this, ((Node16 &)node).children[0]);
-		next = (Node *)((Node16 &)node).children[0].pointer;
+		next = ((Node16 &)node).children[0].Unswizzle(*this);
 		break;
 	}
 	case NodeType::N48: {
@@ -742,8 +740,7 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		Node::UnswizzleChild(*this, n48.children[n48.child_index[pos]]);
-		next = (Node *)n48.children[n48.child_index[pos]].pointer;
+		next = n48.children[n48.child_index[pos]].Unswizzle(*this);
 		break;
 	}
 	case NodeType::N256: {
@@ -751,8 +748,7 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		while (!n256.children[pos].pointer) {
 			pos++;
 		}
-		Node::UnswizzleChild(*this, n256.children[pos]);
-		next = (Node *)n256.children[pos].pointer;
+		next = (Node *)n256.children[pos].Unswizzle(*this);
 		break;
 	}
 	}
@@ -932,12 +928,12 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	}
 }
 
-DiskPosition ART::Serialize(duckdb::MetaBlockWriter &writer) {
+BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	lock_guard<mutex> l(lock);
 	if (tree) {
 		return tree->Serialize(*this, writer);
 	}
-	return {(block_id_t)DConstants::INVALID_INDEX, DConstants::INVALID_INDEX};
+	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
 } // namespace duckdb

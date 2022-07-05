@@ -64,7 +64,7 @@ bool Index::IndexIsUpdated(const vector<column_t> &column_ids) const {
 	return false;
 }
 
-DiskPosition Index::Serialize(duckdb::MetaBlockWriter &writer) {
+BlockPointer Index::Serialize(duckdb::MetaBlockWriter &writer) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 

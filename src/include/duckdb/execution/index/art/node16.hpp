@@ -40,7 +40,7 @@ public:
 	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Serialize Node
-	DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
+	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
 
 	static Node16 *Deserialize(duckdb::MetaBlockReader &source);
 };

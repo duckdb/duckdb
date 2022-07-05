@@ -24,11 +24,6 @@ class Transaction;
 
 struct IndexLock;
 
-struct DiskPosition {
-	DiskPosition(block_id_t block_id_p, idx_t offset_p) : block_id(block_id_p), offset(offset_p) {};
-	block_id_t block_id;
-	idx_t offset;
-};
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
@@ -101,7 +96,7 @@ public:
 		return (constraint_type == IndexConstraintType::FOREIGN);
 	}
 	//! Serializes the index and returns the pair of block_id offset positions
-	virtual DiskPosition Serialize(duckdb::MetaBlockWriter &writer);
+	virtual BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);

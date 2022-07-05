@@ -37,9 +37,9 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[num_elements++] = row_id;
 }
 
-DiskPosition Leaf::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
+BlockPointer Leaf::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 	auto block_id = writer.block->id;
-	auto offset = writer.offset;
+	uint32_t offset = writer.offset;
 	// Write Node Type
 	writer.Write(type);
 	// Write value

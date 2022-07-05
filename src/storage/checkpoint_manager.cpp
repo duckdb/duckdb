@@ -334,8 +334,8 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	auto index_catalog = (IndexCatalogEntry *)schema_catalog->CreateIndex(context, info.get(), table_catalog);
 	index_catalog->info = table_catalog->storage->info;
 	// Here we just gotta read the root node
-	auto root_block_id = reader.Read<idx_t>();
-	auto root_offset = reader.Read<idx_t>();
+	auto root_block_id = reader.Read<block_id_t>();
+	auto root_offset = reader.Read<uint32_t>();
 
 	// create an adaptive radix tree around the expressions
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -349,10 +349,17 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 		bound_expressions.push_back(
 		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].GetType(), key_nr++));
 	}
-	auto art = make_unique<ART>(info->column_ids, move(unbound_expressions), info->constraint_type, db, root_block_id,
-	                            root_offset);
-	index_catalog->index = art.get();
-	table_catalog->storage->info->indexes.AddIndex(move(art));
+	switch (info->index_type) {
+	case IndexType::ART: {
+		auto art = make_unique<ART>(info->column_ids, move(unbound_expressions), info->constraint_type, db,
+		                            root_block_id, root_offset);
+		index_catalog->index = art.get();
+		table_catalog->storage->info->indexes.AddIndex(move(art));
+		break;
+	}
+	default:
+		throw InternalException("Can't read this index type");
+	}
 }
 
 //===--------------------------------------------------------------------===//

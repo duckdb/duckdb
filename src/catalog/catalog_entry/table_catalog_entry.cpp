@@ -47,7 +47,7 @@ column_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) 
 }
 
 void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, vector<idx_t> &keys,
-                       IndexConstraintType constraint_type, DiskPosition *indexes = nullptr) {
+                       IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -67,9 +67,9 @@ void AddDataTableIndex(DataTable *storage, vector<ColumnDefinition> &columns, ve
 		column_ids.push_back(column.StorageOid());
 	}
 	// create an adaptive radix tree around the expressions
-	if (indexes) {
+	if (index_block) {
 		auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db,
-		                            indexes->block_id, indexes->offset);
+		                            index_block->block_id, index_block->offset);
 		storage->info->indexes.AddIndex(move(art));
 	} else {
 		auto art = make_unique<ART>(column_ids, move(unbound_expressions), constraint_type, storage->db);

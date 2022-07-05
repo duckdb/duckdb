@@ -31,7 +31,7 @@ public:
 	void Insert(row_t row_id);
 	void Remove(row_t row_id);
 
-	DiskPosition Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
+	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
 
 	static Leaf *Deserialize(duckdb::MetaBlockReader &reader);
 
