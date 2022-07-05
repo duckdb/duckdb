@@ -112,9 +112,6 @@ public:
 	void SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size);
 
 private:
-	DataChunk expression_result;
-
-private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);
 	//! Insert the leaf value into the tree
