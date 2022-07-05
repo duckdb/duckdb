@@ -1,6 +1,7 @@
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 
 namespace duckdb {
@@ -39,6 +40,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
                                                  DUCKDB_GLOBAL(ExternalThreadsSetting),
+                                                 DUCKDB_LOCAL(FileSearchPathSetting),
                                                  DUCKDB_GLOBAL(ForceCompressionSetting),
                                                  DUCKDB_LOCAL(LogQueryPathSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),

@@ -57,7 +57,18 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
-
+  out_of_tree_ext:
+    description: 'Build Out-Of-Tree Extensions'
+    default: 1
+  python_name:
+    description: 'Python binary name because wtf Python'
+    default: 'python3'
+  substrait:
+    description: 'Build Substrait'
+    default: 0
+  osx_universal:
+    description: 'Build Universal Binary for OSX'
+    default: 0
 runs:
   using: "composite"
   steps:
@@ -80,12 +91,21 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+        OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+
       run: |
         ls -al
         pwd
         echo "$USER"
         git config --global --add safe.directory '*'
         make
+
+    - name: Build External Extensions
+      if: ${{ inputs.out_of_tree_ext != 0 }}
+      shell: bash
+      run: |
+        mkdir -p build/release/extension/out_of_tree
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}

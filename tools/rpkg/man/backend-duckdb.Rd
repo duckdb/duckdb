@@ -27,9 +27,6 @@ dbx <- copy_to(con, x, overwrite = TRUE)
 # x \%>\% mutate(a = stringr::str_pad(txt, 10, side = "both", pad = ">"))
 dbx \%>\% mutate(a = str_pad(txt, 10, side = "both", pad = ">"))
 
-# x \%>\% mutate(a = stringr::str_replace_all(txt, "[aeiou]", "?"))
-dbx \%>\% mutate(a = str_replace_all(txt, "[aeiou]", "?"))
-
 DBI::dbDisconnect(con, shutdown = TRUE)
 duckdb::duckdb_shutdown(duckdb::duckdb())
 }

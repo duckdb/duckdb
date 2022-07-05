@@ -7,10 +7,10 @@ src/duckdb.cpp:
 	npm install --build-from-source
 
 build: ./node_modules src/duckdb.cpp
-	./node_modules/.bin/node-pre-gyp build --loglevel=silent
+	./node_modules/.bin/node-pre-gyp build -j max --loglevel=silent
 
 debug: ./node_modules src/duckdb.cpp
-	./node_modules/.bin/node-pre-gyp build --debug --verbose
+	./node_modules/.bin/node-pre-gyp build -j max --debug --verbose
 
 clean:
 	@rm -rf ./build

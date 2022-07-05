@@ -93,10 +93,6 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 
 	auto &input_type = arguments[0]->return_type;
 	bound_function.arguments[0] = input_type;
-	if (input_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
-	}
 	if (input_type.id() == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
 		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
@@ -115,9 +111,8 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                   FunctionData *bind_data,
-                                                   vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
 	if (!child_stats[0]) {
 		return nullptr;
 	}

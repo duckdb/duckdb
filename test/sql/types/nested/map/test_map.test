@@ -2,16 +2,17 @@
 # description: Test basic functionality of maps
 # group: [map]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 # All keys are NULL
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
 
-# Keys have to be supported by the histogram aggregate functions
-statement error
+query I
 SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a
+----
+{{'i': 1, 'j': 2}={'i': 1, 'j': 2}, {'i': 3, 'j': 4}={'i': 3, 'j': 4}}
 
 # Some keys are NULL
 statement error
@@ -42,6 +43,9 @@ query I
 select MAP()
 ----
 {}
+
+statement error
+select MAP(NULL)
 
 # Test making MAPs from columns
 statement ok
@@ -82,9 +86,10 @@ SELECT MAP(a, b) FROM tbl;
 statement error
 select MAP(LIST_VALUE(10),LIST_VALUE())
 
-# Type is not implemented in the histogram aggregrate function
-statement error
+query I
 select MAP(LIST_VALUE([1],[2],[3],[4]),LIST_VALUE(10,9,8,7))
+----
+{[1]=10, [2]=9, [3]=8, [4]=7}
 
 # Maps that are not initialized empty or with lists are  FORBIDDEN
 # Map where the 2 entries are not lists

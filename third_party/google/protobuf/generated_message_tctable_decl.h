@@ -43,32 +43,37 @@
 
 // Must come last:
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
 
 // Additional information about this field:
 struct TcFieldData {
-  constexpr TcFieldData() : data(0) {}
-  constexpr TcFieldData(uint16_t coded_tag, uint8_t hasbit_idx, uint16_t offset)
-      : data(static_cast<uint64_t>(offset) << 48 |
-             static_cast<uint64_t>(hasbit_idx) << 16 | coded_tag) {}
+	constexpr TcFieldData() : data(0) {
+	}
+	constexpr TcFieldData(uint16_t coded_tag, uint8_t hasbit_idx, uint16_t offset)
+	    : data(static_cast<uint64_t>(offset) << 48 | static_cast<uint64_t>(hasbit_idx) << 16 | coded_tag) {
+	}
 
-  template <typename TagType = uint16_t>
-  TagType coded_tag() const {
-    return static_cast<TagType>(data);
-  }
-  uint8_t hasbit_idx() const { return static_cast<uint8_t>(data >> 16); }
-  uint16_t offset() const { return static_cast<uint16_t>(data >> 48); }
+	template <typename TagType = uint16_t>
+	TagType coded_tag() const {
+		return static_cast<TagType>(data);
+	}
+	uint8_t hasbit_idx() const {
+		return static_cast<uint8_t>(data >> 16);
+	}
+	uint16_t offset() const {
+		return static_cast<uint16_t>(data >> 48);
+	}
 
-  uint64_t data;
+	uint64_t data;
 };
 
 struct TcParseTableBase;
 
 // TailCallParseFunc is the function pointer type used in the tailcall table.
-typedef const char* (*TailCallParseFunc)(PROTOBUF_TC_PARAM_DECL);
+typedef const char *(*TailCallParseFunc)(PROTOBUF_TC_PARAM_DECL);
 
 #if defined(_MSC_VER) && !defined(_WIN64)
 #pragma warning(push)
@@ -78,62 +83,60 @@ typedef const char* (*TailCallParseFunc)(PROTOBUF_TC_PARAM_DECL);
 
 // Base class for message-level table with info for the tail-call parser.
 struct alignas(uint64_t) TcParseTableBase {
-  // Common attributes for message layout:
-  uint16_t has_bits_offset;
-  uint16_t extension_offset;
-  uint32_t extension_range_low;
-  uint32_t extension_range_high;
-  uint8_t fast_idx_mask;
-  uint8_t reserved;
-  uint16_t num_fields;
-  const MessageLite* default_instance;
+	// Common attributes for message layout:
+	uint16_t has_bits_offset;
+	uint16_t extension_offset;
+	uint32_t extension_range_low;
+	uint32_t extension_range_high;
+	uint8_t fast_idx_mask;
+	uint8_t reserved;
+	uint16_t num_fields;
+	const MessageLite *default_instance;
 
-  // Handler for fields which are not handled by table dispatch.
-  TailCallParseFunc fallback;
+	// Handler for fields which are not handled by table dispatch.
+	TailCallParseFunc fallback;
 
-  // Table entry for fast-path tailcall dispatch handling.
-  struct FastFieldEntry {
-    // Target function for dispatch:
-    TailCallParseFunc target;
-    // Field data used during parse:
-    TcFieldData bits;
-  };
-  // There is always at least one table entry.
-  const FastFieldEntry* fast_entry(size_t idx) const {
-    return reinterpret_cast<const FastFieldEntry*>(this + 1) + idx;
-  }
+	// Table entry for fast-path tailcall dispatch handling.
+	struct FastFieldEntry {
+		// Target function for dispatch:
+		TailCallParseFunc target;
+		// Field data used during parse:
+		TcFieldData bits;
+	};
+	// There is always at least one table entry.
+	const FastFieldEntry *fast_entry(size_t idx) const {
+		return reinterpret_cast<const FastFieldEntry *>(this + 1) + idx;
+	}
 };
 
 #if defined(_MSC_VER) && !defined(_WIN64)
 #pragma warning(pop)
 #endif
 
-static_assert(sizeof(TcParseTableBase::FastFieldEntry) <= 16,
-              "Field entry is too big.");
+static_assert(sizeof(TcParseTableBase::FastFieldEntry) <= 16, "Field entry is too big.");
 
 template <size_t kFastTableSizeLog2>
 struct TcParseTable {
-  TcParseTableBase header;
+	TcParseTableBase header;
 
-  // Entries for each field.
-  //
-  // Fields are indexed by the lowest bits of their field number. The field
-  // number is masked to fit inside the table. Note that the parsing logic
-  // generally calls `TailCallParseTableBase::table()` instead of accessing
-  // this field directly.
-  TcParseTableBase::FastFieldEntry entries[(1 << kFastTableSizeLog2)];
+	// Entries for each field.
+	//
+	// Fields are indexed by the lowest bits of their field number. The field
+	// number is masked to fit inside the table. Note that the parsing logic
+	// generally calls `TailCallParseTableBase::table()` instead of accessing
+	// this field directly.
+	TcParseTableBase::FastFieldEntry entries[(1 << kFastTableSizeLog2)];
 };
 
-static_assert(std::is_standard_layout<TcParseTable<1>>::value,
-              "TcParseTable must be standard layout.");
+static_assert(std::is_standard_layout<TcParseTable<1>>::value, "TcParseTable must be standard layout.");
 
 static_assert(offsetof(TcParseTable<1>, entries) == sizeof(TcParseTableBase),
               "Table entries must be laid out after TcParseTableBase.");
 
-}  // namespace internal
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace internal
+} // namespace protobuf
+} // namespace google
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_GENERATED_MESSAGE_TCTABLE_DECL_H__

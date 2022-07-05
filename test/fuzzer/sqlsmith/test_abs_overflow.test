@@ -1,0 +1,22 @@
+# name: test/fuzzer/sqlsmith/test_abs_overflow.test
+# description: Fuzzer #29: test abs overflow
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+# test abs function on extremes
+
+statement ok
+CREATE TABLE numerics AS SELECT tinyint, smallint, int, bigint FROM test_all_types();
+
+foreach type tinyint smallint int bigint
+
+statement error
+SELECT abs(${type}) FROM numerics;
+
+statement ok
+SELECT abs(${type}) FROM numerics WHERE ${type} > 0;
+
+endloop
+

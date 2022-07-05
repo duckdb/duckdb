@@ -36,7 +36,7 @@
 #include <google/protobuf/stubs/stringpiece.h>
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace util {
@@ -44,84 +44,89 @@ namespace status_internal {
 
 // These values must match error codes defined in google/rpc/code.proto.
 enum class StatusCode : int {
-  kOk = 0,
-  kCancelled = 1,
-  kUnknown = 2,
-  kInvalidArgument = 3,
-  kDeadlineExceeded = 4,
-  kNotFound = 5,
-  kAlreadyExists = 6,
-  kPermissionDenied = 7,
-  kUnauthenticated = 16,
-  kResourceExhausted = 8,
-  kFailedPrecondition = 9,
-  kAborted = 10,
-  kOutOfRange = 11,
-  kUnimplemented = 12,
-  kInternal = 13,
-  kUnavailable = 14,
-  kDataLoss = 15,
+	kOk = 0,
+	kCancelled = 1,
+	kUnknown = 2,
+	kInvalidArgument = 3,
+	kDeadlineExceeded = 4,
+	kNotFound = 5,
+	kAlreadyExists = 6,
+	kPermissionDenied = 7,
+	kUnauthenticated = 16,
+	kResourceExhausted = 8,
+	kFailedPrecondition = 9,
+	kAborted = 10,
+	kOutOfRange = 11,
+	kUnimplemented = 12,
+	kInternal = 13,
+	kUnavailable = 14,
+	kDataLoss = 15,
 };
 
-class PROTOBUF_EXPORT Status {
- public:
-  // Creates a "successful" status.
-  Status();
+class  Status {
+public:
+	// Creates a "successful" status.
+	Status();
 
-  // Create a status in the canonical error space with the specified
-  // code, and error message.  If "code == 0", error_message is
-  // ignored and a Status object identical to Status::kOk is
-  // constructed.
-  Status(StatusCode error_code, StringPiece error_message);
-  Status(const Status&);
-  Status& operator=(const Status& x);
-  ~Status() {}
+	// Create a status in the canonical error space with the specified
+	// code, and error message.  If "code == 0", error_message is
+	// ignored and a Status object identical to Status::kOk is
+	// constructed.
+	Status(StatusCode error_code, StringPiece error_message);
+	Status(const Status &);
+	Status &operator=(const Status &x);
+	~Status() {
+	}
 
-  // Accessor
-  bool ok() const { return error_code_ == StatusCode::kOk; }
-  StatusCode code() const { return error_code_; }
-  StringPiece message() const {
-    return error_message_;
-  }
+	// Accessor
+	bool ok() const {
+		return error_code_ == StatusCode::kOk;
+	}
+	StatusCode code() const {
+		return error_code_;
+	}
+	StringPiece message() const {
+		return error_message_;
+	}
 
-  bool operator==(const Status& x) const;
-  bool operator!=(const Status& x) const {
-    return !operator==(x);
-  }
+	bool operator==(const Status &x) const;
+	bool operator!=(const Status &x) const {
+		return !operator==(x);
+	}
 
-  // Return a combination of the error code name and message.
-  std::string ToString() const;
+	// Return a combination of the error code name and message.
+	std::string ToString() const;
 
- private:
-  StatusCode error_code_;
-  std::string error_message_;
+private:
+	StatusCode error_code_;
+	std::string error_message_;
 };
 
 // Returns an OK status, equivalent to a default constructed instance. Prefer
 // usage of `OkStatus()` when constructing such an OK status.
-PROTOBUF_EXPORT Status OkStatus();
+ Status OkStatus();
 
 // Prints a human-readable representation of 'x' to 'os'.
-PROTOBUF_EXPORT std::ostream& operator<<(std::ostream& os, const Status& x);
+ std::ostream &operator<<(std::ostream &os, const Status &x);
 
 // These convenience functions return `true` if a given status matches the
 // `StatusCode` error code of its associated function.
-PROTOBUF_EXPORT bool IsAborted(const Status& status);
-PROTOBUF_EXPORT bool IsAlreadyExists(const Status& status);
-PROTOBUF_EXPORT bool IsCancelled(const Status& status);
-PROTOBUF_EXPORT bool IsDataLoss(const Status& status);
-PROTOBUF_EXPORT bool IsDeadlineExceeded(const Status& status);
-PROTOBUF_EXPORT bool IsFailedPrecondition(const Status& status);
-PROTOBUF_EXPORT bool IsInternal(const Status& status);
-PROTOBUF_EXPORT bool IsInvalidArgument(const Status& status);
-PROTOBUF_EXPORT bool IsNotFound(const Status& status);
-PROTOBUF_EXPORT bool IsOutOfRange(const Status& status);
-PROTOBUF_EXPORT bool IsPermissionDenied(const Status& status);
-PROTOBUF_EXPORT bool IsResourceExhausted(const Status& status);
-PROTOBUF_EXPORT bool IsUnauthenticated(const Status& status);
-PROTOBUF_EXPORT bool IsUnavailable(const Status& status);
-PROTOBUF_EXPORT bool IsUnimplemented(const Status& status);
-PROTOBUF_EXPORT bool IsUnknown(const Status& status);
+ bool IsAborted(const Status &status);
+ bool IsAlreadyExists(const Status &status);
+ bool IsCancelled(const Status &status);
+ bool IsDataLoss(const Status &status);
+ bool IsDeadlineExceeded(const Status &status);
+ bool IsFailedPrecondition(const Status &status);
+ bool IsInternal(const Status &status);
+ bool IsInvalidArgument(const Status &status);
+ bool IsNotFound(const Status &status);
+ bool IsOutOfRange(const Status &status);
+ bool IsPermissionDenied(const Status &status);
+ bool IsResourceExhausted(const Status &status);
+ bool IsUnauthenticated(const Status &status);
+ bool IsUnavailable(const Status &status);
+ bool IsUnimplemented(const Status &status);
+ bool IsUnknown(const Status &status);
 
 // These convenience functions create an `Status` object with an error code as
 // indicated by the associated function name, using the error message passed in
@@ -130,67 +135,67 @@ PROTOBUF_EXPORT bool IsUnknown(const Status& status);
 // These functions are intentionally named `*Error` rather than `*Status` to
 // match the names from Abseil:
 // https://github.com/abseil/abseil-cpp/blob/2e9532cc6c701a8323d0cffb468999ab804095ab/absl/status/status.h#L716
-PROTOBUF_EXPORT Status AbortedError(StringPiece message);
-PROTOBUF_EXPORT Status AlreadyExistsError(StringPiece message);
-PROTOBUF_EXPORT Status CancelledError(StringPiece message);
-PROTOBUF_EXPORT Status DataLossError(StringPiece message);
-PROTOBUF_EXPORT Status DeadlineExceededError(StringPiece message);
-PROTOBUF_EXPORT Status FailedPreconditionError(StringPiece message);
-PROTOBUF_EXPORT Status InternalError(StringPiece message);
-PROTOBUF_EXPORT Status InvalidArgumentError(StringPiece message);
-PROTOBUF_EXPORT Status NotFoundError(StringPiece message);
-PROTOBUF_EXPORT Status OutOfRangeError(StringPiece message);
-PROTOBUF_EXPORT Status PermissionDeniedError(StringPiece message);
-PROTOBUF_EXPORT Status ResourceExhaustedError(StringPiece message);
-PROTOBUF_EXPORT Status UnauthenticatedError(StringPiece message);
-PROTOBUF_EXPORT Status UnavailableError(StringPiece message);
-PROTOBUF_EXPORT Status UnimplementedError(StringPiece message);
-PROTOBUF_EXPORT Status UnknownError(StringPiece message);
+ Status AbortedError(StringPiece message);
+ Status AlreadyExistsError(StringPiece message);
+ Status CancelledError(StringPiece message);
+ Status DataLossError(StringPiece message);
+ Status DeadlineExceededError(StringPiece message);
+ Status FailedPreconditionError(StringPiece message);
+ Status InternalError(StringPiece message);
+ Status InvalidArgumentError(StringPiece message);
+ Status NotFoundError(StringPiece message);
+ Status OutOfRangeError(StringPiece message);
+ Status PermissionDeniedError(StringPiece message);
+ Status ResourceExhaustedError(StringPiece message);
+ Status UnauthenticatedError(StringPiece message);
+ Status UnavailableError(StringPiece message);
+ Status UnimplementedError(StringPiece message);
+ Status UnknownError(StringPiece message);
 
-}  // namespace status_internal
+} // namespace status_internal
 
-using ::google::protobuf::util::status_internal::Status;
-using ::google::protobuf::util::status_internal::StatusCode;
+using duckdb::google::protobuf::util::status_internal::Status;
+using duckdb::google::protobuf::util::status_internal::StatusCode;
 
-using ::google::protobuf::util::status_internal::IsAborted;
-using ::google::protobuf::util::status_internal::IsAlreadyExists;
-using ::google::protobuf::util::status_internal::IsCancelled;
-using ::google::protobuf::util::status_internal::IsDataLoss;
-using ::google::protobuf::util::status_internal::IsDeadlineExceeded;
-using ::google::protobuf::util::status_internal::IsFailedPrecondition;
-using ::google::protobuf::util::status_internal::IsInternal;
-using ::google::protobuf::util::status_internal::IsInvalidArgument;
-using ::google::protobuf::util::status_internal::IsNotFound;
-using ::google::protobuf::util::status_internal::IsOutOfRange;
-using ::google::protobuf::util::status_internal::IsPermissionDenied;
-using ::google::protobuf::util::status_internal::IsResourceExhausted;
-using ::google::protobuf::util::status_internal::IsUnauthenticated;
-using ::google::protobuf::util::status_internal::IsUnavailable;
-using ::google::protobuf::util::status_internal::IsUnimplemented;
-using ::google::protobuf::util::status_internal::IsUnknown;
+using duckdb::google::protobuf::util::status_internal::IsAborted;
+using duckdb::google::protobuf::util::status_internal::IsAlreadyExists;
+using duckdb::google::protobuf::util::status_internal::IsCancelled;
+using duckdb::google::protobuf::util::status_internal::IsDataLoss;
+using duckdb::google::protobuf::util::status_internal::IsDeadlineExceeded;
+using duckdb::google::protobuf::util::status_internal::IsFailedPrecondition;
+using duckdb::google::protobuf::util::status_internal::IsInternal;
+using duckdb::google::protobuf::util::status_internal::IsInvalidArgument;
+using duckdb::google::protobuf::util::status_internal::IsNotFound;
+using duckdb::google::protobuf::util::status_internal::IsOutOfRange;
+using duckdb::google::protobuf::util::status_internal::IsPermissionDenied;
+using duckdb::google::protobuf::util::status_internal::IsResourceExhausted;
+using duckdb::google::protobuf::util::status_internal::IsUnauthenticated;
+using duckdb::google::protobuf::util::status_internal::IsUnavailable;
+using duckdb::google::protobuf::util::status_internal::IsUnimplemented;
+using duckdb::google::protobuf::util::status_internal::IsUnknown;
 
-using ::google::protobuf::util::status_internal::AbortedError;
-using ::google::protobuf::util::status_internal::AlreadyExistsError;
-using ::google::protobuf::util::status_internal::CancelledError;
-using ::google::protobuf::util::status_internal::DataLossError;
-using ::google::protobuf::util::status_internal::DeadlineExceededError;
-using ::google::protobuf::util::status_internal::FailedPreconditionError;
-using ::google::protobuf::util::status_internal::InternalError;
-using ::google::protobuf::util::status_internal::InvalidArgumentError;
-using ::google::protobuf::util::status_internal::NotFoundError;
-using ::google::protobuf::util::status_internal::OkStatus;
-using ::google::protobuf::util::status_internal::OutOfRangeError;
-using ::google::protobuf::util::status_internal::PermissionDeniedError;
-using ::google::protobuf::util::status_internal::ResourceExhaustedError;
-using ::google::protobuf::util::status_internal::UnauthenticatedError;
-using ::google::protobuf::util::status_internal::UnavailableError;
-using ::google::protobuf::util::status_internal::UnimplementedError;
-using ::google::protobuf::util::status_internal::UnknownError;
+using duckdb::google::protobuf::util::status_internal::AbortedError;
+using duckdb::google::protobuf::util::status_internal::AlreadyExistsError;
+using duckdb::google::protobuf::util::status_internal::CancelledError;
+using duckdb::google::protobuf::util::status_internal::DataLossError;
+using duckdb::google::protobuf::util::status_internal::DeadlineExceededError;
+using duckdb::google::protobuf::util::status_internal::FailedPreconditionError;
+using duckdb::google::protobuf::util::status_internal::InternalError;
+using duckdb::google::protobuf::util::status_internal::InvalidArgumentError;
+using duckdb::google::protobuf::util::status_internal::NotFoundError;
+using duckdb::google::protobuf::util::status_internal::OkStatus;
+using duckdb::google::protobuf::util::status_internal::OutOfRangeError;
+using duckdb::google::protobuf::util::status_internal::PermissionDeniedError;
+using duckdb::google::protobuf::util::status_internal::ResourceExhaustedError;
+using duckdb::google::protobuf::util::status_internal::UnauthenticatedError;
+using duckdb::google::protobuf::util::status_internal::UnavailableError;
+using duckdb::google::protobuf::util::status_internal::UnimplementedError;
+using duckdb::google::protobuf::util::status_internal::UnknownError;
 
-}  // namespace util
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace util
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_STUBS_STATUS_H_

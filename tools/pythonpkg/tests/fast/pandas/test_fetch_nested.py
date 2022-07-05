@@ -59,21 +59,21 @@ class TestFetchNested(object):
     def test_map_df(self,duckdb_cursor):
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",[{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}])
         
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys have to be unique"):
             compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t",[{'key': [1, 2, 3, 4, 2, None], 'value': [10, 9, 8, 7, 11, 42]}])
         
         compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t",[{'key': [], 'value': []}])
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys have to be unique"):
             compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", [{'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'], 'value': [10, 9, 10, 11]}])
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
             compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", [{'key': ['Jon Lajoie', None, 'Tenacious D', None, None], 'value': [10, 9, 10, 11, 13]}])
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
             compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t",[{'key': [None, None, None, None, None], 'value': [10, 9, 10, 11, 13]}])
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception, match="Invalid Input Error: Map keys can not be NULL"):
             compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", [{'key': [None, None, None, None, None], 'value': [None, None, None, None, None]}])
         
         compare_results("SELECT m as a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)", [{'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}])
@@ -94,12 +94,10 @@ class TestFetchNested(object):
         compare_results("SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t", [[{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}, {'key': [1, 2, 3, 5], 'value': [10, 9, 8, 7]}]])
 
         # Map with list as key and/or value
-        with pytest.raises(Exception):
-            compare_results("SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4])) as a", [{'key': [[1, 2], [3, 4], [5, 4]], 'value': [[1, 2], [3, 4], [5, 4]]}])
+        compare_results("SELECT MAP(LIST_VALUE([1,2],[3,4],[5,4]),LIST_VALUE([1,2],[3,4],[5,4])) as a", [{'key': [[1, 2], [3, 4], [5, 4]], 'value': [[1, 2], [3, 4], [5, 4]]}])
 
         # Map with struct as key and/or value
-        with pytest.raises(Exception):
-            compare_results("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a", [{'key': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}], 'value': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}]}])
+        compare_results("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a", [{'key': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}], 'value': [{'i': 1, 'j': 2}, {'i': 3, 'j': 4}]}])
 
 
 

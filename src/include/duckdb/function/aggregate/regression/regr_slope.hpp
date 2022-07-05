@@ -25,21 +25,21 @@ struct RegrSlopeOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, bind_data, y_data, x_data, bmask,
-		                                                          amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, bind_data, y_data, bmask, yidx);
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, y_data, x_data,
+		                                                          bmask, amask, yidx, xidx);
+		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, aggr_input_data, y_data, bmask, yidx);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
-		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, bind_data);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, bind_data);
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, aggr_input_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, aggr_input_data);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->cov_pop.count == 0 || state->var_pop.count == 0) {
 			mask.SetInvalid(idx);
 		} else {

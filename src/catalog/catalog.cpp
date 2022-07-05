@@ -380,7 +380,7 @@ TypeCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema
 LogicalType Catalog::GetType(ClientContext &context, const string &schema, const string &name) {
 	auto user_type_catalog = GetEntry<TypeCatalogEntry>(context, schema, name);
 	auto result_type = user_type_catalog->user_type;
-	EnumType::SetCatalog(result_type, user_type_catalog);
+	LogicalType::SetCatalog(result_type, user_type_catalog);
 	return result_type;
 }
 

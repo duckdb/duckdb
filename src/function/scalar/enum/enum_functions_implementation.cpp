@@ -105,9 +105,11 @@ void EnumRange::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void EnumRangeBoundary::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
-	                               LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction, false,
-	                               BindEnumRangeBoundaryFunction));
+	auto fun = ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
+	                          LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction, false,
+	                          BindEnumRangeBoundaryFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

@@ -273,11 +273,6 @@ inline const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1) {
 #include <brotli/encode.h>
 #endif
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wexit-time-destructors"
-#endif
-
 /*
  * Declaration
  */
@@ -6077,7 +6072,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 		return false;
 	}
 
-	auto location = detail::decode_url(res.get_header_value("location"), true);
+	auto location = detail::decode_url(res.get_header_value("location"), false);
 	if (location.empty()) { return false; }
 
 	const static Regex re(
@@ -8188,9 +8183,5 @@ inline SSL_CTX *Client::ssl_context() const {
 // ----------------------------------------------------------------------------
 
 } // namespace CPPHTTPLIB_NAMESPACE
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 #endif // CPPHTTPLIB_HTTPLIB_H

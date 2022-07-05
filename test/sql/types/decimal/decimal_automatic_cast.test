@@ -1,0 +1,30 @@
+# name: test/sql/types/decimal/decimal_automatic_cast.test
+# description: Test automatic decimal casting
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT [1.33, 10.0]
+----
+[1.33, 10.00]
+
+query I
+SELECT [0.1, 1.33, 10.0, 9999999.999999999]
+----
+[0.100000000, 1.330000000, 10.000000000, 9999999.999999999]
+
+query I
+SELECT [99999999999999999999999999999999999.9, 9.99999999999999999999999999999999999]
+----
+[99999999999999999999999999999999999.900, 9.999]
+
+statement ok
+CREATE TABLE foo
+ (my_struct STRUCT(my_double DOUBLE)[]);
+
+statement ok
+INSERT INTO foo VALUES
+  ([{'my_double': 1.33},
+    {'my_double': 10.0}]);

@@ -234,7 +234,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
-	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
+	D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);

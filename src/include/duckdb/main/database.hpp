@@ -44,6 +44,8 @@ public:
 
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
+	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+
 private:
 	void Initialize(const char *path, DBConfig *config);
 

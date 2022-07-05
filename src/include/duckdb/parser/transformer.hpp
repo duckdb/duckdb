@@ -16,6 +16,7 @@
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -90,8 +91,8 @@ private:
 	unique_ptr<CreateStatement> TransformCreateIndex(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateFunctionStmt node into CreateStatement
 	unique_ptr<CreateStatement> TransformCreateFunction(duckdb_libpgquery::PGNode *node);
-	//! Transform a Postgres duckdb_libpgquery::T_PGCreateEnumStmt node into CreateStatement
-	unique_ptr<CreateStatement> TransformCreateEnum(duckdb_libpgquery::PGNode *node);
+	//! Transform a Postgres duckdb_libpgquery::T_PGCreateTypeStmt node into CreateStatement
+	unique_ptr<CreateStatement> TransformCreateType(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGAlterSeqStmt node into CreateStatement
 	unique_ptr<AlterStatement> TransformAlterSequence(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropStmt node into a Drop[Table,Schema]Statement
@@ -195,7 +196,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	OnCreateConflict TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict);
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
-	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
+	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 
@@ -266,5 +267,7 @@ private:
 	Transformer &transformer;
 	idx_t stack_usage;
 };
+
+vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list);
 
 } // namespace duckdb
