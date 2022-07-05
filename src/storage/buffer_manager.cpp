@@ -581,7 +581,7 @@ public:
 			D_ASSERT(handle);
 			RemoveTempBlockIndex(lock, block_index);
 		}
-		return buffer;
+		return move(buffer);
 	}
 
 	bool DeleteIfEmpty() {
