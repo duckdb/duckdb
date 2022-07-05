@@ -138,13 +138,13 @@ jobs:
         python scripts/regression_check.py --old=current.csv --new=new.csv
 
  regression-test-plan-cost:
-  name: Regression Test Plan Cost (Join Order)
+  name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
   strategy:
     fail-fast: false
     matrix:
       benchmark:
-        - 'job'
+        - 'imdb'
         - 'tpch'
   env:
     CC: gcc-10
