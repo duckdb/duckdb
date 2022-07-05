@@ -227,6 +227,14 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 }
 
 RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
+	//	Don't copy and delete if there is only one block.
+	if (row_data.blocks.size() == 1) {
+		auto new_block = row_data.blocks[0];
+		row_data.blocks.clear();
+		row_data.count = 0;
+		return new_block;
+	}
+
 	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
 	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
