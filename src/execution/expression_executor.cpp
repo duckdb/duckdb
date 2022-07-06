@@ -6,19 +6,22 @@
 
 namespace duckdb {
 
-ExpressionExecutor::ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(Allocator &allocator) : allocator(allocator) {
 }
 
-ExpressionExecutor::ExpressionExecutor(const Expression *expression) : ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(Allocator &allocator, const Expression *expression)
+    : ExpressionExecutor(allocator) {
 	D_ASSERT(expression);
 	AddExpression(*expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(const Expression &expression) : ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(Allocator &allocator, const Expression &expression)
+    : ExpressionExecutor(allocator) {
 	AddExpression(expression);
 }
 
-ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs) : ExpressionExecutor() {
+ExpressionExecutor::ExpressionExecutor(Allocator &allocator, const vector<unique_ptr<Expression>> &exprs)
+    : ExpressionExecutor(allocator) {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
@@ -33,8 +36,8 @@ void ExpressionExecutor::AddExpression(const Expression &expr) {
 }
 
 void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExecutorState &state) {
-	state.root_state = InitializeState(expression, state);
 	state.executor = this;
+	state.root_state = InitializeState(expression, state);
 }
 
 void ExpressionExecutor::Execute(DataChunk *input, DataChunk &result) {
@@ -80,7 +83,7 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 	D_ASSERT(expr.IsFoldable());
 	D_ASSERT(expr.IsScalar());
 	// use an ExpressionExecutor to execute the expression
-	ExpressionExecutor executor(expr);
+	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
 
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);

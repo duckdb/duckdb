@@ -31,7 +31,7 @@ bool QueryProfiler::IsDetailedEnabled() const {
 }
 
 ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
-	return is_explain_analyze ? ProfilerPrintFormat::NONE : ClientConfig::GetConfig(context).profiler_print_format;
+	return ClientConfig::GetConfig(context).profiler_print_format;
 }
 
 string QueryProfiler::GetSaveLocation() const {
@@ -119,20 +119,14 @@ void QueryProfiler::EndQuery() {
 		Finalize(*root);
 	}
 	this->running = false;
-	auto automatic_print_format = GetPrintFormat();
-	// print or output the query profiling after termination, if this is enabled
-	if (automatic_print_format != ProfilerPrintFormat::NONE) {
-		// check if this query should be output based on the operator types
-		string query_info;
-		if (automatic_print_format == ProfilerPrintFormat::JSON) {
-			query_info = ToJSON();
-		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE) {
-			query_info = ToString();
-		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER) {
-			query_info = ToString(true);
-		}
+	// print or output the query profiling after termination
+	// EXPLAIN ANALYSE should not be outputted by the profiler
+	if (IsEnabled() && !is_explain_analyze) {
+		string query_info = ToString();
 		auto save_location = GetSaveLocation();
-		if (save_location.empty()) {
+		if (!ClientConfig::GetConfig(context).emit_profiler_output) {
+			// disable output
+		} else if (save_location.empty()) {
 			Printer::Print(query_info);
 			Printer::Print("\n");
 		} else {
@@ -140,6 +134,19 @@ void QueryProfiler::EndQuery() {
 		}
 	}
 	this->is_explain_analyze = false;
+}
+string QueryProfiler::ToString() const {
+	const auto format = GetPrintFormat();
+	switch (format) {
+	case ProfilerPrintFormat::QUERY_TREE:
+		return QueryTreeToString();
+	case ProfilerPrintFormat::JSON:
+		return ToJSON();
+	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
+		return QueryTreeToString(true);
+	default:
+		throw InternalException("Unknown ProfilerPrintFormat \"%s\"", format);
+	}
 }
 
 void QueryProfiler::StartPhase(string new_phase) {
@@ -332,13 +339,13 @@ static string RenderTiming(double timing) {
 	return timing_s + "s";
 }
 
-string QueryProfiler::ToString(bool print_optimizer_output) const {
+string QueryProfiler::QueryTreeToString(bool print_optimizer_output) const {
 	std::stringstream str;
-	ToStream(str, print_optimizer_output);
+	QueryTreeToStream(str, print_optimizer_output);
 	return str.str();
 }
 
-void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) const {
+void QueryProfiler::QueryTreeToStream(std::ostream &ss, bool print_optimizer_output) const {
 	if (!IsEnabled()) {
 		ss << "Query profiling is disabled. Call "
 		      "Connection::EnableProfiling() to enable profiling!";
@@ -589,7 +596,7 @@ void QueryProfiler::Render(const QueryProfiler::TreeNode &node, std::ostream &ss
 }
 
 void QueryProfiler::Print() {
-	Printer::Print(ToString());
+	Printer::Print(QueryTreeToString());
 }
 
 vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {

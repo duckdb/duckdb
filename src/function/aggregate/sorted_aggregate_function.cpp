@@ -71,7 +71,8 @@ struct SortedAggregateBindData : public FunctionData {
 };
 
 struct SortedAggregateState {
-	SortedAggregateState() : nsel(0) {
+	SortedAggregateState()
+	    : arguments(Allocator::DefaultAllocator()), ordering(Allocator::DefaultAllocator()), nsel(0) {
 	}
 
 	ChunkCollection arguments;

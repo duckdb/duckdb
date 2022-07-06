@@ -19,6 +19,7 @@ class DatabaseInstance;
 class ManagedBuffer : public FileBuffer {
 public:
 	ManagedBuffer(DatabaseInstance &db, idx_t size, bool can_destroy, block_id_t id);
+	ManagedBuffer(DatabaseInstance &db, FileBuffer &source, bool can_destroy, block_id_t id);
 
 	DatabaseInstance &db;
 	//! Whether or not the managed buffer can be freely destroyed when unpinned.

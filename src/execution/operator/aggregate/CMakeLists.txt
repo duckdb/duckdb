@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_operator_aggregate
   OBJECT
+  aggregate_object.cpp
   physical_hash_aggregate.cpp
   physical_perfecthash_aggregate.cpp
   physical_simple_aggregate.cpp

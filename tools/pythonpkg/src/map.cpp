@@ -67,7 +67,7 @@ static string TypeVectorToString(vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
-OperatorResultType MapFunction::MapFunctionExec(ClientContext &context, TableFunctionInput &data_p, DataChunk &input,
+OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                                 DataChunk &output) {
 	py::gil_scoped_acquire acquire;
 

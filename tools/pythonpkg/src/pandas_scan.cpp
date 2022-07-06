@@ -87,12 +87,12 @@ unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(Cl
 	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
 }
 
-unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ClientContext &context,
+unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
                                                                             TableFunctionInitInput &input,
                                                                             GlobalTableFunctionState *gstate) {
 	auto result = make_unique<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
-	PandasScanParallelStateNext(context, input.bind_data, result.get(), gstate);
+	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
