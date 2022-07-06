@@ -263,7 +263,7 @@ bool SwizzleablePointer::IsSwizzled() {
 
 void SwizzleablePointer::Reset() {
 	if (pointer) {
-		if (IsSwizzled()) {
+		if (!IsSwizzled()) {
 			delete (Node *)pointer;
 		}
 	}
