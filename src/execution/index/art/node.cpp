@@ -106,6 +106,8 @@ BlockPointer Node::Serialize(ART &art, duckdb::MetaBlockWriter &writer) {
 		auto leaf = (Leaf *)this;
 		return leaf->SerializeLeaf(writer);
 	}
+	default:
+		throw InternalException("Invalid ART Node");
 	}
 }
 
