@@ -209,7 +209,7 @@ static bool PerformDuplicateElimination(Binder &binder, vector<CorrelatedColumnI
 	auto binding = ColumnBinding(binder.GenerateTableIndex(), 0);
 	auto type = LogicalType::BIGINT;
 	auto name = "delim_index";
-	CorrelatedColumnInfo info(binding, move(type), move(name), 0);
+	CorrelatedColumnInfo info(binding, type, name, 0);
 	correlated_columns.insert(correlated_columns.begin(), move(info));
 	return false;
 }
