@@ -2050,7 +2050,7 @@ inline std::string encode_url(const std::string &s) {
 	for (size_t i = 0; s[i]; i++) {
 		switch (s[i]) {
 		case ' ': result += "%20"; break;
-		//case '+': result += "%2B"; break;
+		case '+': result += "%2B"; break;
 		case '\r': result += "%0D"; break;
 		case '\n': result += "%0A"; break;
 		case '\'': result += "%27"; break;
@@ -3695,7 +3695,7 @@ inline void parse_query_text(const std::string &s, Params &params) {
 		});
 
 		if (!key.empty()) {
-			params.emplace(decode_url(key, true), decode_url(val, true));
+			params.emplace(decode_url(key, true), decode_url(val, false));
 		}
 	});
 }
@@ -6072,7 +6072,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 		return false;
 	}
 
-	auto location = detail::decode_url(res.get_header_value("location"), true);
+	auto location = detail::decode_url(res.get_header_value("location"), false);
 	if (location.empty()) { return false; }
 
 	const static Regex re(

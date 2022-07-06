@@ -68,9 +68,17 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:44
 9	Jose	Foster	jfoster8@yelp.com
 10	Emily	Stewart	estewart9@opensource.org
 
-# with a + in the path
-query IIII
+statement ok
+SELECT * FROM "http://test-bucket-ceiveran.s3.eu-west-1.amazonaws.com/test+folder/actual%2Bsign.csv"
+
+# Plus in url is a bit special:
+# Since we use + to encode a space (it's internally converted to %20), this will not work
+statement error
 SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet') LIMIT 10;
+
+# a plus symbol needs to be manually converted to %2B
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb-data/releases/download/v1.0/us%2Ber%2Bda%2Bta.parquet') LIMIT 10;
 ----
 1	Amanda	Jordan	ajordan0@com.com
 2	Albert	Freeman	afreeman1@is.gd

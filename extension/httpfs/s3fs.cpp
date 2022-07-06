@@ -553,7 +553,7 @@ static string get_full_s3_url(S3AuthParams &auth_params, ParsedS3Url parsed_url)
 		if (c == '+') {
 			full_url += "%2B";
 		} else if (c == ' ') {
-			full_url += "+";
+			full_url += "%20";
 		} else {
 			full_url += c;
 		}
