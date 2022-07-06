@@ -2,8 +2,8 @@
 # description: Test nested correlated list subqueries
 # group: [complex]
 
-#statement ok
-#PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE lists(l INTEGER[]);

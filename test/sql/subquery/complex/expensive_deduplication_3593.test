@@ -20,6 +20,25 @@ SELECT gen_random_uuid() id, 1 as val FROM generate_series(0, 160)
 ----
 161
 
+query II
+SELECT
+z%2 AS k,
+(
+  select count(*) as value
+  FROM (
+    SELECT UNNEST(array_agg(distinct id))
+  ) a
+)
+  as total_seats
+FROM (
+SELECT row_number() over () AS z, gen_random_uuid() id, 1 as val FROM generate_series(0, 160)
+) as m
+GROUP BY k
+ORDER BY k;
+----
+0	80
+1	81
+
 # disable verification for these queries, they are too slow to run without the deduplication
 statement ok
 PRAGMA disable_verification
