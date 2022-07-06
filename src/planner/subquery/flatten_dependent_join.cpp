@@ -14,8 +14,8 @@
 namespace duckdb {
 
 FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<CorrelatedColumnInfo> &correlated,
-                                             bool any_join)
-    : binder(binder), correlated_columns(correlated), any_join(any_join) {
+                                             bool perform_delim, bool any_join)
+    : binder(binder), correlated_columns(correlated), perform_delim(perform_delim), any_join(any_join) {
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		correlated_map[col.binding] = i;
@@ -115,8 +115,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now we add all the columns of the delim_scan to the projection list
 		auto proj = (LogicalProjection *)plan.get();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			auto &col = correlated_columns[i];
 			auto colref = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			plan->expressions.push_back(move(colref));
 		}
 
@@ -137,15 +138,42 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
-		for (idx_t i = 0; i < correlated_columns.size(); i++) {
+		idx_t delim_table_index;
+		idx_t delim_column_offset;
+		idx_t delim_data_offset;
+		auto new_group_count = perform_delim ? correlated_columns.size() : 1;
+		for (idx_t i = 0; i < new_group_count; i++) {
+			auto &col = correlated_columns[i];
 			auto colref = make_unique<BoundColumnRefExpression>(
-			    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			for (auto &set : aggr.grouping_sets) {
 				set.insert(aggr.groups.size());
 			}
 			aggr.groups.push_back(move(colref));
 		}
-		if (aggr.groups.size() == correlated_columns.size()) {
+		if (!perform_delim) {
+			// if we are not performing the duplicate elimination, we have only added the row_id column to the grouping
+			// operators in this case, we push a FIRST aggregate for each of the remaining expressions
+			delim_table_index = aggr.aggregate_index;
+			delim_column_offset = aggr.expressions.size();
+			delim_data_offset = aggr.groups.size();
+			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+				auto &col = correlated_columns[i];
+				auto first_aggregate = FirstFun::GetFunction(col.type);
+				auto colref = make_unique<BoundColumnRefExpression>(
+				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+				vector<unique_ptr<Expression>> aggr_children;
+				aggr_children.push_back(move(colref));
+				auto first_fun = make_unique<BoundAggregateExpression>(move(first_aggregate), move(aggr_children),
+				                                                       nullptr, nullptr, false);
+				aggr.expressions.push_back(move(first_fun));
+			}
+		} else {
+			delim_table_index = aggr.group_index;
+			delim_column_offset = aggr.groups.size() - correlated_columns.size();
+			delim_data_offset = aggr.groups.size();
+		}
+		if (aggr.groups.size() == new_group_count) {
 			// we have to perform a LEFT OUTER JOIN between the result of this aggregate and the delim scan
 			// FIXME: this does not always have to be a LEFT OUTER JOIN, depending on whether aggr.expressions return
 			// NULL or a value
@@ -161,13 +189,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto delim_scan = make_unique<LogicalDelimGet>(left_index, delim_types);
 			join->children.push_back(move(delim_scan));
 			join->children.push_back(move(plan));
-			for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			for (idx_t i = 0; i < new_group_count; i++) {
+				auto &col = correlated_columns[i];
 				JoinCondition cond;
-				cond.left =
-				    make_unique<BoundColumnRefExpression>(correlated_columns[i].type, ColumnBinding(left_index, i));
+				cond.left = make_unique<BoundColumnRefExpression>(col.name, col.type, ColumnBinding(left_index, i));
 				cond.right = make_unique<BoundColumnRefExpression>(
-				    correlated_columns[i].type,
-				    ColumnBinding(aggr.group_index, (aggr.groups.size() - correlated_columns.size()) + i));
+				    correlated_columns[i].type, ColumnBinding(delim_table_index, delim_column_offset + i));
 				cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 				join->conditions.push_back(move(cond));
 			}
@@ -183,16 +210,15 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				}
 			}
 			// now we update the delim_index
-
 			base_binding.table_index = left_index;
 			this->delim_offset = base_binding.column_index = 0;
 			this->data_offset = 0;
 			return move(join);
 		} else {
 			// update the delim_index
-			base_binding.table_index = aggr.group_index;
-			this->delim_offset = base_binding.column_index = aggr.groups.size() - correlated_columns.size();
-			this->data_offset = aggr.groups.size();
+			base_binding.table_index = delim_table_index;
+			this->delim_offset = base_binding.column_index = delim_column_offset;
+			this->data_offset = delim_data_offset;
 			return plan;
 		}
 	}

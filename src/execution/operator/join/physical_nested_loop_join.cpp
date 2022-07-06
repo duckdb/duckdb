@@ -105,6 +105,16 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	}
 }
 
+bool PhysicalNestedLoopJoin::IsSupported(const vector<JoinCondition> &conditions) {
+	for (auto &cond : conditions) {
+		if (cond.left->return_type.InternalType() == PhysicalType::STRUCT ||
+		    cond.left->return_type.InternalType() == PhysicalType::LIST) {
+			return false;
+		}
+	}
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
