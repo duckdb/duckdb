@@ -22,13 +22,9 @@ public:
 	PandasAnalyzer(const DBConfig &config) {
 		analyzed_type = LogicalType::SQLNULL;
 
-		auto percentage_entry = config.set_variables.find("analyze_sample_percentage");
-		D_ASSERT(percentage_entry != config.set_variables.end());
-		sample_percentage = percentage_entry->second.GetValue<double>();
-
-		auto minimum_entry = config.set_variables.find("analyze_sample_minimum");
-		D_ASSERT(minimum_entry != config.set_variables.end());
-		sample_minimum = minimum_entry->second.GetValue<uint64_t>();
+		auto maximum_entry = config.set_variables.find("analyze_sample_maximum");
+		D_ASSERT(maximum_entry != config.set_variables.end());
+		sample_maximum = maximum_entry->second.GetValue<uint64_t>();
 	}
 
 public:
@@ -46,8 +42,7 @@ private:
 	uint64_t GetSampleIncrement(idx_t rows);
 
 private:
-	double sample_percentage;
-	uint64_t sample_minimum;
+	uint64_t sample_maximum;
 	//! Holds the gil to allow python object creation/destruction
 	PythonGILWrapper gil;
 	//! The resulting analyzed type

@@ -608,15 +608,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	auto &db_config = res->database->instance->config;
-	db_config.AddExtensionOption("analyze_sample_percentage",
-	                             "The percentage of rows to sample when analyzing a pandas object column.",
-	                             LogicalType::DOUBLE);
-	db_config.AddExtensionOption("analyze_sample_minimum",
-	                             "The minimum number of rows to sample when analyzing a pandas object column."
-	                             "Comes into effect only after 'analyze_sample_percentage'",
+	db_config.AddExtensionOption("analyze_sample_maximum",
+	                             "The maximum number of rows to sample when analyzing a pandas object column.",
 	                             LogicalType::UBIGINT);
-	db_config.set_variables["analyze_sample_percentage"] = Value::DOUBLE(10.0);
-	db_config.set_variables["analyze_sample_minimum"] = Value::UBIGINT(100);
+	db_config.set_variables["analyze_sample_maximum"] = Value::UBIGINT(1000);
 
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);

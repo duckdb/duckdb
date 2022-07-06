@@ -315,16 +315,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
 
 //! Get the increment for the given sample size
 uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
-	if (sample_percentage <= 1) {
-		sample_percentage = 1;
-	}
-	//! Get percentage of rows
-	uint64_t sample = ((rows / 100.0) * sample_percentage);
-
-	//! Apply the minimum
-	if (sample_minimum > sample) {
-		sample = sample_minimum;
-	}
+	//! Apply the maximum
+	auto sample = sample_maximum;
 	if (sample > rows) {
 		sample = rows;
 	}
