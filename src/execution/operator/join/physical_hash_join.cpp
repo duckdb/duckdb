@@ -69,19 +69,23 @@ public:
 
 class HashJoinLocalState : public LocalSinkState {
 public:
-	//! Thread-local local HT
-	unique_ptr<JoinHashTable> hash_table;
-	//! Whether the hash_table has been initialized
-	bool initialized;
+	HashJoinLocalState(Allocator &allocator, const PhysicalHashJoin &hj) : build_executor(allocator) {
+		if (!hj.right_projection_map.empty()) {
+			build_chunk.Initialize(allocator, hj.build_types);
+		}
+		for (auto &cond : hj.conditions) {
+			build_executor.AddExpression(*cond.right);
+		}
+		join_keys.Initialize(allocator, hj.condition_types);
+	}
 
+public:
 	DataChunk build_chunk;
 	DataChunk join_keys;
 	ExpressionExecutor build_executor;
 
-	void Initialize(const HashJoinGlobalState &gstate) {
-		hash_table = gstate.hash_table->CopyEmpty();
-		initialized = true;
-	}
+	//! Thread-local local HT
+	unique_ptr<JoinHashTable> hash_table;
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -121,11 +125,12 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
 
+			auto &allocator = Allocator::Get(context);
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
-			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
+			    allocator, BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
-			info.group_chunk.Initialize(delim_types);
-			info.result_chunk.Initialize(payload_types);
+			info.group_chunk.Initialize(allocator, delim_types);
+			info.result_chunk.Initialize(allocator, payload_types);
 		}
 	}
 	// for perfect hash join
@@ -146,15 +151,8 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<HashJoinLocalState>();
-	state->initialized = false;
-	if (!right_projection_map.empty()) {
-		state->build_chunk.Initialize(build_types);
-	}
-	for (auto &cond : conditions) {
-		state->build_executor.AddExpression(*cond.right);
-	}
-	state->join_keys.Initialize(condition_types);
+	auto &allocator = Allocator::Get(context.client);
+	auto state = make_unique<HashJoinLocalState>(allocator, *this);
 	return move(state);
 }
 
@@ -162,8 +160,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
                                       DataChunk &input) const {
 	auto &gstate = (HashJoinGlobalState &)gstate_p;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
-	if (!lstate.initialized) {
-		lstate.Initialize(gstate);
+	if (!lstate.hash_table) {
+		lstate.hash_table = gstate.hash_table->CopyEmpty();
 	}
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
@@ -198,7 +196,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
 	auto &gstate = (HashJoinGlobalState &)gstate_p;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
-	if (lstate.initialized) {
+	if (lstate.hash_table) {
 		if (gstate.external) {
 			lstate.hash_table->SwizzleBlocks();
 		}
@@ -218,10 +216,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	if (sink.external) {
 		for (auto &ht : sink.local_hash_tables) {
-			if (ht->Count() != 0) {
-				// Has unswizzled blocks left - can happen if one thread finishes before sink.external is set
-				ht->SwizzleBlocks();
-			}
+			// Has unswizzled blocks left - can happen if one thread finishes before sink.external is set
+			ht->SwizzleBlocks();
 		}
 	} else {
 		// Merge local hash tables into the main hash table
@@ -258,7 +254,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
-	PhysicalHashJoinState() : local_ht(nullptr) {
+	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator), local_ht(nullptr) {
 	}
 
 	DataChunk join_keys;
@@ -278,20 +274,21 @@ public:
 	}
 };
 
-unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &context) const {
-	auto state = make_unique<PhysicalHashJoinState>();
+unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
+	auto &allocator = Allocator::Get(context.client);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
+	auto state = make_unique<PhysicalHashJoinState>(allocator);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
-		state->join_keys.Initialize(condition_types);
+		state->join_keys.Initialize(allocator, condition_types);
 		for (auto &cond : conditions) {
 			state->probe_executor.AddExpression(*cond.left);
 		}
 	}
 	if (sink.external) {
-		state->sink_keys.Initialize(condition_types);
-		state->sink_payload.Initialize(children[0]->types);
+		state->sink_keys.Initialize(allocator, condition_types);
+		state->sink_payload.Initialize(allocator, children[0]->types);
 		lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
 		sink.local_hash_tables.push_back(
 		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, types, join_type));
@@ -379,10 +376,11 @@ public:
 //! Only used for external join
 class HashJoinLocalScanState : public LocalSourceState {
 public:
-	explicit HashJoinLocalScanState(const PhysicalHashJoin &op) : partitioned(false), addresses(LogicalType::POINTER) {
-		probe_chunk.Initialize(op.build_types);
-		join_keys.Initialize(op.condition_types);
-		payload.Initialize(op.children[0]->types);
+	explicit HashJoinLocalScanState(Allocator &allocator, const PhysicalHashJoin &hj)
+	    : partitioned(false), addresses(LogicalType::POINTER) {
+		probe_chunk.Initialize(allocator, hj.build_types);
+		join_keys.Initialize(allocator, hj.condition_types);
+		payload.Initialize(allocator, hj.children[0]->types);
 	}
 
 	//! Whether this thread has partitioned its local HT yet
@@ -402,7 +400,8 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_unique<HashJoinLocalScanState>(*this);
+	auto &allocator = Allocator::Get(context.client);
+	return make_unique<HashJoinLocalScanState>(allocator, *this);
 }
 
 bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const {

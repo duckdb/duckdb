@@ -139,7 +139,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 
 	auto hash_data = (hash_t *)hdata.data;
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
-	auto main_ht = (data_ptr_t *)hash_map->node->buffer;
+	auto main_ht = (data_ptr_t *)hash_map.Ptr();
 	for (idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
 		auto hindex = hdata.sel->get_index(rindex);
@@ -303,7 +303,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	hashes.Normalify(count);
 
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto pointers = (data_ptr_t *)hash_map->node->buffer;
+	auto pointers = (data_ptr_t *)hash_map.Ptr();
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
@@ -326,7 +326,7 @@ void JoinHashTable::Finalize() {
 
 	// allocate the HT and initialize it with all-zero entries
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
-	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
+	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
@@ -337,7 +337,7 @@ void JoinHashTable::Finalize() {
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : block_collection->blocks) {
 		auto handle = buffer_manager.Pin(block->block);
-		data_ptr_t dataptr = handle->node->buffer;
+		data_ptr_t dataptr = handle.Ptr();
 		idx_t entry = 0;
 		while (entry < block->count) {
 			// fetch the next vector of entries from the blocks
@@ -805,7 +805,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state, Vec
 		for (; state.block_position < block_collection->blocks.size(); state.block_position++, state.position = 0) {
 			auto &block = block_collection->blocks[state.block_position];
 			auto &handle = pinned_handles[state.block_position];
-			auto baseptr = handle->node->buffer;
+			auto baseptr = handle.Ptr();
 			for (; state.position < block->count; state.position++) {
 				auto tuple_base = baseptr + state.position * entry_size;
 				auto found_match = Load<bool>(tuple_base + tuple_size);
@@ -850,7 +850,7 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	while (state.block_position < block_collection->blocks.size()) {
 		auto &block = block_collection->blocks[state.block_position];
 		auto handle = buffer_manager.Pin(block->block);
-		auto base_ptr = handle->node->buffer;
+		auto base_ptr = handle.Ptr();
 		// go through all the tuples within this block
 		while (state.position < block->count) {
 			auto tuple_base = base_ptr + state.position * entry_size;
@@ -869,6 +869,10 @@ idx_t JoinHashTable::SizeInBytes() {
 }
 
 void JoinHashTable::SwizzleBlocks() {
+	if (Count() == 0){
+		return;
+	}
+
 	// The main data blocks can just be moved
 	swizzled_block_collection->Merge(*block_collection);
 
@@ -888,7 +892,7 @@ void JoinHashTable::SwizzleBlocks() {
 
 		// Pin the data block and swizzle the pointers within the rows
 		auto data_handle = buffer_manager.Pin(data_block->block);
-		auto data_ptr = data_handle->Ptr();
+		auto data_ptr = data_handle.Ptr();
 		RowOperations::SwizzleColumns(layout, data_ptr, data_block->count);
 
 		// We want to copy as little of the heap data as possible, check how the data and heap blocks line up
@@ -900,7 +904,7 @@ void JoinHashTable::SwizzleBlocks() {
 			// Swizzle the heap pointer
 			auto heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
 			auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapOffset());
-			auto heap_offset = heap_ptr - heap_handle->Ptr();
+			auto heap_offset = heap_ptr - heap_handle.Ptr();
 			RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block->count, heap_offset);
 
 			// Update counter
@@ -938,7 +942,7 @@ void JoinHashTable::SwizzleBlocks() {
 			swizzled_string_heap->blocks.push_back(
 			    make_unique<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
 			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap->blocks.back()->block);
-			auto new_heap_ptr = new_heap_handle->Ptr();
+			auto new_heap_ptr = new_heap_handle.Ptr();
 			for (auto &ptr_and_size : ptrs_and_sizes) {
 				memcpy(new_heap_ptr, ptr_and_size.first, ptr_and_size.second);
 				new_heap_ptr += ptr_and_size.second;
@@ -965,7 +969,7 @@ void JoinHashTable::UnswizzleBlocks() {
 			auto heap_handle = buffer_manager.Pin(heap_blocks[block_idx]->block);
 
 			// Unswizzle and move
-			RowOperations::UnswizzlePointers(layout, block_handle->Ptr(), heap_handle->Ptr(), data_block->count);
+			RowOperations::UnswizzlePointers(layout, block_handle.Ptr(), heap_handle.Ptr(), data_block->count);
 			string_heap->blocks.push_back(move(heap_blocks[block_idx]));
 			string_heap->pinned_blocks.push_back(move(heap_handle));
 		}
@@ -1215,12 +1219,12 @@ void JoinHashTable::ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx
 		auto &block = *block_collection->blocks[block_position];
 		auto next = MinValue<idx_t>(block.count, count - done);
 		auto block_handle = buffer_manager.Pin(block.block);
-		auto row_ptr = block_handle->Ptr() + position * layout.GetRowWidth();
+		auto row_ptr = block_handle.Ptr() + position * layout.GetRowWidth();
 		if (!layout.AllConstant()) {
 			// Unswizzle if necessary
 			auto &heap_block = *string_heap->blocks[block_position];
 			auto heap_handle = buffer_manager.Pin(heap_block.block);
-			RowOperations::UnswizzlePointers(layout, row_ptr, heap_handle->Ptr(), next);
+			RowOperations::UnswizzlePointers(layout, row_ptr, heap_handle.Ptr(), next);
 		}
 		// Set up pointers
 		for (idx_t i = done; i < done + next; i++) {

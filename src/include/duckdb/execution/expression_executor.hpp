@@ -14,15 +14,25 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+class Allocator;
 class ExecutionContext;
+
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
 public:
-	DUCKDB_API ExpressionExecutor();
-	DUCKDB_API explicit ExpressionExecutor(const Expression *expression);
-	DUCKDB_API explicit ExpressionExecutor(const Expression &expression);
-	DUCKDB_API explicit ExpressionExecutor(const vector<unique_ptr<Expression>> &expressions);
+	DUCKDB_API ExpressionExecutor(Allocator &allocator);
+	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const Expression *expression);
+	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const Expression &expression);
+	DUCKDB_API explicit ExpressionExecutor(Allocator &allocator, const vector<unique_ptr<Expression>> &expressions);
 
+	Allocator &allocator;
+	//! The expressions of the executor
+	vector<const Expression *> expressions;
+	//! The data chunk of the current physical operator, used to resolve
+	//! column references and determines the output cardinality
+	DataChunk *chunk = nullptr;
+
+public:
 	//! Add an expression to the set of to-be-executed expressions of the executor
 	DUCKDB_API void AddExpression(const Expression &expr);
 
@@ -63,12 +73,6 @@ public:
 	}
 
 	DUCKDB_API vector<unique_ptr<ExpressionExecutorState>> &GetStates();
-
-	//! The expressions of the executor
-	vector<const Expression *> expressions;
-	//! The data chunk of the current physical operator, used to resolve
-	//! column references and determines the output cardinality
-	DataChunk *chunk = nullptr;
 
 protected:
 	void Initialize(const Expression &expr, ExpressionExecutorState &state);

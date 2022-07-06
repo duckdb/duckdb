@@ -69,14 +69,14 @@ public:
 	//! The blocks holding the main data
 	vector<unique_ptr<RowDataBlock>> blocks;
 	//! The blocks that this collection currently has pinned
-	vector<unique_ptr<BufferHandle>> pinned_blocks;
+	vector<BufferHandle> pinned_blocks;
 
 public:
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
 	RowDataBlock &CreateBlock();
-	vector<unique_ptr<BufferHandle>> Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[],
-	                                       const SelectionVector *sel = FlatVector::IncrementalSelectionVector());
+	vector<BufferHandle> Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[],
+	                           const SelectionVector *sel = FlatVector::IncrementalSelectionVector());
 
 	void Merge(RowDataCollection &other);
 	unique_ptr<RowDataCollection> CopyEmpty();

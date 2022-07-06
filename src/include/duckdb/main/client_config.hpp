@@ -27,11 +27,15 @@ struct ClientConfig {
 	bool enable_profiler = false;
 	//! If detailed query profiling is enabled
 	bool enable_detailed_profiling = false;
-	//! The format to automatically print query profiling information in (default: disabled)
-	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::NONE;
+	//! The format to print query profiling information in (default: query_tree), if enabled.
+	ProfilerPrintFormat profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	//! The file to save query profiling information to, instead of printing it to the console
 	//! (empty = print to console)
 	string profiler_save_location;
+
+	//! Allows suppressing profiler output, even if enabled. We turn on the profiler on all test runs but don't want
+	//! to output anything
+	bool emit_profiler_output = true;
 
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;

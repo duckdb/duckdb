@@ -1301,7 +1301,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	return string_buffer.EmptyString(len);
 }
 
-void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
+void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();

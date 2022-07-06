@@ -21,7 +21,7 @@ static unique_ptr<FunctionData> SummaryFunctionBind(ClientContext &context, Tabl
 	return make_unique<TableFunctionData>();
 }
 
-static OperatorResultType SummaryFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &input,
+static OperatorResultType SummaryFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                           DataChunk &output) {
 	output.SetCardinality(input.size());
 

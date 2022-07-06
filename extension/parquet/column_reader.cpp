@@ -687,7 +687,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), read_cache(ListType::GetChildType(Type())),
+      child_column_reader(move(child_column_reader_p)), read_cache(reader.allocator, ListType::GetChildType(Type())),
       read_vector(read_cache), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -698,16 +698,26 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_filter.set();
 }
 
-// ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-//                             Vector &result_out)
 void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
-	parquet_filter_t filter;
 	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	Vector result_out(Type());
-	Read(num_values, filter, define_out.get(), repeat_out.get(), result_out);
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while (remaining) {
+		Vector result_out(Type());
+		parquet_filter_t filter;
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read += Read(to_read, filter, define_out.get(), repeat_out.get(), result_out);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
+		throw InternalException("Not all skips done!");
+	}
 }
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
@@ -717,7 +727,7 @@ CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, Logi
                    child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
       child_reader(move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
-	intermediate_chunk.Initialize(intermediate_types);
+	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
 unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {

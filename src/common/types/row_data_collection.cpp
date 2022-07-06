@@ -47,9 +47,9 @@ RowDataBlock &RowDataCollection::CreateBlock() {
 	return *blocks.back();
 }
 
-vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[],
-                                                          idx_t entry_sizes[], const SelectionVector *sel) {
-	vector<unique_ptr<BufferHandle>> handles;
+vector<BufferHandle> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[],
+                                              const SelectionVector *sel) {
+	vector<BufferHandle> handles;
 	vector<BlockAppendEntry> append_entries;
 
 	// first allocate space of where to serialize the keys and payload columns
@@ -65,7 +65,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 				// last block has space: pin the buffer of this block
 				auto handle = buffer_manager.Pin(last_block.block);
 				// now append to the block
-				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining, entry_sizes);
+				idx_t append_count = AppendToBlock(last_block, handle, append_entries, remaining, entry_sizes);
 				remaining -= append_count;
 				handles.push_back(move(handle));
 			}
@@ -78,7 +78,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			// offset the entry sizes array if we have added entries already
 			idx_t *offset_entry_sizes = entry_sizes ? entry_sizes + added_count - remaining : nullptr;
 
-			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
+			idx_t append_count = AppendToBlock(new_block, handle, append_entries, remaining, offset_entry_sizes);
 			D_ASSERT(new_block.count > 0);
 			remaining -= append_count;
 

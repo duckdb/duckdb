@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 
@@ -114,13 +115,13 @@ public:
 	idx_t block_idx;
 	idx_t entry_idx;
 
-	unique_ptr<BufferHandle> radix_handle = nullptr;
+	BufferHandle radix_handle;
 
-	unique_ptr<BufferHandle> blob_sorting_data_handle = nullptr;
-	unique_ptr<BufferHandle> blob_sorting_heap_handle = nullptr;
+	BufferHandle blob_sorting_data_handle;
+	BufferHandle blob_sorting_heap_handle;
 
-	unique_ptr<BufferHandle> payload_data_handle = nullptr;
-	unique_ptr<BufferHandle> payload_heap_handle = nullptr;
+	BufferHandle payload_data_handle;
+	BufferHandle payload_heap_handle;
 };
 
 //! Used to scan the data into DataChunks after sorting

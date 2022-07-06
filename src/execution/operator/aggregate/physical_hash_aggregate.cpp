@@ -238,9 +238,9 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public GlobalSourceState {
 public:
-	explicit PhysicalHashAggregateState(const PhysicalHashAggregate &op) : scan_index(0) {
+	explicit PhysicalHashAggregateState(ClientContext &context, const PhysicalHashAggregate &op) : scan_index(0) {
 		for (auto &rt : op.radix_tables) {
-			radix_states.push_back(rt.GetGlobalSourceState());
+			radix_states.push_back(rt.GetGlobalSourceState(context));
 		}
 	}
 
@@ -250,7 +250,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalHashAggregateState>(*this);
+	return make_unique<PhysicalHashAggregateState>(context, *this);
 }
 
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

@@ -24,9 +24,9 @@ using counts_t = std::vector<size_t>;
 //	Global sink state
 class WindowGlobalState : public GlobalSinkState {
 public:
-	WindowGlobalState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)),
-	      mode(DBConfig::GetConfig(context).window_mode) {
+	WindowGlobalState(Allocator &allocator, const PhysicalWindow &op_p, ClientContext &context)
+	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), chunks(allocator),
+	      over_collection(allocator), hash_collection(allocator), mode(DBConfig::GetConfig(context).window_mode) {
 	}
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
@@ -41,8 +41,9 @@ public:
 //	Per-thread sink state
 class WindowLocalState : public LocalSinkState {
 public:
-	explicit WindowLocalState(const PhysicalWindow &op_p, const unsigned partition_bits = 10)
-	    : op(op_p), partition_count(size_t(1) << partition_bits) {
+	explicit WindowLocalState(Allocator &allocator, const PhysicalWindow &op_p, const unsigned partition_bits = 10)
+	    : op(op_p), chunks(allocator), over_collection(allocator), hash_collection(allocator),
+	      partition_count(size_t(1) << partition_bits) {
 	}
 
 	const PhysicalWindow &op;
@@ -56,8 +57,9 @@ public:
 // Per-thread read state
 class WindowOperatorState : public LocalSourceState {
 public:
-	WindowOperatorState(const PhysicalWindow &op, ExecutionContext &context)
-	    : buffer_manager(BufferManager::GetBufferManager(context.client)) {
+	WindowOperatorState(Allocator &allocator, const PhysicalWindow &op, ExecutionContext &context)
+	    : buffer_manager(BufferManager::GetBufferManager(context.client)), chunks(allocator),
+	      window_results(allocator) {
 		auto &gstate = (WindowGlobalState &)*op.sink_state;
 		// initialize thread-local operator state
 		partitions = gstate.counts.size();
@@ -65,6 +67,7 @@ public:
 		position = 0;
 	}
 
+	BufferManager &buffer_manager;
 	//! The number of partitions to process (0 if there is no partitioning)
 	size_t partitions;
 	//! The output read position.
@@ -76,7 +79,6 @@ public:
 	//! The read cursor
 	idx_t position;
 
-	BufferManager &buffer_manager;
 	unique_ptr<GlobalSortState> global_sort_state;
 };
 
@@ -286,8 +288,9 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 		return;
 	}
 
+	auto &allocator = input.GetAllocator();
 	vector<LogicalType> types;
-	ExpressionExecutor executor;
+	ExpressionExecutor executor(allocator);
 	for (idx_t expr_idx = 0; expr_idx < expr_count; ++expr_idx) {
 		types.push_back(exprs[expr_idx]->return_type);
 		executor.AddExpression(*exprs[expr_idx]);
@@ -295,7 +298,7 @@ static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCo
 
 	for (idx_t i = 0; i < input.ChunkCount(); i++) {
 		DataChunk chunk;
-		chunk.Initialize(types);
+		chunk.Initialize(allocator, types);
 
 		executor.Execute(input.GetChunk(i), chunk);
 
@@ -319,6 +322,7 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 	if (input.Count() == 0) {
 		return;
 	}
+	auto &allocator = input.GetAllocator();
 
 	vector<BoundOrderByNode> orders;
 	// we sort by both 1) partition by expression list and 2) order by expressions
@@ -349,8 +353,8 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 	DataChunk payload_partition;
 	if (hashes) {
 		sel.Initialize(STANDARD_VECTOR_SIZE);
-		over_partition.Initialize(over.Types());
-		payload_partition.Initialize(payload_types);
+		over_partition.Initialize(allocator, over.Types());
+		payload_partition.Initialize(allocator, payload_types);
 	}
 
 	// initialize row layout for sorting
@@ -431,12 +435,13 @@ static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &inp
 
 	auto payload_types = input_types;
 	payload_types.insert(payload_types.end(), over_types.begin(), over_types.end());
+	auto &allocator = input.GetAllocator();
 
 	// scan the sorted row data
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	for (;;) {
 		DataChunk payload_chunk;
-		payload_chunk.Initialize(payload_types);
+		payload_chunk.Initialize(allocator, payload_types);
 		payload_chunk.SetCardinality(0);
 		scanner.Scan(payload_chunk);
 		if (payload_chunk.size() == 0) {
@@ -453,9 +458,10 @@ static void ScanSortedPartition(WindowOperatorState &state, ChunkCollection &inp
 	}
 }
 
-static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_chunk, const idx_t partition_cols) {
+static void HashChunk(Allocator &allocator, counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_chunk,
+                      const idx_t partition_cols) {
 	const vector<LogicalType> hash_types(1, LogicalType::HASH);
-	hash_chunk.Initialize(hash_types);
+	hash_chunk.Initialize(allocator, hash_types);
 	hash_chunk.SetCardinality(sort_chunk);
 	auto &hash_vector = hash_chunk.data[0];
 
@@ -478,9 +484,10 @@ static void HashChunk(counts_t &counts, DataChunk &hash_chunk, DataChunk &sort_c
 	}
 }
 
-static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &input_chunk, DataChunk &over_chunk) {
+static void MaterializeOverForWindow(Allocator &allocator, BoundWindowExpression *wexpr, DataChunk &input_chunk,
+                                     DataChunk &over_chunk) {
 	vector<LogicalType> over_types;
-	ExpressionExecutor executor;
+	ExpressionExecutor executor(allocator);
 
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
@@ -497,7 +504,7 @@ static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &in
 
 	D_ASSERT(!over_types.empty());
 
-	over_chunk.Initialize(over_types);
+	over_chunk.Initialize(allocator, over_types);
 	executor.Execute(input_chunk, over_chunk);
 
 	over_chunk.Verify();
@@ -878,9 +885,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
                                     const ValidityMask &order_mask, WindowAggregationMode mode) {
 
 	// TODO we could evaluate those expressions in parallel
-
+	auto &allocator = input.GetAllocator();
 	// evaluate inner expressions of window functions, could be more complex
-	ChunkCollection payload_collection;
+	ChunkCollection payload_collection(allocator);
 	vector<Expression *> exprs;
 	for (auto &child : wexpr->children) {
 		exprs.push_back(child.get());
@@ -888,8 +895,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	// TODO: child may be a scalar, don't need to materialize the whole collection then
 	MaterializeExpressions(exprs.data(), exprs.size(), input, payload_collection);
 
-	ChunkCollection leadlag_offset_collection;
-	ChunkCollection leadlag_default_collection;
+	ChunkCollection leadlag_offset_collection(allocator);
+	ChunkCollection leadlag_default_collection(allocator);
 	if (wexpr->type == ExpressionType::WINDOW_LEAD || wexpr->type == ExpressionType::WINDOW_LAG) {
 		if (wexpr->offset_expr) {
 			MaterializeExpression(wexpr->offset_expr.get(), input, leadlag_offset_collection,
@@ -908,7 +915,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		// 	Start with all invalid and set the ones that pass
 		filter_bits.resize(ValidityMask::ValidityMaskSize(input.Count()), 0);
 		filter_mask.Initialize(filter_bits.data());
-		ExpressionExecutor filter_execution(*wexpr->filter_expr);
+		ExpressionExecutor filter_execution(allocator, *wexpr->filter_expr);
 		SelectionVector true_sel(STANDARD_VECTOR_SIZE);
 		idx_t base_idx = 0;
 		for (auto &chunk : input.Chunks()) {
@@ -921,12 +928,12 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	}
 
 	// evaluate boundaries if present. Parser has checked boundary types.
-	ChunkCollection boundary_start_collection;
+	ChunkCollection boundary_start_collection(allocator);
 	if (wexpr->start_expr) {
 		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, wexpr->start_expr->IsScalar());
 	}
 
-	ChunkCollection boundary_end_collection;
+	ChunkCollection boundary_end_collection(allocator);
 	if (wexpr->end_expr) {
 		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
@@ -982,7 +989,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	// this is the main loop, go through all sorted rows and compute window function result
 	const vector<LogicalType> output_types(1, wexpr->return_type);
 	DataChunk output_chunk;
-	output_chunk.Initialize(output_types);
+	output_chunk.Initialize(allocator, output_types);
 	for (idx_t row_idx = 0; row_idx < input.Count(); row_idx++) {
 		// Grow the chunk if necessary.
 		const auto output_offset = row_idx % STANDARD_VECTOR_SIZE;
@@ -1189,7 +1196,7 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 
 	//	Compute the functions columnwise
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
-		ChunkCollection output;
+		ChunkCollection output(input.GetAllocator());
 		ComputeWindowExpression(window_exprs[expr_idx], input, output, over, partition_mask, order_mask, mode);
 		window_results.Fuse(output);
 	}
@@ -1198,7 +1205,8 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
+static void GeneratePartition(Allocator &allocator, WindowOperatorState &state, WindowGlobalState &gstate,
+                              const idx_t hash_bin) {
 	auto &op = (PhysicalWindow &)gstate.op;
 	WindowExpressions window_exprs;
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
@@ -1225,7 +1233,7 @@ static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gst
 
 	if (gstate.counts.empty() && hash_bin == 0) {
 		ChunkCollection &input = gstate.chunks;
-		ChunkCollection output;
+		ChunkCollection output(allocator);
 		ChunkCollection &over = gstate.over_collection;
 
 		const auto has_sorting = over_expr->partitions.size() + over_expr->orders.size();
@@ -1248,9 +1256,9 @@ static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gst
 		                           hash_bin, hash_mask);
 
 		// Scan the sorted data into new Collections
-		ChunkCollection input;
-		ChunkCollection output;
-		ChunkCollection over;
+		ChunkCollection input(allocator);
+		ChunkCollection output(allocator);
+		ChunkCollection over(allocator);
 		ScanSortedPartition(state, input, input_types, over, over_types);
 
 		ComputeWindowExpressions(window_exprs, input, output, over, gstate.mode);
@@ -1294,10 +1302,11 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &
 	const auto over_idx = 0;
 	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
 
+	auto &allocator = Allocator::Get(context.client);
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 	if (sort_col_count > 0) {
 		DataChunk over_chunk;
-		MaterializeOverForWindow(over_expr, input, over_chunk);
+		MaterializeOverForWindow(allocator, over_expr, input, over_chunk);
 
 		if (!over_expr->partitions.empty()) {
 			if (lstate.counts.empty()) {
@@ -1305,7 +1314,7 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &
 			}
 
 			DataChunk hash_chunk;
-			HashChunk(lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
+			HashChunk(allocator, lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
 			lstate.hash_collection.Append(hash_chunk);
 			D_ASSERT(lstate.chunks.Count() == lstate.hash_collection.Count());
 		}
@@ -1337,11 +1346,11 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<WindowLocalState>(*this);
+	return make_unique<WindowLocalState>(Allocator::Get(context.client), *this);
 }
 
 unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<WindowGlobalState>(*this, context);
+	return make_unique<WindowGlobalState>(Allocator::Get(context), *this, context);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1378,7 +1387,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_unique<WindowOperatorState>(*this, context);
+	return make_unique<WindowOperatorState>(Allocator::Get(context.client), *this, context);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
@@ -1399,7 +1408,7 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 					break;
 				}
 			}
-			GeneratePartition(state, gstate, hash_bin);
+			GeneratePartition(Allocator::Get(context.client), state, gstate, hash_bin);
 		}
 		Scan(state, chunk);
 		if (chunk.size() != 0) {

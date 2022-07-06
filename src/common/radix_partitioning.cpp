@@ -152,7 +152,7 @@ unique_ptr<idx_t[]> RadixPartitioning::ReduceHistogram(const idx_t histogram_fro
 
 template <idx_t radix_bits>
 static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowDataCollection>> &partition_collections,
-                           RowDataBlock *partition_blocks[], vector<unique_ptr<BufferHandle>> &partition_handles,
+                           RowDataBlock *partition_blocks[], vector<BufferHandle> &partition_handles,
                            data_ptr_t partition_ptrs[], idx_t block_capacity, idx_t row_width) {
 	using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 
@@ -162,21 +162,21 @@ static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowD
 		partition_collections.push_back(make_unique<RowDataCollection>(buffer_manager, block_capacity, row_width));
 		partition_blocks[i] = &partition_collections[i]->CreateBlock();
 		partition_handles.push_back(buffer_manager.Pin(partition_blocks[i]->block));
-		partition_ptrs[i] = partition_handles[i]->Ptr();
+		partition_ptrs[i] = partition_handles[i].Ptr();
 	}
 }
 
 static inline void PinAndSet(BufferManager &buffer_manager, RowDataBlock &block, RowDataBlock **block_ptr,
-                             unique_ptr<BufferHandle> &handle, data_ptr_t &ptr) {
+                             BufferHandle &handle, data_ptr_t &ptr) {
 	*block_ptr = &block;
 	handle = buffer_manager.Pin(block.block);
-	ptr = handle->Ptr();
+	ptr = handle.Ptr();
 }
 
 static inline void PartitionHeap(BufferManager &buffer_manager, const RowLayout &layout, RowDataBlock &data_block,
                                  const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle,
                                  data_ptr_t &heap_ptr) {
-	D_ASSERT(heap_block.block->BlockId() == heap_handle.handle->BlockId());
+	D_ASSERT(heap_block.block->BlockId() == heap_handle.GetBlockId());
 	const auto count = data_block.count - heap_block.count;
 	if (count == 0) {
 		return;
@@ -221,14 +221,14 @@ struct PartitionFunctor {
 
 		// Fixed-size data
 		RowDataBlock *partition_data_blocks[CONSTANTS::NUM_PARTITIONS];
-		vector<unique_ptr<BufferHandle>> partition_data_handles;
+		vector<BufferHandle> partition_data_handles;
 		data_ptr_t partition_data_ptrs[CONSTANTS::NUM_PARTITIONS];
 		InitPartitions<radix_bits>(buffer_manager, partition_block_collections, partition_data_blocks,
 		                           partition_data_handles, partition_data_ptrs, block_capacity, row_width);
 
 		// Variable-size data
 		RowDataBlock *partition_heap_blocks[CONSTANTS::NUM_PARTITIONS];
-		vector<unique_ptr<BufferHandle>> partition_heap_handles;
+		vector<BufferHandle> partition_heap_handles;
 		data_ptr_t partition_heap_ptrs[CONSTANTS::NUM_PARTITIONS];
 		if (has_heap) {
 			InitPartitions<radix_bits>(buffer_manager, partition_string_heaps, partition_heap_blocks,
@@ -254,13 +254,13 @@ struct PartitionFunctor {
 		auto &heap_blocks = string_heap.blocks;
 		for (idx_t block_idx = 0; block_idx < data_blocks.size(); block_idx++) {
 			RowDataBlock *data_block;
-			unique_ptr<BufferHandle> data_handle;
+			BufferHandle data_handle;
 			data_ptr_t data_ptr;
 			PinAndSet(buffer_manager, *data_blocks[block_idx], &data_block, data_handle, data_ptr);
 
 			// Pin the heap block (if necessary)
 			RowDataBlock *heap_block;
-			unique_ptr<BufferHandle> heap_handle;
+			BufferHandle heap_handle;
 			data_ptr_t heap_ptr;
 			if (has_heap) {
 				PinAndSet(buffer_manager, *heap_blocks[block_idx], &heap_block, heap_handle, heap_ptr);
@@ -298,7 +298,7 @@ struct PartitionFunctor {
 								auto &p_heap_block = *partition_heap_blocks[idx];
 								partition_data_blocks[idx]->count = block_counts[idx];
 								PartitionHeap(buffer_manager, layout, p_data_block, partition_data_ptrs[idx],
-								              p_heap_block, *partition_heap_handles[idx], partition_heap_ptrs[idx]);
+								              p_heap_block, partition_heap_handles[idx], partition_heap_ptrs[idx]);
 
 								// Update counts and create new blocks to write to
 								p_heap_block.count = block_counts[idx];
@@ -350,7 +350,7 @@ struct PartitionFunctor {
 				for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
 					partition_data_blocks[idx]->count = block_counts[idx];
 					PartitionHeap(buffer_manager, layout, *partition_data_blocks[idx], partition_data_ptrs[idx],
-					              *partition_heap_blocks[idx], *partition_heap_handles[idx], partition_heap_ptrs[idx]);
+					              *partition_heap_blocks[idx], partition_heap_handles[idx], partition_heap_ptrs[idx]);
 				}
 			}
 
