@@ -549,7 +549,7 @@ static string get_full_s3_url(S3AuthParams &auth_params, ParsedS3Url parsed_url)
 	string full_url = parsed_url.http_proto + parsed_url.host;
 
 	// Encode + as %2B and plus as space for S3 urls
-	for(auto& c: parsed_url.path) {
+	for (auto &c : parsed_url.path) {
 		if (c == '+') {
 			full_url += "%2B";
 		} else if (c == ' ') {

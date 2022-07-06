@@ -46,7 +46,7 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 	path_out = "";
 
 	// Encode + as %20
-	for (auto& c: url.substr(slash_pos)) {
+	for (auto &c : url.substr(slash_pos)) {
 		if (c == '+') {
 			path_out += "%20";
 		} else {
