@@ -24,7 +24,6 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
     : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
-	parameter_types = nullptr;
 	if (parent) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -33,7 +32,6 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
 			parameters = parent->parameters;
-			parameter_types = parent->parameter_types;
 		}
 	}
 }
@@ -372,22 +370,6 @@ const unordered_set<string> &Binder::GetTableNames() {
 		return parent->GetTableNames();
 	}
 	return table_names;
-}
-
-void Binder::RemoveParameters(vector<unique_ptr<Expression>> &expressions) {
-	for (auto &expr : expressions) {
-		if (!expr->HasParameter()) {
-			continue;
-		}
-		ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-			for (auto param_it = parameters->begin(); param_it != parameters->end(); param_it++) {
-				if (expr->Equals(*param_it)) {
-					parameters->erase(param_it);
-					break;
-				}
-			}
-		});
-	}
 }
 
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {

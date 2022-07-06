@@ -25,12 +25,11 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.n_param;
 
-	vector<BoundParameterExpression *> bound_parameters;
+	BoundParameterMap bound_parameters(parameter_types);
 
 	// first bind the tables and columns to the catalog
 	profiler.StartPhase("binder");
 	binder->parameters = &bound_parameters;
-	binder->parameter_types = &parameter_types;
 	auto bound_statement = binder->Bind(statement);
 	profiler.EndPhase();
 
@@ -42,26 +41,16 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	properties.bound_all_parameters = true;
 
 	// set up a map of parameter number -> value entries
-	for (auto &expr : bound_parameters) {
+	for (auto &kv : bound_parameters.parameters) {
+		auto &parameter_data = kv.second;
 		// check if the type of the parameter could be resolved
-		if (expr->return_type.id() == LogicalTypeId::INVALID || expr->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (parameter_data->return_type.id() == LogicalTypeId::INVALID ||
+		    parameter_data->return_type.id() == LogicalTypeId::UNKNOWN) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
-		auto value = make_unique<Value>(expr->return_type);
-		expr->value = value.get();
-		// check if the parameter number has been used before
-		auto entry = value_map.find(expr->parameter_nr);
-		if (entry == value_map.end()) {
-			// not used before, create vector
-			value_map[expr->parameter_nr] = vector<unique_ptr<Value>>();
-		} else if (entry->second.back()->type() != value->type()) {
-			// used before, but types are inconsistent
-			throw BinderException(
-			    "Inconsistent types found for parameter with index %llu, current type %s, new type %s",
-			    expr->parameter_nr, entry->second.back()->type().ToString(), value->type().ToString());
-		}
-		value_map[expr->parameter_nr].push_back(move(value));
+		parameter_data->value = Value(parameter_data->return_type);
+		value_map[kv.first] = parameter_data;
 	}
 }
 

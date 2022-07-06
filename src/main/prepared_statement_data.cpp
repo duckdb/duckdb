@@ -25,15 +25,13 @@ void PreparedStatementData::Bind(vector<Value> values) {
 		if (i >= values.size()) {
 			throw BinderException("Could not find parameter with index %llu", i + 1);
 		}
-		D_ASSERT(!it.second.empty());
-		if (!values[i].TryCastAs(it.second[0]->type())) {
+		D_ASSERT(it.second);
+		if (!values[i].TryCastAs(it.second->return_type)) {
 			throw BinderException(
 			    "Type mismatch for binding parameter with index %llu, expected type %s but got type %s", i + 1,
-			    it.second[0]->type().ToString().c_str(), values[i].type().ToString().c_str());
+			    it.second->return_type.ToString().c_str(), values[i].type().ToString().c_str());
 		}
-		for (auto &target : it.second) {
-			*target = values[i];
-		}
+		it.second->value = values[i];
 	}
 }
 
@@ -42,8 +40,7 @@ LogicalType PreparedStatementData::GetType(idx_t param_idx) {
 	if (it == value_map.end()) {
 		throw BinderException("Could not find parameter with index %llu", param_idx);
 	}
-	D_ASSERT(!it->second.empty());
-	return it->second[0]->type();
+	return it->second->return_type;
 }
 
 } // namespace duckdb

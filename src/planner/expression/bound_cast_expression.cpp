@@ -9,25 +9,35 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
       try_cast(try_cast_p) {
 }
 
+unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                 bool try_cast) {
+	auto &expr_type = expr->return_type;
+	if (target_type.id() == LogicalTypeId::LIST && expr_type.id() == LogicalTypeId::LIST) {
+		auto &target_list = ListType::GetChildType(target_type);
+		auto &expr_list = ListType::GetChildType(expr_type);
+		if (target_list.id() == LogicalTypeId::ANY || expr_list == target_list) {
+			return expr;
+		}
+	}
+	return make_unique<BoundCastExpression>(move(expr), target_type, try_cast);
+}
+
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                           bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
-		parameter.return_type = target_type;
+		if (parameter.parameter_data->return_type.id() == LogicalTypeId::INVALID) {
+			parameter.parameter_data->return_type = target_type;
+			parameter.return_type = target_type;
+		} else {
+			return AddCastExpressionInternal(move(expr), target_type, try_cast);
+		}
 	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
 		auto &def = (BoundDefaultExpression &)*expr;
 		def.return_type = target_type;
 	} else if (expr->return_type != target_type) {
-		auto &expr_type = expr->return_type;
-		if (target_type.id() == LogicalTypeId::LIST && expr_type.id() == LogicalTypeId::LIST) {
-			auto &target_list = ListType::GetChildType(target_type);
-			auto &expr_list = ListType::GetChildType(expr_type);
-			if (target_list.id() == LogicalTypeId::ANY || expr_list == target_list) {
-				return expr;
-			}
-		}
-		return make_unique<BoundCastExpression>(move(expr), target_type, try_cast);
+		return AddCastExpressionInternal(move(expr), target_type, try_cast);
 	}
 	return expr;
 }

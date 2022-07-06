@@ -11,6 +11,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -27,7 +28,7 @@ public:
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
-	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
+	bound_parameter_map_t value_map;
 	vector<LogicalType> parameter_types;
 
 	shared_ptr<Binder> binder;

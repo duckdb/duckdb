@@ -7,7 +7,7 @@ namespace duckdb {
 BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER,
                  LogicalType(LogicalTypeId::UNKNOWN)),
-      parameter_nr(parameter_nr), value(nullptr) {
+      parameter_nr(parameter_nr) {
 }
 
 bool BoundParameterExpression::IsScalar() const {
@@ -40,7 +40,7 @@ hash_t BoundParameterExpression::Hash() const {
 
 unique_ptr<Expression> BoundParameterExpression::Copy() {
 	auto result = make_unique<BoundParameterExpression>(parameter_nr);
-	result->value = value;
+	result->parameter_data = parameter_data;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
 	return move(result);

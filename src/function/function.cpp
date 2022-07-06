@@ -490,9 +490,6 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
 	if (bound_function.null_handling == FunctionNullHandling::NULL_IN_NULL_OUT) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
-				if (binder) {
-					binder->RemoveParameters(children);
-				}
 				return make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 			}
 		}
