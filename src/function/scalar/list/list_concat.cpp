@@ -79,9 +79,7 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 
 	auto &lhs = arguments[0]->return_type;
 	auto &rhs = arguments[1]->return_type;
-	if (lhs.id() == LogicalTypeId::SQLNULL && rhs.id() == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalType::SQLNULL;
-	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
+	if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
 		// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
 		bound_function.arguments[0] = lhs;
 		bound_function.arguments[1] = rhs;
@@ -122,9 +120,11 @@ static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, Functi
 
 ScalarFunction ListConcatFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
-	                      LogicalType::LIST(LogicalType::ANY), ListConcatFunction, false, false, ListConcatBind,
-	                      nullptr, ListConcatStats);
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
+	                          LogicalType::LIST(LogicalType::ANY), ListConcatFunction, false, false, ListConcatBind,
+	                          nullptr, ListConcatStats);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 void ListConcatFun::RegisterFunction(BuiltinFunctions &set) {

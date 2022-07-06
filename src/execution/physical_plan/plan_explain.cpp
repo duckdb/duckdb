@@ -36,10 +36,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	}
 
 	// create a ChunkCollection from the output
-	auto collection = make_unique<ChunkCollection>();
+	auto &allocator = Allocator::Get(context);
+	auto collection = make_unique<ChunkCollection>(allocator);
 
 	DataChunk chunk;
-	chunk.Initialize(op.types);
+	chunk.Initialize(allocator, op.types);
 	for (idx_t i = 0; i < keys.size(); i++) {
 		chunk.SetValue(0, chunk.size(), Value(keys[i]));
 		chunk.SetValue(1, chunk.size(), Value(values[i]));

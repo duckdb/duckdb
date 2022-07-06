@@ -16,6 +16,9 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
+	config.reset();
+	con.reset();
+	db.reset();
 	for (auto &loaded_path : loaded_databases) {
 		if (loaded_path.empty()) {
 			continue;

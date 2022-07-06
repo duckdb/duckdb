@@ -7,6 +7,7 @@ add_subdirectory(table)
 add_library_unity(
   duckdb_storage
   OBJECT
+  arena_allocator.cpp
   buffer_manager.cpp
   checkpoint_manager.cpp
   block.cpp

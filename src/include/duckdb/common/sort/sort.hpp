@@ -81,7 +81,7 @@ public:
 
 	//! Pinned heap data (if sorting in memory)
 	vector<RowDataBlock> heap_blocks;
-	vector<unique_ptr<BufferHandle>> pinned_blocks;
+	vector<BufferHandle> pinned_blocks;
 
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t block_capacity;

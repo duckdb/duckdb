@@ -13,7 +13,6 @@ namespace duckdb {
 ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
          IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id, idx_t block_offset)
     : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type), db(db) {
-	expression_result.Initialize(logical_types);
 	if (block_id != DConstants::INVALID_INDEX) {
 		tree = Node::Deserialize(*this, block_id, block_offset);
 	} else {
@@ -263,7 +262,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
@@ -372,7 +371,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 //===--------------------------------------------------------------------===//
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	DataChunk expression;
-	expression.Initialize(logical_types);
+	expression.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// first resolve the expressions
 	ExecuteExpressions(input, expression);
@@ -870,7 +869,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	}
 
 	DataChunk expression_chunk;
-	expression_chunk.Initialize(logical_types);
+	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// unique index, check
 	lock_guard<mutex> l(lock);

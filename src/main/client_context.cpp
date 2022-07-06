@@ -772,6 +772,7 @@ void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &config = ClientConfig::GetConfig(*this);
 	config.enable_profiler = true;
+	config.emit_profiler_output = true;
 }
 
 void ClientContext::DisableProfiling() {

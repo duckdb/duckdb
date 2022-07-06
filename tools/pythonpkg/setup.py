@@ -287,7 +287,7 @@ setup(
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
-    tests_require=['pytest'],
+    tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers = [
         'Topic :: Database :: Database Engines/Servers',
         'Intended Audience :: Developers',

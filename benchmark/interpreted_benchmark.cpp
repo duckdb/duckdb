@@ -42,7 +42,6 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	explicit InterpretedBenchmarkState(string path)
 	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
 	      con(db) {
-		con.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(res->success);

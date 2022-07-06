@@ -190,7 +190,7 @@ Allocator &Allocator::Get(ClientContext &context) {
 }
 
 Allocator &Allocator::Get(DatabaseInstance &db) {
-	return db.config.allocator;
+	return *db.config.allocator;
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {
@@ -223,6 +223,9 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.options.load_extensions = new_config.options.load_extensions;
 	config.options.force_compression = new_config.options.force_compression;
 	config.allocator = move(new_config.allocator);
+	if (!config.allocator) {
+		config.allocator = make_unique<Allocator>();
+	}
 	config.options.checkpoint_wal_size = new_config.options.checkpoint_wal_size;
 	config.options.use_direct_io = new_config.options.use_direct_io;
 	config.options.temporary_directory = new_config.options.temporary_directory;

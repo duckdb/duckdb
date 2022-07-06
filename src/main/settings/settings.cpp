@@ -288,6 +288,7 @@ void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input
 		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
 	}
 	config.enable_profiler = true;
+	config.emit_profiler_output = true;
 }
 
 Value EnableProfilingSetting::GetSetting(ClientContext &context) {
@@ -296,8 +297,6 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 		return Value();
 	}
 	switch (config.profiler_print_format) {
-	case ProfilerPrintFormat::NONE:
-		return Value("none");
 	case ProfilerPrintFormat::JSON:
 		return Value("json");
 	case ProfilerPrintFormat::QUERY_TREE:
@@ -521,9 +520,11 @@ void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) 
 	if (parameter == "standard") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = false;
+		config.emit_profiler_output = true;
 	} else if (parameter == "detailed") {
 		config.enable_profiler = true;
 		config.enable_detailed_profiling = true;
+		config.emit_profiler_output = true;
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
 	}

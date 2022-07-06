@@ -257,7 +257,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		buffer_manager.ReAllocate(block, requested_size);
 		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
 		// unpin and make sure it's evicted
-		handle.reset();
+		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
 		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
 		// re-pin
@@ -271,7 +271,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		buffer_manager.ReAllocate(block, requested_size);
 		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
 		// unpin and make sure it's evicted
-		handle.reset();
+		handle.Destroy();
 		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
 		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
 		// re-pin

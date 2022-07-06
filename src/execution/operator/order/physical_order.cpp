@@ -30,7 +30,15 @@ public:
 
 class OrderLocalState : public LocalSinkState {
 public:
-	OrderLocalState() {
+	OrderLocalState(ExecutionContext &context, const vector<BoundOrderByNode> &orders)
+	    : executor(Allocator::Get(context.client)) {
+		// Initialize order clause expression executor and DataChunk
+		vector<LogicalType> types;
+		for (auto &order : orders) {
+			types.push_back(order.expression->return_type);
+			executor.AddExpression(*order.expression);
+		}
+		sort.Initialize(Allocator::Get(context.client), types);
 	}
 
 public:
@@ -58,14 +66,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 }
 
 unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
-	auto result = make_unique<OrderLocalState>();
-	// Initialize order clause expression executor and DataChunk
-	vector<LogicalType> types;
-	for (auto &order : orders) {
-		types.push_back(order.expression->return_type);
-		result->executor.AddExpression(*order.expression);
-	}
-	result->sort.Initialize(types);
+	auto result = make_unique<OrderLocalState>(context, orders);
 	return move(result);
 }
 

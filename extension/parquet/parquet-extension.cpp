@@ -249,7 +249,7 @@ public:
 	}
 
 	static unique_ptr<LocalTableFunctionState>
-	ParquetScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
+	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
 
@@ -258,7 +258,7 @@ public:
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->table_filters = input.filters;
-		if (!ParquetParallelStateNext(context, bind_data, *result, gstate)) {
+		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
 		return move(result);
@@ -367,8 +367,8 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	ParquetWriteLocalState() {
-		buffer = make_unique<ChunkCollection>();
+	explicit ParquetWriteLocalState(Allocator &allocator) {
+		buffer = make_unique<ChunkCollection>(allocator);
 	}
 
 	unique_ptr<ChunkCollection> buffer;
@@ -421,7 +421,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	return move(global_state);
 }
 
-void ParquetWriteSink(ClientContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
+void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
@@ -433,11 +433,11 @@ void ParquetWriteSink(ClientContext &context, FunctionData &bind_data_p, GlobalF
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		global_state.writer->Flush(*local_state.buffer);
 		// and reset the buffer
-		local_state.buffer = make_unique<ChunkCollection>();
+		local_state.buffer = make_unique<ChunkCollection>(Allocator::Get(context.client));
 	}
 }
 
-void ParquetWriteCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate) {
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
@@ -451,8 +451,8 @@ void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, Globa
 	global_state.writer->Finalize();
 }
 
-unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ClientContext &context, FunctionData &bind_data) {
-	return make_unique<ParquetWriteLocalState>();
+unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
+	return make_unique<ParquetWriteLocalState>(Allocator::Get(context.client));
 }
 
 unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,

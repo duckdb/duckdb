@@ -83,7 +83,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	});
 
 	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter rewriter(*this);
+		InClauseRewriter rewriter(context, *this);
 		plan = rewriter.Rewrite(move(plan));
 	});
 

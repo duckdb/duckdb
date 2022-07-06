@@ -21,6 +21,11 @@ ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &co
 ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
+unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
+	D_ASSERT(global_stats);
+	return move(global_stats);
+}
+
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
 	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
 	auto tuple_count = segment->count.load();
@@ -96,7 +101,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			// pin the new block
 			auto new_handle = buffer_manager.Pin(partial_block->block);
 			// memcpy the contents of the old block to the new block
-			memcpy(new_handle->Ptr() + offset_in_block, old_handle->Ptr(), segment_size);
+			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
 		} else {
 			// convert the segment into a persistent segment that points to this block
 			segment->ConvertToPersistent(block_id);

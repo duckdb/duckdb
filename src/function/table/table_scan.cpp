@@ -51,7 +51,7 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
 	auto &bind_data = (TableScanBindData &)*input.bind_data;
@@ -61,7 +61,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &con
 		col = storage_idx;
 	}
 	result->scan_state.table_filters = input.filters;
-	TableScanParallelStateNext(context, input.bind_data, result.get(), gstate);
+	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 

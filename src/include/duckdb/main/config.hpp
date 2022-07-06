@@ -125,8 +125,6 @@ public:
 	DUCKDB_API DBConfig();
 	DUCKDB_API ~DBConfig();
 
-	//! The allocator used by the system
-	Allocator allocator;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
 	//! Extra parameters that can be SET for loaded extensions
@@ -134,6 +132,8 @@ public:
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
+	//! The allocator used by the system
+	unique_ptr<Allocator> allocator;
 	//! Database configuration options
 	DBConfigOptions options;
 

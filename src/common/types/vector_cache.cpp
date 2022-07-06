@@ -1,20 +1,21 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 
 class VectorCacheBuffer : public VectorBuffer {
 public:
-	explicit VectorCacheBuffer(const LogicalType &type_p)
+	explicit VectorCacheBuffer(Allocator &allocator, const LogicalType &type_p)
 	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), type(type_p) {
 		auto internal_type = type.InternalType();
 		switch (internal_type) {
 		case PhysicalType::LIST: {
 			// memory for the list offsets
-			owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type)]);
+			owned_data = allocator.Allocate(STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
-			child_caches.push_back(make_buffer<VectorCacheBuffer>(child_type));
+			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type));
 			auto child_vector = make_unique<Vector>(child_type, false, false);
 			auxiliary = make_unique<VectorListBuffer>(move(child_vector));
 			break;
@@ -22,14 +23,14 @@ public:
 		case PhysicalType::STRUCT: {
 			auto &child_types = StructType::GetChildTypes(type);
 			for (auto &child_type : child_types) {
-				child_caches.push_back(make_buffer<VectorCacheBuffer>(child_type.second));
+				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second));
 			}
 			auto struct_buffer = make_unique<VectorStructBuffer>(type);
 			auxiliary = move(struct_buffer);
 			break;
 		}
 		default:
-			owned_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type)]);
+			owned_data = allocator.Allocate(STANDARD_VECTOR_SIZE * GetTypeIdSize(internal_type));
 			break;
 		}
 	}
@@ -42,7 +43,7 @@ public:
 		result.validity.Reset();
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			result.data = owned_data.get();
+			result.data = owned_data->get();
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
@@ -70,7 +71,7 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.data = owned_data.get();
+			result.data = owned_data->get();
 			result.auxiliary.reset();
 			break;
 		}
@@ -84,15 +85,15 @@ private:
 	//! The type of the vector cache
 	LogicalType type;
 	//! Owned data
-	unique_ptr<data_t[]> owned_data;
+	unique_ptr<AllocatedData> owned_data;
 	//! Child caches (if any). Used for nested types.
 	vector<buffer_ptr<VectorBuffer>> child_caches;
 	//! Aux data for the vector (if any)
 	buffer_ptr<VectorBuffer> auxiliary;
 };
 
-VectorCache::VectorCache(const LogicalType &type_p) {
-	buffer = make_unique<VectorCacheBuffer>(type_p);
+VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p) {
+	buffer = make_unique<VectorCacheBuffer>(allocator, type_p);
 }
 
 void VectorCache::ResetFromCache(Vector &result) const {

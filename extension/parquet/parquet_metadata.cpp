@@ -22,6 +22,9 @@ public:
 };
 
 struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
+	explicit ParquetMetaDataOperatorData(Allocator &allocator) : collection(allocator) {
+	}
+
 	idx_t file_index;
 	ChunkCollection collection;
 
@@ -132,7 +135,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
-	current_chunk.Initialize(return_types);
+	current_chunk.Initialize(context, return_types);
 	auto meta_data = reader->GetFileMetadata();
 	vector<LogicalType> column_types;
 	vector<idx_t> schema_indexes;
@@ -338,7 +341,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
-	current_chunk.Initialize(return_types);
+	current_chunk.Initialize(context, return_types);
 	auto meta_data = reader->GetFileMetadata();
 	for (idx_t col_idx = 0; col_idx < meta_data->schema.size(); col_idx++) {
 		auto &column = meta_data->schema[col_idx];
@@ -419,7 +422,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
 	D_ASSERT(!bind_data.files.empty());
 
-	auto result = make_unique<ParquetMetaDataOperatorData>();
+	auto result = make_unique<ParquetMetaDataOperatorData>(Allocator::Get(context));
 	if (SCHEMA) {
 		result->LoadSchemaData(context, bind_data.return_types, bind_data.files[0]);
 	} else {

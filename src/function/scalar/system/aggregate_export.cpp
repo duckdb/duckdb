@@ -1,8 +1,8 @@
-#include "duckdb/function/scalar/generic_functions.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/scalar/generic_functions.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -290,14 +290,19 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 }
 
 ScalarFunction ExportAggregateFunction::GetFinalize() {
-	return ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID, AggregateStateFinalize,
-	                      false, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	auto result =
+	    ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID, AggregateStateFinalize,
+	                   false, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return result;
 }
 
 ScalarFunction ExportAggregateFunction::GetCombine() {
-	return ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY},
-	                      LogicalTypeId::AGGREGATE_STATE, AggregateStateCombine, false, BindAggregateState, nullptr,
-	                      nullptr, InitCombineState);
+	auto result =
+	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
+	                   AggregateStateCombine, false, BindAggregateState, nullptr, nullptr, InitCombineState);
+	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return result;
 }
 
 } // namespace duckdb

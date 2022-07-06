@@ -2,9 +2,9 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -464,21 +464,19 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 	}
 }
 
-unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context, const string &schema,
-                                                                       const string &name,
-                                                                       vector<unique_ptr<Expression>> children,
-                                                                       string &error, bool is_operator) {
+unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context, const string &schema,
+                                                          const string &name, vector<unique_ptr<Expression>> children,
+                                                          string &error, bool is_operator, Binder *binder) {
 	// bind the function
 	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
 	D_ASSERT(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return ScalarFunction::BindScalarFunction(context, (ScalarFunctionCatalogEntry &)*function, move(children), error,
-	                                          is_operator);
+	                                          is_operator, binder);
 }
 
-unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
-                                                                       ScalarFunctionCatalogEntry &func,
-                                                                       vector<unique_ptr<Expression>> children,
-                                                                       string &error, bool is_operator) {
+unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context, ScalarFunctionCatalogEntry &func,
+                                                          vector<unique_ptr<Expression>> children, string &error,
+                                                          bool is_operator, Binder *binder) {
 	// bind the function
 	bool cast_parameters;
 	idx_t best_function = Function::BindFunction(func.name, func.functions, children, error, cast_parameters);
@@ -488,6 +486,18 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 
 	// found a matching function!
 	auto &bound_function = func.functions[best_function];
+
+	if (bound_function.null_handling == FunctionNullHandling::NULL_IN_NULL_OUT) {
+		for (auto &child : children) {
+			if (child->return_type == LogicalTypeId::SQLNULL) {
+				if (binder) {
+					binder->RemoveParameters(children);
+				}
+				return make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+			}
+		}
+	}
+
 	return ScalarFunction::BindScalarFunction(context, bound_function, move(children), is_operator, cast_parameters);
 }
 

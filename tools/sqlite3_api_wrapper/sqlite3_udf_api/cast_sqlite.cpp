@@ -35,7 +35,7 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 			type = LogicalType::VARCHAR;
 		}
 	}
-	new_chunk.Initialize(new_types);
+	new_chunk.Initialize(Allocator::DefaultAllocator(), new_types);
 
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
 		if (CastSQLite::RequiresCastToVarchar(data_chunk.data[i].GetType())) {
