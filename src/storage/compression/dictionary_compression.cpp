@@ -7,14 +7,26 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
 struct StringHash {
-	std::size_t operator()(const string &k) const {
-		return Hash(k.c_str(), k.size());
+	std::size_t operator()(const string_t &k) const {
+		return Hash(k);
 	}
 };
+
+struct StringEquality {
+	bool operator()(const string_t &a, const string_t &b) const {
+		return Equals::Operation(a, b);
+	}
+};
+
+template <typename T>
+using string_map_t = unordered_map<string_t, T, StringHash, StringEquality>;
+
+using string_set_t = unordered_set<string_t, StringHash, StringEquality>;
 
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
@@ -137,6 +149,28 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction *function;
+
+	// State regarding current segment
+	unique_ptr<ColumnSegment> current_segment;
+	BufferHandle current_handle;
+	StringDictionaryContainer current_dictionary;
+	data_ptr_t current_end_ptr;
+
+	// Buffers and map for current segment
+	StringHeap heap;
+	string_map_t<uint32_t> current_string_map;
+	std::vector<uint32_t> index_buffer;
+	std::vector<uint32_t> selection_buffer;
+
+	bitpacking_width_t current_width = 0;
+	bitpacking_width_t next_width = 0;
+
+	// Result of latest LookupString call
+	uint32_t latest_lookup_result;
+
+public:
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
@@ -157,29 +191,9 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
-		current_dictionary = DictionaryCompressionStorage::GetDictionary(*current_segment, *current_handle);
-		current_end_ptr = current_handle->node->buffer + current_dictionary.end;
+		current_dictionary = DictionaryCompressionStorage::GetDictionary(*current_segment, current_handle);
+		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 	}
-
-	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
-
-	// State regarding current segment
-	unique_ptr<ColumnSegment> current_segment;
-	unique_ptr<BufferHandle> current_handle;
-	StringDictionaryContainer current_dictionary;
-	data_ptr_t current_end_ptr;
-
-	// Buffers and map for current segment
-	std::unordered_map<string, uint32_t, StringHash> current_string_map;
-	std::vector<uint32_t> index_buffer;
-	std::vector<uint32_t> selection_buffer;
-
-	bitpacking_width_t current_width = 0;
-	bitpacking_width_t next_width = 0;
-
-	// Result of latest LookupString call
-	uint32_t latest_lookup_result;
 
 	void Verify() override {
 		current_dictionary.Verify();
@@ -191,7 +205,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	}
 
 	bool LookupString(string_t str) override {
-		auto search = current_string_map.find(str.GetString());
+		auto search = current_string_map.find(str);
 		auto has_result = search != current_string_map.end();
 
 		if (has_result) {
@@ -213,8 +227,12 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		// Update buffers and map
 		index_buffer.push_back(current_dictionary.size);
 		selection_buffer.push_back(index_buffer.size() - 1);
-		current_string_map.insert({str.GetString(), index_buffer.size() - 1});
-		DictionaryCompressionStorage::SetDictionary(*current_segment, *current_handle, current_dictionary);
+		if (str.IsInlined()) {
+			current_string_map.insert({str, index_buffer.size() - 1});
+		} else {
+			current_string_map.insert({heap.AddBlob(str), index_buffer.size() - 1});
+		}
+		DictionaryCompressionStorage::SetDictionary(*current_segment, current_handle, current_dictionary);
 
 		current_width = next_width;
 		current_segment->count++;
@@ -267,7 +285,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		                  index_buffer_size + current_dictionary.size;
 
 		// calculate ptr and offsets
-		auto base_ptr = handle->node->buffer;
+		auto base_ptr = handle.Ptr();
 		auto header_ptr = (dictionary_compression_header_t *)base_ptr;
 		auto compressed_selection_buffer_offset = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE;
 		auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
@@ -304,7 +322,7 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 		current_dictionary.end -= move_amount;
 		D_ASSERT(current_dictionary.end == total_size);
 		// write the new dictionary (with the updated "end")
-		DictionaryCompressionStorage::SetDictionary(*current_segment, *handle, current_dictionary);
+		DictionaryCompressionStorage::SetDictionary(*current_segment, handle, current_dictionary);
 		return total_size;
 	}
 };
@@ -312,8 +330,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
-struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompressionState {
-	DictionaryCompressionAnalyzeState()
+struct DictionaryAnalyzeState : public DictionaryCompressionState {
+	DictionaryAnalyzeState()
 	    : segment_count(0), current_tuple_count(0), current_unique_count(0), current_dict_size(0), current_width(0),
 	      next_width(0) {
 	}
@@ -322,19 +340,24 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	idx_t current_tuple_count;
 	idx_t current_unique_count;
 	size_t current_dict_size;
-	std::unordered_set<string, StringHash> current_set;
+	StringHeap heap;
+	string_set_t current_set;
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
 	bool LookupString(string_t str) override {
-		return current_set.count(str.GetString());
+		return current_set.count(str);
 	}
 
 	void AddNewString(string_t str) override {
 		current_tuple_count++;
 		current_unique_count++;
 		current_dict_size += str.GetSize();
-		current_set.insert(str.GetString());
+		if (str.IsInlined()) {
+			current_set.insert(str);
+		} else {
+			current_set.insert(heap.AddBlob(str));
+		}
 		current_width = next_width;
 	}
 
@@ -368,17 +391,25 @@ struct DictionaryCompressionAnalyzeState : public AnalyzeState, DictionaryCompre
 	void Verify() override {};
 };
 
+struct DictionaryCompressionAnalyzeState : public AnalyzeState {
+	DictionaryCompressionAnalyzeState() : analyze_state(make_unique<DictionaryAnalyzeState>()) {
+	}
+
+	unique_ptr<DictionaryAnalyzeState> analyze_state;
+};
+
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	return make_unique<DictionaryCompressionAnalyzeState>();
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
-	return state.UpdateState(input, count);
+	return state.analyze_state->UpdateState(input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &analyze_state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &state = *analyze_state.analyze_state;
 
 	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
 	auto req_space =
@@ -409,7 +440,7 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 // Scan
 //===--------------------------------------------------------------------===//
 struct CompressedStringScanState : public StringScanState {
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 	buffer_ptr<Vector> dictionary;
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;
@@ -421,10 +452,10 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 
-	auto baseptr = state->handle->node->buffer + segment.GetBlockOffset();
+	auto baseptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	// Load header values
-	auto dict = DictionaryCompressionStorage::GetDictionary(segment, *(state->handle));
+	auto dict = DictionaryCompressionStorage::GetDictionary(segment, state->handle);
 	auto header_ptr = (dictionary_compression_header_t *)baseptr;
 	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
 	auto index_buffer_count = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_count);
@@ -454,8 +485,8 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto &scan_state = (CompressedStringScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
-	auto dict = DictionaryCompressionStorage::GetDictionary(segment, *scan_state.handle);
+	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto dict = DictionaryCompressionStorage::GetDictionary(segment, scan_state.handle);
 
 	auto header_ptr = (dictionary_compression_header_t *)baseptr;
 	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
@@ -529,24 +560,11 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
                                                   Vector &result, idx_t result_idx) {
 	// fetch a single row from the string segment
 	// first pin the main buffer if it is not already pinned
-	auto primary_id = segment.block->BlockId();
+	auto &handle = state.GetOrInsertHandle(segment);
 
-	BufferHandle *handle_ptr;
-	auto entry = state.handles.find(primary_id);
-	if (entry == state.handles.end()) {
-		// not pinned yet: pin it
-		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-		auto handle = buffer_manager.Pin(segment.block);
-		handle_ptr = handle.get();
-		state.handles[primary_id] = move(handle);
-	} else {
-		// already pinned: use the pinned handle
-		handle_ptr = entry->second.get();
-	}
-
-	auto baseptr = handle_ptr->node->buffer + segment.GetBlockOffset();
+	auto baseptr = handle.Ptr() + segment.GetBlockOffset();
 	auto header_ptr = (dictionary_compression_header_t *)baseptr;
-	auto dict = DictionaryCompressionStorage::GetDictionary(segment, *handle_ptr);
+	auto dict = DictionaryCompressionStorage::GetDictionary(segment, handle);
 	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
 	auto width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
 	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
@@ -589,7 +607,7 @@ idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t ind
 }
 
 StringDictionaryContainer DictionaryCompressionStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = (dictionary_compression_header_t *)(handle.node->buffer + segment.GetBlockOffset());
+	auto header_ptr = (dictionary_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>((data_ptr_t)&header_ptr->dict_size);
 	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
@@ -598,7 +616,7 @@ StringDictionaryContainer DictionaryCompressionStorage::GetDictionary(ColumnSegm
 
 void DictionaryCompressionStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
                                                  StringDictionaryContainer container) {
-	auto header_ptr = (dictionary_compression_header_t *)(handle.node->buffer + segment.GetBlockOffset());
+	auto header_ptr = (dictionary_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
 	Store<uint32_t>(container.size, (data_ptr_t)&header_ptr->dict_size);
 	Store<uint32_t>(container.end, (data_ptr_t)&header_ptr->dict_end);
 }

@@ -96,7 +96,6 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 }
 
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
 	Vector &lists = args.data[0];
@@ -203,7 +202,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 		for (;;) {
 			DataChunk result_chunk;
-			result_chunk.Initialize(info.payload_types);
+			result_chunk.Initialize(Allocator::DefaultAllocator(), info.payload_types);
 			result_chunk.SetCardinality(0);
 			scanner.Scan(result_chunk);
 			if (result_chunk.size() == 0) {

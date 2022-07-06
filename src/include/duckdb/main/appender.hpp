@@ -26,6 +26,7 @@ protected:
 	//! The amount of chunks that will be gathered in the chunk collection before flushing
 	static constexpr const idx_t FLUSH_COUNT = 100;
 
+	Allocator &allocator;
 	//! The append types
 	vector<LogicalType> types;
 	//! The buffered data for the append
@@ -36,8 +37,8 @@ protected:
 	idx_t column = 0;
 
 public:
-	DUCKDB_API BaseAppender();
-	DUCKDB_API BaseAppender(vector<LogicalType> types);
+	DUCKDB_API BaseAppender(Allocator &allocator);
+	DUCKDB_API BaseAppender(Allocator &allocator, vector<LogicalType> types);
 	DUCKDB_API virtual ~BaseAppender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions

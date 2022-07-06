@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-LocalTableStorage::LocalTableStorage(DataTable &table) : table(table), active_scans(0) {
+LocalTableStorage::LocalTableStorage(DataTable &table)
+    : table(table), allocator(Allocator::Get(table.db)), collection(allocator), active_scans(0) {
 	Clear();
 }
 
@@ -364,7 +365,7 @@ bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage
 	}
 
 	DataChunk chunk;
-	chunk.Initialize(table.GetTypes());
+	chunk.Initialize(storage.allocator, table.GetTypes());
 
 	// initialize the scan
 	LocalScanState state;
@@ -447,7 +448,8 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 
 	// now add the new column filled with the default value to all chunks
 	const auto &new_column_type = new_column.Type();
-	ExpressionExecutor executor;
+	auto &allocator = Allocator::DefaultAllocator();
+	ExpressionExecutor executor(allocator);
 	DataChunk dummy_chunk;
 	if (default_value) {
 		executor.AddExpression(*default_value);

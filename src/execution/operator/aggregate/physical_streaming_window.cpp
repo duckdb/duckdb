@@ -61,7 +61,7 @@ unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(
 	return make_unique<StreamingWindowGlobalState>();
 }
 
-unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ClientContext &context) const {
+unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
 	return make_unique<StreamingWindowState>();
 }
 

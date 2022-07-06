@@ -130,7 +130,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		return 0;
 	}
 	unique_ptr<DataChunk> agg_chunk_result = make_unique<DataChunk>();
-	agg_chunk_result->Initialize(chunk_result->GetTypes());
+	agg_chunk_result->Initialize(Allocator::DefaultAllocator(), chunk_result->GetTypes());
 	agg_chunk_result->Append(*chunk_result, true);
 
 	while (agg_chunk_result->size() < my_stream->batch_size) {
