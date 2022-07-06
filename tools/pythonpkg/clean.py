@@ -16,7 +16,8 @@ while 'duckdb' in pathlib.PurePath(next_dir).name:
     base_dir = next_dir
     next_dir = next_dir.rsplit(os.path.sep, 1)[0]
 if 'duckdb' not in base_dir:
-    print(Exception("Failed to find DuckDB path to delete"))
+    raise Exception("Failed to find DuckDB path to delete")
+
 answer = ""
 while answer not in ["y", "yes", "n", "no"]:
     print("The following directory and all files in it will be deleted:")
