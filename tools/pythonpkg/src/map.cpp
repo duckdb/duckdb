@@ -87,7 +87,8 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 	vector<LogicalType> pandas_return_types;
 	vector<string> pandas_names;
 
-	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, pandas_return_types, pandas_names);
+	VectorConversion::BindPandas(DBConfig::GetConfig(context.client), df, pandas_bind_data, pandas_return_types,
+	                             pandas_names);
 	if (pandas_return_types.size() != output.ColumnCount()) {
 		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(),
 		                            pandas_return_types.size());
