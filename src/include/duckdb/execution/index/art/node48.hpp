@@ -39,10 +39,5 @@ public:
 
 	//! Shrink to node 16
 	static void Erase(Node *&node, int pos, ART &art);
-
-	//! Serialize Node
-	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
-
-	static Node48 *Deserialize(duckdb::MetaBlockReader &source);
 };
 } // namespace duckdb

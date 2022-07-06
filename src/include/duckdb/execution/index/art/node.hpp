@@ -39,6 +39,17 @@ public:
 	void Reset();
 	//! Unswizzle the pointer (if possible)
 	Node *Unswizzle(ART &art);
+
+	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
+};
+
+struct InternalType {
+	InternalType(Node *n);
+	void Set(uint8_t *key_p, uint16_t key_size_p, SwizzleablePointer *children_p, uint16_t children_size_p);
+	uint8_t *key;
+	uint16_t key_size;
+	SwizzleablePointer *children;
+	uint16_t children_size;
 };
 
 class Node {
@@ -73,7 +84,7 @@ public:
 	virtual idx_t GetMin();
 
 	//! Serialize this Node
-	virtual BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer) = 0;
+	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer);
 
 	static Node *Deserialize(ART &art, idx_t block_id, idx_t offset);
 
@@ -99,6 +110,12 @@ public:
 protected:
 	//! Copies the prefix from the source to the destination node
 	static void CopyPrefix(Node *src, Node *dst);
+
+private:
+	//! Serialize Internal Nodes
+	BlockPointer SerializeInternal(ART &art, duckdb::MetaBlockWriter &writer, InternalType &internal_type);
+	//! Deserialize Internal Nodes
+	void DeserializeInternal(duckdb::MetaBlockReader &reader, uint32_t prefix_length_p);
 };
 
 } // namespace duckdb

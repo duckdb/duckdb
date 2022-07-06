@@ -31,9 +31,9 @@ public:
 	void Insert(row_t row_id);
 	void Remove(row_t row_id);
 
-	BlockPointer Serialize(ART &art, duckdb::MetaBlockWriter &writer) override;
+	BlockPointer SerializeLeaf(duckdb::MetaBlockWriter &writer);
 
-	static Leaf *Deserialize(duckdb::MetaBlockReader &reader);
+	static Leaf *Deserialize(duckdb::MetaBlockReader &reader, uint32_t value_length);
 
 private:
 	unique_ptr<row_t[]> row_ids;
