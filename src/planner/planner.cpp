@@ -42,15 +42,15 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
+		auto parameter_index = kv.first;
 		auto &parameter_data = kv.second;
 		// check if the type of the parameter could be resolved
-		if (parameter_data->return_type.id() == LogicalTypeId::INVALID ||
-		    parameter_data->return_type.id() == LogicalTypeId::UNKNOWN) {
+		if (!parameter_data->return_type.IsValid()) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
 		parameter_data->value = Value(parameter_data->return_type);
-		value_map[kv.first] = parameter_data;
+		value_map[parameter_index] = parameter_data;
 	}
 }
 
@@ -86,6 +86,8 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	auto prepared = entry->second;
 	auto &catalog = Catalog::GetCatalog(context);
 	bool rebound = false;
+
+	prepared->CheckParameterCount(stmt.values.size());
 
 	// bind any supplied parameters
 	vector<Value> bind_values;

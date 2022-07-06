@@ -120,9 +120,7 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value GetVarArgs(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return entry.functions[offset].varargs.id() == LogicalTypeId::INVALID
-		           ? Value()
-		           : Value(entry.functions[offset].varargs.ToString());
+		return !entry.functions[offset].HasVarArgs() ? Value() : Value(entry.functions[offset].varargs.ToString());
 	}
 
 	static Value GetMacroDefinition(ScalarFunctionCatalogEntry &entry, idx_t offset) {
@@ -168,9 +166,7 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value GetVarArgs(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return entry.functions[offset].varargs.id() == LogicalTypeId::INVALID
-		           ? Value()
-		           : Value(entry.functions[offset].varargs.ToString());
+		return !entry.functions[offset].HasVarArgs() ? Value() : Value(entry.functions[offset].varargs.ToString());
 	}
 
 	static Value GetMacroDefinition(AggregateFunctionCatalogEntry &entry, idx_t offset) {
@@ -336,9 +332,7 @@ struct TableFunctionExtractor {
 	}
 
 	static Value GetVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
-		return entry.functions[offset].varargs.id() == LogicalTypeId::INVALID
-		           ? Value()
-		           : Value(entry.functions[offset].varargs.ToString());
+		return !entry.functions[offset].HasVarArgs() ? Value() : Value(entry.functions[offset].varargs.ToString());
 	}
 
 	static Value GetMacroDefinition(TableFunctionCatalogEntry &entry, idx_t offset) {
@@ -390,9 +384,7 @@ struct PragmaFunctionExtractor {
 	}
 
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
-		return entry.functions[offset].varargs.id() == LogicalTypeId::INVALID
-		           ? Value()
-		           : Value(entry.functions[offset].varargs.ToString());
+		return !entry.functions[offset].HasVarArgs() ? Value() : Value(entry.functions[offset].varargs.ToString());
 	}
 
 	static Value GetMacroDefinition(PragmaFunctionCatalogEntry &entry, idx_t offset) {

@@ -9,14 +9,14 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	D_ASSERT(expr.parameter_nr > 0);
 	auto bound_parameter = make_unique<BoundParameterExpression>(expr.parameter_nr);
 	if (!binder.parameters) {
-		throw std::runtime_error("Unexpected prepared parameter. This type of statement can't be prepared!");
+		throw BinderException("Unexpected prepared parameter. This type of statement can't be prepared!");
 	}
 	auto parameter_idx = expr.parameter_nr;
 	auto entry = binder.parameters->parameters.find(parameter_idx);
 	if (entry == binder.parameters->parameters.end()) {
 		// no entry yet: create a new one
 		auto data = make_shared<BoundParameterData>();
-		data->return_type = binder.parameters->GetReturnType(parameter_idx);
+		data->return_type = binder.parameters->GetReturnType(parameter_idx - 1);
 		bound_parameter->return_type = data->return_type;
 		bound_parameter->parameter_data = data;
 		binder.parameters->parameters[parameter_idx] = move(data);

@@ -273,9 +273,6 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 	auto p4 = con.Prepare("SELECT $1::int, $2::string");
 	REQUIRE(p4->success);
 	REQUIRE(p4->n_param == 2);
-
-	auto p5 = con.Prepare("SELECT $2::int, $2::string");
-	REQUIRE(!p5->success);
 }
 
 TEST_CASE("Test ANALYZE", "[api]") {

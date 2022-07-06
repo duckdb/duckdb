@@ -21,7 +21,7 @@ bool BoundParameterExpression::IsFoldable() const {
 }
 
 string BoundParameterExpression::ToString() const {
-	return to_string(parameter_nr);
+	return "$" + to_string(parameter_nr);
 }
 
 bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {

@@ -46,6 +46,7 @@ public:
 	idx_t catalog_version;
 
 public:
+	void CheckParameterCount(idx_t parameter_count);
 	//! Bind a set of values to the prepared statement data
 	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter

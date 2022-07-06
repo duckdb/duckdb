@@ -10,14 +10,18 @@ PreparedStatementData::PreparedStatementData(StatementType type) : statement_typ
 PreparedStatementData::~PreparedStatementData() {
 }
 
+void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
+	const auto required = properties.parameter_count;
+	if (parameter_count != required) {
+		throw BinderException("Parameter/argument count mismatch for prepared statement. Expected %llu, got %llu",
+		                      required, parameter_count);
+	}
+}
+
 void PreparedStatementData::Bind(vector<Value> values) {
 	// set parameters
-	const auto required = properties.parameter_count;
 	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);
-	if (values.size() != required) {
-		throw BinderException("Parameter/argument count mismatch for prepared statement. Expected %llu, got %llu",
-		                      required, values.size());
-	}
+	CheckParameterCount(values.size());
 
 	// bind the required values
 	for (auto &it : value_map) {
