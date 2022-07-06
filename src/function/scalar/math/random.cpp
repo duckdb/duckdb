@@ -55,8 +55,10 @@ static unique_ptr<FunctionLocalState> RandomInitLocalState(const BoundFunctionEx
 }
 
 void RandomFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("random", {}, LogicalType::DOUBLE, RandomFunction, true, RandomBind, nullptr,
-	                               nullptr, RandomInitLocalState));
+	ScalarFunction random("random", {}, LogicalType::DOUBLE, RandomFunction, RandomBind, nullptr, nullptr,
+	                      RandomInitLocalState);
+	random.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(random);
 }
 
 static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -72,9 +74,10 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 void UUIDFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, false, true, RandomBind, nullptr, nullptr,
+	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, RandomBind, nullptr, nullptr,
 	                             RandomInitLocalState);
 	// generate a random uuid
+	uuid_function.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction({"uuid", "gen_random_uuid"}, uuid_function);
 }
 

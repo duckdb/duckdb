@@ -724,9 +724,9 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 void DateTruncFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_trunc("date_trunc");
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<timestamp_t, timestamp_t>, false, false, DateTruncBind));
+	                                      DateTruncFunction<timestamp_t, timestamp_t>, DateTruncBind));
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::TIMESTAMP,
-	                                      DateTruncFunction<date_t, timestamp_t>, false, false, DateTruncBind));
+	                                      DateTruncFunction<date_t, timestamp_t>, DateTruncBind));
 	date_trunc.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::INTERVAL,
 	                                      DateTruncFunction<interval_t, interval_t>));
 	set.AddFunction(date_trunc);
