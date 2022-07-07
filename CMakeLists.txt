@@ -710,7 +710,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
           ".duckdb_extension")
 
   if(MSVC)
-    target_link_libraries(${TARGET_NAME} delayimp)
+    if (NOT EXTENSION_STATIC_BUILD)
+      target_link_libraries(${TARGET_NAME} delayimp)
+    endif()
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -719,7 +721,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
 
-  if(WIN32)
+  if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
     set_target_properties(${TARGET_NAME}
             PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG
