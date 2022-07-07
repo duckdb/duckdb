@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class CatalogEntry;
+class ClientContext;
 class PhysicalOperator;
 class SQLStatement;
 
@@ -47,6 +48,10 @@ public:
 
 public:
 	void CheckParameterCount(idx_t parameter_count);
+	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
+	bool RequireRebind(ClientContext &context, const vector<Value> &values);
+	//! Verify that the rebind was successful/valid
+	void s(const vector<LogicalType> &new_types);
 	//! Bind a set of values to the prepared statement data
 	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter

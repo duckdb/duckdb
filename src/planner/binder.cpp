@@ -357,6 +357,10 @@ BindingMode Binder::GetBindingMode() {
 	return mode;
 }
 
+void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
+	can_contain_nulls = can_contain_nulls_p;
+}
+
 void Binder::AddTableName(string table_name) {
 	if (parent) {
 		parent->AddTableName(move(table_name));

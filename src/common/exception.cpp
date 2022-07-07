@@ -100,6 +100,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Out of Memory";
 	case ExceptionType::PERMISSION:
 		return "Permission";
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		return "Parameter Not Allowed";
 	default:
 		return "Unknown";
 	}
@@ -219,6 +221,10 @@ InvalidInputException::InvalidInputException(const string &msg) : Exception(Exce
 }
 
 OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {
+}
+
+ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
+    : StandardException(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
 }
 
 } // namespace duckdb

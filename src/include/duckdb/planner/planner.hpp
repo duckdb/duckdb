@@ -29,7 +29,7 @@ public:
 	vector<string> names;
 	vector<LogicalType> types;
 	bound_parameter_map_t value_map;
-	vector<LogicalType> parameter_types;
+	vector<BoundParameterData> parameter_data;
 
 	shared_ptr<Binder> binder;
 	ClientContext &context;

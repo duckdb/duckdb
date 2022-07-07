@@ -10,6 +10,15 @@ BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
       parameter_nr(parameter_nr) {
 }
 
+void BoundParameterExpression::Invalidate(Expression &expr) {
+	if (expr.type != ExpressionType::VALUE_PARAMETER) {
+		throw InternalException("BoundParameterExpression::Invalidate requires a parameter as input");
+	}
+	auto &bound_parameter = (BoundParameterExpression &)expr;
+	bound_parameter.return_type = LogicalTypeId::INVALID;
+	bound_parameter.parameter_data->return_type = LogicalTypeId::INVALID;
+}
+
 bool BoundParameterExpression::IsScalar() const {
 	return true;
 }

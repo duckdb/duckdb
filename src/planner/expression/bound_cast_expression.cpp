@@ -29,13 +29,17 @@ unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, co
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                           bool try_cast) {
 	D_ASSERT(expr);
-	if (!target_type.IsValid()) {
-		return expr;
-	}
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
+		if (!target_type.IsValid()) {
+			// invalidate the parameter
+			parameter.parameter_data->return_type = LogicalType::INVALID;
+			parameter.return_type = target_type;
+			return expr;
+		}
 		if (parameter.parameter_data->return_type.id() == LogicalTypeId::INVALID) {
 			// we don't know the type of this parameter
+			parameter.return_type = target_type;
 			return expr;
 		}
 		if (parameter.parameter_data->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -43,34 +47,24 @@ unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression>
 			parameter.parameter_data->return_type = target_type;
 			parameter.return_type = target_type;
 			return expr;
-		} else {
-			// prepared statement parameter already has a type
-			if (parameter.parameter_data->return_type == target_type) {
-				// this type! we are done
-				parameter.return_type = parameter.parameter_data->return_type;
-				return expr;
-			}
-			// check if we can cast from our current type to that type
-			if (CastRules::ImplicitCast(target_type, parameter.parameter_data->return_type) >= 0) {
-				// we can! leave the type as-is
-				parameter.return_type = parameter.parameter_data->return_type;
-				return expr;
-			}
-			// check if we can cast from the other type to this type
-			if (CastRules::ImplicitCast(parameter.parameter_data->return_type, target_type) >= 0) {
-				// we can! upgrade the type
-				parameter.parameter_data->return_type = target_type;
-				parameter.return_type = target_type;
-				return expr;
-			}
-			// no implicit cast possible
-			// invalidate the type
-			parameter.parameter_data->return_type = LogicalType::INVALID;
+		}
+		// prepared statement parameter already has a type
+		if (parameter.parameter_data->return_type == target_type) {
+			// this type! we are done
+			parameter.return_type = parameter.parameter_data->return_type;
 			return expr;
 		}
+		// invalidate the type
+		parameter.parameter_data->return_type = LogicalType::INVALID;
+		parameter.return_type = target_type;
+		return expr;
 	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
+		D_ASSERT(target_type.IsValid());
 		auto &def = (BoundDefaultExpression &)*expr;
 		def.return_type = target_type;
+	}
+	if (!target_type.IsValid()) {
+		return expr;
 	}
 	return AddCastExpressionInternal(move(expr), target_type, try_cast);
 }

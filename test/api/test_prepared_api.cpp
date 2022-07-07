@@ -130,9 +130,9 @@ TEST_CASE("Alter table and prepared statements", "[api]") {
 	// we can alter the type of the column
 	REQUIRE_NO_FAIL(con2.Query("ALTER TABLE a ALTER i TYPE BIGINT USING i"));
 
-	// after the table is altered, the return types change, so we fail executing the statement
-	REQUIRE_FAIL(prepared->Execute(12));
-	REQUIRE_FAIL(prepared->Execute(12));
+	// after the table is altered, the return types change, but the rebind is still successful
+	result = prepared->Execute(12);
+	REQUIRE(CHECK_COLUMN(result, 0, {12}));
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {

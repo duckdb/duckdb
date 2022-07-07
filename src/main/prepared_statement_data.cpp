@@ -18,6 +18,30 @@ void PreparedStatementData::CheckParameterCount(idx_t parameter_count) {
 	}
 }
 
+bool PreparedStatementData::RequireRebind(ClientContext &context, const vector<Value> &values) {
+	CheckParameterCount(values.size());
+	if (!unbound_statement) {
+		// no unbound statement!? cannot rebind?
+		return false;
+	}
+	if (!properties.bound_all_parameters) {
+		// parameters not yet bound: query always requires a rebind
+		return true;
+	}
+	auto &catalog = Catalog::GetCatalog(context);
+	if (catalog.GetCatalogVersion() != catalog_version) {
+		//! context is out of bounds
+		return true;
+	}
+	for (auto &it : value_map) {
+		const idx_t i = it.first - 1;
+		if (values[i].type() != it.second->return_type) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void PreparedStatementData::Bind(vector<Value> values) {
 	// set parameters
 	D_ASSERT(!unbound_statement || unbound_statement->n_param == properties.parameter_count);

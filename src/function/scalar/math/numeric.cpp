@@ -537,6 +537,9 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &decimal_type = arguments[0]->return_type;
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotAllowedException("Parameter not allowed in decimal round");
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}

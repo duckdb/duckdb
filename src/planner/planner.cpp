@@ -25,7 +25,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.n_param;
 
-	BoundParameterMap bound_parameters(parameter_types);
+	BoundParameterMap bound_parameters(parameter_data);
 
 	// first bind the tables and columns to the catalog
 	profiler.StartPhase("binder");
@@ -84,31 +84,25 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	// check if we need to rebind the prepared statement
 	// this happens if the catalog changes, since in this case e.g. tables we relied on may have been deleted
 	auto prepared = entry->second;
-	auto &catalog = Catalog::GetCatalog(context);
 	bool rebound = false;
-
-	prepared->CheckParameterCount(stmt.values.size());
 
 	// bind any supplied parameters
 	vector<Value> bind_values;
+	auto constant_binder = Binder::CreateBinder(context);
+	constant_binder->SetCanContainNulls(true);
 	for (idx_t i = 0; i < stmt.values.size(); i++) {
-		ConstantBinder cbinder(*binder, context, "EXECUTE statement");
+		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
 		auto bound_expr = cbinder.Bind(stmt.values[i]);
 
 		Value value = ExpressionExecutor::EvaluateScalar(*bound_expr);
 		bind_values.push_back(move(value));
 	}
-	bool all_bound = prepared->properties.bound_all_parameters;
-	if (catalog.GetCatalogVersion() != entry->second->catalog_version || !all_bound) {
+	if (prepared->RequireRebind(context, bind_values)) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
-		for (auto &value : bind_values) {
-			parameter_types.push_back(value.type());
+		for (idx_t i = 0; i < bind_values.size(); i++) {
+			parameter_data.emplace_back(bind_values[i]);
 		}
 		prepared = PrepareSQLStatement(entry->second->unbound_statement->Copy());
-		if (all_bound && prepared->types != entry->second->types) {
-			throw BinderException("Rebinding statement \"%s\" after catalog change resulted in change of types",
-			                      stmt.name);
-		}
 		D_ASSERT(prepared->properties.bound_all_parameters);
 		rebound = true;
 	}
@@ -117,14 +111,6 @@ void Planner::PlanExecute(unique_ptr<SQLStatement> statement) {
 	this->properties.parameter_count = parameter_count;
 	this->names = prepared->names;
 	this->types = prepared->types;
-
-	// add casts to the prepared statement parameters as required
-	for (idx_t i = 0; i < bind_values.size(); i++) {
-		if (prepared->value_map.count(i + 1) == 0) {
-			continue;
-		}
-		bind_values[i] = bind_values[i].CastAs(prepared->GetType(i + 1));
-	}
 
 	prepared->Bind(move(bind_values));
 	if (rebound) {

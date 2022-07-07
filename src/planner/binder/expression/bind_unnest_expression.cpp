@@ -30,7 +30,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	auto &child = (BoundExpression &)*function.children[0];
 	auto &child_type = child.expr->return_type;
 
-	if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::SQLNULL) {
+	if (child_type.id() != LogicalTypeId::LIST && child_type.id() != LogicalTypeId::SQLNULL &&
+	    child_type.id() != LogicalTypeId::UNKNOWN) {
 		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists and NULL"));
 	}
 

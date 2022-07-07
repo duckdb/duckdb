@@ -494,6 +494,9 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
 			}
 		}
 	}
+	if (!cast_parameters) {
+		return make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+	}
 
 	return ScalarFunction::BindScalarFunction(context, bound_function, move(children), is_operator, cast_parameters);
 }

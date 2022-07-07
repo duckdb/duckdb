@@ -158,6 +158,8 @@ public:
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
 
+	void SetCanContainNulls(bool can_contain_nulls);
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;

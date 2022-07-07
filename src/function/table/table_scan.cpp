@@ -335,6 +335,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
+				get.function.name = "index_scan";
 				get.function.init_local = nullptr;
 				get.function.init_global = IndexScanInitGlobal;
 				get.function.function = IndexScanFunction;

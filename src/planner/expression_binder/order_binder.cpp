@@ -83,6 +83,9 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		auto &posref = (PositionalReferenceExpression &)*expr;
 		return CreateProjectionReference(*expr, posref.index - 1);
 	}
+	case ExpressionClass::PARAMETER: {
+		throw ParameterNotAllowedException("Parameters are not allowed in the ORDER BY clause");
+	}
 	default:
 		break;
 	}

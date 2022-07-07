@@ -1299,6 +1299,9 @@ struct StructDatePart {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		// collect names and deconflict, construct return type
+		if (arguments[0]->HasParameter()) {
+			throw ParameterNotAllowedException("Parameters not allowed as part name for %s", bound_function.name);
+		}
 		if (!arguments[0]->IsFoldable()) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}

@@ -13,6 +13,11 @@
 namespace duckdb {
 
 struct BoundParameterData {
+	BoundParameterData() {
+	}
+	BoundParameterData(Value val) : value(move(val)), return_type(value.type()) {
+	}
+
 	Value value;
 	LogicalType return_type;
 };
@@ -20,17 +25,17 @@ struct BoundParameterData {
 using bound_parameter_map_t = unordered_map<idx_t, shared_ptr<BoundParameterData>>;
 
 struct BoundParameterMap {
-	BoundParameterMap(vector<LogicalType> &parameter_types) : parameter_types(parameter_types) {
+	BoundParameterMap(vector<BoundParameterData> &parameter_data) : parameter_data(parameter_data) {
 	}
 
 	bound_parameter_map_t parameters;
-	vector<LogicalType> &parameter_types;
+	vector<BoundParameterData> &parameter_data;
 
 	LogicalType GetReturnType(idx_t index) {
-		if (index >= parameter_types.size()) {
+		if (index >= parameter_data.size()) {
 			return LogicalTypeId::UNKNOWN;
 		}
-		return parameter_types[index];
+		return parameter_data[index].return_type;
 	}
 };
 

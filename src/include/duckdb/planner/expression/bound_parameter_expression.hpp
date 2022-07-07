@@ -21,6 +21,8 @@ public:
 	shared_ptr<BoundParameterData> parameter_data;
 
 public:
+	static void Invalidate(Expression &expr);
+
 	bool IsScalar() const override;
 	bool HasParameter() const override;
 	bool IsFoldable() const override;

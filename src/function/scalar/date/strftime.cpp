@@ -10,6 +10,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/date_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 #include <cctype>
 
@@ -607,10 +608,16 @@ struct StrfTimeBindData : public FunctionData {
 template <bool REVERSED>
 static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[REVERSED ? 0 : 1]->IsFoldable()) {
+	auto format_idx = REVERSED ? 0 : 1;
+	auto &format_arg = arguments[format_idx];
+	if (format_arg->type == ExpressionType::VALUE_PARAMETER) {
+		BoundParameterExpression::Invalidate(*format_arg);
+		return nullptr;
+	}
+	if (!format_arg->IsFoldable()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
-	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[REVERSED ? 0 : 1]);
+	Value options_str = ExpressionExecutor::EvaluateScalar(*format_arg);
 	auto format_string = options_str.GetValue<string>();
 	StrfTimeFormat format;
 	if (!options_str.IsNull()) {
@@ -1192,6 +1199,10 @@ struct StrpTimeBindData : public FunctionData {
 
 static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[1]->type == ExpressionType::VALUE_PARAMETER) {
+		BoundParameterExpression::Invalidate(*arguments[1]);
+		return nullptr;
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("strptime format must be a constant");
 	}

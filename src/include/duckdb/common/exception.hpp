@@ -72,9 +72,10 @@ enum class ExceptionType {
 	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
-	INVALID_INPUT = 32, // Input or arguments error
-	OUT_OF_MEMORY = 33, // out of memory
-	PERMISSION = 34     // insufficient permissions
+	INVALID_INPUT = 32,        // Input or arguments error
+	OUT_OF_MEMORY = 33,        // out of memory
+	PERMISSION = 34,           // insufficient permissions
+	PARAMETER_NOT_ALLOWED = 35 // insufficient permissions
 };
 
 class Exception : public std::exception {
@@ -313,6 +314,16 @@ public:
 	DUCKDB_API ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
+};
+
+class ParameterNotAllowedException : public StandardException {
+public:
+	DUCKDB_API explicit ParameterNotAllowedException(const string &msg);
+
+	template <typename... Args>
+	explicit ParameterNotAllowedException(const string &msg, Args... params)
+	    : ParameterNotAllowedException(ConstructMessage(msg, params...)) {
+	}
 };
 
 } // namespace duckdb

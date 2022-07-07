@@ -86,6 +86,15 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		// cast child and subquery child to equivalent types
 		D_ASSERT(bound_node->types.size() == 1);
 		auto compare_type = LogicalType::MaxLogicalType(child->expr->return_type, bound_node->types[0]);
+		//		if (child->expr->return_type.id() == LogicalTypeId::UNKNOWN) {
+		//			throw InternalException("eek");
+		//		}
+		//		if (bound_node->types[0].id() == LogicalTypeId::UNKNOWN) {
+		//			throw InternalException("eek");
+		//		}
+		//		if (compare_type.id() == LogicalTypeId::UNKNOWN) {
+		//			throw InternalException("eek");
+		//		}
 		child->expr = BoundCastExpression::AddCastToType(move(child->expr), compare_type);
 		result->child_type = bound_node->types[0];
 		result->child_target = compare_type;
