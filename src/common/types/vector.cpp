@@ -440,20 +440,17 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 	}
 
 	if (vector->GetVectorType() == VectorType::FSST_VECTOR) {
-		if (vector->GetType().id() ==  LogicalTypeId::VARCHAR) {
-			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
+		if (vector->GetType().id() == LogicalTypeId::VARCHAR) {
+			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
 
 			auto str_compressed = ((string_t *)data)[index];
-			auto decompressed_string_size = fsst_decompress(
-			    (fsst_decoder_t*)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-			    str_compressed.GetSize(),
-			    (unsigned char*)str_compressed.GetDataUnsafe(),
-			    StringUncompressed::STRING_BLOCK_LIMIT+1,
-			    &decompress_buffer[0]
-			);
+			auto decompressed_string_size =
+			    fsst_decompress((fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+			                    str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
+			                    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
-			return Value(string((char*)decompress_buffer, decompressed_string_size));
+			return Value(string((char *)decompress_buffer, decompressed_string_size));
 		} else {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
@@ -614,25 +611,24 @@ string Vector::ToString(idx_t count) const {
 		}
 		break;
 	case VectorType::FSST_VECTOR: {
-			for (idx_t i = 0; i < count; i++) {
-				string_t compressed_string = ((string_t *)data)[i];
-				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
-				auto decompressed_string_size =
-					fsst_decompress((fsst_decoder_t*)FSSTVector::GetDecoder(
-									const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
-									compressed_string.GetSize(),       /* IN: byte-length of compressed string. */
-									(unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
-			                        StringUncompressed::STRING_BLOCK_LIMIT+1,                 /* IN: byte-length of output buffer. */
-									&decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
-					);
+		for (idx_t i = 0; i < count; i++) {
+			string_t compressed_string = ((string_t *)data)[i];
+			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
+			auto decompressed_string_size =
+			    fsst_decompress((fsst_decoder_t *)FSSTVector::GetDecoder(
+			                        const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
+			                    compressed_string.GetSize(),      /* IN: byte-length of compressed string. */
+			                    (unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
+			                    StringUncompressed::STRING_BLOCK_LIMIT + 1, /* IN: byte-length of output buffer. */
+			                    &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
+			    );
 
-				if (decompressed_string_size > StringUncompressed::STRING_BLOCK_LIMIT) {
-					throw InternalException("Failed to decompress entire FSST string");
-				}
-				retval += string((const char*)decompress_buffer, decompressed_string_size) + (i == count - 1 ? "" : ", ");
+			if (decompressed_string_size > StringUncompressed::STRING_BLOCK_LIMIT) {
+				throw InternalException("Failed to decompress entire FSST string");
 			}
+			retval += string((const char *)decompress_buffer, decompressed_string_size) + (i == count - 1 ? "" : ", ");
 		}
-		break;
+	} break;
 	case VectorType::CONSTANT_VECTOR:
 		retval += GetValue(0).ToString();
 		break;
@@ -1415,17 +1411,17 @@ string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 	return fsst_string_buffer.AddBlob(data);
 }
 
-void* FSSTVector::GetDecoder(Vector &vector) {
+void *FSSTVector::GetDecoder(Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		throw InternalException("GetDecoder called on FSST Vector without registered buffer");
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
-	return (fsst_decoder_t*)fsst_string_buffer.GetDecoder();
+	return (fsst_decoder_t *)fsst_string_buffer.GetDecoder();
 }
 
-void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void>& fsst_decoder) {
+void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &fsst_decoder) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (!vector.auxiliary) {

@@ -28,12 +28,12 @@ struct FSSTStorage {
 	static void FinalizeCompress(CompressionState &state_p);
 
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
-	template <bool ALLOW_FSST_VECTORS=false>
+	template <bool ALLOW_FSST_VECTORS = false>
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-	                                    idx_t result_offset);
+	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
-	                                 idx_t result_idx);
+	                           idx_t result_idx);
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
@@ -82,7 +82,8 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 			}
 
 			if (string_size > 0) {
-				// TODO this copies the string, can we do better? i.e. we could make the compression api store strings for
+				// TODO this copies the string, can we do better? i.e. we could make the compression api store strings
+				// for
 				state.fsst_strings.emplace_back(data[idx].GetString());
 				state.fsst_string_total_size += string_size;
 			} else {
@@ -106,9 +107,9 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		// TODO improve on this primitive thing.
 		std::vector<size_t> fsst_string_sizes;
 		std::vector<unsigned char *> fsst_string_ptrs;
-		for (auto& str: state.fsst_strings) {
+		for (auto &str : state.fsst_strings) {
 			fsst_string_sizes.push_back(str.size());
-			fsst_string_ptrs.push_back((unsigned char*) str.c_str());
+			fsst_string_ptrs.push_back((unsigned char *)str.c_str());
 		}
 
 		state.fsst_encoder = fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
@@ -118,9 +119,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		auto compressed_sizes = std::vector<size_t>(string_count, 0);
 		auto compressed_buffer = std::vector<unsigned char>(output_buffer_size, 0);
 
-		auto res =
-		    fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
-		                  output_buffer_size, &compressed_buffer[0], &compressed_sizes[0], &compressed_ptrs[0]);
+		auto res = fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
+		                         output_buffer_size, &compressed_buffer[0], &compressed_sizes[0], &compressed_ptrs[0]);
 
 		if (string_count != res) {
 			std::cout << "string count " << string_count << "\n";
@@ -129,8 +129,9 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		}
 		//	std::cout << "\n";
 		//	std::cout << "Dictionary contains " << n << " strings (total " << state.fsst_string_total_size << "
-		//bytes)\n"; 	std::cout << "Compressed size is " << (compressed_ptrs[res-1] - compressed_ptrs[0]) +
-		//compressed_sizes[res-1] << "\n"; 	std::cout << "Symbol table size is " << serialized_symbol_table_size << "\n";
+		// bytes)\n"; 	std::cout << "Compressed size is " << (compressed_ptrs[res-1] - compressed_ptrs[0]) +
+		// compressed_sizes[res-1] << "\n"; 	std::cout << "Symbol table size is " << serialized_symbol_table_size <<
+		// "\n";
 
 		// Sum and and Max compressed lengths
 		for (auto &size : compressed_sizes) {
@@ -143,7 +144,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	// TODO this returns 0 for all empty strings
 	// Note that the minimum width is equal to max string length due to delta encoding
 	auto minimum_width = BitpackingPrimitives::MinimumBitWidth(max_compressed_string_length);
-	auto bitpacked_offsets_size = BitpackingPrimitives::GetRequiredSize<idx_t>(string_count + state.empty_strings, minimum_width);
+	auto bitpacked_offsets_size =
+	    BitpackingPrimitives::GetRequiredSize<idx_t>(string_count + state.empty_strings, minimum_width);
 
 	// TODO this forgets both the nulls and the fsst symtable size
 	return bitpacked_offsets_size + compressed_dict_size;
@@ -388,14 +390,14 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	vector<unsigned char> compress_buffer(compress_buffer_size, 0);
 
 	auto res = fsst_compress(
-	    state.fsst_encoder,   		/* IN: encoder obtained from fsst_create(). */
-	    total_count,          		/* IN: number of strings in batch to compress. */
+	    state.fsst_encoder,   /* IN: encoder obtained from fsst_create(). */
+	    total_count,          /* IN: number of strings in batch to compress. */
 	    &sizes_in[0],         /* IN: byte-lengths of the inputs */
 	    &strings_in[0],       /* IN: input string start pointers. */
-	    compress_buffer_size, 		/* IN: byte-length of output buffer. */
-	    &compress_buffer[0], /* OUT: memorxy buffer to put the compressed strings in (one after the other). */
-	    &sizes_out[0],       /* OUT: byte-lengths of the compressed strings. */
-	    &strings_out[0]      /* OUT: output string start pointers. Will all point into [output,output+size). */
+	    compress_buffer_size, /* IN: byte-length of output buffer. */
+	    &compress_buffer[0],  /* OUT: memorxy buffer to put the compressed strings in (one after the other). */
+	    &sizes_out[0],        /* OUT: byte-lengths of the compressed strings. */
+	    &strings_out[0]       /* OUT: output string start pointers. Will all point into [output,output+size). */
 	);
 
 	if (res != total_count) {
@@ -448,11 +450,12 @@ struct FSSTScanState : public StringScanState {
 };
 
 // Returns false if no symbol table was found. This means all strings are either empty or null
-bool ParseFSSTSegmentHeader(data_ptr_t base_ptr, fsst_decoder_t *decoder_out, bitpacking_width_t* width_out) {
+bool ParseFSSTSegmentHeader(data_ptr_t base_ptr, fsst_decoder_t *decoder_out, bitpacking_width_t *width_out) {
 	auto header_ptr = (fsst_compression_header_t *)base_ptr;
 	auto fsst_symbol_table_offset = Load<uint32_t>((data_ptr_t)&header_ptr->fsst_symbol_table_offset);
 	*width_out = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
-	return fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset);;
+	return fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset);
+	;
 }
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
@@ -462,7 +465,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	auto base_ptr = state->handle->node->buffer + segment.GetBlockOffset();
 
 	state->fsst_decoder = make_buffer<fsst_decoder_t>();
-	auto retval = ParseFSSTSegmentHeader(base_ptr, (fsst_decoder_t*)state->fsst_decoder.get(), &state->current_width);
+	auto retval = ParseFSSTSegmentHeader(base_ptr, (fsst_decoder_t *)state->fsst_decoder.get(), &state->current_width);
 	if (!retval) {
 		state->fsst_decoder = nullptr;
 	}
@@ -470,11 +473,11 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	return move(state);
 }
 
-void DeltaDecodeIndices(uint32_t*buffer_in, uint32_t*buffer_out, idx_t decode_count, uint32_t last_known_value) {
+void DeltaDecodeIndices(uint32_t *buffer_in, uint32_t *buffer_out, idx_t decode_count, uint32_t last_known_value) {
 	buffer_out[0] = buffer_in[0];
 	buffer_out[0] += last_known_value;
 	for (idx_t i = 1; i < decode_count; i++) {
-		buffer_out[i] = buffer_in[i] + buffer_out[i-1];
+		buffer_out[i] = buffer_in[i] + buffer_out[i - 1];
 	}
 }
 
@@ -511,18 +514,19 @@ bp_delta_offsets_t CalculateBpDeltaOffsets(idx_t last_known_row, idx_t start, id
 	D_ASSERT((idx_t)(last_known_row + 1) <= start);
 	bp_delta_offsets_t result;
 
-	result.delta_decode_start_row = (last_known_row+1); // 1
-	result.bitunpack_alignment_offset = result.delta_decode_start_row % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; // 2
+	result.delta_decode_start_row = (last_known_row + 1); // 1
+	result.bitunpack_alignment_offset =
+	    result.delta_decode_start_row % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;      // 2
 	result.bitunpack_start_row = result.delta_decode_start_row - result.bitunpack_alignment_offset; // 3
-	result.unused_delta_decoded_values = start - result.delta_decode_start_row; // 4
-	result.scan_offset = result.bitunpack_alignment_offset + result.unused_delta_decoded_values; // 5
-	result.total_delta_decode_count = scan_count + result.unused_delta_decoded_values; // 6
-	result.total_bitunpack_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + result.scan_offset); // 7
+	result.unused_delta_decoded_values = start - result.delta_decode_start_row;                     // 4
+	result.scan_offset = result.bitunpack_alignment_offset + result.unused_delta_decoded_values;    // 5
+	result.total_delta_decode_count = scan_count + result.unused_delta_decoded_values;              // 6
+	result.total_bitunpack_count =
+	    BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + result.scan_offset); // 7
 
 	D_ASSERT(result.total_delta_decode_count + result.bitunpack_alignment_offset <= result.total_bitunpack_count);
 	return result;
 }
-
 
 //===--------------------------------------------------------------------===//
 // Scan base data
@@ -538,7 +542,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, *scan_state.handle);
 	auto base_data = (data_ptr_t)(baseptr + sizeof(fsst_compression_header_t));
-	string_t* result_data;
+	string_t *result_data;
 	unique_ptr<Vector> output_vector;
 
 	if (ALLOW_FSST_VECTORS) {
@@ -568,15 +572,18 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto offsets = CalculateBpDeltaOffsets(scan_state.last_known_row, start, scan_count);
 
 	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
-	BitUnpackRange(base_data, (data_ptr_t)bitunpack_buffer.get(), offsets.total_bitunpack_count, offsets.bitunpack_start_row, scan_state.current_width);
+	BitUnpackRange(base_data, (data_ptr_t)bitunpack_buffer.get(), offsets.total_bitunpack_count,
+	               offsets.bitunpack_start_row, scan_state.current_width);
 	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
-	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(), offsets.total_delta_decode_count, scan_state.last_known_index);
+	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
+	                   offsets.total_delta_decode_count, scan_state.last_known_index);
 
 	// Lookup decompressed offsets in dict
 	for (idx_t i = 0; i < scan_count; i++) {
 		uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
-		result_data[i] =
-		    UncompressedStringStorage::FetchStringFromDict(segment, dict, result, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values], string_length);
+		result_data[i] = UncompressedStringStorage::FetchStringFromDict(
+		    segment, dict, result, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values],
+		    string_length);
 	}
 
 	scan_state.StoreLastDelta(delta_decode_buffer[scan_count + offsets.unused_delta_decoded_values - 1],
@@ -609,7 +616,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
-	unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
+	unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
 
 	if (have_symbol_table) {
 		// We basically just do a scan of 1 which is kinda expensive as we need to repeatedly delta decode until we
@@ -617,25 +624,24 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		auto offsets = CalculateBpDeltaOffsets(-1, row_id, 1);
 
 		auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
-		BitUnpackRange(base_data, (data_ptr_t)bitunpack_buffer.get(), offsets.total_bitunpack_count, offsets.bitunpack_start_row, width);
+		BitUnpackRange(base_data, (data_ptr_t)bitunpack_buffer.get(), offsets.total_bitunpack_count,
+		               offsets.bitunpack_start_row, width);
 		auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
-		DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(), offsets.total_delta_decode_count, 0);
+		DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
+		                   offsets.total_delta_decode_count, 0);
 
 		uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
 
-		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
+		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
+		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
-		auto decompressed_string_size = fsst_decompress(
-		    &decoder,
-		    compressed_string.GetSize(),
-		    (unsigned char*)compressed_string.GetDataUnsafe(),
-		    StringUncompressed::STRING_BLOCK_LIMIT+1,
-		    &decompress_buffer[0]
-		);
+		auto decompressed_string_size =
+		    fsst_decompress(&decoder, compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
+		                    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 
 		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
-		auto decompressed_string = StringVector::AddString(result, (char*)decompress_buffer, decompressed_string_size);
+		auto decompressed_string = StringVector::AddString(result, (char *)decompress_buffer, decompressed_string_size);
 		result_data[result_idx] = decompressed_string;
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string

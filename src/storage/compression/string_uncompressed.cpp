@@ -94,9 +94,12 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 
 	// TODO FSST:
 	//  	decompress bitpacked+delta encoded offsets
-	//			- if first element: start from 0, bitunpack+decode the first min(bitpacking_group_width, scan_count values)
-	//			- else start from last cached value, bitunpack the values from last cached value (rounded down to multiple
-	//          - of bitpacking_group_width) up until the max scanned index rounded to multiple of bitpacking_group_width.
+	//			- if first element: start from 0, bitunpack+decode the first min(bitpacking_group_width, scan_count
+	//values)
+	//			- else start from last cached value, bitunpack the values from last cached value (rounded down to
+	//multiple
+	//          - of bitpacking_group_width) up until the max scanned index rounded to multiple of
+	//          bitpacking_group_width.
 	// 		use those to fetchstringfromdict en set result to FSST
 
 	for (idx_t i = 0; i < scan_count; i++) {
@@ -109,7 +112,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 }
 
 void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
-                                            Vector &result) {
+                                           Vector &result) {
 	StringScanPartial(segment, state, scan_count, result, 0);
 }
 

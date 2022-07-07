@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/string/index_fetch.test
 # description: Fetch from compressed string column with index
-# group: [dictionary]
+# group: [string]
 
 # load the DB from disk
 load __TEST_DIR__/test_string_compression.db

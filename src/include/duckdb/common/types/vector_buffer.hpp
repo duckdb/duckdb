@@ -165,12 +165,13 @@ public:
 	VectorFSSTStringBuffer();
 
 public:
-	void AddDecoder(buffer_ptr<void>& fsst_decoder_p) {
+	void AddDecoder(buffer_ptr<void> &fsst_decoder_p) {
 		fsst_decoder = fsst_decoder_p;
 	}
-	void* GetDecoder() {
+	void *GetDecoder() {
 		return fsst_decoder.get();
 	}
+
 private:
 	buffer_ptr<void> fsst_decoder;
 };

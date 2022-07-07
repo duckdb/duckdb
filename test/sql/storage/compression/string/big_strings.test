@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/string/big_strings.test
 # description: Test string compression with big strings, which are currently unsupported by the compression algorithms
-# group: [dictionary]
+# group: [string]
 
 # load the DB from disk
 load __TEST_DIR__/test_string_compression.db

@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/dictionary/medium.test
+# name: test/sql/storage/compression/string/medium.test
 # description: Test medium storage with string compression(> vector size)
-# group: [dictionary]
+# group: [string]
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db

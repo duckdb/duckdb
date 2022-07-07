@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/string/table_copy.test
 # description: Tests a table copy on a table spanning multiple segments
-# group: [dictionary]
+# group: [string]
 
 require tpch
 

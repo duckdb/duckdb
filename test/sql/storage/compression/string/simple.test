@@ -1,6 +1,6 @@
-# name: test/sql/storage/compression/dictionary/dictionary_simple.test
+# name: test/sql/storage/compression/string/simple.test
 # description: Test dictionary compression
-# group: [dictionary]
+# group: [string]
 
 # load the DB from disk
 load __TEST_DIR__/test_dictionary.db

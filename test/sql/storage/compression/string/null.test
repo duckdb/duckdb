@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/string/null.test
 # description: Test storage of string columns with compression and many null values
-# group: [dictionary]
+# group: [string]
 
 # load the DB from disk
 load __TEST_DIR__/test_rle.db

@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/string/struct.test
 # description: Test storage with string compression inside structs
-# group: [dictionary]
+# group: [string]
 
 # load the DB from disk
 load __TEST_DIR__/test_string_compression.db
