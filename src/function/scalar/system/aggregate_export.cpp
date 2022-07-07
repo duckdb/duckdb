@@ -283,6 +283,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      bound_function.combine, ExportAggregateFinalize, bound_function.simple_update,
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
+	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
 	                                             move(child_aggregate->filter), move(export_bind_data),
