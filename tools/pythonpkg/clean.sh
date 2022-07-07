@@ -9,7 +9,7 @@ key="$1"
   case $key in
     -f | --force)
     python3 clean.py -f
-        exit 1
+        exit 0
         ;;
   esac
 shift
