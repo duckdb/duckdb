@@ -2,24 +2,22 @@ import duckdb
 import os
 import pytest
 
-
 def test_multiple_writes():
     con1 = duckdb.connect("test.db")
     con2 = duckdb.connect("test.db")
     con1.execute("CREATE TABLE foo1 as SELECT 1 as a, 2 as b")
-    con1.commit()
     con2.execute("CREATE TABLE bar1 as SELECT 2 as a, 3 as b")
-    con2.commit()
     con2.close()
     con1.close()
     con3 = duckdb.connect("test.db")
     tbls = con3.execute("select * from information_schema.tables").fetchall()
-    assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
-    con3.close()
+    assert tbls == [(None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)] or tbls == [(None, 'main', 'bar1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None), (None, 'main', 'foo1', 'BASE TABLE', None, None, None, None, None, 'YES', 'NO', None)]
     del con1
     del con2
     del con3
-    os.remove('test.db') 
+
+    os.remove('test.db')
+
 
 def test_diff_config():
     con1 = duckdb.connect("test.db")
