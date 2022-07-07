@@ -13,6 +13,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
 #include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
@@ -613,23 +614,20 @@ string Vector::ToString(idx_t count) const {
 		}
 		break;
 	case VectorType::FSST_VECTOR: {
-			D_ASSERT(GetVectorType() == VectorType::FSST_VECTOR);
-			D_ASSERT(GetType() == LogicalType::VARCHAR);
-
 			for (idx_t i = 0; i < count; i++) {
 				string_t compressed_string = ((string_t *)data)[i];
-				unsigned char decompress_buffer[1000]; // variable size
+				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT+1];
 				auto decompressed_string_size =
 					fsst_decompress((fsst_decoder_t*)FSSTVector::GetDecoder(
 									const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
 									compressed_string.GetSize(),       /* IN: byte-length of compressed string. */
 									(unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
-									1000,                 /* IN: byte-length of output buffer. */
+			                        StringUncompressed::STRING_BLOCK_LIMIT+1,                 /* IN: byte-length of output buffer. */
 									&decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
 					);
 
-				if (decompressed_string_size == 1000) {
-					throw InternalException("DONT THINK THIS LL WORK");
+				if (decompressed_string_size > StringUncompressed::STRING_BLOCK_LIMIT) {
+					throw InternalException("Failed to decompress entire FSST string");
 				}
 				retval += string((const char*)decompress_buffer, decompressed_string_size) + (i == count - 1 ? "" : ", ");
 			}
@@ -698,7 +696,6 @@ void Vector::Normalify(idx_t count) {
 		// already a flat vector
 		break;
 	case VectorType::FSST_VECTOR: {
-		D_ASSERT(GetType() == LogicalType::VARCHAR);
 		// create vector to decompress into
 		Vector other(GetType(), count);
 		// now copy the data of this vector to the other vector, decompressing the strings in the process

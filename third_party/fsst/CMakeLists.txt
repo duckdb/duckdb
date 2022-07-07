@@ -4,6 +4,8 @@ endif()
 
 find_package(Threads REQUIRED)
 
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 if(COMPILER_SUPPORTS_MARCH_NATIVE)

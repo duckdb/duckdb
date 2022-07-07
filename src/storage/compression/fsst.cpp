@@ -185,7 +185,7 @@ public:
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
-		current_dictionary = DictionaryCompressionStorage::GetDictionary(*current_segment, *current_handle);
+		current_dictionary = FSSTStorage::GetDictionary(*current_segment, *current_handle);
 		current_end_ptr = current_handle->node->buffer + current_dictionary.end;
 	}
 
@@ -307,7 +307,7 @@ public:
 		current_dictionary.end -= move_amount;
 		D_ASSERT(current_dictionary.end == total_size);
 		// write the new dictionary (with the updated "end")
-		DictionaryCompressionStorage::SetDictionary(*current_segment, *handle, current_dictionary);
+		FSSTStorage::SetDictionary(*current_segment, *handle, current_dictionary);
 
 		return total_size;
 	}
