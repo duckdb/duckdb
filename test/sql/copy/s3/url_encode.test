@@ -50,7 +50,14 @@ SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just b
 ----
 1
 
-# Note that for HTTP urls actual + symbols need to be encoded to %2B
+# For HTTP urls from AWS with + symbols, encoding them with %2B is required
 query I
 SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just%2Bdont%2Buse%2Bplus%2Bor%2Bspaces%2Bplease.parquet" LIMIT 1;
 ----
+2
+
+# However Minio interprets them as spaces so this works too
+query I
+SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
+----
+2
