@@ -82,7 +82,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 
 	auto hash_data = (hash_t *)hdata.data;
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
-	auto main_ht = (data_ptr_t *)hash_map->node->buffer;
+	auto main_ht = (data_ptr_t *)hash_map.Ptr();
 	for (idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
 		auto hindex = hdata.sel->get_index(rindex);
@@ -242,7 +242,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	hashes.Normalify(count);
 
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto pointers = (data_ptr_t *)hash_map->node->buffer;
+	auto pointers = (data_ptr_t *)hash_map.Ptr();
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
@@ -265,7 +265,7 @@ void JoinHashTable::Finalize() {
 
 	// allocate the HT and initialize it with all-zero entries
 	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
-	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
+	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
@@ -276,7 +276,7 @@ void JoinHashTable::Finalize() {
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : block_collection->blocks) {
 		auto handle = buffer_manager.Pin(block.block);
-		data_ptr_t dataptr = handle->node->buffer;
+		data_ptr_t dataptr = handle.Ptr();
 		idx_t entry = 0;
 		while (entry < block.count) {
 			// fetch the next vector of entries from the blocks
@@ -735,7 +735,7 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 		for (; state.block_position < block_collection->blocks.size(); state.block_position++, state.position = 0) {
 			auto &block = block_collection->blocks[state.block_position];
 			auto &handle = pinned_handles[state.block_position];
-			auto baseptr = handle->node->buffer;
+			auto baseptr = handle.Ptr();
 			for (; state.position < block.count; state.position++) {
 				auto tuple_base = baseptr + state.position * entry_size;
 				auto found_match = Load<bool>(tuple_base + tuple_size);
@@ -780,7 +780,7 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 	while (state.block_position < block_collection->blocks.size()) {
 		auto &block = block_collection->blocks[state.block_position];
 		auto handle = buffer_manager.Pin(block.block);
-		auto base_ptr = handle->node->buffer;
+		auto base_ptr = handle.Ptr();
 		// go through all the tuples within this block
 		while (state.position < block.count) {
 			auto tuple_base = base_ptr + state.position * entry_size;

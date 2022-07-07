@@ -45,6 +45,16 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinLocalState : public LocalSinkState {
 public:
+	HashJoinLocalState(Allocator &allocator, const PhysicalHashJoin &hj) : build_executor(allocator) {
+		if (!hj.right_projection_map.empty()) {
+			build_chunk.Initialize(allocator, hj.build_types);
+		}
+		for (auto &cond : hj.conditions) {
+			build_executor.AddExpression(*cond.right);
+		}
+		join_keys.Initialize(allocator, hj.condition_types);
+	}
+
 	DataChunk build_chunk;
 	DataChunk join_keys;
 	ExpressionExecutor build_executor;
@@ -100,11 +110,12 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
 
+			auto &allocator = Allocator::Get(context);
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
-			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
+			    allocator, BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
-			info.group_chunk.Initialize(delim_types);
-			info.result_chunk.Initialize(payload_types);
+			info.group_chunk.Initialize(allocator, delim_types);
+			info.result_chunk.Initialize(allocator, payload_types);
 		}
 	}
 	// for perfect hash join
@@ -114,14 +125,8 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<HashJoinLocalState>();
-	if (!right_projection_map.empty()) {
-		state->build_chunk.Initialize(build_types);
-	}
-	for (auto &cond : conditions) {
-		state->build_executor.AddExpression(*cond.right);
-	}
-	state->join_keys.Initialize(condition_types);
+	auto &allocator = Allocator::Get(context.client);
+	auto state = make_unique<HashJoinLocalState>(allocator, *this);
 	return move(state);
 }
 
@@ -190,6 +195,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
+	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator) {
+	}
+
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
@@ -201,13 +209,14 @@ public:
 	}
 };
 
-unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &context) const {
-	auto state = make_unique<PhysicalHashJoinState>();
+unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
+	auto &allocator = Allocator::Get(context.client);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
+	auto state = make_unique<PhysicalHashJoinState>(allocator);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
-		state->join_keys.Initialize(condition_types);
+		state->join_keys.Initialize(allocator, condition_types);
 		for (auto &cond : conditions) {
 			state->probe_executor.AddExpression(*cond.left);
 		}

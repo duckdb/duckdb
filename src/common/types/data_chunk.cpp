@@ -18,6 +18,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
 
@@ -36,15 +37,19 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void DataChunk::Initialize(const vector<LogicalType> &types) {
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types) {
 	D_ASSERT(data.empty());   // can only be initialized once
 	D_ASSERT(!types.empty()); // empty chunk not allowed
 	capacity = STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < types.size(); i++) {
-		VectorCache cache(types[i]);
+		VectorCache cache(allocator, types[i]);
 		data.emplace_back(cache);
 		vector_caches.push_back(move(cache));
 	}
+}
+
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types) {
+	Initialize(Allocator::Get(context), types);
 }
 
 void DataChunk::Reset() {
@@ -218,7 +223,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	for (idx_t i = 0; i < column_count; i++) {
 		types.push_back(LogicalType::Deserialize(source));
 	}
-	Initialize(types);
+	Initialize(Allocator::DefaultAllocator(), types);
 	// now load the column data
 	SetCardinality(rows);
 	for (idx_t i = 0; i < column_count; i++) {

@@ -79,7 +79,7 @@ struct TestVectorFlat {
 		vector<Value> result_values = GenerateValues(info, info.type);
 		for (idx_t cur_row = 0; cur_row < result_values.size(); cur_row += STANDARD_VECTOR_SIZE) {
 			auto result = make_unique<DataChunk>();
-			result->Initialize({info.type});
+			result->Initialize(Allocator::DefaultAllocator(), {info.type});
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
 			for (idx_t i = 0; i < cardinality; i++) {
 				result->data[0].SetValue(i, result_values[cur_row + i]);
@@ -95,7 +95,7 @@ struct TestVectorConstant {
 		auto values = TestVectorFlat::GenerateValues(info, info.type);
 		for (idx_t cur_row = 0; cur_row < TestVectorFlat::TEST_VECTOR_CARDINALITY; cur_row += STANDARD_VECTOR_SIZE) {
 			auto result = make_unique<DataChunk>();
-			result->Initialize({info.type});
+			result->Initialize(Allocator::DefaultAllocator(), {info.type});
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			result->data[0].SetValue(0, values[0]);
 			result->data[0].SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -160,7 +160,7 @@ struct TestVectorSequence {
 	static void Generate(TestVectorInfo &info) {
 #if STANDARD_VECTOR_SIZE > 2
 		auto result = make_unique<DataChunk>();
-		result->Initialize({info.type});
+		result->Initialize(Allocator::DefaultAllocator(), {info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);

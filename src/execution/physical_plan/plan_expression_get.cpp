@@ -14,18 +14,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	if (!expr_scan->IsFoldable()) {
 		return move(expr_scan);
 	}
+	auto &allocator = Allocator::Get(context);
 	// simple expression scan (i.e. no subqueries to evaluate and no prepared statement parameters)
 	// we can evaluate all the expressions right now and turn this into a chunk collection scan
 	auto chunk_scan =
 	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, expr_scan->expressions.size());
-	chunk_scan->owned_collection = make_unique<ChunkCollection>();
+	chunk_scan->owned_collection = make_unique<ChunkCollection>(allocator);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 
 	DataChunk chunk;
-	chunk.Initialize(op.types);
+	chunk.Initialize(allocator, op.types);
 	for (idx_t expression_idx = 0; expression_idx < expr_scan->expressions.size(); expression_idx++) {
 		chunk.Reset();
-		expr_scan->EvaluateExpression(expression_idx, nullptr, chunk);
+		expr_scan->EvaluateExpression(allocator, expression_idx, nullptr, chunk);
 		chunk_scan->owned_collection->Append(chunk);
 	}
 	return move(chunk_scan);

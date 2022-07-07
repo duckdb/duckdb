@@ -435,6 +435,7 @@ CreateScalarFunctionInfo JSONFunctions::GetObjectFunction() {
 	auto fun =
 	    ScalarFunction("json_object", {}, LogicalType::JSON, ObjectFunction, false, JSONObjectBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
@@ -442,6 +443,7 @@ CreateScalarFunctionInfo JSONFunctions::GetArrayFunction() {
 	auto fun =
 	    ScalarFunction("json_array", {}, LogicalType::JSON, ArrayFunction, false, JSONArrayBind, nullptr, nullptr);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
