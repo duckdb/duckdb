@@ -77,4 +77,4 @@ private:
 	const bool flush;
 };
 
-}; // namespace duckdb
+} // namespace duckdb

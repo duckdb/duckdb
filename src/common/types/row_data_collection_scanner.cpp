@@ -86,4 +86,4 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	total_scanned += scanned;
 }
 
-}; // namespace duckdb
+} // namespace duckdb
