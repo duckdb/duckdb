@@ -193,6 +193,7 @@ void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx
 	for (idx_t i = 0; i < count; i++) {
 		ScanPandasObject(bind_data, col[i], i, out);
 	}
+	gil = nullptr;
 	VerifyTypeConstraints(out, count);
 }
 
