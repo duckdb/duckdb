@@ -65,7 +65,7 @@ public:
 	WindowGlobalSinkState(const PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()), next_sort(0),
-	      memory_per_thread(0), nthreads(0), mode(DBConfig::GetConfig(context).window_mode) {
+	      memory_per_thread(0), count(0), mode(DBConfig::GetConfig(context).window_mode) {
 
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[0].get());
@@ -160,7 +160,7 @@ public:
 
 	// Threading
 	idx_t memory_per_thread;
-	atomic<size_t> nthreads;
+	atomic<idx_t> count;
 	WindowAggregationMode mode;
 };
 
@@ -234,9 +234,11 @@ public:
 
 		if (!over_types.empty()) {
 			over_chunk.Initialize(over_types);
+			over_subset.Initialize(over_types);
 		}
 
 		payload_chunk.Initialize(payload_types);
+		payload_subset.Initialize(payload_types);
 		payload_layout.Initialize(payload_types);
 	}
 
@@ -298,17 +300,17 @@ void WindowLocalSinkState::Hash(WindowGlobalSinkState &gstate) {
 			VectorOperations::CombineHash(hash_vector, over_chunk.data[prt_idx], count);
 		}
 
-		const auto group_mask = hash_t(counts.size() - 1);
+		const auto &partition_info = gstate.partition_info;
 		if (hash_vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			const auto group = (hashes[0] & group_mask);
+			const auto group = partition_info.GetHashPartition(hashes[0]);
 			counts[group] = count;
 			for (idx_t i = 0; i < count; ++i) {
 				sel.set_index(i, i);
 			}
 		} else {
 			for (idx_t i = 0; i < count; ++i) {
-				const auto bin = (hashes[i] & group_mask);
-				++counts[bin];
+				const auto group = partition_info.GetHashPartition(hashes[i]);
+				++counts[group];
 			}
 
 			// Second pass: Initialise offsets
@@ -321,7 +323,7 @@ void WindowLocalSinkState::Hash(WindowGlobalSinkState &gstate) {
 
 			// Third pass: Build sequential selections
 			for (idx_t i = 0; i < count; ++i) {
-				const auto group = (hashes[i] & group_mask);
+				const auto group = partition_info.GetHashPartition(hashes[i]);
 				auto &group_idx = offsets[group];
 				sel.set_index(group_idx++, i);
 			}
@@ -358,18 +360,37 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 
 	hash_groups.resize(gstate.Group());
 
-	D_ASSERT(ungrouped.get());
-	auto &rows = *ungrouped->local_sort->payload_data;
-	auto &heap = *ungrouped->local_sort->payload_heap;
-	RowDataCollectionScanner scanner(rows, heap, payload_layout);
+	if (!ungrouped) {
+		return;
+	}
 
+	auto &payload_data = *ungrouped->local_sort->payload_data;
+	auto rows_block = ungrouped->local_sort->ConcatenateBlocks(payload_data);
+
+	RowDataCollection rows(payload_data.buffer_manager, rows_block.capacity, rows_block.entry_size, true);
+	rows.blocks.emplace_back(rows_block);
+	rows.count = rows_block.count;
+
+	auto &payload_heap = *ungrouped->local_sort->payload_heap;
+	RowDataCollection heap(payload_data.buffer_manager, payload_heap.block_capacity, payload_heap.entry_size, true);
+	if (!payload_layout.AllConstant()) {
+		auto heap_block = ungrouped->local_sort->ConcatenateBlocks(payload_heap);
+		heap.blocks.emplace_back(heap_block);
+		heap.count = heap.count;
+		heap.block_capacity = heap.block_capacity;
+	}
+
+	RowDataCollectionScanner scanner(rows, heap, payload_layout);
 	const auto input_count = payload_chunk.ColumnCount() - over_chunk.ColumnCount();
 	while (scanner.Remaining()) {
+		payload_chunk.Reset();
 		scanner.Scan(payload_chunk);
 
+		over_chunk.Reset();
 		for (idx_t c = 0; c < over_chunk.ColumnCount(); ++c) {
-			over_chunk.data[c].Reference(payload_chunk.data[input_count]);
+			over_chunk.data[c].Reference(payload_chunk.data[input_count + c]);
 		}
+		over_chunk.SetCardinality(payload_chunk);
 
 		Hash(gstate);
 	}
@@ -378,6 +399,8 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 }
 
 void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &gstate) {
+	gstate.count += input_chunk.size();
+
 	if (over_chunk.ColumnCount() > 0) {
 		executor.Execute(input_chunk, over_chunk);
 		over_chunk.Verify();
@@ -425,11 +448,10 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		}
 
 		// If we pass our thread memory budget, then switch to hash grouping.
-		if (ungrouped->SinkChunk(over_chunk, payload_chunk)) {
+		if (ungrouped->SinkChunk(over_chunk, payload_chunk) || gstate.count > 100000) {
 			Group(gstate);
-		} else {
-			return;
 		}
+		return;
 	}
 
 	// Grouped, so hash
@@ -509,6 +531,10 @@ void WindowGlobalSinkState::Finalize() {
 
 	//	Sort the data so we can scan it
 	auto &global_sort = *ungrouped->global_sort;
+	if (global_sort.sorted_blocks.empty()) {
+		return;
+	}
+
 	global_sort.PrepareMergePhase();
 	while (global_sort.sorted_blocks.size() > 1) {
 		global_sort.InitializeMergeRound();
@@ -818,22 +844,24 @@ static void ScanSortedPartition(WindowLocalSourceState &state, ChunkCollection &
 	// scan the sorted row data
 	D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
 	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+	DataChunk payload_chunk;
+	DataChunk over_chunk;
+	payload_chunk.Initialize(payload_types);
 	for (;;) {
-		DataChunk payload_chunk;
-		payload_chunk.Initialize(payload_types);
-		payload_chunk.SetCardinality(0);
+		payload_chunk.Reset();
 		scanner.Scan(payload_chunk);
 		if (payload_chunk.size() == 0) {
 			break;
 		}
 
 		// split into two
-		DataChunk over_chunk;
 		payload_chunk.Split(over_chunk, input_types.size());
 
 		// append back to collection
 		input.Append(payload_chunk);
 		over.Append(over_chunk);
+
+		payload_chunk.Fuse(over_chunk);
 	}
 
 	state.hash_group.reset();
@@ -1617,7 +1645,6 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 	auto &gstate = (WindowGlobalSinkState &)gstate_p;
 	auto &lstate = (WindowLocalSinkState &)lstate_p;
 	lstate.Combine(gstate);
-	gstate.nthreads++;
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
@@ -1755,10 +1782,6 @@ public:
 	idx_t MaxThreads() override {
 		auto &state = (WindowGlobalSinkState &)*op.sink_state;
 
-		if (op.children[0]->type == PhysicalOperatorType::WINDOW) {
-			return state.nthreads;
-		}
-
 		// If there is only one partition, we have to process it on one thread.
 		if (state.hash_groups.empty()) {
 			return 1;
@@ -1771,7 +1794,7 @@ public:
 			}
 		}
 
-		return state.nthreads;
+		return max_threads;
 	}
 };
 
@@ -1794,6 +1817,8 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 	//	Move to the next bin if we are done.
 	while (state.position >= state.chunks.Count()) {
+		state.chunks.Reset();
+		state.window_results.Reset();
 		auto hash_bin = global_source.next_bin++;
 		if (hash_bin >= bin_count) {
 			return;

@@ -29,6 +29,10 @@ RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, Ro
                                                    const RowLayout &layout_p, bool flush_p)
     : rows(rows_p), heap(heap_p), layout(layout_p), read_state(*this), total_count(rows.count), total_scanned(0),
       flush(flush_p) {
+
+	if (!layout.AllConstant()) {
+		D_ASSERT(rows.blocks.size() == heap.blocks.size());
+	}
 }
 
 void RowDataCollectionScanner::Scan(DataChunk &chunk) {
