@@ -27,6 +27,8 @@ import java.util.TimeZone;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import javax.sql.rowset.RowSetProvider;
+import javax.sql.rowset.CachedRowSet;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -2186,6 +2188,12 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_cached_row_set() throws SQLException {
+		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
+		rowSet.setUrl("jdbc:duckdb:");
+		rowSet.setCommand("select 1");
+		rowSet.execute();
+	}
 
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
