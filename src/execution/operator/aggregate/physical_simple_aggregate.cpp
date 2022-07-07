@@ -1,11 +1,12 @@
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,7 @@ struct AggregateState {
 			aggr.function.initialize(state.get());
 			aggregates.push_back(move(state));
 			destructors.push_back(aggr.function.destructor);
+			counts.push_back(0);
 		}
 	}
 	~AggregateState() {
@@ -49,8 +51,10 @@ struct AggregateState {
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
-	// The destructors
+	//! The destructors
 	vector<aggregate_destructor_t> destructors;
+	//! Counts (used for verification)
+	vector<idx_t> counts;
 };
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
@@ -135,6 +139,8 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 			sink.child_executor.SetChunk(input);
 			payload_chunk.SetCardinality(input);
 		}
+		sink.state.counts[aggr_idx] += payload_chunk.size();
+
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
@@ -171,6 +177,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
+
+		gstate.state.counts[aggr_idx] += source.state.counts[aggr_idx];
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
@@ -202,6 +210,20 @@ unique_ptr<GlobalSourceState> PhysicalSimpleAggregate::GetGlobalSourceState(Clie
 	return make_unique<SimpleAggregateState>();
 }
 
+void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {
+#ifdef DEBUG
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggr = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		if (state.counts[aggr_idx] == 0 && aggr.function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+			// Default is when 0 values go in, NULL comes out
+			VectorData vdata;
+			chunk.data[aggr_idx].Orrify(1, vdata);
+			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
+		}
+	}
+#endif
+}
+
 void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                       LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
@@ -220,6 +242,7 @@ void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chun
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
+	VerifyNullHandling(chunk, gstate.state, aggregates);
 	state.finished = true;
 }
 

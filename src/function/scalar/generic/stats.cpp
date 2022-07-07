@@ -48,6 +48,7 @@ static unique_ptr<BaseStatistics> StatsPropagateStats(ClientContext &context, Fu
 void StatsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction stats("stats", {LogicalType::ANY}, LogicalType::VARCHAR, StatsFunction, StatsBind, nullptr,
 	                     StatsPropagateStats);
+	stats.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	stats.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
 	set.AddFunction(stats);
 }
