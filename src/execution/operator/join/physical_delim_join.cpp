@@ -40,7 +40,7 @@ vector<PhysicalOperator *> PhysicalDelimJoin::GetChildren() const {
 //===--------------------------------------------------------------------===//
 class DelimJoinGlobalState : public GlobalSinkState {
 public:
-	explicit DelimJoinGlobalState(const PhysicalDelimJoin *delim_join) {
+	explicit DelimJoinGlobalState(Allocator &allocator, const PhysicalDelimJoin *delim_join) : lhs_data(allocator) {
 		D_ASSERT(delim_join->delim_scans.size() > 0);
 		// set up the delim join chunk to scan in the original join
 		auto &cached_chunk_scan = (PhysicalChunkScan &)*delim_join->join->children[0];
@@ -58,6 +58,9 @@ public:
 
 class DelimJoinLocalState : public LocalSinkState {
 public:
+	explicit DelimJoinLocalState(Allocator &allocator) : lhs_data(allocator) {
+	}
+
 	unique_ptr<LocalSinkState> distinct_state;
 	ChunkCollection lhs_data;
 
@@ -67,7 +70,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_unique<DelimJoinGlobalState>(this);
+	auto state = make_unique<DelimJoinGlobalState>(BufferAllocator::Get(context), this);
 	distinct->sink_state = distinct->GetGlobalSinkState(context);
 	if (delim_scans.size() > 1) {
 		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
@@ -76,7 +79,7 @@ unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext 
 }
 
 unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<DelimJoinLocalState>();
+	auto state = make_unique<DelimJoinLocalState>(Allocator::Get(context.client));
 	state->distinct_state = distinct->GetLocalSinkState(context);
 	return move(state);
 }

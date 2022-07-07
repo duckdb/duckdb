@@ -238,9 +238,10 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateGlobalSourceState : public GlobalSourceState {
 public:
-	explicit PhysicalHashAggregateGlobalSourceState(const PhysicalHashAggregate &op) : op(op), state_index(0) {
+	PhysicalHashAggregateGlobalSourceState(ClientContext &context, const PhysicalHashAggregate &op)
+	    : op(op), state_index(0) {
 		for (auto &rt : op.radix_tables) {
-			radix_states.push_back(rt.GetGlobalSourceState());
+			radix_states.push_back(rt.GetGlobalSourceState(context));
 		}
 	}
 
@@ -269,14 +270,14 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalHashAggregateGlobalSourceState>(*this);
+	return make_unique<PhysicalHashAggregateGlobalSourceState>(context, *this);
 }
 
 class PhysicalHashAggregateLocalSourceState : public LocalSourceState {
 public:
-	explicit PhysicalHashAggregateLocalSourceState(const PhysicalHashAggregate &op) {
+	explicit PhysicalHashAggregateLocalSourceState(ExecutionContext &context, const PhysicalHashAggregate &op) {
 		for (auto &rt : op.radix_tables) {
-			radix_states.push_back(rt.GetLocalSourceState());
+			radix_states.push_back(rt.GetLocalSourceState(context));
 		}
 	}
 
@@ -285,7 +286,7 @@ public:
 
 unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(ExecutionContext &context,
                                                                         GlobalSourceState &gstate) const {
-	return make_unique<PhysicalHashAggregateLocalSourceState>(*this);
+	return make_unique<PhysicalHashAggregateLocalSourceState>(context, *this);
 }
 
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,

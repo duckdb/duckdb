@@ -262,7 +262,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	unique_ptr<FileHandle> handle;
 };
 
-static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto local_data = make_unique<LocalReadCSVData>();
 
@@ -270,7 +270,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 	vector<LogicalType> types;
 	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
 
-	local_data->cast_chunk.Initialize(types);
+	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
 	return move(local_data);
 }
 
@@ -298,7 +298,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	return move(global_data);
 }
 
-static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
@@ -365,7 +365,7 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                             LocalFunctionData &lstate) {
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;

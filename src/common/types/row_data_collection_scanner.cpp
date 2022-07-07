@@ -10,7 +10,7 @@ void RowDataCollectionScanner::ScanState::PinData() {
 	auto &rows = scanner.rows;
 	D_ASSERT(block_idx < rows.blocks.size());
 	auto &data_block = rows.blocks[block_idx];
-	if (!data_handle || data_handle->handle->BlockId() != data_block.block->BlockId()) {
+	if (!data_handle.IsValid() || data_handle.GetBlockId() != data_block.block->BlockId()) {
 		data_handle = rows.buffer_manager.Pin(data_block.block);
 	}
 	if (scanner.layout.AllConstant()) {
@@ -20,7 +20,7 @@ void RowDataCollectionScanner::ScanState::PinData() {
 	auto &heap = scanner.heap;
 	D_ASSERT(block_idx < heap.blocks.size());
 	auto &heap_block = heap.blocks[block_idx];
-	if (!heap_handle || heap_handle->handle->BlockId() != heap_block.block->BlockId()) {
+	if (!heap_handle.IsValid() || heap_handle.GetBlockId() != heap_block.block->BlockId()) {
 		heap_handle = heap.buffer_manager.Pin(heap_block.block);
 	}
 }
@@ -55,7 +55,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		read_state.PinData();
 		auto &data_block = rows.blocks[read_state.block_idx];
 		idx_t next = MinValue(data_block.count - read_state.entry_idx, count - scanned);
-		const data_ptr_t data_ptr = read_state.data_handle->Ptr() + read_state.entry_idx * row_width;
+		const data_ptr_t data_ptr = read_state.data_handle.Ptr() + read_state.entry_idx * row_width;
 		// Set up the next pointers
 		data_ptr_t row_ptr = data_ptr;
 		for (idx_t i = 0; i < next; i++) {
@@ -64,7 +64,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		}
 		// Unswizzle the offsets back to pointers (if needed)
 		if (!layout.AllConstant()) {
-			RowOperations::UnswizzlePointers(layout, data_ptr, read_state.heap_handle->Ptr(), next);
+			RowOperations::UnswizzlePointers(layout, data_ptr, read_state.heap_handle.Ptr(), next);
 		}
 		// Update state indices
 		read_state.entry_idx += next;

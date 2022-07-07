@@ -34,8 +34,8 @@ public:
 		idx_t block_idx;
 		idx_t entry_idx;
 
-		unique_ptr<BufferHandle> data_handle = nullptr;
-		unique_ptr<BufferHandle> heap_handle = nullptr;
+		BufferHandle data_handle;
+		BufferHandle heap_handle;
 	};
 
 	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout,

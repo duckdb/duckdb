@@ -65,9 +65,9 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// generate a mark join that replaces this IN expression
 	// first generate a ChunkCollection from the set of expressions
 	vector<LogicalType> types = {in_type};
-	auto collection = make_unique<ChunkCollection>();
+	auto collection = make_unique<ChunkCollection>(context);
 	DataChunk chunk;
-	chunk.Initialize(types);
+	chunk.Initialize(context, types);
 	for (idx_t i = 1; i < expr.children.size(); i++) {
 		// resolve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(*expr.children[i]);

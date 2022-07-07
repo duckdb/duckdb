@@ -49,8 +49,8 @@ public:
 
 	//! Source interface
 	idx_t Size(GlobalSinkState &sink_state) const;
-	unique_ptr<GlobalSourceState> GetGlobalSourceState() const;
-	unique_ptr<LocalSourceState> GetLocalSourceState() const;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, GlobalSourceState &gstate_p,
 	             LocalSourceState &lstate_p) const;
 
