@@ -488,7 +488,7 @@ Returns the error message contained within the result. The error is only set if 
 
 The result of this function must not be freed. It will be cleaned up when `duckdb_destroy_result` is called.
 
-* result: The result object to fetch the nullmask from.
+* result: The result object to fetch the error from.
 * returns: The error of the result.
 */
 DUCKDB_API const char *duckdb_result_error(duckdb_result *result);
