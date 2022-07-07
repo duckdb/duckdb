@@ -11,7 +11,7 @@ import sys
 parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for DuckDB')
 
 parser.add_argument('--extensions', action='store',
-                    help='CSV file with DuckDB extensions to build', default=".github/workflows/extensions.csv")
+                    help='CSV file with DuckDB extensions to build', default=".github/config/extensions.csv")
 
 
 args = parser.parse_args()
