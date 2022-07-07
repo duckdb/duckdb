@@ -1,5 +1,5 @@
 # name: test/sql/copy/s3/url_encode.test
-# description: Url encoding in urls
+# description: S3 Url encoding
 # group: [s3]
 
 require parquet
@@ -19,37 +19,38 @@ CREATE TABLE test_1 as (SELECT 1 FROM range(0,5));
 CREATE TABLE test_2 as (SELECT 2 FROM range(0,5));
 CREATE TABLE test_3 as (SELECT 3 FROM range(0,5));
 
-# Upload nasty files
 statement ok
 COPY test_1 TO 's3://test-bucket-public/url_encode/just because you can doesnt mean you should.parquet' (FORMAT 'parquet');
 
 statement ok
 COPY test_2 TO 's3://test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet' (FORMAT 'parquet');
 
-# For S3 urls spaces are actually allowed
+# For S3 urls spaces are fine
 query I
 SELECT * FROM "s3://test-bucket-public/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
 ----
 1
 
+# In S3 urls, + means a plus symbol
 query I
 SELECT * FROM "s3://test-bucket-public/url_encode/just+dont+use+plus+or+spaces+please.parquet" LIMIT 1;
 ----
 2
 
-# For HTTP URLs we convert + to %20 internally
-query I
-SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just+because+you+can+doesnt+mean+you+should.parquet" LIMIT 1;
-----
-1
+# NOTE! For HTTP(s) urls, the + symbol is not encoded by duckdb, leaving it up to the server to decide if it should be interpreted
+# as a space or a plus. In the case of AWS S3, they are interpreted as encoded spaces, however Minio does not
+#query I
+#SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just+because+you+can+doesnt+mean+you+should.parquet" LIMIT 1;
+#----
+#1
 
+# For HTTP urls, we also allow regular spaces, which will get encoded to %20 by duckdb
 query I
 SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just because you can doesnt mean you should.parquet" LIMIT 1;
 ----
 1
 
-# Note that a plus
+# Note that for HTTP urls actual + symbols need to be encoded to %2B
 query I
 SELECT * FROM "http://test-bucket-public.duckdb-minio.com:9000/url_encode/just%2Bdont%2Buse%2Bplus%2Bor%2Bspaces%2Bplease.parquet" LIMIT 1;
 ----
-2
