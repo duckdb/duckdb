@@ -55,7 +55,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
 	string error =
-	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, &positionals, defaults);
+	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
 		return BindResult(binder.FormatError(*expr->get(), error));
 	}

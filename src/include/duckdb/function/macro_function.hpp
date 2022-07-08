@@ -40,7 +40,7 @@ public:
 
 	static string ValidateArguments(MacroFunction &macro_function, const string &name,
 	                                FunctionExpression &function_expr,
-	                                vector<unique_ptr<ParsedExpression>> *positionals,
+	                                vector<unique_ptr<ParsedExpression>> &positionals,
 	                                unordered_map<string, unique_ptr<ParsedExpression>> &defaults);
 
 	virtual string ToSQL(const string &schema, const string &name);

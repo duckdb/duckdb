@@ -28,7 +28,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 	string error =
-	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, &positionals, defaults);
+	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
 	if (!error.empty()) {
 		// cannot use error below as binder rnot in scope
 		// return BindResult(binder. FormatError(*expr->get(), error));
