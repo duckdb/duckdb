@@ -1,65 +1,73 @@
 #include "duckdb_python/pandas_type.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/string_util.hpp"
 #include <exception>
 
 namespace duckdb {
 
-PandasType GetPandasType(py::handle dtype) {
-	int64_t extended_type;
-
-	if (py::hasattr(dtype, "num")) {
-		extended_type = py::int_(dtype.attr("num"));
+PandasType ConvertPandasType(const string &col_type) {
+	if (col_type == "bool") {
+		return PandasType::BOOL;
+	} else if (col_type == "boolean") {
+		return PandasType::PANDA_BOOL;
+	} else if (col_type == "uint8") {
+		return PandasType::UINT_8;
+	} else if (col_type == "Uint8") {
+		return PandasType::PANDA_UINT8;
+	} else if (col_type == "uint16") {
+		return PandasType::UINT_16;
+	} else if (col_type == "Uint16") {
+		return PandasType::PANDA_UINT16;
+	} else if (col_type == "uint32") {
+		return PandasType::UINT_32;
+	} else if (col_type == "Uint32") {
+		return PandasType::PANDA_UINT32;
+	} else if (col_type == "uint64") {
+		return PandasType::UINT_64;
+	} else if (col_type == "Uint64") {
+		return PandasType::PANDA_UINT64;
+	} else if (col_type == "int8") {
+		return PandasType::INT_8;
+	} else if (col_type == "Int8") {
+		return PandasType::PANDA_INT8;
+	} else if (col_type == "int16") {
+		return PandasType::INT_16;
+	} else if (col_type == "Int16") {
+		return PandasType::PANDA_INT16;
+	} else if (col_type == "int32") {
+		return PandasType::INT_32;
+	} else if (col_type == "Int32") {
+		return PandasType::PANDA_INT32;
+	} else if (col_type == "int64") {
+		return PandasType::INT_64;
+	} else if (col_type == "Int64") {
+		return PandasType::PANDA_INT64;
+	} else if (col_type == "float32") {
+		return PandasType::FLOAT_32;
+	} else if (col_type == "float64") {
+		return PandasType::FLOAT_64;
+	} else if (col_type == "Float32") {
+		return PandasType::PANDA_FLOAT32;
+	} else if (col_type == "Float64") {
+		return PandasType::PANDA_FLOAT64;
+	} else if (col_type == "object") {
+		//! this better be castable to strings
+		return PandasType::OBJECT;
+	} else if (col_type == "string") {
+		return PandasType::PANDA_STRING;
+	} else if (col_type == "timedelta64[ns]") {
+		return PandasType::PANDA_INTERVAL;
+	} else if (StringUtil::StartsWith(col_type, "datetime64[ns") || col_type == "<M8[ns]") {
+		return PandasType::PANDA_DATETIME;
+	} else if (col_type == "category") {
+		return PandasType::PANDA_CATEGORY;
 	} else {
-		auto type_str = string(py::str(dtype));
-		if (type_str == "boolean") {
-			return PandasType::PANDA_BOOL;
-		} else if (type_str == "category") {
-			return PandasType::PANDA_CATEGORY;
-		} else if (type_str == "Int8") {
-			return PandasType::PANDA_INT8;
-		} else if (type_str == "Int16") {
-			return PandasType::PANDA_INT16;
-		} else if (type_str == "Int32") {
-			return PandasType::PANDA_INT32;
-		} else if (type_str == "Int64") {
-			return PandasType::PANDA_INT64;
-		} else if (type_str == "UInt8") {
-			return PandasType::PANDA_UINT8;
-		} else if (type_str == "UInt16") {
-			return PandasType::PANDA_UINT16;
-		} else if (type_str == "UInt32") {
-			return PandasType::PANDA_UINT32;
-		} else if (type_str == "UInt64") {
-			return PandasType::PANDA_UINT64;
-		} else if (type_str == "Float32") {
-			return PandasType::PANDA_FLOAT32;
-		} else if (type_str == "Float64") {
-			return PandasType::PANDA_FLOAT64;
-		} else if (type_str == "string") {
-			return PandasType::PANDA_STRING;
-		} else {
-			throw std::runtime_error("Unknown dtype (" + type_str + ")");
-		}
+		throw std::runtime_error("unsupported python type " + col_type);
 	}
-	// 100 (PANDA_EXTENSION_TYPE) is potentially used by multiple dtypes, need to figure out which one it is exactly.
-	if (extended_type == (int64_t)PandasType::PANDA_EXTENSION_TYPE) {
-		auto extension_type_str = string(py::str(dtype));
-		if (extension_type_str == "category") {
-			return PandasType::PANDA_CATEGORY;
-		} else {
-			throw std::runtime_error("Unknown extension dtype (" + extension_type_str + ")");
-		}
-	}
-	// Since people can extend the dtypes with their own custom stuff, it's probably best to check if it falls out of
-	// the supported range of dtypes. (little hardcoded though)
-	if (!(extended_type >= 0 && extended_type <= 23) && !(extended_type >= 100 && extended_type <= 103)) {
-		throw std::runtime_error("Dtype num " + to_string(extended_type) + " is not supported");
-	}
-	return (PandasType)extended_type;
 }
 
-LogicalType ConvertPandasType(const PandasType &col_type) {
+LogicalType PandasToLogicalType(const PandasType &col_type) {
 	switch (col_type) {
 	case PandasType::BOOL:
 	case PandasType::PANDA_BOOL: {
@@ -112,6 +120,7 @@ LogicalType ConvertPandasType(const PandasType &col_type) {
 	case PandasType::PANDA_STRING: {
 		return LogicalType::VARCHAR;
 	}
+	case PandasType::PANDA_INTERVAL: {
 	case PandasType::TIMEDELTA: {
 		return LogicalType::INTERVAL;
 	}
@@ -124,6 +133,6 @@ LogicalType ConvertPandasType(const PandasType &col_type) {
 		                         " to duckdb LogicalType");
 	}
 	}
-}
+	}
 
 } // namespace duckdb

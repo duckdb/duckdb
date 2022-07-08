@@ -69,6 +69,6 @@ class TestPandasTypes(object):
         expected_result = data[0]
         df_in = pd.DataFrame({'object': pd.Series(data, dtype='object')})
         result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
-        assert result == str(expected_result)
+        assert result == expected_result
 
 

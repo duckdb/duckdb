@@ -8,6 +8,9 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/pandas_analyzer.hpp"
+#include "duckdb_python/pandas_type.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -115,6 +118,86 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 	return result;
 }
 
+template <typename T>
+bool TryCast(const py::object stuf, T &value) {
+	try {
+		value = stuf.cast<T>();
+		return true;
+	} catch (py::cast_error &e) {
+		return false;
+	}
+}
+
+template <typename T>
+T Cast(const py::object obj) {
+	return obj.cast<T>();
+}
+
+static void SetInvalidRecursive(Vector &out, idx_t index) {
+	auto &validity = FlatVector::Validity(out);
+	validity.SetInvalid(index);
+	if (out.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &children = StructVector::GetEntries(out);
+		for (idx_t i = 0; i < children.size(); i++) {
+			SetInvalidRecursive(*children[i], index);
+		}
+	}
+}
+
+//! 'count' is the amount of rows in the 'out' vector
+//! offset is the current row number within this vector
+void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
+
+	// handle None
+	if (object == Py_None) {
+		SetInvalidRecursive(out, offset);
+		return;
+	}
+
+	auto val = TransformPythonValue(object, out.GetType());
+	// Check if the Value type is accepted for the LogicalType of Vector
+	out.SetValue(offset, val);
+}
+
+static void VerifyMapConstraints(Vector &vec, idx_t count) {
+	auto invalid_reason = CheckMapValidity(vec, count);
+	switch (invalid_reason) {
+	case MapInvalidReason::VALID:
+		return;
+	case MapInvalidReason::DUPLICATE_KEY:
+		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains duplicates");
+	case MapInvalidReason::NULL_KEY_LIST:
+		throw std::runtime_error("Dict->Map conversion failed because 'key' list is None");
+	case MapInvalidReason::NULL_KEY:
+		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains None");
+	default:
+		throw std::runtime_error("Option not implemented for MapInvalidReason");
+	}
+}
+
+void VerifyTypeConstraints(Vector &vec, idx_t count) {
+	switch (vec.GetType().id()) {
+	case LogicalTypeId::MAP: {
+		VerifyMapConstraints(vec, count);
+		break;
+	}
+	default:
+		return;
+	}
+}
+
+void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
+	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
+	out.SetVectorType(VectorType::FLAT_VECTOR);
+	auto gil = make_unique<PythonGILWrapper>(); // We're creating python objects here, so we need the GIL
+
+	for (idx_t i = 0; i < count; i++) {
+		ScanPandasObject(bind_data, col[i], i, out);
+	}
+	gil = nullptr;
+	VerifyTypeConstraints(out, count);
+}
+
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
@@ -213,6 +296,9 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
+		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
+			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
+		}
 
 		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
@@ -315,88 +401,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	}
 }
 
-static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_type, PandasType &pandas_type) {
-	if (col_type == "bool") {
-		duckdb_col_type = LogicalType::BOOLEAN;
-		pandas_type = PandasType::BOOL;
-	} else if (col_type == "boolean") {
-		duckdb_col_type = LogicalType::BOOLEAN;
-		pandas_type = PandasType::PANDA_BOOL;
-	} else if (col_type == "uint8") {
-		duckdb_col_type = LogicalType::UTINYINT;
-		pandas_type = PandasType::UINT_8;
-	} else if (col_type == "Uint8") {
-		duckdb_col_type = LogicalType::UTINYINT;
-		pandas_type = PandasType::PANDA_UINT8;
-	} else if (col_type == "uint16") {
-		duckdb_col_type = LogicalType::USMALLINT;
-		pandas_type = PandasType::UINT_16;
-	} else if (col_type == "Uint16") {
-		duckdb_col_type = LogicalType::USMALLINT;
-		pandas_type = PandasType::PANDA_UINT16;
-	} else if (col_type == "uint32") {
-		duckdb_col_type = LogicalType::UINTEGER;
-		pandas_type = PandasType::UINT_32;
-	} else if (col_type == "Uint32") {
-		duckdb_col_type = LogicalType::UINTEGER;
-		pandas_type = PandasType::PANDA_UINT32;
-	} else if (col_type == "uint64") {
-		duckdb_col_type = LogicalType::UBIGINT;
-		pandas_type = PandasType::UINT_64;
-	} else if (col_type == "Uint64") {
-		duckdb_col_type = LogicalType::UBIGINT;
-		pandas_type = PandasType::PANDA_UINT64;
-	} else if (col_type == "int8") {
-		duckdb_col_type = LogicalType::TINYINT;
-		pandas_type = PandasType::INT_8;
-	} else if (col_type == "Int8") {
-		duckdb_col_type = LogicalType::TINYINT;
-		pandas_type = PandasType::PANDA_INT8;
-	} else if (col_type == "int16") {
-		duckdb_col_type = LogicalType::SMALLINT;
-		pandas_type = PandasType::INT_16;
-	} else if (col_type == "Int16") {
-		duckdb_col_type = LogicalType::SMALLINT;
-		pandas_type = PandasType::PANDA_INT16;
-	} else if (col_type == "int32") {
-		duckdb_col_type = LogicalType::INTEGER;
-		pandas_type = PandasType::INT_32;
-	} else if (col_type == "Int32") {
-		duckdb_col_type = LogicalType::INTEGER;
-		pandas_type = PandasType::PANDA_INT32;
-	} else if (col_type == "int64") {
-		duckdb_col_type = LogicalType::BIGINT;
-		pandas_type = PandasType::INT_64;
-	} else if (col_type == "Int64") {
-		duckdb_col_type = LogicalType::BIGINT;
-		pandas_type = PandasType::PANDA_INT64;
-	} else if (col_type == "float32") {
-		duckdb_col_type = LogicalType::FLOAT;
-		pandas_type = PandasType::FLOAT_32;
-	} else if (col_type == "float64") {
-		duckdb_col_type = LogicalType::DOUBLE;
-		pandas_type = PandasType::FLOAT_64;
-	} else if (col_type == "object") {
-		//! this better be castable to strings
-		duckdb_col_type = LogicalType::VARCHAR;
-		pandas_type = PandasType::OBJECT;
-	} else if (col_type == "string") {
-		duckdb_col_type = LogicalType::VARCHAR;
-		pandas_type = PandasType::PANDA_STRING;
-	} else if (col_type == "timedelta64[ns]") {
-		duckdb_col_type = LogicalType::INTERVAL;
-		pandas_type = PandasType::PANDA_INTERVAL;
-	} else if (StringUtil::StartsWith(col_type, "datetime64[ns") || col_type == "<M8[ns]") {
-		duckdb_col_type = LogicalType::TIMESTAMP;
-		pandas_type = PandasType::PANDA_DATETIME;
-	} else if (col_type == "category") {
-		duckdb_col_type = LogicalType::UNKNOWN;
-		pandas_type = PandasType::PANDA_CATEGORY;
-	} else {
-		throw std::runtime_error("unsupported python type " + col_type);
-	}
-}
-
 bool ColumnIsMasked(const pybind11::detail::accessor<pybind11::detail::accessor_policies::list_item> &column,
                     const PandasType &type) {
 	bool masked = py::hasattr(column, "mask");
@@ -406,7 +410,7 @@ bool ColumnIsMasked(const pybind11::detail::accessor<pybind11::detail::accessor_
 	        type == PandasType::PANDA_FLOAT32 || type == PandasType::PANDA_FLOAT64 || type == PandasType::PANDA_BOOL);
 }
 
-void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &bind_columns,
+void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &bind_columns,
                                   vector<LogicalType> &return_types, vector<string> &names) {
 	// This performs a shallow copy that allows us to rename the dataframe
 	auto df_columns = py::list(df.attr("columns"));
@@ -426,7 +430,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 
 		names.emplace_back(py::str(df_columns[col_idx]));
 		auto col_type = string(py::str(df_types[col_idx]));
-		ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
+		bind_data.pandas_type = ConvertPandasType(col_type);
 		bool masked = ColumnIsMasked(df_columns[col_idx], bind_data.pandas_type);
 		// auto col_type = string(py::str(df_types[col_idx]));
 
@@ -444,7 +448,8 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 			D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
 			auto categories = py::array(column.attr("cat").attr("categories"));
 			auto categories_str = string(py::str(categories.attr("dtype")));
-			if (categories_str == "object") {
+			auto categories_pd_type = ConvertPandasType(categories_str);
+			if (categories_pd_type == PandasType::OBJECT) {
 				// Let's hope the object type is a string.
 				bind_data.pandas_type = PandasType::PANDA_CATEGORY;
 				auto enum_name = string(py::str(df_columns[col_idx]));
@@ -465,7 +470,8 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				auto numpy_type = bind_data.numpy_col.attr("dtype");
 				// for category types (non-strings), we use the converted numpy type
 				categories_str = string(py::str(numpy_type));
-				ConvertPandasType(categories_str, duckdb_col_type, bind_data.pandas_type);
+				bind_data.pandas_type = ConvertPandasType(categories_str);
+				duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
 			}
 		} else {
 			if (masked || bind_data.pandas_type == PandasType::DATETIME ||
@@ -473,6 +479,14 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
 			} else {
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
+			}
+			duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
+		}
+		// Analyze the inner data type of the 'object' column
+		if (bind_data.pandas_type == PandasType::OBJECT) {
+			PandasAnalyzer analyzer(config);
+			if (analyzer.Analyze(get_fun(df_columns[col_idx]))) {
+				duckdb_col_type = analyzer.AnalyzedType();
 			}
 		}
 

@@ -1,6 +1,7 @@
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
 
@@ -115,25 +116,12 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	do {
-		{
-			py::gil_scoped_release release;
-			execution_result = pending_query.ExecuteTask();
-		}
-		if (PyErr_CheckSignals() != 0) {
-			throw std::runtime_error("Query interrupted");
-		}
+		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		throw std::runtime_error(pending_query.error);
 	}
 	return pending_query.Execute();
-}
-
-PythonImportCache *DuckDBPyConnection::ImportCache() {
-	if (!import_cache) {
-		import_cache = make_shared<PythonImportCache>();
-	}
-	return import_cache.get();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
@@ -143,7 +131,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		auto cur_py_connection_lock = AcquireConnectionLock();
+		py::gil_scoped_release release;
+		unique_lock<std::mutex> lock(py_connection_lock);
 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
@@ -184,7 +173,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			auto cur_py_connection_lock = AcquireConnectionLock();
+			py::gil_scoped_release release;
+			unique_lock<std::mutex> lock(py_connection_lock);
 			auto pending_query = prep->PendingQuery(args);
 			res->result = CompletePendingQuery(*pending_query);
 
@@ -595,6 +585,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	auto res = make_shared<DuckDBPyConnection>();
 
 	DBConfig config;
+
 	if (read_only) {
 		config.access_mode = AccessMode::READ_ONLY;
 	}
@@ -612,6 +603,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	if (config.enable_external_access) {
 		res->database->instance->config.replacement_scans.emplace_back(ScanReplacement);
 	}
+
+	auto &db_config = res->database->instance->config;
+	db_config.AddExtensionOption("analyze_sample_maximum",
+	                             "The maximum number of rows to sample when analyzing a pandas object column.",
+	                             LogicalType::UBIGINT);
+	db_config.set_variables["analyze_sample_maximum"] = Value::UBIGINT(1000);
 
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);
@@ -646,6 +643,13 @@ DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 		default_connection = DuckDBPyConnection::Connect(":memory:", false, config_dict);
 	}
 	return default_connection.get();
+}
+
+PythonImportCache *DuckDBPyConnection::ImportCache() {
+	if (!import_cache) {
+		import_cache = make_shared<PythonImportCache>();
+	}
+	return import_cache.get();
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,

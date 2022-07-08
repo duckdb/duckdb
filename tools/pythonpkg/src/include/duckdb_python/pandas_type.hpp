@@ -58,7 +58,7 @@ enum class PandasType : uint8_t {
 	PANDA_INTERVAL = 103,       //! datetime64[ns, UTC]
 };
 
-PandasType GetPandasType(py::handle dtype);
+PandasType ConvertPandasType(const string &col_type);
 LogicalType PandasToLogicalType(const PandasType &col_type);
 
 } // namespace duckdb
