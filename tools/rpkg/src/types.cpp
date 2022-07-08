@@ -106,6 +106,7 @@ string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller
 	case LogicalTypeId::ENUM:
 		return "factor";
 	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::SQLNULL:
 		return "unknown";
 	default:
 		cpp11::stop("%s: Unknown column type for prepare: %s", caller, stype.ToString().c_str());

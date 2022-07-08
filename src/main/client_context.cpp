@@ -781,8 +781,8 @@ void ClientContext::DisableProfiling() {
 }
 
 struct VerifyStatement {
-	VerifyStatement(unique_ptr<SelectStatement> statement_p, bool require_equality = true,
-	                bool disable_optimizer = false)
+	explicit VerifyStatement(unique_ptr<SelectStatement> statement_p, bool require_equality = true,
+	                         bool disable_optimizer = false)
 	    : statement(move(statement_p)), require_equality(require_equality), disable_optimizer(disable_optimizer),
 	      select_list(statement->node->GetSelectList()) {
 	}
