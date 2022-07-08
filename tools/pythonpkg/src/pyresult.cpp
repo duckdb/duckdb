@@ -65,8 +65,8 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	case LogicalTypeId::DOUBLE:
 		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
-		py::object decimal_py = py::module_::import("decimal").attr("Decimal");
-		return decimal_py(val.ToString());
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		return import_cache.decimal.Decimal()(val.ToString());
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
