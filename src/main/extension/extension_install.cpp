@@ -120,7 +120,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		for (auto &closest : closest_extensions) {
 			if (closest == extension_name) {
 				message = "Extension \"" + extension_name + "\" is an existing extension.\n";
-				message += "Are you using a development build? In this case, libraries might not (yet) be uploaded.";
+				message += "Are you using a development build? In this case, extensions might not (yet) be uploaded.";
 				break;
 			}
 		}
