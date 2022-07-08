@@ -14,6 +14,7 @@
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb_python/python_import_cache.hpp"
 
 namespace duckdb {
 
@@ -62,6 +63,7 @@ public:
 	                 const py::object &traceback);
 
 	static DuckDBPyConnection *DefaultConnection();
+	static PythonImportCache *ImportCache();
 
 	DuckDBPyConnection *ExecuteMany(const string &query, py::object params = py::list());
 
@@ -136,6 +138,8 @@ public:
 
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
+	//! Caches and provides an interface to get frequently used modules+subtypes
+	static shared_ptr<PythonImportCache> import_cache;
 
 	static bool IsAcceptedArrowObject(string &py_object_type);
 

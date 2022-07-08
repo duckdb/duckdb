@@ -5,6 +5,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
@@ -220,7 +222,8 @@ struct BlobConvert {
 struct UUIDConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(hugeint_t val) {
-		py::handle h = py::module::import("uuid").attr("UUID")(UUID::ToString(val)).release();
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		py::handle h = import_cache.uuid.UUID()(UUID::ToString(val)).release();
 		return h.ptr();
 	}
 

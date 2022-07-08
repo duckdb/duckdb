@@ -1,3 +1,5 @@
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" // from Python
@@ -137,7 +139,8 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::cast<py::object>(py::module::import("uuid").attr("UUID")(UUID::ToString(uuid_value)));
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		return py::cast<py::object>(import_cache.uuid.UUID()(UUID::ToString(uuid_value)));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();

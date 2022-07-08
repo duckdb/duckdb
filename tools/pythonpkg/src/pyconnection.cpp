@@ -26,6 +26,7 @@
 namespace duckdb {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
+shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
@@ -102,6 +103,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 
 	PyDateTime_IMPORT;
+	DuckDBPyConnection::ImportCache();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
@@ -124,6 +126,13 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 		throw std::runtime_error(pending_query.error);
 	}
 	return pending_query.Execute();
+}
+
+PythonImportCache *DuckDBPyConnection::ImportCache() {
+	if (!import_cache) {
+		import_cache = make_shared<PythonImportCache>();
+	}
+	return import_cache.get();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
@@ -722,6 +731,7 @@ bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
+	import_cache.reset();
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(string &py_object_type) {
