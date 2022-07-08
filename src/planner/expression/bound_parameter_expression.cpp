@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -17,6 +18,16 @@ void BoundParameterExpression::Invalidate(Expression &expr) {
 	auto &bound_parameter = (BoundParameterExpression &)expr;
 	bound_parameter.return_type = LogicalTypeId::INVALID;
 	bound_parameter.parameter_data->return_type = LogicalTypeId::INVALID;
+}
+
+void BoundParameterExpression::InvalidateRecursive(Expression &expr) {
+	if (expr.type == ExpressionType::VALUE_PARAMETER) {
+		Invalidate(expr);
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+		InvalidateRecursive(child);
+	});
 }
 
 bool BoundParameterExpression::IsScalar() const {
