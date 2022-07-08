@@ -15,10 +15,25 @@ statement ok
 create table test (i int)
 
 statement ok
+analyze test
+
+statement ok
 create view testview as select * from test
+
+statement error
+analyze testview
+
+statement ok
+insert into test select range % 5000 from range(10000)
+
+query T
+select stats(i) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
 
 statement ok
 analyze test
 
-statement error
-analyze testview
+query T
+select stats(i) from test limit 1
+----

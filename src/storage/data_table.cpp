@@ -1327,6 +1327,12 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	return column_stats[column_id]->stats->Copy();
 }
 
+void DataTable::SetStatistics(unique_ptr<BaseStatistics> stats, column_t column_id) {
+	lock_guard<mutex> stats_guard(stats_lock);
+	D_ASSERT(column_id < column_stats.size());
+	column_stats[column_id]->stats = move(stats);
+}
+
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//

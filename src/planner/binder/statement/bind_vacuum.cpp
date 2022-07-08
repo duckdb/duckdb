@@ -12,7 +12,10 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw InvalidInputException("Can only vacuum/analyze base tables!");
 		}
+		// TODO: when binding/resolving types, make sure we get the columns we want!!
+		//  Right now we get row_id only ...
 		stmt.info->bound_ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(move(bound_table));
+		stmt.info->bound_ref->get->ResolveOperatorTypes();
 	}
 
 	result.names = {"Success"};

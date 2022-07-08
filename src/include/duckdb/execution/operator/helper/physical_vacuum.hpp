@@ -21,6 +21,26 @@ public:
 	unique_ptr<VacuumInfo> info;
 
 public:
+	// Sink interface
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
+	                    DataChunk &input) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          GlobalSinkState &gstate) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
+		return true;
+	}
+
+public:
+	// Source interface
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 };

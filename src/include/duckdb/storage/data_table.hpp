@@ -213,6 +213,7 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	void SetStatistics(unique_ptr<BaseStatistics> stats, column_t column_id);
 
 	//! Checkpoint the table to the specified table data writer
 	BlockPointer Checkpoint(TableDataWriter &writer);
