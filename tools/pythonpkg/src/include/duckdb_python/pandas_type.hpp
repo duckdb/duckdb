@@ -59,6 +59,6 @@ enum class PandasType : uint8_t {
 };
 
 PandasType GetPandasType(py::handle dtype);
-LogicalType ConvertPandasType(const PandasType &col_type);
+LogicalType PandasToLogicalType(const PandasType &col_type);
 
 } // namespace duckdb
