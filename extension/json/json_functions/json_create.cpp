@@ -76,7 +76,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 	unordered_map<string, unique_ptr<Vector>> const_struct_names;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->return_type;
-		if (type == LogicalTypeId::UNKNOWN) {
+		if (arguments[i]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		} else if (type == LogicalTypeId::SQLNULL) {
 			// This is needed for macro's
