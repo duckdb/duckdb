@@ -108,7 +108,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	                                                                     DuckDB::SourceID(), DuckDB::Platform())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
-	//	const vector<string> &strings, const string &target
+
 	if (!res || res->status != 200) {
 		// create suggestions
 		vector<string> candidates;
