@@ -8,7 +8,6 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas_type.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 
 namespace duckdb {
 
@@ -116,86 +115,6 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 	return result;
 }
 
-template <typename T>
-bool TryCast(const py::object stuf, T &value) {
-	try {
-		value = stuf.cast<T>();
-		return true;
-	} catch (py::cast_error &e) {
-		return false;
-	}
-}
-
-template <typename T>
-T Cast(const py::object obj) {
-	return obj.cast<T>();
-}
-
-static void SetInvalidRecursive(Vector &out, idx_t index) {
-	auto &validity = FlatVector::Validity(out);
-	validity.SetInvalid(index);
-	if (out.GetType().InternalType() == PhysicalType::STRUCT) {
-		auto &children = StructVector::GetEntries(out);
-		for (idx_t i = 0; i < children.size(); i++) {
-			SetInvalidRecursive(*children[i], index);
-		}
-	}
-}
-
-//! 'count' is the amount of rows in the 'out' vector
-//! offset is the current row number within this vector
-void ScanPandasObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
-
-	// handle None
-	if (object == Py_None) {
-		SetInvalidRecursive(out, offset);
-		return;
-	}
-
-	auto val = TransformPythonValue(object, out.GetType());
-	// Check if the Value type is accepted for the LogicalType of Vector
-	out.SetValue(offset, val);
-}
-
-static void VerifyMapConstraints(Vector &vec, idx_t count) {
-	auto invalid_reason = CheckMapValidity(vec, count);
-	switch (invalid_reason) {
-	case MapInvalidReason::VALID:
-		return;
-	case MapInvalidReason::DUPLICATE_KEY:
-		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains duplicates");
-	case MapInvalidReason::NULL_KEY_LIST:
-		throw std::runtime_error("Dict->Map conversion failed because 'key' list is None");
-	case MapInvalidReason::NULL_KEY:
-		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains None");
-	default:
-		throw std::runtime_error("Option not implemented for MapInvalidReason");
-	}
-}
-
-void VerifyTypeConstraints(Vector &vec, idx_t count) {
-	switch (vec.GetType().id()) {
-	case LogicalTypeId::MAP: {
-		VerifyMapConstraints(vec, count);
-		break;
-	}
-	default:
-		return;
-	}
-}
-
-void ScanPandasObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
-	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
-	out.SetVectorType(VectorType::FLAT_VECTOR);
-	auto gil = make_unique<PythonGILWrapper>(); // We're creating python objects here, so we need the GIL
-
-	for (idx_t i = 0; i < count; i++) {
-		ScanPandasObject(bind_data, col[i], i, out);
-	}
-	gil = nullptr;
-	VerifyTypeConstraints(out, count);
-}
-
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
@@ -294,9 +213,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		//! We have determined the underlying logical type of this object column
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)numpy_col.data();
-		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return ScanPandasObjectColumn(bind_data, src_ptr, count, offset, out);
-		}
 
 		// Get the data pointer and the validity mask of the result vector
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
