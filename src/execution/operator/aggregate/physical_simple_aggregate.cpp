@@ -28,7 +28,9 @@ struct AggregateState {
 			aggr.function.initialize(state.get());
 			aggregates.push_back(move(state));
 			destructors.push_back(aggr.function.destructor);
+#ifdef DEBUG
 			counts.push_back(0);
+#endif
 		}
 	}
 	~AggregateState() {
@@ -139,7 +141,10 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 			sink.child_executor.SetChunk(input);
 			payload_chunk.SetCardinality(input);
 		}
+
+#ifdef DEBUG
 		sink.state.counts[aggr_idx] += payload_chunk.size();
+#endif
 
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
@@ -177,8 +182,9 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
-
+#ifdef DEBUG
 		gstate.state.counts[aggr_idx] += source.state.counts[aggr_idx];
+#endif
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
