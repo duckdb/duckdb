@@ -67,6 +67,7 @@ struct ParquetOptions {
 	explicit ParquetOptions(ClientContext &context);
 
 	bool binary_as_string = false;
+	bool filename = false;
 };
 
 class ParquetReader {
