@@ -13,7 +13,19 @@
 namespace duckdb {
 
 struct VacuumInfo : public ParseInfo {
-	// nothing for now
+public:
+	VacuumInfo() {};
+
+	unique_ptr<VacuumInfo> Copy() {
+		auto result = make_unique<VacuumInfo>();
+		result->table_ref = table_ref->Copy();
+		result->table = table;
+		return result;
+	}
+
+public:
+	unique_ptr<TableRef> table_ref;
+	TableCatalogEntry *table;
 };
 
 } // namespace duckdb

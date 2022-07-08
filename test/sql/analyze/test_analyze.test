@@ -1,0 +1,24 @@
+# name: test/sql/analyze/test_analyze.test
+# description: Test ANALYZE statement
+# group: [analyze]
+
+#statement ok
+#pragma enable_verification
+
+statement error
+vacuum test
+
+statement error
+analyze test
+
+statement ok
+create table test (i int)
+
+statement ok
+create view testview as select * from test
+
+statement ok
+analyze test
+
+statement error
+analyze testview

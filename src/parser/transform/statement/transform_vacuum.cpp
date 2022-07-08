@@ -3,12 +3,15 @@
 
 namespace duckdb {
 
-unique_ptr<VacuumStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGNode *node) {
+unique_ptr<SQLStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVacuumStmt *>(node);
 	D_ASSERT(stmt);
-	(void)stmt;
+
 	auto result = make_unique<VacuumStatement>();
-	return result;
+	if (stmt->relation) {
+		result->info->table_ref = TransformRangeVar(stmt->relation);
+	}
+	return move(result);
 }
 
 } // namespace duckdb
