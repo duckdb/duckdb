@@ -18,6 +18,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 #include "datetime.h" // from Python
 
@@ -627,72 +628,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	context.transaction.Commit();
 
 	return res;
-}
-
-Value TransformPythonValue(py::handle ele) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-
-	if (ele.is_none()) {
-		return Value();
-	} else if (py::isinstance<py::bool_>(ele)) {
-		return Value::BOOLEAN(ele.cast<bool>());
-	} else if (py::isinstance<py::int_>(ele)) {
-		return Value::BIGINT(ele.cast<int64_t>());
-	} else if (py::isinstance<py::float_>(ele)) {
-		return Value::DOUBLE(ele.cast<double>());
-	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
-		return py::str(ele).cast<string>();
-	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		auto hour = PyDateTime_DATE_GET_HOUR(ptr);
-		auto minute = PyDateTime_DATE_GET_MINUTE(ptr);
-		auto second = PyDateTime_DATE_GET_SECOND(ptr);
-		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-		return Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
-	} else if (py::isinstance(ele, import_cache.datetime.time())) {
-		auto ptr = ele.ptr();
-		auto hour = PyDateTime_TIME_GET_HOUR(ptr);
-		auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
-		auto second = PyDateTime_TIME_GET_SECOND(ptr);
-		auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
-		return Value::TIME(hour, minute, second, micros);
-	} else if (py::isinstance(ele, import_cache.datetime.date())) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		return Value::DATE(year, month, day);
-	} else if (py::isinstance<py::str>(ele)) {
-		return ele.cast<string>();
-	} else if (py::isinstance<py::memoryview>(ele)) {
-		py::memoryview py_view = ele.cast<py::memoryview>();
-		PyObject *py_view_ptr = py_view.ptr();
-		Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
-		return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
-	} else if (py::isinstance<py::bytes>(ele)) {
-		const string &ele_string = ele.cast<string>();
-		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
-	} else if (py::isinstance<py::list>(ele)) {
-		auto size = py::len(ele);
-
-		if (size == 0) {
-			return Value::EMPTYLIST(LogicalType::SQLNULL);
-		}
-
-		vector<Value> values;
-		values.reserve(size);
-
-		for (auto py_val : ele) {
-			values.emplace_back(TransformPythonValue(py_val));
-		}
-
-		return Value::LIST(values);
-	} else {
-		throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
-	}
 }
 
 vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
