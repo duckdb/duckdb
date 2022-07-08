@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 

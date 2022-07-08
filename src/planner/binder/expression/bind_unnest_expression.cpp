@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -42,6 +43,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	auto return_type = LogicalType(LogicalTypeId::SQLNULL);
 	if (child_type.id() == LogicalTypeId::LIST) {
 		return_type = ListType::GetChildType(child_type);
+	} else if (child_type.id() == LogicalTypeId::UNKNOWN) {
+		BoundParameterExpression::InvalidateRecursive(*child.expr);
 	}
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);
