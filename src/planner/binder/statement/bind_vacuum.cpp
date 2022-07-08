@@ -7,13 +7,12 @@ namespace duckdb {
 BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	BoundStatement result;
 
-	if (stmt.info->table) {
-		auto bound_table = Bind(*stmt.info->table_ref);
+	if (stmt.info->ref) {
+		auto bound_table = Bind(*stmt.info->ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw InvalidInputException("Can only vacuum/analyze base tables!");
 		}
-		auto &ref = (BoundBaseTableRef &)*bound_table;
-		stmt.info->table = ref.table;
+		stmt.info->bound_ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(move(bound_table));
 	}
 
 	result.names = {"Success"};

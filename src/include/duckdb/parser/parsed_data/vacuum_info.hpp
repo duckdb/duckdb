@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
 
@@ -18,14 +19,13 @@ public:
 
 	unique_ptr<VacuumInfo> Copy() {
 		auto result = make_unique<VacuumInfo>();
-		result->table_ref = table_ref->Copy();
-		result->table = table;
+		result->ref = ref->Copy();
 		return result;
 	}
 
 public:
-	unique_ptr<TableRef> table_ref;
-	TableCatalogEntry *table;
+	unique_ptr<TableRef> ref;
+	unique_ptr<BoundBaseTableRef> bound_ref;
 };
 
 } // namespace duckdb

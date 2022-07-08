@@ -9,7 +9,7 @@ unique_ptr<SQLStatement> Transformer::TransformVacuum(duckdb_libpgquery::PGNode 
 
 	auto result = make_unique<VacuumStatement>();
 	if (stmt->relation) {
-		result->info->table_ref = TransformRangeVar(stmt->relation);
+		result->info->ref = TransformRangeVar(stmt->relation);
 	}
 	return move(result);
 }
