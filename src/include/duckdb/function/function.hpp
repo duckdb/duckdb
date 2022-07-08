@@ -157,8 +157,7 @@ public:
 	DUCKDB_API hash_t Hash() const;
 
 	//! Cast a set of expressions to the arguments of this function
-	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children,
-	                                        bool cast_parameter_expressions = true);
+	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 
 	DUCKDB_API string ToString() override;
 };

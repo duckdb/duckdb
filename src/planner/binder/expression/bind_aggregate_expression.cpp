@@ -169,8 +169,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		}
 	}
 
-	auto aggregate = AggregateFunction::BindAggregateFunction(
-	    context, bound_function, move(children), move(bound_filter), aggr.distinct, move(order_bys), cast_parameters);
+	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
+	                                                          move(bound_filter), aggr.distinct, move(order_bys));
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}
