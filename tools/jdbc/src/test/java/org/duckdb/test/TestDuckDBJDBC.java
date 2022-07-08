@@ -2188,11 +2188,17 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	/**
+	 * @see GH3906
+	 */
 	public static void test_cached_row_set() throws SQLException {
 		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
 		rowSet.setUrl("jdbc:duckdb:");
 		rowSet.setCommand("select 1");
 		rowSet.execute();
+
+		rowSet.next();
+		assertEquals(rowSet.getInt(0), 1);
 	}
 
 	public static void main(String[] args) throws Exception {
