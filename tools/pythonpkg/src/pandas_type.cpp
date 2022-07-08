@@ -120,7 +120,7 @@ LogicalType PandasToLogicalType(const PandasType &col_type) {
 	case PandasType::PANDA_STRING: {
 		return LogicalType::VARCHAR;
 	}
-	case PandasType::PANDA_INTERVAL: {
+	case PandasType::PANDA_INTERVAL:
 	case PandasType::TIMEDELTA: {
 		return LogicalType::INTERVAL;
 	}
@@ -133,6 +133,6 @@ LogicalType PandasToLogicalType(const PandasType &col_type) {
 		                         " to duckdb LogicalType");
 	}
 	}
-	}
+}
 
 } // namespace duckdb
