@@ -610,9 +610,8 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto format_idx = REVERSED ? 0 : 1;
 	auto &format_arg = arguments[format_idx];
-	if (format_arg->type == ExpressionType::VALUE_PARAMETER) {
-		BoundParameterExpression::Invalidate(*format_arg);
-		return nullptr;
+	if (format_arg->HasParameter()) {
+		throw ParameterNotResolvedException();
 	}
 	if (!format_arg->IsFoldable()) {
 		throw InvalidInputException("strftime format must be a constant");
@@ -1199,9 +1198,8 @@ struct StrpTimeBindData : public FunctionData {
 
 static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[1]->type == ExpressionType::VALUE_PARAMETER) {
-		BoundParameterExpression::Invalidate(*arguments[1]);
-		return nullptr;
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("strptime format must be a constant");

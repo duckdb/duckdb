@@ -88,7 +88,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		LogicalType sql_type;
 		auto expr = binder.Bind(child, &sql_type);
 		if (expr->HasParameter()) {
-			throw ParameterNotAllowedException("Parameters are not allowed in table functions");
+			throw ParameterNotResolvedException();
 		}
 		if (!expr->IsFoldable()) {
 			error = "Table function requires a constant parameter";

@@ -63,7 +63,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 
 static void CheckEnumParameter(const Expression &expr) {
 	if (expr.HasParameter()) {
-		throw ParameterNotAllowedException("This function needs an ENUM as an argument");
+		throw ParameterNotResolvedException();
 	}
 }
 

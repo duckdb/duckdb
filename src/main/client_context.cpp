@@ -267,13 +267,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		}
 	}
 	planner.CreatePlan(move(statement));
-	D_ASSERT(planner.plan);
+	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
-#ifdef DEBUG
-	plan->Verify();
-#endif
 	// extract the result column names from the plan
 	result->properties = planner.properties;
 	result->names = planner.names;
@@ -281,6 +278,12 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->value_map = move(planner.value_map);
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
+	if (!planner.properties.bound_all_parameters) {
+		return result;
+	}
+#ifdef DEBUG
+	plan->Verify();
+#endif
 	if (config.enable_optimizer) {
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
@@ -982,9 +985,11 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 				throw std::runtime_error("Failed prepare during verify: " + prepare_result->error);
 			}
 			auto execute_result = RunStatementInternal(lock, string(), move(verifier.execute_statement), false, false);
+			if (!execute_result->success) {
+				throw std::runtime_error("Failed execute during verify: " + execute_result->error);
+			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
 		} catch (std::exception &ex) {
-			// we skip any ParameterNotAllowedExceptions
 			if (!StringUtil::Contains(ex.what(), "Parameter Not Allowed Error")) {
 				results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
 			}

@@ -160,7 +160,7 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 	options.set_log_errors(false);
 	if (arguments.size() == 3) {
 		if (arguments[2]->HasParameter()) {
-			throw ParameterNotAllowedException("Parameters not allowed in regex options field");
+			throw ParameterNotResolvedException();
 		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
@@ -219,7 +219,7 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 	data->options.set_log_errors(false);
 	if (arguments.size() == 4) {
 		if (arguments[3]->HasParameter()) {
-			throw ParameterNotAllowedException("Parameters not allowed as approx quantile parameter");
+			throw ParameterNotResolvedException();
 		}
 		if (!arguments[3]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
@@ -300,7 +300,7 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	string group_string = "";
 	if (arguments.size() == 3) {
 		if (arguments[2]->HasParameter()) {
-			throw ParameterNotAllowedException("Parameter not allowed in group index field");
+			throw ParameterNotResolvedException();
 		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Group index field field must be a constant!");

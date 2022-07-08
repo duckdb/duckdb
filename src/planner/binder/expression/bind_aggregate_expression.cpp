@@ -148,8 +148,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	bool cast_parameters;
-	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error, cast_parameters);
+	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}

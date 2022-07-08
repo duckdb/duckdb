@@ -44,7 +44,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	if (child_type.id() == LogicalTypeId::LIST) {
 		return_type = ListType::GetChildType(child_type);
 	} else if (child_type.id() == LogicalTypeId::UNKNOWN) {
-		BoundParameterExpression::InvalidateRecursive(*child.expr);
+		throw ParameterNotResolvedException();
 	}
 
 	auto result = make_unique<BoundUnnestExpression>(return_type);

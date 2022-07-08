@@ -81,13 +81,7 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 	auto &lhs = arguments[0]->return_type;
 	auto &rhs = arguments[1]->return_type;
 	if (lhs.id() == LogicalTypeId::UNKNOWN || rhs.id() == LogicalTypeId::UNKNOWN) {
-		if (lhs.id() == LogicalTypeId::UNKNOWN) {
-			BoundParameterExpression::Invalidate(*arguments[0]);
-		}
-		if (rhs.id() == LogicalTypeId::UNKNOWN) {
-			BoundParameterExpression::Invalidate(*arguments[1]);
-		}
-		bound_function.return_type = LogicalTypeId::SQLNULL;
+		throw ParameterNotResolvedException();
 	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
 		// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
 		bound_function.arguments[0] = lhs;

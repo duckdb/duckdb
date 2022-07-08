@@ -72,10 +72,11 @@ enum class ExceptionType {
 	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
-	INVALID_INPUT = 32,        // Input or arguments error
-	OUT_OF_MEMORY = 33,        // out of memory
-	PERMISSION = 34,           // insufficient permissions
-	PARAMETER_NOT_ALLOWED = 35 // insufficient permissions
+	INVALID_INPUT = 32,          // Input or arguments error
+	OUT_OF_MEMORY = 33,          // out of memory
+	PERMISSION = 34,             // insufficient permissions
+	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
+	PARAMETER_NOT_ALLOWED = 36   // parameter types not allowed
 };
 
 class Exception : public std::exception {
@@ -324,6 +325,14 @@ public:
 	explicit ParameterNotAllowedException(const string &msg, Args... params)
 	    : ParameterNotAllowedException(ConstructMessage(msg, params...)) {
 	}
+};
+
+//! Special exception that should be thrown in the binder if parameter types could not be resolved
+//! This will cause prepared statements to be forcibly rebound with the actual parameter values
+//! This exception is fatal if thrown outside of the binder (i.e. it should never be thrown outside of the binder)
+class ParameterNotResolvedException : public Exception {
+public:
+	DUCKDB_API explicit ParameterNotResolvedException();
 };
 
 } // namespace duckdb

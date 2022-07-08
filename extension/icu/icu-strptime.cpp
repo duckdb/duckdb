@@ -98,9 +98,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
 	                                                     vector<unique_ptr<Expression>> &arguments) {
-		if (arguments[1]->type == ExpressionType::VALUE_PARAMETER) {
-			BoundParameterExpression::Invalidate(*arguments[1]);
-			return nullptr;
+		if (arguments[1]->HasParameter()) {
+			throw ParameterNotResolvedException();
 		}
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
@@ -136,8 +135,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &func = (ScalarFunctionCatalogEntry &)*entry;
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
-		bool cast_parameters;
-		const idx_t best_function = Function::BindFunction(func.name, func.functions, types, error, cast_parameters);
+		const idx_t best_function = Function::BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
 			return;
 		}

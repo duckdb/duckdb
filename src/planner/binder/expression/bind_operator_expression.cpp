@@ -39,7 +39,7 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
 		if (!children[0]->expr->return_type.IsValid()) {
-			BoundParameterExpression::InvalidateRecursive(*children[0]->expr);
+			throw ParameterNotResolvedException();
 		}
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:

@@ -11,9 +11,8 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 		return BindResult(error);
 	}
 	auto &child = (BoundExpression &)*expr.child;
-	if (child.expr->type == ExpressionType::VALUE_PARAMETER) {
-		BoundParameterExpression::Invalidate(*child.expr);
-		return BindResult(move(child.expr));
+	if (child.expr->HasParameter()) {
+		throw ParameterNotResolvedException();
 	}
 	if (child.expr->return_type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");

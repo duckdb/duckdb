@@ -100,6 +100,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Out of Memory";
 	case ExceptionType::PERMISSION:
 		return "Permission";
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		return "Parameter Not Resolved";
 	case ExceptionType::PARAMETER_NOT_ALLOWED:
 		return "Parameter Not Allowed";
 	default:
@@ -225,6 +227,10 @@ OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(Except
 
 ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
     : StandardException(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
+}
+
+ParameterNotResolvedException::ParameterNotResolvedException()
+    : Exception(ExceptionType::PARAMETER_NOT_RESOLVED, "Parameter types could not be resolved") {
 }
 
 } // namespace duckdb

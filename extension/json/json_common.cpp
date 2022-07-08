@@ -74,7 +74,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
                                                         vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
-		throw ParameterNotAllowedException("List of paths cannot be a parameter");
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("List of paths must be constant");

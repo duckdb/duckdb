@@ -67,9 +67,8 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 
 static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->type == ExpressionType::VALUE_PARAMETER) {
-		BoundParameterExpression::Invalidate(*arguments[0]);
-		return nullptr;
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
 	}
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;

@@ -22,9 +22,9 @@ public:
 
 public:
 	//! Invalidate a bound parameter expression - forcing a rebind on any subsequent filters
-	static void Invalidate(Expression &expr);
+	DUCKDB_API static void Invalidate(Expression &expr);
 	//! Invalidate all parameters within an expression
-	static void InvalidateRecursive(Expression &expr);
+	DUCKDB_API static void InvalidateRecursive(Expression &expr);
 
 	bool IsScalar() const override;
 	bool HasParameter() const override;

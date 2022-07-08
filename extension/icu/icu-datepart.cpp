@@ -377,7 +377,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 		// collect names and deconflict, construct return type
 		if (arguments[0]->HasParameter()) {
-			throw ParameterNotAllowedException("Parameters not allowed as part name for %s", bound_function.name);
+			throw ParameterNotResolvedException();
 		}
 		if (!arguments[0]->IsFoldable()) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);

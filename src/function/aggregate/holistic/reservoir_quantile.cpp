@@ -328,7 +328,7 @@ static double CheckReservoirQuantile(const Value &quantile_val) {
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[1]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameters not allowed as reservoir quantile parameter");
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("RESERVOIR_QUANTILE can only take constant quantile parameters");

@@ -146,7 +146,7 @@ static float CheckApproxQuantile(const Value &quantile_val) {
 unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFunction &function,
                                             vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[1]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameters not allowed as approx quantile parameter");
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("APPROXIMATE QUANTILE can only take constant quantile parameters");

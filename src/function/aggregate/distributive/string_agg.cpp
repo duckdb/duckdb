@@ -124,7 +124,7 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 	}
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameter not supported in separator argument to StringAgg");
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("Separator argument to StringAgg must be a constant");

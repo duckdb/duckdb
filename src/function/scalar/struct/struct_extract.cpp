@@ -53,7 +53,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 
 	auto &key_child = arguments[1];
 	if (key_child->HasParameter()) {
-		throw ParameterNotAllowedException("Parameter not allowed as struct_extract key");
+		throw ParameterNotResolvedException();
 	}
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {

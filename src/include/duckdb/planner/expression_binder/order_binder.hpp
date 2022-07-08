@@ -37,6 +37,7 @@ public:
 
 private:
 	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
+	unique_ptr<Expression> BindConstant(ParsedExpression &expr, Value val);
 
 private:
 	vector<Binder *> binders;

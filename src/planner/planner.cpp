@@ -22,17 +22,28 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	BoundParameterMap bound_parameters(parameter_data);
 
 	// first bind the tables and columns to the catalog
-	profiler.StartPhase("binder");
-	binder->parameters = &bound_parameters;
-	auto bound_statement = binder->Bind(statement);
-	profiler.EndPhase();
+	bool parameters_resolved = true;
+	try {
+		profiler.StartPhase("binder");
+		binder->parameters = &bound_parameters;
+		auto bound_statement = binder->Bind(statement);
+		profiler.EndPhase();
+
+		this->names = bound_statement.names;
+		this->types = bound_statement.types;
+		this->plan = move(bound_statement.plan);
+
+	} catch (ParameterNotResolvedException &ex) {
+		// parameter types could not be resolved
+		this->names = {"unknown"};
+		this->types = {LogicalTypeId::UNKNOWN};
+		this->plan = nullptr;
+		parameters_resolved = false;
+	}
 
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
-	this->names = bound_statement.names;
-	this->types = bound_statement.types;
-	this->plan = move(bound_statement.plan);
-	properties.bound_all_parameters = true;
+	properties.bound_all_parameters = parameters_resolved;
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {

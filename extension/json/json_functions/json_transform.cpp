@@ -50,7 +50,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameter not allowed in JSON transform");
+		throw ParameterNotResolvedException();
 	}
 	if (arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;

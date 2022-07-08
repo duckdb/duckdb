@@ -77,7 +77,7 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->return_type;
 		if (type == LogicalTypeId::UNKNOWN) {
-			throw ParameterNotAllowedException("Parameter not allowed in JSON create");
+			throw ParameterNotResolvedException();
 		} else if (type == LogicalTypeId::SQLNULL) {
 			// This is needed for macro's
 			bound_function.arguments.push_back(type);
@@ -120,7 +120,7 @@ static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFu
 	}
 	auto arg_id = arguments[0]->return_type.id();
 	if (arguments[0]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameter not allowed in array_to_json() argument type");
+		throw ParameterNotResolvedException();
 	}
 	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("array_to_json() argument type must be LIST");
@@ -135,7 +135,7 @@ static unique_ptr<FunctionData> RowToJSONBind(ClientContext &context, ScalarFunc
 	}
 	auto arg_id = arguments[0]->return_type.id();
 	if (arguments[0]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameter not allowed in row_to_json");
+		throw ParameterNotResolvedException();
 	}
 	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT && arg_id != LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("row_to_json() argument type must be STRUCT");

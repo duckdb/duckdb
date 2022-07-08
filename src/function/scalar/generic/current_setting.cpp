@@ -35,7 +35,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 
 	auto &key_child = arguments[0];
 	if (key_child->return_type.id() == LogicalTypeId::UNKNOWN) {
-		throw ParameterNotAllowedException("Parameters not allowed in current_setting");
+		throw ParameterNotResolvedException();
 	}
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {

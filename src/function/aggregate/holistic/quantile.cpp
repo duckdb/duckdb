@@ -1140,7 +1140,7 @@ static double CheckQuantile(const Value &quantile_val) {
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
                                       vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[1]->HasParameter()) {
-		throw ParameterNotAllowedException("Parameters not allowed in QUANTILE argument");
+		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("QUANTILE can only take constant parameters");
