@@ -36,6 +36,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 }
 
 py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType &type) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (val.IsNull()) {
 		return py::none();
 	}
@@ -65,7 +66,6 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	case LogicalTypeId::DOUBLE:
 		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		return import_cache.decimal.Decimal()(val.ToString());
 	}
 	case LogicalTypeId::ENUM:
@@ -139,13 +139,11 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		return py::cast<py::object>(import_cache.uuid.UUID()(UUID::ToString(uuid_value)));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		return py::cast<py::object>(
 		    import_cache.datetime.timedelta()(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
 	}
