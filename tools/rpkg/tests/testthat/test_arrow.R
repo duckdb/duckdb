@@ -41,10 +41,12 @@ example_data <- dplyr::tibble(
 
 test_that("to_duckdb", {
   ds <- InMemoryDataset$create(example_data)
+  con <- dbConnect(duckdb::duckdb())
 
+  dbExecute(con, "PRAGMA threads=1")
   expect_equal(
     ds %>%
-      to_duckdb() %>%
+      to_duckdb(con = con) %>%
       collect() %>%
       # factors don't roundtrip https://github.com/duckdb/duckdb/issues/1879
       select(!fct) %>%
@@ -57,7 +59,7 @@ test_that("to_duckdb", {
   expect_equal(
     ds %>%
       select(int, lgl, dbl) %>%
-      to_duckdb() %>%
+      to_duckdb(con = con) %>%
       group_by(lgl) %>%
       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
       collect() %>%
@@ -74,7 +76,7 @@ test_that("to_duckdb", {
     ds %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      to_duckdb() %>%
+      to_duckdb(con = con) %>%
       summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
       collect() %>%
       arrange(mean_int),
