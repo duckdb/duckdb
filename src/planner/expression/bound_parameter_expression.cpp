@@ -25,9 +25,7 @@ void BoundParameterExpression::InvalidateRecursive(Expression &expr) {
 		Invalidate(expr);
 		return;
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		InvalidateRecursive(child);
-	});
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { InvalidateRecursive(child); });
 }
 
 bool BoundParameterExpression::IsScalar() const {

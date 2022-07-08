@@ -20,6 +20,8 @@ class PreparedStatementData;
 //! The planner creates a logical query plan from the parsed SQL statements
 //! using the Binder and LogicalPlanGenerator.
 class Planner {
+	friend class Binder;
+
 public:
 	explicit Planner(ClientContext &context);
 
@@ -39,7 +41,5 @@ public:
 private:
 	void CreatePlan(SQLStatement &statement);
 	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
-	void PlanPrepare(unique_ptr<SQLStatement> statement);
-	void PlanExecute(unique_ptr<SQLStatement> statement);
 };
 } // namespace duckdb

@@ -194,7 +194,7 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 			}
 		}
 		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
-			BoundParameterExpression::Invalidate(*result);
+			BoundParameterExpression::InvalidateRecursive(*result);
 		}
 	}
 	if (result_type) {
