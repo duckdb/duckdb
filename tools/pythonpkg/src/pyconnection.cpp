@@ -115,13 +115,7 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	do {
-		{
-			py::gil_scoped_release release;
-			execution_result = pending_query.ExecuteTask();
-		}
-		if (PyErr_CheckSignals() != 0) {
-			throw std::runtime_error("Query interrupted");
-		}
+		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		throw std::runtime_error(pending_query.error);
@@ -136,7 +130,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		auto cur_py_connection_lock = AcquireConnectionLock();
+		py::gil_scoped_release release;
+		unique_lock<std::mutex> lock(py_connection_lock);
 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
@@ -177,7 +172,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			auto cur_py_connection_lock = AcquireConnectionLock();
+			py::gil_scoped_release release;
+			unique_lock<std::mutex> lock(py_connection_lock);
 			auto pending_query = prep->PendingQuery(args);
 			res->result = CompletePendingQuery(*pending_query);
 
