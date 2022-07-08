@@ -98,6 +98,10 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
 	                                                     vector<unique_ptr<Expression>> &arguments) {
+		if (arguments[1]->type == ExpressionType::VALUE_PARAMETER) {
+			BoundParameterExpression::Invalidate(*arguments[1]);
+			return nullptr;
+		}
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
 		}

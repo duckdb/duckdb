@@ -299,6 +299,9 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 
 	string group_string = "";
 	if (arguments.size() == 3) {
+		if (arguments[2]->HasParameter()) {
+			throw ParameterNotAllowedException("Parameter not allowed in group index field");
+		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Group index field field must be a constant!");
 		}

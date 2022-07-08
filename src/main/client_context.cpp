@@ -881,10 +881,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 	auto parsed_statement = move(parser.statements[0]);
 
-	vector<string> names = {"Original statement", "Copied statement",  "Deserialized statement", "Parsed statement",
-	                        "Unoptimized",        "Prepared statement"
-
-	};
+	vector<string> names = {"Original statement", "Copied statement", "Deserialized statement",
+	                        "Parsed statement",   "Unoptimized",      "Prepared statement"};
 	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement)));
 	verify_statements.emplace_back(move(copied_stmt));
 	verify_statements.emplace_back(move(deserialized_stmt));

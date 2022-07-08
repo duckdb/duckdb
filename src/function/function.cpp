@@ -495,6 +495,11 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
 		}
 	}
 	if (!cast_parameters) {
+		for (auto &arg : children) {
+			if (arg->type == ExpressionType::VALUE_PARAMETER) {
+				BoundParameterExpression::Invalidate(*arg);
+			}
+		}
 		return make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 	}
 
