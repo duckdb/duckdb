@@ -630,12 +630,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 }
 
 Value TransformPythonValue(py::handle ele) {
-	auto datetime_mod = py::module::import("datetime");
-	auto datetime_date = datetime_mod.attr("date");
-	auto datetime_datetime = datetime_mod.attr("datetime");
-	auto datetime_time = datetime_mod.attr("time");
-	auto decimal_mod = py::module::import("decimal");
-	auto decimal_decimal = decimal_mod.attr("Decimal");
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
 		return Value();
@@ -645,9 +640,9 @@ Value TransformPythonValue(py::handle ele) {
 		return Value::BIGINT(ele.cast<int64_t>());
 	} else if (py::isinstance<py::float_>(ele)) {
 		return Value::DOUBLE(ele.cast<double>());
-	} else if (py::isinstance(ele, decimal_decimal)) {
+	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		return py::str(ele).cast<string>();
-	} else if (py::isinstance(ele, datetime_datetime)) {
+	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		auto ptr = ele.ptr();
 		auto year = PyDateTime_GET_YEAR(ptr);
 		auto month = PyDateTime_GET_MONTH(ptr);
@@ -657,14 +652,14 @@ Value TransformPythonValue(py::handle ele) {
 		auto second = PyDateTime_DATE_GET_SECOND(ptr);
 		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
 		return Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_time)) {
+	} else if (py::isinstance(ele, import_cache.datetime.time())) {
 		auto ptr = ele.ptr();
 		auto hour = PyDateTime_TIME_GET_HOUR(ptr);
 		auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
 		auto second = PyDateTime_TIME_GET_SECOND(ptr);
 		auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
 		return Value::TIME(hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_date)) {
+	} else if (py::isinstance(ele, import_cache.datetime.date())) {
 		auto ptr = ele.ptr();
 		auto year = PyDateTime_GET_YEAR(ptr);
 		auto month = PyDateTime_GET_MONTH(ptr);

@@ -145,9 +145,9 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		return py::cast<py::object>(
-		    py::module::import("datetime")
-		        .attr("timedelta")(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		    import_cache.datetime.timedelta()(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
 	}
 
 	default:
