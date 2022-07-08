@@ -54,6 +54,10 @@ static jmethodID J_DuckVector_init;
 static jfieldID J_DuckVector_constlen;
 static jfieldID J_DuckVector_varlen;
 
+static jclass J_DuckArrayStreamWrapper;
+static jmethodID J_DuckArrayStreamWrapper_exportArrayStream;
+static jmethodID J_DuckArrayStreamWrapper_exportSchema;
+
 static jclass J_ByteBuffer;
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -146,6 +150,14 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_ByteBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
+	tmpLocalRef = env->FindClass("org/duckdb/DuckDBArrayStreamWrapper");
+	J_DuckArrayStreamWrapper = (jclass)env->NewGlobalRef(tmpLocalRef);
+	env->DeleteLocalRef(tmpLocalRef);
+
+	J_DuckArrayStreamWrapper_exportArrayStream =
+	    env->GetMethodID(J_DuckArrayStreamWrapper, "exportArrayStream", "(J)V");
+	J_DuckArrayStreamWrapper_exportSchema = env->GetMethodID(J_DuckArrayStreamWrapper, "exportSchema", "(J)V");
+
 	return JNI_VERSION;
 }
 
@@ -170,6 +182,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 	env->DeleteGlobalRef(J_DuckResultSetMeta);
 	env->DeleteGlobalRef(J_DuckVector);
 	env->DeleteGlobalRef(J_ByteBuffer);
+	env->DeleteGlobalRef(J_DuckArrayStreamWrapper);
 }
 
 static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
@@ -860,6 +873,94 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1appender_1appe
                                                                                          jobject appender_ref_buf) {
 	try {
 		get_appender(env, appender_ref_buf)->Append<std::nullptr_t>(nullptr);
+		return;
+	} catch (exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return;
+	}
+}
+
+// TODO where does this belong?
+class JavaArrowStreamFactory {
+public:
+	explicit JavaArrowStreamFactory(JNIEnv *env, jobject array_stream_wrapper_j)
+	    : env(env), array_stream_wrapper_j(array_stream_wrapper_j) {};
+
+	static unique_ptr<ArrowArrayStreamWrapper>
+	Produce(uintptr_t stream_factory_ptr,
+	        std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	        TableFilterSet *filters = nullptr);
+
+	static void GetSchema(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema);
+
+private:
+	JNIEnv *env;
+	jobject array_stream_wrapper_j;
+};
+
+unique_ptr<ArrowArrayStreamWrapper> JavaArrowStreamFactory::Produce(
+    uintptr_t stream_factory_ptr,
+    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns, // unsupported
+    TableFilterSet *filters) {                                                          // unsupported
+
+	JavaArrowStreamFactory *stream_factory = (JavaArrowStreamFactory *)stream_factory_ptr;
+	auto env = stream_factory->env;
+	auto array_stream_wrapper_j = stream_factory->array_stream_wrapper_j;
+	auto wrapper = make_unique<ArrowArrayStreamWrapper>();
+
+	env->CallVoidMethod(array_stream_wrapper_j, J_DuckArrayStreamWrapper_exportArrayStream,
+	                    (long)&wrapper->arrow_array_stream);
+	if (env->ExceptionCheck()) {
+		env->Throw(env->ExceptionOccurred());
+		// shouldn't get here?
+		return nullptr;
+	}
+
+	return wrapper;
+}
+
+void JavaArrowStreamFactory::GetSchema(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema) {
+	JavaArrowStreamFactory *stream_factory = (JavaArrowStreamFactory *)stream_factory_ptr;
+
+	auto env = stream_factory->env;
+	auto array_stream_wrapper_j = stream_factory->array_stream_wrapper_j;
+
+	env->CallVoidMethod(array_stream_wrapper_j, J_DuckArrayStreamWrapper_exportSchema, (long)&(schema.arrow_schema));
+	if (env->ExceptionCheck()) {
+		env->Throw(env->ExceptionOccurred());
+
+		return;
+	}
+
+	return;
+}
+
+JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1ingest_1arrow_1table(JNIEnv *env, jclass,
+                                                                                       jobject conn_ref_buf,
+                                                                                       jbyteArray schema_name_j,
+                                                                                       jbyteArray table_name_j,
+                                                                                       jobject array_stream_wrapper_j) {
+	auto conn_ref = (Connection *)env->GetDirectBufferAddress(conn_ref_buf);
+	if (!conn_ref || !conn_ref->context) {
+		env->ThrowNew(J_SQLException, "Invalid connection");
+		return;
+	}
+	auto schema_name = byte_array_to_string(env, schema_name_j);
+	auto table_name = byte_array_to_string(env, table_name_j);
+
+	try {
+		auto stream_factory = make_unique<JavaArrowStreamFactory>(env, array_stream_wrapper_j);
+
+		vector<Value> params;
+		params.push_back(duckdb::Value::POINTER(reinterpret_cast<uintptr_t>(stream_factory.get())));
+		params.push_back(duckdb::Value::POINTER((uintptr_t)JavaArrowStreamFactory::Produce));
+		params.push_back(duckdb::Value::POINTER((uintptr_t)JavaArrowStreamFactory::GetSchema));
+		// TODO batch size?
+		params.push_back(duckdb::Value::UBIGINT(100000));
+
+		auto func = conn_ref->TableFunction("arrow_scan", params);
+		func->Create(schema_name, table_name);
+
 		return;
 	} catch (exception &e) {
 		env->ThrowNew(J_SQLException, e.what());

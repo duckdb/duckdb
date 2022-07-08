@@ -1,6 +1,7 @@
 package org.duckdb;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -339,5 +340,12 @@ public class DuckDBConnection implements java.sql.Connection {
 
 	public DuckDBAppender createAppender(String schemaName, String tableName) throws SQLException {
 		return new DuckDBAppender(this, schemaName, tableName);
+	}
+
+	public void ingestArrowTable(String schemaName, String tableName, DuckDBArrayStreamWrapper arrayStreamWrapper) throws SQLException {
+		byte[] schemaNameBytes = schemaName.getBytes(StandardCharsets.UTF_8);
+		byte[] tableNameBytes = tableName.getBytes(StandardCharsets.UTF_8);
+
+		DuckDBNative.duckdb_jdbc_ingest_arrow_table(conn_ref, schemaNameBytes, tableNameBytes, arrayStreamWrapper);
 	}
 }
