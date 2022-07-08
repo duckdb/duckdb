@@ -13,7 +13,7 @@
 #include "dbgen/dss.h"
 #include "dbgen/dsstypes.h"
 
-void load_dists(long textBufferSize) {
+void load_dists(long textBufferSize, DBGenContext *ctx) {
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "p_cntr", &p_cntr_set);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "colors", &colors);
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "p_types", &p_types_set);
@@ -40,7 +40,7 @@ void load_dists(long textBufferSize) {
 	read_dist(tpch_env_config(DIST_TAG, DIST_DFLT), "vp", &vp);
 
   /* populate the text buffer used to generate random text */
-  init_text_pool(textBufferSize);
+  init_text_pool(textBufferSize, ctx);
 }
 
 static void cleanup_dist(distribution *target) {
