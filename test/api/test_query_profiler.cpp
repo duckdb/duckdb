@@ -14,6 +14,8 @@ TEST_CASE("Test query profiler", "[api]") {
 
 	con.EnableQueryVerification();
 	con.EnableProfiling();
+	// don't pollute the console with profiler info.
+	con.context->config.emit_profiler_output = false;
 
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM (SELECT 42) tbl1, (SELECT 33) tbl2"));
 
