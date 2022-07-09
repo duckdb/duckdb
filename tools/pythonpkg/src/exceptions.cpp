@@ -6,7 +6,6 @@
 namespace py = pybind11;
 
 namespace duckdb {
-namespace python {
 
 /**
  * @see https://peps.python.org/pep-0249/#exceptions
@@ -55,5 +54,4 @@ void RegisterExceptions(const py::module m) {
 
 	py::register_exception<StandardException>(m, "StandardException", errorClass);
 }
-} // namespace python
 } // namespace duckdb
