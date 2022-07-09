@@ -24,10 +24,8 @@ void RegisterExceptions(const py::module m) {
 	//       |__ InternalError
 	//       |__ ProgrammingError
 	//       |__ NotSupportedError
-	auto standardError = py::module::import("exceptions").attr("StandardError");
-
 	// The base class is mapped to Error in python to somewhat match the DBAPI 2.0 specifications
-	auto errorClass = py::register_exception<Exception>(m, "Error", standardError).ptr();
+	auto errorClass = py::register_exception<Exception>(m, "Error").ptr();
 
 	// auto databaseError = py::register_exception<StandardException>
 
