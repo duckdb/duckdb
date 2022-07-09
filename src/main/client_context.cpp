@@ -37,6 +37,7 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 
@@ -801,6 +802,7 @@ public:
 	vector<unique_ptr<ParsedExpression>> values;
 	unique_ptr<SQLStatement> prepare_statement;
 	unique_ptr<SQLStatement> execute_statement;
+	unique_ptr<SQLStatement> dealloc_statement;
 
 public:
 	void ConvertConstants(unique_ptr<ParsedExpression> &child) {
@@ -847,8 +849,13 @@ public:
 		execute->name = name;
 		execute->values = move(values);
 
+		auto dealloc = make_unique<DropStatement>();
+		dealloc->info->type = CatalogType::PREPARED_STATEMENT;
+		dealloc->info->name = string(name);
+
 		prepare_statement = move(prepare);
 		execute_statement = move(execute);
+		dealloc_statement = move(dealloc);
 	}
 };
 
@@ -994,6 +1001,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 				results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
 			}
 		}
+		RunStatementInternal(lock, string(), move(verifier.dealloc_statement), false, false);
+
 		interrupted = false;
 	}
 	config.enable_optimizer = optimizer_enabled;
