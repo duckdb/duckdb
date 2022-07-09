@@ -3,6 +3,9 @@
 # group: [extension]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
