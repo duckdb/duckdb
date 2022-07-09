@@ -218,7 +218,7 @@ extern "C" {
 DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 	CreateScalarFunctionInfo hello_alias_info(
 	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
-	
+
 	// create a scalar function
 	Connection con(db);
 	auto &client_context = *con.context;
@@ -226,7 +226,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	con.BeginTransaction();
 	con.CreateScalarFunction<string_t, string_t>("hello", {LogicalType(LogicalTypeId::VARCHAR)},
 	                                             LogicalType(LogicalTypeId::VARCHAR), &hello_fun);
-	
+
 	catalog.CreateFunction(client_context, &hello_alias_info);
 
 	// Add alias POINT type
