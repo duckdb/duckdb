@@ -26,9 +26,7 @@ void RegisterExceptions(const py::module m) {
 	// The base class is mapped to Error in python to somewhat match the DBAPI 2.0 specifications
 	auto errorClass = py::register_exception<Exception>(m, "Error").ptr();
 
-	// auto databaseError = py::register_exception<StandardException>
-
-	py::register_exception<NotImplementedException>(m, "NotSupportedException", errorClass);
+	py::register_exception<NotImplementedException>(m, "NotSupportedError", errorClass);
 
 	py::register_exception<BinderException>(m, "BinderException", errorClass);
 	py::register_exception<CastException>(m, "CastException", errorClass);
