@@ -10,7 +10,7 @@ namespace duckdb {
 /**
  * @see https://peps.python.org/pep-0249/#exceptions
  */
-void RegisterExceptions(const py::module m) {
+void RegisterExceptions(const py::module &m) {
 	// This is the error structure defined in the DBAPI spec
 	// StandardError
 	// |__ Warning
@@ -24,32 +24,32 @@ void RegisterExceptions(const py::module m) {
 	//       |__ ProgrammingError
 	//       |__ NotSupportedError
 	// The base class is mapped to Error in python to somewhat match the DBAPI 2.0 specifications
-	auto errorClass = py::register_exception<Exception>(m, "Error").ptr();
+	auto error_class = py::register_exception<Exception>(m, "Error").ptr();
 
-	py::register_exception<NotImplementedException>(m, "NotSupportedError", errorClass);
+	py::register_exception<NotImplementedException>(m, "NotSupportedError", error_class);
 
-	py::register_exception<BinderException>(m, "BinderException", errorClass);
-	py::register_exception<CastException>(m, "CastException", errorClass);
-	py::register_exception<CatalogException>(m, "CatalogException", errorClass);
-	py::register_exception<ConstraintException>(m, "ConstraintException", errorClass);
-	py::register_exception<ConversionException>(m, "ConversionException", errorClass);
-	py::register_exception<FatalException>(m, "FatalException", errorClass);
-	py::register_exception<InternalException>(m, "InternalException", errorClass);
-	py::register_exception<InterruptException>(m, "InterruptException", errorClass);
-	py::register_exception<InvalidInputException>(m, "InvalidInputException", errorClass);
-	py::register_exception<InvalidTypeException>(m, "InvalidTypeException", errorClass);
-	py::register_exception<IOException>(m, "IOException", errorClass);
-	py::register_exception<OutOfMemoryException>(m, "OutOfMemoryException", errorClass);
-	py::register_exception<OutOfRangeException>(m, "OutOfRangeException", errorClass);
-	py::register_exception<ParserException>(m, "ParserException", errorClass);
-	py::register_exception<PermissionException>(m, "PermissionException", errorClass);
-	py::register_exception<SequenceException>(m, "SequenceException", errorClass);
-	py::register_exception<SerializationException>(m, "SerializationException", errorClass);
-	py::register_exception<SyntaxException>(m, "SyntaxException", errorClass);
-	py::register_exception<TransactionException>(m, "TransactionException", errorClass);
-	py::register_exception<TypeMismatchException>(m, "TypeMismatchException", errorClass);
-	py::register_exception<ValueOutOfRangeException>(m, "ValueOutOfRangeException", errorClass);
+	py::register_exception<BinderException>(m, "BinderException", error_class);
+	py::register_exception<CastException>(m, "CastException", error_class);
+	py::register_exception<CatalogException>(m, "CatalogException", error_class);
+	py::register_exception<ConstraintException>(m, "ConstraintException", error_class);
+	py::register_exception<ConversionException>(m, "ConversionException", error_class);
+	py::register_exception<FatalException>(m, "FatalException", error_class);
+	py::register_exception<InternalException>(m, "InternalException", error_class);
+	py::register_exception<InterruptException>(m, "InterruptException", error_class);
+	py::register_exception<InvalidInputException>(m, "InvalidInputException", error_class);
+	py::register_exception<InvalidTypeException>(m, "InvalidTypeException", error_class);
+	py::register_exception<IOException>(m, "IOException", error_class);
+	py::register_exception<OutOfMemoryException>(m, "OutOfMemoryException", error_class);
+	py::register_exception<OutOfRangeException>(m, "OutOfRangeException", error_class);
+	py::register_exception<ParserException>(m, "ParserException", error_class);
+	py::register_exception<PermissionException>(m, "PermissionException", error_class);
+	py::register_exception<SequenceException>(m, "SequenceException", error_class);
+	py::register_exception<SerializationException>(m, "SerializationException", error_class);
+	py::register_exception<SyntaxException>(m, "SyntaxException", error_class);
+	py::register_exception<TransactionException>(m, "TransactionException", error_class);
+	py::register_exception<TypeMismatchException>(m, "TypeMismatchException", error_class);
+	py::register_exception<ValueOutOfRangeException>(m, "ValueOutOfRangeException", error_class);
 
-	py::register_exception<StandardException>(m, "StandardException", errorClass);
+	py::register_exception<StandardException>(m, "StandardException", error_class);
 }
 } // namespace duckdb
