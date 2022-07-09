@@ -692,16 +692,16 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strftime("strftime");
 
 	strftime.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionDate<false>, false, false, StrfTimeBindFunction<false>));
+	                                    StrfTimeFunctionDate<false>, StrfTimeBindFunction<false>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::TIMESTAMP, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<false>, false, false, StrfTimeBindFunction<false>));
+	                                    StrfTimeFunctionTimestamp<false>, StrfTimeBindFunction<false>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionDate<true>, false, false, StrfTimeBindFunction<true>));
+	                                    StrfTimeFunctionDate<true>, StrfTimeBindFunction<true>));
 
 	strftime.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
-	                                    StrfTimeFunctionTimestamp<true>, false, false, StrfTimeBindFunction<true>));
+	                                    StrfTimeFunctionTimestamp<true>, StrfTimeBindFunction<true>));
 
 	set.AddFunction(strftime);
 }
@@ -1306,7 +1306,7 @@ void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet strptime("strptime");
 
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP, StrpTimeFunction,
-	                          false, false, StrpTimeBindFunction);
+	                          StrpTimeBindFunction);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 

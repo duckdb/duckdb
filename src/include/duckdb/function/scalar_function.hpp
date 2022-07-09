@@ -22,8 +22,6 @@ struct FunctionLocalState {
 	DUCKDB_API virtual ~FunctionLocalState();
 };
 
-enum class FunctionNullHandling : uint8_t { NULL_IN_NULL_OUT = 0, SPECIAL_HANDLING = 1 };
-
 class Binder;
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
@@ -54,19 +52,19 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_s
 class ScalarFunction : public BaseScalarFunction {
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                          scalar_function_t function, bool has_side_effects = false,
-	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
-	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
+	                          init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                          bool propagate_null_values = false,
-	                          FunctionNullHandling null_handling = FunctionNullHandling::NULL_IN_NULL_OUT);
+	                          FunctionSideEffects side_effects = FunctionSideEffects::NO_SIDE_EFFECTS,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-	                          bool propagate_null_values = false, bool has_side_effects = false,
 	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                          FunctionNullHandling null_handling = FunctionNullHandling::NULL_IN_NULL_OUT);
+	                          FunctionSideEffects side_effects = FunctionSideEffects::NO_SIDE_EFFECTS,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
 	//! The main scalar function to execute
 	scalar_function_t function;
@@ -78,8 +76,6 @@ public:
 	dependency_function_t dependency;
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;
-	//! How this function handles NULL values
-	FunctionNullHandling null_handling;
 
 	DUCKDB_API static unique_ptr<Expression> BindScalarFunction(ClientContext &context, const string &schema,
 	                                                            const string &name,
