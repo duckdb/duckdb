@@ -2198,7 +2198,7 @@ public class TestDuckDBJDBC {
 		rowSet.execute();
 
 		rowSet.next();
-		assertEquals(rowSet.getInt(0), 1);
+		assertEquals(rowSet.getInt(1), 1);
 	}
 
 	public static void main(String[] args) throws Exception {
