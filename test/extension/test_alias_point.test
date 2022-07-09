@@ -2,7 +2,8 @@
 # description: Enable Test alias for point.
 # group: [extension]
 
-require test_alias
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 statement ok
 CREATE TABLE points(i INTEGER, point POINT, pt STRUCT(i INTEGER, j INTEGER));

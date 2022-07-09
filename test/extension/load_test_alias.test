@@ -2,7 +2,8 @@
 # description: Enable TestAliasExtension.
 # group: [extension]
 
-require test_alias
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 query I
 SELECT test_alias_hello();

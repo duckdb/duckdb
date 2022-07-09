@@ -7,7 +7,6 @@
 #include "sqllogic_parser.hpp"
 #include "test_helpers.hpp"
 #include "test_helper_extension.hpp"
-#include "test_alias_extension.hpp"
 
 namespace duckdb {
 
@@ -479,8 +478,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "test_helper") {
 				db->LoadExtension<TestHelperExtension>();
-			} else if (param == "test_alias") {
-				db->LoadExtension<TestAliasExtension>();
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
