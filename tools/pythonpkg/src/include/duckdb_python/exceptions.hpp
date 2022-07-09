@@ -4,6 +4,6 @@ namespace py = pybind11;
 
 namespace duckdb {
 
-void RegisterExceptions(const py::module m);
+void RegisterExceptions(const py::module& m);
 
 } // namespace duckdb
