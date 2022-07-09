@@ -113,7 +113,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 		// create suggestions
 		vector<string> candidates;
 		for (idx_t ext_count = ExtensionHelper::DefaultExtensionCount(), i = 0; i < ext_count; i++) {
-			candidates.push_back(ExtensionHelper::GetDefaultExtension(i).name);
+			candidates.emplace_back(ExtensionHelper::GetDefaultExtension(i).name);
 		}
 		auto closest_extensions = StringUtil::TopNLevenshtein(candidates, extension_name);
 		auto message = StringUtil::CandidatesMessage(closest_extensions, "Candidate extensions");
