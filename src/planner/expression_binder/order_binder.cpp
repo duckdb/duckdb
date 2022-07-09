@@ -41,7 +41,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	return result;
 }
 
-unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, Value val) {
+unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const Value &val) {
 	// ORDER BY a constant
 	if (!val.type().IsIntegral()) {
 		// non-integral expression, we just leave the constant here.
