@@ -366,16 +366,16 @@ protected:
 	virtual void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats);
 
 	void SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column);
-	void registerToRowGroup(duckdb_parquet::format::RowGroup &row_group);
+	void RegisterToRowGroup(duckdb_parquet::format::RowGroup &row_group);
 };
 
 unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_unique<BasicColumnWriterState>(row_group, row_group.columns.size());
-	registerToRowGroup(row_group);
+	RegisterToRowGroup(row_group);
 	return move(result);
 }
 
-void BasicColumnWriter::registerToRowGroup(duckdb_parquet::format::RowGroup &row_group) {
+void BasicColumnWriter::RegisterToRowGroup(duckdb_parquet::format::RowGroup &row_group) {
 	format::ColumnChunk column_chunk;
 	column_chunk.__isset.meta_data = true;
 	column_chunk.meta_data.codec = writer.codec;
@@ -1180,7 +1180,7 @@ public:
 
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
 		auto result = make_unique<StringColumnWriterState>(row_group, row_group.columns.size());
-		registerToRowGroup(row_group);
+		RegisterToRowGroup(row_group);
 		return move(result);
 	}
 
