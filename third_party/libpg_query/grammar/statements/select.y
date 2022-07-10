@@ -3425,7 +3425,7 @@ name_list_opt_comma:
 			| name_list ','							{ $$ = $1; }
 		;
 
-name:		ColId									{ $$ = $1; };
+name:		ColIdOrString							{ $$ = $1; };
 
 attr_name:	ColLabel								{ $$ = $1; };
 
