@@ -133,10 +133,6 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	return true;
 }
 
-static py::object GetItem(py::handle &column, idx_t index) {
-	return column.attr("__getitem__")(index);
-}
-
 LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
 	auto size = py::len(ele);
 
@@ -258,7 +254,7 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 //! e.g python lists can consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
-LogicalType PandasAnalyzer::GetItemType(py::handle &ele, bool &can_convert) {
+LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 	if (ele.is_none()) {
@@ -341,6 +337,7 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 
 LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
+	auto row = column.attr("__getitem__");
 
 	if (!rows) {
 		return LogicalType::SQLNULL;
@@ -354,8 +351,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	}
 
 	vector<LogicalType> types;
-	auto first_item = GetItem(column, 0);
-	auto item_type = GetItemType(first_item, can_convert);
+	auto item_type = GetItemType(row(0), can_convert);
 	if (!can_convert) {
 		return item_type;
 	}
@@ -365,11 +361,9 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 		increment = GetSampleIncrement(rows);
 	}
 	for (idx_t i = increment; i < rows; i += increment) {
-		auto next_item = GetItem(column, i);
-		auto next_item_type = GetItemType(next_item, can_convert);
+		auto next_item_type = GetItemType(row(i), can_convert);
 		types.push_back(next_item_type);
 
-		D_ASSERT(item_type.id() != LogicalTypeId::TIMESTAMP_TZ && next_item_type.id() != LogicalTypeId::TIMESTAMP_TZ);
 		if (!can_convert || !UpgradeType(item_type, next_item_type)) {
 			return next_item_type;
 		}

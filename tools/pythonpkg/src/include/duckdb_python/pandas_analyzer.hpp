@@ -31,7 +31,7 @@ public:
 	LogicalType GetListType(py::handle &ele, bool &can_convert);
 	LogicalType DictToMap(const PyDictionary &dict, bool &can_convert);
 	LogicalType DictToStruct(const PyDictionary &dict, bool &can_convert);
-	LogicalType GetItemType(py::handle &ele, bool &can_convert);
+	LogicalType GetItemType(py::handle ele, bool &can_convert);
 	bool Analyze(py::handle column);
 	LogicalType AnalyzedType() {
 		return analyzed_type;
