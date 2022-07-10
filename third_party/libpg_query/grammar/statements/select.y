@@ -965,7 +965,7 @@ joined_table:
 		;
 
 alias_clause:
-			AS ColId '(' name_list_opt_comma ')'
+			AS ColIdOrString '(' name_list_opt_comma ')'
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
@@ -1006,7 +1006,7 @@ func_alias_clause:
 				{
 					$$ = list_make2(NULL, $3);
 				}
-			| AS ColId '(' TableFuncElementList ')'
+			| AS ColIdOrString '(' TableFuncElementList ')'
 				{
 					PGAlias *a = makeNode(PGAlias);
 					a->aliasname = $2;
@@ -1162,7 +1162,7 @@ TableFuncElementList:
 				}
 		;
 
-TableFuncElement:	ColId Typename opt_collate_clause
+TableFuncElement:	ColIdOrString Typename opt_collate_clause
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
 					n->colname = $1;
@@ -3604,7 +3604,7 @@ attrs:		'.' attr_name
 		;
 
 opt_name_list:
-			'(' name_list ')'						{ $$ = $2; }
+			'(' name_list_opt_comma ')'						{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
