@@ -383,6 +383,29 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_throw_wrong_datatype() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs;
+
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ, t2 TIMESTAMP)");
+		stmt.execute("INSERT INTO t (id, t1, t2) VALUES (1, '2022-01-01T12:11:10+02', '2022-01-01T12:11:10')");
+
+		rs = stmt.executeQuery("SELECT * FROM t");
+		rs.next();
+
+		try {
+			rs.getTimestamp(2);
+			fail();
+		}
+		catch (SQLException e) {
+		}
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void test_result() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
