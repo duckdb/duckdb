@@ -22,6 +22,8 @@ BindResult GroupBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 			return BindColumnRef((ColumnRefExpression &)expr);
 		case ExpressionClass::CONSTANT:
 			return BindConstant((ConstantExpression &)expr);
+		case ExpressionClass::PARAMETER:
+			throw ParameterNotAllowedException("Parameter not supported in GROUP BY clause");
 		default:
 			break;
 		}

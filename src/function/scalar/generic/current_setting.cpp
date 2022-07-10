@@ -34,7 +34,9 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
                                             vector<unique_ptr<Expression>> &arguments) {
 
 	auto &key_child = arguments[0];
-
+	if (key_child->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw ParserException("Key name for current_setting needs to be a constant string");

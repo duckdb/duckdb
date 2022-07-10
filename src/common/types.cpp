@@ -557,6 +557,10 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
+bool LogicalType::IsValid() const {
+	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+}
+
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -624,7 +628,11 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	if (left.id() < right.id()) {
+	if (left.id() == LogicalTypeId::UNKNOWN) {
+		return right;
+	} else if (right.id() == LogicalTypeId::UNKNOWN) {
+		return left;
+	} else if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {
 		return left;
