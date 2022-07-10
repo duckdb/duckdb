@@ -130,7 +130,7 @@ struct ScalarFunctionExtractor {
 	}
 
 	static Value HasSideEffects(ScalarFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions[offset].has_side_effects);
+		return Value::BOOLEAN(entry.functions[offset].side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS);
 	}
 };
 
@@ -178,7 +178,7 @@ struct AggregateFunctionExtractor {
 	}
 
 	static Value HasSideEffects(AggregateFunctionCatalogEntry &entry, idx_t offset) {
-		return Value::BOOLEAN(entry.functions[offset].has_side_effects);
+		return Value::BOOLEAN(entry.functions[offset].side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS);
 	}
 };
 

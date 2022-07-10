@@ -64,11 +64,12 @@ public:
 	                             const LogicalType &return_type, aggregate_size_t state_size,
 	                             aggregate_initialize_t initialize, aggregate_update_t update,
 	                             aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                             bool propagates_null_values = false, aggregate_simple_update_t simple_update = nullptr,
+	                             FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                             aggregate_simple_update_t simple_update = nullptr,
 	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, false, LogicalType(LogicalTypeId::INVALID),
-	                         propagates_null_values),
+	    : BaseScalarFunction(name, arguments, return_type, FunctionSideEffects::NO_SIDE_EFFECTS,
+	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics) {
 	}
@@ -80,7 +81,8 @@ public:
 	                             aggregate_simple_update_t simple_update = nullptr,
 	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
-	    : BaseScalarFunction(name, arguments, return_type, false, LogicalType(LogicalTypeId::INVALID), false),
+	    : BaseScalarFunction(name, arguments, return_type, FunctionSideEffects::NO_SIDE_EFFECTS,
+	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics) {
 	}
@@ -88,11 +90,12 @@ public:
 	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                             aggregate_size_t state_size, aggregate_initialize_t initialize,
 	                             aggregate_update_t update, aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                             bool propagates_null_values = false, aggregate_simple_update_t simple_update = nullptr,
+	                             FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                             aggregate_simple_update_t simple_update = nullptr,
 	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        propagates_null_values, simple_update, bind, destructor, statistics, window) {
+	                        null_handling, simple_update, bind, destructor, statistics, window) {
 	}
 
 	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -101,8 +104,9 @@ public:
 	                             aggregate_simple_update_t simple_update = nullptr,
 	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
 	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
-	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize, false,
-	                        simple_update, bind, destructor, statistics, window) {
+	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
+	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, bind, destructor, statistics,
+	                        window) {
 	}
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
@@ -156,13 +160,14 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
-	                                        bool propagates_null_values = false) {
+	static AggregateFunction
+	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
+	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		return AggregateFunction(
 		    {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
 		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-		    propagates_null_values, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
+		    null_handling, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>

@@ -7,9 +7,9 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) {
 	DataChunk output;
-	output.Initialize(op.types);
+	output.Initialize(Allocator::Get(context), op.types);
 
-	auto collection = make_unique<ChunkCollection>();
+	auto collection = make_unique<ChunkCollection>(Allocator::Get(context));
 	for (idx_t column_idx = 0; column_idx < op.types_select.size(); column_idx++) {
 		auto type = op.types_select[column_idx];
 		auto &name = op.aliases[column_idx];

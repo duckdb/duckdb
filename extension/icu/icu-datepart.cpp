@@ -416,7 +416,7 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetUnaryPartCodeFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({temporal_type}, LogicalType::BIGINT, UnaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
-		                      false, false, BindDatePart);
+		                      BindDatePart);
 	}
 
 	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
@@ -430,15 +430,14 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetBinaryPartCodeFunction(const LogicalType &temporal_type) {
 		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::BIGINT,
-		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, false, false, BindDatePart);
+		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, BindDatePart);
 	}
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, false, false,
-		                      BindStruct);
+		return ScalarFunction({part_type, temporal_type}, result_type, StructFunction<INPUT_TYPE>, BindStruct);
 	}
 
 	static void AddDatePartFunctions(const string &name, ClientContext &context) {
@@ -458,8 +457,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, false,
-		                      false, BindLastDate);
+		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>,
+		                      BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);

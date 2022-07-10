@@ -14,7 +14,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class InsertGlobalState : public GlobalSinkState {
 public:
-	InsertGlobalState() : insert_count(0), returned_chunk_count(0) {
+	explicit InsertGlobalState(Allocator &allocator)
+	    : insert_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
 	}
 
 	mutex lock;
@@ -25,9 +26,10 @@ public:
 
 class InsertLocalState : public LocalSinkState {
 public:
-	InsertLocalState(const vector<LogicalType> &types, const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(bound_defaults) {
-		insert_chunk.Initialize(types);
+	InsertLocalState(Allocator &allocator, const vector<LogicalType> &types,
+	                 const vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(allocator, bound_defaults) {
+		insert_chunk.Initialize(allocator, types);
 	}
 
 	DataChunk insert_chunk;
@@ -91,11 +93,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<InsertGlobalState>();
+	return make_unique<InsertGlobalState>(Allocator::Get(context));
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(table->GetTypes(), bound_defaults);
+	return make_unique<InsertLocalState>(Allocator::Get(context.client), table->GetTypes(), bound_defaults);
 }
 
 void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

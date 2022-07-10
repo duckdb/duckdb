@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_
-#define _THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_ 1
+#ifndef _DUCKDB_THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_
+#define _DUCKDB_THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_ 1
 
 // FUCK OFF #include <boost/numeric/conversion/cast.hpp>
 #include <string>
@@ -103,4 +103,4 @@ protected:
 }
 } // duckdb_apache::thrift::transport
 
-#endif // #ifndef _THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_
+#endif // #ifndef _DUCKDB_THRIFT_TRANSPORT_TTRANSPORTEXCEPTION_H_

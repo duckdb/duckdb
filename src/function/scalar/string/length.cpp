@@ -71,13 +71,13 @@ static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFun
 }
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction array_length_unary = ScalarFunction(
-	    {LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT,
-	    ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, false, false, ListLengthBind);
+	ScalarFunction array_length_unary =
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT,
+	                   ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, ListLengthBind);
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, false,
-	                                  false, nullptr, nullptr, LengthPropagateStats));
+	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, nullptr,
+	                                  nullptr, LengthPropagateStats));
 	length.AddFunction(array_length_unary);
 	set.AddFunction(length);
 	length.name = "len";
@@ -85,10 +85,9 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunctionSet array_length("array_length");
 	array_length.AddFunction(array_length_unary);
-	array_length.AddFunction(
-	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, false,
-	                   false, ListLengthBind));
+	array_length.AddFunction(ScalarFunction(
+	    {LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::BIGINT,
+	    ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, ListLengthBind));
 	set.AddFunction(array_length);
 
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,

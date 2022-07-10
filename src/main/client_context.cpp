@@ -772,6 +772,7 @@ void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
 	auto &config = ClientConfig::GetConfig(*this);
 	config.enable_profiler = true;
+	config.emit_profiler_output = true;
 }
 
 void ClientContext::DisableProfiling() {
@@ -1183,6 +1184,7 @@ ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
 	options.max_expression_depth = ClientConfig::GetConfig(*this).max_expression_depth;
+	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	return options;
 }
 

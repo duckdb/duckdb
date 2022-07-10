@@ -62,10 +62,9 @@ void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet next_after_fun("nextafter");
 	next_after_fun.AddFunction(
 	    ScalarFunction("nextafter", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::BinaryFunction<double, double, double, NextAfterOperator>, false));
+	                   ScalarFunction::BinaryFunction<double, double, double, NextAfterOperator>));
 	next_after_fun.AddFunction(ScalarFunction("nextafter", {LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>,
-	                                          false));
+	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>));
 	set.AddFunction(next_after_fun);
 }
 
@@ -165,7 +164,7 @@ void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::Numeric()) {
 		switch (type.id()) {
 		case LogicalTypeId::DECIMAL:
-			abs.AddFunction(ScalarFunction({type}, type, nullptr, false, false, DecimalUnaryOpBind<AbsOperator>));
+			abs.AddFunction(ScalarFunction({type}, type, nullptr, DecimalUnaryOpBind<AbsOperator>));
 			break;
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
@@ -356,7 +355,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"ceil\"");
 		}
-		ceil.AddFunction(ScalarFunction({type}, type, func, false, false, bind_func));
+		ceil.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
 
 	set.AddFunction(ceil);
@@ -412,7 +411,7 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
-		floor.AddFunction(ScalarFunction({type}, type, func, false, false, bind_func));
+		floor.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
 	set.AddFunction(floor);
 }
@@ -624,9 +623,8 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
-		round.AddFunction(ScalarFunction({type}, type, round_func, false, false, bind_func));
-		round.AddFunction(
-		    ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, false, false, bind_prec_func));
+		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
+		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
 	}
 	set.AddFunction(round);
 }

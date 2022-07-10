@@ -19,6 +19,13 @@
 
 namespace duckdb {
 
+Transaction::Transaction(weak_ptr<ClientContext> context_p, transaction_t start_time, transaction_t transaction_id,
+                         timestamp_t start_timestamp, idx_t catalog_version)
+    : context(move(context_p)), start_time(start_time), transaction_id(transaction_id), commit_id(0),
+      highest_active_query(0), active_query(MAXIMUM_QUERY_ID), start_timestamp(start_timestamp),
+      catalog_version(catalog_version), storage(*this), is_invalidated(false), undo_buffer(context.lock()) {
+}
+
 Transaction &Transaction::GetTransaction(ClientContext &context) {
 	return context.ActiveTransaction();
 }

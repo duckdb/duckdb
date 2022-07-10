@@ -26,14 +26,21 @@ public:
 	StreamingWindowState() : initialized(false) {
 	}
 
-	void Initialize(DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
+	void Initialize(Allocator &allocator, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
 		for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 			auto &expr = *expressions[expr_idx];
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_FIRST_VALUE: {
 				auto &wexpr = (BoundWindowExpression &)expr;
-				auto &ref = (BoundReferenceExpression &)*wexpr.children[0];
-				const_vectors.push_back(make_unique<Vector>(input.data[ref.index].GetValue(0)));
+
+				// Just execute the expression once
+				ExpressionExecutor executor(allocator);
+				executor.AddExpression(*wexpr.children[0]);
+				DataChunk result;
+				result.Initialize(allocator, {wexpr.children[0]->return_type});
+				executor.Execute(input, result);
+
+				const_vectors.push_back(make_unique<Vector>(result.GetValue(0, 0)));
 				break;
 			}
 			case ExpressionType::WINDOW_PERCENT_RANK: {
@@ -61,7 +68,7 @@ unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(
 	return make_unique<StreamingWindowGlobalState>();
 }
 
-unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ClientContext &context) const {
+unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
 	return make_unique<StreamingWindowState>();
 }
 
@@ -70,7 +77,8 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	auto &gstate = (StreamingWindowGlobalState &)gstate_p;
 	auto &state = (StreamingWindowState &)state_p;
 	if (!state.initialized) {
-		state.Initialize(input, select_list);
+		auto &allocator = Allocator::Get(context.client);
+		state.Initialize(allocator, input, select_list);
 	}
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {

@@ -288,6 +288,8 @@ struct RunPreparedTask : public Task {
 		case RunType::EACH: {
 			duckdb::idx_t count = 0;
 			while (true) {
+				Napi::HandleScope scope(env);
+
 				auto chunk = result->Fetch();
 				if (!chunk || chunk->size() == 0) {
 					break;

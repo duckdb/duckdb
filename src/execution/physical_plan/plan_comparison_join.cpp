@@ -14,6 +14,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -157,6 +159,14 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 	}
 }
 
+static void RewriteJoinCondition(Expression &expr, idx_t offset) {
+	if (expr.type == ExpressionType::BOUND_REF) {
+		auto &ref = (BoundReferenceExpression &)expr;
+		ref.index += offset;
+	}
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
+}
+
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
@@ -242,10 +252,17 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);
-		} else {
+		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions)) {
 			// inequality join: use nested loop
 			plan = make_unique<PhysicalNestedLoopJoin>(op, move(left), move(right), move(op.conditions), op.join_type,
 			                                           op.estimated_cardinality);
+		} else {
+			for (auto &cond : op.conditions) {
+				RewriteJoinCondition(*cond.right, left->types.size());
+			}
+			auto condition = JoinCondition::CreateExpression(move(op.conditions));
+			plan = make_unique<PhysicalBlockwiseNLJoin>(op, move(left), move(right), move(condition), op.join_type,
+			                                            op.estimated_cardinality);
 		}
 	}
 	return plan;

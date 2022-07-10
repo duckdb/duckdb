@@ -394,6 +394,8 @@ def gather_files(dir, source_files, header_files):
         elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
             gather_file(fpath, source_files, header_files)
 
+def write_license(hfile):
+    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE for licensing information\n\n")
 
 def generate_amalgamation_splits(source_file, header_file, nsplits):
     # construct duckdb.hpp from these headers

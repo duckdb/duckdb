@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -12,10 +13,12 @@ DeleteStatement::DeleteStatement(const DeleteStatement &other) : SQLStatement(ot
 	for (const auto &using_clause : other.using_clauses) {
 		using_clauses.push_back(using_clause->Copy());
 	}
+	cte_map = other.cte_map.Copy();
 }
 
 string DeleteStatement::ToString() const {
 	string result;
+	result = cte_map.ToString();
 	result += "DELETE FROM ";
 	result += table->ToString();
 	if (!using_clauses.empty()) {

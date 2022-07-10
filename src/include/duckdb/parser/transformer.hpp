@@ -16,6 +16,7 @@
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -149,6 +150,7 @@ private:
 	unique_ptr<ConstantExpression> TransformValue(duckdb_libpgquery::PGValue val);
 	//! Transform a Postgres operator into an Expression
 	unique_ptr<ParsedExpression> TransformAExpr(duckdb_libpgquery::PGAExpr *root);
+	unique_ptr<ParsedExpression> TransformAExprInternal(duckdb_libpgquery::PGAExpr *root);
 	//! Transform a Postgres abstract expression into an Expression
 	unique_ptr<ParsedExpression> TransformExpression(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres function call into an Expression
@@ -195,7 +197,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	OnCreateConflict TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict);
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
-	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
+	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, CommonTableExpressionMap &cte_map);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
 	                                                  CommonTableExpressionInfo &info);
 
