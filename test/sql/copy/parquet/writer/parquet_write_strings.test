@@ -1,0 +1,137 @@
+# name: test/sql/copy/parquet/writer/parquet_write_strings.test
+# description: Strings tests
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES
+	('happy'), ('happy'), ('joy'), ('joy'),
+	('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'), ('joy')
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+joy
+
+# strings with null values
+statement ok
+UPDATE strings SET s=NULL WHERE s='joy'
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+NULL
+
+# all values are null
+statement ok
+UPDATE strings SET s=NULL
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
