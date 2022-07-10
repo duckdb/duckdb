@@ -214,7 +214,9 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		auto &j_ref = (JoinRef &)ref;
 		EnumerateTableRefChildren(*j_ref.left, callback);
 		EnumerateTableRefChildren(*j_ref.right, callback);
-		callback(j_ref.condition);
+		if (j_ref.condition) {
+			callback(j_ref.condition);
+		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {

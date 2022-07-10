@@ -451,7 +451,7 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<string> &expected_names,
                              const vector<LogicalType> &expected_types_p, const vector<column_t> &column_ids,
                              ParquetOptions parquet_options_p, const string &initial_filename_p)
-    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+    : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
       parquet_options(parquet_options_p) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);

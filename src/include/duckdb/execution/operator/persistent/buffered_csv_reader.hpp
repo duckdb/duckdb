@@ -159,11 +159,12 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(FileSystem &fs, FileOpener *opener, BufferedCSVReaderOptions options,
+	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	FileSystem &fs;
+	Allocator &allocator;
 	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;

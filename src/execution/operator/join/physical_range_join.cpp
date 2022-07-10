@@ -15,8 +15,9 @@
 
 namespace duckdb {
 
-PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(const PhysicalRangeJoin &op, const idx_t child)
-    : op(op), has_null(0), count(0) {
+PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(Allocator &allocator, const PhysicalRangeJoin &op,
+                                                      const idx_t child)
+    : op(op), executor(allocator), has_null(0), count(0) {
 	// Initialize order clause expression executor and key DataChunk
 	vector<LogicalType> types;
 	for (const auto &cond : op.conditions) {
@@ -25,7 +26,7 @@ PhysicalRangeJoin::LocalSortedTable::LocalSortedTable(const PhysicalRangeJoin &o
 
 		types.push_back(expr->return_type);
 	}
-	keys.Initialize(types);
+	keys.Initialize(allocator, types);
 }
 
 void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState &global_sort_state) {
@@ -306,7 +307,7 @@ void PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &
 
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && state.external) {
-		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
+		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(),
 		                                 addr_count);
 	}
 

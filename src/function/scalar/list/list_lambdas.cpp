@@ -179,7 +179,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 
 	// get the expression executor
-	ExpressionExecutor expr_executor(*lambda_expr);
+	ExpressionExecutor expr_executor(Allocator::DefaultAllocator(), *lambda_expr);
 
 	// these are only for the list_filter
 	vector<idx_t> lists_len;
@@ -195,7 +195,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	DataChunk input_chunk;
 	DataChunk lambda_chunk;
 	input_chunk.InitializeEmpty(types);
-	lambda_chunk.Initialize(result_types);
+	lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
 
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t elem_cnt = 0;
@@ -349,7 +349,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunction fun("list_transform", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, false, ListTransformBind, nullptr,
+	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, ListTransformBind, nullptr,
 	                   nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
@@ -365,7 +365,7 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunction fun("list_filter", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, false, ListFilterBind, nullptr,
+	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr,
 	                   nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);

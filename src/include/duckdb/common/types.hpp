@@ -449,6 +449,8 @@ struct LogicalType {
 
 	DUCKDB_API void Verify() const;
 
+	DUCKDB_API bool IsValid() const;
+
 private:
 	LogicalTypeId id_;
 	PhysicalType physical_type_;

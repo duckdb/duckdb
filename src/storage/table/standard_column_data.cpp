@@ -159,9 +159,9 @@ struct StandardColumnCheckpointState : public ColumnCheckpointState {
 
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
-		auto stats = global_stats->Copy();
-		stats->validity_stats = validity_state->GetStatistics();
-		return stats;
+		D_ASSERT(global_stats);
+		global_stats->validity_stats = validity_state->GetStatistics();
+		return move(global_stats);
 	}
 
 	void FlushToDisk() override {

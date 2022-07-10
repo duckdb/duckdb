@@ -10,23 +10,11 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/undo_flags.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 
 class WriteAheadLog;
-
-struct UndoChunk {
-	explicit UndoChunk(idx_t size);
-	~UndoChunk();
-
-	data_ptr_t WriteEntry(UndoFlags type, uint32_t len);
-
-	unique_ptr<data_t[]> data;
-	idx_t current_position;
-	idx_t maximum_size;
-	unique_ptr<UndoChunk> next;
-	UndoChunk *prev;
-};
 
 //! The undo buffer of a transaction is used to hold previous versions of tuples
 //! that might be required in the future (because of rollbacks or previous
@@ -34,13 +22,13 @@ struct UndoChunk {
 class UndoBuffer {
 public:
 	struct IteratorState {
-		UndoChunk *current;
+		ArenaChunk *current;
 		data_ptr_t start;
 		data_ptr_t end;
 	};
 
 public:
-	UndoBuffer();
+	UndoBuffer(const shared_ptr<ClientContext> &context);
 
 	//! Reserve space for an entry of the specified type and length in the undo
 	//! buffer
@@ -60,8 +48,7 @@ public:
 	void Rollback() noexcept;
 
 private:
-	unique_ptr<UndoChunk> head;
-	UndoChunk *tail;
+	ArenaAllocator allocator;
 
 private:
 	template <class T>

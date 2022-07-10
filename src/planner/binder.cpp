@@ -24,7 +24,6 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
     : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
-	parameter_types = nullptr;
 	if (parent) {
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
@@ -36,7 +35,6 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
 			parameters = parent->parameters;
-			parameter_types = parent->parameter_types;
 		}
 	}
 }
@@ -82,6 +80,10 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((LoadStatement &)statement);
 	case StatementType::EXTENSION_STATEMENT:
 		return Bind((ExtensionStatement &)statement);
+	case StatementType::PREPARE_STATEMENT:
+		return Bind((PrepareStatement &)statement);
+	case StatementType::EXECUTE_STATEMENT:
+		return Bind((ExecuteStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
@@ -364,6 +366,10 @@ BindingMode Binder::GetBindingMode() {
 	return mode;
 }
 
+void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
+	can_contain_nulls = can_contain_nulls_p;
+}
+
 void Binder::AddTableName(string table_name) {
 	if (parent) {
 		parent->AddTableName(move(table_name));
@@ -377,22 +383,6 @@ const unordered_set<string> &Binder::GetTableNames() {
 		return parent->GetTableNames();
 	}
 	return table_names;
-}
-
-void Binder::RemoveParameters(vector<unique_ptr<Expression>> &expressions) {
-	for (auto &expr : expressions) {
-		if (!expr->HasParameter()) {
-			continue;
-		}
-		ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-			for (auto param_it = parameters->begin(); param_it != parameters->end(); param_it++) {
-				if (expr->Equals(*param_it)) {
-					parameters->erase(param_it);
-					break;
-				}
-			}
-		});
-	}
 }
 
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {

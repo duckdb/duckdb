@@ -1,10 +1,12 @@
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
-#include "duckdb/parallel/thread_context.hpp"
+
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
 
@@ -26,6 +28,9 @@ struct AggregateState {
 			aggr.function.initialize(state.get());
 			aggregates.push_back(move(state));
 			destructors.push_back(aggr.function.destructor);
+#ifdef DEBUG
+			counts.push_back(0);
+#endif
 		}
 	}
 	~AggregateState() {
@@ -48,8 +53,10 @@ struct AggregateState {
 
 	//! The aggregate values
 	vector<unique_ptr<data_t[]>> aggregates;
-	// The destructors
+	//! The destructors
 	vector<aggregate_destructor_t> destructors;
+	//! Counts (used for verification)
+	vector<idx_t> counts;
 };
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
@@ -68,8 +75,11 @@ public:
 
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
-	explicit SimpleAggregateLocalState(const vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
+	                          const vector<LogicalType> &child_types)
+	    : state(aggregates), child_executor(allocator) {
 		vector<LogicalType> payload_types;
+		vector<AggregateObject> aggregate_objects;
 		for (auto &aggregate : aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -80,10 +90,12 @@ public:
 					child_executor.AddExpression(*child);
 				}
 			}
+			aggregate_objects.emplace_back(&aggr);
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			payload_chunk.Initialize(payload_types);
+			payload_chunk.Initialize(allocator, payload_types);
 		}
+		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
 	void Reset() {
 		payload_chunk.Reset();
@@ -95,6 +107,8 @@ public:
 	ExpressionExecutor child_executor;
 	//! The payload chunk
 	DataChunk payload_chunk;
+	//! Aggregate filter data set
+	AggregateFilterDataSet filter_set;
 };
 
 unique_ptr<GlobalSinkState> PhysicalSimpleAggregate::GetGlobalSinkState(ClientContext &context) const {
@@ -102,7 +116,7 @@ unique_ptr<GlobalSinkState> PhysicalSimpleAggregate::GetGlobalSinkState(ClientCo
 }
 
 unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<SimpleAggregateLocalState>(aggregates);
+	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes());
 }
 
 SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -114,23 +128,24 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 
 	DataChunk &payload_chunk = sink.payload_chunk;
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
-		DataChunk filtered_input;
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
-			ExpressionExecutor filter_execution(aggregate.filter.get());
-			SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-			auto count = filter_execution.SelectExpression(input, true_sel);
-			auto input_types = input.GetTypes();
-			filtered_input.Initialize(input_types);
-			filtered_input.Slice(input, true_sel, count);
-			sink.child_executor.SetChunk(filtered_input);
+			auto &filtered_data = sink.filter_set.GetFilterData(aggr_idx);
+			auto count = filtered_data.ApplyFilter(input);
+
+			sink.child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
 			sink.child_executor.SetChunk(input);
 			payload_chunk.SetCardinality(input);
 		}
+
+#ifdef DEBUG
+		sink.state.counts[aggr_idx] += payload_chunk.size();
+#endif
+
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
@@ -167,6 +182,9 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
+#ifdef DEBUG
+		gstate.state.counts[aggr_idx] += source.state.counts[aggr_idx];
+#endif
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
@@ -198,6 +216,20 @@ unique_ptr<GlobalSourceState> PhysicalSimpleAggregate::GetGlobalSourceState(Clie
 	return make_unique<SimpleAggregateState>();
 }
 
+void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {
+#ifdef DEBUG
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggr = (BoundAggregateExpression &)*aggregates[aggr_idx];
+		if (state.counts[aggr_idx] == 0 && aggr.function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+			// Default is when 0 values go in, NULL comes out
+			VectorData vdata;
+			chunk.data[aggr_idx].Orrify(1, vdata);
+			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
+		}
+	}
+#endif
+}
+
 void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                       LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
@@ -216,6 +248,7 @@ void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chun
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
+	VerifyNullHandling(chunk, gstate.state, aggregates);
 	state.finished = true;
 }
 

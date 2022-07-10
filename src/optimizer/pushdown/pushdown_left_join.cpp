@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 

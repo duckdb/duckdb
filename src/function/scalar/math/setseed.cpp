@@ -53,8 +53,9 @@ unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bou
 }
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    ScalarFunction("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, true, SetSeedBind));
+	ScalarFunction setseed("setseed", {LogicalType::DOUBLE}, LogicalType::SQLNULL, SetSeedFunction, SetSeedBind);
+	setseed.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(setseed);
 }
 
 } // namespace duckdb
