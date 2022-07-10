@@ -835,6 +835,15 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
+			| values_clause_opt_comma alias_clause opt_tablesample_clause
+			{
+				PGRangeSubselect *n = makeNode(PGRangeSubselect);
+				n->lateral = false;
+				n->subquery = $1;
+				n->alias = $2;
+				n->sample = $3;
+				$$ = (PGNode *) n;
+			}
 			| LATERAL_P func_table func_alias_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $2;
