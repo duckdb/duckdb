@@ -398,7 +398,7 @@ public class TestDuckDBJDBC {
 			rs.getTimestamp(2);
 			fail();
 		}
-		catch (SQLException e) {
+		catch (IllegalArgumentException e) {
 		}
 
 		rs.close();
