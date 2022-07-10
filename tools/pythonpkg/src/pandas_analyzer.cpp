@@ -6,6 +6,19 @@
 
 namespace duckdb {
 
+static bool TypeIsNested(LogicalTypeId id) {
+	switch (id) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::TABLE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool UpgradeType(LogicalType &left, const LogicalType &right);
 
 static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
@@ -21,16 +34,18 @@ static bool SameTypeRealm(LogicalTypeId a, LogicalTypeId b) {
 	if (a <= LogicalTypeId::ANY) {
 		return true;
 	}
+	auto a_is_nested = TypeIsNested(a);
+	auto b_is_nested = TypeIsNested(b);
 	// Both a and b are not nested
-	if (b < LogicalTypeId::STRUCT) {
+	if (!a_is_nested && !b_is_nested) {
 		return true;
 	}
 	// Non-nested -> Nested is not possible
-	if (a < LogicalTypeId::STRUCT) {
+	if (!a_is_nested || !b_is_nested) {
 		return false;
 	}
 	// STRUCT -> LIST is not possible
-	if (b == LogicalTypeId::LIST) {
+	if (b == LogicalTypeId::LIST || a == LogicalTypeId::LIST) {
 		return false;
 	}
 	return true;
