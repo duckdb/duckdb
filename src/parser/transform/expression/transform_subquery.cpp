@@ -1,6 +1,10 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 
@@ -51,6 +55,33 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	case duckdb_libpgquery::PG_EXPR_SUBLINK: {
 		// return a single scalar value from the subquery
 		// no child expression to compare to
+		subquery_expr->subquery_type = SubqueryType::SCALAR;
+		break;
+	}
+	case duckdb_libpgquery::PG_ARRAY_SUBLINK: {
+		auto subquery_table_alias = "__subquery";
+		auto subquery_column_alias = "__arr_element";
+
+		// ARRAY expression
+		// wrap subquery into "SELECT ARRAY_AGG(i) FROM (...) tbl(i)"
+		auto select_node = make_unique<SelectNode>();
+
+		// SELECT ARRAY_AGG(i)
+		vector<unique_ptr<ParsedExpression>> children;
+		children.push_back(
+		    make_unique_base<ParsedExpression, ColumnRefExpression>(subquery_column_alias, subquery_table_alias));
+		auto aggr = make_unique<FunctionExpression>("array_agg", move(children));
+		select_node->select_list.push_back(move(aggr));
+
+		// FROM (...) tbl(i)
+		auto child_subquery = make_unique<SubqueryRef>(move(subquery_expr->subquery), subquery_table_alias);
+		child_subquery->column_name_alias.emplace_back(subquery_column_alias);
+		select_node->from_table = move(child_subquery);
+
+		auto new_subquery = make_unique<SelectStatement>();
+		new_subquery->node = move(select_node);
+		subquery_expr->subquery = move(new_subquery);
+
 		subquery_expr->subquery_type = SubqueryType::SCALAR;
 		break;
 	}
