@@ -2615,6 +2615,7 @@ within_group_clause:
 
 filter_clause:
 			FILTER '(' WHERE a_expr ')'				{ $$ = $4; }
+			FILTER '(' a_expr ')'					{ $$ = $3; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
