@@ -37,7 +37,6 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 

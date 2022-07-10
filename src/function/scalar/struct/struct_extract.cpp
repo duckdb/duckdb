@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
-#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
