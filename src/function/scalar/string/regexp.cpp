@@ -159,6 +159,9 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 	RE2::Options options;
 	options.set_log_errors(false);
 	if (arguments.size() == 3) {
+		if (arguments[2]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
@@ -215,6 +218,9 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 	auto data = make_unique<RegexpReplaceBindData>();
 	data->options.set_log_errors(false);
 	if (arguments.size() == 4) {
+		if (arguments[3]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[3]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
@@ -293,6 +299,9 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 
 	string group_string = "";
 	if (arguments.size() == 3) {
+		if (arguments[2]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Group index field field must be a constant!");
 		}

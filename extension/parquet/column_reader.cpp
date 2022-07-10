@@ -44,7 +44,6 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
       type(move(type_p)), page_rows_available(0) {
 
 	// dummies for Skip()
-	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 }

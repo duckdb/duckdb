@@ -376,6 +376,9 @@ struct ICUDatePart : public ICUDateFunc {
 		using adapters_t = data_t::adapters_t;
 
 		// collect names and deconflict, construct return type
+		if (arguments[0]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[0]->IsFoldable()) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}

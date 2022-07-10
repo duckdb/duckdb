@@ -86,14 +86,11 @@ public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns DConstants::INVALID_INDEX and sets error if none could be found
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
-	                                     vector<LogicalType> &arguments, string &error, bool &cast_parameters);
+	                                     vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
-	                                     vector<unique_ptr<Expression>> &arguments, string &error,
-	                                     bool &cast_parameters);
+	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
-	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
-	                                     vector<LogicalType> &arguments, string &error, bool &cast_parameters);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
 	                                     vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
@@ -161,8 +158,7 @@ public:
 	DUCKDB_API hash_t Hash() const;
 
 	//! Cast a set of expressions to the arguments of this function
-	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children,
-	                                        bool cast_parameter_expressions = true);
+	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 
 	DUCKDB_API string ToString() override;
 };
