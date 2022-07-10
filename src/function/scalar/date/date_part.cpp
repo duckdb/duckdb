@@ -1210,10 +1210,10 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scala
                                 scalar_function_t ts_func, scalar_function_t interval_func,
                                 function_statistics_t date_stats, function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
-	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, false,
-	                                        nullptr, nullptr, date_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false, false,
-	                                        nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, move(interval_func)));
 	set.AddFunction(operator_set);
 }
@@ -1231,13 +1231,13 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
                                 function_statistics_t date_stats, function_statistics_t ts_stats,
                                 function_statistics_t time_stats) {
 	ScalarFunctionSet operator_set(name);
-	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, false,
-	                                        nullptr, nullptr, date_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false, false,
-	                                        nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, move(interval_func)));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, move(time_func), false, false,
-	                                        nullptr, nullptr, time_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, move(time_func), nullptr, nullptr, time_stats));
 	set.AddFunction(operator_set);
 }
 
@@ -1448,7 +1448,7 @@ struct StructDatePart {
 	static ScalarFunction GetFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, false, false, Bind);
+		return ScalarFunction({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, Bind);
 	}
 };
 

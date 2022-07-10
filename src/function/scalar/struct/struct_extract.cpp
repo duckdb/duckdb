@@ -109,7 +109,7 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 
 ScalarFunction StructExtractFun::GetFunction() {
 	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                      StructExtractFunction, false, StructExtractBind, nullptr, PropagateStructExtractStats);
+	                      StructExtractFunction, StructExtractBind, nullptr, PropagateStructExtractStats);
 }
 
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {

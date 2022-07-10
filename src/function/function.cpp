@@ -84,9 +84,10 @@ bool SimpleNamedParameterFunction::HasNamedParameters() {
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
-                                       bool has_side_effects, LogicalType varargs_p, bool propagates_null_values_p)
+                                       FunctionSideEffects side_effects, LogicalType varargs_p,
+                                       FunctionNullHandling null_handling)
     : SimpleFunction(move(name_p), move(arguments_p), move(varargs_p)), return_type(move(return_type_p)),
-      has_side_effects(has_side_effects), propagates_null_values(propagates_null_values_p) {
+      side_effects(side_effects), null_handling(null_handling) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {
@@ -487,7 +488,7 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
 	// found a matching function!
 	auto &bound_function = func.functions[best_function];
 
-	if (bound_function.null_handling == FunctionNullHandling::NULL_IN_NULL_OUT) {
+	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
 				if (binder) {

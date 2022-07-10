@@ -33,6 +33,9 @@ class TableFunction;
 
 struct PragmaInfo;
 
+enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_HANDLING = 1 };
+enum class FunctionSideEffects : uint8_t { NO_SIDE_EFFECTS = 0, HAS_SIDE_EFFECTS = 1 };
+
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
 
@@ -141,17 +144,18 @@ public:
 class BaseScalarFunction : public SimpleFunction {
 public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              bool has_side_effects, LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                              bool propagates_null_values = false);
+	                              FunctionSideEffects side_effects,
+	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function
 	LogicalType return_type;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
-	bool has_side_effects;
-	//! Whether or not the function propagates null values
-	bool propagates_null_values;
+	FunctionSideEffects side_effects;
+	//! How this function handles NULL values
+	FunctionNullHandling null_handling;
 
 public:
 	DUCKDB_API hash_t Hash() const;

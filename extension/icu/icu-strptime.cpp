@@ -234,7 +234,7 @@ struct ICUStrftime : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction, false, false, Bind));
+		                               ICUStrftimeFunction, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);

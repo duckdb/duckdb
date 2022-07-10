@@ -391,14 +391,12 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {
 	return CreateScalarFunctionInfo(ScalarFunction("json_transform", {LogicalType::JSON, LogicalType::JSON},
-	                                               LogicalType::ANY, TransformFunction<false>, false, JSONTransformBind,
-	                                               nullptr, nullptr));
+	                                               LogicalType::ANY, TransformFunction<false>, JSONTransformBind));
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
 	return CreateScalarFunctionInfo(ScalarFunction("json_transform_strict", {LogicalType::JSON, LogicalType::JSON},
-	                                               LogicalType::ANY, TransformFunction<true>, false, JSONTransformBind,
-	                                               nullptr, nullptr));
+	                                               LogicalType::ANY, TransformFunction<true>, JSONTransformBind));
 }
 
 } // namespace duckdb
