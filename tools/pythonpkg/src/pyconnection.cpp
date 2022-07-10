@@ -605,10 +605,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	auto &db_config = res->database->instance->config;
-	db_config.AddExtensionOption("analyze_sample_maximum",
+	db_config.AddExtensionOption("pandas_analyze_sample",
 	                             "The maximum number of rows to sample when analyzing a pandas object column.",
 	                             LogicalType::UBIGINT);
-	db_config.set_variables["analyze_sample_maximum"] = Value::UBIGINT(1000);
+	db_config.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
 
 	PandasScanFunction scan_fun;
 	CreateTableFunctionInfo scan_info(scan_fun);

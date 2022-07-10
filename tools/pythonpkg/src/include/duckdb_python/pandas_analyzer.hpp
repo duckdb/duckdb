@@ -22,9 +22,9 @@ public:
 	PandasAnalyzer(const DBConfig &config) {
 		analyzed_type = LogicalType::SQLNULL;
 
-		auto maximum_entry = config.set_variables.find("analyze_sample_maximum");
+		auto maximum_entry = config.set_variables.find("pandas_analyze_sample");
 		D_ASSERT(maximum_entry != config.set_variables.end());
-		sample_maximum = maximum_entry->second.GetValue<uint64_t>();
+		sample_size = maximum_entry->second.GetValue<uint64_t>();
 	}
 
 public:
@@ -42,7 +42,7 @@ private:
 	uint64_t GetSampleIncrement(idx_t rows);
 
 private:
-	uint64_t sample_maximum;
+	uint64_t sample_size;
 	//! Holds the gil to allow python object creation/destruction
 	PythonGILWrapper gil;
 	//! The resulting analyzed type

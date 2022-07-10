@@ -327,8 +327,9 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 
 //! Get the increment for the given sample size
 uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
+	D_ASSERT(sample_size != 0);
 	//! Apply the maximum
-	auto sample = sample_maximum;
+	auto sample = sample_size;
 	if (sample > rows) {
 		sample = rows;
 	}
@@ -365,6 +366,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 		types.push_back(next_item_type);
 
 		if (!can_convert || !UpgradeType(item_type, next_item_type)) {
+			can_convert = false;
 			return next_item_type;
 		}
 	}
@@ -377,6 +379,10 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 }
 
 bool PandasAnalyzer::Analyze(py::handle column) {
+	// Disable analyze
+	if (sample_size == 0) {
+		return false;
+	}
 	bool can_convert = true;
 	LogicalType type = InnerAnalyze(column, can_convert);
 	if (can_convert) {
