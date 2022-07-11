@@ -14,8 +14,6 @@ inline string_t hello_fun(string_t what) {
 	return "Hello, " + what.GetString();
 }
 
-namespace duckdb {
-
 DUCKDB_API inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"));
 }
@@ -97,8 +95,6 @@ DUCKDB_API inline void SubPointFunction(DataChunk &args, ExpressionState &state,
 	}
 	result.Verify(count);
 }
-
-} // namespace duckdb
 
 //===--------------------------------------------------------------------===//
 // Quack Table Function
@@ -244,17 +240,17 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
 
-	auto entry = (duckdb::TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
+	auto entry = (TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
 	LogicalType::SetCatalog(target_type, entry);
 
 	// Function add point
-	duckdb::ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, duckdb::AddPointFunction);
-	duckdb::CreateScalarFunctionInfo add_point_info(add_point_func);
+	ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, AddPointFunction);
+	CreateScalarFunctionInfo add_point_info(add_point_func);
 	catalog.CreateFunction(client_context, &add_point_info);
 
 	// Function sub point
-	duckdb::ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, duckdb::SubPointFunction);
-	duckdb::CreateScalarFunctionInfo sub_point_info(sub_point_func);
+	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type,SubPointFunction);
+	CreateScalarFunctionInfo sub_point_info(sub_point_func);
 	catalog.CreateFunction(client_context, &sub_point_info);
 
 	con.Commit();
