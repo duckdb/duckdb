@@ -221,7 +221,7 @@ public:
 extern "C" {
 DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 	CreateScalarFunctionInfo hello_alias_info(
-	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
+	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, duckdb::TestAliasHello));
 
 	// create a scalar function
 	Connection con(db);
@@ -244,17 +244,17 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	target_type.SetAlias(alias_name);
 	alias_info->type = target_type;
 
-	auto entry = (TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
+	auto entry = (duckdb::TypeCatalogEntry *)catalog.CreateType(client_context, alias_info.get());
 	LogicalType::SetCatalog(target_type, entry);
 
 	// Function add point
-	ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, AddPointFunction);
-	CreateScalarFunctionInfo add_point_info(add_point_func);
+	duckdb::ScalarFunction add_point_func("add_point", {target_type, target_type}, target_type, duckdb::AddPointFunction);
+	duckdb::CreateScalarFunctionInfo add_point_info(add_point_func);
 	catalog.CreateFunction(client_context, &add_point_info);
 
 	// Function sub point
-	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, SubPointFunction);
-	CreateScalarFunctionInfo sub_point_info(sub_point_func);
+	duckdb::ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, duckdb::SubPointFunction);
+	duckdb::CreateScalarFunctionInfo sub_point_info(sub_point_func);
 	catalog.CreateFunction(client_context, &sub_point_info);
 
 	con.Commit();
