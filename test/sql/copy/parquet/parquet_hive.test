@@ -18,6 +18,12 @@ select id, value, part, date from parquet_scan('data/parquet-testing/hive-partit
 1	value1	a	2012-01-01
 2	value2	b	2013-01-01
 
+# Filter should work too
+query II
+select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01';
+----
+2	2013-01-01
+
 # If the key names don't add up, there's nothing we can do
 statement error
 select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
