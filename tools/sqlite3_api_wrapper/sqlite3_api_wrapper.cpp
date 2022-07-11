@@ -95,7 +95,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			config.options.access_mode = AccessMode::READ_ONLY;
 		}
 		if (flags & DUCKDB_UNSIGNED_EXTENSIONS) {
-			config.allow_unsigned_extensions = true;
+			config.options.allow_unsigned_extensions = true;
 		}
 		pDb->db = make_unique<DuckDB>(filename, &config);
 		pDb->con = make_unique<Connection>(*pDb->db);
