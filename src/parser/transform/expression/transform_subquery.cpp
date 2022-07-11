@@ -71,7 +71,8 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		// ARRAY_AGG(i) IS NULL
 		auto agg_is_null = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, aggr->Copy());
 		// empty list
-		auto empty_list = make_unique<FunctionExpression>("list_value", move(children));
+		vector<unique_ptr<ParsedExpression>> list_children;
+		auto empty_list = make_unique<FunctionExpression>("list_value", move(list_children));
 		// CASE
 		auto case_expr = make_unique<CaseExpression>();
 		CaseCheck check;
