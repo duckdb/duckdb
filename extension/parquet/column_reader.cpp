@@ -724,14 +724,13 @@ void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 //===--------------------------------------------------------------------===//
 // Generated Constant Column Reader
 //===--------------------------------------------------------------------===//
-GeneratedConstantColumnReader::GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-                                             idx_t max_define_p, idx_t max_repeat_p, Value constant_p)
-    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p,
-                   max_define_p, max_repeat_p),
-      constant(constant_p) {
+GeneratedConstantColumnReader::GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p,
+                                                             const SchemaElement &schema_p, idx_t schema_idx_p,
+                                                             idx_t max_define_p, idx_t max_repeat_p, Value constant_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p), constant(constant_p) {
 }
-idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-                             Vector &result) {
+idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
+                                          uint8_t *repeat_out, Vector &result) {
 	result.SetValue(0, constant);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	return num_values;

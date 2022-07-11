@@ -20,8 +20,8 @@ namespace duckdb {
 //! filename column. Can be used for handling hive partitioning later.
 class GeneratedConstantColumnReader : public ColumnReader {
 public:
-	GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                   idx_t max_define_p, idx_t max_repeat_p, Value constant);
+	GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
+	                              idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p, Value constant);
 	Value constant;
 
 public:
@@ -49,7 +49,7 @@ public:
 		return;
 	}
 	idx_t GroupRowsAvailable() override {
-	    return NumericLimits<idx_t>::Maximum();
+		return NumericLimits<idx_t>::Maximum();
 	};
 	uint64_t TotalCompressedSize() override {
 		return 0;

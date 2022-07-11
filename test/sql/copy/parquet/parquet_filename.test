@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/filename.test
+# name: test/sql/copy/parquet/parquet_filename.test
 # description: Test the filename option of the parquet reader
 # group: [parquet]
 

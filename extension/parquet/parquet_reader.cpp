@@ -358,15 +358,17 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 
 	if (parquet_options.filename) {
 		Value val = Value(file_name);
-		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
+		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
+		    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
 	}
 
 	if (parquet_options.hive_partitioning) {
 		auto res = ParseHivePartitions(file_name);
 
-		for (auto& partition: res) {
+		for (auto &partition : res) {
 			Value val = Value(partition.second);
-			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
+			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(
+			    *this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
 		}
 	}
 
@@ -410,7 +412,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 	// Add generated constant column for filename
 	if (parquet_options.hive_partitioning) {
 		auto partitions = ParseHivePartitions(file_name);
-		for (auto& part : partitions) {
+		for (auto &part : partitions) {
 			return_types.emplace_back(LogicalType::VARCHAR);
 			names.emplace_back(part.first);
 		}

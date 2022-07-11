@@ -92,7 +92,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (result->options.include_parsed_hive_partitions) {
 		auto partitions = ParseHivePartitions(result->files[0]);
 		result->hive_partition_col_idx = names.size();
-		for (auto& part : partitions) {
+		for (auto &part : partitions) {
 			return_types.emplace_back(LogicalType::VARCHAR);
 			names.emplace_back(part.first);
 		}
@@ -159,9 +159,11 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 		idx_t i = bind_data.hive_partition_col_idx;
 
-		for (auto& part : partitions) {
+		for (auto &part : partitions) {
 			if (bind_data.options.names[i] != part.first) {
-				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] + "' but found '" + part.first + "' for file '" + data.csv_reader->options.file_path + "'");
+				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
+				                  "' but found '" + part.first + "' for file '" + data.csv_reader->options.file_path +
+				                  "'");
 			}
 			auto &col = output.data[i++];
 			col.SetValue(0, Value(part.second));

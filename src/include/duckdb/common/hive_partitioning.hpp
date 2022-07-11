@@ -19,7 +19,7 @@ inline std::map<string, string> ParseHivePartitions(string filename) {
 	std::map<string, string> result;
 
 	string regex = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
-	duckdb_re2::StringPiece input(filename);    // Wrap a StringPiece around it
+	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
 
 	string var;
 	string value;
@@ -29,4 +29,4 @@ inline std::map<string, string> ParseHivePartitions(string filename) {
 	return result;
 }
 
-}
+} // namespace duckdb
