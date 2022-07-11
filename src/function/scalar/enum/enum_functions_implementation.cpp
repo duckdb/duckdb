@@ -61,8 +61,15 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	result.Reference(val);
 }
 
+static void CheckEnumParameter(const Expression &expr) {
+	if (expr.HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+}
+
 unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
                                           vector<unique_ptr<Expression>> &arguments) {
+	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
@@ -71,6 +78,8 @@ unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction
 
 unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
+	CheckEnumParameter(*arguments[0]);
+	CheckEnumParameter(*arguments[1]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
@@ -83,7 +92,6 @@ unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, S
 	if (arguments[0]->return_type.id() == LogicalTypeId::ENUM &&
 	    arguments[1]->return_type.id() == LogicalTypeId::ENUM &&
 	    arguments[0]->return_type != arguments[1]->return_type) {
-
 		throw BinderException("The parameters need to link to ONLY one enum OR be NULL ");
 	}
 	return nullptr;
