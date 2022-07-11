@@ -1,5 +1,6 @@
 #include "duckdb/parser/statement/vacuum_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 
 namespace duckdb {
