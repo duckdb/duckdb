@@ -121,7 +121,9 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		// evaluate the constant and perform the catalog lookup already
 		auto seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.IsNull()) {
-			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
+			if (seqname.type().id() != LogicalTypeId::VARCHAR) {
+				seqname = seqname.CastAs(LogicalTypeId::VARCHAR, true);
+			}
 			auto qname = QualifiedName::Parse(StringValue::Get(seqname));
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 		}
