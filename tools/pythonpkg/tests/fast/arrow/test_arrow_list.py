@@ -48,7 +48,7 @@ def create_and_register_comparison_result(column_list, duckdb_conn):
     duckdb_conn.execute(query, inserted_values)
 
 class TestArrowListType(object):
-    def test_regular_list(self, duckdb_cursor):
+    def test_regular_list(self):
         if not can_run:
             return
         duckdb_conn = duckdb.connect()
@@ -69,7 +69,7 @@ class TestArrowListType(object):
 
         check_equal(duckdb_conn)
 
-    def test_fixedsize_list(self, duckdb_cursor):
+    def test_fixedsize_list(self):
         if not can_run:
             return
         duckdb_conn = duckdb.connect()
