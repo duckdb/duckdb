@@ -98,7 +98,7 @@ DUCKDB_API inline static void SubPointFunction(DataChunk &args, ExpressionState 
 	result.Verify(count);
 }
 
-}
+} // namespace duckdb
 
 //===--------------------------------------------------------------------===//
 // Quack Table Function
