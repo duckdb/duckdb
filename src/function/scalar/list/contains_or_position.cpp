@@ -209,13 +209,13 @@ static unique_ptr<FunctionData> ListPositionBind(ClientContext &context, ScalarF
 ScalarFunction ListContainsFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, // argument list
 	                      LogicalType::BOOLEAN,                                    // return type
-	                      ListContainsFunction, false, false, ListContainsBind, nullptr);
+	                      ListContainsFunction, ListContainsBind, nullptr);
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, // argument list
 	                      LogicalType::INTEGER,                                    // return type
-	                      ListPositionFunction, false, false, ListPositionBind, nullptr);
+	                      ListPositionFunction, ListPositionBind, nullptr);
 }
 
 void ListContainsFun::RegisterFunction(BuiltinFunctions &set) {

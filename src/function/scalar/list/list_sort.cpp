@@ -319,15 +319,15 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    false, false, ListNormalSortBind);
+	                    ListNormalSortBind);
 
 	// two parameters: list, order
 	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	// three parameters: list, order, null order
 	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	ScalarFunctionSet list_sort("list_sort");
 	list_sort.AddFunction(sort);
@@ -345,12 +345,11 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                            ListSortFunction, false, false, ListReverseSortBind);
+	                            ListSortFunction, ListReverseSortBind);
 
 	// two parameters: list, null order
 	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false,
-	                                       ListReverseSortBind);
+	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
 
 	ScalarFunctionSet list_reverse_sort("list_reverse_sort");
 	list_reverse_sort.AddFunction(sort_reverse);

@@ -1,0 +1,103 @@
+# name: test/sql/explain/explain_all_statements.test
+# description: Test explain on various statements
+# group: [explain]
+
+statement ok
+explain PRAGMA enable_verification
+
+statement ok
+explain CREATE TABLE integers(i INTEGER);
+
+# oops we didn't actually create it
+statement error
+explain SELECT * FROM integers;
+
+statement error
+explain INSERT INTO integers VALUES (1);
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+explain SELECT * FROM integers;
+
+statement ok
+explain INSERT INTO integers VALUES (1);
+
+statement ok
+INSERT INTO integers VALUES (1);
+
+statement ok
+explain DELETE FROM integers WHERE i=1
+
+statement ok
+explain UPDATE integers SET i=i+1
+
+statement ok
+explain CREATE INDEX i_index ON integers(i)
+
+statement ok
+explain ALTER TABLE integers RENAME TO integers2
+
+statement ok
+explain ALTER TABLE integers ADD COLUMN j INTEGER
+
+statement ok
+explain ALTER TABLE integers RENAME i TO k
+
+query I
+SELECT * FROM integers
+----
+1
+
+statement ok
+explain PREPARE v1 AS SELECT * FROM integers WHERE i=?
+
+statement ok
+PREPARE v1 AS SELECT * FROM integers WHERE i=?
+
+statement ok
+explain EXECUTE v1(1);
+
+statement ok
+explain DEALLOCATE v1
+
+query I
+EXECUTE v1(1)
+----
+1
+
+statement ok
+explain VACUUM
+
+statement ok
+explain CREATE SEQUENCE seq
+
+statement ok
+explain CREATE VIEW v1 AS SELECT * FROM integers
+
+statement ok
+explain DROP TABLE integers
+
+statement ok
+explain CHECKPOINT
+
+statement ok
+explain BEGIN TRANSACTION
+
+statement ok
+explain SET memory_limit='1GB'
+
+statement ok
+explain CREATE MACRO f(x) AS x+1
+
+statement error
+SELECT f(1)
+
+statement ok
+CREATE MACRO f(x) AS x+1
+
+query I
+SELECT f(1)
+----
+2
