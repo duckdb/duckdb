@@ -89,7 +89,6 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 
 template <typename INPUT_TYPE>
 struct ChunkIterator {
-
 	ChunkIterator(ChunkCollection &collection, const idx_t col_idx)
 	    : collection(collection), col_idx(col_idx), chunk_begin(0), chunk_end(0), ch_idx(0), data(nullptr),
 	      validity(nullptr) {
@@ -125,6 +124,27 @@ private:
 	const INPUT_TYPE *data;
 	ValidityMask *validity;
 };
+
+template <>
+void ChunkIterator<Value>::Update(idx_t r) {
+	if (r >= chunk_end) {
+		ch_idx = collection.LocateChunk(r);
+		auto &ch = collection.GetChunk(ch_idx);
+		chunk_begin = ch_idx * STANDARD_VECTOR_SIZE;
+		chunk_end = chunk_begin + ch.size();
+		auto &vector = ch.data[col_idx];
+		validity = &FlatVector::Validity(vector);
+	}
+}
+
+template <>
+Value ChunkIterator<Value>::GetValue(idx_t r) {
+	auto &ch = collection.GetChunk(ch_idx);
+	chunk_begin = ch_idx * STANDARD_VECTOR_SIZE;
+	chunk_end = chunk_begin + ch.size();
+	auto &vector = ch.data[col_idx];
+	return vector.GetValue(r);
+}
 
 template <typename INPUT_TYPE>
 static void MaskTypedColumn(ValidityMask &mask, ChunkCollection &over_collection, const idx_t c) {
@@ -211,7 +231,7 @@ static void MaskColumn(ValidityMask &mask, ChunkCollection &over_collection, con
 		MaskTypedColumn<interval_t>(mask, over_collection, c);
 		break;
 	default:
-		throw NotImplementedException("Type for comparison");
+		MaskTypedColumn<Value>(mask, over_collection, c);
 		break;
 	}
 }

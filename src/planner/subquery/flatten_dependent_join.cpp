@@ -389,8 +389,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		window->children.push_back(move(child));
 
 		// add a filter based on the row_number
-		// the filter we add is "row_number >= offset + 1 AND row_number <= offset + limit"
-		// (we add a +1 because row_number is 1-based)
+		// the filter we add is "row_number > offset AND row_number <= offset + limit"
 		auto filter = make_unique<LogicalFilter>();
 		unique_ptr<Expression> condition;
 		auto row_num_ref =
@@ -400,8 +399,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		                                                   row_num_ref->Copy(), move(upper_bound));
 		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
 		if (limit.offset_val > 0) {
-			auto lower_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val + 1));
-			auto lower_comp = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			auto lower_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val));
+			auto lower_comp = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
 			                                                         row_num_ref->Copy(), move(lower_bound));
 			auto conj = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(lower_comp),
 			                                                    move(condition));
