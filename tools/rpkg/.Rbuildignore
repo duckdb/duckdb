@@ -8,7 +8,7 @@ dependencies.R
 src/Makevars.in
 ^.*\.Rproj$
 ^\.Rproj\.user$
-^build-win$
+^build_win$
 ^tic\.R$
 ^_pkgdown\.yml$
 ^docs$
