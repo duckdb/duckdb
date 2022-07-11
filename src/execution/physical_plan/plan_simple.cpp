@@ -24,7 +24,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		                                        op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_VACUUM: {
 		auto &info = (VacuumInfo &)*op.info;
-		if (!info.bound_ref) {
+		if (!info.has_table) {
 			return make_unique<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(move(op.info)),
 			                                   op.estimated_cardinality);
 		}

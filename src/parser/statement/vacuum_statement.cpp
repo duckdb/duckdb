@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-VacuumStatement::VacuumStatement() : SQLStatement(StatementType::VACUUM_STATEMENT), info(make_unique<VacuumInfo>()) {
+VacuumStatement::VacuumStatement(const int &options)
+    : SQLStatement(StatementType::VACUUM_STATEMENT), info(make_unique<VacuumInfo>(options)) {
 }
 
 VacuumStatement::VacuumStatement(const VacuumStatement &other) : SQLStatement(other), info(other.info->Copy()) {

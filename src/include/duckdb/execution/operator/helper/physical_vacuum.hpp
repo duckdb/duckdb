@@ -36,11 +36,11 @@ public:
 	                          GlobalSinkState &gstate) const override;
 
 	bool IsSink() const override {
-		return true;
+		return info->has_table;
 	}
 
 	bool ParallelSink() const override {
-		return true;
+		return IsSink();
 	}
 
 public:

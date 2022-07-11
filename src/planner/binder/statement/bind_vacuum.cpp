@@ -7,7 +7,7 @@ namespace duckdb {
 BoundStatement Binder::Bind(VacuumStatement &stmt) {
 	BoundStatement result;
 
-	if (stmt.info->ref) {
+	if (stmt.info->has_table) {
 		auto bound_table = Bind(*stmt.info->ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw InvalidInputException("Can only vacuum/analyze base tables!");

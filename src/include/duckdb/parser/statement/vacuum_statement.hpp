@@ -16,7 +16,7 @@ namespace duckdb {
 
 class VacuumStatement : public SQLStatement {
 public:
-	VacuumStatement();
+	explicit VacuumStatement(const int &options);
 
 	unique_ptr<VacuumInfo> info;
 

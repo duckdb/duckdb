@@ -5,6 +5,12 @@
 #statement ok
 #pragma enable_verification
 
+statement ok
+analyze
+
+statement ok
+vacuum
+
 statement error
 vacuum test
 
