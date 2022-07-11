@@ -28,6 +28,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 			return make_unique<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(move(op.info)),
 			                                   op.estimated_cardinality);
 		}
+		info.bound_ref->get->ResolveOperatorTypes();
 		auto child = CreatePlan(*info.bound_ref->get);
 		auto result = make_unique<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(move(op.info)),
 		                                          op.estimated_cardinality);

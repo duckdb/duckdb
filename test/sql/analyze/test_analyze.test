@@ -26,6 +26,7 @@ analyze testview
 statement ok
 insert into test select range % 5000 from range(10000)
 
+# inaccurate approx unique due to sampling
 query T
 select stats(i) from test limit 1
 ----
@@ -34,6 +35,8 @@ select stats(i) from test limit 1
 statement ok
 analyze test
 
+# more accurate now
 query T
 select stats(i) from test limit 1
 ----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]

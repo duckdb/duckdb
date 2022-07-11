@@ -12,10 +12,14 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw InvalidInputException("Can only vacuum/analyze base tables!");
 		}
-		// TODO: when binding/resolving types, make sure we get the columns we want!!
-		//  Right now we get row_id only ...
 		stmt.info->bound_ref = unique_ptr_cast<BoundTableRef, BoundBaseTableRef>(move(bound_table));
-		stmt.info->bound_ref->get->ResolveOperatorTypes();
+
+		auto &columns = stmt.info->columns;
+		if (columns.empty()) {
+			// Empty means ALL columns should be vacuumed/analyzed
+			auto &get = (LogicalGet &)*stmt.info->bound_ref->get;
+			columns.insert(columns.end(), get.names.begin(), get.names.end());
+		}
 	}
 
 	result.names = {"Success"};

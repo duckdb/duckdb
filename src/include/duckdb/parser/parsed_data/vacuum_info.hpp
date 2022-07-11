@@ -26,6 +26,7 @@ public:
 public:
 	unique_ptr<TableRef> ref;
 	unique_ptr<BoundBaseTableRef> bound_ref;
+	vector<string> columns;
 };
 
 } // namespace duckdb
