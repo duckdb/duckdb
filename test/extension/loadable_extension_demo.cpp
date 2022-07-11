@@ -14,11 +14,13 @@ inline string_t hello_fun(string_t what) {
 	return "Hello, " + what.GetString();
 }
 
-DUCKDB_EXTENSION_API inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
+namespace duckdb {
+
+DUCKDB_API inline void TestAliasHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello Alias!"));
 }
 
-DUCKDB_EXTENSION_API inline static void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+DUCKDB_API inline static void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -57,7 +59,7 @@ DUCKDB_EXTENSION_API inline static void AddPointFunction(DataChunk &args, Expres
 	result.Verify(count);
 }
 
-DUCKDB_EXTENSION_API inline static void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+DUCKDB_API inline static void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -94,6 +96,8 @@ DUCKDB_EXTENSION_API inline static void SubPointFunction(DataChunk &args, Expres
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	result.Verify(count);
+}
+
 }
 
 //===--------------------------------------------------------------------===//
