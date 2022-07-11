@@ -87,6 +87,7 @@ public:
 	//! The set of child indices
 	vector<VectorDataIndex> child_indices;
 	//! The string heap for the column data collection
+	// FIXME: we should get rid of the string heap and store strings as LIST<UINT8>
 	StringHeap heap;
 
 public:
@@ -329,6 +330,7 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
 	auto target_data = FlatVector::GetData(result);
+	auto &target_validity = FlatVector::Validity(result);
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
@@ -337,7 +339,11 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}
-		// FIXME: copy validity
+		// FIXME: use bitwise operations here
+		ValidityMask current_validity(validity_data);
+		for (idx_t k = 0; k < current_vdata.count; k++) {
+			target_validity.Set(current_offset + k, current_validity.RowIsValid(k));
+		}
 		current_offset += current_vdata.count;
 		next_index = current_vdata.next_data;
 	}
