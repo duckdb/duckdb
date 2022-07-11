@@ -20,18 +20,21 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
 	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
-	    .def("fetchone", &DuckDBPyResult::Fetchone)
-	    .def("fetchall", &DuckDBPyResult::Fetchall)
-	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy)
-	    .def("df", &DuckDBPyResult::FetchDF)
-	    .def("fetchdf", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df", &DuckDBPyResult::FetchDF)
-	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	    .def("fetchone", &DuckDBPyResult::Fetchone, "Fetch a single row as a tuple")
+	    .def("fetchall", &DuckDBPyResult::Fetchall, "Fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy,
+	         "Fetch all rows as a Python dict mapping each column to one numpy arrays")
+	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
+	         py::arg("num_of_vectors") = 1)
+	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
+	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
 
 	PyDateTime_IMPORT;
 }
