@@ -1326,7 +1326,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	return column_stats[column_id]->stats->Copy();
 }
 
-void DataTable::SetStatistics(column_t column_id, std::function<void(BaseStatistics &)> set_fun) {
+void DataTable::SetStatistics(column_t column_id, std::function<void(BaseStatistics &)> &set_fun) {
 	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 		return;
 	}

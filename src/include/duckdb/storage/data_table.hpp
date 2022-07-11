@@ -212,7 +212,7 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
-	void SetStatistics(column_t column_id, std::function<void(BaseStatistics &)> set_fun);
+	void SetStatistics(column_t column_id, std::function<void(BaseStatistics &)> &set_fun);
 
 	//! Checkpoint the table to the specified table data writer
 	BlockPointer Checkpoint(TableDataWriter &writer);
