@@ -20,7 +20,7 @@ DUCKDB_API inline void TestAliasHello(DataChunk &args, ExpressionState &state, V
 	result.Reference(Value("Hello Alias!"));
 }
 
-DUCKDB_API inline static void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+DUCKDB_API inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
@@ -59,7 +59,7 @@ DUCKDB_API inline static void AddPointFunction(DataChunk &args, ExpressionState 
 	result.Verify(count);
 }
 
-DUCKDB_API inline static void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+DUCKDB_API inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &left_vector = args.data[0];
 	auto &right_vector = args.data[1];
 	const int count = args.size();
