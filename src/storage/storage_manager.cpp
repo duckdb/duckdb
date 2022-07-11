@@ -13,7 +13,6 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
-#include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
 

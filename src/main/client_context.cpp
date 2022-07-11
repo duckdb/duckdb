@@ -16,6 +16,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
@@ -35,6 +36,9 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
 
 namespace duckdb {
 
@@ -259,17 +263,14 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	Planner planner(*this);
 	if (values) {
 		for (auto &value : *values) {
-			planner.parameter_types.push_back(value.type());
+			planner.parameter_data.emplace_back(value);
 		}
 	}
 	planner.CreatePlan(move(statement));
-	D_ASSERT(planner.plan);
+	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
-#ifdef DEBUG
-	plan->Verify();
-#endif
 	// extract the result column names from the plan
 	result->properties = planner.properties;
 	result->names = planner.names;
@@ -277,6 +278,12 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->value_map = move(planner.value_map);
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
+	if (!planner.properties.bound_all_parameters) {
+		return result;
+	}
+#ifdef DEBUG
+	plan->Verify();
+#endif
 	if (config.enable_optimizer) {
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
@@ -603,15 +610,10 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		if (statement) {
 			result = PendingStatementInternal(lock, query, move(statement), parameters);
 		} else {
-			auto &catalog = Catalog::GetCatalog(*this);
-			if (prepared->unbound_statement && (catalog.GetCatalogVersion() != prepared->catalog_version ||
-			                                    !prepared->properties.bound_all_parameters)) {
+			if (prepared->RequireRebind(*this, *parameters.parameters)) {
 				// catalog was modified: rebind the statement before execution
 				auto new_prepared =
 				    CreatePreparedStatement(lock, query, prepared->unbound_statement->Copy(), parameters.parameters);
-				if (prepared->types != new_prepared->types && prepared->properties.bound_all_parameters) {
-					throw BinderException("Rebinding statement after catalog change resulted in change of types");
-				}
 				D_ASSERT(new_prepared->properties.bound_all_parameters);
 				new_prepared->unbound_statement = move(prepared->unbound_statement);
 				prepared = move(new_prepared);
@@ -782,17 +784,78 @@ void ClientContext::DisableProfiling() {
 }
 
 struct VerifyStatement {
-	VerifyStatement(unique_ptr<SelectStatement> statement_p, string statement_name_p, bool require_equality = true,
-	                bool disable_optimizer = false)
-	    : statement(move(statement_p)), statement_name(move(statement_name_p)), require_equality(require_equality),
-	      disable_optimizer(disable_optimizer), select_list(statement->node->GetSelectList()) {
+	explicit VerifyStatement(unique_ptr<SelectStatement> statement_p, bool require_equality = true,
+	                         bool disable_optimizer = false)
+	    : statement(move(statement_p)), require_equality(require_equality), disable_optimizer(disable_optimizer),
+	      select_list(statement->node->GetSelectList()) {
 	}
 
 	unique_ptr<SelectStatement> statement;
-	string statement_name;
 	bool require_equality;
 	bool disable_optimizer;
 	const vector<unique_ptr<ParsedExpression>> &select_list;
+};
+
+struct PreparedStatementVerifier {
+public:
+	vector<unique_ptr<ParsedExpression>> values;
+	unique_ptr<SQLStatement> prepare_statement;
+	unique_ptr<SQLStatement> execute_statement;
+	unique_ptr<SQLStatement> dealloc_statement;
+
+public:
+	void ConvertConstants(unique_ptr<ParsedExpression> &child) {
+		if (child->type == ExpressionType::VALUE_CONSTANT) {
+			// constant: extract the constant value
+			auto alias = child->alias;
+			child->alias = string();
+			// check if the value already exists
+			idx_t index = values.size();
+			for (idx_t v_idx = 0; v_idx < values.size(); v_idx++) {
+				if (values[v_idx]->Equals(child.get())) {
+					// duplicate value! refer to the original value
+					index = v_idx;
+					break;
+				}
+			}
+			if (index == values.size()) {
+				values.push_back(move(child));
+			}
+			// replace it with an expression
+			auto parameter = make_unique<ParameterExpression>();
+			parameter->parameter_nr = index + 1;
+			parameter->alias = alias;
+			child = move(parameter);
+			return;
+		}
+		ParsedExpressionIterator::EnumerateChildren(
+		    *child, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+	}
+
+	void Extract(unique_ptr<SQLStatement> statement) {
+		auto &select = (SelectStatement &)*statement;
+		// replace all the constants from the select statement and replace them with parameter expressions
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
+		statement->n_param = values.size();
+		// create the PREPARE and EXECUTE statements
+		string name = "__duckdb_verification_prepared_statement";
+		auto prepare = make_unique<PrepareStatement>();
+		prepare->name = name;
+		prepare->statement = move(statement);
+
+		auto execute = make_unique<ExecuteStatement>();
+		execute->name = name;
+		execute->values = move(values);
+
+		auto dealloc = make_unique<DropStatement>();
+		dealloc->info->type = CatalogType::PREPARED_STATEMENT;
+		dealloc->info->name = string(name);
+
+		prepare_statement = move(prepare);
+		execute_statement = move(execute);
+		dealloc_statement = move(dealloc);
+	}
 };
 
 string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
@@ -813,6 +876,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	auto select_stmt = (SelectStatement *)statement.get();
 	auto copied_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(select_stmt->Copy());
 	auto unoptimized_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(select_stmt->Copy());
+	auto prepared_stmt = unique_ptr_cast<SQLStatement, SelectStatement>(select_stmt->Copy());
 
 	BufferedSerializer serializer;
 	select_stmt->Serialize(serializer);
@@ -826,14 +890,13 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
 	auto parsed_statement = move(parser.statements[0]);
 
-	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement)),
-	                               "Original statement");
-	verify_statements.emplace_back(move(copied_stmt), "Copied statement");
-	verify_statements.emplace_back(move(deserialized_stmt), "Deserialized statement");
-	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(parsed_statement)),
-	                               "Parsed statement", false);
-	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(unoptimized_stmt)),
-	                               "Unoptimized", true, true);
+	vector<string> names = {"Original statement", "Copied statement", "Deserialized statement",
+	                        "Parsed statement",   "Unoptimized",      "Prepared statement"};
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement)));
+	verify_statements.emplace_back(move(copied_stmt));
+	verify_statements.emplace_back(move(deserialized_stmt));
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(parsed_statement)), false);
+	verify_statements.emplace_back(unique_ptr_cast<SQLStatement, SelectStatement>(move(unoptimized_stmt)), true, true);
 
 	// all the statements should be equal
 	for (idx_t i = 1; i < verify_statements.size(); i++) {
@@ -898,6 +961,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	auto statement_copy_for_explain = select_stmt->Copy();
 
 	// execute the original statement
+	bool any_failed = false;
 	auto optimizer_enabled = config.enable_optimizer;
 	vector<unique_ptr<MaterializedQueryResult>> results;
 	for (idx_t i = 0; i < verify_statements.size(); i++) {
@@ -905,10 +969,39 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		config.enable_optimizer = !verify_statements[i].disable_optimizer;
 		try {
 			auto result = RunStatementInternal(lock, query, move(verify_statements[i].statement), false, false);
+			if (!result->success) {
+				any_failed = true;
+			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result)));
 		} catch (std::exception &ex) {
+			any_failed = true;
 			results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
 		}
+		interrupted = false;
+	}
+	if (!any_failed) {
+		// verify that we can extract all constants from the query and run the query as a prepared statement
+		// create the PREPARE and EXECUTE statements
+		PreparedStatementVerifier verifier;
+		verifier.Extract(move(prepared_stmt));
+		// execute the prepared statements
+		try {
+			auto prepare_result = RunStatementInternal(lock, string(), move(verifier.prepare_statement), false, false);
+			if (!prepare_result->success) {
+				throw std::runtime_error("Failed prepare during verify: " + prepare_result->error);
+			}
+			auto execute_result = RunStatementInternal(lock, string(), move(verifier.execute_statement), false, false);
+			if (!execute_result->success) {
+				throw std::runtime_error("Failed execute during verify: " + execute_result->error);
+			}
+			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
+		} catch (std::exception &ex) {
+			if (!StringUtil::Contains(ex.what(), "Parameter Not Allowed Error")) {
+				results.push_back(make_unique<MaterializedQueryResult>(ex.what()));
+			}
+		}
+		RunStatementInternal(lock, string(), move(verifier.dealloc_statement), false, false);
+
 		interrupted = false;
 	}
 	config.enable_optimizer = optimizer_enabled;
@@ -931,8 +1024,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	// now compare the results
 	// the results of all runs should be identical
+	D_ASSERT(names.size() >= results.size());
 	for (idx_t i = 1; i < results.size(); i++) {
-		auto name = verify_statements[i].statement_name;
+		auto name = names[i];
 		if (results[0]->success != results[i]->success) { // LCOV_EXCL_START
 			string result = name + " differs from original result!\n";
 			result += "Original Result:\n" + results[0]->ToString();

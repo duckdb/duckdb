@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include "duckdb/common/mutex.hpp"
 
@@ -223,6 +224,11 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	auto table = bind_data.table;
 	auto &storage = *table->storage;
 
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_optimizer) {
+		// we only push index scans if the optimizer is enabled
+		return;
+	}
 	if (bind_data.is_index_scan) {
 		return;
 	}

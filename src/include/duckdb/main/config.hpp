@@ -116,6 +116,8 @@ struct DBConfigOptions {
 	bool preserve_insertion_order = true;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
+	//! Whether unsigned extensions should be loaded
+	bool allow_unsigned_extensions = false;
 };
 struct DBConfig {
 	friend class DatabaseInstance;

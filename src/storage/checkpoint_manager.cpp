@@ -358,11 +358,12 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	}
 
 	if (parsed_expressions.empty()) {
-		// If no parsed_expressions are present, this means this is a PK/FK index, so we create the necessary bound column refs
-		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++){
+		// If no parsed_expressions are present, this means this is a PK/FK index, so we create the necessary bound
+		// column refs
+		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
 			unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    table_catalog->columns[info->column_ids[key_nr]].GetName(), table_catalog->columns[info->column_ids[key_nr]].GetType(),
-			    ColumnBinding(0, key_nr)));
+			    table_catalog->columns[info->column_ids[key_nr]].GetName(),
+			    table_catalog->columns[info->column_ids[key_nr]].GetType(), ColumnBinding(0, key_nr)));
 		}
 	}
 

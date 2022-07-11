@@ -57,7 +57,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgquery::PGAExpr *root) {
 	D_ASSERT(root);
 	auto name = string((reinterpret_cast<duckdb_libpgquery::PGValue *>(root->name->head->data.ptr_value))->val.str);
 
@@ -203,6 +203,14 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 	} else {
 		return TransformBinaryOperator(name, move(left_expr), move(right_expr));
 	}
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr *root) {
+	auto result = TransformAExprInternal(root);
+	if (result) {
+		result->query_location = root->location;
+	}
+	return result;
 }
 
 } // namespace duckdb

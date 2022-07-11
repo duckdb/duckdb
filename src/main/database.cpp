@@ -233,6 +233,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.options.default_order_type = new_config.options.default_order_type;
 	config.options.default_null_order = new_config.options.default_null_order;
 	config.options.enable_external_access = new_config.options.enable_external_access;
+	config.options.allow_unsigned_extensions = new_config.options.allow_unsigned_extensions;
 	config.replacement_scans = move(new_config.replacement_scans);
 	config.options.initialize_default_database = new_config.options.initialize_default_database;
 	config.options.disabled_optimizers = move(new_config.options.disabled_optimizers);

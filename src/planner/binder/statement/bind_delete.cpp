@@ -43,19 +43,13 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 			auto op = CreatePlan(*bound_node);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				auto cross_product = make_unique<LogicalCrossProduct>();
-				cross_product->children.push_back(move(child_operator));
-				cross_product->children.push_back(move(op));
-				child_operator = move(cross_product);
+				child_operator = LogicalCrossProduct::Create(move(child_operator), move(op));
 			} else {
 				child_operator = move(op);
 			}
 		}
 		if (child_operator) {
-			auto cross_product = make_unique<LogicalCrossProduct>();
-			cross_product->children.push_back(move(root));
-			cross_product->children.push_back(move(child_operator));
-			root = move(cross_product);
+			root = LogicalCrossProduct::Create(move(root), move(child_operator));
 		}
 	}
 

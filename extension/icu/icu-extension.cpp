@@ -137,8 +137,7 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 }
 
 static ScalarFunction GetICUFunction(const string &collation) {
-	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, false,
-	                      ICUCollateBind);
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 }
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
@@ -308,7 +307,7 @@ void ICUExtension::Load(DuckDB &db) {
 		catalog.CreateCollation(*con.context, &info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                        ICUCollateFunction, false, ICUSortKeyBind);
+	                        ICUCollateFunction, ICUSortKeyBind);
 
 	CreateScalarFunctionInfo sort_key_info(move(sort_key));
 	catalog.CreateFunction(*con.context, &sort_key_info);
