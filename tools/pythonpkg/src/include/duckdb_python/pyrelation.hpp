@@ -175,6 +175,8 @@ public:
 
 	py::object Fetchall();
 
+	py::dict FetchNumpy();
+
 	py::object ToArrowTable(idx_t batch_size);
 
 	py::object ToRecordBatch(idx_t batch_size);

@@ -24,14 +24,19 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
 	    .def("fetchdf", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
 	    .def("fetch_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
+	    .def("to_df", &DuckDBPyResult::FetchDF, "Fetch all rows as a pandas DataFrame")
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk, "Fetch a chunk of rows as a pandas DataFrame",
 	         py::arg("num_of_vectors") = 1)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
+	    .def("to_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
+	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch all rows as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
+	    .def("record_batch", &DuckDBPyResult::FetchRecordBatchReader,
+	         "Return an Arrow Record Batch Reader that yields all rows", py::arg("approx_batch_size"))
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch all rows as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
+	         "Return an Arrow Record Batch Reader that yields all rows", py::arg("approx_batch_size"));
 
 	PyDateTime_IMPORT;
 }

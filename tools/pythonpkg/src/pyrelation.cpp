@@ -125,13 +125,21 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("replace") = true)
 	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row as a tuple")
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows as a list of tuples")
+	    .def("fetchnumpy", &DuckDBPyRelation::FetchNumpy,
+	         "Execute and fetch all rows as a Python dict mapping each column to one numpy arrays")
 	    .def("df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
+	    .def("fetchdf", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
+	    .def("fetch_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("to_df", &DuckDBPyRelation::ToDF, "Execute and fetch all rows as a pandas DataFrame")
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
+	    .def("fetch_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
+	         py::arg("batch_size") = 1000000)
 	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
+	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
 	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
@@ -452,6 +460,18 @@ py::object DuckDBPyRelation::Fetchall() {
 		throw std::runtime_error(res->result->error);
 	}
 	return res->Fetchall();
+}
+
+py::dict DuckDBPyRelation::FetchNumpy() {
+	auto res = make_unique<DuckDBPyResult>();
+	{
+		py::gil_scoped_release release;
+		res->result = rel->Execute();
+	}
+	if (!res->result->success) {
+		throw std::runtime_error(res->result->error);
+	}
+	return res->FetchNumpy();
 }
 
 py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
