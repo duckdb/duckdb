@@ -40,7 +40,7 @@ string MbedTlsWrapper::ComputeSha256Hash(const string& file_content) {
 bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature, const std::string &sha256_hash) {
 
 	if (signature.size() != 256 || sha256_hash.size() != 32) {
-		throw std::runtime_error("Invalid input lengths");
+		throw std::runtime_error("Invalid input lengths, expected signature length 256, got " + to_string(signature.size()) + ", hash length 32, got " + to_string(sha256_hash.size()));
 	}
 
 	mbedtls_pk_context pk_context;
