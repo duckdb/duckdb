@@ -49,3 +49,42 @@ NULL	NULL
 1	[2, 3]
 2	[3]
 3	NULL
+
+# array with limit
+query II
+SELECT i, ARRAY(
+	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3
+) top
+FROM integers
+ORDER BY i
+----
+NULL	NULL
+1	[1, 1, 1]
+2	[2, 2, 2]
+3	[3, 3, 3]
+
+# array with limit and offset
+query II
+SELECT i, ARRAY(
+	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3 OFFSET 3
+) top
+FROM integers
+ORDER BY i
+----
+NULL	NULL
+1	[1, 1, 1]
+2	[2, 2, 2]
+3	[3, 3, 3]
+
+# offset on the edge
+query II
+SELECT i, ARRAY(
+	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3 OFFSET 62
+) top
+FROM integers
+ORDER BY i
+----
+NULL	NULL
+1	[1, 1]
+2	[2, 2]
+3	[3, 3]

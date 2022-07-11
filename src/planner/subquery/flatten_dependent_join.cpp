@@ -349,20 +349,55 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = (LogicalLimit &)*plan;
+		if (limit.limit || limit.offset) {
+			throw ParserException("Non-constant limit or offset not supported in correlated subquery");
+		}
+		auto rownum_alias = "limit_rownum";
+		auto child = PushDownDependentJoinInternal(move(plan->children[0]), parent_propagate_null_values);
+		auto child_column_count = child->GetColumnBindings().size();
+		// we push a row_number() OVER (PARTITION BY [correlated columns])
+		auto window_index = binder.GenerateTableIndex();
+		auto window = make_unique<LogicalWindow>(window_index);
+		auto row_number = make_unique<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
+		                                                     nullptr, nullptr);
+		auto partition_count = perform_delim ? correlated_columns.size() : 1;
+		for (idx_t i = 0; i < partition_count; i++) {
+			auto &col = correlated_columns[i];
+			auto colref = make_unique<BoundColumnRefExpression>(
+			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			row_number->partitions.push_back(move(colref));
+		}
+		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		window->expressions.push_back(move(row_number));
+		window->children.push_back(move(child));
+
+		// add a filter based on the row_number
+		// the filter we add is "row_number >= offset + 1 AND row_number <= offset + limit"
+		// (we add a +1 because row_number is 1-based)
+		auto filter = make_unique<LogicalFilter>();
+		unique_ptr<Expression> condition;
+		auto row_num_ref =
+		    make_unique<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
+		auto upper_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val + limit.limit_val));
+		condition = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                   row_num_ref->Copy(), move(upper_bound));
+		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
 		if (limit.offset_val > 0) {
-			throw ParserException("OFFSET not supported in correlated subquery");
+			auto lower_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val + 1));
+			auto lower_comp = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+			                                                         row_num_ref->Copy(), move(lower_bound));
+			auto conj = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(lower_comp),
+			                                                    move(condition));
+			condition = move(conj);
 		}
-		if (limit.limit) {
-			throw ParserException("Non-constant limit not supported in correlated subquery");
+		filter->expressions.push_back(move(condition));
+		filter->children.push_back(move(window));
+		// we prune away the row_number after the filter clause using the projection map
+		for (idx_t i = 0; i < child_column_count; i++) {
+			filter->projection_map.push_back(i);
 		}
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]), parent_propagate_null_values);
-		if (limit.limit_val == 0) {
-			// limit = 0 means we return zero columns here
-			return plan;
-		} else {
-			// limit > 0 does nothing
-			return move(plan->children[0]);
-		}
+		return move(filter);
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
 		throw ParserException("Limit percent operator not supported in correlated subquery");
@@ -423,7 +458,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		throw ParserException("ORDER BY not supported in correlated subquery");
+		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+		return plan;
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	}
