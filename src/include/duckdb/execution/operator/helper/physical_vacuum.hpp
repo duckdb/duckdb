@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-//! PhysicalVacuum represents a VACUUM operation (e.g. VACUUM or ANALYZE)
+//! PhysicalVacuum represents a VACUUM operation (i.e. VACUUM or ANALYZE)
 class PhysicalVacuum : public PhysicalOperator {
 public:
 	PhysicalVacuum(unique_ptr<VacuumInfo> info, idx_t estimated_cardinality);
@@ -23,6 +23,11 @@ public:
 
 private:
 	unordered_map<idx_t, idx_t> column_id_map;
+
+public:
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
 public:
 	// Sink interface
@@ -42,11 +47,6 @@ public:
 	bool ParallelSink() const override {
 		return IsSink();
 	}
-
-public:
-	// Source interface
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
 };
 
 } // namespace duckdb
