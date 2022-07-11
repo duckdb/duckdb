@@ -26,6 +26,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include "duckdb/storage/object_cache.hpp"
@@ -355,10 +356,18 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 		root_struct_reader.child_readers[column_idx] = move(cast_reader);
 	}
 
-	// add generated columns if required
 	if (parquet_options.filename) {
 		Value val = Value(file_name);
 		root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
+	}
+
+	if (parquet_options.hive_partitioning) {
+		auto res = ParseHivePartitions(file_name);
+
+		for (auto& partition: res) {
+			Value val = Value(partition.second);
+			root_struct_reader.child_readers.push_back(make_unique<GeneratedConstantColumnReader>(*this, LogicalType::VARCHAR, SchemaElement(), next_file_idx, 0, 0, val));
+		}
 	}
 
 	return ret;
@@ -396,6 +405,15 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 		}
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
+	}
+
+	// Add generated constant column for filename
+	if (parquet_options.hive_partitioning) {
+		auto partitions = ParseHivePartitions(file_name);
+		for (auto& part : partitions) {
+			return_types.emplace_back(LogicalType::VARCHAR);
+			names.emplace_back(part.first);
+		}
 	}
 
 	D_ASSERT(!names.empty());

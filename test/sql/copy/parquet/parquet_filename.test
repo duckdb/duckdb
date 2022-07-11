@@ -4,9 +4,9 @@
 
 require parquet
 
-# Simple glob with filenames
+# Simple glob with filenames, note that we replace \ for / to make tests pass on windows
 query III
-select * from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i
+select i, j, replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
 ----
 1	a	data/parquet-testing/glob/t1.parquet
 2	b	data/parquet-testing/glob/t2.parquet
@@ -14,7 +14,7 @@ select * from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) 
 
 # Filter on filename col
 query III
-select * from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where filename='data/parquet-testing/glob2/t1.parquet';
+select i, j, replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where filename='data/parquet-testing/glob2/t1.parquet';
 ----
 3	c	data/parquet-testing/glob2/t1.parquet
 
@@ -26,7 +26,7 @@ SELECT count(filename) FROM parquet_scan('data/parquet-testing/p2.parquet', FILE
 
 # Filter on non-filename col
 query I
-select filename from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
+select replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
 ----
 data/parquet-testing/glob/t2.parquet
 
@@ -59,7 +59,7 @@ statement ok
 COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet' (FILENAME 1);
 
 query III
-SELECT * FROM test_copy
+SELECT i, j, replace(filename, '\', '/') FROM test_copy
 ----
 1	a	data/parquet-testing/glob/t1.parquet
 
@@ -77,7 +77,7 @@ SELECT sum(i), max(filename) FROM parquet_scan('__TEST_DIR__/test_table_large.pa
 
 # Same file twice
 query III
-SELECT * FROM parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet'], FILENAME=1) where filename like '%t1%'
+SELECT i, j, replace(filename, '\', '/') FROM parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet'], FILENAME=1) where filename like '%t1%'
 ----
 1	a	data/parquet-testing/glob/t1.parquet
 1	a	data/parquet-testing/glob/t1.parquet

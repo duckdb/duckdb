@@ -68,6 +68,7 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool filename = false;
+	bool hive_partitioning = false;
 };
 
 class ParquetReader {
