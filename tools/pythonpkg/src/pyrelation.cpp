@@ -123,16 +123,16 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("create_view", &DuckDBPyRelation::CreateView,
 	         "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
 	         py::arg("replace") = true)
-	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
-	         py::arg("batch_size") = 1000000)
+	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row")
+	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
+	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
+	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
 	    .def("arrow", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
+	         py::arg("batch_size") = 1000000)
+	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Transforms the relation object into a Arrow table",
 	         py::arg("batch_size") = 1000000)
 	    .def("record_batch", &DuckDBPyRelation::ToRecordBatch,
 	         "Transforms the relation object into a Arrow Record Batch Reader", py::arg("batch_size") = 1000000)
-	    .def("to_df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
-	    .def("df", &DuckDBPyRelation::ToDF, "Transforms the relation object into a Data.Frame")
-	    .def("fetchone", &DuckDBPyRelation::Fetchone, "Execute and fetch a single row")
-	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
 	    .def("__repr__", &DuckDBPyRelation::Print)

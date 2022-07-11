@@ -23,15 +23,15 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchone", &DuckDBPyResult::Fetchone)
 	    .def("fetchall", &DuckDBPyResult::Fetchall)
 	    .def("fetchnumpy", &DuckDBPyResult::FetchNumpy)
+	    .def("df", &DuckDBPyResult::FetchDF)
 	    .def("fetchdf", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
+	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
 	         py::arg("chunk_size") = 1000000)
 	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
-	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
-	    .def("arrow", &DuckDBPyResult::FetchArrowTable, py::arg("chunk_size") = 1000000)
-	    .def("df", &DuckDBPyResult::FetchDF);
+	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"));
 
 	PyDateTime_IMPORT;
 }
