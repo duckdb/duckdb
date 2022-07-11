@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 
@@ -19,6 +20,9 @@ public:
 	PhysicalVacuum(unique_ptr<VacuumInfo> info, idx_t estimated_cardinality);
 
 	unique_ptr<VacuumInfo> info;
+
+private:
+	unordered_map<idx_t, idx_t> column_id_map;
 
 public:
 	// Sink interface

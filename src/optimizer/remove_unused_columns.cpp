@@ -254,8 +254,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				}
 			}
 		}
-		// TODO: set columns in 'get' based on 'info'
-
 	}
 	default:
 		break;

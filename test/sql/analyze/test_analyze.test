@@ -12,7 +12,7 @@ statement error
 analyze test
 
 statement ok
-create table test (i int)
+create table test (i int, j int)
 
 statement ok
 analyze test
@@ -24,7 +24,7 @@ statement error
 analyze testview
 
 statement ok
-insert into test select range % 5000 from range(10000)
+insert into test select range % 5000, range % 5000 from range(10000)
 
 # inaccurate approx unique due to sampling
 query T
@@ -32,11 +32,37 @@ select stats(i) from test limit 1
 ----
 [Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
 
+query T
+select stats(j) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+
+statement ok
+analyze test(i)
+
+# i is more accurate now
+query T
+select stats(i) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+
+# j is not yet accurate
+query T
+select stats(j) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+
+# now we analyze the whole table
 statement ok
 analyze test
 
-# more accurate now
+# both i and j should be more accurate
 query T
 select stats(i) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+
+query T
+select stats(j) from test limit 1
 ----
 [Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
