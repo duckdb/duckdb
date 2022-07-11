@@ -13,12 +13,12 @@ project(DuckDBJDummy NONE)
 file(GLOB JAVA_SRC_FILES src/main/java/org/duckdb/*.java)
 file(GLOB JAVA_TEST_FILES src/test/java/org/duckdb/test/*.java)
 
-set(CMAKE_JAVA_COMPILE_FLAGS -source 1.7 -target 1.7 -encoding utf-8)
-
-add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
-        META-INF/services/java.sql.Driver GENERATE_NATIVE_HEADERS duckdb-native)
-
 include_directories(../../extension/parquet/include)
+
+add_custom_command(
+  OUTPUT duckdb_jdbc
+  DEPENDS duckdb_java
+  COMMAND ./mvnw compile)
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
@@ -40,7 +40,6 @@ set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 add_custom_command(
   OUTPUT dummy_jdbc_target
   DEPENDS duckdb_java duckdb_jdbc
-  COMMAND ${Java_JAR_EXECUTABLE} uf duckdb_jdbc.jar -C
-          $<TARGET_FILE_DIR:duckdb_java> $<TARGET_FILE_NAME:duckdb_java>)
+  COMMAND ./mvnw package)
 
 add_custom_target(jdbc ALL DEPENDS dummy_jdbc_target)
