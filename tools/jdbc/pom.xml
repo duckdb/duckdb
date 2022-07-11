@@ -29,6 +29,10 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.6.0</version>
                 <configuration>
+                    <compilerArgs>
+                        <arg>-h</arg>
+                        <arg>target/headers</arg>
+                    </compilerArgs>
                     <source>1.8</source>
                     <target>1.8</target>
                 </configuration>
