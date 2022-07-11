@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -37,6 +38,9 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
+		if (!children[0]->expr->return_type.IsValid()) {
+			throw ParameterNotResolvedException();
+		}
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:

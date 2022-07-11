@@ -15,12 +15,12 @@ BoundFunctionExpression::BoundFunctionExpression(LogicalType return_type, Scalar
 }
 
 bool BoundFunctionExpression::HasSideEffects() const {
-	return function.has_side_effects ? true : Expression::HasSideEffects();
+	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? true : Expression::HasSideEffects();
 }
 
 bool BoundFunctionExpression::IsFoldable() const {
 	// functions with side effects cannot be folded: they have to be executed once for every row
-	return function.has_side_effects ? false : Expression::IsFoldable();
+	return function.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS ? false : Expression::IsFoldable();
 }
 
 string BoundFunctionExpression::ToString() const {
@@ -28,7 +28,8 @@ string BoundFunctionExpression::ToString() const {
 	                                                                         is_operator);
 }
 bool BoundFunctionExpression::PropagatesNullValues() const {
-	return !function.propagates_null_values ? false : Expression::PropagatesNullValues();
+	return function.null_handling == FunctionNullHandling::SPECIAL_HANDLING ? false
+	                                                                        : Expression::PropagatesNullValues();
 }
 
 hash_t BoundFunctionExpression::Hash() const {

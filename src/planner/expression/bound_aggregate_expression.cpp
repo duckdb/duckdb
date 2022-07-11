@@ -57,7 +57,8 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 }
 
 bool BoundAggregateExpression::PropagatesNullValues() const {
-	return !function.propagates_null_values ? false : Expression::PropagatesNullValues();
+	return function.null_handling == FunctionNullHandling::SPECIAL_HANDLING ? false
+	                                                                        : Expression::PropagatesNullValues();
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Copy() {
