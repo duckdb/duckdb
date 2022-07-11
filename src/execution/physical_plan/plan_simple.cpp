@@ -33,7 +33,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 		auto result = make_unique<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(move(op.info)),
 		                                          op.estimated_cardinality);
 		result->children.push_back(move(child));
-		return result;
+		return move(result);
 	}
 	case LogicalOperatorType::LOGICAL_LOAD:
 		return make_unique<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(move(op.info)), op.estimated_cardinality);
