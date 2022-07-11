@@ -353,7 +353,17 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			throw ParserException("Non-constant limit or offset not supported in correlated subquery");
 		}
 		auto rownum_alias = "limit_rownum";
-		auto child = PushDownDependentJoinInternal(move(plan->children[0]), parent_propagate_null_values);
+		unique_ptr<LogicalOperator> child;
+		unique_ptr<LogicalOrder> order_by;
+
+		// check if the direct child of this LIMIT node is an ORDER BY node, if so, keep it separate
+		// this is done for an optimization to avoid having to compute the total order
+		if (plan->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+			order_by = unique_ptr_cast<LogicalOperator, LogicalOrder>(move(plan->children[0]));
+			child = PushDownDependentJoinInternal(move(order_by->children[0]), parent_propagate_null_values);
+		} else {
+			child = PushDownDependentJoinInternal(move(plan->children[0]), parent_propagate_null_values);
+		}
 		auto child_column_count = child->GetColumnBindings().size();
 		// we push a row_number() OVER (PARTITION BY [correlated columns])
 		auto window_index = binder.GenerateTableIndex();
@@ -366,6 +376,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			auto colref = make_unique<BoundColumnRefExpression>(
 			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 			row_number->partitions.push_back(move(colref));
+		}
+		if (order_by) {
+			// optimization: if there is an ORDER BY node followed by a LIMIT
+			// rather than computing the entire order, we push the ORDER BY expressions into the row_num computation
+			// this way, the order only needs to be computed per partition
+			row_number->orders = move(order_by->orders);
 		}
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
@@ -400,6 +416,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return move(filter);
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
+		// NOTE: limit percent could be supported in a manner similar to the LIMIT above
+		// but instead of filtering by an exact number of rows, the limit should be expressed as
+		// COUNT computed over the partition multiplied by the percentage
 		throw ParserException("Limit percent operator not supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {

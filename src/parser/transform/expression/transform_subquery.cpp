@@ -1,9 +1,6 @@
-#include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
@@ -63,15 +60,27 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		auto subquery_column_alias = "__arr_element";
 
 		// ARRAY expression
-		// wrap subquery into "SELECT ARRAY_AGG(i) FROM (...) tbl(i)"
+		// wrap subquery into "SELECT CASE WHEN ARRAY_AGG(i) IS NULL THEN [] ELSE ARRAY_AGG(i) END FROM (...) tbl(i)"
 		auto select_node = make_unique<SelectNode>();
 
-		// SELECT ARRAY_AGG(i)
+		// ARRAY_AGG(i)
 		vector<unique_ptr<ParsedExpression>> children;
 		children.push_back(
 		    make_unique_base<ParsedExpression, ColumnRefExpression>(subquery_column_alias, subquery_table_alias));
 		auto aggr = make_unique<FunctionExpression>("array_agg", move(children));
-		select_node->select_list.push_back(move(aggr));
+		// ARRAY_AGG(i) IS NULL
+		auto agg_is_null = make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, aggr->Copy());
+		// empty list
+		auto empty_list = make_unique<FunctionExpression>("list_value", move(children));
+		// CASE
+		auto case_expr = make_unique<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = move(agg_is_null);
+		check.then_expr = move(empty_list);
+		case_expr->case_checks.push_back(move(check));
+		case_expr->else_expr = move(aggr);
+
+		select_node->select_list.push_back(move(case_expr));
 
 		// FROM (...) tbl(i)
 		auto child_subquery = make_unique<SubqueryRef>(move(subquery_expr->subquery), subquery_table_alias);

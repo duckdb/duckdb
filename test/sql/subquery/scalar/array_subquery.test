@@ -32,7 +32,7 @@ SELECT i, ARRAY(
 FROM integers i1
 ORDER BY i
 ----
-NULL	NULL
+NULL	[]
 1	[1]
 2	[2]
 3	[3]
@@ -45,10 +45,10 @@ SELECT i, ARRAY(
 FROM integers i1
 ORDER BY i
 ----
-NULL	NULL
+NULL	[]
 1	[2, 3]
 2	[3]
-3	NULL
+3	[]
 
 # array with limit
 query II
@@ -58,7 +58,7 @@ SELECT i, ARRAY(
 FROM integers
 ORDER BY i
 ----
-NULL	NULL
+NULL	[]
 1	[1, 1, 1]
 2	[2, 2, 2]
 3	[3, 3, 3]
@@ -71,7 +71,7 @@ SELECT i, ARRAY(
 FROM integers
 ORDER BY i
 ----
-NULL	NULL
+NULL	[]
 1	[1, 1, 1]
 2	[2, 2, 2]
 3	[3, 3, 3]
@@ -84,7 +84,7 @@ SELECT i, ARRAY(
 FROM integers
 ORDER BY i
 ----
-NULL	NULL
+NULL	[]
 1	[1, 1]
 2	[2, 2]
 3	[3, 3]
