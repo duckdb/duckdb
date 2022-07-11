@@ -16,9 +16,11 @@ namespace duckdb {
 class BufferManager;
 class BlockHandle;
 class ClientContext;
+struct ColumnDataCopyFunction;
+class ColumnDataCollectionSegment;
 
 struct ChunkManagementState {
-	unordered_map<idx_t, unique_ptr<BufferHandle>> handles;
+	unordered_map<idx_t, BufferHandle> handles;
 };
 
 struct ColumnDataAppendState {
@@ -31,9 +33,6 @@ struct ColumnDataScanState {
 	idx_t segment_index;
 	idx_t chunk_index;
 };
-
-struct ColumnDataCopyFunction;
-class ColumnDataCollectionSegment;
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
 //! It is efficient to read and scan
@@ -101,7 +100,7 @@ private:
 	//! The number of entries stored in the column data collection
 	idx_t count;
 	//! The data segments of the column data collection
-	vector<ColumnDataCollectionSegment> segments;
+	vector<unique_ptr<ColumnDataCollectionSegment>> segments;
 	//! The set of copy functions
 	vector<ColumnDataCopyFunction> copy_functions;
 };

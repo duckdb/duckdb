@@ -70,7 +70,7 @@ struct BlockMetaData {
 class ColumnDataCollectionSegment {
 public:
 	ColumnDataCollectionSegment(BufferManager &buffer_manager, vector<LogicalType> types_p)
-	    : buffer_manager(buffer_manager), types(move(types_p)) {
+	    : buffer_manager(buffer_manager), types(move(types_p)), count(0) {
 	}
 
 	BufferManager &buffer_manager;
@@ -166,9 +166,7 @@ ColumnDataCollection::~ColumnDataCollection() {
 }
 
 void ColumnDataCollection::CreateSegment() {
-	ColumnDataCollectionSegment segment(buffer_manager, types);
-	segment.count = 0;
-	segments.push_back(move(segment));
+	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(buffer_manager, types));
 }
 
 uint32_t BlockMetaData::Capacity() {
@@ -307,7 +305,7 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 		}
 	}
 
-	auto base_ptr = state.handles[vdata.block_id]->Ptr() + vdata.offset;
+	auto base_ptr = state.handles[vdata.block_id].Ptr() + vdata.offset;
 	auto validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
 	if (!vdata.next_data.IsValid()) {
 		// no next data, we can do a zero-copy read of this vector
@@ -334,7 +332,7 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
-		base_ptr = state.handles[current_vdata.block_id]->Ptr() + current_vdata.offset;
+		base_ptr = state.handles[current_vdata.block_id].Ptr() + current_vdata.offset;
 		validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
@@ -360,7 +358,7 @@ void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 	if (segments.empty()) {
 		CreateSegment();
 	}
-	auto &segment = segments.back();
+	auto &segment = *segments.back();
 	if (segment.chunk_data.empty()) {
 		segment.AllocateNewChunk();
 	}
@@ -416,7 +414,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorD
 	auto &vector_data = meta_data.GetVectorMetaData();
 	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
 	         append_state.current_chunk_state.handles.end());
-	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
+	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id].Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)(base_ptr + sizeof(T) * STANDARD_VECTOR_SIZE);
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 
@@ -496,7 +494,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &sourc
 	auto &vector_data = meta_data.GetVectorMetaData();
 	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
 	         append_state.current_chunk_state.handles.end());
-	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id]->Ptr() + vector_data.offset;
+	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id].Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)base_ptr;
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 
@@ -603,7 +601,7 @@ static bool IsComplexType(const LogicalType &type) {
 void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input) {
 	D_ASSERT(types == input.GetTypes());
 
-	auto &segment = segments.back();
+	auto &segment = *segments.back();
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
 		if (IsComplexType(input.data[vector_idx].GetType())) {
 			input.data[vector_idx].Normalify(input.size());
@@ -657,7 +655,7 @@ void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) {
 		return;
 	}
 	// check within the current collection if we still have chunks to scan
-	while (state.chunk_index >= segments[state.segment_index].chunk_data.size()) {
+	while (state.chunk_index >= segments[state.segment_index]->chunk_data.size()) {
 		// exhausted all chunks for this internal data structure: move to the next one
 		state.chunk_index = 0;
 		state.segment_index++;
@@ -666,7 +664,7 @@ void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) {
 		}
 	}
 	// found a chunk to scan -> scan it
-	auto &segment = segments[state.segment_index];
+	auto &segment = *segments[state.segment_index];
 	segment.InitializeChunk(state.chunk_index, state.current_chunk_state, result);
 	state.chunk_index++;
 }
