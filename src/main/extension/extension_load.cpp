@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/dl.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -37,11 +38,44 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	}
 
 	if (!fs.FileExists(filename)) {
-		throw IOException("File \"%s\" not found", filename);
+		throw IOException("Extension \"%s\" not found", filename);
+	}
+	{
+		auto handle = fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ);
+
+		// signature is the last 265 bytes of the file
+
+		string signature;
+		signature.resize(256);
+
+		auto signature_offset = handle->GetFileSize() - signature.size();
+
+		string file_content;
+		file_content.resize(signature_offset);
+		handle->Read((void *)file_content.data(), signature_offset, 0);
+
+		// TODO maybe we should do a stream read / hash update here
+		handle->Read((void *)signature.data(), signature.size(), signature_offset);
+
+		auto hash = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(file_content);
+
+		bool any_valid = false;
+		for (auto &key : ExtensionHelper::GetPublicKeys()) {
+			if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, hash)) {
+				any_valid = true;
+				break;
+			}
+		}
+		if (!any_valid && !config.allow_unsigned_extensions) {
+			throw IOException(
+			    "Extension \"%s\" could not be loaded because its signature is either missing or "
+			    "invalid and unsigned extensions are disabled by configuration (allow_unsigned_extensions)",
+			    filename);
+		}
 	}
 	auto lib_hdl = dlopen(filename.c_str(), RTLD_NOW | RTLD_LOCAL);
 	if (!lib_hdl) {
-		throw IOException("File \"%s\" could not be loaded: %s", filename, GetDLError());
+		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
 	}
 
 	auto basename = fs.ExtractBaseName(filename);
