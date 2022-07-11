@@ -51,6 +51,9 @@ void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, G
 	}
 	index_entry->index = index.get();
 	index_entry->info = table.storage->info;
+	for (auto &parsed_expr : info->parsed_expressions) {
+		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+	}
 	table.storage->AddIndex(move(index), expressions);
 
 	chunk.SetCardinality(0);

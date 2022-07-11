@@ -15,7 +15,6 @@ class Node256 : public Node {
 public:
 	explicit Node256(size_t compression_length);
 
-	~Node256();
 	SwizzleablePointer children[256];
 
 public:

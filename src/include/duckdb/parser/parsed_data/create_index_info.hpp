@@ -30,6 +30,7 @@ struct CreateIndexInfo : public CreateInfo {
 	unique_ptr<BaseTableRef> table;
 	//! Set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;
+	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
 	vector<idx_t> column_ids;
 

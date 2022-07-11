@@ -28,6 +28,7 @@ public:
 	shared_ptr<DataTableInfo> info;
 	string sql;
 	vector<unique_ptr<ParsedExpression>> expressions;
+	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
 public:
 	string ToSQL() override;

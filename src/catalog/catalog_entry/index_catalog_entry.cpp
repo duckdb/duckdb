@@ -39,6 +39,7 @@ void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
 	writer.WriteField(index->type);
 	writer.WriteField(index->constraint_type);
 	writer.WriteSerializableList(expressions);
+	writer.WriteSerializableList(parsed_expressions);
 	writer.WriteList<idx_t>(index->column_ids);
 	writer.Finalize();
 }
@@ -61,6 +62,8 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source)
 	create_index_info->index_type = IndexType(reader.ReadRequired<uint8_t>());
 	create_index_info->constraint_type = IndexConstraintType(reader.ReadRequired<uint8_t>());
 	create_index_info->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	create_index_info->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+
 	create_index_info->column_ids = reader.ReadRequiredList<idx_t>();
 	reader.Finalize();
 	return create_index_info;

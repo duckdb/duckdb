@@ -14,7 +14,6 @@ namespace duckdb {
 class Node48 : public Node {
 public:
 	explicit Node48(size_t compression_length);
-	~Node48() override;
 	uint8_t child_index[256];
 
 	SwizzleablePointer children[48];

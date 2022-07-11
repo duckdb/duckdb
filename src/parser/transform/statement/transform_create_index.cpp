@@ -63,6 +63,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	} else {
 		throw NotImplementedException("Index wout a name not supported yet!");
 	}
+	for (auto &expr : info->expressions) {
+		info->parsed_expressions.emplace_back(expr->Copy());
+	}
 	result->info = move(info);
 	return result;
 }

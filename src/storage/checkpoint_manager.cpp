@@ -15,17 +15,20 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 
 namespace duckdb {
 
@@ -339,16 +342,30 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 
 	// create an adaptive radix tree around the expressions
 	vector<unique_ptr<Expression>> unbound_expressions;
-	vector<unique_ptr<Expression>> bound_expressions;
-	idx_t key_nr = 0;
-	for (auto &column_id : info->column_ids) {
-		unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(table_catalog->columns[column_id].GetName(),
-		                                                                    table_catalog->columns[column_id].GetType(),
-		                                                                    ColumnBinding(0, key_nr)));
+	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
-		bound_expressions.push_back(
-		    make_unique<BoundReferenceExpression>(table_catalog->columns[column_id].GetType(), key_nr++));
+	for (auto &p_exp : info->parsed_expressions) {
+		parsed_expressions.push_back(p_exp->Copy());
 	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto table_ref = (TableRef *)info->table.get();
+	auto bound_table = binder->Bind(*table_ref);
+	D_ASSERT(bound_table->type == TableReferenceType::BASE_TABLE);
+	IndexBinder idx_binder(*binder, context);
+	for (auto &expr : parsed_expressions) {
+		unbound_expressions.push_back(idx_binder.Bind(expr));
+	}
+
+	if (parsed_expressions.empty()) {
+		// If no parsed_expressions are present, this means this is a PK/FK index, so we create the necessary bound column refs
+		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++){
+			unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
+			    table_catalog->columns[info->column_ids[key_nr]].GetName(), table_catalog->columns[info->column_ids[key_nr]].GetType(),
+			    ColumnBinding(0, key_nr)));
+		}
+	}
+
 	switch (info->index_type) {
 	case IndexType::ART: {
 		auto art = make_unique<ART>(info->column_ids, move(unbound_expressions), info->constraint_type, db,

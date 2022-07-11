@@ -14,7 +14,6 @@ namespace duckdb {
 class Node4 : public Node {
 public:
 	explicit Node4(size_t compression_length);
-	~Node4() override;
 	uint8_t key[4];
 	// Pointers to the child nodes
 	SwizzleablePointer children[4];

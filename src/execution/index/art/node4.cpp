@@ -9,9 +9,6 @@ Node4::Node4(size_t compression_length) : Node(NodeType::N4, compression_length)
 	memset(key, 0, sizeof(key));
 }
 
-Node4::~Node4() {
-}
-
 void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[pos] = node;
 }

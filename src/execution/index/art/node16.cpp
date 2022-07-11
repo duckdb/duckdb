@@ -10,9 +10,6 @@ Node16::Node16(size_t compression_length) : Node(NodeType::N16, compression_leng
 	memset(key, 16, sizeof(key));
 }
 
-Node16::~Node16() {
-}
-
 idx_t Node16::GetChildPos(uint8_t k) {
 	for (idx_t pos = 0; pos < count; pos++) {
 		if (key[pos] == k) {
