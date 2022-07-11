@@ -36,7 +36,7 @@ mv "${OUTPUT_DIR}/duckdb.pyi" "${OUTPUT_DIR}/__init__.pyi"
 add_header() (
 	{ set +x; } 2>/dev/null
 	cat - "$1" > "$1.tmp" <<EOF
-# to regenerate this from scratch, run scripts/generate_python_stubs.sh .
+# to regenerate this from scratch, run scripts/regenerate_python_stubs.sh .
 # be warned - currently there are still tweaks needed after this file is
 # generated. These should be annotated with a comment like
 # # stubgen override
