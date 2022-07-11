@@ -5,6 +5,28 @@
 
 namespace duckdb {
 
+struct VectorChildIndex {
+	explicit VectorChildIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
+	}
+
+	idx_t index;
+
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
+struct VectorDataIndex {
+	explicit VectorDataIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
+	}
+
+	idx_t index;
+
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
 struct VectorMetaData {
 	//! Where the vector data lives
 	uint32_t block_id;
@@ -13,14 +35,21 @@ struct VectorMetaData {
 	uint16_t count;
 
 	//! Child data of this vector (used only for lists and structs)
-	vector<idx_t> child_data;
+	//! Note: child indices are stored with one layer of indirection
+	//! The child_index here refers to the `child_indices` array in the ColumnDataCollectionSegment
+	//! The entry in the child_indices array then refers to the actual `VectorMetaData` index
+	//! In case of structs, the child_index refers to the FIRST child in the `child_indices` array
+	//! Subsequent children are stored consecutively, i.e.
+	//! first child: segment.child_indices[child_index + 0]
+	//! nth child  : segment.child_indices[child_index + (n - 1)]
+	VectorChildIndex child_index;
 	//! Next vector entry (in case there is more data - used only in case of children of lists)
-	idx_t next_data = DConstants::INVALID_INDEX;
+	VectorDataIndex next_data;
 };
 
 struct ChunkMetaData {
 	//! The set of vectors of the chunk
-	vector<idx_t> vector_data;
+	vector<VectorDataIndex> vector_data;
 	//! The block ids referenced by the chunk
 	unordered_set<uint32_t> block_ids;
 	//! The number of entries in the chunk
@@ -55,15 +84,18 @@ public:
 	vector<ChunkMetaData> chunk_data;
 	//! Set of vector meta data
 	vector<VectorMetaData> vector_data;
+	//! The set of child indices
+	vector<VectorDataIndex> child_indices;
 	//! The string heap for the column data collection
 	StringHeap heap;
 
 public:
 	void AllocateNewChunk();
 	//! Allocate space for a vector of a specific type in the segment
-	idx_t AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data);
+	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data);
 	//! Allocate space for a vector during append,
-	idx_t AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data, ColumnDataAppendState &append_state);
+	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+	                               ColumnDataAppendState &append_state);
 
 	void AllocateBlock();
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset);
@@ -71,7 +103,17 @@ public:
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void InitializeChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
 
-	idx_t InitializeVector(ChunkManagementState &state, idx_t vector_index, Vector &result);
+	idx_t InitializeVector(ChunkManagementState &state, VectorDataIndex vector_index, Vector &result);
+
+	VectorDataIndex GetChildIndex(VectorChildIndex index, idx_t child_entry = 0);
+	VectorChildIndex AddChildIndex(VectorDataIndex index);
+	VectorChildIndex ReserveChildren(idx_t child_count);
+	void SetChildIndex(VectorChildIndex base_idx, idx_t child_number, VectorDataIndex index);
+
+	VectorMetaData &GetVectorData(VectorDataIndex index) {
+		D_ASSERT(index.index < vector_data.size());
+		return vector_data[index.index];
+	}
 };
 
 struct ColumnDataMetaData;
@@ -86,11 +128,12 @@ struct ColumnDataCopyFunction {
 
 struct ColumnDataMetaData {
 	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataCollectionSegment &segment,
-	                   ColumnDataAppendState &state, ChunkMetaData &chunk_data, idx_t vector_data_index)
+	                   ColumnDataAppendState &state, ChunkMetaData &chunk_data, VectorDataIndex vector_data_index)
 	    : copy_function(copy_function), segment(segment), state(state), chunk_data(chunk_data),
 	      vector_data_index(vector_data_index) {
 	}
-	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataMetaData &parent, idx_t vector_data_index)
+	ColumnDataMetaData(ColumnDataCopyFunction &copy_function, ColumnDataMetaData &parent,
+	                   VectorDataIndex vector_data_index)
 	    : copy_function(copy_function), segment(parent.segment), state(parent.state), chunk_data(parent.chunk_data),
 	      vector_data_index(vector_data_index) {
 	}
@@ -99,11 +142,11 @@ struct ColumnDataMetaData {
 	ColumnDataCollectionSegment &segment;
 	ColumnDataAppendState &state;
 	ChunkMetaData &chunk_data;
-	idx_t vector_data_index;
+	VectorDataIndex vector_data_index;
 	idx_t child_list_size = DConstants::INVALID_INDEX;
 
 	VectorMetaData &GetVectorMetaData() {
-		return segment.vector_data[vector_data_index];
+		return segment.GetVectorData(vector_data_index);
 	}
 };
 
@@ -152,7 +195,7 @@ void ColumnDataCollectionSegment::AllocateData(idx_t size, uint32_t &block_id, u
 	block.size += size;
 }
 
-idx_t ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data) {
+VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data) {
 	VectorMetaData meta_data;
 	meta_data.count = 0;
 
@@ -164,16 +207,16 @@ idx_t ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, Chunk
 
 	auto index = vector_data.size();
 	vector_data.push_back(meta_data);
-	return index;
+	return VectorDataIndex(index);
 }
 
-idx_t ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
-                                                  ColumnDataAppendState &append_state) {
+VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+                                                            ColumnDataAppendState &append_state) {
 	idx_t block_count = blocks.size();
-	idx_t vector_index = AllocateVector(type, chunk_data);
+	auto vector_index = AllocateVector(type, chunk_data);
 	if (blocks.size() != block_count) {
 		// we allocated a new block for this vector: pin it
-		auto &vdata = vector_data[vector_index];
+		auto &vdata = GetVectorData(vector_index);
 		D_ASSERT(blocks.size() == block_count + 1);
 		auto &last_block = blocks.back();
 		append_state.current_chunk_state.handles[vdata.block_id] = buffer_manager.Pin(last_block.handle);
@@ -186,7 +229,7 @@ void ColumnDataCollectionSegment::AllocateNewChunk() {
 	meta_data.count = 0;
 	meta_data.vector_data.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
-		idx_t vector_idx = AllocateVector(types[i], meta_data);
+		auto vector_idx = AllocateVector(types[i], meta_data);
 		meta_data.vector_data.push_back(vector_idx);
 	}
 	chunk_data.push_back(move(meta_data));
@@ -219,29 +262,54 @@ void ColumnDataCollectionSegment::InitializeChunkState(idx_t chunk_index, ChunkM
 	}
 }
 
-idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state, idx_t vector_index, Vector &result) {
+VectorDataIndex ColumnDataCollectionSegment::GetChildIndex(VectorChildIndex index, idx_t child_entry) {
+	D_ASSERT(index.IsValid());
+	D_ASSERT(index.index + child_entry < child_indices.size());
+	return VectorDataIndex(child_indices[index.index + child_entry]);
+}
+
+VectorChildIndex ColumnDataCollectionSegment::AddChildIndex(VectorDataIndex index) {
+	auto result = child_indices.size();
+	child_indices.push_back(index);
+	return VectorChildIndex(result);
+}
+
+VectorChildIndex ColumnDataCollectionSegment::ReserveChildren(idx_t child_count) {
+	auto result = child_indices.size();
+	for (idx_t i = 0; i < child_count; i++) {
+		child_indices.emplace_back();
+	}
+	return VectorChildIndex(result);
+}
+
+void ColumnDataCollectionSegment::SetChildIndex(VectorChildIndex base_idx, idx_t child_number, VectorDataIndex index) {
+	D_ASSERT(base_idx.IsValid());
+	D_ASSERT(index.IsValid());
+	D_ASSERT(base_idx.index + child_number < child_indices.size());
+	child_indices[base_idx.index + child_number] = index;
+}
+
+idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state, VectorDataIndex vector_index,
+                                                    Vector &result) {
 	auto &vector_type = result.GetType();
 	auto internal_type = vector_type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
-	auto &vdata = vector_data[vector_index];
+	auto &vdata = GetVectorData(vector_index);
 	if (internal_type == PhysicalType::LIST) {
-		D_ASSERT(vdata.child_data.size() == 1);
 		// list: copy child
 		auto &child_vector = ListVector::GetEntry(result);
-		auto child_count = InitializeVector(state, vdata.child_data[0], child_vector);
+		auto child_count = InitializeVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
 	} else if (internal_type == PhysicalType::STRUCT) {
-		auto &struct_types = StructType::GetChildTypes(vector_type);
-		D_ASSERT(vdata.child_data.size() == struct_types.size());
 		auto &child_vectors = StructVector::GetEntries(result);
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
-			InitializeVector(state, vdata.child_data[child_idx], *child_vectors[child_idx]);
+			InitializeVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
 		}
 	}
 
 	auto base_ptr = state.handles[vdata.block_id]->Ptr() + vdata.offset;
 	auto validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
-	if (vdata.next_data == DConstants::INVALID_INDEX) {
+	if (!vdata.next_data.IsValid()) {
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
 		FlatVector::Validity(result).Initialize(validity_data);
@@ -252,9 +320,9 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	// we need to copy over the data for each of the vectors
 	// first figure out how many rows we need to copy by looping over all of the child vector indexes
 	idx_t vector_count = 0;
-	idx_t next_index = vector_index;
-	while (next_index != DConstants::INVALID_INDEX) {
-		auto &current_vdata = vector_data[next_index];
+	auto next_index = vector_index;
+	while (next_index.IsValid()) {
+		auto &current_vdata = GetVectorData(next_index);
 		vector_count += current_vdata.count;
 		next_index = current_vdata.next_data;
 	}
@@ -264,8 +332,8 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	// now perform the copy of each of the vectors
 	auto target_data = FlatVector::GetData(result);
 	idx_t current_offset = 0;
-	while (next_index != DConstants::INVALID_INDEX) {
-		auto &current_vdata = vector_data[next_index];
+	while (next_index.IsValid()) {
+		auto &current_vdata = GetVectorData(next_index);
 		base_ptr = state.handles[current_vdata.block_id]->Ptr() + current_vdata.offset;
 		validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
 		if (type_size > 0) {
@@ -378,8 +446,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const VectorData &s
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
                                   idx_t source_offset, idx_t copy_count) {
-
-	auto &vdata_list = meta_data.segment.vector_data;
+	auto &segment = meta_data.segment;
 	// first append the child entries of the list
 	auto &child_vector = ListVector::GetEntry(source);
 	idx_t child_list_size = ListVector::GetListSize(source);
@@ -388,20 +455,19 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 	VectorData child_vector_data;
 	child_vector.Orrify(child_list_size, child_vector_data);
 
-	if (vdata_list[meta_data.vector_data_index].child_data.empty()) {
-		auto child_index = meta_data.segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
-		vdata_list[meta_data.vector_data_index].child_data.push_back(child_index);
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
-	D_ASSERT(vdata_list[meta_data.vector_data_index].child_data.size() == 1);
 	auto &child_function = meta_data.copy_function.child_functions[0];
-	idx_t child_index = vdata_list[meta_data.vector_data_index].child_data[0];
+	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
 
 	idx_t remaining = child_list_size;
 	idx_t current_list_size = 0;
 	while (remaining > 0) {
-		current_list_size += meta_data.segment.vector_data[child_index].count;
+		current_list_size += segment.GetVectorData(child_index).count;
 		idx_t child_append_count =
-		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - meta_data.segment.vector_data[child_index].count, remaining);
+		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - segment.GetVectorData(child_index).count, remaining);
 		if (child_append_count > 0) {
 			ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 			child_function.function(child_meta_data, child_vector_data, child_vector, child_list_size - remaining,
@@ -410,11 +476,11 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 		remaining -= child_append_count;
 		if (remaining > 0) {
 			// need to append more, check if we need to allocate a new vector or not
-			if (meta_data.segment.vector_data[child_index].next_data == DConstants::INVALID_INDEX) {
-				meta_data.segment.vector_data[child_index].next_data =
-				    meta_data.segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+			if (!segment.GetVectorData(child_index).next_data.IsValid()) {
+				auto next_data = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+				segment.GetVectorData(child_index).next_data = next_data;
 			}
-			child_index = meta_data.segment.vector_data[child_index].next_data;
+			child_index = segment.GetVectorData(child_index).next_data;
 		}
 	}
 	// now copy the list entries
@@ -424,7 +490,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
                           idx_t source_offset, idx_t copy_count) {
-	auto &vdata_list = meta_data.segment.vector_data;
+	auto &segment = meta_data.segment;
 	// copy the NULL values for the main struct vector
 	auto &append_state = meta_data.state;
 	auto &vector_data = meta_data.GetVectorMetaData();
@@ -436,20 +502,20 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &sourc
 
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
-	if (vdata_list[meta_data.vector_data_index].child_data.empty()) {
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		// no child vectors yet, allocate them
-		vdata_list[meta_data.vector_data_index].child_data.reserve(child_types.size());
+		auto base_index = segment.ReserveChildren(child_types.size());
 		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 			auto child_index =
-			    meta_data.segment.AllocateVector(child_types[child_idx].second, meta_data.chunk_data, meta_data.state);
-			vdata_list[meta_data.vector_data_index].child_data.push_back(child_index);
+			    segment.AllocateVector(child_types[child_idx].second, meta_data.chunk_data, meta_data.state);
+			segment.SetChildIndex(base_index, child_idx, child_index);
 		}
+		meta_data.GetVectorMetaData().child_index = base_index;
 	}
 	auto &child_vectors = StructVector::GetEntries(source);
-	D_ASSERT(vdata_list[meta_data.vector_data_index].child_data.size() == child_types.size());
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &child_function = meta_data.copy_function.child_functions[child_idx];
-		auto child_index = vdata_list[meta_data.vector_data_index].child_data[child_idx];
+		auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index, child_idx);
 		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
 		VectorData child_data;
