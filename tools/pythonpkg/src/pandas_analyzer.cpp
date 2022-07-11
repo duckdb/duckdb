@@ -338,7 +338,6 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 
 LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
-	auto row = column.attr("__getitem__");
 
 	if (!rows) {
 		return LogicalType::SQLNULL;
@@ -350,6 +349,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	if (py::isinstance(column, pandas_series)) {
 		column = column.attr("__array__")();
 	}
+	auto row = column.attr("__getitem__");
 
 	vector<LogicalType> types;
 	auto item_type = GetItemType(row(0), can_convert);
