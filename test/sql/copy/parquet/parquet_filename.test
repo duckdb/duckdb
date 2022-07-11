@@ -14,7 +14,7 @@ select i, j, replace(filename, '\', '/') from parquet_scan('data/parquet-testing
 
 # Filter on filename col
 query III
-select i, j, replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where filename='data/parquet-testing/glob2/t1.parquet';
+select i, j, replace(filename, '\', '/') as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet';
 ----
 3	c	data/parquet-testing/glob2/t1.parquet
 
@@ -77,7 +77,7 @@ SELECT sum(i), max(filename) FROM parquet_scan('__TEST_DIR__/test_table_large.pa
 
 # Same file twice
 query III
-SELECT i, j, replace(filename, '\', '/') FROM parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet'], FILENAME=1) where filename like '%t1%'
+SELECT i, j, replace(filename, '\', '/') as file FROM parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet'], FILENAME=1) where file like '%t1%'
 ----
 1	a	data/parquet-testing/glob/t1.parquet
 1	a	data/parquet-testing/glob/t1.parquet

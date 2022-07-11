@@ -6,14 +6,14 @@ require parquet
 
 # test parsing hive partitioning scheme
 query IIII
-select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1)
+select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1)  order by id
 ----
 1	value1	a	2012-01-01
 2	value2	b	2013-01-01
 
 # As long as the names match, we don't really mind since everything is a string anyway
 query IIII
-select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1)
+select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) order by id
 ----
 1	value1	a	2012-01-01
 2	value2	b	2013-01-01
