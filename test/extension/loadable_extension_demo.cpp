@@ -217,7 +217,7 @@ public:
 extern "C" {
 DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance &db) {
 	CreateScalarFunctionInfo hello_alias_info(
-	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, duckdb::TestAliasHello));
+	    ScalarFunction("test_alias_hello", {}, LogicalType::VARCHAR, TestAliasHello));
 
 	// create a scalar function
 	Connection con(db);
@@ -249,7 +249,7 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	catalog.CreateFunction(client_context, &add_point_info);
 
 	// Function sub point
-	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type,SubPointFunction);
+	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, SubPointFunction);
 	CreateScalarFunctionInfo sub_point_info(sub_point_func);
 	catalog.CreateFunction(client_context, &sub_point_info);
 
