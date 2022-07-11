@@ -168,7 +168,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
 
-	// now we actually write the data to disk
 	owned_segment.reset();
 }
 

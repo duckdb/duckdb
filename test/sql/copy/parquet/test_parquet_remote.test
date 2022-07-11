@@ -67,3 +67,13 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:44
 8	Harry	Howell	hhowell7@eepurl.com
 9	Jose	Foster	jfoster8@yelp.com
 10	Emily	Stewart	estewart9@opensource.org
+
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet') LIMIT 1;
+----
+1	Amanda	Jordan	ajordan0@com.com
+
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb-data/releases/download/v1.0/us%2Ber%2Bda%2Bta.parquet') LIMIT 1;
+----
+1	Amanda	Jordan	ajordan0@com.com

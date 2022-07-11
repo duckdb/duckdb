@@ -63,8 +63,7 @@ protected:
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"
 class ReservoirSample : public BlockingSample {
 public:
-	ReservoirSample(idx_t sample_count, int64_t seed) : BlockingSample(seed), sample_count(sample_count) {
-	}
+	ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -92,7 +91,7 @@ class ReservoirSamplePercentage : public BlockingSample {
 	constexpr static idx_t RESERVOIR_THRESHOLD = 100000;
 
 public:
-	ReservoirSamplePercentage(double percentage, int64_t seed);
+	ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed);
 
 	//! Add a chunk of data to the sample
 	void AddToReservoir(DataChunk &input) override;
@@ -105,6 +104,7 @@ private:
 	void Finalize();
 
 private:
+	Allocator &allocator;
 	//! The sample_size to sample
 	double sample_percentage;
 	//! The fixed sample size of the sub-reservoirs

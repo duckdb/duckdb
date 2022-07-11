@@ -156,14 +156,14 @@ void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun =
 	    ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, false, BindPrintfFunction);
+	                   PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
 	printf_fun.varargs = LogicalType::ANY;
 	set.AddFunction(printf_fun);
 
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun =
 	    ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   PrintfFunction<FMTFormat, duckdb_fmt::format_context>, false, BindPrintfFunction);
+	                   PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
 	format_fun.varargs = LogicalType::ANY;
 	set.AddFunction(format_fun);
 }

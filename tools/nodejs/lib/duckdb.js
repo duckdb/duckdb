@@ -23,83 +23,111 @@ Connection.prototype.each = function(sql) {
     return statement.each.apply(statement, arguments);
 }
 
-function ptr_to_arr(buffer, ptype, n) {
-    // TODO can we create those on the C++ side of things already?
-    switch(ptype) {
-        case 'BOOL':
-        case 'UINT8':
-            return new Uint8Array(buffer.buffer, 0, n);
-        case 'INT8':
-            return new Int8Array(buffer.buffer, 0, n);
-        case 'INT16':
-            return new Int16Array(buffer.buffer, 0, n);
-        case 'UINT16':
-            return new UInt16Array(buffer.buffer, 0, n);
-        case 'INT32':
-            return new Int32Array(buffer.buffer, 0, n);
-        case 'UINT32':
-            return new UInt32Array(buffer.buffer, 0, n);
-        case 'FLOAT':
-            return new Float32Array(buffer.buffer, 0, n);
-        case 'DOUBLE':
-            return new Float64Array(buffer.buffer, 0, n);
-        case 'VARCHAR':  // we already have created a string array on the C++ side for this
-            return buffer;
-        default:
-            return new Array<string>(0); // cough
-    }
-}
-
 // this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
 Connection.prototype.register = function(name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
-    return this.register_bulk(name, return_type, function(descr) {
+    return this.register_bulk(name, return_type, function(desc) {
         try {
-            const data_arr = [];
-            const validity_arr = [];
+            // Build an argument resolver
+            const buildResolver = (arg) => {
+                let validity = arg.validity || null;
+                switch (arg.physicalType) {
+                    case 'STRUCT': {
+                        const tmp = {};
+                        const children = [];
+                        for (let j = 0; j < (arg.children.length || 0); ++j) {
+                            const attr = arg.children[j];
+                            const child = buildResolver(attr);
+                            children.push((row) => {
+                                tmp[attr.name] = child(row);
+                            });
+                        }
+                        if (validity != null) {
+                            return (row) => {
+                                if (!validity[row]) {
+                                    return null;
+                                }
+                                for (const resolver of children) {
+                                    resolver(row);
+                                }
+                                return tmp;
+                            };
+                        } else {
+                            return (row) => {
+                                for (const resolver of children) {
+                                    resolver(row);
+                                }
+                                return tmp;
+                            };
+                        }
+                    }
+                    default: {
+                        if (arg.data === undefined) {
+                            throw new Error(
+                                'malformed data view, expected data buffer for argument of type: ' + arg.physicalType,
+                            );
+                        }
+                        const data = arg.data;
+                        if (validity != null) {
+                            return (row) => (!validity[row] ? null : data[row]);
+                        } else {
+                            return (row) => data[row];
+                        }
+                    }
+                }
+            };
 
-            for (const idx in descr.args) {
-                const arg = descr.args[idx];
-                validity_arr.push(arg.data_buffers[arg.validity_buffer]);
-                data_arr.push(ptr_to_arr(arg.data_buffers[arg.data_buffer], arg.physical_type, descr.rows));
+            // Translate argument data
+            const argResolvers = [];
+            for (let i = 0; i < desc.args.length; ++i) {
+                argResolvers.push(buildResolver(desc.args[i]));
+            }
+            const args = [];
+            for (let i = 0; i < desc.args.length; ++i) {
+                args.push(null);
             }
 
-            const out_data = ptr_to_arr(descr.ret.data_buffers[descr.ret.data_buffer], descr.ret.physical_type, descr.rows);
-            const out_validity = descr.ret.data_buffers[descr.ret.validity_buffer];
+            // Return type
+            desc.ret.validity = new Uint8Array(desc.rows);
+            switch (desc.ret.physicalType) {
+                case 'INT8':
+                    desc.ret.data = new Int8Array(desc.rows);
+                    break;
+                case 'INT16':
+                    desc.ret.data = new Int16Array(desc.rows);
+                    break;
+                case 'INT32':
+                    desc.ret.data = new Int32Array(desc.rows);
+                    break;
+                case 'DOUBLE':
+                    desc.ret.data = new Float64Array(desc.rows);
+                    break;
+                case 'DATE64':
+                case 'TIME64':
+                case 'TIMESTAMP':
+                case 'INT64':
+                    desc.ret.data = new BigInt64Array(desc.rows);
+                    break;
+                case 'UINT64':
+                    desc.ret.data = new BigUint64Array(desc.rows);
+                    break;
+                case 'BLOB':
+                case 'VARCHAR':
+                    desc.ret.data = new Array(desc.rows);
+                    break;
+            }
 
-            switch (descr.args.length) {
-                case 0:
-                    for (let i = 0; i < descr.rows; ++i) {
-                        const res = fun();
-                        out_data[i] = res;
-                        out_validity[i] = res == undefined || res == null ? 0 : 1;
-                    }
-                    break;
-                case 1:
-                    for (let i = 0; i < descr.rows; ++i) {
-                        const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined);
-                        out_data[i] = res;
-                        out_validity[i] = res == undefined || res == null ? 0 : 1;
-                    }
-                    break;
-                case 2:
-                    for (let i = 0; i < descr.rows; ++i) {
-                        const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined, validity_arr[1][i] ? data_arr[1][i] : undefined);
-                        out_data[i] = res;
-                        out_validity[i] = res == undefined || res == null ? 0 : 1;
-                    }
-                    break;
-                case 3:
-                    for (let i = 0; i < descr.rows; ++i) {
-                        const res = fun(validity_arr[0][i] ? data_arr[0][i] : undefined, validity_arr[1][i] ? data_arr[1][i] : undefined, validity_arr[2][i] ? data_arr[2][i] : undefined);
-                        out_data[i] = res;
-                        out_validity[i] = res == undefined || res == null ? 0 : 1;
-                    }
-                    break;
-                default:
-                    throw "Unsupported argument count";
+            // Call the function
+            for (let i = 0; i < desc.rows; ++i) {
+                for (let j = 0; j < desc.args.length; ++j) {
+                    args[j] = argResolvers[j](i);
+                }
+                const res = fun(...args);
+                desc.ret.data[i] = res;
+                desc.ret.validity[i] = res === undefined || res === null ? 0 : 1;
             }
         } catch(error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
+            console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
                 msg = error.message

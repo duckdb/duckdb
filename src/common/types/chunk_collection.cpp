@@ -13,6 +13,12 @@
 
 namespace duckdb {
 
+ChunkCollection::ChunkCollection(Allocator &allocator) : allocator(allocator), count(0) {
+}
+
+ChunkCollection::ChunkCollection(ClientContext &context) : ChunkCollection(Allocator::Get(context)) {
+}
+
 void ChunkCollection::Verify() {
 #ifdef DEBUG
 	for (auto &chunk : chunks) {
@@ -114,7 +120,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	if (remaining_data > 0) {
 		// create a new chunk and fill it with the remainder
 		auto chunk = make_unique<DataChunk>();
-		chunk->Initialize(types);
+		chunk->Initialize(allocator, types);
 		new_chunk.Copy(*chunk, offset);
 		chunks.push_back(move(chunk));
 	}
@@ -453,6 +459,12 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	}
 	if (compare_equals) {
 		return true;
+	}
+	for (auto &type : types) {
+		// sort not supported
+		if (type.InternalType() == PhysicalType::LIST || type.InternalType() == PhysicalType::STRUCT) {
+			return false;
+		}
 	}
 	// if the results are not equal,
 	// sort both chunk collections to ensure the comparison is not order insensitive

@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-struct PandasScanFunctionData : public TableFunctionData {
+struct PandasScanFunctionData : public PyTableFunctionData {
 	PandasScanFunctionData(py::handle df, idx_t row_count, vector<PandasColumnBindData> pandas_bind_data,
 	                       vector<LogicalType> sql_types)
 	    : df(df), row_count(row_count), lines_read(0), pandas_bind_data(move(pandas_bind_data)),
@@ -87,12 +87,12 @@ unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(Cl
 	return make_unique<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
 }
 
-unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ClientContext &context,
+unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
                                                                             TableFunctionInitInput &input,
                                                                             GlobalTableFunctionState *gstate) {
 	auto result = make_unique<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
-	PandasScanParallelStateNext(context, input.bind_data, result.get(), gstate);
+	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 

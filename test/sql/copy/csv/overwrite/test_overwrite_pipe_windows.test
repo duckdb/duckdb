@@ -4,6 +4,8 @@
 
 require windows
 
+require notmingw
+
 # Write to pipe - should pass since .tmp is not added when writing to a pipe
 statement ok
 copy (select 42) to 'con:'

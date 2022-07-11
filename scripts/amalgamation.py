@@ -113,6 +113,8 @@ def get_includes(fpath, text):
             continue
         if 'extension_helper.cpp' in fpath and included_file.endswith('-extension.hpp'):
             continue
+        if x[0] in include_statements:
+            raise Exception(f"duplicate include {x[0]} in file {fpath}")
         include_statements.append(x[0])
         included_file = os.sep.join(included_file.split('/'))
         found = False
@@ -392,6 +394,8 @@ def gather_files(dir, source_files, header_files):
         elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
             gather_file(fpath, source_files, header_files)
 
+def write_license(hfile):
+    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE for licensing information\n\n")
 
 def generate_amalgamation_splits(source_file, header_file, nsplits):
     # construct duckdb.hpp from these headers

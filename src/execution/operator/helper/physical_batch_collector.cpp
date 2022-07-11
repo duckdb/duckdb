@@ -51,7 +51,7 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto result =
 	    make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
 	DataChunk output;
-	output.Initialize(types);
+	output.Initialize(BufferAllocator::Get(context), types);
 
 	BatchedChunkScanState state;
 	gstate.data.InitializeScan(state);

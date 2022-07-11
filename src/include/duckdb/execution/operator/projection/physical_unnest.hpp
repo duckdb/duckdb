@@ -24,7 +24,7 @@ public:
 	vector<unique_ptr<Expression>> select_list;
 
 public:
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
@@ -33,8 +33,9 @@ public:
 	}
 
 public:
-	static unique_ptr<OperatorState> GetState(ClientContext &context);
-	static OperatorResultType ExecuteInternal(ClientContext &context, DataChunk &input, DataChunk &chunk,
+	static unique_ptr<OperatorState> GetState(ExecutionContext &context,
+	                                          const vector<unique_ptr<Expression>> &select_list);
+	static OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                          OperatorState &state, const vector<unique_ptr<Expression>> &select_list,
 	                                          bool include_input = true);
 };

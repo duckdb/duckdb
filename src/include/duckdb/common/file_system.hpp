@@ -158,7 +158,7 @@ public:
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
 	DUCKDB_API static string GetHomeDirectory();
-	//! Returns the system-available memory in bytes
+	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static idx_t GetAvailableMemory();
 	//! Path separator for the current file system
 	DUCKDB_API static string PathSeparator();

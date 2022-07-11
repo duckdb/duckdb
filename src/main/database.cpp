@@ -190,7 +190,7 @@ Allocator &Allocator::Get(ClientContext &context) {
 }
 
 Allocator &Allocator::Get(DatabaseInstance &db) {
-	return db.config.allocator;
+	return *db.config.allocator;
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {
@@ -205,7 +205,10 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	}
 	config.maximum_memory = new_config.maximum_memory;
 	if (config.maximum_memory == (idx_t)-1) {
-		config.maximum_memory = FileSystem::GetAvailableMemory() * 8 / 10;
+		auto memory = FileSystem::GetAvailableMemory();
+		if (memory != DConstants::INVALID_INDEX) {
+			config.maximum_memory = memory * 8 / 10;
+		}
 	}
 	if (new_config.maximum_threads == (idx_t)-1) {
 #ifndef DUCKDB_NO_THREADS
@@ -220,6 +223,9 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.load_extensions = new_config.load_extensions;
 	config.force_compression = new_config.force_compression;
 	config.allocator = move(new_config.allocator);
+	if (!config.allocator) {
+		config.allocator = make_unique<Allocator>();
+	}
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;
 	config.temporary_directory = new_config.temporary_directory;
@@ -230,6 +236,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.replacement_scans = move(new_config.replacement_scans);
 	config.initialize_default_database = new_config.initialize_default_database;
 	config.disabled_optimizers = move(new_config.disabled_optimizers);
+	config.parser_extensions = move(new_config.parser_extensions);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

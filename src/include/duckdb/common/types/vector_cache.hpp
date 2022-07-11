@@ -13,13 +13,14 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 
 namespace duckdb {
+class Allocator;
 class Vector;
 
 //! The VectorCache holds cached data that allows for re-use of the same memory by vectors
 class VectorCache {
 public:
 	//! Instantiate a vector cache with the given type
-	explicit VectorCache(const LogicalType &type);
+	explicit VectorCache(Allocator &allocator, const LogicalType &type);
 
 	buffer_ptr<VectorBuffer> buffer;
 

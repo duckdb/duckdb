@@ -30,7 +30,7 @@ Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, 
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
-	if (dataptr && type.id() == LogicalTypeId::INVALID) {
+	if (dataptr && !type.IsValid()) {
 		throw InternalException("Cannot create a vector of type INVALID!");
 	}
 }
@@ -496,8 +496,6 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 	}
-	case LogicalTypeId::HASH:
-		return Value::HASH(((hash_t *)data)[index]);
 	case LogicalTypeId::POINTER:
 		return Value::POINTER(((uintptr_t *)data)[index]);
 	case LogicalTypeId::FLOAT:
@@ -1053,7 +1051,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		D_ASSERT(child_types.size() == children.size());
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
-			children[child_idx]->Verify(count);
+			Vector::Verify(*children[child_idx], sel_p, count);
 			if (vtype == VectorType::CONSTANT_VECTOR) {
 				D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
 				if (ConstantVector::IsNull(*vector)) {
@@ -1303,7 +1301,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	return string_buffer.EmptyString(len);
 }
 
-void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
+void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();

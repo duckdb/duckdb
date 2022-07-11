@@ -33,8 +33,15 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 
 	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
-		auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
-		result_ptr[size++] = StringVector::AddStringOrBlob(result, target->name);
+		auto &type_val = *((duckdb_libpgquery::PGAConst *)c->data.ptr_value);
+		auto entry_value_node = (duckdb_libpgquery::PGValue)(type_val.val);
+		if (entry_value_node.type != duckdb_libpgquery::T_PGString) {
+			throw ParserException("Expected a string constant as value");
+		}
+
+		auto entry_value = string(entry_value_node.val.str);
+		D_ASSERT(!entry_value.empty());
+		result_ptr[size++] = StringVector::AddStringOrBlob(result, entry_value);
 	}
 	return result;
 }

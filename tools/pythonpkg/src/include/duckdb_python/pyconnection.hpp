@@ -24,6 +24,7 @@ public:
 	explicit RegisteredObject(py::object obj_p) : obj(move(obj_p)) {
 	}
 	virtual ~RegisteredObject() {
+		py::gil_scoped_acquire acquire;
 		obj = py::none();
 	}
 
@@ -70,6 +71,10 @@ public:
 
 	DuckDBPyConnection *RegisterPythonObject(const string &name, py::object python_object,
 	                                         const idx_t rows_per_tuple = 100000);
+
+	void InstallExtension(const string &extension, bool force_install = false);
+
+	void LoadExtension(const string &extension);
 
 	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
 	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");

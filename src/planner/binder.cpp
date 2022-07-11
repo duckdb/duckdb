@@ -1,19 +1,19 @@
 #include "duckdb/planner/binder.hpp"
 
-#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/planner/operator/logical_sample.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/returning_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_sample.hpp"
 
 #include <algorithm>
-
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -24,7 +24,6 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, Binder *parent, 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
     : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
-	parameter_types = nullptr;
 	if (parent) {
 		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -33,7 +32,6 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
 			bind_context.cte_references = parent->bind_context.cte_references;
 			parameters = parent->parameters;
-			parameter_types = parent->parameter_types;
 		}
 	}
 }
@@ -77,17 +75,27 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((SetStatement &)statement);
 	case StatementType::LOAD_STATEMENT:
 		return Bind((LoadStatement &)statement);
+	case StatementType::EXTENSION_STATEMENT:
+		return Bind((ExtensionStatement &)statement);
+	case StatementType::PREPARE_STATEMENT:
+		return Bind((PrepareStatement &)statement);
+	case StatementType::EXECUTE_STATEMENT:
+		return Bind((ExecuteStatement &)statement);
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
 	} // LCOV_EXCL_STOP
 }
 
-unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
-	// first we visit the set of CTEs and add them to the bind context
-	for (auto &cte_it : node.cte_map) {
+void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
+	for (auto &cte_it : cte_map.map) {
 		AddCTE(cte_it.first, cte_it.second.get());
 	}
+}
+
+unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
+	// first we visit the set of CTEs and add them to the bind context
+	AddCTEMap(node.cte_map);
 	// now we bind the node
 	unique_ptr<BoundQueryNode> result;
 	switch (node.type) {
@@ -351,6 +359,10 @@ BindingMode Binder::GetBindingMode() {
 		return parent->GetBindingMode();
 	}
 	return mode;
+}
+
+void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
+	can_contain_nulls = can_contain_nulls_p;
 }
 
 void Binder::AddTableName(string table_name) {

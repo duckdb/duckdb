@@ -13,36 +13,36 @@ struct BaseCountFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		*target += source;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		target[idx] = *state;
 	}
 };
 
 struct CountStarFunction : public BaseCountFunction {
 	template <class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, idx_t idx) {
 		*state += 1;
 	}
 
 	template <class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &, idx_t count) {
 		*state += count;
 	}
 };
 
 struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		*state += 1;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		*state += count;
 	}
@@ -56,12 +56,14 @@ AggregateFunction CountFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(
 	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
 	fun.name = "count";
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 
 AggregateFunction CountStarFun::GetFunction() {
 	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
 	fun.name = "count_star";
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
 }
 

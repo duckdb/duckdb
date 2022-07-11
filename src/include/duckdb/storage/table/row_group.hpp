@@ -129,7 +129,8 @@ public:
 	void UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids,
 	                  const vector<column_t> &column_path);
 
-	void MergeStatistics(idx_t column_idx, BaseStatistics &other);
+	void MergeStatistics(idx_t column_idx, const BaseStatistics &other);
+	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
 	void GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &result);

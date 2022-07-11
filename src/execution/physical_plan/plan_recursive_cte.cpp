@@ -11,7 +11,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalRecursiveC
 	D_ASSERT(op.children.size() == 2);
 
 	// Create the working_table that the PhysicalRecursiveCTE will use for evaluation.
-	auto working_table = std::make_shared<ChunkCollection>();
+	auto working_table = std::make_shared<ChunkCollection>(context);
 
 	// Add the ChunkCollection to the context of this PhysicalPlanGenerator
 	rec_ctes[op.table_index] = working_table;

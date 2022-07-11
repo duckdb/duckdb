@@ -27,7 +27,7 @@ public:
 	vector<vector<unique_ptr<Expression>>> expressions;
 
 public:
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
@@ -37,7 +37,8 @@ public:
 
 public:
 	bool IsFoldable() const;
-	void EvaluateExpression(idx_t expression_idx, DataChunk *child_chunk, DataChunk &result) const;
+	void EvaluateExpression(Allocator &allocator, idx_t expression_idx, DataChunk *child_chunk,
+	                        DataChunk &result) const;
 };
 
 } // namespace duckdb
