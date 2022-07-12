@@ -14,9 +14,11 @@
 
 namespace duckdb {
 
+enum class VacuumOptions : int { VACUUM = 1 << 0, ANALYZE = 1 << 1 };
+
 struct VacuumInfo : public ParseInfo {
 public:
-	explicit VacuumInfo(const int &options) : options(options), has_table(false) {};
+	explicit VacuumInfo(const VacuumOptions &options) : options(options), has_table(false) {};
 
 	unique_ptr<VacuumInfo> Copy() {
 		auto result = make_unique<VacuumInfo>(options);
@@ -28,39 +30,16 @@ public:
 	}
 
 	bool Vacuum() {
-		return options & VACOPT_VACUUM;
+		return HasOption(VacuumOptions::VACUUM);
 	}
 
 	bool Analyze() {
-		return options & VACOPT_ANALYZE;
-	}
-
-	bool Verbose() {
-		return options & VACOPT_VERBOSE;
-	}
-
-	bool Freeze() {
-		return options & VACOPT_FREEZE;
-	}
-
-	bool Full() {
-		return options & VACOPT_FULL;
-	}
-
-	bool NoWait() {
-		return options & VACOPT_NOWAIT;
-	}
-
-	bool SkipToast() {
-		return options & VACOPT_SKIPTOAST;
-	}
-
-	bool DisablePageSkipping() {
-		return options & VACOPT_DISABLE_PAGE_SKIPPING;
+		return HasOption(VacuumOptions::ANALYZE);
 	}
 
 public:
-	const int options;
+	//! Bitmap of options set by the parser
+	const VacuumOptions options;
 
 	bool has_table;
 	unique_ptr<TableRef> ref;
@@ -68,15 +47,9 @@ public:
 	vector<string> columns;
 
 private:
-	//! Same as postgres vacuum options
-	constexpr static const int VACOPT_VACUUM = 1 << 0;                /* do VACUUM */
-	constexpr static const int VACOPT_ANALYZE = 1 << 1;               /* do ANALYZE */
-	constexpr static const int VACOPT_VERBOSE = 1 << 2;               /* print progress info */
-	constexpr static const int VACOPT_FREEZE = 1 << 3;                /* FREEZE option */
-	constexpr static const int VACOPT_FULL = 1 << 4;                  /* FULL (non-concurrent) vacuum */
-	constexpr static const int VACOPT_NOWAIT = 1 << 5;                /* don't wait to get lock (autovacuum only) */
-	constexpr static const int VACOPT_SKIPTOAST = 1 << 6;             /* don't process the TOAST table; if any */
-	constexpr static const int VACOPT_DISABLE_PAGE_SKIPPING = 1 << 7; /* don't skip any pages */
+	bool HasOption(const VacuumOptions &option) {
+		return int(options) & int(option);
+	}
 };
 
 } // namespace duckdb

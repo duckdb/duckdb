@@ -1327,9 +1327,7 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 }
 
 void DataTable::SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun) {
-	if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
-		return;
-	}
+	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
 	lock_guard<mutex> stats_guard(stats_lock);
 	set_fun(*column_stats[column_id]->stats);
 }
