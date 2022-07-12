@@ -129,7 +129,7 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
 
 				auto decompressed_string_size =
-				    fsst_decompress((fsst_decoder_t *)FSSTVector::GetDecoder(
+				    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(
 				                        const_cast<Vector &>(*source)), /* IN: use this symbol table for compression. */
 				                    compressed_string.GetSize(),        /* IN: byte-length of compressed string. */
 				                    (unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */

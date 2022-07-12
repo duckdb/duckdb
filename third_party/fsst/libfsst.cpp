@@ -284,7 +284,7 @@ static inline size_t compressSIMD(SymbolTable &symbolTable, u8* symbolBase, size
          } while(curOff < len[curLine]);
    
          if ((batchPos == 512) || (outOff > (1<<19)) || (++curLine >= nlines)) { // cannot accumulate more?
-            if (batchPos-empty >= 32) { // if we have enough work, fire off fsst_compressAVX512 (32 is due to max 4x8 unrolling)
+            if (batchPos-empty >= 32) { // if we have enough work, fire off duckdb_fsst_compressAVX512 (32 is due to max 4x8 unrolling)
                // radix-sort jobs on length (longest string first) 
                // -- this provides best load balancing and allows to skip empty jobs at the end
                u16 sortpos[513]; 
@@ -307,7 +307,7 @@ static inline size_t compressSIMD(SymbolTable &symbolTable, u8* symbolBase, size
                   inputOrdered[pos] = input[i]; 
                 }
                // finally.. SIMD compress max 256KB of simdbuf into (max) 512KB of simdbuf (but presumably much less..) 
-               for(size_t done = fsst_compressAVX512(symbolTable, codeBase, symbolBase, inputOrdered, output, batchPos-empty, unroll);
+               for(size_t done = duckdb_fsst_compressAVX512(symbolTable, codeBase, symbolBase, inputOrdered, output, batchPos-empty, unroll);
                    done < batchPos; done++) output[done] = inputOrdered[done]; 
             } else {
                memcpy(output, input, batchPos*sizeof(SIMDjob));
@@ -488,7 +488,7 @@ vector<u8*> makeSample(u8* sampleBuf, u8* strIn[], size_t **lenRef, size_t nline
    return sample;
 }
 
-extern "C" fsst_encoder_t* fsst_create(size_t n, size_t lenIn[], u8 *strIn[], int zeroTerminated) {
+extern "C" fsst_encoder_t* duckdb_fsst_create(size_t n, size_t lenIn[], u8 *strIn[], int zeroTerminated) {
    u8* sampleBuf = new u8[FSST_SAMPLEMAXSZ];
    size_t *sampleLen = lenIn;
    vector<u8*> sample = makeSample(sampleBuf, strIn, &sampleLen, n?n:1); // careful handling of input to get a right-size and representative sample
@@ -500,17 +500,17 @@ extern "C" fsst_encoder_t* fsst_create(size_t n, size_t lenIn[], u8 *strIn[], in
 }
 
 /* create another encoder instance, necessary to do multi-threaded encoding using the same symbol table */
-extern "C" fsst_encoder_t* fsst_duplicate(fsst_encoder_t *encoder) {
+extern "C" fsst_encoder_t* duckdb_fsst_duplicate(fsst_encoder_t *encoder) {
    Encoder *e = new Encoder();
    e->symbolTable = ((Encoder*)encoder)->symbolTable; // it is a shared_ptr
    return (fsst_encoder_t*) e;
 }
 
 // export a symbol table in compact format. 
-extern "C" u32 fsst_export(fsst_encoder_t *encoder, u8 *buf) {
+extern "C" u32 duckdb_fsst_export(fsst_encoder_t *encoder, u8 *buf) {
    Encoder *e = (Encoder*) encoder;
    // In ->version there is a versionnr, but we hide also suffixLim/terminator/nSymbols there.
-   // This is sufficient in principle to *reconstruct* a fsst_encoder_t from a fsst_decoder_t
+   // This is sufficient in principle to *reconstruct* a fsst_encoder_t from a duckdb_fsst_decoder_t
    // (such functionality could be useful to append compressed data to an existing block).
    //
    // However, the hash function in the encoder hash table is endian-sensitive, and given its
@@ -546,7 +546,7 @@ extern "C" u32 fsst_export(fsst_encoder_t *encoder, u8 *buf) {
 
 #define FSST_CORRUPT 32774747032022883 /* 7-byte number in little endian containing "corrupt" */
 
-extern "C" u32 fsst_import(fsst_decoder_t *decoder, u8 *buf) {
+extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
    u64 version = 0;
    u32 code, pos = 17;
    u8 lenHisto[8];
@@ -614,7 +614,7 @@ size_t compressAuto(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size
 }
 
 // the main compression function (everything automatic)
-extern "C" size_t fsst_compress(fsst_encoder_t *encoder, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[]) {
+extern "C" size_t duckdb_fsst_compress(fsst_encoder_t *encoder, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[]) {
    // to be faster than scalar, simd needs 64 lines or more of length >=12; or fewer lines, but big ones (totLen > 32KB)
    size_t totLen = accumulate(lenIn, lenIn+nlines, 0);
    int simd = totLen > nlines*12 && (nlines > 64 || totLen > (size_t) 1<<15); 
@@ -622,17 +622,17 @@ extern "C" size_t fsst_compress(fsst_encoder_t *encoder, size_t nlines, size_t l
 }
 
 /* deallocate encoder */
-extern "C" void fsst_destroy(fsst_encoder_t* encoder) {
+extern "C" void duckdb_fsst_destroy(fsst_encoder_t* encoder) {
    Encoder *e = (Encoder*) encoder; 
    delete e;
 }
 
 /* very lazy implementation relying on export and import */
-extern "C" fsst_decoder_t fsst_decoder(fsst_encoder_t *encoder) {
-   u8 buf[sizeof(fsst_decoder_t)];
-   u32 cnt1 = fsst_export(encoder, buf);
-   fsst_decoder_t decoder;
-   u32 cnt2 = fsst_import(&decoder, buf);
+extern "C" duckdb_fsst_decoder_t duckdb_fsst_decoder(fsst_encoder_t *encoder) {
+   u8 buf[sizeof(duckdb_fsst_decoder_t)];
+   u32 cnt1 = duckdb_fsst_export(encoder, buf);
+   duckdb_fsst_decoder_t decoder;
+   u32 cnt2 = duckdb_fsst_import(&decoder, buf);
    assert(cnt1 == cnt2); (void) cnt1; (void) cnt2; 
    return decoder;
 }

@@ -445,7 +445,7 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 
 			auto str_compressed = ((string_t *)data)[index];
 			auto decompressed_string_size =
-			    fsst_decompress((fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
 			                    str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
 			                    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
@@ -615,7 +615,7 @@ string Vector::ToString(idx_t count) const {
 			string_t compressed_string = ((string_t *)data)[i];
 			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
 			auto decompressed_string_size =
-			    fsst_decompress((fsst_decoder_t *)FSSTVector::GetDecoder(
+			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(
 			                        const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
 			                    compressed_string.GetSize(),      /* IN: byte-length of compressed string. */
 			                    (unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
@@ -1418,10 +1418,10 @@ void *FSSTVector::GetDecoder(Vector &vector) {
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
-	return (fsst_decoder_t *)fsst_string_buffer.GetDecoder();
+	return (duckdb_fsst_decoder_t *)fsst_string_buffer.GetDecoder();
 }
 
-void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &fsst_decoder) {
+void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 
 	if (!vector.auxiliary) {
@@ -1430,7 +1430,7 @@ void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &fsst_decoder)
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 
 	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
-	fsst_string_buffer.AddDecoder(fsst_decoder);
+	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder);
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {

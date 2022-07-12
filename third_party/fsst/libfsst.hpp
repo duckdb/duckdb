@@ -436,7 +436,7 @@ extern bool
 fsst_hasAVX512(); // runtime check for avx512 capability
 
 extern size_t 
-fsst_compressAVX512(
+duckdb_fsst_compressAVX512(
    SymbolTable &symbolTable, 
    u8* codeBase,    // IN: base address for codes, i.e. compression output (points to simdbuf+256KB)
    u8* symbolBase,  // IN: base address for string bytes, i.e. compression input (points to simdbuf)

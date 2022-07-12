@@ -157,20 +157,20 @@ int main(int argc, char* argv[]) {
          break;
       }
       if (decompress) {
-          fsst_decoder_t decoder;
-          size_t hdr = fsst_import(&decoder, srcBuf[swap]);
-          dstLen[swap] = fsst_decompress(&decoder, srcLen[swap] - hdr, srcBuf[swap] + hdr, FSST_MEMBUF, dstBuf[swap] = dstMem[swap]);
+          duckdb_fsst_decoder_t decoder;
+          size_t hdr = duckdb_fsst_import(&decoder, srcBuf[swap]);
+          dstLen[swap] = duckdb_fsst_decompress(&decoder, srcLen[swap] - hdr, srcBuf[swap] + hdr, FSST_MEMBUF, dstBuf[swap] = dstMem[swap]);
       } else {
           unsigned char tmp[FSST_MAXHEADER];
-          fsst_encoder_t *encoder = fsst_create(1, &srcLen[swap], &srcBuf[swap], 0);
-          size_t hdr = fsst_export(encoder, tmp);
-          if (fsst_compress(encoder, 1, &srcLen[swap], &srcBuf[swap], FSST_MEMBUF*2, dstMem[swap]+FSST_MAXHEADER+3,
+          fsst_encoder_t *encoder = duckdb_fsst_create(1, &srcLen[swap], &srcBuf[swap], 0);
+          size_t hdr = duckdb_fsst_export(encoder, tmp);
+          if (duckdb_fsst_compress(encoder, 1, &srcLen[swap], &srcBuf[swap], FSST_MEMBUF*2, dstMem[swap]+FSST_MAXHEADER+3,
                                        &dstLen[swap], &dstBuf[swap]) < 1) return -1;
           dstLen[swap] += 3 + hdr;
           dstBuf[swap] -= 3 + hdr;
           SERIALIZE(dstLen[swap],dstBuf[swap]); // block starts with size
           copy(tmp, tmp+hdr, dstBuf[swap]+3); // then the header (followed by the compressed bytes which are already there)
-          fsst_destroy(encoder);
+          duckdb_fsst_destroy(encoder);
       }
       srcTot += srcLen[swap];
       dstTot += dstLen[swap];

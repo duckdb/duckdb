@@ -70,7 +70,7 @@ bool fsst_hasAVX512() { return false; }
 // This reduces the effectiveness of unrolling, hence -O2 makes the loop perform worse than -O1 which skips this optimization. 
 // Assembly inspection confirmed that 3-way unroll with -O1 avoids needless load/stores.
 
-size_t fsst_compressAVX512(SymbolTable &symbolTable, u8* codeBase, u8* symbolBase, SIMDjob *input, SIMDjob *output, size_t n, size_t unroll) {
+size_t duckdb_fsst_compressAVX512(SymbolTable &symbolTable, u8* codeBase, u8* symbolBase, SIMDjob *input, SIMDjob *output, size_t n, size_t unroll) {
    size_t processed = 0;
    // define some constants (all_x means that all 8 lanes contain 64-bits value X)
 //#ifdef __AVX512F__

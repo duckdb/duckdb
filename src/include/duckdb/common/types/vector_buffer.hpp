@@ -165,15 +165,15 @@ public:
 	VectorFSSTStringBuffer();
 
 public:
-	void AddDecoder(buffer_ptr<void> &fsst_decoder_p) {
-		fsst_decoder = fsst_decoder_p;
+	void AddDecoder(buffer_ptr<void> &duckdb_fsst_decoder_p) {
+		duckdb_fsst_decoder = duckdb_fsst_decoder_p;
 	}
 	void *GetDecoder() {
-		return fsst_decoder.get();
+		return duckdb_fsst_decoder.get();
 	}
 
 private:
-	buffer_ptr<void> fsst_decoder;
+	buffer_ptr<void> duckdb_fsst_decoder;
 };
 
 class VectorStructBuffer : public VectorBuffer {
