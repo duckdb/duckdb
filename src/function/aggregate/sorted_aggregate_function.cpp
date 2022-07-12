@@ -137,8 +137,8 @@ struct SortedAggregateFunction {
 
 		// We have to scatter the chunks one at a time
 		// so build a selection vector for each one.
-		VectorData svdata;
-		states.Orrify(count, svdata);
+		CanonicalFormat svdata;
+		states.ToCanonical(count, svdata);
 
 		// Build the selection vector for each state.
 		auto sdata = (SortedAggregateState **)svdata.data;

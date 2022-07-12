@@ -24,7 +24,7 @@ class FieldReader;
 class Vector;
 class ValidityStatistics;
 class DistinctStatistics;
-struct VectorData;
+struct CanonicalFormat;
 
 enum StatisticsType { LOCAL_STATS = 0, GLOBAL_STATS = 1 };
 

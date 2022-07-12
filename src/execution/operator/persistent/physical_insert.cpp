@@ -49,7 +49,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
 
-	chunk.Normalify();
+	chunk.Flatten();
 	istate.default_executor.SetChunk(chunk);
 
 	istate.insert_chunk.Reset();

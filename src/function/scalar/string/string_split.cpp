@@ -188,12 +188,12 @@ unique_ptr<Vector> BaseStringSplitFunction(string_t input, string_t delim, const
 }
 
 static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, const bool regex) {
-	VectorData input_data;
-	args.data[0].Orrify(args.size(), input_data);
+	CanonicalFormat input_data;
+	args.data[0].ToCanonical(args.size(), input_data);
 	auto inputs = (string_t *)input_data.data;
 
-	VectorData delim_data;
-	args.data[1].Orrify(args.size(), delim_data);
+	CanonicalFormat delim_data;
+	args.data[1].ToCanonical(args.size(), delim_data);
 	auto delims = (string_t *)delim_data.data;
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);

@@ -214,8 +214,8 @@ public:
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			NullaryFlatLoop<STATE_TYPE, OP>(sdata, aggr_input_data, count);
 		} else {
-			VectorData sdata;
-			states.Orrify(count, sdata);
+			CanonicalFormat sdata;
+			states.ToCanonical(count, sdata);
 			NullaryScatterLoop<STATE_TYPE, OP>((STATE_TYPE **)sdata.data, aggr_input_data, *sdata.sel, count);
 		}
 	}
@@ -245,9 +245,9 @@ public:
 			UnaryFlatLoop<STATE_TYPE, INPUT_TYPE, OP>(idata, aggr_input_data, sdata, FlatVector::Validity(input),
 			                                          count);
 		} else {
-			VectorData idata, sdata;
-			input.Orrify(count, idata);
-			states.Orrify(count, sdata);
+			CanonicalFormat idata, sdata;
+			input.ToCanonical(count, idata);
+			states.ToCanonical(count, sdata);
 			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data,
 			                                             (STATE_TYPE **)sdata.data, *idata.sel, *sdata.sel,
 			                                             idata.validity, count);
@@ -273,8 +273,8 @@ public:
 			break;
 		}
 		default: {
-			VectorData idata;
-			input.Orrify(count, idata);
+			CanonicalFormat idata;
+			input.ToCanonical(count, idata);
 			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data, (STATE_TYPE *)state,
 			                                            count, idata.validity, *idata.sel);
 			break;
@@ -284,11 +284,11 @@ public:
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryScatter(AggregateInputData &aggr_input_data, Vector &a, Vector &b, Vector &states, idx_t count) {
-		VectorData adata, bdata, sdata;
+		CanonicalFormat adata, bdata, sdata;
 
-		a.Orrify(count, adata);
-		b.Orrify(count, bdata);
-		states.Orrify(count, sdata);
+		a.ToCanonical(count, adata);
+		b.ToCanonical(count, bdata);
+		states.ToCanonical(count, sdata);
 
 		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, aggr_input_data, (B_TYPE *)bdata.data,
 		                                                  (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel,
@@ -297,10 +297,10 @@ public:
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
 	static void BinaryUpdate(AggregateInputData &aggr_input_data, Vector &a, Vector &b, data_ptr_t state, idx_t count) {
-		VectorData adata, bdata;
+		CanonicalFormat adata, bdata;
 
-		a.Orrify(count, adata);
-		b.Orrify(count, bdata);
+		a.ToCanonical(count, adata);
+		b.ToCanonical(count, bdata);
 
 		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, aggr_input_data, (B_TYPE *)bdata.data,
 		                                                 (STATE_TYPE *)state, count, *adata.sel, *bdata.sel,

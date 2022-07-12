@@ -1387,8 +1387,8 @@ struct StructDatePart {
 				}
 			}
 		} else {
-			VectorData rdata;
-			input.Orrify(count, rdata);
+			CanonicalFormat rdata;
+			input.ToCanonical(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
 			auto tdata = (const INPUT_TYPE *)rdata.data;

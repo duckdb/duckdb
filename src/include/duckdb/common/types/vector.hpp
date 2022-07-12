@@ -19,7 +19,7 @@
 
 namespace duckdb {
 
-struct VectorData {
+struct CanonicalFormat {
 	const SelectionVector *sel;
 	data_ptr_t data;
 	ValidityMask validity;
@@ -113,10 +113,11 @@ public:
 	DUCKDB_API void Print();
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
-	DUCKDB_API void Normalify(idx_t count);
-	DUCKDB_API void Normalify(const SelectionVector &sel, idx_t count);
+	DUCKDB_API void Flatten(idx_t count);
+	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count);
+	//! Creates a CanonicalFormat of a vector -
 	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
-	DUCKDB_API void Orrify(idx_t count, VectorData &data);
+	DUCKDB_API void ToCanonical(idx_t count, CanonicalFormat &data);
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment);

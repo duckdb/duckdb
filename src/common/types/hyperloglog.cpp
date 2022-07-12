@@ -193,7 +193,7 @@ inline uint64_t TemplatedHash(const string_t &elem) {
 }
 
 template <class T>
-void TemplatedComputeHashes(VectorData &vdata, const idx_t &count, uint64_t hashes[]) {
+void TemplatedComputeHashes(CanonicalFormat &vdata, const idx_t &count, uint64_t hashes[]) {
 	T *data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -205,7 +205,7 @@ void TemplatedComputeHashes(VectorData &vdata, const idx_t &count, uint64_t hash
 	}
 }
 
-static void ComputeHashes(VectorData &vdata, const LogicalType &type, uint64_t hashes[], idx_t count) {
+static void ComputeHashes(CanonicalFormat &vdata, const LogicalType &type, uint64_t hashes[], idx_t count) {
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -252,7 +252,7 @@ static inline void ComputeIndexAndCount(uint64_t &hash, uint8_t &prefix) {
 	hash = index;
 }
 
-void HyperLogLog::ProcessEntries(VectorData &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
+void HyperLogLog::ProcessEntries(CanonicalFormat &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
                                  idx_t count) {
 	ComputeHashes(vdata, type, hashes, count);
 	for (idx_t i = 0; i < count; i++) {
@@ -260,12 +260,12 @@ void HyperLogLog::ProcessEntries(VectorData &vdata, const LogicalType &type, uin
 	}
 }
 
-void HyperLogLog::AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], HyperLogLog **logs[],
-                            const SelectionVector *log_sel) {
+void HyperLogLog::AddToLogs(CanonicalFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
+                            HyperLogLog **logs[], const SelectionVector *log_sel) {
 	AddToLogsInternal(vdata, count, indices, counts, (void ****)logs, log_sel);
 }
 
-void HyperLogLog::AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
+void HyperLogLog::AddToLog(CanonicalFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {
 	lock_guard<mutex> guard(lock);
 	AddToSingleLogInternal(vdata, count, indices, counts, hll);
 }

@@ -320,7 +320,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 				distinct_addresses.Verify(new_group_count);
 
 				if (aggr.filter) {
-					distinct_addresses.Normalify(new_group_count);
+					distinct_addresses.Flatten(new_group_count);
 					RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggr, distinct_addresses,
 					                                    distinct_payload, payload_idx);
 				} else {
@@ -382,14 +382,14 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	D_ASSERT(capacity - entries >= groups.size());
 	D_ASSERT(group_hashes.GetType() == LogicalType::HASH);
 
-	group_hashes.Normalify(groups.size());
+	group_hashes.Flatten(groups.size());
 	auto group_hashes_ptr = FlatVector::GetData<hash_t>(group_hashes);
 
 	D_ASSERT(ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(ht_offsets.GetType() == LogicalType::BIGINT);
 
 	D_ASSERT(addresses.GetType() == LogicalType::POINTER);
-	addresses.Normalify(groups.size());
+	addresses.Flatten(groups.size());
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// now compute the entry in the table based on the hash using a modulo
@@ -420,7 +420,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	group_chunk.SetCardinality(groups);
 
 	// orrify all the groups
-	auto group_data = group_chunk.Orrify();
+	auto group_data = group_chunk.ToCanonical();
 
 	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {

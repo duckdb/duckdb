@@ -141,8 +141,8 @@ string NumericStatistics::ToString() const {
 
 template <class T>
 void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count) const {
-	VectorData vdata;
-	vector.Orrify(count, vdata);
+	CanonicalFormat vdata;
+	vector.ToCanonical(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {

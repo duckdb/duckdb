@@ -6,9 +6,9 @@
 namespace duckdb {
 
 template <class T>
-void TemplatedRadixScatter(VectorData &vdata, const SelectionVector &sel, idx_t add_count, data_ptr_t *key_locations,
-                           const bool desc, const bool has_null, const bool nulls_first, const bool is_little_endian,
-                           const idx_t offset) {
+void TemplatedRadixScatter(CanonicalFormat &vdata, const SelectionVector &sel, idx_t add_count,
+                           data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
+                           const bool is_little_endian, const idx_t offset) {
 	auto source = (T *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -51,9 +51,9 @@ void TemplatedRadixScatter(VectorData &vdata, const SelectionVector &sel, idx_t 
 	}
 }
 
-void RadixScatterStringVector(VectorData &vdata, const SelectionVector &sel, idx_t add_count, data_ptr_t *key_locations,
-                              const bool desc, const bool has_null, const bool nulls_first, const idx_t prefix_len,
-                              idx_t offset) {
+void RadixScatterStringVector(CanonicalFormat &vdata, const SelectionVector &sel, idx_t add_count,
+                              data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
+                              const idx_t prefix_len, idx_t offset) {
 	auto source = (string_t *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -96,7 +96,7 @@ void RadixScatterStringVector(VectorData &vdata, const SelectionVector &sel, idx
 	}
 }
 
-void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector &sel, idx_t add_count,
+void RadixScatterListVector(Vector &v, CanonicalFormat &vdata, const SelectionVector &sel, idx_t add_count,
                             data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                             const idx_t prefix_len, const idx_t width, const idx_t offset) {
 	auto list_data = ListVector::GetData(v);
@@ -172,9 +172,9 @@ void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector 
 	}
 }
 
-void RadixScatterStructVector(Vector &v, VectorData &vdata, idx_t vcount, const SelectionVector &sel, idx_t add_count,
-                              data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
-                              const idx_t prefix_len, idx_t width, const idx_t offset) {
+void RadixScatterStructVector(Vector &v, CanonicalFormat &vdata, idx_t vcount, const SelectionVector &sel,
+                              idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
+                              const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
 	// serialize null values
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -213,8 +213,8 @@ void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector 
                                  idx_t prefix_len, idx_t width, idx_t offset) {
 	auto is_little_endian = Radix::IsLittleEndian();
 
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
+	CanonicalFormat vdata;
+	v.ToCanonical(vcount, vdata);
 	switch (v.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

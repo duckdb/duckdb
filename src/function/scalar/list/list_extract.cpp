@@ -13,10 +13,10 @@
 namespace duckdb {
 
 template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
-void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets_data, Vector &child_vector,
+void ListExtractTemplate(idx_t count, CanonicalFormat &list_data, CanonicalFormat &offsets_data, Vector &child_vector,
                          idx_t list_size, Vector &result) {
-	VectorData child_data;
-	child_vector.Orrify(list_size, child_data);
+	CanonicalFormat child_data;
+	child_vector.ToCanonical(list_size, child_data);
 
 	T *result_data;
 
@@ -76,8 +76,8 @@ void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
-static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector,
-                                       idx_t list_size, Vector &result) {
+static void ExecuteListExtractInternal(const idx_t count, CanonicalFormat &list, CanonicalFormat &offsets,
+                                       Vector &child_vector, idx_t list_size, Vector &result) {
 	D_ASSERT(child_vector.GetType() == result.GetType());
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -148,11 +148,11 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
-	VectorData list_data;
-	VectorData offsets_data;
+	CanonicalFormat list_data;
+	CanonicalFormat offsets_data;
 
-	list.Orrify(count, list_data);
-	offsets.Orrify(count, offsets_data);
+	list.ToCanonical(count, list_data);
+	offsets.ToCanonical(count, offsets_data);
 	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list),
 	                           ListVector::GetListSize(list), result);
 	result.Verify(count);

@@ -177,14 +177,14 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 			}
 		}
 		handles = blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
-		auto blob_data = blob_chunk.Orrify();
+		auto blob_data = blob_chunk.ToCanonical();
 		RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout->blob_layout, addresses, *blob_sorting_heap,
 		                       sel_ptr, blob_chunk.size());
 	}
 
 	// Finally, serialize payload data
 	handles = payload_data->Build(payload.size(), data_pointers, nullptr);
-	auto input_data = payload.Orrify();
+	auto input_data = payload.ToCanonical();
 	RowOperations::Scatter(payload, input_data.get(), *payload_layout, addresses, *payload_heap, sel_ptr,
 	                       payload.size());
 }

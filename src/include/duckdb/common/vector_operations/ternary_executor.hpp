@@ -81,10 +81,10 @@ public:
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
-			VectorData adata, bdata, cdata;
-			a.Orrify(count, adata);
-			b.Orrify(count, bdata);
-			c.Orrify(count, cdata);
+			CanonicalFormat adata, bdata, cdata;
+			a.ToCanonical(count, adata);
+			b.ToCanonical(count, bdata);
+			c.ToCanonical(count, cdata);
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data,
@@ -139,7 +139,7 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL>
-	static inline idx_t SelectLoopSelSwitch(VectorData &adata, VectorData &bdata, VectorData &cdata,
+	static inline idx_t SelectLoopSelSwitch(CanonicalFormat &adata, CanonicalFormat &bdata, CanonicalFormat &cdata,
 	                                        const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                                        SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
@@ -159,7 +159,7 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
-	static inline idx_t SelectLoopSwitch(VectorData &adata, VectorData &bdata, VectorData &cdata,
+	static inline idx_t SelectLoopSwitch(CanonicalFormat &adata, CanonicalFormat &bdata, CanonicalFormat &cdata,
 	                                     const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
 	                                     SelectionVector *false_sel) {
 		if (!adata.validity.AllValid() || !bdata.validity.AllValid() || !cdata.validity.AllValid()) {
@@ -178,10 +178,10 @@ public:
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();
 		}
-		VectorData adata, bdata, cdata;
-		a.Orrify(count, adata);
-		b.Orrify(count, bdata);
-		c.Orrify(count, cdata);
+		CanonicalFormat adata, bdata, cdata;
+		a.ToCanonical(count, adata);
+		b.ToCanonical(count, bdata);
+		c.ToCanonical(count, cdata);
 
 		return SelectLoopSwitch<A_TYPE, B_TYPE, C_TYPE, OP>(adata, bdata, cdata, sel, count, true_sel, false_sel);
 	}
