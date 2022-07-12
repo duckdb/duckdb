@@ -301,8 +301,15 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 		ListVector::SetListSize(result, child_count);
 	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &child_vectors = StructVector::GetEntries(result);
+		idx_t child_count = 0;
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
-			InitializeVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
+			auto current_count =
+			    InitializeVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
+			if (child_idx == 0) {
+				child_count = current_count;
+			} else {
+				D_ASSERT(current_count == child_count);
+			}
 		}
 	}
 
@@ -503,6 +510,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &sourc
 	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id].Ptr() + vector_data.offset;
 	auto validity_data = (validity_t *)base_ptr;
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
+	vector_data.count += copy_count;
 
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
@@ -568,6 +576,9 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		break;
 	case PhysicalType::DOUBLE:
 		function = ColumnDataCopy<double>;
+		break;
+	case PhysicalType::INTERVAL:
+		function = ColumnDataCopy<interval_t>;
 		break;
 	case PhysicalType::VARCHAR:
 		function = ColumnDataCopy<string_t>;
@@ -646,13 +657,13 @@ void ColumnDataCollection::Append(DataChunk &input) {
 	Append(state, input);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataScanState &state) {
+void ColumnDataCollection::InitializeScan(ColumnDataScanState &state) const {
 	state.chunk_index = 0;
 	state.segment_index = 0;
 	state.current_chunk_state.handles.clear();
 }
 
-void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) {
+void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
 	result.Reset();
 
 	// check if we still have collections to scan
@@ -672,6 +683,7 @@ void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) {
 	// found a chunk to scan -> scan it
 	auto &segment = *segments[state.segment_index];
 	segment.InitializeChunk(state.chunk_index, state.current_chunk_state, result);
+	result.Verify();
 	state.chunk_index++;
 }
 

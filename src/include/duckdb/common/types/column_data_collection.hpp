@@ -67,9 +67,9 @@ public:
 	DUCKDB_API void Append(ColumnDataAppendState &state, DataChunk &new_chunk);
 
 	//! Initializes a Scan state
-	DUCKDB_API void InitializeScan(ColumnDataScanState &state);
+	DUCKDB_API void InitializeScan(ColumnDataScanState &state) const;
 	//! Scans a DataChunk from the ColumnDataCollection
-	DUCKDB_API void Scan(ColumnDataScanState &state, DataChunk &result);
+	DUCKDB_API void Scan(ColumnDataScanState &state, DataChunk &result) const;
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
