@@ -80,4 +80,12 @@
             </plugin>
         </plugins>
     </reporting>
+
+    <distributionManagement>
+        <repository>
+	    <id>github</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/duckdb/duckdb</url>
+        </repository>
+    </distributionManagement>
 </project>
