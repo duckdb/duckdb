@@ -109,13 +109,13 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 		case PhysicalType::INT32:
 			expr.function =
 			    AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
-			        LogicalType::INTEGER, LogicalType::HUGEINT, true);
+			        LogicalType::INTEGER, LogicalType::HUGEINT);
 			expr.function.name = "sum";
 			break;
 		case PhysicalType::INT64:
 			expr.function =
 			    AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
-			        LogicalType::BIGINT, LogicalType::HUGEINT, true);
+			        LogicalType::BIGINT, LogicalType::HUGEINT);
 			expr.function.name = "sum";
 			break;
 		default:
@@ -129,24 +129,24 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
 		return AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
-		    LogicalType::SMALLINT, LogicalType::HUGEINT, true);
+		    LogicalType::SMALLINT, LogicalType::HUGEINT);
 	case PhysicalType::INT32: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int32_t, hugeint_t, SumToHugeintOperation>(
-		        LogicalType::INTEGER, LogicalType::HUGEINT, true);
+		        LogicalType::INTEGER, LogicalType::HUGEINT);
 		function.statistics = SumPropagateStats;
 		return function;
 	}
 	case PhysicalType::INT64: {
 		auto function =
 		    AggregateFunction::UnaryAggregate<SumState<hugeint_t>, int64_t, hugeint_t, SumToHugeintOperation>(
-		        LogicalType::BIGINT, LogicalType::HUGEINT, true);
+		        LogicalType::BIGINT, LogicalType::HUGEINT);
 		function.statistics = SumPropagateStats;
 		return function;
 	}
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
-		    LogicalType::HUGEINT, LogicalType::HUGEINT, true);
+		    LogicalType::HUGEINT, LogicalType::HUGEINT);
 	default:
 		throw InternalException("Unimplemented sum aggregate");
 	}
@@ -166,20 +166,21 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// decimal
 	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, true, nullptr, BindDecimalSum));
+	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+	                                  BindDecimalSum));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(sum);
 
 	// fsum
 	AggregateFunctionSet fsum("fsum");
 	fsum.AddFunction(AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
-	    LogicalType::DOUBLE, LogicalType::DOUBLE, true));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(fsum);
 

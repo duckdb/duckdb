@@ -750,7 +750,7 @@ Value Value::CreateValue(Value value) {
 template <class T>
 T Value::GetValueInternal() const {
 	if (IsNull()) {
-		return NullValue<T>();
+		throw InternalException("Calling GetValueInternal on a value that is NULL");
 	}
 	switch (type_.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -807,7 +807,6 @@ T Value::GetValueInternal() const {
 			throw InternalException("Invalid Internal Type for ENUMs");
 		}
 	}
-
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for GetValue()", type_.ToString());
 	}
@@ -834,6 +833,9 @@ int32_t Value::GetValue() const {
 }
 template <>
 int64_t Value::GetValue() const {
+	if (IsNull()) {
+		throw InternalException("Calling GetValue on a value that is NULL");
+	}
 	switch (type_.id()) {
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:

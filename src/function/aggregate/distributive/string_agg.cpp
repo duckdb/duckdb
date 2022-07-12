@@ -123,6 +123,9 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 		return make_unique<StringAggBindData>(",");
 	}
 	D_ASSERT(arguments.size() == 2);
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("Separator argument to StringAgg must be a constant");
 	}

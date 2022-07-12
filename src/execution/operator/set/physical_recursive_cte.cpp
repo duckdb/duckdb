@@ -9,7 +9,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/parallel/event.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 

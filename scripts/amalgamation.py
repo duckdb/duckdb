@@ -29,7 +29,9 @@ utf8proc_dir = os.path.join('third_party', 'utf8proc')
 utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
 httplib_include_dir = os.path.join('third_party', 'httplib')
 fastfloat_include_dir = os.path.join('third_party', 'fast_float')
-
+mbedtls_dir = os.path.join('third_party', 'mbedtls')
+mbedtls_include_dir = os.path.join('third_party', 'mbedtls', 'include')
+mbedtls_include_dir2 = os.path.join('third_party', 'mbedtls', 'library')
 moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 pcg_include_dir = os.path.join('third_party', 'pcg')
 
@@ -88,9 +90,9 @@ if '--extended' in sys.argv:
     main_header_files = normalize_path(main_header_files)
 
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir]
+include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir, mbedtls_include_dir, mbedtls_include_dir2, mbedtls_dir]
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir]
+compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir, mbedtls_dir]
 
 # files always excluded
 always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])
@@ -113,6 +115,8 @@ def get_includes(fpath, text):
             continue
         if 'extension_helper.cpp' in fpath and included_file.endswith('-extension.hpp'):
             continue
+        if x[0] in include_statements:
+            raise Exception(f"duplicate include {x[0]} in file {fpath}")
         include_statements.append(x[0])
         included_file = os.sep.join(included_file.split('/'))
         found = False

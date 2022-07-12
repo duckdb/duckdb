@@ -460,6 +460,12 @@ bool ChunkCollection::Equals(ChunkCollection &other) {
 	if (compare_equals) {
 		return true;
 	}
+	for (auto &type : types) {
+		// sort not supported
+		if (type.InternalType() == PhysicalType::LIST || type.InternalType() == PhysicalType::STRUCT) {
+			return false;
+		}
+	}
 	// if the results are not equal,
 	// sort both chunk collections to ensure the comparison is not order insensitive
 	vector<OrderType> desc(ColumnCount(), OrderType::DESCENDING);

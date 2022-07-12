@@ -128,7 +128,7 @@ static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, Funct
 
 void ListFlattenFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::LIST(LogicalType::ANY))}, LogicalType::LIST(LogicalType::ANY),
-	                   ListFlattenFunction, false, false, ListFlattenBind, nullptr, ListFlattenStats);
+	                   ListFlattenFunction, ListFlattenBind, nullptr, ListFlattenStats);
 	set.AddFunction({"flatten"}, fun);
 }
 
