@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -57,6 +58,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.normalize_names = BooleanValue::Get(kv.second);
 		} else if (loption == "filename") {
 			options.include_file_name = BooleanValue::Get(kv.second);
+		} else if (loption == "hive_partitioning") {
+			options.include_parsed_hive_partitions = BooleanValue::Get(kv.second);
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
@@ -81,9 +84,20 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		D_ASSERT(return_types.size() == names.size());
 	}
 	if (result->options.include_file_name) {
+		result->filename_col_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
 	}
+
+	if (result->options.include_parsed_hive_partitions) {
+		auto partitions = ParseHivePartitions(result->files[0]);
+		result->hive_partition_col_idx = names.size();
+		for (auto &part : partitions) {
+			return_types.emplace_back(LogicalType::VARCHAR);
+			names.emplace_back(part.first);
+		}
+	}
+	result->options.names = names;
 	return move(result);
 }
 
@@ -134,10 +148,33 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 	} while (true);
+
 	if (bind_data.options.include_file_name) {
-		auto &col = output.data.back();
+		auto &col = output.data[bind_data.filename_col_idx];
 		col.SetValue(0, Value(data.csv_reader->options.file_path));
 		col.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	if (bind_data.options.include_parsed_hive_partitions) {
+		auto partitions = ParseHivePartitions(data.csv_reader->options.file_path);
+
+		idx_t i = bind_data.hive_partition_col_idx;
+
+		if (partitions.size() != (bind_data.options.names.size() - bind_data.hive_partition_col_idx)) {
+			throw IOException("Hive partition count mismatch, expected " +
+			                  std::to_string(bind_data.options.names.size() - bind_data.hive_partition_col_idx) +
+			                  " hive partitions, got " + std::to_string(partitions.size()) + "\n");
+		}
+
+		for (auto &part : partitions) {
+			if (bind_data.options.names[i] != part.first) {
+				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +
+				                  "' but found '" + part.first + "' for file '" + data.csv_reader->options.file_path +
+				                  "'");
+			}
+			auto &col = output.data[i++];
+			col.SetValue(0, Value(part.second));
+			col.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	}
 }
 
@@ -159,6 +196,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["normalize_names"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
