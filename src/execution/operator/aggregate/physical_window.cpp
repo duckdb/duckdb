@@ -34,7 +34,7 @@ public:
 
 	WindowGlobalHashGroup(BufferManager &buffer_manager, const Orders &orders, const Types &payload_types,
 	                      idx_t max_mem, bool external)
-	    : memory_per_thread(max_mem) {
+	    : memory_per_thread(max_mem), count(0) {
 
 		RowLayout payload_layout;
 		payload_layout.Initialize(payload_types);
@@ -52,6 +52,7 @@ public:
 
 	const idx_t memory_per_thread;
 	GlobalSortStatePtr global_sort;
+	atomic<idx_t> count;
 };
 
 //	Global sink state
@@ -72,7 +73,8 @@ public:
 		// we sort by both 1) partition by expression list and 2) order by expressions
 		payload_types = op.children[0]->types;
 
-		for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
+		partition_cols = wexpr->partitions.size();
+		for (idx_t prt_idx = 0; prt_idx < partition_cols; prt_idx++) {
 			auto &pexpr = wexpr->partitions[prt_idx];
 			payload_types.push_back(pexpr->return_type);
 
@@ -115,6 +117,11 @@ public:
 		return hash_groups.size();
 	}
 
+	idx_t GroupCount() const {
+		return std::accumulate(hash_groups.begin(), hash_groups.end(), 0,
+		                       [&](const idx_t &n, const HashGroupPtr &group) { return n + group->count; });
+	}
+
 	WindowGlobalHashGroup *GetHashGroup(idx_t group) {
 		lock_guard<mutex> guard(lock);
 		D_ASSERT(group < hash_groups.size());
@@ -143,7 +150,8 @@ public:
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
-	RadixPartitionInfo partition_info;
+	size_t partition_cols;
+	const RadixPartitionInfo partition_info;
 	mutex lock;
 
 	// Sorting
@@ -170,7 +178,7 @@ public:
 	using LocalSortStatePtr = unique_ptr<LocalSortState>;
 	using DataChunkPtr = unique_ptr<DataChunk>;
 
-	explicit WindowLocalHashGroup(WindowGlobalHashGroup &global_group_p) : global_group(global_group_p) {
+	explicit WindowLocalHashGroup(WindowGlobalHashGroup &global_group_p) : global_group(global_group_p), count(0) {
 	}
 
 	bool SinkChunk(DataChunk &sort_chunk, DataChunk &payload_chunk);
@@ -178,9 +186,12 @@ public:
 
 	WindowGlobalHashGroup &global_group;
 	LocalSortStatePtr local_sort;
+	idx_t count;
 };
 
 bool WindowLocalHashGroup::SinkChunk(DataChunk &sort_buffer, DataChunk &payload_buffer) {
+	D_ASSERT(sort_buffer.size() == payload_buffer.size());
+	count += payload_buffer.size();
 	auto &global_sort = *global_group.global_sort;
 	if (!local_sort) {
 		local_sort = make_unique<LocalSortState>();
@@ -199,6 +210,7 @@ bool WindowLocalHashGroup::SinkChunk(DataChunk &sort_buffer, DataChunk &payload_
 void WindowLocalHashGroup::Combine() {
 	if (local_sort) {
 		global_group.Combine(*local_sort);
+		global_group.count += count;
 		local_sort.reset();
 	}
 }
@@ -209,7 +221,7 @@ public:
 	using LocalHashGroupPtr = unique_ptr<WindowLocalHashGroup>;
 
 	WindowLocalSinkState(Allocator &allocator, const PhysicalWindow &op_p)
-	    : op(op_p), executor(allocator), hash_vector(LogicalTypeId::UBIGINT), sel(STANDARD_VECTOR_SIZE) {
+	    : op(op_p), executor(allocator), count(0), hash_vector(LogicalTypeId::UBIGINT), sel(STANDARD_VECTOR_SIZE) {
 
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[0].get());
@@ -249,6 +261,7 @@ public:
 	ExpressionExecutor executor;
 	DataChunk over_chunk;
 	DataChunk payload_chunk;
+	idx_t count;
 
 	// Grouping
 	idx_t partition_cols;
@@ -354,6 +367,10 @@ void WindowLocalSinkState::Hash(WindowGlobalSinkState &gstate) {
 }
 
 void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
+	if (!gstate.partition_cols) {
+		return;
+	}
+
 	if (!hash_groups.empty()) {
 		return;
 	}
@@ -365,22 +382,13 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 	}
 
 	auto &payload_data = *ungrouped->local_sort->payload_data;
-	auto rows_block = ungrouped->local_sort->ConcatenateBlocks(payload_data);
-
-	RowDataCollection rows(payload_data.buffer_manager, rows_block.capacity, rows_block.entry_size, true);
-	rows.blocks.emplace_back(rows_block);
-	rows.count = rows_block.count;
+	auto rows = payload_data.CloneEmpty();
 
 	auto &payload_heap = *ungrouped->local_sort->payload_heap;
-	RowDataCollection heap(payload_data.buffer_manager, payload_heap.block_capacity, payload_heap.entry_size, true);
-	if (!payload_layout.AllConstant()) {
-		auto heap_block = ungrouped->local_sort->ConcatenateBlocks(payload_heap);
-		heap.blocks.emplace_back(heap_block);
-		heap.count = heap.count;
-		heap.block_capacity = heap.block_capacity;
-	}
+	auto heap = payload_heap.CloneEmpty();
 
-	RowDataCollectionScanner scanner(rows, heap, payload_layout);
+	RowDataCollectionScanner::SwizzleBlocks(*rows, *heap, payload_data, payload_heap, payload_layout);
+	RowDataCollectionScanner scanner(*rows, *heap, payload_layout);
 	const auto input_count = payload_chunk.ColumnCount() - over_chunk.ColumnCount();
 	while (scanner.Remaining()) {
 		payload_chunk.Reset();
@@ -400,6 +408,7 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 
 void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &gstate) {
 	gstate.count += input_chunk.size();
+	count += input_chunk.size();
 
 	if (over_chunk.ColumnCount() > 0) {
 		executor.Execute(input_chunk, over_chunk);
@@ -478,7 +487,9 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 	}
 
 	// Ungrouped data
+	idx_t check = 0;
 	if (ungrouped) {
+		check += ungrouped->count;
 		ungrouped->Combine();
 		ungrouped.reset();
 	}
@@ -486,10 +497,13 @@ void WindowLocalSinkState::Combine(WindowGlobalSinkState &gstate) {
 	// Grouped data
 	for (auto &local_group : hash_groups) {
 		if (local_group) {
+			check += local_group->count;
 			local_group->Combine();
 			local_group.reset();
 		}
 	}
+
+	D_ASSERT(check == count);
 }
 
 // Per-thread read state
@@ -560,13 +574,16 @@ void WindowGlobalSinkState::Finalize() {
 	while (scanner.Remaining()) {
 		lstate->payload_chunk.Reset();
 		scanner.Scan(lstate->payload_chunk);
-		if (lstate->payload_chunk.size() == 0) {
+		if (payload_chunk.size() == 0) {
 			break;
 		}
+		lstate->count += payload_chunk.size();
 
+		over_chunk.Reset();
 		for (idx_t c = 0; c < over_chunk.ColumnCount(); ++c) {
 			over_chunk.data[c].Reference(payload_chunk.data[input_count]);
 		}
+		over_chunk.SetCardinality(payload_chunk);
 
 		lstate->Hash(*this);
 	}
@@ -804,8 +821,12 @@ static void ScanRowCollection(RowDataCollection &rows, RowDataCollection &heap, 
 	DataChunk result;
 	result.Initialize(allocator, types);
 
-	RowDataCollectionScanner scanner(rows, heap, layout);
+	auto swizzled_rows = rows.CloneEmpty();
+	auto swizzled_heap = heap.CloneEmpty();
+	RowDataCollectionScanner::SwizzleBlocks(*swizzled_rows, *swizzled_heap, rows, heap, layout);
+	RowDataCollectionScanner scanner(*swizzled_rows, *swizzled_heap, layout);
 	while (true) {
+		result.Reset();
 		scanner.Scan(result);
 		if (result.size() == 0) {
 			break;
@@ -1745,6 +1766,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 
 	// Find the first group to sort
 	state.Finalize();
+	D_ASSERT(state.count == state.GroupCount());
 	auto group = state.GetNextSortGroup();
 	if (group >= state.hash_groups.size()) {
 		// Empty input!
