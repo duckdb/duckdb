@@ -1,6 +1,9 @@
-# name: test/sql/analyze/test_analyze.test
+# name: test/sql/vacuum/test_analyze.test
 # description: Test ANALYZE statement
-# group: [analyze]
+# group: [vacuum]
+
+# need this, else the distinct stats sampling is different
+require vector_size 1024
 
 statement ok
 analyze
