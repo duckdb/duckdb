@@ -16,8 +16,8 @@ else()
   set(MVN_COMMAND sh mvnw)
 endif()
 
-add_custom_command(
-  OUTPUT duckdb_jdbc
+add_custom_target(
+  duckdb_jdbc
   USES_TERMINAL
   COMMAND ${MVN_COMMAND} compile
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
@@ -25,7 +25,7 @@ add_custom_command(
 include_directories(../../extension/parquet/include target/headers
                     ${JNI_INCLUDE_DIRS})
 
-add_library(duckdb_java SHARED src/jni/duckdb_java.cpp duckdb_jdbc)
+add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb_static parquet_extension)
 if(OS_NAME STREQUAL "linux")
@@ -42,8 +42,8 @@ string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${OS_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
-add_custom_command(
-  OUTPUT dummy_jdbc_target
+add_custom_target(
+  dummy_jdbc_target
   DEPENDS duckdb_java duckdb_jdbc
   USES_TERMINAL
   COMMAND ${MVN_COMMAND} package -Dmaven.test.skip=true
