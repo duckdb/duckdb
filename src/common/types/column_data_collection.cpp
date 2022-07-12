@@ -408,7 +408,7 @@ struct StandardValueCopy {
 struct StringValueCopy {
 	template <class T>
 	static T Operation(ColumnDataMetaData &meta_data, T input) {
-		return input.IsInlined() ? input : meta_data.segment.heap.AddString(input);
+		return input.IsInlined() ? input : meta_data.segment.heap.AddBlob(input);
 	}
 };
 
