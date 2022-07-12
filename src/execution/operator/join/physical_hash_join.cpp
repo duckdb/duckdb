@@ -215,19 +215,16 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &sink = (HashJoinGlobalState &)gstate;
 
 	if (sink.external) {
-		for (auto &ht : sink.local_hash_tables) {
-			// Has unswizzled blocks left - can happen if one thread finishes before sink.external is set
-			ht->SwizzleBlocks();
-		}
-	} else {
-		// Merge local hash tables into the main hash table
-		for (auto &ht : sink.local_hash_tables) {
-			sink.hash_table->Merge(*ht);
-		}
+		// External join - partition HT
+		sink.perfect_join_executor.reset();
+		sink.hash_table->SetTuplesPerPartitionedProbe(sink.local_hash_tables, sink.max_ht_size);
+		sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables);
+		sink.finalized = true;
+		return SinkFinalizeType::READY;
 	}
 
-	// check for possible perfect hash table (can't if this is an external join)
-	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin() && !sink.external;
+	// check for possible perfect hash table
+	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
 	if (use_perfect_hash) {
 		D_ASSERT(sink.hash_table->equality_types.size() == 1);
 		auto key_type = sink.hash_table->equality_types[0];
@@ -236,16 +233,12 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
-		if (sink.external) {
-			sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
-		} else {
-			sink.hash_table->Finalize();
-			if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
-				return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
-			}
-		}
+		sink.hash_table->Finalize();
 	}
 	sink.finalized = true;
+	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
 	return SinkFinalizeType::READY;
 }
 
@@ -287,11 +280,13 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		}
 	}
 	if (sink.external) {
+		const auto &payload_types = children[0]->types;
 		state->sink_keys.Initialize(allocator, condition_types);
-		state->sink_payload.Initialize(allocator, children[0]->types);
+		state->sink_payload.Initialize(allocator, payload_types);
+
 		lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
 		sink.local_hash_tables.push_back(
-		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, types, join_type));
+		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, payload_types, join_type));
 		state->local_ht = sink.local_hash_tables.back().get();
 	}
 
@@ -328,18 +323,19 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
+
 	// resolve the join keys for the left chunk
 	state.join_keys.Reset();
 	state.probe_executor.Execute(input, state.join_keys);
 
 	// perform the actual probe
 	if (sink.external) {
-		state.scan_structure = sink.hash_table->ProbeAndBuild(state.join_keys, input, *state.local_ht, state.sink_keys,
-		                                                      state.sink_payload);
 		if (state.local_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
+			// Swizzle data collected so far (if needed)
 			state.local_ht->SwizzleBlocks();
 		}
-		// maybe we can scannfullouter here?
+		state.scan_structure = sink.hash_table->ProbeAndBuild(state.join_keys, input, *state.local_ht, state.sink_keys,
+		                                                      state.sink_payload);
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
@@ -410,7 +406,6 @@ bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const 
 	if (sink.hash_table->AllPartitionsCompleted()) {
 		return false;
 	}
-	sink.hash_table->NextPartitions();
 	sink.hash_table->FinalizeExternal();
 	// Prepare the probe side
 	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, gstate.probe_scan_state);

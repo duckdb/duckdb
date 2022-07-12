@@ -233,16 +233,27 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	//! Size of block_collection + string_heap in bytes
-	idx_t SizeInBytes();
+	bool external;
+	idx_t SwizzledCount() {
+		return swizzled_block_collection->count;
+	}
+	idx_t SizeInBytes() {
+		return block_collection->SizeInBytes() + string_heap->SizeInBytes();
+	}
+	//! Size of swizzled_block_collection + swizzled_string_heap in bytes
+	idx_t SwizzledSize() {
+		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
+	}
+
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
 	void SwizzleBlocks();
 	//! Unswizzle the blocks in this HT (moves from swizzled_... to block_collection and string_heap)
 	void UnswizzleBlocks();
 
+	//! TODO
+	void SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size);
 	//! Schedules one task for every HT in local_hts to partition them and add them to this HT
-	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts,
-	                            idx_t max_ht_size);
+	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 
@@ -252,9 +263,9 @@ public:
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);
 
-	bool AllPartitionsCompleted();
-	//! TODO
-	void NextPartitions();
+	bool AllPartitionsCompleted() {
+		return partitions_completed == RadixPartitioning::NumberOfPartitions(radix_bits);
+	}
 	//! TODO
 	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
 	//! If this is the probe-side HT, get the next indices indicating what to scan
@@ -263,20 +274,10 @@ public:
 	void ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx_t position, idx_t block_position, idx_t count);
 
 private:
-	//	//! Merges histogram into this one
-	//	void MergeHistogram(JoinHashTable &other);
-	//	//! Reduces histogram on bit at a time
-	//	void ReduceHistogram(idx_t avg_string_size);
-	//	//! Checks whether the current histogram
-	//	bool PartitionsFitInMemory(idx_t histogram[], idx_t average_row_size);
-
-private:
-	//	//! The number of radix bits used to build the histogram
-	//	static constexpr const idx_t INITIAL_RADIX_BITS = 10;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 	//!
-	idx_t partitions_per_iteration;
+	idx_t tuples_per_iteration;
 	//! TODO
 	idx_t partitions_completed;
 
@@ -284,11 +285,6 @@ private:
 	unique_ptr<RowDataCollection> swizzled_block_collection;
 	//! The stringheap accompanying the swizzled main data
 	unique_ptr<RowDataCollection> swizzled_string_heap;
-
-	//	//! Histogram lock
-	//	mutex histogram_lock;
-	//	//! Histogram of inserted values
-	//	unique_ptr<idx_t[]> histogram_ptr;
 
 	//! Partitioned data lock
 	mutex partition_lock;
