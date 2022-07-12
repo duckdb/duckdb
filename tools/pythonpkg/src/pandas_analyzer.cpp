@@ -3,6 +3,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -274,7 +275,12 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		}
 		return LogicalType::DOUBLE;
 	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
-		return LogicalType::VARCHAR; // Might be float64 actually? //or DECIMAL
+		PyDecimal decimal(ele);
+		auto type = decimal.GetType();
+		if (DecimalType::GetWidth(type) > Decimal::MAX_WIDTH_INT64) {
+			can_convert = false;
+		}
+		return type;
 	} else if (py::isinstance(ele, import_cache.datetime.datetime())) {
 		return LogicalType::TIMESTAMP;
 	} else if (py::isinstance(ele, import_cache.datetime.time())) {

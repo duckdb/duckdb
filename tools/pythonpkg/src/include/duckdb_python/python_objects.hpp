@@ -42,6 +42,18 @@ private:
 	py::object dict;
 };
 
+struct PyDecimal {
+public:
+	PyDecimal(py::handle &obj);
+	vector<int8_t> digits;
+	int32_t exponent;
+	bool signed_value = false;
+
+public:
+	LogicalType GetType();
+	Value ToDuckValue();
+};
+
 struct PyTimeDelta {
 public:
 	PyTimeDelta(py::handle &obj);

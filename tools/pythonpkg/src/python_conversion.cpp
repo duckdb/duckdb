@@ -209,7 +209,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 		}
 		return Value::DOUBLE(ele.cast<double>());
 	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
-		return py::str(ele).cast<string>();
+		PyDecimal decimal(ele);
+		return decimal.ToDuckValue();
 	} else if (py::isinstance(ele, import_cache.uuid.UUID())) {
 		auto string_val = py::str(ele).cast<string>();
 		return Value::UUID(string_val);

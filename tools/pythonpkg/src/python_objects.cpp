@@ -1,6 +1,7 @@
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,44 @@ interval_t PyTimeDelta::ToInterval() {
 	interval.days = days;
 	interval.micros = microseconds;
 	return interval;
+}
+
+PyDecimal::PyDecimal(py::handle &obj) {
+	auto as_tuple = obj.attr("as_tuple")();
+	auto _digits = as_tuple.attr("digits");
+	exponent = py::cast<int32_t>(as_tuple.attr("exponent"));
+	auto width = py::len(_digits);
+	auto sign = py::cast<int8_t>(as_tuple.attr("sign"));
+	signed_value = sign != 0;
+
+	exponent *= -1;
+	digits.reserve(width);
+	for (auto digit : _digits) {
+		digits.push_back(py::cast<int8_t>(digit));
+	}
+}
+
+LogicalType PyDecimal::GetType() {
+	int32_t width = digits.size();
+	auto scale = exponent;
+	return LogicalType::DECIMAL(width, scale);
+}
+
+Value PyDecimal::ToDuckValue() {
+	int32_t width = digits.size();
+	auto scale = exponent;
+
+	if (width > Decimal::MAX_WIDTH_INT64) {
+		throw std::runtime_error("Decimal value exceeds max supported width, failed to convert");
+	}
+	int64_t value = 0;
+	for (auto it = digits.begin(); it != digits.end(); it++) {
+		value = value * 10 + *it;
+	}
+	if (signed_value) {
+		value = -value;
+	}
+	return Value::DECIMAL(value, width, scale);
 }
 
 PyTime::PyTime(py::handle &obj) : obj(obj) {

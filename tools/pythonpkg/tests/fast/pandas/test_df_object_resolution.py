@@ -3,6 +3,7 @@ import duckdb
 import datetime
 import numpy as np
 import pytest
+import decimal
 
 def create_generic_dataframe(data):
     return pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
@@ -12,6 +13,15 @@ class IntString:
         self.value = value
     def __str__(self):
         return str(self.value)
+
+# To avoid DECIMAL being upgraded to DOUBLE (because DOUBLE outranks DECIMAL as a LogicalType)
+# These floats had their precision preserved as string and are now cast to decimal.Decimal
+def ConvertStringToDecimal(data: list):
+    for i in range(len(data)):
+        if isinstance(data[i], str):
+            data[i] = decimal.Decimal(data[i])
+    data = pd.Series(data=data, dtype='object')
+    return data
 
 class TestResolveObjectColumns(object):
 
@@ -368,3 +378,31 @@ class TestResolveObjectColumns(object):
         duckdb_col = duckdb.query_df(x, "x", "select * from x").df()
         df_expected_res = pd.DataFrame({'0': pd.Series(['4','2','0'])})
         pd.testing.assert_frame_equal(duckdb_col, df_expected_res)
+
+    def test_numeric_decimal(self):
+        duckdb_conn = duckdb.connect()
+
+        # DuckDB uses DECIMAL where possible, so all the 'float' types here are actually DECIMAL
+        reference_query = """
+            CREATE TABLE tbl AS SELECT * FROM (
+                VALUES
+                (5,                   5002340,                  -234234234234.0),
+                (12.0,                13,                       324234234.00000005),
+                (-123.0,              -12.0000000005,             -128),
+                (-234234.0,           7453324234.0,             345345),
+                (NULL,                NULL,                     0),
+                (1.234,               -324234234,               1324234359)
+            ) tbl(a, b, c);
+        """
+        duckdb_conn.execute(reference_query)
+        # Because of this we need to wrap these native floats as DECIMAL for this test, to avoid these decimals being "upgraded" to DOUBLE
+        x = pd.DataFrame({
+            '0': ConvertStringToDecimal([5, '12.0', '-123.0', '-234234.0', None, '1.234']),
+            '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', '7453324234.0', None, '-324234234']),
+            '2': ConvertStringToDecimal(['-234234234234.0',  '324234234.00000005', -128, 345345, 0, '1324234359'])
+        })
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
+
+        assert(conversion == reference)
+
