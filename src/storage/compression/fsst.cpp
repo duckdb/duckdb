@@ -346,7 +346,7 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer
 		analyze_state->fsst_encoder = nullptr;
 	}
 
-	return compression_state;
+	return std::move(compression_state);
 }
 
 void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
