@@ -4,10 +4,19 @@
 
     <groupId>org.duckdb</groupId>
     <artifactId>duckdb_jdbc</artifactId>
+    <!-- real version is stamped in as part of release process -->
     <version>1.0-SNAPSHOT</version>
 
-    <name>duckdb_jdbc</name>
-    <description>Add project description here</description>
+    <name>DuckDB JDBC Driver</name>
+    <description>A JDBC-Compliant driver for the DuckDB data management system</description>
+    <url>https://www.duckdb.org</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -63,8 +72,32 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>1.6.13</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <developers>
+        <developer>
+            <name>Hannes Muehleisen</name>
+            <email>hannes@cwi.nl</email>
+            <organization>CWI</organization>
+            <organizationUrl>https://www.cwi.nl</organizationUrl>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:git://github.com/duckdb/duckdb.git</connection>
+        <developerConnection>scm:git:ssh://github.com:duckdb/duckdb.git</developerConnection>
+        <url>http://github.com/duckdb/duckdb/tree/master</url>
+    </scm>
 
     <reporting>
         <plugins>
@@ -83,7 +116,7 @@
 
     <distributionManagement>
         <repository>
-	    <id>github</id>
+            <id>github</id>
             <name>GitHub Packages</name>
             <url>https://maven.pkg.github.com/duckdb/duckdb</url>
         </repository>
