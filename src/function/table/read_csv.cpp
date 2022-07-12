@@ -159,6 +159,10 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 		idx_t i = bind_data.hive_partition_col_idx;
 
+		if (partitions.size() != (bind_data.options.names.size() - bind_data.hive_partition_col_idx)) {
+			throw IOException("Hive partition count mismatch, expected " + std::to_string(bind_data.options.names.size() - bind_data.hive_partition_col_idx) + " hive partitions, got " + std::to_string(partitions.size()) + "\n");
+		}
+
 		for (auto &part : partitions) {
 			if (bind_data.options.names[i] != part.first) {
 				throw IOException("Hive partition names mismatch, expected '" + bind_data.options.names[i] +

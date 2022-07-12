@@ -27,3 +27,7 @@ select id, date from parquet_scan('data/parquet-testing/hive-partitioning/differ
 # If the key names don't add up, there's nothing we can do
 statement error
 select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
+
+
+statement error
+select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1)

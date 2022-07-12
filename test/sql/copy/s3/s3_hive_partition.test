@@ -29,3 +29,34 @@ select id, value, "key_!-_.*()" from parquet_scan('s3://test-bucket/hive-partiti
 ----
 1	value1	zisiswurking1
 2	value2	zisiswurking2
+
+# Test some medium sized files
+statement ok
+CREATE TABLE test3 as SELECT id FROM range(0,10000) tbl(id);
+CREATE TABLE test4 as SELECT id FROM range(10000,20000) tbl(id);
+
+statement ok
+COPY test3 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=1/test.parquet';
+COPY test4 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=2/test.parquet';
+COPY test3 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=1/test.csv' (HEADER 1);
+COPY test4 TO 's3://test-bucket/hive-partitioning/medium/part=1/part2=2/test.csv' (HEADER 1);
+
+query II
+select min(id), max(id) from parquet_scan('s3://test-bucket/hive-partitioning/medium/*/*/test.parquet', HIVE_PARTITIONING=1) where part2=2
+----
+10000	19999
+
+query II
+select min(id), max(id) from parquet_scan('s3://test-bucket/hive-partitioning/medium/*/*/test.parquet', HIVE_PARTITIONING=1) where part2=1
+----
+0	9999
+
+query II
+select min(id), max(id) from read_csv_auto('s3://test-bucket/hive-partitioning/medium/*/*/test.csv', HIVE_PARTITIONING=1) where part2=2
+----
+10000	19999
+
+query II
+select min(id), max(id) from read_csv_auto('s3://test-bucket/hive-partitioning/medium/*/*/test.csv', HIVE_PARTITIONING=1) where part2=1
+----
+0	9999
