@@ -84,6 +84,8 @@ public:
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	//! Whether unsigned extensions should be loaded
+	bool allow_unsigned_extensions = false;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;

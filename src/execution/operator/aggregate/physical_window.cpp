@@ -87,82 +87,67 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
     : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list)) {
 }
 
-template <typename INPUT_TYPE>
-struct ChunkIterator {
-
-	ChunkIterator(ChunkCollection &collection, const idx_t col_idx)
-	    : collection(collection), col_idx(col_idx), chunk_begin(0), chunk_end(0), ch_idx(0), data(nullptr),
-	      validity(nullptr) {
-		Update(0);
+struct MaskColumnOperator {
+	template <class INPUT_TYPE>
+	static INPUT_TYPE GetData(Vector &v, idx_t row_idx) {
+		auto data = FlatVector::GetData<INPUT_TYPE>(v);
+		return data[row_idx];
 	}
-
-	inline void Update(idx_t r) {
-		if (r >= chunk_end) {
-			ch_idx = collection.LocateChunk(r);
-			auto &ch = collection.GetChunk(ch_idx);
-			chunk_begin = ch_idx * STANDARD_VECTOR_SIZE;
-			chunk_end = chunk_begin + ch.size();
-			auto &vector = ch.data[col_idx];
-			data = FlatVector::GetData<INPUT_TYPE>(vector);
-			validity = &FlatVector::Validity(vector);
-		}
-	}
-
-	inline bool IsValid(idx_t r) {
-		return validity->RowIsValid(r - chunk_begin);
-	}
-
-	inline INPUT_TYPE GetValue(idx_t r) {
-		return data[r - chunk_begin];
-	}
-
-private:
-	ChunkCollection &collection;
-	idx_t col_idx;
-	idx_t chunk_begin;
-	idx_t chunk_end;
-	idx_t ch_idx;
-	const INPUT_TYPE *data;
-	ValidityMask *validity;
 };
 
-template <typename INPUT_TYPE>
+struct MaskColumnOperatorValue {
+	template <class INPUT_TYPE>
+	static INPUT_TYPE GetData(Vector &v, idx_t row_idx) {
+		return v.GetValue(row_idx);
+	}
+};
+
+template <typename INPUT_TYPE, class OP = MaskColumnOperator>
 static void MaskTypedColumn(ValidityMask &mask, ChunkCollection &over_collection, const idx_t c) {
-	ChunkIterator<INPUT_TYPE> ci(over_collection, c);
-
-	//	Record the first value
 	idx_t r = 0;
-	auto prev_valid = ci.IsValid(r);
-	auto prev = ci.GetValue(r);
+	bool prev_valid;
+	INPUT_TYPE prev;
+	bool first_chunk = true;
 
-	//	Process complete blocks
-	const auto count = over_collection.Count();
-	const auto entry_count = mask.EntryCount(count);
-	for (idx_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
-		auto validity_entry = mask.GetValidityEntry(entry_idx);
-
-		//	Skip the block if it is all boundaries.
-		idx_t next = MinValue<idx_t>(r + ValidityMask::BITS_PER_VALUE, count);
-		if (ValidityMask::AllValid(validity_entry)) {
-			r = next;
+	for (auto &chunk : over_collection.Chunks()) {
+		auto &v = chunk->data[c];
+		auto validity = FlatVector::Validity(v);
+		if (mask.CheckAllValid(r + chunk->size(), r)) {
+#ifdef DEBUG
+			for (idx_t i = 0; i < chunk->size(); i++) {
+				D_ASSERT(mask.RowIsValid(r + i));
+			}
+#endif
+			// all valid for this chunk: we can skip this
+			// we should update the "prev" values though
+			auto last_idx = chunk->size() - 1;
+			prev_valid = validity.RowIsValid(last_idx);
+			prev = OP::template GetData<INPUT_TYPE>(v, last_idx);
+			first_chunk = false;
+			r += chunk->size();
 			continue;
 		}
+		idx_t start_index = 0;
+		if (first_chunk) {
+			// record the first value (if this is the first chunk)
+			prev_valid = validity.RowIsValid(0);
+			prev = OP::template GetData<INPUT_TYPE>(v, 0);
+			first_chunk = false;
+			start_index++;
+			r++;
+		}
+		for (idx_t i = start_index; i < chunk->size(); i++) {
+			auto curr_valid = validity.RowIsValid(i);
+			auto curr = OP::template GetData<INPUT_TYPE>(v, i);
 
-		//	Scan the rows in the complete block
-		idx_t start = r;
-		for (; r < next; ++r) {
-			//	Update the chunk for this row
-			ci.Update(r);
-
-			auto curr_valid = ci.IsValid(r);
-			auto curr = ci.GetValue(r);
-			if (!ValidityMask::RowIsValid(validity_entry, r - start)) {
+			if (!mask.RowIsValid(r)) {
 				if (curr_valid != prev_valid || (curr_valid && !Equals::Operation(curr, prev))) {
 					mask.SetValidUnsafe(r);
 				}
 			}
 			prev_valid = curr_valid;
 			prev = curr;
+			r++;
 		}
 	}
 }
@@ -211,7 +196,7 @@ static void MaskColumn(ValidityMask &mask, ChunkCollection &over_collection, con
 		MaskTypedColumn<interval_t>(mask, over_collection, c);
 		break;
 	default:
-		throw NotImplementedException("Type for comparison");
+		MaskTypedColumn<Value, MaskColumnOperatorValue>(mask, over_collection, c);
 		break;
 	}
 }
