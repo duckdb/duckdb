@@ -20,10 +20,10 @@ add_custom_command(
   OUTPUT duckdb_jdbc
   USES_TERMINAL
   COMMAND ${MVN_COMMAND} compile
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-include_directories(../../extension/parquet/include target/headers ${JNI_INCLUDE_DIRS})
+include_directories(../../extension/parquet/include target/headers
+                    ${JNI_INCLUDE_DIRS})
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp duckdb_jdbc)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
@@ -46,8 +46,11 @@ add_custom_command(
   OUTPUT dummy_jdbc_target
   DEPENDS duckdb_java duckdb_jdbc
   USES_TERMINAL
-  COMMAND ${MVN_COMMAND} package
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
+  COMMAND ${MVN_COMMAND} package -Dmaven.test.skip=true
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(
+  USES_TERMINAL
+  COMMAND ${MVN_COMMAND} test
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_custom_target(jdbc ALL DEPENDS dummy_jdbc_target)
