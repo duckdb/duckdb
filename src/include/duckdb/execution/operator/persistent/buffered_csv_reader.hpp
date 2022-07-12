@@ -85,6 +85,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! The column names of the columns to read/write
+	vector<string> names;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
@@ -111,13 +113,13 @@ struct BufferedCSVReaderOptions {
 	string file_path;
 	//! Whether or not to include a file name column
 	bool include_file_name = false;
+	//! Whether or not to include a parsed hive partition columns
+	bool include_parsed_hive_partitions = false;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
 
-	//! The column names of the columns to write
-	vector<string> names;
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
 
