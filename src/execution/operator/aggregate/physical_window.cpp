@@ -1042,34 +1042,41 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		}
 		case ExpressionType::WINDOW_NTILE: {
 			D_ASSERT(payload_collection.ColumnCount() == 1);
-			auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
-			// With thanks from SQLite's ntileValueFunc()
-			int64_t n_total = bounds.partition_end - bounds.partition_start;
-			if (n_param > n_total) {
-				// more groups allowed than we have values
-				// map every entry to a unique group
-				n_param = n_total;
-			}
-			int64_t n_size = (n_total / n_param);
-			// find the row idx within the group
-			D_ASSERT(row_idx >= bounds.partition_start);
-			int64_t adjusted_row_idx = row_idx - bounds.partition_start;
-			// now compute the ntile
-			int64_t n_large = n_total - n_param * n_size;
-			int64_t i_small = n_large * (n_size + 1);
-			int64_t result_ntile;
-
-			D_ASSERT((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
-
-			if (adjusted_row_idx < i_small) {
-				result_ntile = 1 + adjusted_row_idx / (n_size + 1);
+			if (CellIsNull(payload_collection, 0, row_idx)) {
+				FlatVector::SetNull(result, output_offset, true);
 			} else {
-				result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
+				auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
+				if (n_param < 1) {
+					throw InvalidInputException("Argument for ntile must be greater than zero");
+				}
+				// With thanks from SQLite's ntileValueFunc()
+				int64_t n_total = bounds.partition_end - bounds.partition_start;
+				if (n_param > n_total) {
+					// more groups allowed than we have values
+					// map every entry to a unique group
+					n_param = n_total;
+				}
+				int64_t n_size = (n_total / n_param);
+				// find the row idx within the group
+				D_ASSERT(row_idx >= bounds.partition_start);
+				int64_t adjusted_row_idx = row_idx - bounds.partition_start;
+				// now compute the ntile
+				int64_t n_large = n_total - n_param * n_size;
+				int64_t i_small = n_large * (n_size + 1);
+				int64_t result_ntile;
+
+				D_ASSERT((n_large * (n_size + 1) + (n_param - n_large) * n_size) == n_total);
+
+				if (adjusted_row_idx < i_small) {
+					result_ntile = 1 + adjusted_row_idx / (n_size + 1);
+				} else {
+					result_ntile = 1 + n_large + (adjusted_row_idx - i_small) / n_size;
+				}
+				// result has to be between [1, NTILE]
+				D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
+				auto rdata = FlatVector::GetData<int64_t>(result);
+				rdata[output_offset] = result_ntile;
 			}
-			// result has to be between [1, NTILE]
-			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			auto rdata = FlatVector::GetData<int64_t>(result);
-			rdata[output_offset] = result_ntile;
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
