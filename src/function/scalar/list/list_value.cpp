@@ -63,7 +63,7 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatis
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, false, ListValueBind, nullptr,
+	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, ListValueBind, nullptr,
 	                   ListValueStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;

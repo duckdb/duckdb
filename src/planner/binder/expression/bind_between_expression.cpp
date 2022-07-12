@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {

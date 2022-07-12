@@ -4,7 +4,6 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"

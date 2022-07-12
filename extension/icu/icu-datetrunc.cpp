@@ -137,8 +137,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetDateTruncFunction(const LogicalTypeId &type) {
-		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, false,
-		                      false, Bind);
+		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, Bind);
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {

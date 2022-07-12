@@ -13,6 +13,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -78,6 +79,8 @@ public:
 		table_function.cardinality = ParquetCardinality;
 		table_function.table_scan_progress = ParquetProgress;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -85,6 +88,8 @@ public:
 		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
 		table_function.bind = ParquetScanBindList;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		set.AddFunction(table_function);
 		return set;
 	}
@@ -93,11 +98,17 @@ public:
 	                                                vector<string> &expected_names,
 	                                                vector<LogicalType> &expected_types) {
 		D_ASSERT(expected_names.size() == expected_types.size());
+		ParquetOptions parquet_options(context);
+
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (loption == "compression" || loption == "codec") {
 				// CODEC option has no effect on parquet read: we determine codec from the file
 				continue;
+			} else if (loption == "filename") {
+				parquet_options.filename = true;
+			} else if (loption == "hive_partitioning") {
+				parquet_options.hive_partitioning = true;
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
@@ -109,7 +120,6 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
 		result->names = result->initial_reader->names;
 		result->types = result->initial_reader->return_types;
@@ -203,8 +213,13 @@ public:
 		auto file_name = input.inputs[0].GetValue<string>();
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
-			if (kv.first == "binary_as_string") {
+			auto loption = StringUtil::Lower(kv.first);
+			if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
+			} else if (loption == "filename") {
+				parquet_options.filename = BooleanValue::Get(kv.second);
+			} else if (loption == "hive_partitioning") {
+				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -229,8 +244,13 @@ public:
 		}
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
-			if (kv.first == "binary_as_string") {
+			auto loption = StringUtil::Lower(kv.first);
+			if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
+			} else if (loption == "filename") {
+				parquet_options.filename = BooleanValue::Get(kv.second);
+			} else if (loption == "hive_partitioning") {
+				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}
 		}
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
@@ -332,6 +352,8 @@ public:
 			while (parallel_state.file_index + 1 < bind_data.files.size()) {
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
+				// TODO check if any of the hivepartitioning/filename columns are in a filter, in this case we may be
+				// 		able to skip the file here.
 				parallel_state.current_reader =
 				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
 				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);

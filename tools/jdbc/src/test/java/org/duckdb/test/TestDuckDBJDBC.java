@@ -27,6 +27,8 @@ import java.util.TimeZone;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import javax.sql.rowset.RowSetProvider;
+import javax.sql.rowset.CachedRowSet;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -375,6 +377,29 @@ public class TestDuckDBJDBC {
 		// Metadata tests
 		assertEquals(Types.TIME_WITH_TIMEZONE, ((DuckDBResultSetMetaData)meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
 		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_throw_wrong_datatype() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs;
+
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ, t2 TIMESTAMP)");
+		stmt.execute("INSERT INTO t (id, t1, t2) VALUES (1, '2022-01-01T12:11:10+02', '2022-01-01T12:11:10')");
+
+		rs = stmt.executeQuery("SELECT * FROM t");
+		rs.next();
+
+		try {
+			rs.getTimestamp(2);
+			fail();
+		}
+		catch (IllegalArgumentException e) {
+		}
 
 		rs.close();
 		stmt.close();
@@ -2186,6 +2211,18 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	/**
+	 * @see GH3906
+	 */
+	public static void test_cached_row_set() throws Exception {
+		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
+		rowSet.setUrl("jdbc:duckdb:");
+		rowSet.setCommand("select 1");
+		rowSet.execute();
+
+		rowSet.next();
+		assertEquals(rowSet.getInt(1), 1);
+	}
 
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!

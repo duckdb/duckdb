@@ -49,7 +49,7 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	if (entry == wrapper->statement->data->value_map.end()) {
 		return DUCKDB_TYPE_INVALID;
 	}
-	return ConvertCPPTypeToC(entry->second[0]->type());
+	return ConvertCPPTypeToC(entry->second->return_type);
 }
 
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, Value val) {

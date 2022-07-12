@@ -36,6 +36,7 @@ struct CreateInfo;
 struct BoundCreateTableInfo;
 struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
+struct BoundParameterMap;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -83,9 +84,7 @@ public:
 	//! vector)
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
-	vector<BoundParameterExpression *> *parameters;
-	//! The types of the prepared statement parameters, if any
-	vector<LogicalType> *parameter_types;
+	BoundParameterMap *parameters;
 	//! Statement properties
 	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
@@ -162,8 +161,7 @@ public:
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
 
-	//! Removes the BoundParameterExpressions from Binder::parameters if they occur in 'expressions'
-	void RemoveParameters(vector<unique_ptr<Expression>> &expressions);
+	void SetCanContainNulls(bool can_contain_nulls);
 
 private:
 	//! The parent binder (if any)
@@ -210,6 +208,8 @@ private:
 	BoundStatement Bind(CreateStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
 	BoundStatement Bind(AlterStatement &stmt);
+	BoundStatement Bind(PrepareStatement &stmt);
+	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);
 	BoundStatement Bind(PragmaStatement &stmt);
 	BoundStatement Bind(ExplainStatement &stmt);

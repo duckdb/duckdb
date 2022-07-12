@@ -96,7 +96,7 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &s
 			le.length = original_type.second;
 			cur_offset += original_type.second;
 		}
-		list_size = cur_offset;
+		list_size = start_offset + cur_offset;
 	} else if (original_type.first == ArrowVariableSizeType::NORMAL) {
 		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {

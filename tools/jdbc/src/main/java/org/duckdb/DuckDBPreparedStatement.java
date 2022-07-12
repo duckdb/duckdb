@@ -30,7 +30,12 @@ import java.util.Calendar;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 
+import java.util.logging.Logger;
+import java.util.logging.Level;
+
 public class DuckDBPreparedStatement implements PreparedStatement {
+	private static Logger logger = Logger.getLogger(DuckDBPreparedStatement.class.getName());
+
 	private DuckDBConnection conn;
 
 	private ByteBuffer stmt_ref = null;
@@ -292,7 +297,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setMaxFieldSize(int max) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		logger.log(Level.FINE, "setMaxFieldSize not supported");
 	}
 
 	@Override
@@ -315,7 +320,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void setQueryTimeout(int seconds) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		logger.log(Level.FINE, "setQueryTimeout not supported");
 	}
 
 	@Override

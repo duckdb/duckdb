@@ -1,0 +1,30 @@
+# name: test/sql/index/art/test_art_prepared.test
+# description: Test ART with prepared statements
+# group: [art]
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (4);
+
+statement ok
+CREATE INDEX i_index ON integers(i);
+
+statement ok
+PRAGMA explain_output='optimized_only'
+
+# verify that the index scan is being used
+query II
+EXPLAIN SELECT * FROM integers WHERE i=2
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+# verify that the index scan is being used with prepared statements as well
+statement ok
+PREPARE v1 AS SELECT * FROM integers WHERE i=$1
+
+query II
+EXPLAIN EXECUTE v1(2)
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*

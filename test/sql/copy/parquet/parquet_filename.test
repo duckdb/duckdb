@@ -1,0 +1,85 @@
+# name: test/sql/copy/parquet/parquet_filename.test
+# description: Test the filename option of the parquet reader
+# group: [parquet]
+
+require parquet
+
+# Simple glob with filenames, note that we replace \ for / to make tests pass on windows
+query III
+select i, j, replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
+----
+1	a	data/parquet-testing/glob/t1.parquet
+2	b	data/parquet-testing/glob/t2.parquet
+3	c	data/parquet-testing/glob2/t1.parquet
+
+# Filter on filename col
+query III
+select i, j, replace(filename, '\', '/') as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet';
+----
+3	c	data/parquet-testing/glob2/t1.parquet
+
+# filter on multiple vector sizes of rows
+query I
+SELECT count(filename) FROM parquet_scan('data/parquet-testing/p2.parquet', FILENAME=1) where id < 1000;
+----
+479
+
+# Filter on non-filename col
+query I
+select replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
+----
+data/parquet-testing/glob/t2.parquet
+
+statement ok
+CREATE TABLE test_csv AS SELECT 1 as id, 'test_csv_content' as filename;
+
+statement ok
+COPY test_csv TO '__TEST_DIR__/filename_as_column.csv' WITH HEADER;
+
+# This currently fails with a binder error
+statement error
+SELECT id, filename FROM read_csv_auto('__TEST_DIR__/filename_as_column.csv', HEADER=1, FILENAME=1);
+
+# Parquet filename name conflict
+statement ok
+CREATE TABLE test AS SELECT 1 as id, 'test' as filename;
+
+statement ok
+COPY test TO '__TEST_DIR__/filename_as_column.parquet';
+
+# we currently don't support filename as a column name when using the filename option
+statement error
+SELECT * FROM parquet_scan('__TEST_DIR__/filename_as_column.parquet', FILENAME=1);
+
+# Now also test copy
+statement ok
+CREATE TABLE test_copy (i INT, j VARCHAR, filename VARCHAR);
+
+statement ok
+COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet' (FILENAME 1);
+
+query III
+SELECT i, j, replace(filename, '\', '/') FROM test_copy
+----
+1	a	data/parquet-testing/glob/t1.parquet
+
+# Multiple row groups in same file
+statement ok
+CREATE TABLE test_table_large AS SELECT * FROM range(0,10000) tbl(i);
+
+statement ok
+COPY test_table_large TO '__TEST_DIR__/test_table_large.parquet' (ROW_GROUP_SIZE 1000);
+
+query II
+SELECT sum(i), max(filename) FROM parquet_scan('__TEST_DIR__/test_table_large.parquet', FILENAME=1) where i>5000;
+----
+37492500	duckdb_unittest_tempdir/test_table_large.parquet
+
+# Same file twice
+query III
+SELECT i, j, replace(filename, '\', '/') as file FROM parquet_scan(['data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t1.parquet', 'data/parquet-testing/glob/t2.parquet'], FILENAME=1) where file like '%t1%'
+----
+1	a	data/parquet-testing/glob/t1.parquet
+1	a	data/parquet-testing/glob/t1.parquet
+
+

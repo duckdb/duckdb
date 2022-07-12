@@ -193,6 +193,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 				result = BoundCastExpression::AddCastToType(move(result), result_type);
 			}
 		}
+		if (result->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
 	}
 	if (result_type) {
 		*result_type = result->return_type;
