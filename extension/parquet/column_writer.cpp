@@ -331,7 +331,9 @@ public:
 	//! We limit the uncompressed page size to 100MB
 	// The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
-	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 10 * MAX_UNCOMPRESSED_PAGE_SIZE;
+	//! Dictionary pages must be below 2GB. Unlike data pages, there's only one dictionary page.
+	//  For this reason we go with a much higher, but stil conservative upper bound of 1GB;
+	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 1e9;
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
@@ -1158,6 +1160,10 @@ public:
 	unordered_map<string, uint32_t> dictionary;
 	// key_bit_width== 0 signifies the chunk is written in plain encoding
 	uint32_t key_bit_width;
+
+	bool IsDictionaryEncoded() {
+		return key_bit_width != 0;
+	}
 };
 
 class StringWriterPageState : public ColumnWriterPageState {
@@ -1265,11 +1271,12 @@ public:
 		if (page_state.bit_width == 0) {
 			// plain page
 			for (idx_t r = chunk_start; r < chunk_end; r++) {
-				if (mask.RowIsValid(r)) {
-					stats.Update(ptr[r]);
-					temp_writer.Write<uint32_t>(ptr[r].GetSize());
-					temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
+				if (!mask.RowIsValid(r)) {
+					continue;
 				}
+				stats.Update(ptr[r]);
+				temp_writer.Write<uint32_t>(ptr[r].GetSize());
+				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
 			}
 		} else {
 			// dictionary based page
@@ -1317,7 +1324,7 @@ public:
 	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
 		auto &stats = (StringStatisticsState &)*stats_p;
 		auto &state = (StringColumnWriterState &)state_p;
-		if (state.key_bit_width != 0) {
+		if (state.IsDictionaryEncoded()) {
 			// first we need to sort the values in index order
 			auto values = vector<string>(state.dictionary.size());
 			for (auto iter = state.dictionary.cbegin(); iter != state.dictionary.cend(); iter++) {
