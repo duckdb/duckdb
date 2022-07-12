@@ -34,7 +34,7 @@
 #include <google/protobuf/unknown_field_set.h>
 // @@protoc_insertion_point(includes)
 #include <google/protobuf/port_def.inc>
-#define PROTOBUF_INTERNAL_EXPORT_google_2fprotobuf_2fempty_2eproto PROTOBUF_EXPORT
+#define PROTOBUF_INTERNAL_EXPORT_google_2fprotobuf_2fempty_2eproto 
 PROTOBUF_NAMESPACE_OPEN
 namespace internal {
 class AnyMetadata;
