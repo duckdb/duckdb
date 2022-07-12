@@ -16,6 +16,9 @@ inputs:
   s3_key:
     description: 'S3 key secret'
     default: ''
+  signing_pk:
+    description: 'Extension signing RSA private key'
+    default: ''
 
   # Build config
   force_32_bit:
@@ -119,6 +122,7 @@ runs:
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
+        DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
