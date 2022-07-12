@@ -332,8 +332,13 @@ public:
 	// The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 	//! Dictionary pages must be below 2GB. Unlike data pages, there's only one dictionary page.
-	//  For this reason we go with a much higher, but stil conservative upper bound of 1GB;
+	//  For this reason we go with a much higher, but still a conservative upper bound of 1GB;
 	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 1e9;
+
+	// the maximum size a key entry in an RLE page takes
+	static constexpr const idx_t MAX_DICTIONARY_KEY_SIZE = sizeof(uint32_t);
+	// the size of encoding the string length
+	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
@@ -1170,8 +1175,12 @@ class StringWriterPageState : public ColumnWriterPageState {
 public:
 	explicit StringWriterPageState(uint32_t bit_width, const unordered_map<string, uint32_t> &values)
 	    : bit_width(bit_width), dictionary(values), encoder(bit_width), written_value(false) {
+		D_ASSERT(IsDictionaryEncoded() || (bit_width == 0 && dictionary.empty()));
 	}
 
+	bool IsDictionaryEncoded() {
+		return bit_width != 0;
+	}
 	// if 0, we're writing a plain page
 	uint32_t bit_width;
 	const unordered_map<string, uint32_t> &dictionary;
@@ -1224,11 +1233,11 @@ public:
 				run_length++;
 				const auto &value = strings[vector_index].GetString();
 				auto found = state.dictionary.insert(unordered_map<string, idx_t>::value_type(value, new_value_index));
-				state.estimated_plain_size += value.size() + 4; // 4 bytes for length
+				state.estimated_plain_size += value.size() + STRING_LENGTH_SIZE;
 				if (found.second) {
 					// string didn't exist yet in the dictionary
 					new_value_index++;
-					state.estimated_dict_page_size += value.size() + 4; // 4 bytes for length
+					state.estimated_dict_page_size += value.size() + MAX_DICTIONARY_KEY_SIZE;
 				}
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
@@ -1243,7 +1252,7 @@ public:
 		}
 		// Add the costs of keys sizes. We don't know yet how many bytes the keys need as we haven't
 		// seen all the values. therefore we use an over-estimation of
-		state.estimated_rle_pages_size += 4 * run_count;
+		state.estimated_rle_pages_size += MAX_DICTIONARY_KEY_SIZE * run_count;
 	}
 
 	void FinalizeAnalyze(ColumnWriterState &state_p) override {
@@ -1268,7 +1277,25 @@ public:
 		auto &stats = (StringStatisticsState &)*stats_p;
 
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
-		if (page_state.bit_width == 0) {
+		if (page_state.IsDictionaryEncoded()) {
+			// dictionary based page
+			for (idx_t r = chunk_start; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				auto value_index = page_state.dictionary.at(ptr[r].GetString());
+				if (!page_state.written_value) {
+					// first value
+					// write the bit-width as a one-byte entry
+					temp_writer.Write<uint8_t>(page_state.bit_width);
+					// now begin writing the actual value
+					page_state.encoder.BeginWrite(temp_writer, value_index);
+					page_state.written_value = true;
+				} else {
+					page_state.encoder.WriteValue(temp_writer, value_index);
+				}
+			}
+		} else {
 			// plain page
 			for (idx_t r = chunk_start; r < chunk_end; r++) {
 				if (!mask.RowIsValid(r)) {
@@ -1277,23 +1304,6 @@ public:
 				stats.Update(ptr[r]);
 				temp_writer.Write<uint32_t>(ptr[r].GetSize());
 				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetDataUnsafe(), ptr[r].GetSize());
-			}
-		} else {
-			// dictionary based page
-			for (idx_t r = chunk_start; r < chunk_end; r++) {
-				if (mask.RowIsValid(r)) {
-					auto value_index = page_state.dictionary.at(ptr[r].GetString());
-					if (!page_state.written_value) {
-						// first value
-						// write the bit-width as a one-byte entry
-						temp_writer.Write<uint8_t>(page_state.bit_width);
-						// now begin writing the actual value
-						page_state.encoder.BeginWrite(temp_writer, value_index);
-						page_state.written_value = true;
-					} else {
-						page_state.encoder.WriteValue(temp_writer, value_index);
-					}
-				}
 			}
 		}
 	}
@@ -1318,7 +1328,7 @@ public:
 
 	duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state_p) override {
 		auto &state = (StringColumnWriterState &)state_p;
-		return state.key_bit_width == 0 ? Encoding::PLAIN : Encoding::RLE_DICTIONARY;
+		return state.IsDictionaryEncoded() ? Encoding::RLE_DICTIONARY : Encoding::PLAIN;
 	}
 
 	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
@@ -1348,11 +1358,11 @@ public:
 
 	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state_p) override {
 		auto &state = (StringColumnWriterState &)state_p;
-		if (state.key_bit_width == 0) {
+		if (state.IsDictionaryEncoded()) {
+			return (state.key_bit_width + 7) / 8;
+		} else {
 			auto strings = FlatVector::GetData<string_t>(vector);
 			return strings[index].GetSize();
-		} else {
-			return (state.key_bit_width + 7) / 8;
 		}
 	}
 };
