@@ -109,7 +109,7 @@ protected:
 
 private:
 	void PrepareRead(parquet_filter_t &filter);
-	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
+	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
 

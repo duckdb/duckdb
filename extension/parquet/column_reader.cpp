@@ -175,11 +175,11 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DATA_PAGE:
-		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+		PreparePage(page_hdr);
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE:
-		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+		PreparePage(page_hdr);
 		Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
 		break;
 	default:
@@ -229,16 +229,16 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 }
 
-void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size) {
+void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
 
-	block = make_shared<ResizeableBuffer>(reader.allocator, compressed_page_size + 1);
-	trans.read((uint8_t *)block->ptr, compressed_page_size);
+	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.compressed_page_size + 1);
+	trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
 
 	// TODO this allocation should probably be avoided
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
-		unpacked_block = make_shared<ResizeableBuffer>(reader.allocator, uncompressed_page_size + 1);
+		unpacked_block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
 	}
 
 	switch (chunk->meta_data.codec) {
@@ -247,15 +247,15 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
 
-		s.Decompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr,
-		             uncompressed_page_size);
+		s.Decompress((const char *)block->ptr, page_hdr.compressed_page_size, (char *)unpacked_block->ptr,
+		             page_hdr.uncompressed_page_size);
 		block = move(unpacked_block);
 
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
-		auto res =
-		    duckdb_snappy::RawUncompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr);
+		auto res = duckdb_snappy::RawUncompress((const char *)block->ptr, page_hdr.compressed_page_size,
+		                                        (char *)unpacked_block->ptr);
 		if (!res) {
 			throw std::runtime_error("Decompression failure");
 		}
@@ -263,9 +263,9 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 		break;
 	}
 	case CompressionCodec::ZSTD: {
-		auto res = duckdb_zstd::ZSTD_decompress((char *)unpacked_block->ptr, uncompressed_page_size,
-		                                        (const char *)block->ptr, compressed_page_size);
-		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)uncompressed_page_size) {
+		auto res = duckdb_zstd::ZSTD_decompress((char *)unpacked_block->ptr, page_hdr.uncompressed_page_size,
+		                                        (const char *)block->ptr, page_hdr.compressed_page_size);
+		if (duckdb_zstd::ZSTD_isError(res) || res != (size_t)page_hdr.uncompressed_page_size) {
 			throw std::runtime_error("ZSTD Decompression failure");
 		}
 		block = move(unpacked_block);
