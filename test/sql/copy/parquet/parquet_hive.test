@@ -28,6 +28,5 @@ select id, date from parquet_scan('data/parquet-testing/hive-partitioning/differ
 statement error
 select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
 
-
 statement error
-select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1)
+select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1) WHERE part=b
