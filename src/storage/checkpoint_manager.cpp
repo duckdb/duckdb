@@ -353,6 +353,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	auto bound_table = binder->Bind(*table_ref);
 	D_ASSERT(bound_table->type == TableReferenceType::BASE_TABLE);
 	IndexBinder idx_binder(*binder, context);
+	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
 		unbound_expressions.push_back(idx_binder.Bind(expr));
 	}
@@ -360,6 +361,7 @@ void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reade
 	if (parsed_expressions.empty()) {
 		// If no parsed_expressions are present, this means this is a PK/FK index, so we create the necessary bound
 		// column refs
+		unbound_expressions.reserve(info->column_ids.size());
 		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
 			unbound_expressions.push_back(make_unique<BoundColumnRefExpression>(
 			    table_catalog->columns[info->column_ids[key_nr]].GetName(),
