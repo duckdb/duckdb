@@ -385,17 +385,17 @@ int mbedtls_pk_setup_rsa_alt( mbedtls_pk_context *ctx, void * key,
  */
 size_t mbedtls_pk_get_bitlen( const mbedtls_pk_context *ctx );
 
-/**
- * \brief           Get the length in bytes of the underlying key
- *
- * \param ctx       The context to query. It must have been initialized.
- *
- * \return          Key length in bytes, or 0 on error
- */
-static inline size_t mbedtls_pk_get_len( const mbedtls_pk_context *ctx )
-{
-    return( ( mbedtls_pk_get_bitlen( ctx ) + 7 ) / 8 );
-}
+///**
+// * \brief           Get the length in bytes of the underlying key
+// *
+// * \param ctx       The context to query. It must have been initialized.
+// *
+// * \return          Key length in bytes, or 0 on error
+// */
+//static inline size_t mbedtls_pk_get_len( const mbedtls_pk_context *ctx )
+//{
+//    return( ( mbedtls_pk_get_bitlen( ctx ) + 7 ) / 8 );
+//}
 
 /**
  * \brief           Tell if a context can do the operation given by type
