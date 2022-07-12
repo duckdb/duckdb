@@ -15,6 +15,7 @@ set(PROTOBUF_SOURCES
     ../../third_party/google/protobuf/descriptor.pb.cc
     ../../third_party/google/protobuf/descriptor_database.cc
     ../../third_party/google/protobuf/dynamic_message.cc
+        ../../third_party/google/protobuf/empty.pb.cc
     ../../third_party/google/protobuf/extension_set.cc
     ../../third_party/google/protobuf/extension_set_heavy.cc
     ../../third_party/google/protobuf/generated_enum_util.cc
