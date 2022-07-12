@@ -14,11 +14,14 @@
 
 namespace duckdb {
 
-enum class VacuumOptions : int { VACUUM = 1 << 0, ANALYZE = 1 << 1 };
+struct VacuumOptions {
+	bool vacuum;
+	bool analyze;
+};
 
 struct VacuumInfo : public ParseInfo {
 public:
-	explicit VacuumInfo(const VacuumOptions &options) : options(options), has_table(false) {};
+	explicit VacuumInfo(VacuumOptions options) : options(options), has_table(false) {};
 
 	unique_ptr<VacuumInfo> Copy() {
 		auto result = make_unique<VacuumInfo>(options);
@@ -29,27 +32,13 @@ public:
 		return result;
 	}
 
-	bool Vacuum() {
-		return HasOption(VacuumOptions::VACUUM);
-	}
-
-	bool Analyze() {
-		return HasOption(VacuumOptions::ANALYZE);
-	}
-
-public:
-	//! Bitmap of options set by the parser
 	const VacuumOptions options;
 
+public:
 	bool has_table;
 	unique_ptr<TableRef> ref;
 	unique_ptr<BoundBaseTableRef> bound_ref;
 	vector<string> columns;
-
-private:
-	bool HasOption(const VacuumOptions &option) {
-		return int(options) & int(option);
-	}
 };
 
 } // namespace duckdb
