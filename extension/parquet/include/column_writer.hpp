@@ -61,6 +61,21 @@ public:
 	                                                      bool can_have_nulls = true);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) = 0;
+
+	//! indicates whether the write need to analyse the data before preparing it
+	virtual bool HasAnalyze() {
+		return false;
+	}
+
+	virtual void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) {
+		throw NotImplementedException("Writer does not need analysis");
+	}
+
+	//! Called after all data has been passed to Analyze
+	virtual void FinalizeAnalyze(ColumnWriterState &state) {
+		throw NotImplementedException("Writer does not need analysis");
+	}
+
 	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) = 0;
 
 	virtual void BeginWrite(ColumnWriterState &state) = 0;

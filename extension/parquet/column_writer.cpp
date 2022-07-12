@@ -132,6 +132,7 @@ void RleBpEncoder::WriteRun(Serializer &writer) {
 	// write the header of the run
 	VarintEncode(current_run_count << 1, writer);
 	// now write the value
+	D_ASSERT(last_value >> (byte_width * 8) == 0);
 	switch (byte_width) {
 	case 1:
 		writer.Write<uint8_t>(last_value);
@@ -330,6 +331,7 @@ public:
 	//! We limit the uncompressed page size to 100MB
 	// The max size in Parquet is 2GB, but we choose a more conservative limit
 	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
+	static constexpr const idx_t MAX_UNCOMPRESSED_DICT_PAGE_SIZE = 10 * MAX_UNCOMPRESSED_PAGE_SIZE;
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
@@ -1147,20 +1149,26 @@ public:
 	}
 	~StringColumnWriterState() override = default;
 
-	unordered_map<string, idx_t> dictionary;
+	// analysis state
+	idx_t estimated_dict_page_size = 0;
+	idx_t estimated_rle_pages_size = 0;
+	idx_t estimated_plain_size = 0;
+
+	// Dictionary
+	unordered_map<string, uint32_t> dictionary;
 	// key_bit_width== 0 signifies the chunk is written in plain encoding
 	uint32_t key_bit_width;
 };
 
 class StringWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StringWriterPageState(uint32_t bit_width, unordered_map<string, idx_t> &values)
+	explicit StringWriterPageState(uint32_t bit_width, const unordered_map<string, uint32_t> &values)
 	    : bit_width(bit_width), dictionary(values), encoder(bit_width), written_value(false) {
 	}
 
 	// if 0, we're writing a plain page
 	uint32_t bit_width;
-	unordered_map<string, idx_t> dictionary;
+	const unordered_map<string, uint32_t> &dictionary;
 	RleBpEncoder encoder;
 	bool written_value;
 };
@@ -1184,19 +1192,21 @@ public:
 		return move(result);
 	}
 
-public:
-	void Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
+	bool HasAnalyze() override {
+		return true;
+	}
+
+	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
 		auto &state = (StringColumnWriterState &)state_p;
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 		idx_t parent_index = state.definition_levels.size();
 		auto &validity = FlatVector::Validity(vector);
 		idx_t vector_index = 0;
-		idx_t new_value_index = 0;
-		idx_t last_value_index = -1;
+		uint32_t new_value_index = state.dictionary.size();
+		uint32_t last_value_index = -1;
+		idx_t run_length = 0;
 		idx_t run_count = 0;
-		idx_t total_dict_size = 0;
-		idx_t total_plain_size = 0;
 		auto strings = FlatVector::GetData<string_t>(vector);
 		for (idx_t i = 0; i < vcount; i++) {
 
@@ -1205,35 +1215,44 @@ public:
 			}
 
 			if (validity.RowIsValid(vector_index)) {
-				run_count++;
+				run_length++;
 				const auto &value = strings[vector_index].GetString();
 				auto found = state.dictionary.insert(unordered_map<string, idx_t>::value_type(value, new_value_index));
-				total_plain_size += value.size() + 4; // 4 bytes for length
+				state.estimated_plain_size += value.size() + 4; // 4 bytes for length
 				if (found.second) {
 					// string didn't exist yet in the dictionary
 					new_value_index++;
-					total_dict_size += value.size() + 4; // 4 bytes for length
+					state.estimated_dict_page_size += value.size() + 4; // 4 bytes for length
 				}
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
-					total_dict_size +=
-					    (RleBpDecoder::ComputeBitWidth(new_value_index) + 7) / 8 + GetVarintSize(run_count);
-					run_count = 0;
+					// we will add the value index size later, when we know the total number of keys
+					state.estimated_rle_pages_size += GetVarintSize(run_length);
+					run_length = 0;
+					run_count++;
 					last_value_index = found.first->second;
 				}
 			}
 			vector_index++;
 		}
-		state.key_bit_width = RleBpDecoder::ComputeBitWidth(new_value_index);
+		// Add the costs of keys sizes. We don't know yet how many bytes the keys need as we haven't
+		// seen all the values. therefore we use an over-estimation of
+		state.estimated_rle_pages_size += 4 * run_count;
+	}
 
-		// check if a dictionary will require more space than a plain write
-		if (total_dict_size > total_plain_size) {
+	void FinalizeAnalyze(ColumnWriterState &state_p) override {
+		auto &state = (StringColumnWriterState &)state_p;
+
+		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
+		// be too large
+		if (state.estimated_dict_page_size > MAX_UNCOMPRESSED_DICT_PAGE_SIZE ||
+		    state.estimated_rle_pages_size + state.estimated_dict_page_size > state.estimated_plain_size) {
 			// clearing the dictionary signals a plain write
 			state.dictionary.clear();
 			state.key_bit_width = 0;
+		} else {
+			state.key_bit_width = RleBpDecoder::ComputeBitWidth(state.dictionary.size());
 		}
-
-		BasicColumnWriter::Prepare(state_p, parent, vector, count);
 	}
 
 	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
@@ -1302,6 +1321,7 @@ public:
 			// first we need to sort the values in index order
 			auto values = vector<string>(state.dictionary.size());
 			for (auto iter = state.dictionary.cbegin(); iter != state.dictionary.cend(); iter++) {
+				D_ASSERT(values[iter->second].empty());
 				values[iter->second] = iter->first;
 			}
 			// first write the contents of the dictionary page to a temporary buffer
@@ -1459,6 +1479,9 @@ public:
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
+	bool HasAnalyze() override;
+	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+	void FinalizeAnalyze(ColumnWriterState &state) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 
 	void BeginWrite(ColumnWriterState &state) override;
@@ -1486,6 +1509,37 @@ unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_pa
 		result->child_states.push_back(child_writer->InitializeWriteState(row_group));
 	}
 	return move(result);
+}
+
+bool StructColumnWriter::HasAnalyze() {
+	for (auto &child_writer : child_writers) {
+		if (child_writer->HasAnalyze()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void StructColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+	auto &state = (StructColumnWriterState &)state_p;
+	auto &child_vectors = StructVector::GetEntries(vector);
+	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
+		// Need to check again. It might be that just one child needs it but the rest not
+		if (child_writers[child_idx]->HasAnalyze()) {
+			child_writers[child_idx]->Analyze(*state.child_states[child_idx], &state_p, *child_vectors[child_idx],
+			                                  count);
+		}
+	}
+}
+
+void StructColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
+	auto &state = (StructColumnWriterState &)state_p;
+	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
+		// Need to check again. It might be that just one child needs it but the rest not
+		if (child_writers[child_idx]->HasAnalyze()) {
+			child_writers[child_idx]->FinalizeAnalyze(*state.child_states[child_idx]);
+		}
+	}
 }
 
 void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
@@ -1546,6 +1600,9 @@ public:
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
+	bool HasAnalyze() override;
+	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
+	void FinalizeAnalyze(ColumnWriterState &state) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 
 	void BeginWrite(ColumnWriterState &state) override;
@@ -1570,6 +1627,21 @@ unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parq
 	auto result = make_unique<ListColumnWriterState>(row_group, row_group.columns.size());
 	result->child_state = child_writer->InitializeWriteState(row_group);
 	return move(result);
+}
+
+bool ListColumnWriter::HasAnalyze() {
+	return child_writer->HasAnalyze();
+}
+void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+	auto &state = (ListColumnWriterState &)state_p;
+	auto &list_child = ListVector::GetEntry(vector);
+	auto list_count = ListVector::GetListSize(vector);
+	child_writer->Analyze(*state.child_state, &state_p, list_child, list_count);
+}
+
+void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
+	auto &state = (ListColumnWriterState &)state_p;
+	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
