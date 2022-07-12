@@ -24,7 +24,7 @@ class TableDataWriter {
 
 public:
 	TableDataWriter(DatabaseInstance &db, CheckpointManager &checkpoint_manager, TableCatalogEntry &table,
-	                MetaBlockWriter &meta_writer, MetaBlockWriter &meta_data_writer);
+	                MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
 	~TableDataWriter();
 
 	void WriteTableData();
