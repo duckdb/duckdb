@@ -48,6 +48,14 @@ add_custom_command(
   USES_TERMINAL
   COMMAND ${MVN_COMMAND} package -Dmaven.test.skip=true
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_custom_command(
+  TARGET dummy_jdbc_target
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy target/duckdb_jdbc-1.0.0-SNAPSHOT.jar
+          duckdb_jdbc.jar
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_test(
   USES_TERMINAL
   COMMAND ${MVN_COMMAND} test
