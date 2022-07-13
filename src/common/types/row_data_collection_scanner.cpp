@@ -23,12 +23,6 @@ void RowDataCollectionScanner::SwizzleBlocks(RowDataCollection &swizzled_block_c
 		return;
 	}
 
-	// If there is only one block of each type, then we are already done.
-	if (string_heap.blocks.size() == swizzled_block_collection.blocks.size() && string_heap.blocks.size() == 1) {
-		swizzled_string_heap.Merge(string_heap);
-		return;
-	}
-
 	// We create one heap block per data block and swizzle the pointers
 	auto &buffer_manager = swizzled_block_collection.buffer_manager;
 	auto &heap_blocks = string_heap.blocks;

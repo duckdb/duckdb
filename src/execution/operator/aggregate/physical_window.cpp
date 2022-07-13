@@ -118,8 +118,9 @@ public:
 	}
 
 	idx_t GroupCount() const {
-		return std::accumulate(hash_groups.begin(), hash_groups.end(), 0,
-		                       [&](const idx_t &n, const HashGroupPtr &group) { return n + group->count; });
+		return std::accumulate(
+		    hash_groups.begin(), hash_groups.end(), 0,
+		    [&](const idx_t &n, const HashGroupPtr &group) { return n + (group ? idx_t(group->count) : 0); });
 	}
 
 	WindowGlobalHashGroup *GetHashGroup(idx_t group) {
@@ -581,7 +582,7 @@ void WindowGlobalSinkState::Finalize() {
 
 		over_chunk.Reset();
 		for (idx_t c = 0; c < over_chunk.ColumnCount(); ++c) {
-			over_chunk.data[c].Reference(payload_chunk.data[input_count]);
+			over_chunk.data[c].Reference(payload_chunk.data[input_count + c]);
 		}
 		over_chunk.SetCardinality(payload_chunk);
 
