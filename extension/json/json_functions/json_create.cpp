@@ -1,5 +1,6 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 namespace duckdb {
 
@@ -75,7 +76,9 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 	unordered_map<string, unique_ptr<Vector>> const_struct_names;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->return_type;
-		if (type == LogicalTypeId::SQLNULL) {
+		if (arguments[i]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		} else if (type == LogicalTypeId::SQLNULL) {
 			// This is needed for macro's
 			bound_function.arguments.push_back(type);
 		} else if (object && i % 2 == 0) {
@@ -116,6 +119,9 @@ static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFu
 		throw InvalidInputException("array_to_json() takes exactly one argument");
 	}
 	auto arg_id = arguments[0]->return_type.id();
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("array_to_json() argument type must be LIST");
 	}
@@ -128,6 +134,9 @@ static unique_ptr<FunctionData> RowToJSONBind(ClientContext &context, ScalarFunc
 		throw InvalidInputException("row_to_json() takes exactly one argument");
 	}
 	auto arg_id = arguments[0]->return_type.id();
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT && arg_id != LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("row_to_json() argument type must be STRUCT");
 	}
@@ -376,7 +385,7 @@ static void ObjectFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		yyjson_mut_doc_set_root(*doc, objs[i]);
-		objects[i] = JSONCommon::WriteVal(*doc, result);
+		objects[i] = JSONCommon::WriteDoc(*doc, result);
 	}
 }
 
@@ -403,7 +412,7 @@ static void ArrayFunction(DataChunk &args, ExpressionState &state, Vector &resul
 	auto objects = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
 		yyjson_mut_doc_set_root(*doc, arrs[i]);
-		objects[i] = JSONCommon::WriteVal(*doc, result);
+		objects[i] = JSONCommon::WriteDoc(*doc, result);
 	}
 }
 
@@ -424,7 +433,7 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {
 			yyjson_mut_doc_set_root(*doc, vals[i]);
-			objects[i] = JSONCommon::WriteVal(*doc, result);
+			objects[i] = JSONCommon::WriteDoc(*doc, result);
 		} else {
 			result_validity.SetInvalid(i);
 		}
@@ -432,35 +441,33 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetObjectFunction() {
-	auto fun =
-	    ScalarFunction("json_object", {}, LogicalType::JSON, ObjectFunction, false, JSONObjectBind, nullptr, nullptr);
+	auto fun = ScalarFunction("json_object", {}, LogicalType::JSON, ObjectFunction, JSONObjectBind);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayFunction() {
-	auto fun =
-	    ScalarFunction("json_array", {}, LogicalType::JSON, ArrayFunction, false, JSONArrayBind, nullptr, nullptr);
+	auto fun = ScalarFunction("json_array", {}, LogicalType::JSON, ArrayFunction, JSONArrayBind);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetToJSONFunction() {
-	auto fun = ScalarFunction("to_json", {}, LogicalType::JSON, ToJSONFunction, false, ToJSONBind, nullptr, nullptr);
+	auto fun = ScalarFunction("to_json", {}, LogicalType::JSON, ToJSONFunction, ToJSONBind);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetArrayToJSONFunction() {
-	auto fun = ScalarFunction("array_to_json", {}, LogicalType::JSON, ToJSONFunction, false, ArrayToJSONBind, nullptr,
-	                          nullptr);
+	auto fun = ScalarFunction("array_to_json", {}, LogicalType::JSON, ToJSONFunction, ArrayToJSONBind);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetRowToJSONFunction() {
-	auto fun =
-	    ScalarFunction("row_to_json", {}, LogicalType::JSON, ToJSONFunction, false, RowToJSONBind, nullptr, nullptr);
+	auto fun = ScalarFunction("row_to_json", {}, LogicalType::JSON, ToJSONFunction, RowToJSONBind);
 	fun.varargs = LogicalType::ANY;
 	return CreateScalarFunctionInfo(fun);
 }

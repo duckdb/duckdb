@@ -1,10 +1,10 @@
 
 #include "duckdb/function/macro_function.hpp"
-#include "duckdb/function/scalar_macro_function.hpp"
 
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -22,7 +22,8 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 
 	// separate positional and default arguments
 	for (auto &arg : function_expr.children) {
-		if (arg->type == ExpressionType::VALUE_CONSTANT && !arg->alias.empty()) {
+		if ((arg->type == ExpressionType::VALUE_CONSTANT || arg->type == ExpressionType::VALUE_PARAMETER) &&
+		    !arg->alias.empty()) {
 			// default argument
 			if (macro_def.default_parameters.find(arg->alias) == macro_def.default_parameters.end()) {
 				return StringUtil::Format("Macro %s does not have default parameter %s!", name, arg->alias);
@@ -74,6 +75,18 @@ void MacroFunction::CopyProperties(MacroFunction &other) {
 	for (auto &kv : default_parameters) {
 		other.default_parameters[kv.first] = kv.second->Copy();
 	}
+}
+
+string MacroFunction::ToSQL(const string &schema, const string &name) {
+	vector<string> param_strings;
+	for (auto &param : parameters) {
+		param_strings.push_back(param->ToString());
+	}
+	for (auto &named_param : default_parameters) {
+		param_strings.push_back(StringUtil::Format("%s := %s", named_param.first, named_param.second->ToString()));
+	}
+
+	return StringUtil::Format("CREATE MACRO %s.%s(%s) AS ", schema, name, StringUtil::Join(param_strings, ", "));
 }
 
 } // namespace duckdb

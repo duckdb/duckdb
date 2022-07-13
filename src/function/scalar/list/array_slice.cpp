@@ -1,11 +1,11 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -184,6 +184,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		bound_function.arguments[1] = LogicalType::INTEGER;
 		bound_function.arguments[2] = LogicalType::INTEGER;
 		break;
+	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
 		bound_function.return_type = LogicalType::SQLNULL;
@@ -198,8 +199,9 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ArraySliceFunction, false, false, ArraySliceBind);
+	                   ArraySliceFunction, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"array_slice", "list_slice"}, fun);
 }
 

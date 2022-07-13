@@ -1,0 +1,86 @@
+# name: test/sql/prepared/prepare_mixed_types.test
+# description: Prepared parameters with mixed types
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+# first type up-casts to second type
+statement ok
+PREPARE v1 AS SELECT $1::INT, $1::BIGINT
+
+query II
+EXECUTE v1(42)
+----
+42	42
+
+# second type up-casts to second type
+statement ok
+PREPARE v2 AS SELECT $1::BIGINT, $1::INT
+
+query II
+EXECUTE v2(42)
+----
+42	42
+
+# no conversion possible between types
+statement ok
+PREPARE v3 AS SELECT $1::BIGINT, $1::UBIGINT
+
+query II
+EXECUTE v3(42)
+----
+42	42
+
+statement error
+EXECUTE v3(-1)
+
+# mixed varchar types
+statement ok
+PREPARE v4 AS SELECT $1::VARCHAR, $1::DATE
+
+query II
+EXECUTE v4('1992-01-01')
+----
+1992-01-01	1992-01-01
+
+# multiple scattered upcasts
+statement ok
+PREPARE v5 AS SELECT $1::INT, $1::BIGINT, $1::TINYINT, $1::HUGEINT, $1::SMALLINT
+
+query IIIII
+EXECUTE v5(42)
+----
+42	42	42	42	42
+
+# multiple scattered up-casts plus no up-cast possible in the end
+statement ok
+PREPARE v6 AS SELECT $1::INT, $1::BIGINT, $1::TINYINT, $1::UBIGINT, $1::SMALLINT
+
+query IIIII
+EXECUTE v6(42)
+----
+42	42	42	42	42
+
+# concat
+statement ok
+PREPARE v7 AS SELECT CONCAT($1::TINYINT, $1)
+
+query I
+EXECUTE v7(42)
+----
+4242
+
+# complex prepare with mixed types
+statement ok
+PREPARE v8 AS SELECT * FROM (values ('body')) t(field) WHERE CASE WHEN $1 IS NULL THEN 1 ELSE field IN (SELECT * FROM (SELECT UNNEST(string_split($1, ','))) AS fsq) END
+
+statement ok
+EXECUTE v8('body')
+
+# mixed types with unnest
+statement ok
+PREPARE v9 AS SELECT UNNEST($1) UNION ALL SELECT * FROM range(1) WHERE $1::INT[]=[1]
+
+statement ok
+EXECUTE v9([1])

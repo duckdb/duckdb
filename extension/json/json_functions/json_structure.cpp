@@ -201,7 +201,7 @@ static inline string_t Structure(yyjson_val *val, Vector &result) {
 	auto structure = ConvertStructure(BuildStructure(val, *structure_doc), *structure_doc);
 	D_ASSERT(structure);
 	yyjson_mut_doc_set_root(*structure_doc, structure);
-	return JSONCommon::WriteVal(*structure_doc, result);
+	return JSONCommon::WriteDoc(*structure_doc, result);
 }
 
 static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -209,8 +209,8 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
-	return CreateScalarFunctionInfo(ScalarFunction("json_structure", {LogicalType::JSON}, LogicalType::JSON,
-	                                               StructureFunction, false, nullptr, nullptr, nullptr));
+	return CreateScalarFunctionInfo(
+	    ScalarFunction("json_structure", {LogicalType::JSON}, LogicalType::JSON, StructureFunction));
 }
 
 } // namespace duckdb

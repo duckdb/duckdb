@@ -88,7 +88,7 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 idx_t FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
 	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
-		return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
+		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
 	}
 	// fallback: try GlobalMemoryStatusEx
 	MEMORYSTATUSEX mem_state;

@@ -14,6 +14,7 @@
 namespace duckdb {
 
 struct AggregateObject;
+struct AggregateFilterData;
 class DataChunk;
 class RowLayout;
 class RowDataCollection;
@@ -34,7 +35,8 @@ struct RowOperations {
 	//! update - aligned addresses
 	static void UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx, idx_t count);
 	//! filtered update - aligned addresses
-	static void UpdateFilteredStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx);
+	static void UpdateFilteredStates(AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
+	                                 DataChunk &payload, idx_t arg_idx);
 	//! combine - unaligned addresses, updated
 	static void CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count);
 	//! finalize - unaligned addresses, updated
@@ -99,7 +101,7 @@ struct RowOperations {
 	static void SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
 	//! Swizzles the base pointer of each row to offset within heap block
 	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
-	                               const idx_t count);
+	                               const idx_t count, const idx_t base_offset = 0);
 	//! Unswizzles all offsets back to pointers
 	static void UnswizzlePointers(const RowLayout &layout, const data_ptr_t base_row_ptr,
 	                              const data_ptr_t base_heap_ptr, const idx_t count);

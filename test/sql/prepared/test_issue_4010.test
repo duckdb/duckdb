@@ -1,0 +1,12 @@
+# name: test/sql/prepared/test_issue_4010.test
+# description: Issue 4010: SIGSEGV in duckdb_jdbc
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE table T1(A0 TIMESTAMP, A1 INTEGER, A2 VARCHAR, A3 VARCHAR, A4 INTEGER, A5 DOUBLE)
+
+statement ok
+PREPARE v1 AS SELECT (SUM(CASE WHEN ((T1.A2 = ($1)::text) AND (T1.A3 = ($1)::text)) THEN T1.A4 ELSE (0)::int END) / ((SUM(CASE WHEN ((T1.A2 = ($1)::text) AND (T1.A3 = ($1)::text)) THEN T1.A4 ELSE (0)::int END) + SUM(CASE WHEN ((T1.A2 = ($2)::text) AND (T1.A3 = ($1)::text)) THEN T1.A4 ELSE (0)::int END)))::float8) AS A00036933 FROM T1

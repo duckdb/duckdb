@@ -56,7 +56,7 @@ PRAGMA enable_profiling='json'
 query II
 EXPLAIN ANALYZE SELECT SUM(i) FROM integers
 ----
-analyzed_plan	<REGEX>:.*integers.*
+analyzed_plan	<REGEX>:.*integers.*"timings":.*
 
 statement ok
 PRAGMA disable_profiling

@@ -147,8 +147,8 @@ int MergeSorter::CompareUsingGlobalIndex(SBScanState &l, SBScanState &r, const i
 
 	l.PinRadix(l.block_idx);
 	r.PinRadix(r.block_idx);
-	data_ptr_t l_ptr = l.radix_handle->Ptr() + l.entry_idx * sort_layout.entry_size;
-	data_ptr_t r_ptr = r.radix_handle->Ptr() + r.entry_idx * sort_layout.entry_size;
+	data_ptr_t l_ptr = l.radix_handle.Ptr() + l.entry_idx * sort_layout.entry_size;
+	data_ptr_t r_ptr = r.radix_handle.Ptr() + r.entry_idx * sort_layout.entry_size;
 
 	int comp_res;
 	if (sort_layout.all_constant) {
@@ -342,7 +342,7 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 
 	RowDataBlock *result_block = &result->radix_sorting_data.back();
 	auto result_handle = buffer_manager.Pin(result_block->block);
-	data_ptr_t result_ptr = result_handle->Ptr() + result_block->count * sort_layout.entry_size;
+	data_ptr_t result_ptr = result_handle.Ptr() + result_block->count * sort_layout.entry_size;
 
 	idx_t copied = 0;
 	while (copied < count) {
@@ -418,15 +418,15 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 	// Result rows to write to
 	RowDataBlock *result_data_block = &result_data.data_blocks.back();
 	auto result_data_handle = buffer_manager.Pin(result_data_block->block);
-	data_ptr_t result_data_ptr = result_data_handle->Ptr() + result_data_block->count * row_width;
+	data_ptr_t result_data_ptr = result_data_handle.Ptr() + result_data_block->count * row_width;
 	// Result heap to write to (if needed)
 	RowDataBlock *result_heap_block;
-	unique_ptr<BufferHandle> result_heap_handle;
+	BufferHandle result_heap_handle;
 	data_ptr_t result_heap_ptr;
 	if (!layout.AllConstant() && state.external) {
 		result_heap_block = &result_data.heap_blocks.back();
 		result_heap_handle = buffer_manager.Pin(result_heap_block->block);
-		result_heap_ptr = result_heap_handle->Ptr() + result_heap_block->byte_offset;
+		result_heap_ptr = result_heap_handle.Ptr() + result_heap_block->byte_offset;
 	}
 
 	idx_t copied = 0;
@@ -530,7 +530,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					idx_t new_capacity = result_heap_block->byte_offset + copy_bytes;
 					buffer_manager.ReAllocate(result_heap_block->block, new_capacity);
 					result_heap_block->capacity = new_capacity;
-					result_heap_ptr = result_heap_handle->Ptr() + result_heap_block->byte_offset;
+					result_heap_ptr = result_heap_handle.Ptr() + result_heap_block->byte_offset;
 				}
 				D_ASSERT(result_heap_block->byte_offset + copy_bytes <= result_heap_block->capacity);
 				// Now copy the heap data
@@ -554,11 +554,11 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 			} else if (r_done) {
 				// Right side is exhausted - flush left
 				FlushBlobs(layout, l_count, l_ptr, l.entry_idx, l_heap_ptr, result_data_block, result_data_ptr,
-				           result_heap_block, *result_heap_handle, result_heap_ptr, copied, count);
+				           result_heap_block, result_heap_handle, result_heap_ptr, copied, count);
 			} else {
 				// Left side is exhausted - flush right
 				FlushBlobs(layout, r_count, r_ptr, r.entry_idx, r_heap_ptr, result_data_block, result_data_ptr,
-				           result_heap_block, *result_heap_handle, result_heap_ptr, copied, count);
+				           result_heap_block, result_heap_handle, result_heap_ptr, copied, count);
 			}
 			D_ASSERT(result_data_block->count == result_heap_block->count);
 		}

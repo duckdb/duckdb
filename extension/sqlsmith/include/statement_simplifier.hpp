@@ -67,6 +67,7 @@ private:
 	void Simplify(OrderModifier &modifier);
 
 	void SimplifyExpression(unique_ptr<ParsedExpression> &expr);
+	void Simplify(CommonTableExpressionMap &cte_map);
 };
 
 } // namespace duckdb

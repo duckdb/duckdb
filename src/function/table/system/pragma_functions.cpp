@@ -67,7 +67,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());
-	output.SetValue(5, count, Value::BOOLEAN(f.has_side_effects));
+	output.SetValue(5, count, Value::BOOLEAN(f.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS));
 
 	count++;
 }

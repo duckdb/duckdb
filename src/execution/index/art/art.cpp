@@ -14,7 +14,6 @@ ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>
          IndexConstraintType constraint_type)
     : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type) {
 	tree = nullptr;
-	expression_result.Initialize(logical_types);
 	is_little_endian = Radix::IsLittleEndian();
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
@@ -256,7 +255,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// first resolve the expressions for the index
 	ExecuteExpressions(appended_data, expression_result);
@@ -358,7 +357,7 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 //===--------------------------------------------------------------------===//
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// first resolve the expressions
 	ExecuteExpressions(input, expression_result);
@@ -859,7 +858,7 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 	}
 
 	DataChunk expression_result;
-	expression_result.Initialize(logical_types);
+	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// unique index, check
 	lock_guard<mutex> l(lock);
