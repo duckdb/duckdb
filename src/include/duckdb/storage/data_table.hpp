@@ -21,9 +21,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/statistics/column_statistics.hpp"
-
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/table_index.hpp"
 #include "duckdb/storage/table_statistics.hpp"
 #include "duckdb/transaction/local_storage.hpp"
