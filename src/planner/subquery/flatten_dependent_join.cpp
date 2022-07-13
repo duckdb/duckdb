@@ -349,22 +349,75 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT: {
 		auto &limit = (LogicalLimit &)*plan;
-		if (limit.offset_val > 0) {
-			throw ParserException("OFFSET not supported in correlated subquery");
+		if (limit.limit || limit.offset) {
+			throw ParserException("Non-constant limit or offset not supported in correlated subquery");
 		}
-		if (limit.limit) {
-			throw ParserException("Non-constant limit not supported in correlated subquery");
-		}
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]), parent_propagate_null_values);
-		if (limit.limit_val == 0) {
-			// limit = 0 means we return zero columns here
-			return plan;
+		auto rownum_alias = "limit_rownum";
+		unique_ptr<LogicalOperator> child;
+		unique_ptr<LogicalOrder> order_by;
+
+		// check if the direct child of this LIMIT node is an ORDER BY node, if so, keep it separate
+		// this is done for an optimization to avoid having to compute the total order
+		if (plan->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+			order_by = unique_ptr_cast<LogicalOperator, LogicalOrder>(move(plan->children[0]));
+			child = PushDownDependentJoinInternal(move(order_by->children[0]), parent_propagate_null_values);
 		} else {
-			// limit > 0 does nothing
-			return move(plan->children[0]);
+			child = PushDownDependentJoinInternal(move(plan->children[0]), parent_propagate_null_values);
 		}
+		auto child_column_count = child->GetColumnBindings().size();
+		// we push a row_number() OVER (PARTITION BY [correlated columns])
+		auto window_index = binder.GenerateTableIndex();
+		auto window = make_unique<LogicalWindow>(window_index);
+		auto row_number = make_unique<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT,
+		                                                     nullptr, nullptr);
+		auto partition_count = perform_delim ? correlated_columns.size() : 1;
+		for (idx_t i = 0; i < partition_count; i++) {
+			auto &col = correlated_columns[i];
+			auto colref = make_unique<BoundColumnRefExpression>(
+			    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+			row_number->partitions.push_back(move(colref));
+		}
+		if (order_by) {
+			// optimization: if there is an ORDER BY node followed by a LIMIT
+			// rather than computing the entire order, we push the ORDER BY expressions into the row_num computation
+			// this way, the order only needs to be computed per partition
+			row_number->orders = move(order_by->orders);
+		}
+		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
+		window->expressions.push_back(move(row_number));
+		window->children.push_back(move(child));
+
+		// add a filter based on the row_number
+		// the filter we add is "row_number > offset AND row_number <= offset + limit"
+		auto filter = make_unique<LogicalFilter>();
+		unique_ptr<Expression> condition;
+		auto row_num_ref =
+		    make_unique<BoundColumnRefExpression>(rownum_alias, LogicalType::BIGINT, ColumnBinding(window_index, 0));
+		auto upper_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val + limit.limit_val));
+		condition = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO,
+		                                                   row_num_ref->Copy(), move(upper_bound));
+		// we only need to add "row_number >= offset + 1" if offset is bigger than 0
+		if (limit.offset_val > 0) {
+			auto lower_bound = make_unique<BoundConstantExpression>(Value::BIGINT(limit.offset_val));
+			auto lower_comp = make_unique<BoundComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN,
+			                                                         row_num_ref->Copy(), move(lower_bound));
+			auto conj = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(lower_comp),
+			                                                    move(condition));
+			condition = move(conj);
+		}
+		filter->expressions.push_back(move(condition));
+		filter->children.push_back(move(window));
+		// we prune away the row_number after the filter clause using the projection map
+		for (idx_t i = 0; i < child_column_count; i++) {
+			filter->projection_map.push_back(i);
+		}
+		return move(filter);
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
+		// NOTE: limit percent could be supported in a manner similar to the LIMIT above
+		// but instead of filtering by an exact number of rows, the limit should be expressed as
+		// COUNT computed over the partition multiplied by the percentage
 		throw ParserException("Limit percent operator not supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
@@ -423,7 +476,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
-		throw ParserException("ORDER BY not supported in correlated subquery");
+		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
+		return plan;
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	}

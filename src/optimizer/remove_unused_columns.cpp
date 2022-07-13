@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
@@ -13,8 +14,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
-
-#include <map>
+#include "duckdb/planner/operator/logical_simple.hpp"
 
 namespace duckdb {
 
@@ -238,6 +238,23 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
 		everything_referenced = true;
 		break;
+	}
+	case LogicalOperatorType::LOGICAL_VACUUM: {
+		auto &vacuum = (LogicalSimple &)op;
+		auto &info = (VacuumInfo &)*vacuum.info;
+		if (!info.bound_ref) {
+			break;
+		}
+
+		auto &get = (LogicalGet &)*info.bound_ref->get;
+		for (auto &col : info.columns) {
+			for (idx_t col_idx = 0; col_idx < get.names.size(); col_idx++) {
+				if (get.names[col_idx] == col) {
+					get.column_ids.push_back(col_idx);
+					break;
+				}
+			}
+		}
 	}
 	default:
 		break;

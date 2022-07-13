@@ -24,7 +24,7 @@ unique_ptr<BaseStatistics> DistinctStatistics::Copy() const {
 void DistinctStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
 	auto &other = (const DistinctStatistics &)other_p;
-	log->Merge(*other.log);
+	log = log->Merge(*other.log);
 	sample_count += other.sample_count;
 	total_count += other.total_count;
 }
@@ -54,18 +54,21 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &read
 	return make_unique<DistinctStatistics>(HyperLogLog::Deserialize(reader), sample_count, total_count);
 }
 
-void DistinctStatistics::Update(Vector &v, idx_t count) {
+void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
 	VectorData vdata;
 	v.Orrify(count, vdata);
-	Update(vdata, v.GetType(), count);
+	Update(vdata, v.GetType(), count, sample);
 }
 
-void DistinctStatistics::Update(VectorData &vdata, const LogicalType &type, idx_t count) {
+void DistinctStatistics::Update(VectorData &vdata, const LogicalType &type, idx_t count, bool sample) {
 	if (count == 0) {
 		return;
 	}
+
 	total_count += count;
-	count = MinValue<idx_t>(idx_t(SAMPLE_RATE * MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count)), count);
+	if (sample) {
+		count = MinValue<idx_t>(idx_t(SAMPLE_RATE * MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count)), count);
+	}
 	sample_count += count;
 
 	uint64_t indices[STANDARD_VECTOR_SIZE];
