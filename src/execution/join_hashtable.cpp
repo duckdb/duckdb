@@ -785,7 +785,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	finished = true;
 }
 
-void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state, Vector &addresses) {
+idx_t JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses) {
 	// scan the HT starting from the current position and check which rows from the build side did not find a match
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t found_entries = 0;
@@ -811,24 +811,27 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state, Vec
 			}
 		}
 	}
+	return found_entries;
+}
+
+void JoinHashTable::GatherFullOuter(DataChunk &result, Vector &addresses, idx_t found_entries) {
+	D_ASSERT(found_entries > 0);
 	result.SetCardinality(found_entries);
-	if (found_entries > 0) {
-		idx_t left_column_count = result.ColumnCount() - build_types.size();
-		const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
-		// set the left side as a constant NULL
-		for (idx_t i = 0; i < left_column_count; i++) {
-			Vector &vec = result.data[i];
-			vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(vec, true);
-		}
-		// gather the values from the RHS
-		for (idx_t i = 0; i < build_types.size(); i++) {
-			auto &vector = result.data[left_column_count + i];
-			D_ASSERT(vector.GetType() == build_types[i]);
-			const auto col_no = condition_types.size() + i;
-			const auto col_offset = layout.GetOffsets()[col_no];
-			RowOperations::Gather(addresses, sel_vector, vector, sel_vector, found_entries, col_offset, col_no);
-		}
+	idx_t left_column_count = result.ColumnCount() - build_types.size();
+	const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
+	// set the left side as a constant NULL
+	for (idx_t i = 0; i < left_column_count; i++) {
+		Vector &vec = result.data[i];
+		vec.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(vec, true);
+	}
+	// gather the values from the RHS
+	for (idx_t i = 0; i < build_types.size(); i++) {
+		auto &vector = result.data[left_column_count + i];
+		D_ASSERT(vector.GetType() == build_types[i]);
+		const auto col_no = condition_types.size() + i;
+		const auto col_offset = layout.GetOffsets()[col_no];
+		RowOperations::Gather(addresses, sel_vector, vector, sel_vector, found_entries, col_offset, col_no);
 	}
 }
 
@@ -1159,7 +1162,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 
 void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
 	// Get rid of partitions that we already completed
-	for (idx_t p = build_ht.partitions_start; p < build_ht.partitions_end; p++) {
+	for (idx_t p = 0; p < build_ht.partitions_start; p++) {
 		partition_block_collections[p] = nullptr;
 		if (!layout.AllConstant()) {
 			partition_string_heaps[p] = nullptr;

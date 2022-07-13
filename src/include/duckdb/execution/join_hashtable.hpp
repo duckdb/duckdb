@@ -142,8 +142,11 @@ public:
 	void Finalize();
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
-	//! Scan the HT to construct the final full outer join result after
-	void ScanFullOuter(DataChunk &result, JoinHTScanState &state, Vector &addresses);
+	//! Scan the HT to find the rows for the full outer join and return the number of found entries
+	idx_t ScanFullOuter(JoinHTScanState &state, Vector &addresses);
+	//! Construct the full outer join result given the addresses and number of found entries
+	void GatherFullOuter(DataChunk &result, Vector &addresses, idx_t found_entries);
+
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 
