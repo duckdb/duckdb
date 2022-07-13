@@ -8,20 +8,19 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
-#include "duckdb/storage/statistics/column_statistics.hpp"
-
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/table_statistics.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -213,6 +212,7 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
 
 	//! Checkpoint the table to the specified table data writer
 	BlockPointer Checkpoint(TableDataWriter &writer);
