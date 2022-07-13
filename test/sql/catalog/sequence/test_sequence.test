@@ -482,3 +482,10 @@ CREATE SEQUENCE fresh;
 
 statement error
 select currval('fresh');
+
+# convert inputs into varchar if that's not the case
+statement error
+select nextval(1 + 1);
+
+statement error
+select currval(true);

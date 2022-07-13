@@ -12,7 +12,7 @@ do
 	# calculate SHA256 hash of extension binary
 	openssl dgst -binary -sha256 $f > $f.hash
 	# encrypt hash with extension signing private key to create signature
-	openssl pkeyutl -sign -in hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
+	openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
 	# append signature to extension binary
   cat $f.sign >> $f
   # compress extension binary
