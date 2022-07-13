@@ -5,6 +5,8 @@
 # need this, else the distinct stats sampling is different
 require vector_size 1024
 
+require skip_reload
+
 statement ok
 analyze
 

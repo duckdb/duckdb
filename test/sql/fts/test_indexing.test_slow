@@ -2,6 +2,8 @@
 # description: Full text search indexing
 # group: [fts]
 
+require skip_reload
+
 require fts
 
 statement ok

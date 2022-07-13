@@ -35,7 +35,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 			extension_option.set_function(context.client, scope, target_value);
 		}
 		if (scope == SetScope::GLOBAL) {
-			config.set_variables[name] = move(target_value);
+			config.options.set_variables[name] = move(target_value);
 		} else {
 			auto &client_config = ClientConfig::GetConfig(context.client);
 			client_config.set_variables[name] = move(target_value);

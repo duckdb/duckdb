@@ -213,7 +213,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 	auto database = byte_array_to_string(env, database_j);
 	DBConfig config;
 	if (read_only) {
-		config.access_mode = AccessMode::READ_ONLY;
+		config.options.access_mode = AccessMode::READ_ONLY;
 	}
 	try {
 		auto db = new DuckDB(database, &config);

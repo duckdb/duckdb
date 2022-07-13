@@ -25,7 +25,8 @@ class WindowGlobalState : public GlobalSinkState {
 public:
 	WindowGlobalState(Allocator &allocator, const PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)), chunks(allocator),
-	      over_collection(allocator), hash_collection(allocator), mode(DBConfig::GetConfig(context).window_mode) {
+	      over_collection(allocator), hash_collection(allocator),
+	      mode(DBConfig::GetConfig(context).options.window_mode) {
 	}
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
