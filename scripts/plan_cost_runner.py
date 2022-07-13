@@ -111,10 +111,10 @@ def main():
             regressions.append((query_name, old_cost, new_cost))
             
     exit_code = 0
-    if len(improvements) > 1:
+    if len(improvements) > 0:
         print_banner("IMPROVEMENTS DETECTED")
         print_diffs(improvements)
-    if len(regressions) > 1:
+    if len(regressions) > 0:
         exit_code = 1
         print_banner("REGRESSIONS DETECTED")
         print_diffs(regressions)
