@@ -115,8 +115,12 @@ public:
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	DUCKDB_API void Flatten(idx_t count);
 	DUCKDB_API void Flatten(const SelectionVector &sel, idx_t count);
-	//! Creates a CanonicalFormat of a vector -
-	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
+	//! Creates a CanonicalFormat of a vector
+	//! The CanonicalFormat allows efficient reading of vectors regardless of their vector type
+	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
+	//! Access to the individual vector elements can be performed through data_pointer[sel_idx[i]]/validity[sel_idx[i]]
+	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
+	//! ToCanonical was originally called Orrify, as a tribute to Orri Erling who came up with it
 	DUCKDB_API void ToCanonical(idx_t count, CanonicalFormat &data);
 
 	//! Turn the vector into a sequence vector
