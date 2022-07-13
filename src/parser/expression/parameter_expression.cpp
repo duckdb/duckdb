@@ -22,6 +22,10 @@ unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	return move(copy);
 }
 
+bool ParameterExpression::Equals(const ParameterExpression *a, const ParameterExpression *b) {
+	return a->parameter_nr == b->parameter_nr;
+}
+
 hash_t ParameterExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
 	return CombineHash(duckdb::Hash(parameter_nr), result);

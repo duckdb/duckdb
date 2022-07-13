@@ -4,6 +4,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "utf8proc.hpp"
 
 namespace duckdb {
@@ -66,6 +67,9 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, F
 
 static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
 }

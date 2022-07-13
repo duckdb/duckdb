@@ -36,12 +36,14 @@ for f in $FILES
 do
 	ext=`basename $f .duckdb_extension`
 	install_path=${ext}
+	unsigned_flag=
 	if [ "$1" = "local" ]
 	then
 		install_path=${f}
+		unsigned_flag=-unsigned
 	fi
 	echo ${install_path}
-	${duckdb_path} -c "INSTALL '${install_path}'"
-	${duckdb_path} -c "LOAD '${ext}'"
+	${duckdb_path} ${unsigned_flag} -c "INSTALL '${install_path}'"
+	${duckdb_path} ${unsigned_flag} -c "LOAD '${ext}'"
 done
 ${unittest_path}

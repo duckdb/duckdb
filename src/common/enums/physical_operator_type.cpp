@@ -33,8 +33,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "STREAMING_WINDOW";
 	case PhysicalOperatorType::UNNEST:
 		return "UNNEST";
-	case PhysicalOperatorType::SIMPLE_AGGREGATE:
-		return "SIMPLE_AGGREGATE";
+	case PhysicalOperatorType::UNGROUPED_AGGREGATE:
+		return "UNGROUPED_AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
 		return "HASH_GROUP_BY";
 	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:

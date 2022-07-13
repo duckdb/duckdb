@@ -336,22 +336,19 @@ static idx_t MultipleCandidateException(const string &name, vector<T> &functions
 
 template <class T>
 static idx_t BindFunctionFromArguments(const string &name, vector<T> &functions, vector<LogicalType> &arguments,
-                                       string &error, bool &cast_parameters) {
+                                       string &error) {
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
 		// no candidates
 		return DConstants::INVALID_INDEX;
 	}
-	cast_parameters = true;
 	if (candidate_functions.size() > 1) {
 		// multiple candidates, check if there are any unknown arguments
 		bool has_parameters = false;
 		for (auto &arg_type : arguments) {
 			if (arg_type.id() == LogicalTypeId::UNKNOWN) {
-				//! there are! disable casting of parameters, but do not throw an error
-				cast_parameters = false;
-				has_parameters = true;
-				break;
+				//! there are! we could not resolve parameters in this case
+				throw ParameterNotResolvedException();
 			}
 		}
 		if (!has_parameters) {
@@ -362,25 +359,18 @@ static idx_t BindFunctionFromArguments(const string &name, vector<T> &functions,
 }
 
 idx_t Function::BindFunction(const string &name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
-                             string &error, bool &cast_parameters) {
-	return BindFunctionFromArguments(name, functions, arguments, error, cast_parameters);
-}
-
-idx_t Function::BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
-                             string &error, bool &cast_parameters) {
-	return BindFunctionFromArguments(name, functions, arguments, error, cast_parameters);
+                             string &error) {
+	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t Function::BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
                              string &error) {
-	bool cast_parameters;
-	return BindFunction(name, functions, arguments, error, cast_parameters);
+	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t Function::BindFunction(const string &name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
                              string &error) {
-	bool cast_parameters;
-	return BindFunctionFromArguments(name, functions, arguments, error, cast_parameters);
+	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 idx_t Function::BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error) {
@@ -388,8 +378,7 @@ idx_t Function::BindFunction(const string &name, vector<PragmaFunction> &functio
 	for (auto &value : info.parameters) {
 		types.push_back(value.type());
 	}
-	bool cast_parameters;
-	idx_t entry = BindFunctionFromArguments(name, functions, types, error, cast_parameters);
+	idx_t entry = BindFunctionFromArguments(name, functions, types, error);
 	if (entry == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}
@@ -413,9 +402,9 @@ vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>
 }
 
 idx_t Function::BindFunction(const string &name, vector<ScalarFunction> &functions,
-                             vector<unique_ptr<Expression>> &arguments, string &error, bool &cast_parameters) {
+                             vector<unique_ptr<Expression>> &arguments, string &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
-	return Function::BindFunction(name, functions, types, error, cast_parameters);
+	return Function::BindFunction(name, functions, types, error);
 }
 
 idx_t Function::BindFunction(const string &name, vector<AggregateFunction> &functions,
@@ -445,15 +434,10 @@ LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const L
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
-void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children,
-                                                 bool cast_parameter_expressions) {
+void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children) {
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		target_type.Verify();
-		// check if the source type is a paramter, and we have disabled casting of parameters
-		if (children[i]->return_type.id() == LogicalTypeId::UNKNOWN && !cast_parameter_expressions) {
-			continue;
-		}
 		// check if the type of child matches the type of function argument
 		// if not we need to add a cast
 		auto cast_result = RequiresCast(children[i]->return_type, target_type);
@@ -479,8 +463,7 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
                                                           vector<unique_ptr<Expression>> children, string &error,
                                                           bool is_operator, Binder *binder) {
 	// bind the function
-	bool cast_parameters;
-	idx_t best_function = Function::BindFunction(func.name, func.functions, children, error, cast_parameters);
+	idx_t best_function = Function::BindFunction(func.name, func.functions, children, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		return nullptr;
 	}
@@ -491,27 +474,23 @@ unique_ptr<Expression> ScalarFunction::BindScalarFunction(ClientContext &context
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
-				if (binder) {
-					binder->RemoveParameters(children);
-				}
 				return make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 			}
 		}
 	}
-
-	return ScalarFunction::BindScalarFunction(context, bound_function, move(children), is_operator, cast_parameters);
+	return ScalarFunction::BindScalarFunction(context, bound_function, move(children), is_operator);
 }
 
 unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientContext &context,
                                                                        ScalarFunction bound_function,
                                                                        vector<unique_ptr<Expression>> children,
-                                                                       bool is_operator, bool cast_parameters) {
+                                                                       bool is_operator) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
 	}
 	// check if we need to add casts to the children
-	bound_function.CastToFunctionArguments(children, cast_parameters);
+	bound_function.CastToFunctionArguments(children);
 
 	// now create the function
 	auto return_type = bound_function.return_type;
@@ -519,9 +498,10 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	                                            move(bind_info), is_operator);
 }
 
-unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(
-    ClientContext &context, AggregateFunction bound_function, vector<unique_ptr<Expression>> children,
-    unique_ptr<Expression> filter, bool is_distinct, unique_ptr<BoundOrderModifier> order_bys, bool cast_parameters) {
+unique_ptr<BoundAggregateExpression>
+AggregateFunction::BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
+                                         vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter,
+                                         bool is_distinct, unique_ptr<BoundOrderModifier> order_bys) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
@@ -530,7 +510,7 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(
 	}
 
 	// check if we need to add casts to the children
-	bound_function.CastToFunctionArguments(children, cast_parameters);
+	bound_function.CastToFunctionArguments(children);
 
 	// Special case: for ORDER BY aggregates, we wrap the aggregate function in a SortedAggregateFunction
 	// The children are the sort clauses and the binding contains the ordering data.

@@ -1,5 +1,6 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 namespace duckdb {
 
@@ -75,7 +76,9 @@ static unique_ptr<FunctionData> JSONCreateBindParams(ScalarFunction &bound_funct
 	unordered_map<string, unique_ptr<Vector>> const_struct_names;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &type = arguments[i]->return_type;
-		if (type == LogicalTypeId::SQLNULL) {
+		if (arguments[i]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		} else if (type == LogicalTypeId::SQLNULL) {
 			// This is needed for macro's
 			bound_function.arguments.push_back(type);
 		} else if (object && i % 2 == 0) {
@@ -116,6 +119,9 @@ static unique_ptr<FunctionData> ArrayToJSONBind(ClientContext &context, ScalarFu
 		throw InvalidInputException("array_to_json() takes exactly one argument");
 	}
 	auto arg_id = arguments[0]->return_type.id();
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (arg_id != LogicalTypeId::LIST && arg_id != LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("array_to_json() argument type must be LIST");
 	}
@@ -128,6 +134,9 @@ static unique_ptr<FunctionData> RowToJSONBind(ClientContext &context, ScalarFunc
 		throw InvalidInputException("row_to_json() takes exactly one argument");
 	}
 	auto arg_id = arguments[0]->return_type.id();
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (arguments[0]->return_type.id() != LogicalTypeId::STRUCT && arg_id != LogicalTypeId::SQLNULL) {
 		throw InvalidInputException("row_to_json() argument type must be STRUCT");
 	}
