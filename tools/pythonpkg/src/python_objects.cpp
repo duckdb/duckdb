@@ -45,10 +45,10 @@ PyDecimal::PyDecimal(py::handle &obj) {
 	auto sign = py::cast<int8_t>(as_tuple.attr("sign"));
 	signed_value = sign != 0;
 
-	auto _digits = as_tuple.attr("digits");
-	auto width = py::len(_digits);
+	auto decimal_digits = as_tuple.attr("digits");
+	auto width = py::len(decimal_digits);
 	digits.reserve(width);
-	for (auto digit : _digits) {
+	for (auto digit : decimal_digits) {
 		digits.push_back(py::cast<uint8_t>(digit));
 	}
 }
