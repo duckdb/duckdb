@@ -7,7 +7,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/database.hpp"
 
-#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/pipeline_event.hpp"

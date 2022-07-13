@@ -96,7 +96,6 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 }
 
 static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() >= 1 && args.ColumnCount() <= 3);
 	auto count = args.size();
 	Vector &lists = args.data[0];
@@ -203,7 +202,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 		for (;;) {
 			DataChunk result_chunk;
-			result_chunk.Initialize(info.payload_types);
+			result_chunk.Initialize(Allocator::DefaultAllocator(), info.payload_types);
 			result_chunk.SetCardinality(0);
 			scanner.Scan(result_chunk);
 			if (result_chunk.size() == 0) {
@@ -320,15 +319,15 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    false, false, ListNormalSortBind);
+	                    ListNormalSortBind);
 
 	// two parameters: list, order
 	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	// three parameters: list, order, null order
 	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	ScalarFunctionSet list_sort("list_sort");
 	list_sort.AddFunction(sort);
@@ -346,12 +345,11 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                            ListSortFunction, false, false, ListReverseSortBind);
+	                            ListSortFunction, ListReverseSortBind);
 
 	// two parameters: list, null order
 	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false,
-	                                       ListReverseSortBind);
+	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
 
 	ScalarFunctionSet list_reverse_sort("list_reverse_sort");
 	list_reverse_sort.AddFunction(sort_reverse);

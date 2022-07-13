@@ -29,7 +29,7 @@ struct StringDictionaryContainer {
 };
 
 struct StringScanState : public SegmentScanState {
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 };
 
 struct UncompressedStringStorage {
@@ -70,17 +70,17 @@ public:
 
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto source_data = (string_t *)data.data;
-		auto result_data = (int32_t *)(handle->node->buffer + DICTIONARY_HEADER_SIZE);
+		auto result_data = (int32_t *)(handle.Ptr() + DICTIONARY_HEADER_SIZE);
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = data.sel->get_index(offset + i);
 			auto target_idx = segment.count.load();
-			idx_t remaining_space = RemainingSpace(segment, *handle);
+			idx_t remaining_space = RemainingSpace(segment, handle);
 			if (remaining_space < sizeof(int32_t)) {
 				// string index does not fit in the block at all
 				return i;
 			}
 			remaining_space -= sizeof(int32_t);
-			auto dictionary = GetDictionary(segment, *handle);
+			auto dictionary = GetDictionary(segment, handle);
 			if (!data.validity.RowIsValid(source_idx)) {
 				// null value is stored as a copy of the last value, this is done to be able to efficiently do the
 				// string_length calculation
@@ -90,7 +90,7 @@ public:
 					result_data[target_idx] = 0;
 				}
 			} else {
-				auto end = handle->node->buffer + dictionary.end;
+				auto end = handle.Ptr() + dictionary.end;
 
 				dictionary.Verify();
 
@@ -150,7 +150,7 @@ public:
 						// now write the actual string data into the dictionary
 						memcpy(dict_pos, source_data[source_idx].GetDataUnsafe(), string_length);
 					}
-					D_ASSERT(RemainingSpace(segment, *handle) <= Storage::BLOCK_SIZE);
+					D_ASSERT(RemainingSpace(segment, handle) <= Storage::BLOCK_SIZE);
 					// place the dictionary offset into the set of vectors
 					dictionary.Verify();
 
@@ -160,7 +160,7 @@ public:
 					if (DUPLICATE_ELIMINATE) {
 						seen_strings->insert({source_data[source_idx].GetString(), dictionary.size});
 					}
-					SetDictionary(segment, *handle, dictionary);
+					SetDictionary(segment, handle, dictionary);
 				}
 			}
 			segment.count++;

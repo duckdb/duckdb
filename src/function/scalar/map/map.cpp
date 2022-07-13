@@ -150,7 +150,7 @@ static unique_ptr<FunctionData> MapBind(ClientContext &context, ScalarFunction &
 
 void MapFun::RegisterFunction(BuiltinFunctions &set) {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map", {}, LogicalTypeId::MAP, MapFunction, false, MapBind);
+	ScalarFunction fun("map", {}, LogicalTypeId::MAP, MapFunction, MapBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);

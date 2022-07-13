@@ -1,0 +1,90 @@
+# name: test/sql/subquery/scalar/array_subquery.test
+# description: Test ARRAY subquery
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# uncorrelated
+query II
+SELECT i, ARRAY(
+	SELECT 42
+) top
+FROM integers i1
+ORDER BY i
+----
+NULL	[42]
+1	[42]
+2	[42]
+3	[42]
+
+# single element
+query II
+SELECT i, ARRAY(
+	SELECT i FROM integers WHERE i1.i=i
+) top
+FROM integers i1
+ORDER BY i
+----
+NULL	[]
+1	[1]
+2	[2]
+3	[3]
+
+# multiple elements
+query II
+SELECT i, ARRAY(
+	SELECT i FROM integers WHERE i>i1.i ORDER BY i ASC NULLS FIRST
+) top
+FROM integers i1
+ORDER BY i
+----
+NULL	[]
+1	[2, 3]
+2	[3]
+3	[]
+
+# array with limit
+query II
+SELECT i, ARRAY(
+	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3
+) top
+FROM integers
+ORDER BY i
+----
+NULL	[]
+1	[1, 1, 1]
+2	[2, 2, 2]
+3	[3, 3, 3]
+
+# array with limit and offset
+query II
+SELECT i, ARRAY(
+	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3 OFFSET 3
+) top
+FROM integers
+ORDER BY i
+----
+NULL	[]
+1	[1, 1, 1]
+2	[2, 2, 2]
+3	[3, 3, 3]
+
+# offset on the edge
+query II
+SELECT i, ARRAY(
+	SELECT i1.i FROM integers i1, integers i2, integers i3, integers i4 WHERE i1.i=integers.i LIMIT 3 OFFSET 62
+) top
+FROM integers
+ORDER BY i
+----
+NULL	[]
+1	[1, 1]
+2	[2, 2]
+3	[3, 3]

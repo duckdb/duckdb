@@ -24,7 +24,7 @@ typedef vector<unique_ptr<GroupedAggregateHashTable>> HashTableList;
 
 class PartitionableHashTable {
 public:
-	PartitionableHashTable(BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
+	PartitionableHashTable(Allocator &allocator, BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
 	                       vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
 	                       vector<BoundAggregateExpression *> bindings_p);
 
@@ -38,6 +38,7 @@ public:
 	void Finalize();
 
 private:
+	Allocator &allocator;
 	BufferManager &buffer_manager;
 	vector<LogicalType> group_types;
 	vector<LogicalType> payload_types;

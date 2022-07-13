@@ -12,14 +12,14 @@ WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(DatabaseInstance &db)
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	auto &block_manager = BlockManager::GetBlockManager(db);
 	if (offset > 0) {
-		block_manager.Write(*handle->node, block_id);
+		block_manager.Write(handle.GetFileBuffer(), block_id);
 	}
 }
 
 void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result_block, int32_t &result_offset) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto &block_manager = BlockManager::GetBlockManager(db);
-	if (!handle) {
+	if (!handle.IsValid()) {
 		handle = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	}
 	// first write the length of the string
@@ -39,8 +39,9 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	string_t compressed_string((const char *)compressed_buf.get(), compressed_size);
 
 	// store sizes
-	Store<uint32_t>(compressed_size, handle->node->buffer + offset);
-	Store<uint32_t>(uncompressed_size, handle->node->buffer + offset + sizeof(uint32_t));
+	auto data_ptr = handle.Ptr();
+	Store<uint32_t>(compressed_size, data_ptr + offset);
+	Store<uint32_t>(uncompressed_size, data_ptr + offset + sizeof(uint32_t));
 
 	// now write the remainder of the string
 	offset += 2 * sizeof(uint32_t);
@@ -49,7 +50,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	while (remaining > 0) {
 		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);
 		if (to_write > 0) {
-			memcpy(handle->node->buffer + offset, strptr, to_write);
+			memcpy(data_ptr + offset, strptr, to_write);
 
 			remaining -= to_write;
 			offset += to_write;
@@ -59,7 +60,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 			// there is still remaining stuff to write
 			// first get the new block id and write it to the end of the previous block
 			auto new_block_id = block_manager.GetFreeBlockId();
-			Store<block_id_t>(new_block_id, handle->node->buffer + offset);
+			Store<block_id_t>(new_block_id, data_ptr + offset);
 			// now write the current block to disk and allocate a new block
 			AllocateNewBlock(new_block_id);
 		}
@@ -70,7 +71,7 @@ void WriteOverflowStringsToDisk::AllocateNewBlock(block_id_t new_block_id) {
 	auto &block_manager = BlockManager::GetBlockManager(db);
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
-		block_manager.Write(*handle->node, block_id);
+		block_manager.Write(handle.GetFileBuffer(), block_id);
 	}
 	offset = 0;
 	block_id = new_block_id;

@@ -30,7 +30,7 @@ Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, 
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
-	if (dataptr && type.id() == LogicalTypeId::INVALID) {
+	if (dataptr && !type.IsValid()) {
 		throw InternalException("Cannot create a vector of type INVALID!");
 	}
 }
@@ -1301,7 +1301,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	return string_buffer.EmptyString(len);
 }
 
-void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
+void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();

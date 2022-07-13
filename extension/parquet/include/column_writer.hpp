@@ -15,7 +15,7 @@ namespace duckdb {
 class BufferedSerializer;
 class ParquetWriter;
 class ColumnWriterPageState;
-class StandardColumnWriterState;
+class BasicColumnWriterState;
 
 class ColumnWriterState {
 public:
@@ -37,9 +37,6 @@ public:
 };
 
 class ColumnWriter {
-	//! We limit the uncompressed page size to 100MB
-	// The max size in Parquet is 2GB, but we choose a more conservative limit
-	static constexpr const idx_t MAX_UNCOMPRESSED_PAGE_SIZE = 100000000;
 
 public:
 	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path, idx_t max_repeat,
@@ -63,46 +60,35 @@ public:
 	                                                      idx_t max_repeat = 0, idx_t max_define = 1,
 	                                                      bool can_have_nulls = true);
 
-	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group);
-	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count);
+	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) = 0;
 
-	virtual void BeginWrite(ColumnWriterState &state);
-	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count);
-	virtual void FinalizeWrite(ColumnWriterState &state);
+	//! indicates whether the write need to analyse the data before preparing it
+	virtual bool HasAnalyze() {
+		return false;
+	}
+
+	virtual void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) {
+		throw NotImplementedException("Writer does not need analysis");
+	}
+
+	//! Called after all data has been passed to Analyze
+	virtual void FinalizeAnalyze(ColumnWriterState &state) {
+		throw NotImplementedException("Writer does not need analysis");
+	}
+
+	virtual void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) = 0;
+
+	virtual void BeginWrite(ColumnWriterState &state) = 0;
+	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
+	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, ValidityMask &validity, idx_t count,
 	                        uint16_t define_value, uint16_t null_value);
 	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat);
 
-	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
-	                 idx_t count);
-
-	virtual duckdb_parquet::format::Encoding::type GetEncoding();
-
-	void NextPage(ColumnWriterState &state_p);
-	void FlushPage(ColumnWriterState &state_p);
-	void WriteDictionary(ColumnWriterState &state_p, unique_ptr<BufferedSerializer> temp_writer, idx_t row_count);
-
-	virtual void FlushDictionary(ColumnWriterState &state, ColumnWriterStatistics *stats);
-
-	//! Initializes the state used to track statistics during writing. Only used for scalar types.
-	virtual unique_ptr<ColumnWriterStatistics> InitializeStatsState();
-	//! Retrieves the row size of a vector at the specified location. Only used for scalar types.
-	virtual idx_t GetRowSize(Vector &vector, idx_t index);
-	//! Writes a (subset of a) vector to the specified serializer. Only used for scalar types.
-	virtual void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
-	                         Vector &vector, idx_t chunk_start, idx_t chunk_end);
-
-	//! Initialize the writer for a specific page. Only used for scalar types.
-	virtual unique_ptr<ColumnWriterPageState> InitializePageState();
-	//! Flushes the writer for a specific page. Only used for scalar types.
-	virtual void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state);
-
 	void CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  unique_ptr<data_t[]> &compressed_buf);
-
-	void SetParquetStatistics(StandardColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column);
 };
 
 } // namespace duckdb

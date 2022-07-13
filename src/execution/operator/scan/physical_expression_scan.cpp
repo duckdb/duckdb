@@ -6,8 +6,8 @@ namespace duckdb {
 
 class ExpressionScanState : public OperatorState {
 public:
-	explicit ExpressionScanState(const PhysicalExpressionScan &op) : expression_index(0) {
-		temp_chunk.Initialize(op.GetTypes());
+	explicit ExpressionScanState(Allocator &allocator, const PhysicalExpressionScan &op) : expression_index(0) {
+		temp_chunk.Initialize(allocator, op.GetTypes());
 	}
 
 	//! The current position in the scan
@@ -16,8 +16,8 @@ public:
 	DataChunk temp_chunk;
 };
 
-unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ClientContext &context) const {
-	return make_unique<ExpressionScanState>(*this);
+unique_ptr<OperatorState> PhysicalExpressionScan::GetOperatorState(ExecutionContext &context) const {
+	return make_unique<ExpressionScanState>(Allocator::Get(context.client), *this);
 }
 
 OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -27,7 +27,7 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	for (; chunk.size() + input.size() <= STANDARD_VECTOR_SIZE && state.expression_index < expressions.size();
 	     state.expression_index++) {
 		state.temp_chunk.Reset();
-		EvaluateExpression(state.expression_index, &input, state.temp_chunk);
+		EvaluateExpression(Allocator::Get(context.client), state.expression_index, &input, state.temp_chunk);
 		chunk.Append(state.temp_chunk);
 	}
 	if (state.expression_index < expressions.size()) {
@@ -38,8 +38,9 @@ OperatorResultType PhysicalExpressionScan::Execute(ExecutionContext &context, Da
 	}
 }
 
-void PhysicalExpressionScan::EvaluateExpression(idx_t expression_idx, DataChunk *child_chunk, DataChunk &result) const {
-	ExpressionExecutor executor(expressions[expression_idx]);
+void PhysicalExpressionScan::EvaluateExpression(Allocator &allocator, idx_t expression_idx, DataChunk *child_chunk,
+                                                DataChunk &result) const {
+	ExpressionExecutor executor(allocator, expressions[expression_idx]);
 	if (child_chunk) {
 		child_chunk->Verify();
 		executor.Execute(*child_chunk, result);

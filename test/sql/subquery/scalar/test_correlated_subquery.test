@@ -83,13 +83,31 @@ NULL	0
 2	0
 3	0
 
-# subquery with OFFSET is not supported
-statement error
+# subquery with OFFSET
+query II
 SELECT i, (SELECT i+i1.i FROM integers LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	3
+2	4
+3	5
 
-# subquery with ORDER BY is not supported
-statement error
-SELECT i, (SELECT i+i1.i FROM integers ORDER BY 1 LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
+# subquery with ORDER BY
+query II
+SELECT i, (SELECT i+i1.i FROM integers ORDER BY i NULLS LAST LIMIT 1) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	2
+2	3
+3	4
+
+query II
+SELECT i, (SELECT i+i1.i FROM integers ORDER BY i NULLS LAST LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	3
+2	4
+3	5
 
 # correlated filter without FROM clause
 query II
