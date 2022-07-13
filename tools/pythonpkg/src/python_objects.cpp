@@ -115,8 +115,9 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 	ExponentNotRecognized();
 }
 
-static void UnsupportedWidth() {
-	throw std::runtime_error("Decimal value exceeds max supported width, failed to convert");
+static void UnsupportedWidth(uint16_t width) {
+	throw std::runtime_error("Failed to convert to a DECIMAL value with a width of " + to_string(width) +
+	                         " because it exceeds the max supported width of " + to_string(Decimal::MAX_WIDTH_INT64));
 }
 
 Value PyDecimal::ToDuckValue() {
@@ -125,7 +126,7 @@ Value PyDecimal::ToDuckValue() {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
 		uint8_t scale = exponent_value;
 		if (width > Decimal::MAX_WIDTH_INT64) {
-			UnsupportedWidth();
+			UnsupportedWidth(width);
 		}
 		int64_t value = 0;
 		for (auto it = digits.begin(); it != digits.end(); it++) {
@@ -140,7 +141,7 @@ Value PyDecimal::ToDuckValue() {
 		uint8_t scale = exponent_value;
 		width += scale;
 		if (width > Decimal::MAX_WIDTH_INT64) {
-			UnsupportedWidth();
+			UnsupportedWidth(width);
 		}
 		int64_t value = 0;
 		for (auto &digit : digits) {
