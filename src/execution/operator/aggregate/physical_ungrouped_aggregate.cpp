@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -10,9 +10,10 @@
 
 namespace duckdb {
 
-PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-                                                 idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types), estimated_cardinality),
+PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
+                                                       vector<unique_ptr<Expression>> expressions,
+                                                       idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, move(types), estimated_cardinality),
       aggregates(move(expressions)) {
 }
 
@@ -111,16 +112,16 @@ public:
 	AggregateFilterDataSet filter_set;
 };
 
-unique_ptr<GlobalSinkState> PhysicalSimpleAggregate::GetGlobalSinkState(ClientContext &context) const {
+unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<SimpleAggregateGlobalState>(aggregates);
 }
 
-unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) const {
+unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes());
 }
 
-SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                             DataChunk &input) const {
+SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
+                                                LocalSinkState &lstate, DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;
@@ -166,7 +167,8 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
+void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkState &state,
+                                         LocalSinkState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)state;
 	auto &source = (SimpleAggregateLocalState &)lstate;
 	D_ASSERT(!gstate.finished);
@@ -192,8 +194,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 	client_profiler.Flush(context.thread.profiler);
 }
 
-SinkFinalizeType PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                      GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
 
 	D_ASSERT(!gstate.finished);
@@ -212,7 +214,7 @@ public:
 	bool finished;
 };
 
-unique_ptr<GlobalSourceState> PhysicalSimpleAggregate::GetGlobalSourceState(ClientContext &context) const {
+unique_ptr<GlobalSourceState> PhysicalUngroupedAggregate::GetGlobalSourceState(ClientContext &context) const {
 	return make_unique<SimpleAggregateState>();
 }
 
@@ -230,8 +232,8 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 #endif
 }
 
-void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                      LocalSourceState &lstate) const {
+void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                         LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
 	auto &state = (SimpleAggregateState &)gstate_p;
 	D_ASSERT(gstate.finished);
@@ -252,7 +254,7 @@ void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chun
 	state.finished = true;
 }
 
-string PhysicalSimpleAggregate::ParamsToString() const {
+string PhysicalUngroupedAggregate::ParamsToString() const {
 	string result;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
