@@ -70,8 +70,12 @@ set(PROTOBUF_SOURCES
     ../../third_party/google/protobuf/util/internal/protostream_objectwriter.cc
     ../../third_party/google/protobuf/source_context.pb.cc
     ../../third_party/google/protobuf/stubs/statusor.cc
+    ../../third_party/google/protobuf/stubs/time.cc
     ../../third_party/google/protobuf/type.pb.cc
+    ../../third_party/google/protobuf/wrappers.pb.cc
+    ../../third_party/google/protobuf/struct.pb.cc
     ../../third_party/google/protobuf/util/internal/type_info.cc
+    ../../third_party/google/protobuf/util/internal/field_mask_utility.cc
     ../../third_party/google/protobuf/util/type_resolver_util.cc
     ../../third_party/google/protobuf/util/internal/utility.cc)
 

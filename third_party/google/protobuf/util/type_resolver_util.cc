@@ -48,21 +48,21 @@ namespace google {
 namespace protobuf {
 namespace util {
 namespace {
-using google::protobuf::Any;
-using google::protobuf::BoolValue;
-using google::protobuf::BytesValue;
-using google::protobuf::DoubleValue;
-using google::protobuf::Enum;
-using google::protobuf::EnumValue;
-using google::protobuf::Field;
-using google::protobuf::FloatValue;
-using google::protobuf::Int32Value;
-using google::protobuf::Int64Value;
-using google::protobuf::Option;
-using google::protobuf::StringValue;
-using google::protobuf::Type;
-using google::protobuf::UInt32Value;
-using google::protobuf::UInt64Value;
+using duckdb::google::protobuf::Any;
+using duckdb::google::protobuf::BoolValue;
+using duckdb::google::protobuf::BytesValue;
+using duckdb::google::protobuf::DoubleValue;
+using duckdb::google::protobuf::Enum;
+using duckdb::google::protobuf::EnumValue;
+using duckdb::google::protobuf::Field;
+using duckdb::google::protobuf::FloatValue;
+using duckdb::google::protobuf::Int32Value;
+using duckdb::google::protobuf::Int64Value;
+using duckdb::google::protobuf::Option;
+using duckdb::google::protobuf::StringValue;
+using duckdb::google::protobuf::Type;
+using duckdb::google::protobuf::UInt32Value;
+using duckdb::google::protobuf::UInt64Value;
 
 class DescriptorPoolTypeResolver : public TypeResolver {
 public:

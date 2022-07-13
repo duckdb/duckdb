@@ -974,7 +974,7 @@ Status ProtoStreamObjectWriter::RenderTimestamp(ProtoStreamObjectWriter *ow, con
 
 	int64 seconds;
 	int32 nanos;
-	if (!::google::protobuf::internal::ParseTime(value.ToString(), &seconds, &nanos)) {
+	if (!duckdb::google::protobuf::internal::ParseTime(value.ToString(), &seconds, &nanos)) {
 		return util::InvalidArgumentError(StrCat("Invalid time format: ", value));
 	}
 
@@ -1206,7 +1206,7 @@ void ProtoStreamObjectWriter::InitRendererMap() {
 	(*renderers_)["type.googleapis.com/google.protobuf.StringValue"] = &ProtoStreamObjectWriter::RenderWrapperType;
 	(*renderers_)["type.googleapis.com/google.protobuf.BytesValue"] = &ProtoStreamObjectWriter::RenderWrapperType;
 	(*renderers_)["type.googleapis.com/google.protobuf.Value"] = &ProtoStreamObjectWriter::RenderStructValue;
-	::google::protobuf::internal::OnShutdown(&DeleteRendererMap);
+	duckdb::google::protobuf::internal::OnShutdown(&DeleteRendererMap);
 }
 
 void ProtoStreamObjectWriter::DeleteRendererMap() {

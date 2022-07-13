@@ -23,6 +23,7 @@ public:
 	}
 	//! Serializes the substrait plan to a string
 	string SerializeToString();
+	string SerializeToJson();
 
 private:
 	//! Transform DuckDB Plan to Substrait Plan

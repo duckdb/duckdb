@@ -294,7 +294,7 @@ util::Status ProtoStreamObjectSource::RenderTimestamp(const ProtoStreamObjectSou
 		return util::InternalError(StrCat("Timestamp nanos exceeds limit for field: ", field_name));
 	}
 
-	ow->RenderString(field_name, ::google::protobuf::internal::FormatTime(seconds, nanos));
+	ow->RenderString(field_name, duckdb::google::protobuf::internal::FormatTime(seconds, nanos));
 
 	return util::Status();
 }
@@ -637,7 +637,7 @@ void ProtoStreamObjectSource::InitRendererMap() {
 	(*renderers_)["google.protobuf.Value"] = &ProtoStreamObjectSource::RenderStructValue;
 	(*renderers_)["google.protobuf.ListValue"] = &ProtoStreamObjectSource::RenderStructListValue;
 	(*renderers_)["google.protobuf.FieldMask"] = &ProtoStreamObjectSource::RenderFieldMask;
-	::google::protobuf::internal::OnShutdown(&DeleteRendererMap);
+	duckdb::google::protobuf::internal::OnShutdown(&DeleteRendererMap);
 }
 
 void ProtoStreamObjectSource::DeleteRendererMap() {

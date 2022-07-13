@@ -14,6 +14,7 @@
 #include "substrait/plan.pb.h"
 #include "substrait/algebra.pb.h"
 #include "google/protobuf/util/json_util.h"
+
 namespace duckdb {
 
 string DuckDBToSubstrait::SerializeToString() {
@@ -21,7 +22,16 @@ string DuckDBToSubstrait::SerializeToString() {
 	if (!plan.SerializeToString(&serialized)) {
 		throw InternalException("It was not possible to serialize the substrait plan");
 	}
-	plan.return serialized;
+	return serialized;
+}
+
+string DuckDBToSubstrait::SerializeToJson() {
+	string serialized;
+	auto success = google::protobuf::util::MessageToJsonString(plan, &serialized);
+	if (!success.ok()) {
+		throw InternalException("It was not possible to serialize the substrait plan");
+	}
+	return serialized;
 }
 
 string DuckDBToSubstrait::GetDecimalInternalString(Value &value) {
