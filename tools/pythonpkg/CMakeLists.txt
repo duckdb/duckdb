@@ -1,5 +1,4 @@
 include_directories(src)
-include_directories(../../third_party/fmt/include)
 
 find_package(PythonLibs)
 find_package(pybind11)
