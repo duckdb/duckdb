@@ -349,8 +349,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunction fun("list_transform", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, ListTransformBind, nullptr,
-	                   nullptr);
+	                   LogicalType::LIST(LogicalType::ANY), ListTransformFunction, ListTransformBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 
@@ -365,8 +364,7 @@ void ListTransformFun::RegisterFunction(BuiltinFunctions &set) {
 void ListFilterFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunction fun("list_filter", {LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA},
-	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr,
-	                   nullptr);
+	                   LogicalType::LIST(LogicalType::ANY), ListFilterFunction, ListFilterBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 
