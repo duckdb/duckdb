@@ -86,7 +86,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	case ExpressionClass::LAMBDA: {
 		auto &lambda_expr = (LambdaExpression &)expr;
 		callback(lambda_expr.lhs);
-		callback(lambda_expr.rhs);
+		callback(lambda_expr.expr);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
