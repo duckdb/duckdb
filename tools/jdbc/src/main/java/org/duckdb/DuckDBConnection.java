@@ -322,10 +322,12 @@ public class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
+		// TODO: support array creation
 		throw new SQLFeatureNotSupportedException();
 	}
 
 	public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
+		// TODO: support struct creation
 		throw new SQLFeatureNotSupportedException();
 	}
 

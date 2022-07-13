@@ -1,4 +1,5 @@
 import duckdb
+from re import escape
 import pandas as pd
 import numpy
 import pytest
@@ -54,40 +55,40 @@ class TestMap(object):
         def return_empty_df(df):
             return pd.DataFrame()
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match='Invalid Input Error: Expected 1 columns from UDF, got 2'):
             print(testrel.map(evil1).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match=escape('Invalid Input Error: UDF column type mismatch, expected [VARCHAR, BIGINT], got [BIGINT, BIGINT]')):
             print(testrel.map(evil2).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match=escape('Invalid Input Error: UDF column name mismatch, expected [col42, col1], got [col0, col1]')):
             print(testrel.map(evil3).df())
 
-        with pytest.raises(AttributeError):
+        with pytest.raises(AttributeError, match="'int' object has no attribute 'columns'"):
             print(testrel.map(evil4).df())
 
-        with pytest.raises(duckdb.Error):
+        with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: Python error. See above for a stack trace.'):
             print(testrel.map(evil5).df())
 
         # not a function
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match='map(): incompatible function arguments. The following argument types are supported .*'):
             print(testrel.map(42).df())
 
         # nothing passed to map
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match='frogs'):
             print(testrel.map().df())
 
         testrel.map(return_dataframe).df().equals(pd.DataFrame({'A' : [1]}))
         
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError, match='frogs'):
             testrel.map(return_big_dataframe).df()
 
         empty_rel.map(return_dataframe).df().equals(pd.DataFrame({'A' : []}))
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: No return value from Python function'):
             testrel.map(return_none).df()
 
-        with pytest.raises(Exception):
+        with pytest.raises(RuntimeError, match='Need a DataFrame with at least one column'):
             testrel.map(return_empty_df).df()
 
     def test_isse_3237(self, duckdb_cursor):
