@@ -414,6 +414,14 @@ class TestResolveObjectColumns(object):
         assert(res['nested'].dtype == np.dtype('object'))
 
 
+    def test_analyze_sample_too_small(self):
+        data = [1 for _ in range(9)] + [[1,2,3]] + [1 for _ in range(9991)]
+        x = pd.DataFrame({
+            'a': pd.Series(data=data)
+        })
+        with pytest.raises(Exception, match="Unimplemented type for cast"):
+            res = duckdb.query_df(x, "x", "select * from x").df()
+
     def test_numeric_decimal_incompatible(self):
         duckdb_conn = duckdb.connect()
         reference_query = """
