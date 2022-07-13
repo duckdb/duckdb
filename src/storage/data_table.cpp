@@ -1,23 +1,22 @@
 #include "duckdb/storage/data_table.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/constraints/list.hpp"
+#include "duckdb/planner/expression_binder/check_binder.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
-#include "duckdb/planner/expression_binder/check_binder.hpp"
-
-#include "duckdb/common/chrono.hpp"
 
 namespace duckdb {
 
@@ -1325,6 +1324,12 @@ unique_ptr<BaseStatistics> DataTable::GetStatistics(ClientContext &context, colu
 	}
 	lock_guard<mutex> stats_guard(stats_lock);
 	return column_stats[column_id]->stats->Copy();
+}
+
+void DataTable::SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun) {
+	D_ASSERT(column_id != COLUMN_IDENTIFIER_ROW_ID);
+	lock_guard<mutex> stats_guard(stats_lock);
+	set_fun(*column_stats[column_id]->stats);
 }
 
 //===--------------------------------------------------------------------===//

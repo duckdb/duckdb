@@ -115,7 +115,7 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGImportStmt node into a PragmaStatement
 	unique_ptr<PragmaStatement> TransformImport(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExplainStatement> TransformExplain(duckdb_libpgquery::PGNode *node);
-	unique_ptr<VacuumStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SQLStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SQLStatement> TransformShow(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ShowStatement> TransformShowSelect(duckdb_libpgquery::PGNode *node);
 
