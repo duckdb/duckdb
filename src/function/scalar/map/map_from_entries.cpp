@@ -134,6 +134,13 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 		throw InvalidInputException("The input argument must be a list of structs.");
 	}
 	auto &list = arguments[0]->return_type;
+
+	if (list.id() == LogicalTypeId::UNKNOWN) {
+		bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);
+		bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
+		return nullptr;
+	}
+
 	if (list.id() != LogicalTypeId::LIST) {
 		throw InvalidInputException("The provided argument is not a list of structs");
 	}
@@ -155,7 +162,8 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 
 void MapFromEntriesFun::RegisterFunction(BuiltinFunctions &set) {
 	//! the arguments and return types are actually set in the binder function
-	ScalarFunction fun("map_from_entries", {}, LogicalTypeId::MAP, MapFromEntriesFunction, false, MapFromEntriesBind);
+	ScalarFunction fun("map_from_entries", {}, LogicalTypeId::MAP, MapFromEntriesFunction, MapFromEntriesBind);
+	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }
