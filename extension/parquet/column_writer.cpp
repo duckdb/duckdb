@@ -624,6 +624,9 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
+	for (const auto &write_info : state.write_info) {
+		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
+	}
 }
 
 void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
