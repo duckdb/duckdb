@@ -2,6 +2,8 @@
 # description: Verify that dropping tables with multi-use blocks does not leak memory
 # group: [storage]
 
+require skip_reload
+
 load __TEST_DIR__/many_checkpoints.db
 
 # verify that doing this in a loop doesn't increase database size (i.e. blocks properly get added to the free list)

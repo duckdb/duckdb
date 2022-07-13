@@ -90,7 +90,9 @@ public:
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
-	MacroBinding *macro_binding = nullptr;
+	DummyBinding *macro_binding = nullptr;
+	//! The intermediate lambda bindings to bind nested lambdas (if any)
+	vector<DummyBinding> *lambda_bindings = nullptr;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);

@@ -11,10 +11,13 @@
 namespace duckdb {
 
 ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
-         IndexConstraintType constraint_type)
-    : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type) {
-	tree = nullptr;
-	is_little_endian = Radix::IsLittleEndian();
+         IndexConstraintType constraint_type, DatabaseInstance &db, idx_t block_id, idx_t block_offset)
+    : Index(IndexType::ART, column_ids, unbound_expressions, constraint_type), db(db) {
+	if (block_id != DConstants::INVALID_INDEX) {
+		tree = Node::Deserialize(*this, block_id, block_offset);
+	} else {
+		tree = nullptr;
+	}
 	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
@@ -38,6 +41,10 @@ ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>
 }
 
 ART::~ART() {
+	if (tree) {
+		delete tree;
+		tree = nullptr;
+	}
 }
 
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
@@ -75,7 +82,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 // Insert
 //===--------------------------------------------------------------------===//
 template <class T>
-static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -83,7 +90,7 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
-			keys.push_back(Key::CreateKey<T>(input_data[idx], is_little_endian));
+			keys.push_back(Key::CreateKey<T>(input_data[idx]));
 		} else {
 			keys.push_back(nullptr);
 		}
@@ -91,7 +98,7 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 }
 
 template <class T>
-static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
+static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
 	VectorData idata;
 	input.Orrify(count, idata);
 
@@ -104,7 +111,7 @@ static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> 
 		} else {
 			// concatenate the keys
 			auto old_key = move(keys[i]);
-			auto new_key = Key::CreateKey<T>(input_data[idx], is_little_endian);
+			auto new_key = Key::CreateKey<T>(input_data[idx]);
 			auto key_len = old_key->len + new_key->len;
 			auto compound_data = unique_ptr<data_t[]>(new data_t[key_len]);
 			memcpy(compound_data.get(), old_key->data.get(), old_key->len);
@@ -119,43 +126,43 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	// generate keys for the first input column
 	switch (input.data[0].GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		TemplatedGenerateKeys<bool>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<bool>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT8:
-		TemplatedGenerateKeys<int8_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int8_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGenerateKeys<int16_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int16_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGenerateKeys<int32_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int32_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGenerateKeys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<int64_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGenerateKeys<hugeint_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<hugeint_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedGenerateKeys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint8_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGenerateKeys<uint16_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint16_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGenerateKeys<uint32_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint32_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGenerateKeys<uint64_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<uint64_t>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGenerateKeys<float>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<float>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGenerateKeys<double>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<double>(input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedGenerateKeys<string_t>(input.data[0], input.size(), keys, is_little_endian);
+		TemplatedGenerateKeys<string_t>(input.data[0], input.size(), keys);
 		break;
 	default:
 		throw InternalException("Invalid type for index");
@@ -165,43 +172,43 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		// for each of the remaining columns, concatenate
 		switch (input.data[i].GetType().InternalType()) {
 		case PhysicalType::BOOL:
-			ConcatenateKeys<bool>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<bool>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT8:
-			ConcatenateKeys<int8_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int8_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT16:
-			ConcatenateKeys<int16_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int16_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT32:
-			ConcatenateKeys<int32_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int32_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT64:
-			ConcatenateKeys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<int64_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT128:
-			ConcatenateKeys<hugeint_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<hugeint_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT8:
-			ConcatenateKeys<uint8_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint8_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT16:
-			ConcatenateKeys<uint16_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint16_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT32:
-			ConcatenateKeys<uint32_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint32_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT64:
-			ConcatenateKeys<uint64_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<uint64_t>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::FLOAT:
-			ConcatenateKeys<float>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<float>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::DOUBLE:
-			ConcatenateKeys<double>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<double>(input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::VARCHAR:
-			ConcatenateKeys<string_t>(input.data[i], input.size(), keys, is_little_endian);
+			ConcatenateKeys<string_t>(input.data[i], input.size(), keys);
 			break;
 		default:
 			throw InternalException("Invalid type for index");
@@ -277,6 +284,11 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
 }
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
+#ifdef DEBUG
+	for (idx_t k = 0; k < leaf.num_elements; k++) {
+		D_ASSERT(leaf.GetRowId(k) != row_id);
+	}
+#endif
 	if (IsUnique() && leaf.num_elements != 0) {
 		return false;
 	}
@@ -284,17 +296,17 @@ bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 	return true;
 }
 
-bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
+bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_id) {
 	Key &key = *value;
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = make_unique<Leaf>(*this, move(value), row_id);
+		node = new Leaf(move(value), row_id);
 		return true;
 	}
 
 	if (node->type == NodeType::NLeaf) {
 		// Replace leaf with Node4 and store both leaves in it
-		auto leaf = static_cast<Leaf *>(node.get());
+		auto leaf = (Leaf *)node;
 
 		Key &existing_key = *leaf->value;
 		uint32_t new_prefix_length = 0;
@@ -310,45 +322,47 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 			}
 		}
 
-		unique_ptr<Node> new_node = make_unique<Node4>(*this, new_prefix_length);
+		Node *new_node = new Node4(new_prefix_length);
 		new_node->prefix_length = new_prefix_length;
 		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
-		Node4::Insert(*this, new_node, existing_key[depth + new_prefix_length], node);
-		unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-		Node4::Insert(*this, new_node, key[depth + new_prefix_length], leaf_node);
-		node = move(new_node);
+		Node4::Insert(new_node, existing_key[depth + new_prefix_length], node);
+		Node *leaf_node = new Leaf(move(value), row_id);
+		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
+		node = new_node;
 		return true;
 	}
 
 	// Handle prefix of inner node
 	if (node->prefix_length) {
-		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node.get(), key, depth);
+		uint32_t mismatch_pos = Node::PrefixMismatch(node, key, depth);
 		if (mismatch_pos != node->prefix_length) {
 			// Prefix differs, create new node
-			unique_ptr<Node> new_node = make_unique<Node4>(*this, mismatch_pos);
+			Node *new_node = new Node4(mismatch_pos);
 			new_node->prefix_length = mismatch_pos;
 			memcpy(new_node->prefix.get(), node->prefix.get(), mismatch_pos);
 			// Break up prefix
-			auto node_ptr = node.get();
-			Node4::Insert(*this, new_node, node->prefix[mismatch_pos], node);
-			node_ptr->prefix_length -= (mismatch_pos + 1);
-			memmove(node_ptr->prefix.get(), node_ptr->prefix.get() + mismatch_pos + 1, node_ptr->prefix_length);
-			unique_ptr<Node> leaf_node = make_unique<Leaf>(*this, move(value), row_id);
-			Node4::Insert(*this, new_node, key[depth + mismatch_pos], leaf_node);
-			node = move(new_node);
+			Node4::Insert(new_node, node->prefix[mismatch_pos], node);
+			node->prefix_length -= (mismatch_pos + 1);
+			memmove(node->prefix.get(), node->prefix.get() + mismatch_pos + 1, node->prefix_length);
+			Node *leaf_node = new Leaf(move(value), row_id);
+			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
+			node = new_node;
 			return true;
 		}
 		depth += node->prefix_length;
 	}
 
 	// Recurse
+	D_ASSERT(depth < key.len);
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != DConstants::INVALID_INDEX) {
-		auto child = node->GetChild(pos);
-		return Insert(*child, move(value), depth + 1, row_id);
+		auto child = node->GetChild(*this, pos);
+		bool insertion_result = Insert(child, move(value), depth + 1, row_id);
+		node->ReplaceChildPointer(pos, child);
+		return insertion_result;
 	}
-	unique_ptr<Node> new_node = make_unique<Leaf>(*this, move(value), row_id);
-	Node::InsertLeaf(*this, node, key[depth], new_node);
+	Node *new_node = new Leaf(move(value), row_id);
+	Node::InsertLeaf(node, key[depth], new_node);
 	return true;
 }
 
@@ -356,15 +370,15 @@ bool ART::Insert(unique_ptr<Node> &node, unique_ptr<Key> value, unsigned depth, 
 // Delete
 //===--------------------------------------------------------------------===//
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
-	DataChunk expression_result;
-	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
+	DataChunk expression;
+	expression.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// first resolve the expressions
-	ExecuteExpressions(input, expression_result);
+	ExecuteExpressions(input, expression);
 
 	// then generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression_result, keys);
+	GenerateKeys(expression, keys);
 
 	// now erase the elements from the database
 	row_ids.Normalify(input.size());
@@ -387,18 +401,19 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	}
 }
 
-void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) {
+void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 	if (!node) {
 		return;
 	}
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		if (ART::LeafMatches(node.get(), key, depth)) {
-			auto leaf = static_cast<Leaf *>(node.get());
+		if (ART::LeafMatches(node, key, depth)) {
+			auto leaf = static_cast<Leaf *>(node);
 			leaf->Remove(row_id);
 			if (leaf->num_elements == 0) {
-				node.reset();
+				delete node;
+				node = nullptr;
 			}
 		}
 		return;
@@ -406,28 +421,28 @@ void ART::Erase(unique_ptr<Node> &node, Key &key, unsigned depth, row_t row_id) 
 
 	// Handle prefix
 	if (node->prefix_length) {
-		if (Node::PrefixMismatch(*this, node.get(), key, depth) != node->prefix_length) {
+		if (Node::PrefixMismatch(node, key, depth) != node->prefix_length) {
 			return;
 		}
 		depth += node->prefix_length;
 	}
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != DConstants::INVALID_INDEX) {
-		auto child = node->GetChild(pos);
+		auto child = node->GetChild(*this, pos);
 		D_ASSERT(child);
 
-		unique_ptr<Node> &child_ref = *child;
-		if (child_ref->type == NodeType::NLeaf && LeafMatches(child_ref.get(), key, depth)) {
+		if (child->type == NodeType::NLeaf && LeafMatches(child, key, depth)) {
 			// Leaf found, remove entry
-			auto leaf = static_cast<Leaf *>(child_ref.get());
+			auto leaf = (Leaf *)child;
 			leaf->Remove(row_id);
 			if (leaf->num_elements == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::Erase(*this, node, pos);
+				Node::Erase(node, pos, *this);
 			}
 		} else {
 			// Recurse
-			Erase(*child, key, depth + 1, row_id);
+			Erase(child, key, depth + 1, row_id);
+			node->ReplaceChildPointer(pos, child);
 		}
 	}
 }
@@ -439,31 +454,31 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
-		return Key::CreateKey<bool>(value, art.is_little_endian);
+		return Key::CreateKey<bool>(value);
 	case PhysicalType::INT8:
-		return Key::CreateKey<int8_t>(value, art.is_little_endian);
+		return Key::CreateKey<int8_t>(value);
 	case PhysicalType::INT16:
-		return Key::CreateKey<int16_t>(value, art.is_little_endian);
+		return Key::CreateKey<int16_t>(value);
 	case PhysicalType::INT32:
-		return Key::CreateKey<int32_t>(value, art.is_little_endian);
+		return Key::CreateKey<int32_t>(value);
 	case PhysicalType::INT64:
-		return Key::CreateKey<int64_t>(value, art.is_little_endian);
+		return Key::CreateKey<int64_t>(value);
 	case PhysicalType::UINT8:
-		return Key::CreateKey<uint8_t>(value, art.is_little_endian);
+		return Key::CreateKey<uint8_t>(value);
 	case PhysicalType::UINT16:
-		return Key::CreateKey<uint16_t>(value, art.is_little_endian);
+		return Key::CreateKey<uint16_t>(value);
 	case PhysicalType::UINT32:
-		return Key::CreateKey<uint32_t>(value, art.is_little_endian);
+		return Key::CreateKey<uint32_t>(value);
 	case PhysicalType::UINT64:
-		return Key::CreateKey<uint64_t>(value, art.is_little_endian);
+		return Key::CreateKey<uint64_t>(value);
 	case PhysicalType::INT128:
-		return Key::CreateKey<hugeint_t>(value, art.is_little_endian);
+		return Key::CreateKey<hugeint_t>(value);
 	case PhysicalType::FLOAT:
-		return Key::CreateKey<float>(value, art.is_little_endian);
+		return Key::CreateKey<float>(value);
 	case PhysicalType::DOUBLE:
-		return Key::CreateKey<double>(value, art.is_little_endian);
+		return Key::CreateKey<double>(value);
 	case PhysicalType::VARCHAR:
-		return Key::CreateKey<string_t>(value, art.is_little_endian);
+		return Key::CreateKey<string_t>(value);
 	default:
 		throw InternalException("Invalid type for index");
 	}
@@ -488,19 +503,17 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	//! We need to look for a leaf
 	auto key = CreateKey(*this, types[0], equal_value);
-	auto leaf = static_cast<Leaf *>(Lookup(tree, *key, 0));
+	auto leaf = (Leaf *)(Lookup(tree, *key, 0));
 	if (!leaf) {
 		return;
 	}
 	result_size = leaf->num_elements;
 }
 
-Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
-	auto node_val = node.get();
-
-	while (node_val) {
-		if (node_val->type == NodeType::NLeaf) {
-			auto leaf = static_cast<Leaf *>(node_val);
+Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
+	while (node) {
+		if (node->type == NodeType::NLeaf) {
+			auto leaf = (Leaf *)node;
 			Key &leaf_key = *leaf->value;
 			//! Check leaf
 			for (idx_t i = depth; i < leaf_key.len; i++) {
@@ -508,26 +521,24 @@ Node *ART::Lookup(unique_ptr<Node> &node, Key &key, unsigned depth) {
 					return nullptr;
 				}
 			}
-			return node_val;
+			return node;
 		}
-		if (node_val->prefix_length) {
-			for (idx_t pos = 0; pos < node_val->prefix_length; pos++) {
-				if (key[depth + pos] != node_val->prefix[pos]) {
+		if (node->prefix_length) {
+			for (idx_t pos = 0; pos < node->prefix_length; pos++) {
+				if (key[depth + pos] != node->prefix[pos]) {
 					return nullptr;
 				}
 			}
-			depth += node_val->prefix_length;
+			depth += node->prefix_length;
 		}
-		idx_t pos = node_val->GetChildPos(key[depth]);
+		idx_t pos = node->GetChildPos(key[depth]);
 		if (pos == DConstants::INVALID_INDEX) {
 			return nullptr;
 		}
-		node_val = node_val->GetChild(pos)->get();
-		D_ASSERT(node_val);
-
+		node = node->GetChild(*this, pos);
+		D_ASSERT(node);
 		depth++;
 	}
-
 	return nullptr;
 }
 
@@ -591,7 +602,7 @@ bool ART::IteratorNext(Iterator &it) {
 		top.pos = node->GetNextPos(top.pos);
 		if (top.pos != DConstants::INVALID_INDEX) {
 			// next node found: go there
-			it.SetEntry(it.depth, IteratorEntry(node->GetChild(top.pos)->get(), DConstants::INVALID_INDEX));
+			it.SetEntry(it.depth, IteratorEntry(node->GetChild(*this, top.pos), DConstants::INVALID_INDEX));
 			it.depth++;
 		} else {
 			// no node found: move up the tree
@@ -606,13 +617,12 @@ bool ART::IteratorNext(Iterator &it) {
 // Returns: True (If found leaf >= key)
 //          False (Otherwise)
 //===--------------------------------------------------------------------===//
-bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
+bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 	it.depth = 0;
 	bool equal = false;
-	if (!n) {
+	if (!node) {
 		return false;
 	}
-	Node *node = n.get();
 
 	idx_t depth = 0;
 	while (true) {
@@ -621,7 +631,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 		it.depth++;
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
-				node = node->GetChild(node->GetMin())->get();
+				node = node->GetChild(*this, node->GetMin());
 				auto &c_top = it.stack[it.depth];
 				c_top.node = node;
 				it.depth++;
@@ -662,7 +672,7 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			}
 			return false;
 		}
-		uint32_t mismatch_pos = Node::PrefixMismatch(*this, node, key, depth);
+		uint32_t mismatch_pos = Node::PrefixMismatch(node, key, depth);
 		if (mismatch_pos != node->prefix_length) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
@@ -682,9 +692,8 @@ bool ART::Bound(unique_ptr<Node> &n, Key &key, Iterator &it, bool inclusive) {
 			// Find min leaf
 			top.pos = node->GetMin();
 		}
-		node = node->GetChild(top.pos)->get();
+		node = node->GetChild(*this, top.pos);
 		//! This means all children of this node qualify as geq
-
 		depth++;
 	}
 }
@@ -710,33 +719,35 @@ bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_coun
 //===--------------------------------------------------------------------===//
 // Less Than
 //===--------------------------------------------------------------------===//
-static Leaf &FindMinimum(Iterator &it, Node &node) {
+Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 	Node *next = nullptr;
 	idx_t pos = 0;
 	switch (node.type) {
 	case NodeType::NLeaf:
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
-	case NodeType::N4:
-		next = ((Node4 &)node).child[0].get();
+	case NodeType::N4: {
+		next = ((Node4 &)node).children[0].Unswizzle(*this);
 		break;
-	case NodeType::N16:
-		next = ((Node16 &)node).child[0].get();
+	}
+	case NodeType::N16: {
+		next = ((Node16 &)node).children[0].Unswizzle(*this);
 		break;
+	}
 	case NodeType::N48: {
 		auto &n48 = (Node48 &)node;
 		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
-		next = n48.child[n48.child_index[pos]].get();
+		next = n48.children[n48.child_index[pos]].Unswizzle(*this);
 		break;
 	}
 	case NodeType::N256: {
 		auto &n256 = (Node256 &)node;
-		while (!n256.child[pos]) {
+		while (!n256.children[pos].pointer) {
 			pos++;
 		}
-		next = n256.child[pos].get();
+		next = (Node *)n256.children[pos].Unswizzle(*this);
 		break;
 	}
 	}
@@ -801,7 +812,7 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 	D_ASSERT(state->values[0].type().InternalType() == types[0]);
 
 	vector<row_t> row_ids;
-	bool success = true;
+	bool success;
 	if (state->values[1].IsNull()) {
 		lock_guard<mutex> l(lock);
 		// single predicate
@@ -857,17 +868,17 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 		return;
 	}
 
-	DataChunk expression_result;
-	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
+	DataChunk expression_chunk;
+	expression_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 
 	// unique index, check
 	lock_guard<mutex> l(lock);
 	// first resolve the expressions for the index
-	ExecuteExpressions(chunk, expression_result);
+	ExecuteExpressions(chunk, expression_chunk);
 
 	// generate the keys for the given input
 	vector<unique_ptr<Key>> keys;
-	GenerateKeys(expression_result, keys);
+	GenerateKeys(expression_chunk, keys);
 
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (!keys[i]) {
@@ -880,11 +891,11 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 			continue;
 		}
 		string key_name;
-		for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+		for (idx_t k = 0; k < expression_chunk.ColumnCount(); k++) {
 			if (k > 0) {
 				key_name += ", ";
 			}
-			key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
+			key_name += unbound_expressions[k]->GetName() + ": " + expression_chunk.data[k].GetValue(i).ToString();
 		}
 		string exception_msg;
 		switch (verify_type) {
@@ -914,6 +925,14 @@ void ART::VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, str
 			throw ConstraintException(exception_msg);
 		}
 	}
+}
+
+BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
+	lock_guard<mutex> l(lock);
+	if (tree) {
+		return tree->Serialize(*this, writer);
+	}
+	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
 } // namespace duckdb

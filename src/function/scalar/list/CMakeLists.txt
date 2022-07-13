@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_func_list
   OBJECT
+  list_lambdas.cpp
   list_concat.cpp
   contains_or_position.cpp
   list_aggregates.cpp

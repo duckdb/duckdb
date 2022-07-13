@@ -2,6 +2,8 @@
 # description: Test temporary catalog entry creation
 # group: [catalog]
 
+require skip_reload
+
 # basic temp table creation works
 statement ok
 CREATE TEMPORARY TABLE integers(i INTEGER) ON COMMIT PRESERVE ROWS

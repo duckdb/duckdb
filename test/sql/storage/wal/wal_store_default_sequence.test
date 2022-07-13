@@ -2,6 +2,9 @@
 # description: Test storage of default values with sequences
 # group: [wal]
 
+require skip_reload
+
+
 load __TEST_DIR__/test_store_defaults.db
 
 statement ok

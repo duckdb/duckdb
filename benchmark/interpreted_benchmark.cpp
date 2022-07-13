@@ -49,7 +49,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 
 	unique_ptr<DBConfig> GetBenchmarkConfig() {
 		auto result = make_unique<DBConfig>();
-		result->load_extensions = false;
+		result->options.load_extensions = false;
 		return result;
 	}
 };
