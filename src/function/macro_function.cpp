@@ -22,7 +22,8 @@ string MacroFunction::ValidateArguments(MacroFunction &macro_def, const string &
 
 	// separate positional and default arguments
 	for (auto &arg : function_expr.children) {
-		if (arg->type == ExpressionType::VALUE_CONSTANT && !arg->alias.empty()) {
+		if ((arg->type == ExpressionType::VALUE_CONSTANT || arg->type == ExpressionType::VALUE_PARAMETER) &&
+		    !arg->alias.empty()) {
 			// default argument
 			if (macro_def.default_parameters.find(arg->alias) == macro_def.default_parameters.end()) {
 				return StringUtil::Format("Macro %s does not have default parameter %s!", name, arg->alias);

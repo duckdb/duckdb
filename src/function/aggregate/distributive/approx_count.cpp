@@ -98,7 +98,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 }
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    {input_type}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
@@ -106,6 +106,8 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctSimpleUpdateFunction, nullptr,
 	    AggregateFunction::StateDestroy<ApproxDistinctCountState, ApproxCountDistinctFunction>);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {

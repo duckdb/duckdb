@@ -77,7 +77,9 @@ public:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" +
 			       entry.children[2]->ToString() + "]";
 		case ExpressionType::STRUCT_EXTRACT: {
-			D_ASSERT(entry.children[1]->type == ExpressionType::VALUE_CONSTANT);
+			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {
+				return string();
+			}
 			auto child_string = entry.children[1]->ToString();
 			D_ASSERT(child_string.size() >= 3);
 			D_ASSERT(child_string[0] == '\'' && child_string[child_string.size() - 1] == '\'');

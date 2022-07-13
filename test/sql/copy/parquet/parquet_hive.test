@@ -1,0 +1,32 @@
+# name: test/sql/copy/parquet/parquet_hive.test
+# description: Test the automatic parsing of the hive partitioning scheme
+# group: [parquet]
+
+require parquet
+
+# test parsing hive partitioning scheme
+query IIII
+select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1)  order by id
+----
+1	value1	a	2012-01-01
+2	value2	b	2013-01-01
+
+# As long as the names match, we don't really mind since everything is a string anyway
+query IIII
+select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) order by id
+----
+1	value1	a	2012-01-01
+2	value2	b	2013-01-01
+
+# Filter should work too
+query II
+select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01';
+----
+2	2013-01-01
+
+# If the key names don't add up, there's nothing we can do
+statement error
+select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_names/*/*/test.parquet', HIVE_PARTITIONING=1)
+
+statement error
+select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_count/*/*/test.parquet', HIVE_PARTITIONING=1) WHERE part=b
