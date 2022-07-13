@@ -276,8 +276,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		return LogicalType::DOUBLE;
 	} else if (py::isinstance(ele, import_cache.decimal.Decimal())) {
 		PyDecimal decimal(ele);
-		auto type = decimal.GetType();
-		if (DecimalType::GetWidth(type) > Decimal::MAX_WIDTH_INT64) {
+		LogicalType type;
+		if (!decimal.TryGetType(type)) {
 			can_convert = false;
 		}
 		return type;

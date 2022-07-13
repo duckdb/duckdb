@@ -388,9 +388,9 @@ class TestResolveObjectColumns(object):
                 VALUES
                 (5,                   5002340,                  -234234234234.0),
                 (12.0,                13,                       324234234.00000005),
-                (-123.0,              -12.0000000005,             -128),
+                (-123.0,              -12.0000000005,           -128),
                 (-234234.0,           7453324234.0,             345345),
-                (NULL,                NULL,                     0),
+                (NULL,                NULL,                     1.00000),
                 (1.234,               -324234234,               1324234359)
             ) tbl(a, b, c);
         """
@@ -399,7 +399,7 @@ class TestResolveObjectColumns(object):
         x = pd.DataFrame({
             '0': ConvertStringToDecimal([5, '12.0', '-123.0', '-234234.0', None, '1.234']),
             '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', '7453324234.0', None, '-324234234']),
-            '2': ConvertStringToDecimal(['-234234234234.0',  '324234234.00000005', -128, 345345, 0, '1324234359'])
+            '2': ConvertStringToDecimal(['-234234234234.0',  '324234234.00000005', -128, 345345, '1E5', '1324234359'])
         })
         reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
         conversion = duckdb.query_df(x, "x", "select * from x").fetchall()

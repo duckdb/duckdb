@@ -42,16 +42,28 @@ private:
 	py::object dict;
 };
 
+enum class PyDecimalExponentType {
+	EXPONENT_SCALE,    //! Amount of digits after the decimal point
+	EXPONENT_POWER,    //! How many zeros behind the decimal point
+	EXPONENT_INFINITY, //! Decimal is INFINITY
+	EXPONENT_NAN       //! Decimal is NAN
+};
+
 struct PyDecimal {
 public:
 	PyDecimal(py::handle &obj);
-	vector<int8_t> digits;
-	int32_t exponent;
+	vector<uint8_t> digits;
 	bool signed_value = false;
 
+	PyDecimalExponentType exponent_type;
+	int32_t exponent_value;
+
 public:
-	LogicalType GetType();
+	bool TryGetType(LogicalType &type);
 	Value ToDuckValue();
+
+private:
+	void SetExponent(py::handle &exponent);
 };
 
 struct PyTimeDelta {

@@ -21,7 +21,8 @@ namespace duckdb {
 //! NumericHelper is a static class that holds helper functions for integers/doubles
 class NumericHelper {
 public:
-	static const int64_t POWERS_OF_TEN[20];
+	static constexpr uint8_t CACHED_POWERS_OF_TEN = 20;
+	static const int64_t POWERS_OF_TEN[CACHED_POWERS_OF_TEN];
 	static const double DOUBLE_POWERS_OF_TEN[40];
 
 public:

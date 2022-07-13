@@ -160,9 +160,12 @@ header_files = []
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
+#TODO: add all the third party include paths
+third_party_fmt_include_path = os.path.join(script_path, '..', '..', 'third_party', 'fmt', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
-include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+include_directories = [main_include_path, third_party_fmt_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     source_files = main_source_files

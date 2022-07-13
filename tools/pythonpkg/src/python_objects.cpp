@@ -2,6 +2,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -37,40 +38,136 @@ interval_t PyTimeDelta::ToInterval() {
 
 PyDecimal::PyDecimal(py::handle &obj) {
 	auto as_tuple = obj.attr("as_tuple")();
-	auto _digits = as_tuple.attr("digits");
-	exponent = py::cast<int32_t>(as_tuple.attr("exponent"));
-	auto width = py::len(_digits);
+
+	py::object exponent = as_tuple.attr("exponent");
+	SetExponent(exponent);
+
 	auto sign = py::cast<int8_t>(as_tuple.attr("sign"));
 	signed_value = sign != 0;
 
-	exponent *= -1;
+	auto _digits = as_tuple.attr("digits");
+	auto width = py::len(_digits);
 	digits.reserve(width);
 	for (auto digit : _digits) {
-		digits.push_back(py::cast<int8_t>(digit));
+		digits.push_back(py::cast<uint8_t>(digit));
 	}
 }
 
-LogicalType PyDecimal::GetType() {
+bool PyDecimal::TryGetType(LogicalType &type) {
 	int32_t width = digits.size();
-	auto scale = exponent;
-	return LogicalType::DECIMAL(width, scale);
+
+	switch (exponent_type) {
+	case PyDecimalExponentType::EXPONENT_SCALE: {
+	case PyDecimalExponentType::EXPONENT_POWER: {
+		auto scale = exponent_value;
+		if (exponent_type == PyDecimalExponentType::EXPONENT_SCALE) {
+			scale *= -1;
+		} else if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
+			width += scale;
+		}
+		if (width > Decimal::MAX_WIDTH_INT64) {
+			return false;
+		}
+		type = LogicalType::DECIMAL(width, scale);
+		return true;
+	}
+	case PyDecimalExponentType::EXPONENT_INFINITY: {
+		type = LogicalType::FLOAT;
+		return true;
+	}
+	case PyDecimalExponentType::EXPONENT_NAN: {
+		type = LogicalType::FLOAT;
+		return true;
+	}
+	default:
+		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
+	}
+	}
+	return true;
+}
+
+static void ExponentNotRecognized() {
+	throw std::runtime_error("decimal.Decimal exponent type not recognized");
+}
+
+void PyDecimal::SetExponent(py::handle &exponent) {
+	if (py::isinstance<py::int_>(exponent)) {
+		this->exponent_value = py::cast<int32_t>(exponent);
+		if (this->exponent_value >= 0) {
+			exponent_type = PyDecimalExponentType::EXPONENT_POWER;
+			return;
+		}
+		exponent_value *= -1;
+		exponent_type = PyDecimalExponentType::EXPONENT_SCALE;
+		return;
+	}
+	if (py::isinstance<py::str>(exponent)) {
+		string exponent_string = py::str(exponent);
+		if (exponent_string == "n") {
+			exponent_type = PyDecimalExponentType::EXPONENT_NAN;
+			return;
+		}
+		if (exponent_string == "F") {
+			exponent_type = PyDecimalExponentType::EXPONENT_INFINITY;
+			return;
+		}
+	}
+	ExponentNotRecognized();
+}
+
+static void UnsupportedWidth() {
+	throw std::runtime_error("Decimal value exceeds max supported width, failed to convert");
 }
 
 Value PyDecimal::ToDuckValue() {
 	int32_t width = digits.size();
-	auto scale = exponent;
-
-	if (width > Decimal::MAX_WIDTH_INT64) {
-		throw std::runtime_error("Decimal value exceeds max supported width, failed to convert");
+	switch (exponent_type) {
+	case PyDecimalExponentType::EXPONENT_SCALE: {
+		uint8_t scale = exponent_value;
+		if (width > Decimal::MAX_WIDTH_INT64) {
+			UnsupportedWidth();
+		}
+		int64_t value = 0;
+		for (auto it = digits.begin(); it != digits.end(); it++) {
+			value = value * 10 + *it;
+		}
+		if (signed_value) {
+			value = -value;
+		}
+		return Value::DECIMAL(value, width, scale);
 	}
-	int64_t value = 0;
-	for (auto it = digits.begin(); it != digits.end(); it++) {
-		value = value * 10 + *it;
+	case PyDecimalExponentType::EXPONENT_POWER: {
+		uint8_t scale = exponent_value;
+		width += scale;
+		if (width > Decimal::MAX_WIDTH_INT64) {
+			UnsupportedWidth();
+		}
+		int64_t value = 0;
+		for (auto &digit : digits) {
+			value = value * 10 + digit;
+		}
+		D_ASSERT(scale >= 0);
+		int64_t multiplier =
+		    NumericHelper::POWERS_OF_TEN[MinValue<uint8_t>(scale, NumericHelper::CACHED_POWERS_OF_TEN - 1)];
+		for (auto power = scale; power > NumericHelper::CACHED_POWERS_OF_TEN; power--) {
+			multiplier *= 10;
+		}
+		value *= multiplier;
+		if (signed_value) {
+			value = -value;
+		}
+		return Value::DECIMAL(value, width, scale);
 	}
-	if (signed_value) {
-		value = -value;
+	case PyDecimalExponentType::EXPONENT_NAN: {
+		return Value::FLOAT(NAN);
 	}
-	return Value::DECIMAL(value, width, scale);
+	case PyDecimalExponentType::EXPONENT_INFINITY: {
+		return Value::FLOAT(INFINITY);
+	}
+	default: {
+		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
+	}
+	}
 }
 
 PyTime::PyTime(py::handle &obj) : obj(obj) {
