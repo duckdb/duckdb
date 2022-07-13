@@ -63,9 +63,11 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	//! Becomes a source when it is an external join
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return true;
 	}
+
 	bool ParallelSource() const override {
 		return true;
 	}

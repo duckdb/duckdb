@@ -258,14 +258,13 @@ public:
 	void Partition(JoinHashTable &global_ht);
 
 	//! TODO
+	void UnFinalize();
+	//! TODO
 	void FinalizeExternal();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);
 
-	bool AllPartitionsCompleted() {
-		return partitions_completed == RadixPartitioning::NumberOfPartitions(radix_bits);
-	}
 	//! TODO
 	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
 	//! If this is the probe-side HT, get the next indices indicating what to scan
@@ -278,8 +277,9 @@ private:
 	idx_t radix_bits;
 	//!
 	idx_t tuples_per_iteration;
-	//! TODO
-	idx_t partitions_completed;
+	//! TODO: rename this to something better
+	idx_t partitions_start;
+	idx_t partitions_end;
 
 	//! The RowDataCollection holding the swizzled main data of the hash table
 	unique_ptr<RowDataCollection> swizzled_block_collection;

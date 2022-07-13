@@ -18,7 +18,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false), radix_bits(7),
-      partitions_completed(0) {
+      partitions_start(0), partitions_end(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -304,7 +304,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t count = external ? tuples_per_iteration : Count();
+	idx_t count = external ? MaxValue<idx_t>(tuples_per_iteration, Count()) : Count();
 	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
@@ -1034,8 +1034,8 @@ void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable
 	if (tuples_per_iteration >= total_count) {
 		// We decided to do an external join, but the data fits
 		// This can happen when we force an external join
-		// Just do two probe iterations
-		tuples_per_iteration = (total_count + 1) / 2;
+		// Just do three probe iterations
+		tuples_per_iteration = (total_count + 1) / 3;
 	}
 
 	// TODO: set number of radix bits (determine what's best?)
@@ -1064,15 +1064,28 @@ void JoinHashTable::Partition(JoinHashTable &global_ht) {
 	global_ht.Merge(*this);
 }
 
+void JoinHashTable::UnFinalize() {
+	pinned_handles.clear();
+	block_collection->Clear();
+	string_heap->Clear();
+	finalized = false;
+}
+
 void JoinHashTable::FinalizeExternal() {
-	D_ASSERT(!AllPartitionsCompleted());
+	if (finalized) {
+		UnFinalize();
+	}
 
-	// Determine how many partitions we can do next
 	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+	partitions_start = partitions_end;
+	if (partitions_start == num_partitions) {
+		return;
+	}
 
-	idx_t next = 0;
-	idx_t count = 0;
-	for (idx_t p = partitions_completed; p < num_partitions; p++) {
+	// Determine how many partitions we can do next (at least one)
+	idx_t next = 1;
+	idx_t count = partition_block_collections[partitions_start]->count;
+	for (idx_t p = partitions_start + 1; p < num_partitions; p++) {
 		auto partition_count = partition_block_collections[p]->count;
 		if (count + partition_count > tuples_per_iteration) {
 			break;
@@ -1080,12 +1093,11 @@ void JoinHashTable::FinalizeExternal() {
 		next++;
 		count += partition_count;
 	}
-
-	// Ensure that we do at least one partition
-	next = MaxValue<idx_t>(next, 1);
+	partitions_end += next;
 
 	// Move specific partitions to the swizzled_... collections so they can be unswizzled
-	for (idx_t p = partitions_completed; p < partitions_completed + next; p++) {
+	D_ASSERT(SwizzledCount() == 0);
+	for (idx_t p = partitions_start; p < partitions_end; p++) {
 		swizzled_block_collection->Merge(*partition_block_collections[p]);
 		if (!layout.AllConstant()) {
 			swizzled_string_heap->Merge(*partition_string_heaps[p]);
@@ -1094,6 +1106,7 @@ void JoinHashTable::FinalizeExternal() {
 	D_ASSERT(count == SwizzledCount());
 
 	// Unswizzle them
+	D_ASSERT(Count() == 0);
 	UnswizzleBlocks();
 	D_ASSERT(count == Count());
 
@@ -1118,8 +1131,8 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	SelectionVector false_sel;
 	true_sel.Initialize();
 	false_sel.Initialize();
-	auto true_count = RadixPartitioning::Select(hashes, current_sel, ss->count, radix_bits, partitions_completed,
-	                                            &true_sel, &false_sel);
+	auto true_count =
+	    RadixPartitioning::Select(hashes, current_sel, ss->count, radix_bits, partitions_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
 	// sink non-matching stuff into HT for later
@@ -1145,11 +1158,8 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 }
 
 void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
-	auto p_start = partitions_completed;
-	auto p_end = build_ht.partitions_completed;
-
 	// Get rid of partitions that we already completed
-	for (idx_t p = p_start; p < p_end; p++) {
+	for (idx_t p = build_ht.partitions_start; p < build_ht.partitions_end; p++) {
 		partition_block_collections[p] = nullptr;
 		if (!layout.AllConstant()) {
 			partition_string_heaps[p] = nullptr;
@@ -1158,7 +1168,7 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 
 	// Reset scan state and set how much we need to scan in this round
 	probe_scan_state.Reset();
-	for (idx_t p = p_start; p < p_end; p++) {
+	for (idx_t p = build_ht.partitions_start; p < build_ht.partitions_end; p++) {
 		probe_scan_state.total += partition_block_collections[p]->count;
 	}
 }

@@ -402,11 +402,13 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 
 bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalScanState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)*sink_state;
+
 	// Prepare the build side
-	if (sink.hash_table->AllPartitionsCompleted()) {
+	sink.hash_table->FinalizeExternal();
+	if (!sink.finalized) {
+		// Done
 		return false;
 	}
-	sink.hash_table->FinalizeExternal();
 	// Prepare the probe side
 	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, gstate.probe_scan_state);
 	// Reset full outer scan state (if necessary)

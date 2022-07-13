@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_join.hpp"
+
 #include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
@@ -30,15 +31,20 @@ void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, Pip
 
 	// on the LHS (probe child), the operator becomes a regular operator
 	state.AddPipelineOperator(current, &op);
-	if (op.IsSource()) {
-		// FULL or RIGHT outer join
-		// schedule a scan of the node as a child pipeline
-		// this scan has to be performed AFTER all the probing has happened
+
+	// FULL/RIGHT outer join and external hash joins are source operators too
+	// schedule a scan of the node as a child pipeline
+	// this scan has to be performed AFTER all the probing has happened
+	auto &join_op = (PhysicalJoin &)op;
+	if (IsRightOuterJoin(join_op.join_type)) {
 		if (state.recursive_cte) {
 			throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
 		}
 		state.AddChildPipeline(executor, current);
+	} else if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
+		state.AddChildPipeline(executor, current);
 	}
+
 	// continue building the pipeline on this child
 	op.children[0]->BuildPipelines(executor, current, state);
 
