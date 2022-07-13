@@ -406,6 +406,14 @@ class TestResolveObjectColumns(object):
 
         assert(conversion == reference)
 
+    def test_mixed_object_types(self):
+        x = pd.DataFrame({
+            'nested': pd.Series(data=[{'a': 1, 'b': 2}, [5, 4, 3], {'key': [1,2,3], 'value': ['a', 'b', 'c']}], dtype='object'),
+        })
+        res = duckdb.query_df(x, "x", "select * from x").df()
+        assert(res['nested'].dtype == np.dtype('object'))
+
+
     def test_numeric_decimal_incompatible(self):
         duckdb_conn = duckdb.connect()
         reference_query = """
