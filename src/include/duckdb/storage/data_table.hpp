@@ -19,7 +19,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/storage/table_index.hpp"
 #include "duckdb/storage/table_statistics.hpp"
 #include "duckdb/transaction/local_storage.hpp"
