@@ -40,6 +40,8 @@ NULL
 statement ok
 PRAGMA threads=4
 
+mode skip
+
 query I
 with t as (
   values ('a',1), ('c',3), ('b',2)
@@ -47,6 +49,8 @@ with t as (
 select list(col0 order by col1) from t
 ----
 [a, b, c]
+
+mode unskip
 
 query II
 SELECT g, LIST(i ORDER BY i ASC) FROM list_extract_test GROUP BY g;
@@ -113,5 +117,9 @@ SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i = 1337) FROM list_extract_test 
 
 # test forcing reallocation of lists
 
+mode skip
+
 statement ok
 CREATE TABLE test_realloc AS (SELECT range % 4 g, list(range || 'some_string_longer_than_12') l FROM range(500000) GROUP BY range % 4);
+
+mode unskip

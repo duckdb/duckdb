@@ -290,6 +290,12 @@ ListSegment *CreateListSegment(LinkedList *linked_list) {
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;
+
+	auto linked_child_list = GetListChildData(segment);
+	linked_child_list->first_segment = nullptr;
+	linked_child_list->last_segment = nullptr;
+	linked_child_list->total_capacity = 0;
+
 	return segment;
 }
 
@@ -322,8 +328,8 @@ void AppendRow(LinkedList *linked_list, const LogicalType &type, Vector &input, 
 		}
 		linked_list->last_segment->next = segment;
 		linked_list->last_segment = segment;
-	} else {
 
+	} else {
 		// last_segment is not full, append to it
 		segment = linked_list->last_segment;
 	}
@@ -345,9 +351,15 @@ void AppendRow(LinkedList *linked_list, const LogicalType &type, Vector &input, 
 		child_vector.Orrify(lists_size, child_data);
 
 		// write the list entry length and offset
+		// by getting the length and offset of the previous list
 		auto list_offset_data = GetListOffsetData(segment);
 		list_offset_data[segment->count].length = list_entry.length;
-		list_offset_data[segment->count].offset = list_entry.offset;
+		if (segment->count == 0) {
+			list_offset_data[segment->count].offset = 0;
+		} else {
+			auto offset = list_offset_data[segment->count - 1].offset + list_offset_data[segment->count - 1].length;
+			list_offset_data[segment->count].offset = offset;
+		}
 
 		// loop over the child entries and recurse on them
 		// TODO: this can be done more efficiently maybe by writing them all at once
@@ -364,9 +376,10 @@ void AppendRow(LinkedList *linked_list, const LogicalType &type, Vector &input, 
 
 	} else {
 		SetPrimitiveDataValue(segment, type, input_data.data, entry_idx);
-		linked_list->total_capacity++;
-		segment->count++;
 	}
+
+	linked_list->total_capacity++;
+	segment->count++;
 }
 
 void BuildListVector(LinkedList *linked_list, Vector &aggr_vector) {
@@ -397,8 +410,12 @@ void BuildListVector(LinkedList *linked_list, Vector &aggr_vector) {
 				}
 			}
 
-			// TODO: recurse into the linked list of child values
 			// TODO: resize child vector?
+			auto &child_vector = ListVector::GetEntry(aggr_vector);
+			auto linked_child_list = GetListChildData(segment);
+
+			// recurse into the linked list of child values
+			BuildListVector(linked_child_list, child_vector);
 
 		} else if (aggr_vector.GetType().id() == LogicalTypeId::STRUCT) {
 			// TODO: build struct vector
@@ -472,7 +489,8 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &, idx_t inpu
 			state->linked_list = new LinkedList;
 			state->type = new LogicalType(input.GetType());
 		}
-		AppendRow(state->linked_list, input.GetType(), input, input_data, i);
+		D_ASSERT(state->type);
+		AppendRow(state->linked_list, *state->type, input, input_data, i);
 	}
 }
 
@@ -488,11 +506,13 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 			// NULL, no need to append.
 			continue;
 		}
+		D_ASSERT(state->type);
 		if (!combined_ptr[i]->linked_list) {
 			combined_ptr[i]->linked_list = new LinkedList;
 			combined_ptr[i]->linked_list->first_segment = state->linked_list->first_segment;
 			combined_ptr[i]->linked_list->last_segment = state->linked_list->last_segment;
 			combined_ptr[i]->linked_list->total_capacity = state->linked_list->total_capacity;
+			combined_ptr[i]->type = new LogicalType(*state->type);
 		} else {
 			combined_ptr[i]->linked_list->last_segment->next = state->linked_list->first_segment;
 			combined_ptr[i]->linked_list->last_segment = state->linked_list->last_segment;
@@ -526,6 +546,8 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &, Vector &res
 		result_data[rid].length = total_capacity;
 		result_data[rid].offset = total_len;
 		total_len += total_capacity;
+
+		D_ASSERT(state->type);
 
 		Vector aggr_vector(*state->type, total_capacity);
 		BuildListVector(state->linked_list, aggr_vector);
