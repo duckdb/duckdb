@@ -296,7 +296,7 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 		auto space_in_block = Storage::BLOCK_SIZE - 4 * sizeof(block_id_t);
 		auto total_blocks = (total_size + space_in_block - 1) / space_in_block;
 		auto &config = DBConfig::GetConfig(db);
-		if (config.debug_many_free_list_blocks) {
+		if (config.options.debug_many_free_list_blocks) {
 			total_blocks++;
 		}
 		D_ASSERT(total_size > 0);
@@ -376,7 +376,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	header.block_count = max_block;
 
 	auto &config = DBConfig::GetConfig(db);
-	if (config.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
+	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
 		throw IOException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 

@@ -14,6 +14,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -82,6 +83,7 @@ private:
 	void WriteSequence(SequenceCatalogEntry &table);
 	void WriteMacro(ScalarMacroCatalogEntry &table);
 	void WriteTableMacro(TableMacroCatalogEntry &table);
+	void WriteIndex(IndexCatalogEntry &index_catalog);
 	void WriteType(TypeCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
@@ -90,6 +92,7 @@ private:
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
 	void ReadTableMacro(ClientContext &context, MetaBlockReader &reader);
+	void ReadIndex(ClientContext &context, MetaBlockReader &reader);
 	void ReadType(ClientContext &context, MetaBlockReader &reader);
 
 private:

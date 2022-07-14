@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp
+// duckdb/execution/operator/aggregate/physical_ungrouped_aggregate.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,12 +13,12 @@
 
 namespace duckdb {
 
-//! PhysicalSimpleAggregate is an aggregate operator that can only perform aggregates (1) without any groups, (2)
+//! PhysicalUngroupedAggregate is an aggregate operator that can only perform aggregates (1) without any groups, (2)
 //! without any DISTINCT aggregates, and (3) when all aggregates are combineable
-class PhysicalSimpleAggregate : public PhysicalOperator {
+class PhysicalUngroupedAggregate : public PhysicalOperator {
 public:
-	PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                        idx_t estimated_cardinality);
+	PhysicalUngroupedAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	                           idx_t estimated_cardinality);
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;

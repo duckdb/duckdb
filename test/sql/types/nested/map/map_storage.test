@@ -2,6 +2,8 @@
 # description: Test maps with in-memory storage
 # group: [map]
 
+require skip_reload
+
 statement ok
 CREATE TABLE a(b MAP(INTEGER,INTEGER));
 

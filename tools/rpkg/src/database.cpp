@@ -23,7 +23,7 @@ void duckdb::DBDeleter(DBWrapper *db) {
 
 	DBConfig config;
 	if (readonly) {
-		config.access_mode = AccessMode::READ_ONLY;
+		config.options.access_mode = AccessMode::READ_ONLY;
 	}
 
 	auto confignames = configsexp.names();
