@@ -89,7 +89,7 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 
 	// slice to get the new lists and append them to the result
 	Vector new_lists(input_chunk.data[0], true_sel, true_count);
-	new_lists.Normalify(true_count);
+	new_lists.Flatten(true_count);
 	UnifiedVectorFormat new_lists_child_data;
 	new_lists.ToUnifiedFormat(true_count, new_lists_child_data);
 	ListVector::Append(result, new_lists, *new_lists_child_data.sel, true_count, 0);
@@ -105,14 +105,14 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 
 	// set the list child vector
 	Vector slice(child_vector, sel, elem_cnt);
-	slice.Normalify(elem_cnt);
+	slice.Flatten(elem_cnt);
 	input_chunk.data[0].Reference(slice);
 
 	// set the other vectors
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
 		slices.emplace_back(Vector(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt));
-		slices[col_idx].Normalify(elem_cnt);
+		slices[col_idx].Flatten(elem_cnt);
 		input_chunk.data[col_idx + 1].Reference(slices[col_idx]);
 	}
 
