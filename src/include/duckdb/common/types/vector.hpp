@@ -120,7 +120,7 @@ public:
 	//! It contains (1) a data pointer, (2) a validity mask, and (3) a selection vector
 	//! Access to the individual vector elements can be performed through data_pointer[sel_idx[i]]/validity[sel_idx[i]]
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
-	//! ToUnifiedFormat was originally called ToUnifiedFormat, as a tribute to Orri Erling who came up with it
+	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
 	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
