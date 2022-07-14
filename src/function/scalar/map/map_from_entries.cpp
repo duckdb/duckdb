@@ -9,10 +9,10 @@ namespace duckdb {
 
 struct VectorInfo {
 	Vector &container;
-	duckdb::list_entry_t &data;
+	list_entry_t &data;
 };
 
-static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
+static void MapStruct(Value &element, VectorInfo &keys, VectorInfo &values) {
 	D_ASSERT(element.type().id() == LogicalTypeId::STRUCT);
 	D_ASSERT(!element.IsNull());
 	auto &key_value = StructValue::GetChildren(element);
@@ -28,7 +28,7 @@ static void MapStruct(Value &element, VectorInfo keys, VectorInfo values) {
 }
 
 // FIXME: this operation has a time complexity of O(n^2)
-void CheckKeyUniqueness(VectorInfo keys) {
+void CheckKeyUniqueness(VectorInfo &keys) {
 	auto end = keys.data.offset + keys.data.length;
 	auto &entries = ListVector::GetEntry(keys.container);
 	for (auto lhs = keys.data.offset; lhs < end; lhs++) {
@@ -48,7 +48,7 @@ void CheckKeyUniqueness(VectorInfo keys) {
 	}
 }
 
-static bool MapSingleList(VectorInfo input, VectorInfo keys, VectorInfo values) {
+static bool MapSingleList(VectorInfo &input, VectorInfo &keys, VectorInfo &values) {
 	// Get the length and offset of this list from the argument data
 	auto pair_amount = input.data.length;
 	auto input_offset = input.data.offset;
@@ -97,7 +97,6 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	auto count = args.size();
 
-	ListVector::GetEntry(key_vector);
 	VectorData input_list_data;
 	input_list.Orrify(count, input_list_data);
 
@@ -112,7 +111,7 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 		keys.data.offset = offset;
 		values.data.offset = offset;
-		bool row_valid = MapSingleList(input, keys, values);
+		auto row_valid = MapSingleList(input, keys, values);
 		offset += keys.data.length;
 
 		// Check validity
