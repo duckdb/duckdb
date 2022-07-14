@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 import multiprocessing.pool
+from pathlib import Path
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -154,6 +155,31 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
+def locate_scripts_folders(my_path):
+	directory = my_path
+	if not os.path.isdir(directory):
+		directory = os.path.dirname(directory)
+	found = False
+	max_depth = 5
+	current_depth = 0
+	script_folder = None
+	while not found and current_depth < max_depth:
+		for path in [f.path for f in os.scandir(directory) if f.is_dir()]:
+			# root reached
+			if '/' == path:
+				current_depth = max_depth
+				break
+			if (os.path.basename(path) == 'scripts'):
+				script_folder = path
+				found = True
+		current_depth += 1
+		directory = Path(directory).parent.absolute()
+
+	if not found:
+		print("Could not locate the 'scripts' directory, stopping script", file=sys.stderr)
+		exit(1)
+	return script_folder
+
 extra_files = []
 header_files = []
 
@@ -162,7 +188,7 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
-scripts_folder_abspath = os.path.join(script_path, '..', '..', 'scripts')
+scripts_folder_abspath = locate_scripts_folders(script_path)
 print(scripts_folder_abspath)
 sys.path.append(scripts_folder_abspath)
 from package_build import third_party_includes
