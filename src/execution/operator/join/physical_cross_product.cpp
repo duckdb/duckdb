@@ -19,9 +19,11 @@ class CrossProductGlobalState : public GlobalSinkState {
 public:
 	explicit CrossProductGlobalState(ClientContext &context, const PhysicalCrossProduct &op)
 	    : rhs_materialized(context, op.children[1]->GetTypes()) {
+		rhs_materialized.InitializeAppend(append_state);
 	}
 
 	ColumnDataCollection rhs_materialized;
+	ColumnDataAppendState append_state;
 	mutex rhs_lock;
 };
 
@@ -33,7 +35,7 @@ SinkResultType PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalSinkS
                                           DataChunk &input) const {
 	auto &sink = (CrossProductGlobalState &)state;
 	lock_guard<mutex> client_guard(sink.rhs_lock);
-	sink.rhs_materialized.Append(input);
+	sink.rhs_materialized.Append(sink.append_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

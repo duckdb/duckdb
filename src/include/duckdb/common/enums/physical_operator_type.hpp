@@ -38,6 +38,7 @@ enum class PhysicalOperatorType : uint8_t {
 	// -----------------------------
 	TABLE_SCAN,
 	DUMMY_SCAN,
+	COLUMN_DATA_SCAN,
 	CHUNK_SCAN,
 	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,

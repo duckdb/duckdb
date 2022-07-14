@@ -115,6 +115,8 @@ public:
 		D_ASSERT(index.index < vector_data.size());
 		return vector_data[index.index];
 	}
+
+	void Verify();
 };
 
 struct ColumnDataMetaData;
@@ -364,6 +366,16 @@ void ColumnDataCollectionSegment::InitializeChunk(idx_t chunk_index, ChunkManage
 		InitializeVector(state, chunk_meta.vector_data[vector_idx], chunk.data[vector_idx]);
 	}
 	chunk.SetCardinality(chunk_meta.count);
+}
+
+void ColumnDataCollectionSegment::Verify() {
+#ifdef DEBUG
+	idx_t total_count = 0;
+	for (idx_t i = 0; i < chunk_data.size(); i++) {
+		total_count += chunk_data[i].count;
+	}
+	D_ASSERT(total_count == this->count);
+#endif
 }
 
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
@@ -648,6 +660,7 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 			segment.InitializeChunkState(segment.chunk_data.size() - 1, state.current_chunk_state);
 		}
 	}
+	segment.count += input.size();
 	count += input.size();
 }
 
@@ -676,6 +689,7 @@ void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 		// exhausted all chunks for this internal data structure: move to the next one
 		state.chunk_index = 0;
 		state.segment_index++;
+		state.current_chunk_state.handles.clear();
 		if (state.segment_index >= segments.size()) {
 			return;
 		}
@@ -688,9 +702,27 @@ void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 }
 
 void ColumnDataCollection::Combine(ColumnDataCollection &other) {
+	if (types != other.types) {
+		throw InternalException("Attempting to combine ColumnDataCollections with mismatching types");
+	}
+	this->count += other.count;
+	this->segments.reserve(segments.size() + other.segments.size());
+	for (auto &other_seg : other.segments) {
+		segments.push_back(move(other_seg));
+	}
+	Verify();
 }
 
 void ColumnDataCollection::Verify() {
+#ifdef DEBUG
+	// verify counts
+	idx_t total_segment_count = 0;
+	for (auto &segment : segments) {
+		segment->Verify();
+		total_segment_count += segment->count;
+	}
+	D_ASSERT(total_segment_count == this->count);
+#endif
 }
 
 string ColumnDataCollection::ToString() const {
