@@ -33,8 +33,8 @@ unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData
 
 bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = (StringAnalyzeState &)state_p;
-	CanonicalFormat vdata;
-	input.ToCanonical(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 
 	state.count += count;
 	auto data = (string_t *)vdata.data;

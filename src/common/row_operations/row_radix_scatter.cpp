@@ -6,7 +6,7 @@
 namespace duckdb {
 
 template <class T>
-void TemplatedRadixScatter(CanonicalFormat &vdata, const SelectionVector &sel, idx_t add_count,
+void TemplatedRadixScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
                            data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                            const bool is_little_endian, const idx_t offset) {
 	auto source = (T *)vdata.data;
@@ -51,7 +51,7 @@ void TemplatedRadixScatter(CanonicalFormat &vdata, const SelectionVector &sel, i
 	}
 }
 
-void RadixScatterStringVector(CanonicalFormat &vdata, const SelectionVector &sel, idx_t add_count,
+void RadixScatterStringVector(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
                               data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                               const idx_t prefix_len, idx_t offset) {
 	auto source = (string_t *)vdata.data;
@@ -96,7 +96,7 @@ void RadixScatterStringVector(CanonicalFormat &vdata, const SelectionVector &sel
 	}
 }
 
-void RadixScatterListVector(Vector &v, CanonicalFormat &vdata, const SelectionVector &sel, idx_t add_count,
+void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
                             data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                             const idx_t prefix_len, const idx_t width, const idx_t offset) {
 	auto list_data = ListVector::GetData(v);
@@ -172,7 +172,7 @@ void RadixScatterListVector(Vector &v, CanonicalFormat &vdata, const SelectionVe
 	}
 }
 
-void RadixScatterStructVector(Vector &v, CanonicalFormat &vdata, idx_t vcount, const SelectionVector &sel,
+void RadixScatterStructVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount, const SelectionVector &sel,
                               idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
                               const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
 	// serialize null values
@@ -213,8 +213,8 @@ void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector 
                                  idx_t prefix_len, idx_t width, idx_t offset) {
 	auto is_little_endian = Radix::IsLittleEndian();
 
-	CanonicalFormat vdata;
-	v.ToCanonical(vcount, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
 	switch (v.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

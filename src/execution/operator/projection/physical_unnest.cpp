@@ -32,8 +32,8 @@ public:
 
 	ExpressionExecutor executor;
 	DataChunk list_data;
-	vector<CanonicalFormat> list_vector_data;
-	vector<CanonicalFormat> list_child_data;
+	vector<UnifiedVectorFormat> list_vector_data;
+	vector<UnifiedVectorFormat> list_child_data;
 };
 
 // this implements a sorted window functions variant
@@ -63,7 +63,7 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 }
 
 template <class T>
-static void TemplatedUnnest(CanonicalFormat &vdata, idx_t start, idx_t end, Vector &result) {
+static void TemplatedUnnest(UnifiedVectorFormat &vdata, idx_t start, idx_t end, Vector &result) {
 	auto source_data = (T *)vdata.data;
 	auto &source_mask = vdata.validity;
 	auto result_data = FlatVector::GetData<T>(result);
@@ -81,7 +81,7 @@ static void TemplatedUnnest(CanonicalFormat &vdata, idx_t start, idx_t end, Vect
 	}
 }
 
-static void UnnestValidity(CanonicalFormat &vdata, idx_t start, idx_t end, Vector &result) {
+static void UnnestValidity(UnifiedVectorFormat &vdata, idx_t start, idx_t end, Vector &result) {
 	auto &source_mask = vdata.validity;
 	auto &result_mask = FlatVector::Validity(result);
 
@@ -92,7 +92,7 @@ static void UnnestValidity(CanonicalFormat &vdata, idx_t start, idx_t end, Vecto
 	}
 }
 
-static void UnnestVector(CanonicalFormat &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end,
+static void UnnestVector(UnifiedVectorFormat &vdata, Vector &source, idx_t list_size, idx_t start, idx_t end,
                          Vector &result) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -147,8 +147,8 @@ static void UnnestVector(CanonicalFormat &vdata, Vector &source, idx_t list_size
 		auto &target_entries = StructVector::GetEntries(result);
 		UnnestValidity(vdata, start, end, result);
 		for (idx_t i = 0; i < source_entries.size(); i++) {
-			CanonicalFormat sdata;
-			source_entries[i]->ToCanonical(list_size, sdata);
+			UnifiedVectorFormat sdata;
+			source_entries[i]->ToUnifiedFormat(list_size, sdata);
 			UnnestVector(sdata, *source_entries[i], list_size, start, end, *target_entries[i]);
 		}
 		break;
@@ -185,19 +185,19 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			D_ASSERT(state.list_vector_data.size() == state.list_data.ColumnCount());
 			D_ASSERT(state.list_child_data.size() == state.list_data.ColumnCount());
 
-			// initialize CanonicalFormat object so the nullmask can accessed
+			// initialize UnifiedVectorFormat object so the nullmask can accessed
 			for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
 				auto &list_vector = state.list_data.data[col_idx];
-				list_vector.ToCanonical(state.list_data.size(), state.list_vector_data[col_idx]);
+				list_vector.ToUnifiedFormat(state.list_data.size(), state.list_vector_data[col_idx]);
 
 				if (list_vector.GetType() == LogicalType::SQLNULL) {
 					// UNNEST(NULL)
 					auto &child_vector = list_vector;
-					child_vector.ToCanonical(0, state.list_child_data[col_idx]);
+					child_vector.ToUnifiedFormat(0, state.list_child_data[col_idx]);
 				} else {
 					auto list_size = ListVector::GetListSize(list_vector);
 					auto &child_vector = ListVector::GetEntry(list_vector);
-					child_vector.ToCanonical(list_size, state.list_child_data[col_idx]);
+					child_vector.ToUnifiedFormat(list_size, state.list_child_data[col_idx]);
 				}
 			}
 			state.first_fetch = false;

@@ -227,10 +227,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
-			//	ToCanonical the rest, as the sort code will do this anyway.
+			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
-			CanonicalFormat vdata;
-			v.ToCanonical(count, vdata);
+			UnifiedVectorFormat vdata;
+			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.AllValid()) {
 				continue;

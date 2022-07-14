@@ -48,8 +48,8 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		default: {
-			CanonicalFormat vdata;
-			args.data[idx].ToCanonical(args.size(), vdata);
+			UnifiedVectorFormat vdata;
+			args.data[idx].ToUnifiedFormat(args.size(), vdata);
 			if (!vdata.validity.AllValid()) {
 				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);

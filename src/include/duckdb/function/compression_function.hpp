@@ -91,7 +91,7 @@ typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &stat
 // Append (optional)
 //===--------------------------------------------------------------------===//
 typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(ColumnSegment &segment, block_id_t block_id);
-typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics &stats, CanonicalFormat &data,
+typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data,
                                       idx_t offset, idx_t count);
 typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);

@@ -460,8 +460,8 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	} catch (...) { // LCOV_EXCL_START
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	} // LCOV_EXCL_STOP
-	CanonicalFormat vdata;
-	result.ToCanonical(chunk.size(), vdata);
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(chunk.size(), vdata);
 
 	auto dataptr = (int32_t *)vdata.data;
 	for (idx_t i = 0; i < chunk.size(); i++) {

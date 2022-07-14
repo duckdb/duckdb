@@ -76,8 +76,8 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 template <class T>
 static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	CanonicalFormat idata;
-	input.ToCanonical(count, idata);
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
 
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -92,8 +92,8 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 
 template <class T>
 static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys, bool is_little_endian) {
-	CanonicalFormat idata;
-	input.ToCanonical(count, idata);
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
 
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {

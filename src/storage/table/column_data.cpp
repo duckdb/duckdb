@@ -205,8 +205,8 @@ void ColumnScanState::NextVector() {
 }
 
 void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
-	CanonicalFormat vdata;
-	vector.ToCanonical(count, vdata);
+	UnifiedVectorFormat vdata;
+	vector.ToUnifiedFormat(count, vdata);
 	AppendData(stats, state, vdata, count);
 }
 
@@ -230,7 +230,7 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.current->InitializeAppend(state);
 }
 
-void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, CanonicalFormat &vdata, idx_t count) {
+void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) {
 	idx_t offset = 0;
 	while (true) {
 		// append the data from the vector

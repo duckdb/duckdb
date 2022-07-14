@@ -30,9 +30,9 @@ static void TemplatedBooleanNullmask(Vector &left, Vector &right, Vector &result
 		ConstantVector::SetNull(result, is_null);
 	} else {
 		// perform generic loop
-		CanonicalFormat ldata, rdata;
-		left.ToCanonical(count, ldata);
-		right.ToCanonical(count, rdata);
+		UnifiedVectorFormat ldata, rdata;
+		left.ToUnifiedFormat(count, ldata);
+		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto left_data = (uint8_t *)ldata.data; // we use uint8 to avoid load of gunk bools

@@ -313,8 +313,8 @@ struct ICUDatePart : public ICUDateFunc {
 				}
 			}
 		} else {
-			CanonicalFormat rdata;
-			input.ToCanonical(count, rdata);
+			UnifiedVectorFormat rdata;
+			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
 			auto tdata = (const INPUT_TYPE *)rdata.data;

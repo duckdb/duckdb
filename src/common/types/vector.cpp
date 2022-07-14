@@ -762,7 +762,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 	}
 }
 
-void Vector::ToCanonical(idx_t count, CanonicalFormat &data) {
+void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
@@ -811,8 +811,8 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 void Vector::Serialize(idx_t count, Serializer &serializer) {
 	auto &type = GetType();
 
-	CanonicalFormat vdata;
-	ToCanonical(count, vdata);
+	UnifiedVectorFormat vdata;
+	ToUnifiedFormat(count, vdata);
 
 	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
 	serializer.Write<bool>(write_validity);
@@ -1186,8 +1186,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
 		// retrieve the list entry from the source vector
-		CanonicalFormat vdata;
-		source.ToCanonical(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		auto list_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(list_index)) {
@@ -1214,8 +1214,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		break;
 	}
 	case PhysicalType::STRUCT: {
-		CanonicalFormat vdata;
-		source.ToCanonical(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		auto struct_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(struct_index)) {
@@ -1382,8 +1382,8 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 template <class T>
 void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
-	CanonicalFormat vector_data;
-	list_vector.ToCanonical(ListVector::GetListSize(list), vector_data);
+	UnifiedVectorFormat vector_data;
+	list_vector.ToUnifiedFormat(ListVector::GetListSize(list), vector_data);
 	auto data = (T *)vector_data.data;
 	auto validity_mask = vector_data.validity;
 
@@ -1414,8 +1414,8 @@ void TemplatedSearchInMap(Vector &list, const Value &key, vector<idx_t> &offsets
 void SearchStringInMap(Vector &list, const string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
                        idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
-	CanonicalFormat vector_data;
-	list_vector.ToCanonical(ListVector::GetListSize(list), vector_data);
+	UnifiedVectorFormat vector_data;
+	list_vector.ToUnifiedFormat(ListVector::GetListSize(list), vector_data);
 	auto data = (string_t *)vector_data.data;
 	auto validity_mask = vector_data.validity;
 	if (is_key_null) {

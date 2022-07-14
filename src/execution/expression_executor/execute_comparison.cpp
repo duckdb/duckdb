@@ -153,9 +153,9 @@ idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &ri
 static inline idx_t SelectNotNull(Vector &left, Vector &right, const idx_t count, const SelectionVector &sel,
                                   SelectionVector &maybe_vec, OptionalSelection &false_opt) {
 
-	CanonicalFormat lvdata, rvdata;
-	left.ToCanonical(count, lvdata);
-	right.ToCanonical(count, rvdata);
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(count, lvdata);
+	right.ToUnifiedFormat(count, rvdata);
 
 	auto &lmask = lvdata.validity;
 	auto &rmask = rvdata.validity;

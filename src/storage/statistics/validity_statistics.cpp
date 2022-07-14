@@ -63,8 +63,8 @@ void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_
 		// nothing to verify
 		return;
 	}
-	CanonicalFormat vdata;
-	vector.ToCanonical(count, vdata);
+	UnifiedVectorFormat vdata;
+	vector.ToUnifiedFormat(count, vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto index = vdata.sel->get_index(idx);

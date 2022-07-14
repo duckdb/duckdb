@@ -27,9 +27,9 @@ struct CastSQLite {
 
 	static VectorType ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
 	                                       vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlites,
-	                                       unique_ptr<CanonicalFormat[]> vec_data);
+	                                       unique_ptr<UnifiedVectorFormat[]> vec_data);
 
-	static unique_ptr<vector<sqlite3_value>> ToVector(LogicalType type, CanonicalFormat &vec_data, idx_t size,
+	static unique_ptr<vector<sqlite3_value>> ToVector(LogicalType type, UnifiedVectorFormat &vec_data, idx_t size,
 	                                                  Vector &result);
 
 	static void ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result);
@@ -87,7 +87,7 @@ struct CastToSQLiteValue {
 struct CastToVectorSQLiteValue {
 
 	template <class INPUT_TYPE, class OPCAST>
-	static inline unique_ptr<vector<sqlite3_value>> Operation(CanonicalFormat &vec_data, idx_t count) {
+	static inline unique_ptr<vector<sqlite3_value>> Operation(UnifiedVectorFormat &vec_data, idx_t count) {
 		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 

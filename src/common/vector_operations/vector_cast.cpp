@@ -213,8 +213,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_me
 		                error_message, nullptr);
 	}
 	default: {
-		CanonicalFormat vdata;
-		source.ToCanonical(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -620,8 +620,8 @@ bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message
 
 	auto res_enum_type = result.GetType();
 
-	CanonicalFormat vdata;
-	source.ToCanonical(count, vdata);
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(count, vdata);
 
 	auto source_data = (SRC_TYPE *)vdata.data;
 	auto source_sel = vdata.sel;

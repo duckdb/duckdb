@@ -21,7 +21,7 @@ class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
 class Vector;
-struct CanonicalFormat;
+struct UnifiedVectorFormat;
 
 // RowOperations contains a set of operations that operate on data using a RowLayout
 struct RowOperations {
@@ -46,7 +46,7 @@ struct RowOperations {
 	// Read/Write Operators
 	//===--------------------------------------------------------------------===//
 	//! Scatter group data to the rows. Initialises the ValidityMask.
-	static void Scatter(DataChunk &columns, CanonicalFormat col_data[], const RowLayout &layout, Vector &rows,
+	static void Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
 	                    RowDataCollection &string_heap, const SelectionVector &sel, idx_t count);
 	//! Gather a single column.
 	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
@@ -62,7 +62,7 @@ struct RowOperations {
 	//! Returns the number of matches remaining in the selection.
 	using Predicates = vector<ExpressionType>;
 
-	static idx_t Match(DataChunk &columns, CanonicalFormat col_data[], const RowLayout &layout, Vector &rows,
+	static idx_t Match(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
 	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
 	                   idx_t &no_match_count);
 
@@ -73,15 +73,15 @@ struct RowOperations {
 	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
 	                              const SelectionVector &sel, idx_t offset = 0);
 	//! Compute the entry sizes of vector data with variable size type (used before building heap buffer space).
-	static void ComputeEntrySizes(Vector &v, CanonicalFormat &vdata, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
-	                              const SelectionVector &sel, idx_t offset = 0);
+	static void ComputeEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t vcount,
+	                              idx_t ser_count, const SelectionVector &sel, idx_t offset = 0);
 	//! Scatter vector with variable size type to the heap.
 	static void HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
 	                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset = 0);
 	//! Scatter vector data with variable size type to the heap.
-	static void HeapScatterVData(CanonicalFormat &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-	                             idx_t col_idx, data_ptr_t *key_locations, data_ptr_t *validitymask_locations,
-	                             idx_t offset = 0);
+	static void HeapScatterVData(UnifiedVectorFormat &vdata, PhysicalType type, const SelectionVector &sel,
+	                             idx_t ser_count, idx_t col_idx, data_ptr_t *key_locations,
+	                             data_ptr_t *validitymask_locations, idx_t offset = 0);
 	//! Gather a single column with variable size type from the heap.
 	static void HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_idx,
 	                       data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);

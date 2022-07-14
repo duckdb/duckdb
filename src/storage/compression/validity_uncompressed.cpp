@@ -397,7 +397,7 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	return nullptr;
 }
 
-idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, CanonicalFormat &data, idx_t offset,
+idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset,
                      idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
 	auto &validity_stats = (ValidityStatistics &)*stats.statistics;

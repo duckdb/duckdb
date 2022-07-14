@@ -36,7 +36,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 }
 
 template <class T>
-static void ComputeGroupLocationTemplated(CanonicalFormat &group_data, Value &min, uintptr_t *address_data,
+static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
 	auto data = (T *)group_data.data;
 	auto min_val = min.GetValueUnsafe<T>();
@@ -64,8 +64,8 @@ static void ComputeGroupLocationTemplated(CanonicalFormat &group_data, Value &mi
 }
 
 static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift, idx_t count) {
-	CanonicalFormat vdata;
-	group.ToCanonical(count, vdata);
+	UnifiedVectorFormat vdata;
+	group.ToUnifiedFormat(count, vdata);
 
 	switch (group.GetType().InternalType()) {
 	case PhysicalType::INT8:

@@ -420,7 +420,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	group_chunk.SetCardinality(groups);
 
 	// orrify all the groups
-	auto group_data = group_chunk.ToCanonical();
+	auto group_data = group_chunk.ToUnifiedFormat();
 
 	idx_t new_group_count = 0;
 	while (remaining_entries > 0) {

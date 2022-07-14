@@ -31,8 +31,8 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &, idx_t inpu
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];
-	CanonicalFormat sdata;
-	state_vector.ToCanonical(count, sdata);
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
 
 	auto list_vector_type = LogicalType::LIST(input.GetType());
 
@@ -52,8 +52,8 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &, idx_t inpu
 }
 
 static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputData &, idx_t count) {
-	CanonicalFormat sdata;
-	state.ToCanonical(count, sdata);
+	UnifiedVectorFormat sdata;
+	state.ToUnifiedFormat(count, sdata);
 	auto states_ptr = (ListAggState **)sdata.data;
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
@@ -75,8 +75,8 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 }
 
 static void ListFinalize(Vector &state_vector, AggregateInputData &, Vector &result, idx_t count, idx_t offset) {
-	CanonicalFormat sdata;
-	state_vector.ToCanonical(count, sdata);
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = (ListAggState **)sdata.data;
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);

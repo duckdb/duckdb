@@ -102,11 +102,11 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
 		}
 	} else {
-		CanonicalFormat sdata, bdata, edata;
+		UnifiedVectorFormat sdata, bdata, edata;
 
-		s.ToCanonical(count, sdata);
-		b.ToCanonical(count, bdata);
-		e.ToCanonical(count, edata);
+		s.ToUnifiedFormat(count, sdata);
+		b.ToUnifiedFormat(count, bdata);
+		e.ToUnifiedFormat(count, edata);
 
 		auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
