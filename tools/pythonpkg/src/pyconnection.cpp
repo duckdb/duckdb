@@ -90,6 +90,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
 	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
@@ -397,6 +399,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 	vector<Value> params;
 	params.emplace_back(query);
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	vector<Value> params;
+	params.emplace_back(query);
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
 }
 
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {

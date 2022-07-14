@@ -1,0 +1,25 @@
+import duckdb
+import pytest
+
+def test_substrait_json(require):
+    connection = require('substrait')
+    if connection is None:
+        return
+
+    connection.execute('CREATE TABLE integers (i integer)')
+    json =  connection.get_substrait_json("select * from integers limit 5").fetchone()[0]
+    expected_result = '{"relations":[{"root":{"input":{"fetch":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["i"]},"namedTable":{"names":["integers"]}}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"count":"5"}},"names":["i"]}}]}'
+    assert json == expected_result
+
+    duckdb.default_connection.execute('CREATE TABLE integers (i integer)')
+    json = duckdb.get_substrait_json("select * from integers limit 5").fetchone()[0]
+    assert json == expected_result
+
+    # Test closed connection
+    connection.close()
+    with pytest.raises(Exception, match="connection closed"):
+        connection.get_substrait_json("select * from integers limit 5")
+
+    # Test broken query
+    with pytest.raises(Exception, match="Table with name p does not exist!"):
+        duckdb.get_substrait_json("select * from p limit 5").fetchone()[0]

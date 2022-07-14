@@ -36,7 +36,7 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 [[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query) {
 
 	if (!conn || !conn->conn) {
-		cpp11::stop("rapi_prepare_substrait: Invalid connection");
+		cpp11::stop("rapi_get_substrait: Invalid connection");
 	}
 
 	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)});
@@ -51,6 +51,20 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 	memcpy(RAW_POINTER(rawval), blob_string.data(), blob_string.size());
 
 	return rawval;
+}
+
+[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query) {
+
+	if (!conn || !conn->conn) {
+		cpp11::stop("rapi_get_substrait_json: Invalid connection");
+	}
+
+	auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)});
+	auto res = rel->Execute();
+	auto chunk = res->Fetch();
+	auto json = StringValue::Get(chunk->GetValue(0, 0));
+
+	return StringsToSexp({json});
 }
 
 static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
