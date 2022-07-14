@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-void string_t::Verify() {
+void string_t::Verify() const {
 	auto dataptr = GetDataUnsafe();
 	(void)dataptr;
 	D_ASSERT(dataptr);
@@ -25,7 +25,7 @@ void string_t::Verify() {
 	}
 }
 
-void string_t::VerifyNull() {
+void string_t::VerifyNull() const {
 	for (idx_t i = 0; i < GetSize(); i++) {
 		D_ASSERT(GetDataUnsafe()[i] != '\0');
 	}

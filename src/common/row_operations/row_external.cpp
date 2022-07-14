@@ -10,6 +10,8 @@
 
 namespace duckdb {
 
+using ValidityBytes = RowLayout::ValidityBytes;
+
 void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
 	data_ptr_t heap_row_ptrs[STANDARD_VECTOR_SIZE];
@@ -94,6 +96,19 @@ void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, const data_ptr
 	}
 }
 
+static inline void VerifyUnswizzledString(const RowLayout &layout, const idx_t &col_idx, const data_ptr_t &row_ptr) {
+#ifdef DEBUG
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
+	ValidityBytes row_mask(row_ptr);
+	if (row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+		Load<string_t>(row_ptr + layout.GetOffsets()[col_idx]).Verify();
+	}
+#endif
+}
+
 void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t base_row_ptr,
                                       const data_ptr_t base_heap_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
@@ -125,6 +140,7 @@ void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t 
 					}
 					col_ptr += row_width;
 					string_ptr += row_width;
+					VerifyUnswizzledString(layout, col_idx, row_ptr + i * row_width);
 				}
 			} else {
 				// Non-varchar blob columns

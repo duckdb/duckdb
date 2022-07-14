@@ -10,6 +10,7 @@ PRAGMA debug_force_external=true
 
 # Create tables with large string values so that we have to swizzle strings
 # The tables have a single overlapping value to keep the join result small
+# 000000000000
 statement ok
 create table t1 as select concat('000000000000', range::VARCHAR) i from range(20000)
 

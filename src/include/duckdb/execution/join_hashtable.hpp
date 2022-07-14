@@ -273,7 +273,8 @@ public:
 	//! If this is the probe-side HT, get the next indices indicating what to scan
 	idx_t GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position);
 	//! If this is the probe
-	void ConstructProbeChunk(DataChunk &chunk, Vector &addresses, idx_t position, idx_t block_position, idx_t count);
+	void ConstructProbeChunk(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
+	                         idx_t block_position, idx_t count);
 
 private:
 	//! The current number of radix bits used to partition
