@@ -1,18 +1,18 @@
-#include "duckdb/common/types/batched_chunk_collection.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-BatchedChunkCollection::BatchedChunkCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
+BatchedDataCollection::BatchedDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
     : buffer_manager(buffer_manager), types(move(types_p)) {
 }
 
-BatchedChunkCollection::BatchedChunkCollection(ClientContext &context, vector<LogicalType> types_p)
-    : BatchedChunkCollection(BufferManager::GetBufferManager(context), move(types_p)) {
+BatchedDataCollection::BatchedDataCollection(ClientContext &context, vector<LogicalType> types_p)
+    : BatchedDataCollection(BufferManager::GetBufferManager(context), move(types_p)) {
 }
 
-void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
+void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
 	auto entry = data.find(batch_index);
 	ColumnDataCollection *collection;
@@ -26,11 +26,11 @@ void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
 	collection->Append(input);
 }
 
-void BatchedChunkCollection::Merge(BatchedChunkCollection &other) {
+void BatchedDataCollection::Merge(BatchedDataCollection &other) {
 	for (auto &entry : other.data) {
 		if (data.find(entry.first) != data.end()) {
 			throw InternalException(
-			    "BatchChunkCollection::Merge error - batch index %d is present in both collections. This occurs when "
+			    "BatchedDataCollection::Merge error - batch index %d is present in both collections. This occurs when "
 			    "batch indexes are not uniquely distributed over threads",
 			    entry.first);
 		}
@@ -39,7 +39,7 @@ void BatchedChunkCollection::Merge(BatchedChunkCollection &other) {
 	other.data.clear();
 }
 
-void BatchedChunkCollection::InitializeScan(BatchedChunkScanState &state) {
+void BatchedDataCollection::InitializeScan(BatchedChunkScanState &state) {
 	state.iterator = data.begin();
 	if (state.iterator == data.end()) {
 		return;
@@ -47,7 +47,7 @@ void BatchedChunkCollection::InitializeScan(BatchedChunkScanState &state) {
 	state.iterator->second->InitializeScan(state.scan_state);
 }
 
-void BatchedChunkCollection::Scan(BatchedChunkScanState &state, DataChunk &output) {
+void BatchedDataCollection::Scan(BatchedChunkScanState &state, DataChunk &output) {
 	while (state.iterator != data.end()) {
 		// check if there is a chunk remaining in this collection
 		auto collection = state.iterator->second.get();
@@ -64,9 +64,9 @@ void BatchedChunkCollection::Scan(BatchedChunkScanState &state, DataChunk &outpu
 	}
 }
 
-string BatchedChunkCollection::ToString() const {
+string BatchedDataCollection::ToString() const {
 	string result;
-	result += "Batched Chunk Collection\n";
+	result += "Batched Data Collection\n";
 	for (auto &entry : data) {
 		result += "Batch Index - " + to_string(entry.first) + "\n";
 		result += entry.second->ToString() + "\n\n";
@@ -74,7 +74,7 @@ string BatchedChunkCollection::ToString() const {
 	return result;
 }
 
-void BatchedChunkCollection::Print() const {
+void BatchedDataCollection::Print() const {
 	Printer::Print(ToString());
 }
 

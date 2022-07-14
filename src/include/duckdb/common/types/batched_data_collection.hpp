@@ -20,18 +20,18 @@ struct BatchedChunkScanState {
 	ColumnDataScanState scan_state;
 };
 
-//!  A BatchedChunkCollection holds a number of data entries that are partitioned by batch index
-//! Scans over a BatchedChunkCollection are ordered by batch index
-class BatchedChunkCollection {
+//!  A BatchedDataCollection holds a number of data entries that are partitioned by batch index
+//! Scans over a BatchedDataCollection are ordered by batch index
+class BatchedDataCollection {
 public:
-	DUCKDB_API BatchedChunkCollection(BufferManager &buffer_manager, vector<LogicalType> types);
-	DUCKDB_API BatchedChunkCollection(ClientContext &context, vector<LogicalType> types);
+	DUCKDB_API BatchedDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types);
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);
 
 	//! Merge the other batched chunk collection into this batched collection
-	DUCKDB_API void Merge(BatchedChunkCollection &other);
+	DUCKDB_API void Merge(BatchedDataCollection &other);
 
 	//! Initialize a scan over the batched chunk collection
 	DUCKDB_API void InitializeScan(BatchedChunkScanState &state);

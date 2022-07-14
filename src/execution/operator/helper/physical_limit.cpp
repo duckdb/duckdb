@@ -4,7 +4,7 @@
 #include "duckdb/main/config.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/common/types/batched_chunk_collection.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
 
 namespace duckdb {
@@ -29,7 +29,7 @@ public:
 	mutex glock;
 	idx_t limit;
 	idx_t offset;
-	BatchedChunkCollection data;
+	BatchedDataCollection data;
 };
 
 class LimitLocalState : public LocalSinkState {
@@ -43,7 +43,7 @@ public:
 	idx_t current_offset;
 	idx_t limit;
 	idx_t offset;
-	BatchedChunkCollection data;
+	BatchedDataCollection data;
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {

@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
-#include "duckdb/common/types/batched_chunk_collection.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -17,7 +17,7 @@ public:
 	}
 
 	mutex glock;
-	BatchedChunkCollection data;
+	BatchedDataCollection data;
 	unique_ptr<MaterializedQueryResult> result;
 };
 
@@ -26,7 +26,7 @@ public:
 	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
-	BatchedChunkCollection data;
+	BatchedDataCollection data;
 };
 
 SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate,
