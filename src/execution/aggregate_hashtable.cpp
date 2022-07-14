@@ -419,7 +419,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	group_chunk.data[groups.ColumnCount()].Reference(group_hashes);
 	group_chunk.SetCardinality(groups);
 
-	// orrify all the groups
+	// convert all vectors to unified format
 	auto group_data = group_chunk.ToUnifiedFormat();
 
 	idx_t new_group_count = 0;

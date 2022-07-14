@@ -39,8 +39,8 @@ ListLambdaBindData::~ListLambdaBindData() {
 static void AppendTransformedToResult(Vector &lambda_vector, idx_t &elem_cnt, Vector &result) {
 
 	// append the lambda_vector to the result list
-	VectorData lambda_child_data;
-	lambda_vector.Orrify(elem_cnt, lambda_child_data);
+	UnifiedVectorFormat lambda_child_data;
+	lambda_vector.ToUnifiedFormat(elem_cnt, lambda_child_data);
 	ListVector::Append(result, lambda_vector, *lambda_child_data.sel, elem_cnt, 0);
 }
 
@@ -90,8 +90,8 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 	// slice to get the new lists and append them to the result
 	Vector new_lists(input_chunk.data[0], true_sel, true_count);
 	new_lists.Normalify(true_count);
-	VectorData new_lists_child_data;
-	new_lists.Orrify(true_count, new_lists_child_data);
+	UnifiedVectorFormat new_lists_child_data;
+	new_lists.ToUnifiedFormat(true_count, new_lists_child_data);
 	ListVector::Append(result, new_lists, *new_lists_child_data.sel, true_count, 0);
 }
 
@@ -139,8 +139,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 
 	// get the lists data
-	VectorData lists_data;
-	lists.Orrify(count, lists_data);
+	UnifiedVectorFormat lists_data;
+	lists.ToUnifiedFormat(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// get the lambda expression
@@ -151,8 +151,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	// get the child vector and child data
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
-	VectorData child_data;
-	child_vector.Orrify(lists_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// to slice the child vector
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -162,7 +162,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	result_types.push_back(lambda_expr->return_type);
 
 	// non-lambda parameter columns
-	vector<VectorData> columns;
+	vector<UnifiedVectorFormat> columns;
 	vector<idx_t> indexes;
 	vector<SelectionVector> sel_vectors;
 
@@ -171,8 +171,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	// skip the list column
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
-		columns.emplace_back(VectorData());
-		args.data[i].Orrify(count, columns[i - 1]);
+		columns.emplace_back(UnifiedVectorFormat());
+		args.data[i].ToUnifiedFormat(count, columns[i - 1]);
 		indexes.push_back(0);
 		sel_vectors.emplace_back(SelectionVector(STANDARD_VECTOR_SIZE));
 		types.push_back(args.data[i].GetType());
