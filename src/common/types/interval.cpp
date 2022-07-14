@@ -439,12 +439,10 @@ bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
 }
 
 interval_t Interval::Invert(interval_t interval) {
-	auto microseconds = Interval::GetMicro(interval);
-	int64_t inverted;
-	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(microseconds, (int64_t)-1, inverted)) {
-		throw OutOfRangeException("Interval could not be inverted, as it would result in overflow");
-	}
-	return Interval::FromMicro(inverted);
+	interval.days = -interval.days;
+	interval.micros = -interval.micros;
+	interval.months = -interval.months;
+	return interval;
 }
 
 date_t Interval::Add(date_t left, interval_t right) {
