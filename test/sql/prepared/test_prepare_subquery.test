@@ -2,6 +2,9 @@
 # description: Prepared statements and subqueries
 # group: [prepared]
 
+require skip_reload
+
+
 # simple subquery
 statement ok
 PREPARE v1 AS SELECT * FROM (SELECT $1::INTEGER) sq1;

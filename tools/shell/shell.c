@@ -20287,6 +20287,7 @@ static const char zOptions[] =
 #endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
+  "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
   "   -vfs NAME            use NAME as the default VFS\n"
 #ifdef SQLITE_ENABLE_VFSTRACE
@@ -20748,6 +20749,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.statsOn = 1;
     }else if( strcmp(z,"-scanstats")==0 ){
       data.scanstatsOn = 1;
+    }else if( strcmp(z,"-unsigned")==0 ){
+      data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
     }else if( strcmp(z,"-backslash")==0 ){
       /* Undocumented command-line option: -backslash
       ** Causes C-style backslash escapes to be evaluated in SQL statements

@@ -2,6 +2,8 @@
 # description: Update the same value multiple times in one transaction
 # group: [update]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 

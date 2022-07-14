@@ -137,8 +137,7 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 }
 
 static ScalarFunction GetICUFunction(const string &collation) {
-	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, false,
-	                      ICUCollateBind);
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, ICUCollateBind);
 }
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
@@ -308,7 +307,7 @@ void ICUExtension::Load(DuckDB &db) {
 		catalog.CreateCollation(*con.context, &info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                        ICUCollateFunction, false, ICUSortKeyBind);
+	                        ICUCollateFunction, ICUSortKeyBind);
 
 	CreateScalarFunctionInfo sort_key_info(move(sort_key));
 	catalog.CreateFunction(*con.context, &sort_key_info);
@@ -320,7 +319,7 @@ void ICUExtension::Load(DuckDB &db) {
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
-	config.set_variables["TimeZone"] = Value(tz_string);
+	config.options.set_variables["TimeZone"] = Value(tz_string);
 
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
@@ -337,7 +336,7 @@ void ICUExtension::Load(DuckDB &db) {
 	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, SetICUCalendar);
 	UErrorCode status = U_ZERO_ERROR;
 	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
-	config.set_variables["Calendar"] = Value(cal->getType());
+	config.options.set_variables["Calendar"] = Value(cal->getType());
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(move(cal_names));

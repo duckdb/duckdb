@@ -24,8 +24,12 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateIndexInfo>();
+	if (stmt->unique) {
+		info->constraint_type = IndexConstraintType::UNIQUE;
+	} else {
+		info->constraint_type = IndexConstraintType::NONE;
+	}
 
-	info->unique = stmt->unique;
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
@@ -58,6 +62,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 		info->index_name = stmt->idxname;
 	} else {
 		throw NotImplementedException("Index wout a name not supported yet!");
+	}
+	for (auto &expr : info->expressions) {
+		info->parsed_expressions.emplace_back(expr->Copy());
 	}
 	result->info = move(info);
 	return result;

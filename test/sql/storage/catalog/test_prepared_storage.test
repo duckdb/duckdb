@@ -2,6 +2,9 @@
 # description: PREPARE and WAL
 # group: [catalog]
 
+require skip_reload
+
+
 # load the DB from disk
 load __TEST_DIR__/prepared_storage.db
 

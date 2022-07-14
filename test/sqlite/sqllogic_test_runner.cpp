@@ -12,7 +12,7 @@ namespace duckdb {
 
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
 	config = GetTestConfig();
-	config->load_extensions = false;
+	config->options.load_extensions = false;
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -478,6 +478,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "test_helper") {
 				db->LoadExtension<TestHelperExtension>();
+			} else if (param == "skip_reload") {
+				skip_reload = true;
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
@@ -521,11 +523,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// set up the config file
 			if (readonly) {
-				config->use_temporary_directory = false;
-				config->access_mode = AccessMode::READ_ONLY;
+				config->options.use_temporary_directory = false;
+				config->options.access_mode = AccessMode::READ_ONLY;
 			} else {
-				config->use_temporary_directory = true;
-				config->access_mode = AccessMode::AUTOMATIC;
+				config->options.use_temporary_directory = true;
+				config->options.access_mode = AccessMode::AUTOMATIC;
 			}
 			// now create the database file
 			LoadDatabase(dbpath);

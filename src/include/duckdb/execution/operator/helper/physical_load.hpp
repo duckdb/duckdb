@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! PhysicalVacuum represents an etension LOAD operation
+//! PhysicalLoad represents an extension LOAD operation
 class PhysicalLoad : public PhysicalOperator {
 public:
 	explicit PhysicalLoad(unique_ptr<LoadInfo> info, idx_t estimated_cardinality)

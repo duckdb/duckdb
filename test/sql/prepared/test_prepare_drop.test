@@ -2,6 +2,9 @@
 # description: PREPARE and DROPping tables
 # group: [prepared]
 
+require skip_reload
+
+
 statement ok con1
 CREATE TABLE a (i TINYINT)
 

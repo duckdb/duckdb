@@ -3,6 +3,9 @@
 # group: [art]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR, l BIGINT)
 
 statement ok
@@ -49,4 +52,3 @@ query I
 SELECT COUNT(*) FROM integers WHERE j+l>0
 ----
 0
-
