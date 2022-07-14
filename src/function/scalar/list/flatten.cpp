@@ -16,8 +16,8 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 	idx_t count = args.size();
 
-	VectorData list_data;
-	input.Orrify(count, list_data);
+	UnifiedVectorFormat list_data;
+	input.ToUnifiedFormat(count, list_data);
 	auto list_entries = (list_entry_t *)list_data.data;
 
 	auto &child_vector = ListVector::GetEntry(input);
@@ -41,8 +41,8 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 
 	auto child_size = ListVector::GetListSize(input);
-	VectorData child_data;
-	child_vector.Orrify(child_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(child_size, child_data);
 	auto child_entries = (list_entry_t *)child_data.data;
 	auto &data_vector = ListVector::GetEntry(child_vector);
 

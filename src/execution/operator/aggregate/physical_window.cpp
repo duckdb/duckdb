@@ -1315,8 +1315,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			idx_t pos = 0;
 			for (auto &chunk : payload_collection.Chunks()) {
 				const auto count = chunk->size();
-				VectorData vdata;
-				chunk->data[0].Orrify(count, vdata);
+				UnifiedVectorFormat vdata;
+				chunk->data[0].ToUnifiedFormat(count, vdata);
 				if (!vdata.validity.AllValid()) {
 					//	Lazily materialise the contents when we find the first NULL
 					if (ignore_nulls.AllValid()) {

@@ -765,7 +765,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	if (!filter.all()) {
 		// work-around for filters: set all values that are filtered to NULL to prevent the cast from failing on
 		// uninitialized data
-		intermediate_vector.Normalify(amount);
+		intermediate_vector.Flatten(amount);
 		auto &validity = FlatVector::Validity(intermediate_vector);
 		for (idx_t i = 0; i < amount; i++) {
 			if (!filter[i]) {

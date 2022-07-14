@@ -214,8 +214,8 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		}
 		return 0;
 	} else if (keys.ColumnCount() > 1) {
-		//	Normalify the primary, as it will need to merge arbitrary validity masks
-		primary.Normalify(count);
+		//	Flatten the primary, as it will need to merge arbitrary validity masks
+		primary.Flatten(count);
 		auto &pvalidity = FlatVector::Validity(primary);
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
@@ -223,10 +223,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
-			//	Orrify the rest, as the sort code will do this anyway.
+			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
-			VectorData vdata;
-			v.Orrify(count, vdata);
+			UnifiedVectorFormat vdata;
+			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.AllValid()) {
 				continue;

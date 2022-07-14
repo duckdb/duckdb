@@ -460,8 +460,8 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	} catch (...) { // LCOV_EXCL_START
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
 	} // LCOV_EXCL_STOP
-	VectorData vdata;
-	result.Orrify(chunk.size(), vdata);
+	UnifiedVectorFormat vdata;
+	result.ToUnifiedFormat(chunk.size(), vdata);
 
 	auto dataptr = (int32_t *)vdata.data;
 	for (idx_t i = 0; i < chunk.size(); i++) {
@@ -1003,7 +1003,7 @@ idx_t DataTable::Delete(TableCatalogEntry &table, ClientContext &context, Vector
 
 	auto &transaction = Transaction::GetTransaction(context);
 
-	row_identifiers.Normalify(count);
+	row_identifiers.Flatten(count);
 	auto ids = FlatVector::GetData<row_t>(row_identifiers);
 	auto first_id = ids[0];
 
@@ -1155,8 +1155,8 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);
 
-	updates.Normalify();
-	row_ids.Normalify(count);
+	updates.Flatten();
+	row_ids.Flatten(count);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
@@ -1213,8 +1213,8 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 	// now perform the actual update
 	auto &transaction = Transaction::GetTransaction(context);
 
-	updates.Normalify();
-	row_ids.Normalify(updates.size());
+	updates.Flatten();
+	row_ids.Flatten(updates.size());
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		throw NotImplementedException("Cannot update a column-path on transaction local data");
