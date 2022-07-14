@@ -438,11 +438,11 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		Vector addresses(LogicalType::POINTER);
 		auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 		auto handles = rows->Build(row_count, key_locations, nullptr, row_sel);
-		vector<VectorData> payload_data;
+		vector<UnifiedVectorFormat> payload_data;
 		payload_data.reserve(payload_chunk.ColumnCount());
 		for (idx_t i = 0; i < payload_chunk.ColumnCount(); i++) {
-			VectorData pdata;
-			payload_chunk.data[i].Orrify(row_count, pdata);
+			UnifiedVectorFormat pdata;
+			payload_chunk.data[i].ToUnifiedFormat(row_count, pdata);
 			payload_data.emplace_back(move(pdata));
 		}
 		RowOperations::Scatter(payload_chunk, payload_data.data(), payload_layout, addresses, *strings, *row_sel,

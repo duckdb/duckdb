@@ -25,10 +25,10 @@ inline void AddPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
-	VectorData lhs_data;
-	VectorData rhs_data;
-	left_vector.Orrify(count, lhs_data);
-	right_vector.Orrify(count, rhs_data);
+	UnifiedVectorFormat lhs_data;
+	UnifiedVectorFormat rhs_data;
+	left_vector.ToUnifiedFormat(count, lhs_data);
+	right_vector.ToUnifiedFormat(count, rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
@@ -64,10 +64,10 @@ inline void SubPointFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto left_vector_type = left_vector.GetVectorType();
 	auto right_vector_type = right_vector.GetVectorType();
 
-	VectorData lhs_data;
-	VectorData rhs_data;
-	left_vector.Orrify(count, lhs_data);
-	right_vector.Orrify(count, rhs_data);
+	UnifiedVectorFormat lhs_data;
+	UnifiedVectorFormat rhs_data;
+	left_vector.ToUnifiedFormat(count, lhs_data);
+	right_vector.ToUnifiedFormat(count, rhs_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &child_entries = StructVector::GetEntries(result);
