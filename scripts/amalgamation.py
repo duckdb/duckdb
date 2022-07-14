@@ -90,10 +90,11 @@ if '--extended' in sys.argv:
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
     main_header_files = normalize_path(main_header_files)
 
+from package_build import third_party_includes, third_party_sources
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir, mbedtls_include_dir, mbedtls_include_dir2, mbedtls_dir]
+include_paths = [include_dir] + third_party_includes()
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir, mbedtls_dir]
+compile_directories = [src_dir] + third_party_sources()
 
 # files always excluded
 always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])

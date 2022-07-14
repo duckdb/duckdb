@@ -154,13 +154,6 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-#TODO: add missing third party includes
-# Add paths that should be included when building the python client here
-def extra_python_includes():
-	extra_includes = []
-	extra_includes += [os.path.join(script_path, '..', '..', 'third_party', 'fmt', 'include')] #third_party/fmt/include
-	return extra_includes
-
 extra_files = []
 header_files = []
 
@@ -169,7 +162,12 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
-include_directories += extra_python_includes()
+sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
+from package_build import third_party_includes
+third_party = third_party_includes()
+# Make the third_party paths relative to the script path
+third_party = [os.path.join(script_path, '..', '..', x) for x in third_party]
+include_directories += third_party
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -179,7 +177,6 @@ if len(existing_duckdb_dir) == 0:
     if os.path.isfile(os.path.join(script_path, '..', '..', 'scripts', 'amalgamation.py')):
         # amalgamation exists: compiling from source directory
         # copy all source files to the current directory
-        sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
         (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, lib_name), extensions, False, unity_build)
 
@@ -225,7 +222,6 @@ if len(existing_duckdb_dir) == 0:
         libraries=libraries,
         language='c++')
 else:
-    sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
     import package_build
 
     toolchain_args += ['-I' + x for x in package_build.includes(extensions)]
