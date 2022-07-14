@@ -681,7 +681,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	row_group_pointer.tuple_count = count;
 	for (auto &state : states) {
 		// get the current position of the meta data writer
-		auto &meta_writer = writer.GetMetaWriter();
+		auto &meta_writer = writer.GetTableWriter();
 		auto pointer = meta_writer.GetBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers

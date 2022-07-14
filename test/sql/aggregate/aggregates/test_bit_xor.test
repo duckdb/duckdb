@@ -2,6 +2,8 @@
 # description: Test BIT_XOR operator
 # group: [aggregates]
 
+require skip_reload
+
 # test on scalar values
 query II
 SELECT BIT_XOR(3), BIT_XOR(NULL)

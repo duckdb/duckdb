@@ -101,7 +101,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		dummy_types.push_back(val.value.type());
 		dummy_names.push_back(it->first);
 	}
-	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
+	auto this_macro_binding = make_unique<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
 

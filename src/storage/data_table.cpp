@@ -472,7 +472,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	}
 }
 
-static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type) {
+bool DataTable::IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type) {
 	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
 		return false;
 	}
@@ -492,17 +492,6 @@ static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, Foreig
 		}
 	}
 	return true;
-}
-
-Index *TableIndexList::FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type) {
-	Index *result = nullptr;
-	Scan([&](Index &index) {
-		if (IsForeignKeyIndex(fk_keys, index, fk_type)) {
-			result = &index;
-		}
-		return false;
-	});
-	return result;
 }
 
 static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
@@ -560,7 +549,7 @@ static void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, Cli
 	if (transaction_check) {
 		vector<unique_ptr<Index>> &transact_index_vec = transaction.storage.GetIndexes(data_table);
 		for (idx_t i = 0; i < transact_index_vec.size(); i++) {
-			if (IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
+			if (DataTable::IsForeignKeyIndex(*dst_keys_ptr, *transact_index_vec[i], fk_type)) {
 				if (is_append) {
 					transact_index_vec[i]->VerifyAppendForeignKey(dst_chunk, tran_err_msgs.data());
 				} else {
@@ -1335,7 +1324,7 @@ void DataTable::SetStatistics(column_t column_id, const std::function<void(BaseS
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
+void DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	vector<unique_ptr<BaseStatistics>> global_stats;
@@ -1352,18 +1341,33 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	}
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
-	auto &meta_writer = writer.GetMetaWriter();
-	auto pointer = meta_writer.GetBlockPointer();
+	auto &data_writer = writer.GetTableWriter();
+	auto pointer = data_writer.GetBlockPointer();
 
 	for (auto &stats : global_stats) {
-		stats->Serialize(meta_writer);
+		stats->Serialize(data_writer);
 	}
 	// now start writing the row group pointers to disk
-	meta_writer.Write<uint64_t>(row_group_pointers.size());
+	data_writer.Write<uint64_t>(row_group_pointers.size());
 	for (auto &row_group_pointer : row_group_pointers) {
-		RowGroup::Serialize(row_group_pointer, meta_writer);
+		RowGroup::Serialize(row_group_pointer, data_writer);
 	}
-	return pointer;
+	// Now we serialize indexes in the tabledata_writer
+	auto blocks_info = info->indexes.SerializeIndexes(data_writer);
+
+	// metadata writing time
+	auto &metadata_writer = writer.GetMetaWriter();
+
+	// write the block pointer for the table info
+	metadata_writer.Write<block_id_t>(pointer.block_id);
+	metadata_writer.Write<uint64_t>(pointer.offset);
+
+	// Write-off block ids and offsets of indexes
+	metadata_writer.Write<idx_t>(blocks_info.size());
+	for (auto &block_info : blocks_info) {
+		metadata_writer.Write<idx_t>(block_info.block_id);
+		metadata_writer.Write<idx_t>(block_info.offset);
+	}
 }
 
 void DataTable::CommitDropColumn(idx_t index) {

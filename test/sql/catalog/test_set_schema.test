@@ -5,6 +5,8 @@
 # This test focuses on actual name lookup.
 # See also test_set_search_path.test
 
+require skip_reload
+
 statement ok
 CREATE SCHEMA test;
 

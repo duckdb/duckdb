@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
@@ -22,13 +23,6 @@ class ClientContext;
 class Transaction;
 
 struct IndexLock;
-
-enum IndexConstraintType : uint8_t {
-	NONE = 0,    // index is an index don't built to any constraint
-	UNIQUE = 1,  // index is an index built to enforce a UNIQUE constraint
-	PRIMARY = 2, // index is an index built to enforce a PRIMARY KEY constraint
-	FOREIGN = 3  // index is an index built to enforce a FOREIGN KEY constraint
-};
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -49,7 +43,7 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
-	// ! constraint type
+	//! constraint type
 	IndexConstraintType constraint_type;
 
 public:
@@ -101,6 +95,8 @@ public:
 	bool IsForeign() {
 		return (constraint_type == IndexConstraintType::FOREIGN);
 	}
+	//! Serializes the index and returns the pair of block_id offset positions
+	virtual BlockPointer Serialize(duckdb::MetaBlockWriter &writer);
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
