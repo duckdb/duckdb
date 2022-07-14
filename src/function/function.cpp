@@ -259,6 +259,10 @@ static int64_t BindFunctionCost(SimpleFunction &func, vector<LogicalType> &argum
 	}
 	int64_t cost = 0;
 	for (idx_t i = 0; i < arguments.size(); i++) {
+		// Check alias first
+		if (arguments[i].GetAlias() != func.arguments[i].GetAlias()) {
+			return -1;
+		}
 		if (arguments[i].id() == func.arguments[i].id()) {
 			// arguments match: do nothing
 			continue;
