@@ -307,6 +307,20 @@ class RadixHTGlobalSourceState : public GlobalSourceState {
 public:
 	explicit RadixHTGlobalSourceState(Allocator &allocator, const RadixPartitionedHashTable &ht)
 	    : ht_index(0), ht_scan_position(0), finished(false) {
+	}
+
+	//! Heavy handed for now.
+	mutex lock;
+	//! The current position to scan the HT for output tuples
+	idx_t ht_index;
+	idx_t ht_scan_position;
+	atomic<bool> finished;
+};
+
+class RadixHTLocalSourceState : public LocalSourceState {
+public:
+	explicit RadixHTLocalSourceState(ExecutionContext &context, const RadixPartitionedHashTable &ht) {
+		auto &allocator = Allocator::Get(context.client);
 		auto scan_chunk_types = ht.group_types;
 		for (auto &aggr_type : ht.op.aggregate_return_types) {
 			scan_chunk_types.push_back(aggr_type);
@@ -316,26 +330,39 @@ public:
 
 	//! Materialized GROUP BY expressions & aggregates
 	DataChunk scan_chunk;
-	//! The current position to scan the HT for output tuples
-	idx_t ht_index;
-	idx_t ht_scan_position;
-	bool finished;
 };
 
 unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState(ClientContext &context) const {
 	return make_unique<RadixHTGlobalSourceState>(Allocator::Get(context), *this);
 }
 
-void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
-                                        GlobalSourceState &source_state) const {
+unique_ptr<LocalSourceState> RadixPartitionedHashTable::GetLocalSourceState(ExecutionContext &context) const {
+	return make_unique<RadixHTLocalSourceState>(context, *this);
+}
+
+idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
 	auto &gstate = (RadixHTGlobalState &)sink_state;
-	auto &state = (RadixHTGlobalSourceState &)source_state;
+	if (gstate.is_empty && grouping_set.empty()) {
+		return 1;
+	}
+
+	idx_t count = 0;
+	for (const auto &ht : gstate.finalized_hts) {
+		count += ht->Size();
+	}
+	return count;
+}
+
+void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
+                                        GlobalSourceState &gsstate, LocalSourceState &lsstate) const {
+	auto &gstate = (RadixHTGlobalState &)sink_state;
+	auto &state = (RadixHTGlobalSourceState &)gsstate;
+	auto &lstate = (RadixHTLocalSourceState &)lsstate;
 	D_ASSERT(gstate.is_finalized);
 	if (state.finished) {
 		return;
 	}
 
-	state.scan_chunk.Reset();
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (gstate.is_empty && grouping_set.empty()) {
@@ -362,19 +389,21 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		state.finished = true;
 		return;
 	}
-	if (gstate.is_empty && !state.finished) {
+	if (gstate.is_empty) {
 		state.finished = true;
 		return;
 	}
 	idx_t elements_found = 0;
 
+	lstate.scan_chunk.Reset();
 	while (true) {
+		lock_guard<mutex> glock(state.lock);
 		if (state.ht_index == gstate.finalized_hts.size()) {
 			state.finished = true;
 			return;
 		}
 		D_ASSERT(gstate.finalized_hts[state.ht_index]);
-		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, state.scan_chunk);
+		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, lstate.scan_chunk);
 
 		if (elements_found > 0) {
 			break;
@@ -391,14 +420,14 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 
 	idx_t chunk_index = 0;
 	for (auto &entry : grouping_set) {
-		chunk.data[entry].Reference(state.scan_chunk.data[chunk_index++]);
+		chunk.data[entry].Reference(lstate.scan_chunk.data[chunk_index++]);
 	}
 	for (auto null_group : null_groups) {
 		chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(chunk.data[null_group], true);
 	}
 	for (idx_t col_idx = 0; col_idx < op.aggregates.size(); col_idx++) {
-		chunk.data[op.groups.size() + col_idx].Reference(state.scan_chunk.data[group_types.size() + col_idx]);
+		chunk.data[op.groups.size() + col_idx].Reference(lstate.scan_chunk.data[group_types.size() + col_idx]);
 	}
 	D_ASSERT(op.grouping_functions.size() == grouping_values.size());
 	for (idx_t i = 0; i < op.grouping_functions.size(); i++) {

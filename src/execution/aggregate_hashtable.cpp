@@ -59,12 +59,12 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(Allocator &allocator, Buffe
 	switch (entry_type) {
 	case HtEntryType::HT_WIDTH_64: {
 		hash_prefix_shift = (HASH_WIDTH - sizeof(aggr_ht_entry_64::salt)) * 8;
-		Resize<aggr_ht_entry_64>(STANDARD_VECTOR_SIZE * 2);
+		Resize<aggr_ht_entry_64>(STANDARD_VECTOR_SIZE * 2L);
 		break;
 	}
 	case HtEntryType::HT_WIDTH_32: {
 		hash_prefix_shift = (HASH_WIDTH - sizeof(aggr_ht_entry_32::salt)) * 8;
-		Resize<aggr_ht_entry_32>(STANDARD_VECTOR_SIZE * 2);
+		Resize<aggr_ht_entry_32>(STANDARD_VECTOR_SIZE * 2L);
 		break;
 	}
 	default:
@@ -647,14 +647,14 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 }
 
 idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
-	Vector addresses(LogicalType::POINTER);
-	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-
-	auto remaining = entries - scan_position;
-	if (remaining == 0) {
+	if (scan_position >= entries) {
 		return 0;
 	}
+	auto remaining = entries - scan_position;
 	auto this_n = MinValue((idx_t)STANDARD_VECTOR_SIZE, remaining);
+
+	Vector addresses(LogicalType::POINTER);
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	auto chunk_idx = scan_position / tuples_per_block;
 	auto chunk_offset = (scan_position % tuples_per_block) * tuple_size;
