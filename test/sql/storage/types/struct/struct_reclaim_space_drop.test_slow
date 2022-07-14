@@ -2,6 +2,9 @@
 # description: Test that we reclaim space when dropping tables with struct columns
 # group: [struct]
 
+require skip_reload
+
+
 load __TEST_DIR__/test_reclaim_space.db
 
 statement ok

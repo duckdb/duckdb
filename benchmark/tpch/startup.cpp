@@ -18,7 +18,7 @@ using namespace duckdb;
 		}                                                                                                              \
 		{                                                                                                              \
 			auto config = GetConfig();                                                                                 \
-			config->checkpoint_wal_size = 0;                                                                           \
+			config->options.checkpoint_wal_size = 0;                                                                   \
 			DuckDB db(db_path, config.get());                                                                          \
 		}                                                                                                              \
 	}                                                                                                                  \

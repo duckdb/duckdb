@@ -26,7 +26,7 @@ class TableFunctionCatalogEntry;
 class BoundTableFunction;
 class StandardEntry;
 
-enum class BindingType { BASE, TABLE, MACRO, CATALOG_ENTRY };
+enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
@@ -81,18 +81,19 @@ public:
 	string ColumnNotFoundError(const string &column_name) const override;
 };
 
-//! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
-//! Params/Arguments.
-struct MacroBinding : public Binding {
-	static constexpr const char *MACRO_NAME = "0_macro_parameters";
+//! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
+//! parameters.
+struct DummyBinding : public Binding {
+	// NOTE: changing this string conflicts with the storage version
+	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
+	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
 
 	//! Arguments
-	vector<unique_ptr<ParsedExpression>> arguments;
-	//! The name of the macro
-	string macro_name;
+	vector<unique_ptr<ParsedExpression>> *arguments;
+	//! The name of the dummy binding
+	string dummy_name;
 
 public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;

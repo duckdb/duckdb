@@ -2,6 +2,9 @@
 # description: Test ART index with simple updates
 # group: [art]
 
+statement ok
+PRAGMA enable_verification
+
 statement ok con1
 CREATE TABLE integers(i INTEGER)
 

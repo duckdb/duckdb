@@ -27,7 +27,7 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 						n->options = list_concat(n->options, $11);
 					$$ = (PGNode *)n;
 				}
-			| COPY '(' PreparableStmt ')' TO opt_program copy_file_name opt_with copy_options
+			| COPY '(' SelectStmt ')' TO opt_program copy_file_name opt_with copy_options
 				{
 					PGCopyStmt *n = makeNode(PGCopyStmt);
 					n->relation = NULL;

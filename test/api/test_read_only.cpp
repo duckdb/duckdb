@@ -13,8 +13,8 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	DeleteDatabase(dbdir);
 
 	DBConfig readonly_config;
-	readonly_config.use_temporary_directory = false;
-	readonly_config.access_mode = AccessMode::READ_ONLY;
+	readonly_config.options.use_temporary_directory = false;
+	readonly_config.options.access_mode = AccessMode::READ_ONLY;
 
 	// cannot create read-only memory database
 	REQUIRE_THROWS(db = make_unique<DuckDB>(nullptr, &readonly_config));
@@ -112,8 +112,8 @@ TEST_CASE("Test view creation using a read only database", "[readonly]") {
 	DeleteDatabase(dbdir);
 
 	DBConfig readonly_config;
-	readonly_config.use_temporary_directory = false;
-	readonly_config.access_mode = AccessMode::READ_ONLY;
+	readonly_config.options.use_temporary_directory = false;
+	readonly_config.options.access_mode = AccessMode::READ_ONLY;
 
 	// create db in first place
 	{ auto db_rw = DuckDB(dbdir); }

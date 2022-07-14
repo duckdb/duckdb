@@ -125,6 +125,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
+	case LogicalTypeId::LAMBDA:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -177,6 +178,7 @@ constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
 // TODO these are incomplete and should maybe not exist as such
 constexpr const LogicalTypeId LogicalType::TABLE;
+constexpr const LogicalTypeId LogicalType::LAMBDA;
 
 constexpr const LogicalTypeId LogicalType::ANY;
 
@@ -420,6 +422,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "POINTER";
 	case LogicalTypeId::TABLE:
 		return "TABLE";
+	case LogicalTypeId::LAMBDA:
+		return "LAMBDA";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:
@@ -557,6 +561,10 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
+bool LogicalType::IsValid() const {
+	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+}
+
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -624,7 +632,11 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	if (left.id() < right.id()) {
+	if (left.id() == LogicalTypeId::UNKNOWN) {
+		return right;
+	} else if (right.id() == LogicalTypeId::UNKNOWN) {
+		return left;
+	} else if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {
 		return left;

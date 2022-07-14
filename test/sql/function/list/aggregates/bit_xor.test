@@ -2,6 +2,9 @@
 # description: Test the list_bit_xor aggregate function
 # group: [aggregates]
 
+require skip_reload
+
+
 # bit_xor on a sequence
 statement ok
 CREATE SEQUENCE seq;
