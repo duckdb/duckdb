@@ -6,8 +6,9 @@
 namespace duckdb {
 
 template <class T>
-void TemplatedRadixScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count, data_ptr_t *key_locations,
-                           const bool desc, const bool has_null, const bool nulls_first, const idx_t offset) {
+void TemplatedRadixScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
+                           data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
+                           const idx_t offset) {
 	auto source = (T *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
