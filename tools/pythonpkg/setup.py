@@ -162,7 +162,9 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
-sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
+scripts_folder_abspath = os.path.join(script_path, '..', '..', 'scripts')
+print(scripts_folder_abspath)
+sys.path.append(scripts_folder_abspath)
 from package_build import third_party_includes
 third_party = third_party_includes()
 # Make the third_party paths relative to the script path
