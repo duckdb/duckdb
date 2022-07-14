@@ -18,6 +18,8 @@ typedef struct {
 } fsst_compression_header_t;
 
 struct FSSTStorage {
+	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
+
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
@@ -123,8 +125,6 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		                         output_buffer_size, &compressed_buffer[0], &compressed_sizes[0], &compressed_ptrs[0]);
 
 		if (string_count != res) {
-			std::cout << "string count " << string_count << "\n";
-			std::cout << "res " << res << "\n";
 			throw std::runtime_error("FSST output buffer is too small unexpectedly");
 		}
 		//	std::cout << "\n";
@@ -296,7 +296,7 @@ public:
 		Store<uint32_t>((uint32_t)current_width, (data_ptr_t)&header_ptr->bitpacking_width);
 
 		// TODO: MOVING!  also think about code deduplication!
-		if (true || total_size >= DictionaryCompressionStorage::COMPACTION_FLUSH_LIMIT) {
+		if (true || total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {
 			// the block is full enough, don't bother moving around the dictionary
 			return Storage::BLOCK_SIZE;
 		}

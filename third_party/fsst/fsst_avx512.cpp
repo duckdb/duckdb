@@ -21,21 +21,21 @@
 //#include <immintrin.h>
 //
 //#ifdef _WIN32
-//bool fsst_hasAVX512() {
+//bool duckdb_fsst_hasAVX512() {
 //   int info[4];
 //   __cpuidex(info, 0x00000007, 0);
 //   return (info[1]>>16)&1;
 //}
 //#else
 //#include <cpuid.h>
-//bool fsst_hasAVX512() {
+//bool duckdb_fsst_hasAVX512() {
 //   int info[4];
 //    __cpuid_count(0x00000007, 0, info[0], info[1], info[2], info[3]);
 //   return (info[1]>>16)&1;
 //}
 //#endif
 //#else
-bool fsst_hasAVX512() { return false; }
+bool duckdb_fsst_hasAVX512() { return false; }
 //#endif
 
 // BULK COMPRESSION OF STRINGS

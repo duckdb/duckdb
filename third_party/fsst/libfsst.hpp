@@ -433,7 +433,7 @@ struct SIMDjob {
 };
 
 extern bool 
-fsst_hasAVX512(); // runtime check for avx512 capability
+duckdb_fsst_hasAVX512(); // runtime check for avx512 capability
 
 extern size_t 
 duckdb_fsst_compressAVX512(

@@ -587,7 +587,7 @@ extern "C" u32 duckdb_fsst_import(duckdb_fsst_decoder_t *decoder, u8 *buf) {
 // runtime check for simd
 inline size_t _compressImpl(Encoder *e, size_t nlines, size_t lenIn[], u8 *strIn[], size_t size, u8 *output, size_t *lenOut, u8 *strOut[], bool noSuffixOpt, bool avoidBranch, int simd) {
 #ifndef NONOPT_FSST
-   if (simd && fsst_hasAVX512())
+   if (simd && duckdb_fsst_hasAVX512())
       return compressSIMD(*e->symbolTable, e->simdbuf, nlines, lenIn, strIn, size, output, lenOut, strOut, simd);
 #endif
    (void) simd;
