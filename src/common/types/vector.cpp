@@ -298,14 +298,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type().id() == LogicalTypeId::DECIMAL && GetType().id() == LogicalTypeId::DECIMAL) {
-		//! Ensure that both are of the exact same DECIMAL type
-		if (val.type() != GetType()) {
-			SetValue(index, val.CastAs(GetType()));
-			return;
-		}
-	}
-	if (val.type().InternalType() != GetType().InternalType()) {
+	if (val.type() != GetType()) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
