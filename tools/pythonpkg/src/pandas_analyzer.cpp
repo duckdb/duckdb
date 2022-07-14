@@ -12,8 +12,6 @@ static bool TypeIsNested(LogicalTypeId id) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
-	case LogicalTypeId::AGGREGATE_STATE:
-	case LogicalTypeId::TABLE:
 		return true;
 	default:
 		return false;
