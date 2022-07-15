@@ -22,8 +22,8 @@ public:
 	PandasAnalyzer(const DBConfig &config) {
 		analyzed_type = LogicalType::SQLNULL;
 
-		auto maximum_entry = config.set_variables.find("pandas_analyze_sample");
-		D_ASSERT(maximum_entry != config.set_variables.end());
+		auto maximum_entry = config.options.set_variables.find("pandas_analyze_sample");
+		D_ASSERT(maximum_entry != config.options.set_variables.end());
 		sample_size = maximum_entry->second.GetValue<uint64_t>();
 	}
 
