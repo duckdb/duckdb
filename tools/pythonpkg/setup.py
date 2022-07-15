@@ -154,13 +154,6 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-#TODO: add missing third party includes
-# Add paths that should be included when building the python client here
-def extra_python_includes():
-	extra_includes = []
-	extra_includes += [os.path.join(script_path, '..', '..', 'third_party', 'fmt', 'include')] #third_party/fmt/include
-	return extra_includes
-
 extra_files = []
 header_files = []
 
@@ -169,7 +162,6 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
-include_directories += extra_python_includes()
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -228,6 +220,7 @@ else:
     sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
     import package_build
 
+    include_directories += [os.path.join('..', '..', include) for include in package_build.third_party_includes()]
     toolchain_args += ['-I' + x for x in package_build.includes(extensions)]
 
     result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
