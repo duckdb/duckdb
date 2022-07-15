@@ -6,7 +6,6 @@
 #include "duckdb/main/config.hpp"
 #include "miniz_wrapper.hpp"
 #include "fsst.h"
-#include <iostream>
 
 namespace duckdb {
 
