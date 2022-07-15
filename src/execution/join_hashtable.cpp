@@ -1223,11 +1223,11 @@ void JoinHashTable::ConstructProbeChunk(DataChunk &join_keys, DataChunk &payload
                                         idx_t block_position, idx_t count) {
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	vector<BufferHandle> handles;
-	// TODO currently something is wrong with partitioning/unswizzling probe-side data
+
 	idx_t done = 0;
 	while (done != count) {
 		auto &block = *block_collection->blocks[block_position];
-		auto next = MinValue<idx_t>(block.count, count - done);
+		auto next = MinValue<idx_t>(block.count - position, count - done);
 		auto block_handle = buffer_manager.Pin(block.block);
 		auto row_ptr = block_handle.Ptr() + position * layout.GetRowWidth();
 		if (!layout.AllConstant()) {

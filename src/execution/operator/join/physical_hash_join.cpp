@@ -411,9 +411,7 @@ bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalSourceState &gstate) cons
 	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, gstate.probe_scan_state);
 	// Reset full outer scan state (if necessary)
 	if (IsRightOuterJoin(join_type)) {
-		auto &outer_ss = gstate.full_outer_scan_state;
-		lock_guard<mutex> fo_lock(outer_ss.lock);
-		outer_ss.Reset();
+		gstate.full_outer_scan_state.Reset();
 	}
 	return true;
 }
@@ -466,7 +464,8 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	// Partition thread-local probe hts
 	while (!sink.local_hash_tables.empty()) {
 		unique_ptr<JoinHashTable> local_ht;
-		{
+		// Check if anything has changed after we grab the lock
+		if (!sink.local_hash_tables.empty()) {
 			lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
 			local_ht = move(sink.local_hash_tables.back());
 			sink.local_hash_tables.pop_back();
