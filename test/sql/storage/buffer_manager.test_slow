@@ -2,6 +2,8 @@
 # description: Test that the buffer manager correctly frees any memory we use
 # group: [storage]
 
+require skip_reload
+
 load
 
 statement ok

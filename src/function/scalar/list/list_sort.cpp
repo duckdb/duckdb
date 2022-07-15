@@ -121,12 +121,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// get the child vector
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
-	VectorData child_data;
-	child_vector.Orrify(lists_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
-	VectorData lists_data;
-	lists.Orrify(count, lists_data);
+	UnifiedVectorFormat lists_data;
+	lists.ToUnifiedFormat(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// create the lists_indices vector, this contains an element for each list's entry,
@@ -222,7 +222,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		child_vector.Slice(sel_sorted, sel_sorted_idx);
-		child_vector.Normalify(sel_sorted_idx);
+		child_vector.Flatten(sel_sorted_idx);
 	}
 
 	result.Reference(lists);
@@ -264,8 +264,8 @@ static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, Scala
 
 	// set default values
 	auto &config = DBConfig::GetConfig(context);
-	auto order = config.default_order_type;
-	auto null_order = config.default_null_order;
+	auto order = config.options.default_order_type;
+	auto null_order = config.options.default_null_order;
 
 	// get the sorting order
 	if (arguments.size() >= 2) {
@@ -302,8 +302,9 @@ static unique_ptr<FunctionData> ListReverseSortBind(ClientContext &context, Scal
 
 	// set (reverse) default values
 	auto &config = DBConfig::GetConfig(context);
-	auto order = (config.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
-	auto null_order = config.default_null_order;
+	auto order =
+	    (config.options.default_order_type == OrderType::ASCENDING) ? OrderType::DESCENDING : OrderType::ASCENDING;
+	auto null_order = config.options.default_null_order;
 
 	// get the null sorting order
 	if (arguments.size() == 2) {
@@ -319,15 +320,15 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
-	                    false, false, ListNormalSortBind);
+	                    ListNormalSortBind);
 
 	// two parameters: list, order
 	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	// three parameters: list, order, null order
 	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false, ListNormalSortBind);
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
 
 	ScalarFunctionSet list_sort("list_sort");
 	list_sort.AddFunction(sort);
@@ -345,12 +346,11 @@ void ListSortFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// one parameter: list
 	ScalarFunction sort_reverse({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                            ListSortFunction, false, false, ListReverseSortBind);
+	                            ListSortFunction, ListReverseSortBind);
 
 	// two parameters: list, null order
 	ScalarFunction sort_reverse_null_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
-	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, false, false,
-	                                       ListReverseSortBind);
+	                                       LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
 
 	ScalarFunctionSet list_reverse_sort("list_reverse_sort");
 	list_reverse_sort.AddFunction(sort_reverse);

@@ -1,0 +1,29 @@
+# name: test/sql/copy/parquet/read_parquet_parameter.test
+# description: Read a Parquet file from a parameter
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PREPARE v1 AS SELECT * FROM parquet_scan($1) ORDER BY 1
+
+query ITIIIIRRTTT
+EXECUTE v1('data/parquet-testing/arrow/alltypes_plain.parquet')
+----
+0	1	0	0	0	0	0.000000	0.000000	01/01/09	0	2009-01-01 00:00:00
+1	0	1	1	1	10	1.100000	10.100000	01/01/09	1	2009-01-01 00:01:00
+2	1	0	0	0	0	0.000000	0.000000	02/01/09	0	2009-02-01 00:00:00
+3	0	1	1	1	10	1.100000	10.100000	02/01/09	1	2009-02-01 00:01:00
+4	1	0	0	0	0	0.000000	0.000000	03/01/09	0	2009-03-01 00:00:00
+5	0	1	1	1	10	1.100000	10.100000	03/01/09	1	2009-03-01 00:01:00
+6	1	0	0	0	0	0.000000	0.000000	04/01/09	0	2009-04-01 00:00:00
+7	0	1	1	1	10	1.100000	10.100000	04/01/09	1	2009-04-01 00:01:00
+
+query T
+EXECUTE v1('data/parquet-testing/pandas-date.parquet')
+----
+1921-12-24
+2021-01-12

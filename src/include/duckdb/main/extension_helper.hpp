@@ -36,6 +36,8 @@ public:
 	static idx_t DefaultExtensionCount();
 	static DefaultExtension GetDefaultExtension(idx_t index);
 
+	static const vector<string> GetPublicKeys();
+
 private:
 	static const vector<string> PathComponents();
 

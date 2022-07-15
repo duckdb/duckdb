@@ -5,6 +5,10 @@
 # note: query verification is disabled for these queries
 # because running the same query multiple times with a sequence does not result in the same answer
 # create a sequence
+
+require skip_reload
+
+
 statement ok
 CREATE SEQUENCE seq;
 
@@ -478,3 +482,10 @@ CREATE SEQUENCE fresh;
 
 statement error
 select currval('fresh');
+
+# convert inputs into varchar if that's not the case
+statement error
+select nextval(1 + 1);
+
+statement error
+select currval(true);

@@ -33,7 +33,7 @@ public:
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
-	void AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) override;
+	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
 	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,

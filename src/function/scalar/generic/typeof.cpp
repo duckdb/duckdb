@@ -8,7 +8,9 @@ static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 void TypeOfFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction));
+	auto fun = ScalarFunction("typeof", {LogicalType::ANY}, LogicalType::VARCHAR, TypeOfFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

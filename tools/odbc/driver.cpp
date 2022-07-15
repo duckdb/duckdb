@@ -204,7 +204,7 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 	if (!db_name.empty()) {
 		duckdb::DBConfig config;
 		if (dbc->sql_attr_access_mode == SQL_MODE_READ_ONLY) {
-			config.access_mode = duckdb::AccessMode::READ_ONLY;
+			config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 		}
 		dbc->env->db = duckdb::make_unique<duckdb::DuckDB>(db_name, &config);
 	}

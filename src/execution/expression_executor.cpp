@@ -232,7 +232,7 @@ static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__re
 }
 
 template <bool NO_NULL>
-static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count,
+static inline idx_t DefaultSelectSwitch(UnifiedVectorFormat &idata, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
 		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
@@ -256,8 +256,8 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
-	VectorData idata;
-	intermediate.Orrify(count, idata);
+	UnifiedVectorFormat idata;
+	intermediate.ToUnifiedFormat(count, idata);
 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();

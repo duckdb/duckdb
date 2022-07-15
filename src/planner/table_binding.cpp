@@ -180,30 +180,30 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 	return StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name);
 }
 
-MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding(BindingType::MACRO, MacroBinding::MACRO_NAME, move(types_p), move(names_p), -1),
-      macro_name(move(macro_name_p)) {
+DummyBinding::DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p)
+    : Binding(BindingType::DUMMY, DummyBinding::DUMMY_NAME + dummy_name_p, move(types_p), move(names_p), -1),
+      dummy_name(move(dummy_name_p)) {
 }
 
-BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
+BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
-		throw InternalException("Column %s not found in macro", colref.GetColumnName());
+		throw InternalException("Column %s not found in bindings", colref.GetColumnName());
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
 	binding.column_index = column_index;
 
-	// we are binding a parameter to create the macro, no arguments are supplied
+	// we are binding a parameter to create the dummy binding, no arguments are supplied
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
 }
 
-unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
+unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
 		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
-	auto arg = arguments[column_index]->Copy();
+	auto arg = (*arguments)[column_index]->Copy();
 	arg->alias = colref.alias;
 	return arg;
 }

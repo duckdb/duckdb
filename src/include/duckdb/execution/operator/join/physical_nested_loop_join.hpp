@@ -67,6 +67,8 @@ public:
 		return true;
 	}
 
+	static bool IsSupported(const vector<JoinCondition> &conditions);
+
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;

@@ -2,6 +2,8 @@
 # description: Test ALTER TABLE ALTER TYPE and dependencies
 # group: [alter_type]
 
+require skip_reload
+
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 
@@ -13,13 +15,39 @@ statement ok
 PREPARE v1 AS SELECT * FROM test
 
 # we can run the statement
-statement ok
+query II
 EXECUTE v1
+----
+1	1
+2	2
 
 # now change the type of "i" to varchar
 statement ok
 ALTER TABLE test ALTER i TYPE VARCHAR USING i::VARCHAR
 
-# executing the prepared statement now results in an error: the return types have changed
-statement error
+# executing the prepared statement now works as the alter type has not broken the query
+query II
 EXECUTE v1
+----
+1	1
+2	2
+
+statement ok
+ALTER TABLE test ALTER i TYPE INTEGER USING i::INTEGER
+
+# do the same, but this time the prepared statement depends on the type
+statement ok
+PREPARE v2 AS SELECT i+$1 FROM test
+
+query I
+EXECUTE v2(1)
+----
+2
+3
+
+statement ok
+ALTER TABLE test ALTER i TYPE VARCHAR USING i::VARCHAR
+
+# this now results in an error when rebinding
+statement error
+EXECUTE v2

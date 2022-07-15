@@ -137,7 +137,8 @@ inline idx_t ComparisonSelector::Select<duckdb::LessThanEquals>(Vector &left, Ve
 	return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
 }
 
-static void ComparesNotNull(VectorData &ldata, VectorData &rdata, ValidityMask &vresult, idx_t count) {
+static void ComparesNotNull(UnifiedVectorFormat &ldata, UnifiedVectorFormat &rdata, ValidityMask &vresult,
+                            idx_t count) {
 	for (idx_t i = 0; i < count; ++i) {
 		auto lidx = ldata.sel->get_index(i);
 		auto ridx = rdata.sel->get_index(i);
@@ -173,9 +174,9 @@ static void NestedComparisonExecutor(Vector &left, Vector &right, Vector &result
 	auto result_data = FlatVector::GetData<bool>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
-	VectorData leftv, rightv;
-	left.Orrify(count, leftv);
-	right.Orrify(count, rightv);
+	UnifiedVectorFormat leftv, rightv;
+	left.ToUnifiedFormat(count, leftv);
+	right.ToUnifiedFormat(count, rightv);
 	if (!leftv.validity.AllValid() || !rightv.validity.AllValid()) {
 		ComparesNotNull(leftv, rightv, result_validity, count);
 	}

@@ -177,14 +177,14 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 			}
 		}
 		handles = blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
-		auto blob_data = blob_chunk.Orrify();
+		auto blob_data = blob_chunk.ToUnifiedFormat();
 		RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout->blob_layout, addresses, *blob_sorting_heap,
 		                       sel_ptr, blob_chunk.size());
 	}
 
 	// Finally, serialize payload data
 	handles = payload_data->Build(payload.size(), data_pointers, nullptr);
-	auto input_data = payload.Orrify();
+	auto input_data = payload.ToUnifiedFormat();
 	RowOperations::Scatter(payload, input_data.get(), *payload_layout, addresses, *payload_heap, sel_ptr,
 	                       payload.size());
 }
@@ -227,7 +227,16 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 }
 
 RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
+	//	Don't copy and delete if there is only one block.
+	if (row_data.blocks.size() == 1) {
+		auto new_block = row_data.blocks[0];
+		row_data.blocks.clear();
+		row_data.count = 0;
+		return new_block;
+	}
+
 	// Create block with the correct capacity
+	auto buffer_manager = &row_data.buffer_manager;
 	const idx_t &entry_size = row_data.entry_size;
 	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
 	RowDataBlock new_block(*buffer_manager, capacity, entry_size);

@@ -78,8 +78,8 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
-	VectorData state_data;
-	input.data[0].Orrify(input.size(), state_data);
+	UnifiedVectorFormat state_data;
+	input.data[0].ToUnifiedFormat(input.size(), state_data);
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
 		auto state_entry = &((string_t *)state_data.data)[state_idx];
@@ -122,9 +122,9 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		                  input.data[0].GetType().ToString(), input.data[1].GetType().ToString());
 	}
 
-	VectorData state0_data, state1_data;
-	input.data[0].Orrify(input.size(), state0_data);
-	input.data[1].Orrify(input.size(), state1_data);
+	UnifiedVectorFormat state0_data, state1_data;
+	input.data[0].ToUnifiedFormat(input.size(), state0_data);
+	input.data[1].ToUnifiedFormat(input.size(), state1_data);
 
 	auto result_ptr = FlatVector::GetData<string_t>(result);
 
@@ -283,6 +283,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      bound_function.combine, ExportAggregateFinalize, bound_function.simple_update,
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
+	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	return make_unique<BoundAggregateExpression>(export_function, move(child_aggregate->children),
 	                                             move(child_aggregate->filter), move(export_bind_data),
@@ -290,9 +291,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 }
 
 ScalarFunction ExportAggregateFunction::GetFinalize() {
-	auto result =
-	    ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID, AggregateStateFinalize,
-	                   false, BindAggregateState, nullptr, nullptr, InitFinalizeState);
+	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
+	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return result;
 }
@@ -300,7 +300,7 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 ScalarFunction ExportAggregateFunction::GetCombine() {
 	auto result =
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
-	                   AggregateStateCombine, false, BindAggregateState, nullptr, nullptr, InitCombineState);
+	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return result;
 }

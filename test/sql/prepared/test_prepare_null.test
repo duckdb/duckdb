@@ -2,6 +2,8 @@
 # description: PREPARE with NULL
 # group: [prepared]
 
+require skip_reload
+
 statement ok
 CREATE TABLE b (i TINYINT)
 

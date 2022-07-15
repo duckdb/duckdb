@@ -70,7 +70,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::TOP_N:
 	case PhysicalOperatorType::WINDOW:
 	case PhysicalOperatorType::UNNEST:
-	case PhysicalOperatorType::SIMPLE_AGGREGATE:
+	case PhysicalOperatorType::UNGROUPED_AGGREGATE:
 	case PhysicalOperatorType::HASH_GROUP_BY:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:

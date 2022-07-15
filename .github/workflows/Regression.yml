@@ -136,3 +136,52 @@ jobs:
       shell: bash
       run: |
         python scripts/regression_check.py --old=current.csv --new=new.csv
+
+ regression-test-plan-cost:
+  name: Regression Test Join Order Plan Cost
+  runs-on: ubuntu-20.04
+  strategy:
+    fail-fast: false
+    matrix:
+      benchmark:
+        - 'imdb'
+        - 'tpch'
+  env:
+    CC: gcc-10
+    CXX: g++-10
+    GEN: ninja
+    BUILD_TPCH: 1
+    BUILD_HTTPFS: 1
+
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install tqdm
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+
+    - name: Build
+      shell: bash
+      run: |
+        make
+        git clone https://github.com/duckdb/duckdb.git --depth=1
+        cd duckdb
+        make
+        cd ..
+
+    - name: Regression Test
+      shell: bash
+      run: |
+        cp -r benchmark duckdb/
+        python scripts/plan_cost_runner.py --old=duckdb/build/release/duckdb --new=build/release/duckdb --dir=benchmark/${{ matrix.benchmark }}_plan_cost

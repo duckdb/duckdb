@@ -72,14 +72,14 @@ static void VersionFunction(DataChunk &input, ExpressionState &state, Vector &re
 void SystemFun::RegisterFunction(BuiltinFunctions &set) {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
+	ScalarFunction current_query("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, BindSystemFunction);
+	current_query.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(current_query);
 	set.AddFunction(
-	    ScalarFunction("current_query", {}, LogicalType::VARCHAR, CurrentQueryFunction, true, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, false, BindSystemFunction));
+	    ScalarFunction("current_schema", {}, LogicalType::VARCHAR, CurrentSchemaFunction, BindSystemFunction));
 	set.AddFunction(ScalarFunction("current_schemas", {LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction,
-	                               false, BindSystemFunction));
-	set.AddFunction(
-	    ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, false, BindSystemFunction));
+	                               BindSystemFunction));
+	set.AddFunction(ScalarFunction("txid_current", {}, LogicalType::BIGINT, TransactionIdCurrent, BindSystemFunction));
 	set.AddFunction(ScalarFunction("version", {}, LogicalType::VARCHAR, VersionFunction));
 	set.AddFunction(ExportAggregateFunction::GetCombine());
 	set.AddFunction(ExportAggregateFunction::GetFinalize());
