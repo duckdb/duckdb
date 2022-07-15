@@ -510,11 +510,11 @@ typedef struct BPDeltaDecodeOffsets {
 // 5:			   < -------------------------------------- >
 // 6:			   					< ---------------------------------------- >
 // 7:			   < ------------------------------------------------------------------------------- >
-bp_delta_offsets_t CalculateBpDeltaOffsets(idx_t last_known_row, idx_t start, idx_t scan_count) {
+bp_delta_offsets_t CalculateBpDeltaOffsets(int64_t last_known_row, idx_t start, idx_t scan_count) {
 	D_ASSERT((idx_t)(last_known_row + 1) <= start);
 	bp_delta_offsets_t result;
 
-	result.delta_decode_start_row = (last_known_row + 1); // 1
+	result.delta_decode_start_row = (idx_t)(last_known_row + 1); // 1
 	result.bitunpack_alignment_offset =
 	    result.delta_decode_start_row % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;      // 2
 	result.bitunpack_start_row = result.delta_decode_start_row - result.bitunpack_alignment_offset; // 3
@@ -544,6 +544,10 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto base_data = (data_ptr_t)(baseptr + sizeof(fsst_compression_header_t));
 	string_t *result_data;
 	unique_ptr<Vector> output_vector;
+
+	if (scan_count == 0) {
+		return;
+	}
 
 	if (ALLOW_FSST_VECTORS) {
 		D_ASSERT(result_offset == 0);
