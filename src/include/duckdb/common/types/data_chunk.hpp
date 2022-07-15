@@ -11,12 +11,15 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 
 struct ArrowArray;
 
 namespace duckdb {
+class Allocator;
+class ClientContext;
+class ExecutionContext;
 class VectorCache;
 
 //!  A Data Chunk represents a set of vectors.
@@ -76,7 +79,8 @@ public:
 	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	DUCKDB_API void Initialize(const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
 	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
@@ -100,9 +104,9 @@ public:
 	DUCKDB_API void Fuse(DataChunk &other);
 
 	//! Turn all the vectors from the chunk into flat vectors
-	DUCKDB_API void Normalify();
+	DUCKDB_API void Flatten();
 
-	DUCKDB_API unique_ptr<VectorData[]> Orrify();
+	DUCKDB_API unique_ptr<UnifiedVectorFormat[]> ToUnifiedFormat();
 
 	DUCKDB_API void Slice(const SelectionVector &sel_vector, idx_t count);
 	DUCKDB_API void Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset = 0);

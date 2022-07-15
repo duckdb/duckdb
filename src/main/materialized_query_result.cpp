@@ -5,13 +5,13 @@ namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
                                                  vector<LogicalType> types, vector<string> names,
-                                                 const shared_ptr<ClientContext> &context)
+                                                 const shared_ptr<ClientContext> &context_p)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, properties, move(types), move(names)),
-      context(context) {
+      collection(Allocator::DefaultAllocator()), context(context_p) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)
-    : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)) {
+    : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)), collection(Allocator::DefaultAllocator()) {
 }
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {

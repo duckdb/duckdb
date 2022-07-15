@@ -103,6 +103,24 @@ Simpsons	Lisa	710	1
 Simpsons	Marge	990	1
 Simpsons	Bart	2010	1
 
+query IIII
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(NULL) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+----
+Mongrels	Apu	350	NULL
+Mongrels	Ned	666	NULL
+Mongrels	Meg	1030	NULL
+Mongrels	Burns	1270	NULL
+Simpsons	Homer	1	NULL
+Simpsons	Lisa	710	NULL
+Simpsons	Marge	990	NULL
+Simpsons	Bart	2010	NULL
+
 # incorrect number of parameters for ntile
 statement error
 SELECT
@@ -137,5 +155,23 @@ SELECT
   Player,
   Score,
   NTILE(1,2,3,4) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+
+statement error
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(-1) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+
+statement error
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(0) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
 FROM ScoreBoard s
 ORDER BY TeamName, Score;

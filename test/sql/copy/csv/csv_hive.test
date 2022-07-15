@@ -1,0 +1,36 @@
+# name: test/sql/copy/csv/csv_hive.test
+# description: Test the automatic parsing of the hive partitioning scheme
+# group: [csv]
+
+statement ok
+CREATE TABLE test AS SELECT 1 as id, 'value1' as value;
+CREATE TABLE test2 AS SELECT 2 as id, 'value2' as value;
+
+# filenames could allow you to parse hive partitions manually using SQL
+query III
+select id, value, replace(filename, '\', '/') from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', FILENAME=1, HEADER=1) order by id
+----
+1	value1	data/csv/hive-partitioning/simple/part=a/date=2012-01-01/test.csv
+2	value2	data/csv/hive-partitioning/simple/part=b/date=2013-01-01/test.csv
+
+# however this is just a lot nicer
+query IIII
+select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) order by id
+----
+1	value1	a	2012-01-01
+2	value2	b	2013-01-01
+
+# As long as the names match, we don't really mind since everything is a string anyway
+query IIII
+select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)  order by id
+----
+1	value1	a	2012-01-01
+2	value2	b	2013-01-01
+
+# If the key names don't add up, we throw
+statement error
+select * from read_csv_auto('data/csv/hive-partitioning/mismatching_names/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)
+
+# If the key names don't add up, we throw
+statement error
+select * from read_csv_auto('data/csv/hive-partitioning/mismatching_count/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)

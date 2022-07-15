@@ -2,6 +2,8 @@
 # description: Test LIMIT with a parameter (issue 1866)
 # group: [order]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
@@ -111,7 +113,7 @@ EXECUTE v6(3, 1, 2)
 10
 
 statement ok
-PREPARE v7 AS SELECT * FROM RANGE(5) LIMIT ? OFFSET ?
+PREPARE v7 AS SELECT * FROM GENERATE_SERIES(0,4,1) LIMIT ? OFFSET ?
 
 query I
 EXECUTE v7(NULL, 2)
@@ -126,14 +128,21 @@ EXECUTE v7(2, NULL)
 0
 1
 
+query I
+EXECUTE v7(NULL, 9223372036854775807)
+----
+
+query I
+EXECUTE v7(9223372036854775807, NULL)
+----
+0
+1
+2
+3
+4
+
 statement error
 EXECUTE v7(NULL, 922337203685477580700)
-
-statement error
-EXECUTE v7(NULL, 9223372036854775807)
-
-statement error
-EXECUTE v7(9223372036854775807, NULL)
 
 query I
 EXECUTE v7(NULL, 4611686018427387904)

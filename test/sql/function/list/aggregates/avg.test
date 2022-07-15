@@ -2,6 +2,9 @@
 # description: Test the list_avg aggregate function
 # group: [aggregates]
 
+require skip_reload
+
+
 # list_avg on a sequence
 statement ok
 CREATE SEQUENCE seq;

@@ -44,18 +44,19 @@ RadixPartitionInfo::RadixPartitionInfo(const idx_t n_partitions_upper_bound)
 	D_ASSERT(radix_bits <= 8);
 }
 
-PartitionableHashTable::PartitionableHashTable(BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
-                                               vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
+PartitionableHashTable::PartitionableHashTable(Allocator &allocator, BufferManager &buffer_manager_p,
+                                               RadixPartitionInfo &partition_info_p, vector<LogicalType> group_types_p,
+                                               vector<LogicalType> payload_types_p,
                                                vector<BoundAggregateExpression *> bindings_p)
-    : buffer_manager(buffer_manager_p), group_types(move(group_types_p)), payload_types(move(payload_types_p)),
-      bindings(move(bindings_p)), is_partitioned(false), partition_info(partition_info_p), hashes(LogicalType::HASH),
-      hashes_subset(LogicalType::HASH) {
+    : allocator(allocator), buffer_manager(buffer_manager_p), group_types(move(group_types_p)),
+      payload_types(move(payload_types_p)), bindings(move(bindings_p)), is_partitioned(false),
+      partition_info(partition_info_p), hashes(LogicalType::HASH), hashes_subset(LogicalType::HASH) {
 
 	sel_vectors.resize(partition_info.n_partitions);
 	sel_vector_sizes.resize(partition_info.n_partitions);
-	group_subset.Initialize(group_types);
+	group_subset.Initialize(allocator, group_types);
 	if (!payload_types.empty()) {
-		payload_subset.Initialize(payload_types);
+		payload_subset.Initialize(allocator, payload_types);
 	}
 
 	for (hash_t r = 0; r < partition_info.n_partitions; r++) {
@@ -70,8 +71,8 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 			// early release first part of ht and prevent adding of more data
 			list.back()->Finalize();
 		}
-		list.push_back(make_unique<GroupedAggregateHashTable>(buffer_manager, group_types, payload_types, bindings,
-		                                                      HtEntryType::HT_WIDTH_32));
+		list.push_back(make_unique<GroupedAggregateHashTable>(allocator, buffer_manager, group_types, payload_types,
+		                                                      bindings, HtEntryType::HT_WIDTH_32));
 	}
 	return list.back()->AddChunk(groups, group_hashes, payload);
 }
@@ -95,11 +96,11 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 		sel_vector_sizes[r] = 0;
 	}
 
-	hashes.Normalify(groups.size());
+	hashes.Flatten(groups.size());
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
 	for (idx_t i = 0; i < groups.size(); i++) {
-		auto partition = (hashes_ptr[i] & partition_info.radix_mask) >> partition_info.RADIX_SHIFT;
+		auto partition = partition_info.GetHashPartition(hashes_ptr[i]);
 		D_ASSERT(partition < partition_info.n_partitions);
 		sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
 	}
@@ -125,14 +126,14 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 
 void PartitionableHashTable::Partition() {
 	D_ASSERT(!IsPartitioned());
-	D_ASSERT(radix_partitioned_hts.size() == 0);
+	D_ASSERT(radix_partitioned_hts.empty());
 	D_ASSERT(partition_info.n_partitions > 1);
 
 	vector<GroupedAggregateHashTable *> partition_hts(partition_info.n_partitions);
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
 			radix_partitioned_hts[r].push_back(make_unique<GroupedAggregateHashTable>(
-			    buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
+			    allocator, buffer_manager, group_types, payload_types, bindings, HtEntryType::HT_WIDTH_32));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
 		unpartitioned_ht->Partition(partition_hts, partition_info.radix_mask, partition_info.RADIX_SHIFT);

@@ -200,13 +200,14 @@ static bool DataFrameScanParallelStateNext(ClientContext &context, const Functio
 	return true;
 }
 
-static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionContext &context,
+                                                                  TableFunctionInitInput &input,
                                                                   GlobalTableFunctionState *global_state) {
 	auto &gstate = (DataFrameGlobalState &)*global_state;
 	auto result = make_unique<DataFrameLocalState>();
 
 	result->column_ids = input.column_ids;
-	DataFrameScanParallelStateNext(context, input.bind_data, *result, gstate);
+	DataFrameScanParallelStateNext(context.client, input.bind_data, *result, gstate);
 	return move(result);
 }
 

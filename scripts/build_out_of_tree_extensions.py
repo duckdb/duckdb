@@ -11,13 +11,8 @@ import sys
 parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for DuckDB')
 
 parser.add_argument('--extensions', action='store',
-                    help='CSV file with DuckDB extensions to build', default=".github/workflows/extensions.csv")
+                    help='CSV file with DuckDB extensions to build', default=".github/config/extensions.csv")
 
-parser.add_argument('--build', action='store',
-                    help='Build directory', default="build/release")
-
-parser.add_argument('--output', action='store',
-                    help='Folder to store the created extensions', required=True)
 
 args = parser.parse_args()
 
@@ -54,17 +49,12 @@ basedir = os.getcwd()
 for task in tasks:
     print(task)
     clonedir = task['name'] + "_clone"
-    exec('git clone %s %s' % (task['url'], clonedir))
+    if not os.path.isdir(clonedir):
+        exec('git clone %s %s' % (task['url'], clonedir))
     os.chdir(clonedir)
     exec('git checkout %s' % (task['commit']))
     os.chdir(basedir)
-    exec('cmake -S . -DEXTERNAL_EXTENSION_DIRECTORY=%s -B %s ' % (clonedir, args.build))
-    exec('cmake --build %s --parallel' % (args.build))
-    outpath = pathlib.Path(args.build, 'external_extension_build')
-    for path in outpath.rglob('*.duckdb_extension'):
-        res_path = os.path.join(args.output, path.name)
-        shutil.copyfile(path, res_path)
-        print(res_path)
-    shutil.rmtree(outpath)
-
+    os.environ['BUILD_OUT_OF_TREE_EXTENSION'] = clonedir
+    print(f"Building extension \"{task['name']}\" from URL \"{task['url']}\" at commit \"{task['commit']}\" at clonedir \"{clonedir}\"")
+    exec('make')
 print("done")

@@ -13,7 +13,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class DeleteGlobalState : public GlobalSinkState {
 public:
-	DeleteGlobalState() : deleted_count(0), returned_chunk_count(0) {
+	explicit DeleteGlobalState(Allocator &allocator)
+	    : deleted_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
 	}
 
 	mutex delete_lock;
@@ -24,8 +25,8 @@ public:
 
 class DeleteLocalState : public LocalSinkState {
 public:
-	explicit DeleteLocalState(const vector<LogicalType> &table_types) {
-		delete_chunk.Initialize(table_types);
+	DeleteLocalState(Allocator &allocator, const vector<LogicalType> &table_types) {
+		delete_chunk.Initialize(allocator, table_types);
 	}
 	DataChunk delete_chunk;
 };
@@ -47,7 +48,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 
 	lock_guard<mutex> delete_guard(gstate.delete_lock);
 	if (return_chunk) {
-		row_identifiers.Normalify(input.size());
+		row_identifiers.Flatten(input.size());
 		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, input.size(), cfs);
 		gstate.return_chunk_collection.Append(ustate.delete_chunk);
 	}
@@ -57,11 +58,11 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<DeleteGlobalState>();
+	return make_unique<DeleteGlobalState>(Allocator::Get(context));
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<DeleteLocalState>(table.GetTypes());
+	return make_unique<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
 }
 
 //===--------------------------------------------------------------------===//

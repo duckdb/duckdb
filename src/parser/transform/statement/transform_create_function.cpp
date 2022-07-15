@@ -20,7 +20,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	auto qname = TransformQualifiedName(stmt->name);
 
 	unique_ptr<MacroFunction> macro_func;
-	;
 
 	// function can be null here
 	if (stmt->function) {

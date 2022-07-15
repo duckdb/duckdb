@@ -2,6 +2,9 @@
 # description: Test order of unmarked prepared statements in select
 # group: [prepared]
 
+require skip_reload
+
+
 # select - from - where with subquery
 statement ok
 PREPARE s1 AS SELECT ?::VARCHAR FROM (SELECT ?::INTEGER) tbl(i) WHERE i > ?::INTEGER

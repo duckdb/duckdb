@@ -50,7 +50,7 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
     TableFilterSet *filters);
 typedef void (*stream_factory_get_schema_t)(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema);
 
-struct ArrowScanFunctionData : public TableFunctionData {
+struct ArrowScanFunctionData : public PyTableFunctionData {
 	ArrowScanFunctionData(idx_t rows_per_thread_p, stream_factory_produce_t scanner_producer_p,
 	                      uintptr_t stream_factory_ptr_p)
 	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
@@ -111,7 +111,8 @@ private:
 	                                                                TableFunctionInitInput &input);
 
 	//! Initialize Local State
-	static unique_ptr<LocalTableFunctionState> ArrowScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+	static unique_ptr<LocalTableFunctionState> ArrowScanInitLocal(ExecutionContext &context,
+	                                                              TableFunctionInitInput &input,
 	                                                              GlobalTableFunctionState *global_state);
 
 	//! Scan Function

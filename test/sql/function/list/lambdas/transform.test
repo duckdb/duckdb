@@ -1,0 +1,241 @@
+# name: test/sql/function/list/lambdas/transform.test
+# description: Test list_transform function
+# group: [lambdas]
+
+# NOTE: some of these tests are directly taken from the Presto Array Function examples
+
+statement ok
+PRAGMA enable_verification
+
+# test NULLs and simple cases
+
+query II
+SELECT [1] AS l, list_transform([1], l -> l + 1)
+----
+[1]	[2]
+
+query I
+SELECT list_transform(NULL, x -> x + 1)
+----
+NULL
+
+query I
+SELECT list_transform([1], x -> x)
+----
+[1]
+
+query I
+SELECT list_transform(['duck', 'a', 'ö'], duck -> concat(duck, 'DB'))
+----
+[duckDB, aDB, öDB]
+
+query I
+SELECT list_transform([1, 2, 3], x -> 1)
+----
+[1, 1, 1]
+
+query I
+SELECT list_transform([], x -> x + 1)
+----
+[]
+
+query I
+SELECT list_transform([1, 2, 3], x -> x + 1)
+----
+[2, 3, 4]
+
+query I
+SELECT list_transform([1, NULL, -2, NULL], x -> x + 1)
+----
+[2, NULL, -1, NULL]
+
+# test on table with rows
+
+statement ok
+CREATE TABLE lists (n integer, l integer[])
+
+statement ok
+INSERT INTO lists VALUES (1, [1]), (2, [1, 2, 3]), (3, NULL), (4, [-1, NULL, 2])
+
+query I
+SELECT list_transform(l, x -> x) FROM lists
+----
+[1]
+[1, 2, 3]
+NULL
+[-1, NULL, 2]
+
+query I
+SELECT list_transform(l, x -> x + n) FROM lists
+----
+[2]
+[3, 4, 5]
+NULL
+[3, NULL, 6]
+
+query I
+SELECT list_transform(l, x -> x < 2) FROM lists
+----
+[True]
+[True, False, False]
+NULL
+[True, NULL, False]
+
+# test other operators and more complex/nested functions
+
+query I
+SELECT list_transform(['x', 'abc', 'z'], x -> x || '0')
+----
+[x0, abc0, z0]
+
+query I
+SELECT list_transform([[1], [2, 3], [NULL], NULL], x -> list_transform(x, y -> y + 1))
+----
+[[2], [3, 4], [NULL], NULL]
+
+query I
+SELECT list_transform([[1], [2], [3]], x -> list_concat(x, x))
+----
+[[1, 1], [2, 2], [3, 3]]
+
+query I
+SELECT list_transform([5, NULL, 6], x -> POW(x, 2)::INTEGER)
+----
+[25, NULL, 36]
+
+query I
+SELECT list_transform([5, NULL, 6], x -> COALESCE(x, 0) + 1)
+----
+[6, 1, 7]
+
+query I
+SELECT list_transform(list_value(list_unique(list_concat([1,2],[2,2]))), x -> (x + 1)::INTEGER);
+----
+[3]
+
+query I
+SELECT list_sort(list_transform(list_distinct(list_concat([1,2],[2,2])), x -> x + 1));
+----
+[2, 3]
+
+query I
+SELECT list_transform([[1], [2], [3]], x -> list_concat(list_transform(x, y -> y + 1), list_transform(x, z -> z - 1)))
+----
+[[2, 0], [3, 1], [4, 2]]
+
+query I
+SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x))
+----
+[[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
+
+# test aliases
+
+query I
+SELECT array_transform([1, NULL], arr_elem -> arr_elem - 4)
+----
+[-3, NULL]
+
+query I
+SELECT array_apply([1, NULL], arr_elem -> arr_elem - 4)
+----
+[-3, NULL]
+
+query I
+SELECT list_apply([1, NULL], arr_elem -> arr_elem - 4)
+----
+[-3, NULL]
+
+# more tests on precedence
+
+query I
+select list_apply(i, x -> (6 + 2 * 12) / x) from (values (list_value(1, 2, 3))) tbl(i);
+----
+[30, 15, 10]
+
+query I
+select list_apply(i, x -> x + 1 AND x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+----
+[True, True, True]
+
+# very large lists
+
+statement ok
+CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+statement ok
+CREATE TABLE transformed_lists (g integer, l integer[]);
+
+statement ok
+INSERT INTO transformed_lists (SELECT g + 1, list_transform(l, x -> x + 1) FROM large_lists WHERE g != 3)
+
+statement ok
+INSERT INTO transformed_lists (SELECT g - 3, list_transform(l, x -> x - 3) FROM large_lists WHERE g = 3)
+
+query I
+SELECT ll.l = tl.l FROM large_lists ll, transformed_lists tl WHERE ll.g = tl.g
+----
+True
+True
+True
+True
+
+# test correlated subqueries
+
+statement ok
+CREATE TABLE corr_test (n integer, l integer[], g integer)
+
+statement ok
+INSERT INTO corr_test VALUES (1, [2, 1, 1], 1), (3, [NULL, 2, 4, 4], 1), (NULL, NULL, 1), (0, [], 1)
+
+query I
+SELECT n FROM corr_test WHERE list_sum(list_transform(l, elem -> elem - n)) >= n
+----
+1
+
+query I
+SELECT ct.n FROM corr_test ct
+WHERE list_count(ct.l) < (SELECT list_count(list_transform(list_concat(list(c.n), ct.l), a -> a)) FROM corr_test c GROUP BY c.g)
+ORDER BY ct.n
+----
+0
+1
+3
+
+query I
+SELECT (SELECT list_transform(l, elem -> elem + 1)) FROM corr_test
+----
+[3, 2, 2]
+[NULL, 3, 5, 5]
+NULL
+[]
+
+query I
+SELECT (SELECT list_transform(l, elem -> elem + n)) FROM corr_test
+----
+[3, 2, 2]
+[NULL, 5, 7, 7]
+NULL
+[]
+
+query I
+SELECT (SELECT (SELECT (SELECT list_transform(l, elem -> elem + 1)))) FROM corr_test
+----
+[3, 2, 2]
+[NULL, 3, 5, 5]
+NULL
+[]
+
+# positional references in lambda functions
+query I
+SELECT list_transform([1, 2, 3], x -> x + #1) FROM range(10)
+----
+[1, 2, 3]
+[2, 3, 4]
+[3, 4, 5]
+[4, 5, 6]
+[5, 6, 7]
+[6, 7, 8]
+[7, 8, 9]
+[8, 9, 10]
+[9, 10, 11]
+[10, 11, 12]

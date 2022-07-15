@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+enum class MapInvalidReason : uint8_t { VALID, NULL_KEY_LIST, NULL_KEY, DUPLICATE_KEY };
+
 struct VariableReturnBindData : public FunctionData {
 	LogicalType stype;
 
@@ -43,6 +45,10 @@ struct StructPackFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct StructInsertFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct ListValueFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -60,6 +66,16 @@ struct MapExtractFun {
 };
 
 struct ListExtractFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListTransformFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct ListFilterFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -110,5 +126,8 @@ struct StructExtractFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
+
+MapInvalidReason CheckMapValidity(Vector &map, idx_t count,
+                                  const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 
 } // namespace duckdb

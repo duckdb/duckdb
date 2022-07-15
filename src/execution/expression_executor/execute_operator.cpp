@@ -73,8 +73,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
 			        vector_to_check);
 
-			VectorData vdata;
-			vector_to_check.Orrify(remaining_count, vdata);
+			UnifiedVectorFormat vdata;
+			vector_to_check.ToUnifiedFormat(remaining_count, vdata);
 
 			idx_t result_count = 0;
 			next_count = 0;

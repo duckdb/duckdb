@@ -268,7 +268,7 @@ TEST_CASE("Concurrent commits on persistent database with automatic checkpoints"
 	auto storage_database = TestCreatePath("concurrent_checkpoint");
 	DeleteDatabase(storage_database);
 	unique_ptr<MaterializedQueryResult> result;
-	config->checkpoint_wal_size = 1;
+	config->options.checkpoint_wal_size = 1;
 	DuckDB db(storage_database, config.get());
 	Connection con(db);
 

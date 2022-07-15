@@ -2,6 +2,8 @@
 # description: Test QUALIFY clause in a view over different runs
 # group: [qualify]
 
+require skip_reload
+
 # load the DB from disk
 load __TEST_DIR__/view_storage.db
 

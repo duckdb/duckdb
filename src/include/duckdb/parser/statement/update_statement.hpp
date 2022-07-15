@@ -12,6 +12,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -26,6 +27,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> expressions;
 	//! keep track of optional returningList if statement contains a RETURNING keyword
 	vector<unique_ptr<ParsedExpression>> returning_list;
+	//! CTEs
+	CommonTableExpressionMap cte_map;
 
 protected:
 	UpdateStatement(const UpdateStatement &other);

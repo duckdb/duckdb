@@ -2,6 +2,9 @@
 # description: Test information_schema functions
 # group: [table_function]
 
+require skip_reload
+
+
 statement ok
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA;
 

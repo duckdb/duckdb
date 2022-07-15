@@ -2,6 +2,8 @@
 # description: Test null type
 # group: [types]
 
+require skip_reload
+
 statement ok
 pragma enable_verification
 
@@ -79,22 +81,11 @@ endloop
 statement ok
 create table null_map (i map("null", "null"))
 
-statement ok
+# Map keys cant be NULL
+statement error
 insert into null_map values (null), (map([null], [null]))
 
-query T
-select i from null_map
-----
-NULL
-{NULL=NULL}
-
 foreach type <integral> float double varchar
-
-query T
-select i::map(${type}, ${type}) from null_map
-----
-NULL
-{NULL=NULL}
 
 statement error
 insert into null_map values (map([42::${type}], [7::${type}]))

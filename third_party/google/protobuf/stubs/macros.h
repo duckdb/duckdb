@@ -30,20 +30,20 @@
 
 #ifndef GOOGLE_PROTOBUF_MACROS_H__
 #define GOOGLE_PROTOBUF_MACROS_H__
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 
 #undef GOOGLE_DISALLOW_EVIL_CONSTRUCTORS
 #define GOOGLE_DISALLOW_EVIL_CONSTRUCTORS(TypeName) \
-  TypeName(const TypeName&) = delete;               \
-  void operator=(const TypeName&) = delete
+  TypeName(const TypeName &) = delete;               \
+  void operator=(const TypeName &) = delete
 
 #undef GOOGLE_DISALLOW_IMPLICIT_CONSTRUCTORS
 #define GOOGLE_DISALLOW_IMPLICIT_CONSTRUCTORS(TypeName) \
   TypeName() = delete;                                  \
-  TypeName(const TypeName&) = delete;                   \
-  void operator=(const TypeName&) = delete
+  TypeName(const TypeName &) = delete;                   \
+  void operator=(const TypeName &) = delete
 
 // ===================================================================
 // from google3/base/basictypes.h
@@ -83,11 +83,9 @@ namespace protobuf {
 // Kudos to Jorg Brown for this simple and elegant implementation.
 
 #undef GOOGLE_ARRAYSIZE
-#define GOOGLE_ARRAYSIZE(a) \
-  ((sizeof(a) / sizeof(*(a))) / \
-   static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
+#define GOOGLE_ARRAYSIZE(a) ((sizeof(a) / sizeof(*(a))) / static_cast<size_t>(!(sizeof(a) % sizeof(*(a)))))
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #endif  // GOOGLE_PROTOBUF_MACROS_H__

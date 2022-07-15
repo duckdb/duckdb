@@ -1,20 +1,17 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parser.hpp"
 
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb_python/exceptions.hpp"
 
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
-#include <random>
-#include <stdlib.h>
 
 #ifndef DUCKDB_PYTHON_LIB_NAME
 #define DUCKDB_PYTHON_LIB_NAME duckdb
@@ -80,11 +77,12 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
+	RegisterExceptions(m);
+
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
-	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict(),
-	      py::arg("check_same_thread") = true);
+	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict());
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",
