@@ -11,8 +11,11 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 	D_ASSERT(stmt);
 	D_ASSERT(stmt->relation);
 
-	auto result = make_unique<AlterStatement>();
+	if (stmt->cmds->length != 1) {
+		throw ParserException("Only one ALTER command per statement is supported");
+	}
 
+	auto result = make_unique<AlterStatement>();
 	auto qname = TransformQualifiedName(stmt->relation);
 
 	// first we check the type of ALTER
