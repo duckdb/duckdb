@@ -13,6 +13,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/storage/string_uncompressed.hpp"
+#include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
 
@@ -169,7 +171,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	}
 
 	if (GetVectorType() == VectorType::FSST_VECTOR) {
-		Normalify(sel, count);
+		Flatten(sel, count);
 		return;
 	}
 

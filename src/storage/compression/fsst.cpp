@@ -68,8 +68,8 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 	auto &state = (FSSTAnalyzeState &)state_p;
-	VectorData vdata;
-	input.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 
 	state.count += count;
 	auto data = (string_t *)vdata.data;
@@ -186,8 +186,8 @@ public:
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
-		current_dictionary = FSSTStorage::GetDictionary(*current_segment, *current_handle);
-		current_end_ptr = current_handle->node->buffer + current_dictionary.end;
+		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
+		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 	}
 
 	void UpdateState(string_t uncompressed_string, unsigned char *compressed_string, size_t compressed_string_len) {
@@ -266,7 +266,7 @@ public:
 		                  fsst_serialized_symbol_table_size;
 
 		// calculate ptr and offsets
-		auto base_ptr = handle->node->buffer;
+		auto base_ptr = handle.Ptr();
 		auto header_ptr = (fsst_compression_header_t *)base_ptr;
 		auto compressed_index_buffer_offset = sizeof(fsst_compression_header_t);
 		auto symbol_table_offset = compressed_index_buffer_offset + compressed_index_buffer_size;
@@ -308,7 +308,7 @@ public:
 		current_dictionary.end -= move_amount;
 		D_ASSERT(current_dictionary.end == total_size);
 		// write the new dictionary (with the updated "end")
-		FSSTStorage::SetDictionary(*current_segment, *handle, current_dictionary);
+		FSSTStorage::SetDictionary(*current_segment, handle, current_dictionary);
 
 		return total_size;
 	}
@@ -318,7 +318,7 @@ public:
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
-	unique_ptr<BufferHandle> current_handle;
+	BufferHandle current_handle;
 	StringDictionaryContainer current_dictionary;
 	data_ptr_t current_end_ptr;
 
@@ -352,8 +352,8 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	auto &state = (FSSTCompressionState &)state_p;
 
 	// Get vector data
-	VectorData vdata;
-	scan_vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	scan_vector.ToUnifiedFormat(count, vdata);
 	auto data = (string_t *)vdata.data;
 
 	// Collect pointers to strings to compress
@@ -461,7 +461,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	auto state = make_unique<FSSTScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
-	auto base_ptr = state->handle->node->buffer + segment.GetBlockOffset();
+	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
 	auto retval = ParseFSSTSegmentHeader(base_ptr, (duckdb_fsst_decoder_t *)state->duckdb_fsst_decoder.get(), &state->current_width);
@@ -538,8 +538,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto &scan_state = (FSSTScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
-	auto dict = GetDictionary(segment, *scan_state.handle);
+	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto dict = GetDictionary(segment, scan_state.handle);
 	auto base_data = (data_ptr_t)(baseptr + sizeof(fsst_compression_header_t));
 	string_t *result_data;
 	unique_ptr<Vector> output_vector;
@@ -610,9 +610,9 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	auto base_ptr = handle->node->buffer + segment.GetBlockOffset();
+	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
 	auto base_data = (data_ptr_t)(base_ptr + sizeof(fsst_compression_header_t));
-	auto dict = GetDictionary(segment, *handle);
+	auto dict = GetDictionary(segment, handle);
 
 	duckdb_fsst_decoder_t decoder;
 	bitpacking_width_t width;
@@ -672,13 +672,13 @@ bool FSSTFun::TypeIsSupported(PhysicalType type) {
 // Helper Functions
 //===--------------------------------------------------------------------===//
 void FSSTStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container) {
-	auto header_ptr = (fsst_compression_header_t *)(handle.node->buffer + segment.GetBlockOffset());
+	auto header_ptr = (fsst_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
 	Store<uint32_t>(container.size, (data_ptr_t)&header_ptr->dict_size);
 	Store<uint32_t>(container.end, (data_ptr_t)&header_ptr->dict_end);
 }
 
 StringDictionaryContainer FSSTStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = (fsst_compression_header_t *)(handle.node->buffer + segment.GetBlockOffset());
+	auto header_ptr = (fsst_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>((data_ptr_t)&header_ptr->dict_size);
 	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
