@@ -82,8 +82,8 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformSelectionExpr(const sub
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(const substrait::Expression &sexpr) {
 	auto function_name = FindFunction(sexpr.scalar_function().function_reference());
 	vector<unique_ptr<ParsedExpression>> children;
-	for (auto &sarg : sexpr.scalar_function().args()) {
-		children.push_back(TransformExpr(sarg));
+	for (auto &sarg : sexpr.scalar_function().arguments()) {
+		children.push_back(TransformExpr(sarg.value()));
 	}
 	// string compare galore
 	// TODO simplify this
@@ -306,8 +306,8 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Re
 
 	for (auto &smeas : sop.aggregate().measures()) {
 		vector<unique_ptr<ParsedExpression>> children;
-		for (auto &sarg : smeas.measure().args()) {
-			children.push_back(TransformExpr(sarg));
+		for (auto &sarg : smeas.measure().arguments()) {
+			children.push_back(TransformExpr(sarg.value()));
 		}
 		auto function_name = FindFunction(smeas.measure().function_reference());
 		if (function_name == "count" && children.empty()) {

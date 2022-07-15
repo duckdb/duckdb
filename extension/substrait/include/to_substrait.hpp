@@ -85,6 +85,8 @@ private:
 
 	string GetDecimalInternalString(duckdb::Value &value);
 
+	void AllocateFunctionArgument(substrait::Expression_ScalarFunction *scalar_fun, substrait::Expression *value);
+
 	//! Creates a Conjuction
 	template <typename T, typename FUNC>
 	substrait::Expression *CreateConjunction(T &source, FUNC f) {
@@ -97,8 +99,8 @@ private:
 				auto temp_expr = new substrait::Expression();
 				auto scalar_fun = temp_expr->mutable_scalar_function();
 				scalar_fun->set_function_reference(RegisterFunction("and"));
-				scalar_fun->mutable_args()->AddAllocated(res);
-				scalar_fun->mutable_args()->AddAllocated(child_expression);
+				AllocateFunctionArgument(scalar_fun, res);
+				AllocateFunctionArgument(scalar_fun, child_expression);
 				res = temp_expr;
 			}
 		}
