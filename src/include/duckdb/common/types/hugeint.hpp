@@ -53,10 +53,10 @@ public:
 	}
 
 	static void NegateInPlace(hugeint_t &input) {
-		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
-		if (input.upper == NumericLimits<int64_t>::Minimum()) {
+		if (input.upper == NumericLimits<int64_t>::Minimum() && input.lower == 0) {
 			throw OutOfRangeException("HUGEINT is out of range");
 		}
+		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
 		input.upper = -1 - input.upper + (input.lower == 0);
 	}
 	static hugeint_t Negate(hugeint_t input) {

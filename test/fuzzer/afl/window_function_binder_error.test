@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT count(x) OVER () FROM (SELECT 1) x(x) GROUP BY ALL;
+SELECT count(x) OVER () FROM (SELECT 1) x(x);
 ----
 1
 
