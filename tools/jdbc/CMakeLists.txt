@@ -16,14 +16,17 @@ else()
   set(MVN_COMMAND sh mvnw)
 endif()
 
+set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/target/headers)
+
 add_custom_target(
   duckdb_jdbc
   USES_TERMINAL
+  BYPRODUCTS ${OUR_DIR}/org_duckdb_DuckDBNative.h
   COMMAND ${MVN_COMMAND} compile
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-include_directories(../../extension/parquet/include target/headers
-                    ${JNI_INCLUDE_DIRS})
+include_directories(${JNI_INCLUDE_DIRS} ${OUT_DIR}
+                    ../../extension/parquet/include)
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
