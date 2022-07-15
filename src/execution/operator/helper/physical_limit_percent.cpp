@@ -111,7 +111,15 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		if (count > 0) {
 			count += offset;
 		}
-		limit = MinValue((idx_t)(limit_percent / 100 * count), count);
+		if (limit_percent < 0 || limit_percent > 100) {
+			throw OutOfRangeException("Limit percent out of range, should be between 0% and 100%");
+		}
+		double limit_dbl = limit_percent / 100 * count;
+		if (limit_dbl > count) {
+			limit = count;
+		} else {
+			limit = idx_t(limit_dbl);
+		}
 		if (limit == 0) {
 			return;
 		}
