@@ -521,7 +521,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, move(statement), parameters.parameters);
 	if (prepared->properties.parameter_count > 0 && !parameters.parameters) {
-		return make_unique<PendingQueryResult>(StringUtil::Format("Expected %lld parameters, but none were supplied", prepared->properties.parameter_count));
+		return make_unique<PendingQueryResult>(StringUtil::Format("Expected %lld parameters, but none were supplied",
+		                                                          prepared->properties.parameter_count));
 	}
 	if (!prepared->properties.bound_all_parameters) {
 		return make_unique<PendingQueryResult>("Not all parameters were bound");
