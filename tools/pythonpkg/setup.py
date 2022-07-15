@@ -5,7 +5,6 @@ import os
 import sys
 import platform
 import multiprocessing.pool
-from pathlib import Path
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -155,30 +154,12 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-def locate_scripts_folders(my_path):
-    directory = my_path
-    if not os.path.isdir(directory):
-        directory = os.path.dirname(directory)
-    found = False
-    max_depth = 5
-    current_depth = 0
-    script_folder = None
-    while not found and current_depth < max_depth:
-        for path in [f.path for f in os.scandir(directory) if f.is_dir()]:
-            # root reached
-            if '/' == path:
-                current_depth = max_depth
-                break
-            if (os.path.basename(path) == 'scripts'):
-                script_folder = path
-                found = True
-        current_depth += 1
-        directory = Path(directory).parent.absolute()
-
-    if not found:
-        print("Could not locate the 'scripts' directory, stopping script", file=sys.stderr)
-        exit(1)
-    return script_folder
+#TODO: add missing third party includes
+# Add paths that should be included when building the python client here
+def extra_python_includes():
+	extra_includes = []
+	extra_includes += [os.path.join(script_path, '..', '..', 'third_party', 'fmt', 'include')] #third_party/fmt/include
+	return extra_includes
 
 extra_files = []
 header_files = []
@@ -188,14 +169,7 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
-scripts_folder_abspath = os.path.join(script_path, '..', '..', 'scripts')
-print(scripts_folder_abspath)
-sys.path.append(scripts_folder_abspath)
-from package_build import third_party_includes
-third_party = third_party_includes()
-# Make the third_party paths relative to the script path
-third_party = [os.path.join(script_path, '..', '..', x) for x in third_party]
-include_directories += third_party
+include_directories += extra_python_includes()
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -205,6 +179,7 @@ if len(existing_duckdb_dir) == 0:
     if os.path.isfile(os.path.join(script_path, '..', '..', 'scripts', 'amalgamation.py')):
         # amalgamation exists: compiling from source directory
         # copy all source files to the current directory
+        sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
         (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, lib_name), extensions, False, unity_build)
 
@@ -250,6 +225,7 @@ if len(existing_duckdb_dir) == 0:
         libraries=libraries,
         language='c++')
 else:
+    sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
     import package_build
 
     toolchain_args += ['-I' + x for x in package_build.includes(extensions)]
@@ -299,7 +275,7 @@ def setup_data_files(data_files):
         new_data_files.append((kv, directory_map[kv]))
     return new_data_files
 
-data_files = setup_data_files(extra_files + header_files + ['duckdb/scripts/package_build.py'])
+data_files = setup_data_files(extra_files + header_files)
 
 setup(
     name = lib_name,
