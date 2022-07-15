@@ -1,5 +1,5 @@
 # name: test/fuzzer/afl/invalid_foreign_key.test
-# description: Invalid foreign key declaration
+# description: Foreign key without primary/unique key counterpart
 # group: [afl]
 
 statement ok
