@@ -54,9 +54,17 @@
 #define __ORDER_LITTLE_ENDIAN__ 2
 #include <intrin.h>
 static inline int __builtin_ctzl(unsigned long long x) {
-    unsigned long ret;
+#  ifdef _WIN64
+	unsigned long ret;
     _BitScanForward64(&ret, x);
-    return (int)ret;
+	return (int)ret;
+#  else
+	unsigned long low, high;
+	bool low_set = _BitScanForward(&low, (u32)(x)) != 0;
+	_BitScanForward(&high, (u32)(x >> 32));
+	high += 32;
+	return low_set ? low : high;
+#  endif
 }
 #endif
 
