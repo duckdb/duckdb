@@ -1027,17 +1027,15 @@ void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable
 		total_size += ht->SizeInBytes() + ht->SwizzledSize();
 	}
 
-	tuples_per_iteration = total_count;
+	idx_t avg_tuple_size = total_size / total_count;
+	tuples_per_iteration = max_ht_size / avg_tuple_size;
 
-//	idx_t avg_tuple_size = total_size / total_count;
-//	tuples_per_iteration = max_ht_size / avg_tuple_size;
-//
-//	if (tuples_per_iteration >= total_count) {
-//		// We decided to do an external join, but the data fits
-//		// This can happen when we force an external join
-//		// Just do three probe iterations
-//		tuples_per_iteration = (total_count + 1) / 3;
-//	}
+	if (tuples_per_iteration >= total_count) {
+		// We decided to do an external join, but the data fits
+		// This can happen when we force an external join
+		// Just do three probe iterations
+		tuples_per_iteration = (total_count + 1) / 3;
+	}
 
 	// TODO: set number of radix bits (determine what's best?)
 }
@@ -1224,7 +1222,7 @@ void JoinHashTable::ConstructProbeChunk(DataChunk &join_keys, DataChunk &payload
                                         idx_t block_position, idx_t count) {
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	vector<BufferHandle> handles;
-
+	// TODO currently something is wrong with partitioning/unswizzling probe-side data
 	idx_t done = 0;
 	while (done != count) {
 		auto &block = *block_collection->blocks[block_position];

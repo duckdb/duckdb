@@ -75,6 +75,7 @@ void RowOperations::CopyHeapAndSwizzle(const RowLayout &layout, data_ptr_t row_p
 		// Figure out source and size
 		const auto source_heap_ptr = Load<data_ptr_t>(row_ptr + heap_offset);
 		const auto size = Load<uint32_t>(source_heap_ptr);
+		D_ASSERT(size >= sizeof(uint32_t));
 
 		// Copy and swizzle
 		memcpy(heap_ptr, source_heap_ptr, size);
@@ -104,7 +105,8 @@ static inline void VerifyUnswizzledString(const RowLayout &layout, const idx_t &
 
 	ValidityBytes row_mask(row_ptr);
 	if (row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
-		Load<string_t>(row_ptr + layout.GetOffsets()[col_idx]).Verify();
+		auto str = Load<string_t>(row_ptr + layout.GetOffsets()[col_idx]);
+		str.Verify();
 	}
 #endif
 }
@@ -137,10 +139,10 @@ void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t 
 					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
 						// Overwrite the string offset with the pointer (if not inlined)
 						Store<data_ptr_t>(heap_row_ptrs[i] + Load<idx_t>(string_ptr), string_ptr);
+						VerifyUnswizzledString(layout, col_idx, row_ptr + i * row_width);
 					}
 					col_ptr += row_width;
 					string_ptr += row_width;
-					VerifyUnswizzledString(layout, col_idx, row_ptr + i * row_width);
 				}
 			} else {
 				// Non-varchar blob columns

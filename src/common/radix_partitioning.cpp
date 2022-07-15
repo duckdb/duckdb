@@ -162,48 +162,10 @@ static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowD
 		partition_collections.push_back(make_unique<RowDataCollection>(buffer_manager, block_capacity, row_width));
 		partition_blocks[i] = &partition_collections[i]->CreateBlock();
 		partition_handles.push_back(buffer_manager.Pin(partition_blocks[i]->block));
-		partition_ptrs[i] = partition_handles[i].Ptr();
+		if (partition_ptrs) {
+			partition_ptrs[i] = partition_handles[i].Ptr();
+		}
 	}
-}
-
-static inline void PinAndSet(BufferManager &buffer_manager, RowDataBlock &block, RowDataBlock **block_ptr,
-                             BufferHandle &handle, data_ptr_t &ptr) {
-	*block_ptr = &block;
-	handle = buffer_manager.Pin(block.block);
-	ptr = handle.Ptr();
-}
-
-static inline void PartitionHeap(BufferManager &buffer_manager, const RowLayout &layout, RowDataBlock &data_block,
-                                 const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle,
-                                 data_ptr_t &heap_ptr) {
-	D_ASSERT(heap_block.block->BlockId() == heap_handle.GetBlockId());
-	const auto count = data_block.count - heap_block.count;
-	if (count == 0) {
-		return;
-	}
-	const auto row_width = layout.GetRowWidth();
-	auto base_row_ptr = data_ptr - count * row_width;
-
-	// Compute size of remaining heap rows
-	idx_t size = 0;
-	auto row_ptr = base_row_ptr + layout.GetHeapOffset();
-	for (idx_t i = 0; i < count; i++) {
-		size += Load<uint32_t>(Load<data_ptr_t>(row_ptr));
-	}
-
-	// Resize block if it doesn't fit
-	auto required_size = heap_block.byte_offset + size;
-	if (required_size > heap_block.capacity) {
-		buffer_manager.ReAllocate(heap_block.block, required_size);
-		heap_block.capacity = required_size;
-		heap_ptr = heap_handle.Ptr() + heap_block.byte_offset;
-	}
-
-	// Copy corresponding heap rows, swizzle, and update counts
-	RowOperations::CopyHeapAndSwizzle(layout, base_row_ptr, heap_handle.Ptr(), heap_ptr, count);
-	heap_block.count += count;
-	heap_block.byte_offset += size;
-	heap_ptr += size;
 }
 
 struct PartitionFunctor {
@@ -229,10 +191,9 @@ struct PartitionFunctor {
 		// Variable-size data
 		RowDataBlock *partition_heap_blocks[CONSTANTS::NUM_PARTITIONS];
 		vector<BufferHandle> partition_heap_handles;
-		data_ptr_t partition_heap_ptrs[CONSTANTS::NUM_PARTITIONS];
 		if (has_heap) {
 			InitPartitions<radix_bits>(buffer_manager, partition_string_heaps, partition_heap_blocks,
-			                           partition_heap_handles, partition_heap_ptrs, (idx_t)Storage::BLOCK_SIZE, 1);
+			                           partition_heap_handles, nullptr, (idx_t)Storage::BLOCK_SIZE, 1);
 		}
 
 		// Init local counts of the partition blocks
@@ -244,7 +205,7 @@ struct PartitionFunctor {
 		    unique_ptr<data_t[]>(new data_t[CONSTANTS::TMP_BUF_SIZE * CONSTANTS::NUM_PARTITIONS * row_width]);
 		const auto tmp_buf = temp_buf_ptr.get();
 
-		// Initialize temporal buffer count
+		// Initialize temporal buffer offsets
 		idx_t pos[CONSTANTS::NUM_PARTITIONS];
 		for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
 			pos[idx] = idx * CONSTANTS::TMP_BUF_SIZE;
@@ -298,7 +259,7 @@ struct PartitionFunctor {
 								auto &p_heap_block = *partition_heap_blocks[idx];
 								partition_data_blocks[idx]->count = block_counts[idx];
 								PartitionHeap(buffer_manager, layout, p_data_block, partition_data_ptrs[idx],
-								              p_heap_block, partition_heap_handles[idx], partition_heap_ptrs[idx]);
+								              p_heap_block, partition_heap_handles[idx]);
 
 								// Update counts and create new blocks to write to
 								p_heap_block.count = block_counts[idx];
@@ -313,9 +274,10 @@ struct PartitionFunctor {
 									partition_string_heaps[idx]->CreateBlock();
 								}
 
+								// TODO: describe why we don't need a partition_heap_ptr
+								data_ptr_t dummy_ptr;
 								PinAndSet(buffer_manager, *partition_string_heaps[idx]->blocks.back(),
-								          &partition_heap_blocks[idx], partition_heap_handles[idx],
-								          partition_heap_ptrs[idx]);
+								          &partition_heap_blocks[idx], partition_heap_handles[idx], dummy_ptr);
 							}
 
 							// Update counts and create new blocks to write to
@@ -350,7 +312,7 @@ struct PartitionFunctor {
 				for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
 					partition_data_blocks[idx]->count = block_counts[idx];
 					PartitionHeap(buffer_manager, layout, *partition_data_blocks[idx], partition_data_ptrs[idx],
-					              *partition_heap_blocks[idx], partition_heap_handles[idx], partition_heap_ptrs[idx]);
+					              *partition_heap_blocks[idx], partition_heap_handles[idx]);
 				}
 			}
 
@@ -369,6 +331,58 @@ struct PartitionFunctor {
 			}
 		}
 		// TODO: maybe delete empty blocks at the end? (although they are small and unlikely)
+	}
+
+	static inline void PinAndSet(BufferManager &buffer_manager, RowDataBlock &block, RowDataBlock **block_ptr,
+	                             BufferHandle &handle, data_ptr_t &ptr) {
+		*block_ptr = &block;
+		handle = buffer_manager.Pin(block.block);
+		ptr = handle.Ptr();
+	}
+
+	static inline void PartitionHeap(BufferManager &buffer_manager, const RowLayout &layout, RowDataBlock &data_block,
+	                                 const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle) {
+		D_ASSERT(!layout.AllConstant());
+		D_ASSERT(heap_block.block->BlockId() == heap_handle.GetBlockId());
+		D_ASSERT(data_block.count >= heap_block.count);
+		const auto count = data_block.count - heap_block.count;
+		if (count == 0) {
+			return;
+		}
+		const auto row_width = layout.GetRowWidth();
+		const auto base_row_ptr = data_ptr - count * row_width;
+
+		// Compute size of remaining heap rows
+		idx_t size = 0;
+		auto row_ptr = base_row_ptr + layout.GetHeapOffset();
+		for (idx_t i = 0; i < count; i++) {
+			size += Load<uint32_t>(Load<data_ptr_t>(row_ptr));
+			row_ptr += row_width;
+		}
+
+		// Resize block if it doesn't fit
+		auto required_size = heap_block.byte_offset + size;
+		if (required_size > heap_block.capacity) {
+			buffer_manager.ReAllocate(heap_block.block, required_size);
+			heap_block.capacity = required_size;
+		}
+		auto heap_ptr = heap_handle.Ptr() + heap_block.byte_offset;
+
+#ifdef DEBUG
+		if (data_block.count > count) {
+			auto previous_row_heap_offset = Load<idx_t>(base_row_ptr - layout.GetRowWidth() + layout.GetHeapOffset());
+			auto previous_row_heap_ptr = heap_handle.Ptr() + previous_row_heap_offset;
+			auto current_heap_ptr = previous_row_heap_ptr + Load<uint32_t>(previous_row_heap_ptr);
+			D_ASSERT(current_heap_ptr == heap_ptr);
+		}
+#endif
+
+		// Copy corresponding heap rows, swizzle, and update counts
+		RowOperations::CopyHeapAndSwizzle(layout, base_row_ptr, heap_handle.Ptr(), heap_ptr, count);
+		heap_block.count += count;
+		heap_block.byte_offset += size;
+		D_ASSERT(heap_ptr + size == heap_handle.Ptr() + heap_block.byte_offset);
+		D_ASSERT(heap_ptr <= heap_handle.Ptr() + heap_block.capacity);
 	}
 };
 

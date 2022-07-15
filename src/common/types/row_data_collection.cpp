@@ -122,7 +122,6 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 		temp.block_capacity = other.block_capacity;
 		temp.entry_size = other.entry_size;
 		temp.blocks = move(other.blocks);
-		other.count = 0;
 	}
 
 	lock_guard<mutex> write_lock(rdc_lock);
@@ -135,6 +134,7 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 	for (auto &handle : temp.pinned_blocks) {
 		pinned_blocks.emplace_back(move(handle));
 	}
+	other.Clear();
 }
 
 unique_ptr<RowDataCollection> RowDataCollection::CopyEmpty() {

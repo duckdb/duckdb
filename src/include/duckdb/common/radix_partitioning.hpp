@@ -17,7 +17,6 @@ class RowLayout;
 class RowDataCollection;
 
 //! Templated radix partitioning constants, can be templated to the number of radix bits
-//! See: join_hashtable.hpp
 template <idx_t radix_bits>
 struct RadixPartitioningConstants {
 public:
