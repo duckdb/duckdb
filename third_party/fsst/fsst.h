@@ -60,8 +60,8 @@ static inline int __builtin_ctzl(unsigned long long x) {
 	return (int)ret;
 #  else
 	unsigned long low, high;
-	bool low_set = _BitScanForward(&low, (u32)(x)) != 0;
-	_BitScanForward(&high, (u32)(x >> 32));
+	bool low_set = _BitScanForward(&low, (unsigned __int32)(x)) != 0;
+	_BitScanForward(&high, (unsigned __int32)(x >> 32));
 	high += 32;
 	return low_set ? low : high;
 #  endif
