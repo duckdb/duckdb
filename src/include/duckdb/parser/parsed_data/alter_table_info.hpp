@@ -30,6 +30,8 @@ struct AlterInfo : public ParseInfo {
 	~AlterInfo() override;
 
 	AlterType type;
+	//! if exists
+	bool if_exists;
 	//! Schema name to alter
 	string schema;
 	//! Entry name to alter
