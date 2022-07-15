@@ -87,7 +87,7 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 }
 
 static void ExponentNotRecognized() {
-	throw std::runtime_error("decimal.Decimal exponent type not recognized");
+	throw NotImplementedException("Failed to convert decimal.Decimal value, exponent type is unknown");
 }
 
 void PyDecimal::SetExponent(py::handle &exponent) {
@@ -116,8 +116,9 @@ void PyDecimal::SetExponent(py::handle &exponent) {
 }
 
 static void UnsupportedWidth(uint16_t width) {
-	throw std::runtime_error("Failed to convert to a DECIMAL value with a width of " + to_string(width) +
-	                         " because it exceeds the max supported width of " + to_string(Decimal::MAX_WIDTH_INT64));
+	throw ConversionException(
+	    "Failed to convert to a DECIMAL value with a width of %d because it exceeds the max supported with of %d",
+	    width, Decimal::MAX_WIDTH_INT64);
 }
 
 Value PyDecimal::ToDuckValue() {

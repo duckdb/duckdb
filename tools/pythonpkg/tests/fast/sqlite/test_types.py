@@ -68,7 +68,7 @@ class DuckDBTypeTests(unittest.TestCase):
 
     def test_CheckDecimalTooBig(self):
         val = 17.29
-        with pytest.raises(Exception, match="exceeds the max supported width"):
+        with pytest.raises(duckdb.ConversionException):
             self.cur.execute("insert into test(f) values (?)", (decimal.Decimal(val),))
 
     def test_CheckDecimal(self):

@@ -50,16 +50,13 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 
 	// Dont check for 'py::list' to allow ducktyping
 	if (!py::hasattr(keys, "__getitem__") || !py::hasattr(keys, "__len__")) {
-		// throw std::runtime_error("Dictionary malformed, keys(index 0) found within 'dict.values' is not a list");
 		return false;
 	}
 	if (!py::hasattr(values, "__getitem__") || !py::hasattr(values, "__len__")) {
-		// throw std::runtime_error("Dictionary malformed, values(index 1) found within 'dict.values' is not a list");
 		return false;
 	}
 	auto size = py::len(keys);
 	if (size != py::len(values)) {
-		// throw std::runtime_error("Dictionary malformed, keys and values lists are not of the same size");
 		return false;
 	}
 	return true;
@@ -200,7 +197,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 	} else if (py::isinstance<py::int_>(ele)) {
 		Value integer;
 		if (!TryTransformPythonInteger(integer, ele)) {
-			throw std::runtime_error("An error occurred attempting to convert a python integer");
+			throw InvalidInputException("An error occurred attempting to convert a python integer");
 		}
 		return integer;
 	} else if (py::isinstance<py::float_>(ele)) {
@@ -255,7 +252,8 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
 		return TransformPythonValue(ele.attr("tolist")());
 	} else {
-		throw std::runtime_error("TransformPythonValue unknown param type " + py::str(ele.get_type()).cast<string>());
+		throw NotImplementedException("Unable to transform python value of type '%s' to DuckDB LogicalType",
+		                              py::str(ele.get_type()).cast<string>());
 	}
 }
 

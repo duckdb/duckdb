@@ -63,7 +63,7 @@ PandasType ConvertPandasType(const string &col_type) {
 	} else if (col_type == "category") {
 		return PandasType::PANDA_CATEGORY;
 	} else {
-		throw std::runtime_error("unsupported python type " + col_type);
+		throw NotImplementedException("Data type '%s' not recognized", col_type);
 	}
 }
 
@@ -129,8 +129,7 @@ LogicalType PandasToLogicalType(const PandasType &col_type) {
 		return LogicalType::TIMESTAMP;
 	}
 	default: {
-		throw std::runtime_error("Failed to convert dtype num " + to_string((uint8_t)col_type) +
-		                         " to duckdb LogicalType");
+		throw InternalException("No known conversion for PandasType '%d' to LogicalType");
 	}
 	}
 }

@@ -165,13 +165,13 @@ static void VerifyMapConstraints(Vector &vec, idx_t count) {
 	case MapInvalidReason::VALID:
 		return;
 	case MapInvalidReason::DUPLICATE_KEY:
-		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains duplicates");
+		throw InvalidInputException("Dict->Map conversion failed because 'key' list contains duplicates");
 	case MapInvalidReason::NULL_KEY_LIST:
-		throw std::runtime_error("Dict->Map conversion failed because 'key' list is None");
+		throw InvalidInputException("Dict->Map conversion failed because 'key' list is None");
 	case MapInvalidReason::NULL_KEY:
-		throw std::runtime_error("Dict->Map conversion failed because 'key' list contains None");
+		throw InvalidInputException("Dict->Map conversion failed because 'key' list contains None");
 	default:
-		throw std::runtime_error("Option not implemented for MapInvalidReason");
+		throw InvalidInputException("Option not implemented for MapInvalidReason");
 	}
 }
 
