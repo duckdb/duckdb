@@ -223,9 +223,9 @@ struct PartitionFunctor {
 			// Pin the heap block (if necessary)
 			RowDataBlock *heap_block;
 			BufferHandle heap_handle;
-			data_ptr_t heap_ptr;
 			if (has_heap) {
-				PinAndSet(buffer_manager, *heap_blocks[block_idx], &heap_block, heap_handle, heap_ptr);
+				heap_block = heap_blocks[block_idx].get();
+				heap_handle = buffer_manager.Pin(heap_block->block);
 			}
 
 			idx_t remaining = data_block->count;
@@ -234,7 +234,7 @@ struct PartitionFunctor {
 
 				if (has_heap) {
 					// Unswizzle so that the rows that we copy have a pointer to their heap rows
-					RowOperations::UnswizzleHeapPointer(layout, data_ptr, heap_ptr, next);
+					RowOperations::UnswizzleHeapPointer(layout, data_ptr, heap_handle.Ptr(), next);
 				}
 
 				for (idx_t i = 0; i < next; i++) {
@@ -275,10 +275,8 @@ struct PartitionFunctor {
 									partition_string_heaps[idx]->CreateBlock();
 								}
 
-								// TODO: describe why we don't need a partition_heap_ptr
-								data_ptr_t dummy_ptr;
-								PinAndSet(buffer_manager, *partition_string_heaps[idx]->blocks.back(),
-								          &partition_heap_blocks[idx], partition_heap_handles[idx], dummy_ptr);
+								partition_heap_blocks[idx] = partition_string_heaps[idx]->blocks.back().get();
+								partition_heap_handles[idx] = buffer_manager.Pin(partition_heap_blocks[idx]->block);
 							}
 
 							// Update counts and create new blocks to write to
