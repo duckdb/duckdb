@@ -150,7 +150,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 }
 
 static void FindMatchingPrimaryKeyColumns(vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk) {
-	if (!fk.pk_columns.empty()) {
+	if (fk.pk_columns.empty()) {
 		return;
 	}
 	// find the matching primary key constraint
