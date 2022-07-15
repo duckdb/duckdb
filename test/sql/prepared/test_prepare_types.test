@@ -2,6 +2,9 @@
 # description: PREPARE many types for INSERT
 # group: [prepared]
 
+require skip_reload
+
+
 # prepare different types in insert
 statement ok
 CREATE TABLE test(a TINYINT, b SMALLINT, c INTEGER, d BIGINT, e REAL, f DOUBLE, g DATE, h VARCHAR)

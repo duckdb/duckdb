@@ -587,7 +587,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	DBConfig config;
 
 	if (read_only) {
-		config.access_mode = AccessMode::READ_ONLY;
+		config.options.access_mode = AccessMode::READ_ONLY;
 	}
 	for (auto &kv : config_dict) {
 		string key = py::str(kv.first);
@@ -600,7 +600,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 	res->database = make_unique<DuckDB>(database, &config);
 	res->connection = make_unique<Connection>(*res->database);
-	if (config.enable_external_access) {
+	if (config.options.enable_external_access) {
 		res->database->instance->config.replacement_scans.emplace_back(ScanReplacement);
 	}
 

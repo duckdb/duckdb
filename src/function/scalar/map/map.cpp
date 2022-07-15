@@ -12,19 +12,19 @@ namespace duckdb {
 // TODO: this doesn't recursively verify maps if maps are nested
 MapInvalidReason CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
 	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	VectorData map_vdata;
-	map.Orrify(count, map_vdata);
+	UnifiedVectorFormat map_vdata;
+	map.ToUnifiedFormat(count, map_vdata);
 	auto &map_validity = map_vdata.validity;
 
 	auto &key_vector = *(StructVector::GetEntries(map)[0]);
-	VectorData key_vdata;
-	key_vector.Orrify(count, key_vdata);
+	UnifiedVectorFormat key_vdata;
+	key_vector.ToUnifiedFormat(count, key_vdata);
 	auto key_data = (list_entry_t *)key_vdata.data;
 	auto &key_validity = key_vdata.validity;
 
 	auto &key_entries = ListVector::GetEntry(key_vector);
-	VectorData key_entry_vdata;
-	key_entries.Orrify(count, key_entry_vdata);
+	UnifiedVectorFormat key_entry_vdata;
+	key_entries.ToUnifiedFormat(count, key_entry_vdata);
 	auto &entry_validity = key_entry_vdata.validity;
 
 	for (idx_t row = 0; row < count; row++) {

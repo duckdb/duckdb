@@ -21,7 +21,7 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
 	auto &config = DBConfig::GetConfig(db);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
@@ -66,7 +66,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 				break;
 			}
 		}
-		if (!any_valid && !config.allow_unsigned_extensions) {
+		if (!any_valid && !config.options.allow_unsigned_extensions) {
 			throw IOException(
 			    "Extension \"%s\" could not be loaded because its signature is either missing or "
 			    "invalid and unsigned extensions are disabled by configuration (allow_unsigned_extensions)",

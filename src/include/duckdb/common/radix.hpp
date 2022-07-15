@@ -44,7 +44,7 @@ public:
 	}
 
 	template <class T>
-	static inline void EncodeData(data_ptr_t dataptr, T value, bool is_little_endian) {
+	static inline void EncodeData(data_ptr_t dataptr, T value) {
 		throw NotImplementedException("Cannot create data from this type");
 	}
 
@@ -122,79 +122,79 @@ public:
 };
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, bool value, bool is_little_endian) {
+inline void Radix::EncodeData(data_ptr_t dataptr, bool value) {
 	Store<uint8_t>(value ? 1 : 0, dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, int8_t value, bool is_little_endian) {
+inline void Radix::EncodeData(data_ptr_t dataptr, int8_t value) {
 	Store<uint8_t>(value, dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, int16_t value, bool is_little_endian) {
-	Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
+inline void Radix::EncodeData(data_ptr_t dataptr, int16_t value) {
+	Store<uint16_t>(BSWAP16(value), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, int32_t value, bool is_little_endian) {
-	Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
+inline void Radix::EncodeData(data_ptr_t dataptr, int32_t value) {
+	Store<uint32_t>(BSWAP32(value), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, int64_t value, bool is_little_endian) {
-	Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
+inline void Radix::EncodeData(data_ptr_t dataptr, int64_t value) {
+	Store<uint64_t>(BSWAP64(value), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, uint8_t value, bool is_little_endian) {
+inline void Radix::EncodeData(data_ptr_t dataptr, uint8_t value) {
 	Store<uint8_t>(value, dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, uint16_t value, bool is_little_endian) {
-	Store<uint16_t>(is_little_endian ? BSWAP16(value) : value, dataptr);
+inline void Radix::EncodeData(data_ptr_t dataptr, uint16_t value) {
+	Store<uint16_t>(BSWAP16(value), dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, uint32_t value, bool is_little_endian) {
-	Store<uint32_t>(is_little_endian ? BSWAP32(value) : value, dataptr);
+inline void Radix::EncodeData(data_ptr_t dataptr, uint32_t value) {
+	Store<uint32_t>(BSWAP32(value), dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, uint64_t value, bool is_little_endian) {
-	Store<uint64_t>(is_little_endian ? BSWAP64(value) : value, dataptr);
+inline void Radix::EncodeData(data_ptr_t dataptr, uint64_t value) {
+	Store<uint64_t>(BSWAP64(value), dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, hugeint_t value, bool is_little_endian) {
-	EncodeData<int64_t>(dataptr, value.upper, is_little_endian);
-	EncodeData<uint64_t>(dataptr + sizeof(value.upper), value.lower, is_little_endian);
+inline void Radix::EncodeData(data_ptr_t dataptr, hugeint_t value) {
+	EncodeData<int64_t>(dataptr, value.upper);
+	EncodeData<uint64_t>(dataptr + sizeof(value.upper), value.lower);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, float value, bool is_little_endian) {
+inline void Radix::EncodeData(data_ptr_t dataptr, float value) {
 	uint32_t converted_value = EncodeFloat(value);
-	Store<uint32_t>(is_little_endian ? BSWAP32(converted_value) : converted_value, dataptr);
+	Store<uint32_t>(BSWAP32(converted_value), dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, double value, bool is_little_endian) {
+inline void Radix::EncodeData(data_ptr_t dataptr, double value) {
 	uint64_t converted_value = EncodeDouble(value);
-	Store<uint64_t>(is_little_endian ? BSWAP64(converted_value) : converted_value, dataptr);
+	Store<uint64_t>(BSWAP64(converted_value), dataptr);
 }
 
 template <>
-inline void Radix::EncodeData(data_ptr_t dataptr, interval_t value, bool is_little_endian) {
-	EncodeData<int32_t>(dataptr, value.months, is_little_endian);
+inline void Radix::EncodeData(data_ptr_t dataptr, interval_t value) {
+	EncodeData<int32_t>(dataptr, value.months);
 	dataptr += sizeof(value.months);
-	EncodeData<int32_t>(dataptr, value.days, is_little_endian);
+	EncodeData<int32_t>(dataptr, value.days);
 	dataptr += sizeof(value.days);
-	EncodeData<int64_t>(dataptr, value.micros, is_little_endian);
+	EncodeData<int64_t>(dataptr, value.micros);
 }
 
 } // namespace duckdb

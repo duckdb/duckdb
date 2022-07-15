@@ -59,7 +59,7 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("Import is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(context);

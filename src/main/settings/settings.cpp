@@ -20,11 +20,11 @@ namespace duckdb {
 void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "automatic") {
-		config.access_mode = AccessMode::AUTOMATIC;
+		config.options.access_mode = AccessMode::AUTOMATIC;
 	} else if (parameter == "read_only") {
-		config.access_mode = AccessMode::READ_ONLY;
+		config.options.access_mode = AccessMode::READ_ONLY;
 	} else if (parameter == "read_write") {
-		config.access_mode = AccessMode::READ_WRITE;
+		config.options.access_mode = AccessMode::READ_WRITE;
 	} else {
 		throw InvalidInputException(
 		    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
@@ -33,7 +33,7 @@ void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const 
 
 Value AccessModeSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	switch (config.access_mode) {
+	switch (config.options.access_mode) {
 	case AccessMode::AUTOMATIC:
 		return "automatic";
 	case AccessMode::READ_ONLY:
@@ -50,12 +50,12 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	idx_t new_limit = DBConfig::ParseMemoryLimit(input.ToString());
-	config.checkpoint_wal_size = new_limit;
+	config.options.checkpoint_wal_size = new_limit;
 }
 
 Value CheckpointThresholdSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.checkpoint_wal_size));
+	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
 }
 
 //===--------------------------------------------------------------------===//
@@ -64,13 +64,13 @@ Value CheckpointThresholdSetting::GetSetting(ClientContext &context) {
 void DebugCheckpointAbort::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto checkpoint_abort = StringUtil::Lower(input.ToString());
 	if (checkpoint_abort == "none") {
-		config.checkpoint_abort = CheckpointAbort::NO_ABORT;
+		config.options.checkpoint_abort = CheckpointAbort::NO_ABORT;
 	} else if (checkpoint_abort == "before_truncate") {
-		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
+		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
 	} else if (checkpoint_abort == "before_header") {
-		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
+		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
 	} else if (checkpoint_abort == "after_free_list_write") {
-		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
+		config.options.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
 	} else {
 		throw ParserException(
 		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
@@ -107,12 +107,12 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 // Debug Many Free List blocks
 //===--------------------------------------------------------------------===//
 void DebugManyFreeListBlocks::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.debug_many_free_list_blocks = input.GetValue<bool>();
+	config.options.debug_many_free_list_blocks = input.GetValue<bool>();
 }
 
 Value DebugManyFreeListBlocks::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.debug_many_free_list_blocks);
+	return Value::BOOLEAN(config.options.debug_many_free_list_blocks);
 }
 
 //===--------------------------------------------------------------------===//
@@ -121,11 +121,11 @@ Value DebugManyFreeListBlocks::GetSetting(ClientContext &context) {
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto param = StringUtil::Lower(input.ToString());
 	if (param == "window") {
-		config.window_mode = WindowAggregationMode::WINDOW;
+		config.options.window_mode = WindowAggregationMode::WINDOW;
 	} else if (param == "combine") {
-		config.window_mode = WindowAggregationMode::COMBINE;
+		config.options.window_mode = WindowAggregationMode::COMBINE;
 	} else if (param == "separate") {
-		config.window_mode = WindowAggregationMode::SEPARATE;
+		config.options.window_mode = WindowAggregationMode::SEPARATE;
 	} else {
 		throw ParserException("Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate");
 	}
@@ -140,7 +140,7 @@ Value DebugWindowMode::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
-	config.collation = parameter;
+	config.options.collation = parameter;
 }
 
 void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -148,12 +148,12 @@ void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &inpu
 	// bind the collation to verify that it exists
 	ExpressionBinder::TestCollation(context, parameter);
 	auto &config = DBConfig::GetConfig(context);
-	config.collation = parameter;
+	config.options.collation = parameter;
 }
 
 Value DefaultCollationSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(config.collation);
+	return Value(config.options.collation);
 }
 
 //===--------------------------------------------------------------------===//
@@ -162,9 +162,9 @@ Value DefaultCollationSetting::GetSetting(ClientContext &context) {
 void DefaultOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "ascending" || parameter == "asc") {
-		config.default_order_type = OrderType::ASCENDING;
+		config.options.default_order_type = OrderType::ASCENDING;
 	} else if (parameter == "descending" || parameter == "desc") {
-		config.default_order_type = OrderType::DESCENDING;
+		config.options.default_order_type = OrderType::DESCENDING;
 	} else {
 		throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
 		                            parameter);
@@ -173,7 +173,7 @@ void DefaultOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 
 Value DefaultOrderSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	switch (config.default_order_type) {
+	switch (config.options.default_order_type) {
 	case OrderType::ASCENDING:
 		return "asc";
 	case OrderType::DESCENDING:
@@ -190,10 +190,10 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	if (parameter == "nulls_first" || parameter == "nulls first" || parameter == "null first" || parameter == "first") {
-		config.default_null_order = OrderByNullType::NULLS_FIRST;
+		config.options.default_null_order = OrderByNullType::NULLS_FIRST;
 	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" ||
 	           parameter == "last") {
-		config.default_null_order = OrderByNullType::NULLS_LAST;
+		config.options.default_null_order = OrderByNullType::NULLS_LAST;
 	} else {
 		throw ParserException(
 		    "Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
@@ -203,7 +203,7 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 
 Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	switch (config.default_null_order) {
+	switch (config.options.default_null_order) {
 	case OrderByNullType::NULLS_FIRST:
 		return "nulls_first";
 	case OrderByNullType::NULLS_LAST:
@@ -227,13 +227,13 @@ void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config
 		}
 		disabled_optimizers.insert(OptimizerTypeFromString(param));
 	}
-	config.disabled_optimizers = move(disabled_optimizers);
+	config.options.disabled_optimizers = move(disabled_optimizers);
 }
 
 Value DisabledOptimizersSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	string result;
-	for (auto &optimizer : config.disabled_optimizers) {
+	for (auto &optimizer : config.options.disabled_optimizers) {
 		if (!result.empty()) {
 			result += ",";
 		}
@@ -250,12 +250,12 @@ void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &conf
 	if (db && new_value) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
-	config.enable_external_access = new_value;
+	config.options.enable_external_access = new_value;
 }
 
 Value EnableExternalAccessSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.enable_external_access);
+	return Value::BOOLEAN(config.options.enable_external_access);
 }
 
 //===--------------------------------------------------------------------===//
@@ -266,24 +266,24 @@ void AllowUnsignedExtensionsSetting::SetGlobal(DatabaseInstance *db, DBConfig &c
 	if (db && new_value) {
 		throw InvalidInputException("Cannot change allow_unsigned_extensions setting while database is running");
 	}
-	config.allow_unsigned_extensions = new_value;
+	config.options.allow_unsigned_extensions = new_value;
 }
 
 Value AllowUnsignedExtensionsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.allow_unsigned_extensions);
+	return Value::BOOLEAN(config.options.allow_unsigned_extensions);
 }
 
 //===--------------------------------------------------------------------===//
 // Enable Object Cache
 //===--------------------------------------------------------------------===//
 void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.object_cache_enable = input.GetValue<bool>();
+	config.options.object_cache_enable = input.GetValue<bool>();
 }
 
 Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.object_cache_enable);
+	return Value::BOOLEAN(config.options.object_cache_enable);
 }
 
 //===--------------------------------------------------------------------===//
@@ -369,12 +369,12 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 // External Threads Setting
 //===--------------------------------------------------------------------===//
 void ExternalThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.external_threads = input.GetValue<int64_t>();
+	config.options.external_threads = input.GetValue<int64_t>();
 }
 
 Value ExternalThreadsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.external_threads);
+	return Value::BIGINT(config.options.external_threads);
 }
 
 //===--------------------------------------------------------------------===//
@@ -397,14 +397,14 @@ Value FileSearchPathSetting::GetSetting(ClientContext &context) {
 void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto compression = StringUtil::Lower(input.ToString());
 	if (compression == "none") {
-		config.force_compression = CompressionType::COMPRESSION_AUTO;
+		config.options.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
 		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
 			                      "dictionary, pfor, bitpacking or fsst");
 		}
-		config.force_compression = compression_type;
+		config.options.force_compression = compression_type;
 	}
 }
 
@@ -448,15 +448,15 @@ Value MaximumExpressionDepthSetting::GetSetting(ClientContext &context) {
 // Maximum Memory
 //===--------------------------------------------------------------------===//
 void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
+	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetLimit(config.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetLimit(config.options.maximum_memory);
 	}
 }
 
 Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.maximum_memory));
+	return Value(StringUtil::BytesToHumanReadableString(config.options.maximum_memory));
 }
 
 //===--------------------------------------------------------------------===//
@@ -489,12 +489,12 @@ Value PreserveIdentifierCase::GetSetting(ClientContext &context) {
 // PreserveInsertionOrder
 //===--------------------------------------------------------------------===//
 void PreserveInsertionOrder::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.preserve_insertion_order = input.GetValue<bool>();
+	config.options.preserve_insertion_order = input.GetValue<bool>();
 }
 
 Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.preserve_insertion_order);
+	return Value::BOOLEAN(config.options.preserve_insertion_order);
 }
 
 //===--------------------------------------------------------------------===//
@@ -597,11 +597,11 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 // Temp Directory
 //===--------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.temporary_directory = input.ToString();
-	config.use_temporary_directory = !config.temporary_directory.empty();
+	config.options.temporary_directory = input.ToString();
+	config.options.use_temporary_directory = !config.options.temporary_directory.empty();
 	if (db) {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db);
-		buffer_manager.SetTemporaryDirectory(config.temporary_directory);
+		buffer_manager.SetTemporaryDirectory(config.options.temporary_directory);
 	}
 }
 
@@ -614,15 +614,15 @@ Value TempDirectorySetting::GetSetting(ClientContext &context) {
 // Threads Setting
 //===--------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.maximum_threads = input.GetValue<int64_t>();
+	config.options.maximum_threads = input.GetValue<int64_t>();
 	if (db) {
-		TaskScheduler::GetScheduler(*db).SetThreads(config.maximum_threads);
+		TaskScheduler::GetScheduler(*db).SetThreads(config.options.maximum_threads);
 	}
 }
 
 Value ThreadsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.maximum_threads);
+	return Value::BIGINT(config.options.maximum_threads);
 }
 
 } // namespace duckdb

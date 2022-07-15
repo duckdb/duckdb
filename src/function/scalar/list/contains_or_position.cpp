@@ -53,15 +53,15 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 	auto list_size = ListVector::GetListSize(list);
 	auto &child_vector = ListVector::GetEntry(list);
 
-	VectorData child_data;
-	child_vector.Orrify(list_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(list_size, child_data);
 
-	VectorData list_data;
-	list.Orrify(count, list_data);
+	UnifiedVectorFormat list_data;
+	list.ToUnifiedFormat(count, list_data);
 	auto list_entries = (list_entry_t *)list_data.data;
 
-	VectorData value_data;
-	value_vector.Orrify(count, value_data);
+	UnifiedVectorFormat value_data;
+	value_vector.ToUnifiedFormat(count, value_data);
 
 	// not required for a comparison of nested types
 	auto child_value = FlatVector::GetData<CHILD_TYPE>(child_vector);

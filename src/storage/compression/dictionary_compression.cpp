@@ -32,8 +32,8 @@ using string_set_t = unordered_set<string_t, StringHash, StringEquality>;
 class DictionaryCompressionState : public CompressionState {
 public:
 	bool UpdateState(Vector &scan_vector, idx_t count) {
-		VectorData vdata;
-		scan_vector.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		scan_vector.ToUnifiedFormat(count, vdata);
 		auto data = (string_t *)vdata.data;
 		Verify();
 

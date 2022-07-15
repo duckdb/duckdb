@@ -2,7 +2,7 @@
 
 set -e
 
-echo $DUCKDB_EXTENSION_SIGNING_PK > private.pem
+echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 
 FILES="build/release/extension/*/*.duckdb_extension"
 for f in $FILES

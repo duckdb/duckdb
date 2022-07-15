@@ -26,7 +26,7 @@ struct OpenTask : public Task {
 	         Napi::Function callback_)
 	    : Task(database_, callback_), filename(filename_) {
 
-		duckdb_config.access_mode = access_mode_;
+		duckdb_config.options.access_mode = access_mode_;
 		Napi::Env env = database_.Env();
 		Napi::HandleScope scope(env);
 

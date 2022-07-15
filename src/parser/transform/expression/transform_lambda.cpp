@@ -5,9 +5,10 @@
 namespace duckdb {
 
 unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node) {
-	if (!node->lhs) {
-		throw ParserException("Lambda function must have parameters");
-	}
+
+	D_ASSERT(node->lhs);
+	D_ASSERT(node->rhs);
+
 	auto lhs = TransformExpression(node->lhs);
 	auto rhs = TransformExpression(node->rhs);
 	return make_unique<LambdaExpression>(move(lhs), move(rhs));

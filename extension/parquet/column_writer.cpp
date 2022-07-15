@@ -624,6 +624,9 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 		column_chunk.meta_data.statistics.__isset.max_value = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
+	for (const auto &write_info : state.write_info) {
+		column_chunk.meta_data.encodings.push_back(write_info.page_header.data_page_header.encoding);
+	}
 }
 
 void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
@@ -1334,26 +1337,27 @@ public:
 	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
 		auto &stats = (StringStatisticsState &)*stats_p;
 		auto &state = (StringColumnWriterState &)state_p;
-		if (state.IsDictionaryEncoded()) {
-			// first we need to sort the values in index order
-			auto values = vector<string>(state.dictionary.size());
-			for (auto iter = state.dictionary.cbegin(); iter != state.dictionary.cend(); iter++) {
-				D_ASSERT(values[iter->second].empty());
-				values[iter->second] = iter->first;
-			}
-			// first write the contents of the dictionary page to a temporary buffer
-			auto temp_writer = make_unique<BufferedSerializer>();
-			for (idx_t r = 0; r < values.size(); r++) {
-				auto &value = values[r];
-				// update the statistics
-				stats.Update(value);
-				// write this string value to the dictionary
-				temp_writer->Write<uint32_t>(value.size());
-				temp_writer->WriteData((const_data_ptr_t)value.data(), value.size());
-			}
-			// flush the dictionary page and add it to the to-be-written pages
-			WriteDictionary(state, move(temp_writer), values.size());
+		if (!state.IsDictionaryEncoded()) {
+			return;
 		}
+		// first we need to sort the values in index order
+		auto values = vector<string>(state.dictionary.size());
+		for (const auto &entry : state.dictionary) {
+			D_ASSERT(values[entry.second].empty());
+			values[entry.second] = entry.first;
+		}
+		// first write the contents of the dictionary page to a temporary buffer
+		auto temp_writer = make_unique<BufferedSerializer>();
+		for (idx_t r = 0; r < values.size(); r++) {
+			auto &value = values[r];
+			// update the statistics
+			stats.Update(value);
+			// write this string value to the dictionary
+			temp_writer->Write<uint32_t>(value.size());
+			temp_writer->WriteData((const_data_ptr_t)value.data(), value.size());
+		}
+		// flush the dictionary page and add it to the to-be-written pages
+		WriteDictionary(state, move(temp_writer), values.size());
 	}
 
 	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state_p) override {

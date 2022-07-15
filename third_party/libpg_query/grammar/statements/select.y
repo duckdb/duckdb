@@ -1948,7 +1948,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| a_expr LAMBDA_ARROW a_expr %prec Op
+			| a_expr LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
 				n->lhs = $1;
@@ -1956,6 +1956,10 @@ a_expr:		c_expr									{ $$ = $1; }
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
+			| a_expr DOUBLE_ARROW a_expr %prec Op
+                        {
+                                        $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "->>", $1, $3, @2);
+                        }
 			| row OVERLAPS row
 				{
 					if (list_length($1) != 2)

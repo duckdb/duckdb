@@ -329,7 +329,7 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 		}
 	}
 
-	cast_chunk.Normalify();
+	cast_chunk.Flatten();
 	auto &writer = local_data.serializer;
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {

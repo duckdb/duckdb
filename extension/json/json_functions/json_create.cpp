@@ -185,8 +185,8 @@ static void CreateValues(const JSONCreateFunctionData &info, yyjson_mut_doc *doc
 
 static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector &key_v, yyjson_mut_val *vals[],
                              idx_t count) {
-	VectorData key_data;
-	key_v.Orrify(count, key_data);
+	UnifiedVectorFormat key_data;
+	key_v.ToUnifiedFormat(count, key_data);
 	auto keys = (string_t *)key_data.data;
 
 	for (idx_t i = 0; i < count; i++) {
@@ -213,8 +213,8 @@ static void CreateValuesNull(yyjson_mut_doc *doc, yyjson_mut_val *vals[], idx_t 
 
 template <class T>
 static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
-	VectorData value_data;
-	value_v.Orrify(count, value_data);
+	UnifiedVectorFormat value_data;
+	value_v.ToUnifiedFormat(count, value_data);
 	auto values = (T *)value_data.data;
 
 	const auto value_type = value_v.GetType().id();
@@ -248,8 +248,8 @@ static void CreateValuesStruct(const JSONCreateFunctionData &info, yyjson_mut_do
 		CreateKeyValuePairs(info, doc, vals, nested_vals, struct_key_v, struct_val_v, count);
 	}
 	// Whole struct can be NULL
-	VectorData struct_data;
-	value_v.Orrify(count, struct_data);
+	UnifiedVectorFormat struct_data;
+	value_v.ToUnifiedFormat(count, struct_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = struct_data.sel->get_index(i);
 		if (!struct_data.validity.RowIsValid(idx)) {
@@ -276,10 +276,10 @@ static void CreateValuesMap(const JSONCreateFunctionData &info, yyjson_mut_doc *
 	auto nested_vals = nested_vals_ptr.get();
 	CreateValues(info, doc, nested_vals, map_val_v, map_val_count);
 	// Add the key/value pairs to the objects
-	VectorData map_data;
-	value_v.Orrify(count, map_data);
-	VectorData map_key_list_data;
-	map_key_list_v.Orrify(map_key_count, map_key_list_data);
+	UnifiedVectorFormat map_data;
+	value_v.ToUnifiedFormat(count, map_data);
+	UnifiedVectorFormat map_key_list_data;
+	map_key_list_v.ToUnifiedFormat(map_key_count, map_key_list_data);
 	auto map_key_list_entries = (list_entry_t *)map_key_list_data.data;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = map_data.sel->get_index(i);
@@ -310,8 +310,8 @@ static void CreateValuesList(const JSONCreateFunctionData &info, yyjson_mut_doc 
 	// Fill nested_vals with list values
 	CreateValues(info, doc, nested_vals, child_v, child_count);
 	// Now we add the values to the appropriate JSON arrays
-	VectorData list_data;
-	value_v.Orrify(count, list_data);
+	UnifiedVectorFormat list_data;
+	value_v.ToUnifiedFormat(count, list_data);
 	auto list_entries = (list_entry_t *)list_data.data;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = list_data.sel->get_index(i);
@@ -427,8 +427,8 @@ static void ToJSONFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	// Write JSON values to string
 	auto objects = FlatVector::GetData<string_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
-	VectorData input_data;
-	args.data[0].Orrify(count, input_data);
+	UnifiedVectorFormat input_data;
+	args.data[0].ToUnifiedFormat(count, input_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = input_data.sel->get_index(i);
 		if (input_data.validity.RowIsValid(idx)) {

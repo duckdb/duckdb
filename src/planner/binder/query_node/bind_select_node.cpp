@@ -145,9 +145,11 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				if (!order_expression) {
 					continue;
 				}
-				auto type = order_node.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order_node.type;
-				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order
-				                                                                          : order_node.null_order;
+				auto type =
+				    order_node.type == OrderType::ORDER_DEFAULT ? config.options.default_order_type : order_node.type;
+				auto null_order = order_node.null_order == OrderByNullType::ORDER_DEFAULT
+				                      ? config.options.default_null_order
+				                      : order_node.null_order;
 				bound_order->orders.emplace_back(type, null_order, move(order_expression));
 			}
 			if (!bound_order->orders.empty()) {
