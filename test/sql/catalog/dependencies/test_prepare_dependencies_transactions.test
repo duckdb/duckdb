@@ -2,6 +2,9 @@
 # description: Prepare dependencies and transactions
 # group: [dependencies]
 
+require skip_reload
+
+
 # case one: prepared statement is created outside of transaction and committed
 statement ok con1
 CREATE TABLE integers(i INTEGER)

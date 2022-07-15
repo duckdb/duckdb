@@ -29,7 +29,7 @@ static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &res
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (SetseedBindData &)*func_expr.bind_info;
 	auto &input = args.data[0];
-	input.Normalify(args.size());
+	input.Flatten(args.size());
 
 	auto input_seeds = FlatVector::GetData<double>(input);
 	uint32_t half_max = NumericLimits<uint32_t>::Maximum() / 2;

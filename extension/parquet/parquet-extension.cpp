@@ -149,7 +149,7 @@ public:
 		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
 			return overall_stats;
-		} else if (config.object_cache_enable) {
+		} else if (config.options.object_cache_enable) {
 			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
@@ -207,7 +207,7 @@ public:
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
-		if (!config.enable_external_access) {
+		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
 		auto file_name = input.inputs[0].GetValue<string>();
@@ -230,7 +230,7 @@ public:
 	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
-		if (!config.enable_external_access) {
+		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);

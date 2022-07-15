@@ -170,8 +170,8 @@ private:
 			break;
 		}
 		default: {
-			VectorData vdata;
-			input.Orrify(count, vdata);
+			UnifiedVectorFormat vdata;
+			input.ToUnifiedFormat(count, vdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);

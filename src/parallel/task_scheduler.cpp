@@ -169,7 +169,7 @@ static void ThreadExecuteTasks(TaskScheduler *scheduler, atomic<bool> *marker) {
 
 int32_t TaskScheduler::NumberOfThreads() {
 	auto &config = DBConfig::GetConfig(db);
-	return threads.size() + config.external_threads + 1;
+	return threads.size() + config.options.external_threads + 1;
 }
 
 void TaskScheduler::SetThreads(int32_t n) {

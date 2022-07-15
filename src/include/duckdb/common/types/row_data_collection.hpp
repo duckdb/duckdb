@@ -58,6 +58,10 @@ class RowDataCollection {
 public:
 	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size, bool keep_pinned = false);
 
+	unique_ptr<RowDataCollection> CloneEmpty(bool keep_pinned = false) const {
+		return make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size, keep_pinned);
+	}
+
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The total number of stored entries

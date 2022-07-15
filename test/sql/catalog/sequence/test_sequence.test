@@ -5,6 +5,10 @@
 # note: query verification is disabled for these queries
 # because running the same query multiple times with a sequence does not result in the same answer
 # create a sequence
+
+require skip_reload
+
+
 statement ok
 CREATE SEQUENCE seq;
 

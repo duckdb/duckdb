@@ -49,13 +49,13 @@ public:
 public:
 	//! Compute HLL hashes over vdata, and store them in 'hashes'
 	//! Then, compute register indices and prefix lengths, and also store them in 'hashes' as a pair of uint32_t
-	static void ProcessEntries(VectorData &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
+	static void ProcessEntries(UnifiedVectorFormat &vdata, const LogicalType &type, uint64_t hashes[], uint8_t counts[],
 	                           idx_t count);
 	//! Add the indices and counts to the logs
-	static void AddToLogs(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], HyperLogLog **logs[],
-	                      const SelectionVector *log_sel);
+	static void AddToLogs(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
+	                      HyperLogLog **logs[], const SelectionVector *log_sel);
 	//! Add the indices and counts to THIS log
-	void AddToLog(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
+	void AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
 
 private:
 	explicit HyperLogLog(void *hll);

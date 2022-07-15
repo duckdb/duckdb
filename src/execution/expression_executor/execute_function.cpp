@@ -33,8 +33,8 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	idx_t count = args.size();
 	ValidityMask combined_mask(count);
 	for (auto &arg : args.data) {
-		VectorData arg_data;
-		arg.Orrify(count, arg_data);
+		UnifiedVectorFormat arg_data;
+		arg.ToUnifiedFormat(count, arg_data);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = arg_data.sel->get_index(i);
@@ -45,8 +45,8 @@ static void VerifyNullHandling(const BoundFunctionExpression &expr, DataChunk &a
 	}
 
 	// Default is that if any of the arguments are NULL, the result is also NULL
-	VectorData result_data;
-	result.Orrify(count, result_data);
+	UnifiedVectorFormat result_data;
+	result.ToUnifiedFormat(count, result_data);
 	for (idx_t i = 0; i < count; i++) {
 		if (!combined_mask.RowIsValid(i)) {
 			auto idx = result_data.sel->get_index(i);

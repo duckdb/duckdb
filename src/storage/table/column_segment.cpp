@@ -112,7 +112,7 @@ void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-idx_t ColumnSegment::Append(ColumnAppendState &state, VectorData &append_data, idx_t offset, idx_t count) {
+idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &append_data, idx_t offset, idx_t count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->append) {
 		throw InternalException("Attempting to append to a segment without append method");

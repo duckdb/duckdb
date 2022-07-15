@@ -6,9 +6,9 @@ namespace duckdb {
 
 template <class T, class OP>
 static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t rcount, bool found_match[]) {
-	VectorData left_data, right_data;
-	left.Orrify(lcount, left_data);
-	right.Orrify(rcount, right_data);
+	UnifiedVectorFormat left_data, right_data;
+	left.ToUnifiedFormat(lcount, left_data);
+	right.ToUnifiedFormat(rcount, right_data);
 
 	auto ldata = (T *)left_data.data;
 	auto rdata = (T *)right_data.data;

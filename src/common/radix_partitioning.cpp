@@ -107,7 +107,8 @@ unique_ptr<idx_t[]> RadixPartitioning::InitializeHistogram(idx_t radix_bits) {
 
 struct UpdateHistogramFunctor {
 	template <idx_t radix_bits>
-	static void Operation(const VectorData &hash_data, const idx_t count, const bool has_rsel, idx_t histogram[]) {
+	static void Operation(const UnifiedVectorFormat &hash_data, const idx_t count, const bool has_rsel,
+	                      idx_t histogram[]) {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 
 		const auto hashes = (hash_t *)hash_data.data;
@@ -124,7 +125,7 @@ struct UpdateHistogramFunctor {
 	}
 };
 
-void RadixPartitioning::UpdateHistogram(const VectorData &hash_data, const idx_t count, const bool has_rsel,
+void RadixPartitioning::UpdateHistogram(const UnifiedVectorFormat &hash_data, const idx_t count, const bool has_rsel,
                                         idx_t histogram[], idx_t radix_bits) {
 	return RadixBitsSwitch<UpdateHistogramFunctor, void>(radix_bits, hash_data, count, has_rsel, histogram);
 }

@@ -207,7 +207,7 @@ struct RegisterTask : public Task {
 			// here we can do only DuckDB stuff because we do not have a functioning env
 
 			// Flatten all args to simplify udfs
-			args.Normalify();
+			args.Flatten();
 
 			JSArgs jsargs;
 			jsargs.rows = args.size();

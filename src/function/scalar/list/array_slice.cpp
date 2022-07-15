@@ -102,11 +102,11 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
 		}
 	} else {
-		VectorData sdata, bdata, edata;
+		UnifiedVectorFormat sdata, bdata, edata;
 
-		s.Orrify(count, sdata);
-		b.Orrify(count, bdata);
-		e.Orrify(count, edata);
+		s.ToUnifiedFormat(count, sdata);
+		b.ToUnifiedFormat(count, bdata);
+		e.ToUnifiedFormat(count, edata);
 
 		auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
@@ -147,7 +147,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
 
-	s.Normalify(count);
+	s.Flatten(count);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it

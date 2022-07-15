@@ -72,7 +72,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			break;
 		default:
 			// FLAT VECTOR, we can directly OR the nullmask
-			args.data[i].Normalify(args.size());
+			args.data[i].Flatten(args.size());
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			result_validity.Combine(FlatVector::Validity(args.data[i]), args.size());
 			break;

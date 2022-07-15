@@ -179,9 +179,9 @@ void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel
 	SetCardinality(new_size);
 }
 
-void DataChunk::Normalify() {
+void DataChunk::Flatten() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Normalify(size());
+		data[i].Flatten(size());
 	}
 }
 
@@ -255,10 +255,10 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 	}
 }
 
-unique_ptr<VectorData[]> DataChunk::Orrify() {
-	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[ColumnCount()]);
+unique_ptr<UnifiedVectorFormat[]> DataChunk::ToUnifiedFormat() {
+	auto orrified_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[ColumnCount()]);
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].Orrify(size(), orrified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(size(), orrified_data[col_idx]);
 	}
 	return orrified_data;
 }
@@ -417,8 +417,8 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
 		auto &list_vector_child = ListVector::GetEntry(*children[child_idx]);
 		if (child_idx == 0) {
-			VectorData list_data;
-			children[child_idx]->Orrify(size, list_data);
+			UnifiedVectorFormat list_data;
+			children[child_idx]->ToUnifiedFormat(size, list_data);
 			auto list_child_validity = FlatVector::Validity(list_vector_child);
 			if (!list_child_validity.AllValid()) {
 				//! Get the offsets to check from the selection vector
@@ -699,7 +699,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 }
 
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
-	Normalify();
+	Flatten();
 	D_ASSERT(out_array);
 
 	// Allocate as unique_ptr first to cleanup properly on error

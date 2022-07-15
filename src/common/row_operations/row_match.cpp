@@ -57,8 +57,8 @@ idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const Select
 }
 
 template <class T, class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &sel, idx_t &count, idx_t col_offset,
-                               idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+static void TemplatedMatchType(UnifiedVectorFormat &col, Vector &rows, SelectionVector &sel, idx_t &count,
+                               idx_t col_offset, idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
 	// Precompute row_mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -139,8 +139,9 @@ static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel
 }
 
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchOp(Vector &vec, VectorData &col, const RowLayout &layout, Vector &rows, SelectionVector &sel,
-                             idx_t &count, idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const RowLayout &layout, Vector &rows,
+                             SelectionVector &sel, idx_t &count, idx_t col_no, SelectionVector *no_match,
+                             idx_t &no_match_count) {
 	if (count == 0) {
 		return;
 	}
@@ -210,7 +211,7 @@ static void TemplatedMatchOp(Vector &vec, VectorData &col, const RowLayout &layo
 }
 
 template <bool NO_MATCH_SEL>
-static void TemplatedMatch(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
                            const Predicates &predicates, SelectionVector &sel, idx_t &count, SelectionVector *no_match,
                            idx_t &no_match_count) {
 	for (idx_t col_no = 0; col_no < predicates.size(); ++col_no) {
@@ -249,7 +250,7 @@ static void TemplatedMatch(DataChunk &columns, VectorData col_data[], const RowL
 	}
 }
 
-idx_t RowOperations::Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+idx_t RowOperations::Match(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
                            const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
                            idx_t &no_match_count) {
 	if (no_match) {

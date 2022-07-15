@@ -34,24 +34,29 @@ SELECT subquery(a) FROM integers
 ----
 1
 
-statement ok
+# macro parameters and column names should not conflict
+statement error
 CREATE MACRO a1(a) AS (SELECT a + a FROM integers)
 
-# macro parameters get priority over column references
+statement ok
+CREATE MACRO a1(b) AS (SELECT a + a FROM integers)
+
 query T
 SELECT a1(3)
 ----
-6
+2
 
-# macro parameters should be contained within the function call (a from integers should be 1, not 3)
 query T
 SELECT a1(3) + a FROM integers
 ----
-7
+3
 
-# by specifying the table name we get can use columns with the same name as parameters
-statement ok
+# never allow columns with the same name as parameters
+statement error
 CREATE MACRO a2(a) AS (SELECT i.a + a FROM integers i)
+
+statement ok
+CREATE MACRO a2(b) AS (SELECT i.a + b FROM integers i)
 
 query T
 SELECT a2(3)

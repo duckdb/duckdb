@@ -80,8 +80,8 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = (BitpackingAnalyzeState<T> &)state;
-	VectorData vdata;
-	input.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -169,7 +169,7 @@ public:
 		width_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
-	void Append(VectorData &vdata, idx_t count) {
+	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		// TODO Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
 
@@ -223,8 +223,8 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &c
 template <class T>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (BitpackingCompressState<T> &)state_p;
-	VectorData vdata;
-	scan_vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
 }
 
