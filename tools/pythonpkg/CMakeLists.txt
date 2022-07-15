@@ -22,6 +22,7 @@ add_library(
   src/pyrelation.cpp
   src/pyresult.cpp
   src/map.cpp
+  src/exceptions.cpp
   src/vector_conversion.cpp
   src/python_conversion.cpp
   src/python_objects.cpp
