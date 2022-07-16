@@ -19,6 +19,8 @@ static jmethodID J_Charset_decode;
 static jclass J_CharBuffer;
 static jmethodID J_CharBuffer_toString;
 
+static jmethodID J_String_getBytes;
+
 static jclass J_SQLException;
 
 static jclass J_Bool;
@@ -138,6 +140,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_DuckVector = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
+	J_String_getBytes = env->GetMethodID(J_String, "getBytes", "(Ljava/nio/charset/Charset;)[B");
+
 	J_DuckVector_init = env->GetMethodID(J_DuckVector, "<init>", "(Ljava/lang/String;I[Z)V");
 	J_DuckVector_constlen = env->GetFieldID(J_DuckVector, "constlen_data", "Ljava/nio/ByteBuffer;");
 	J_DuckVector_varlen = env->GetFieldID(J_DuckVector, "varlen_data", "[Ljava/lang/Object;");
@@ -185,6 +189,12 @@ static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
 	env->ReleaseByteArrayElements(ba_j, bytes, 0);
 
 	return ret;
+}
+
+static string jstring_to_string(JNIEnv *env, jstring string_j) {
+	jobject charset = env->CallStaticObjectMethod(J_Charset, J_Charset_forName, env->NewStringUTF("UTF-8"));
+	jbyteArray bytes = (jbyteArray)env->CallObjectMethod(string_j, J_String_getBytes, charset);
+	return byte_array_to_string(env, bytes);
 }
 
 static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len) {
@@ -416,9 +426,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 				}
 				continue;
 			} else if (env->IsInstanceOf(param, J_String)) {
-				auto *param_string = env->GetStringUTFChars((jstring)param, 0);
+				auto param_string = jstring_to_string(env, (jstring)param);
 				duckdb_params.push_back(Value(param_string));
-				env->ReleaseStringUTFChars((jstring)param, param_string);
 				continue;
 			} else {
 				delete res_ref;
