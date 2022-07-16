@@ -2,6 +2,8 @@
 # description: Invalid column assertion error
 # group: [afl]
 
+require vector_size 512
+
 statement ok
 PRAGMA enable_verification
 
