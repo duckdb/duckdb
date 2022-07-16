@@ -79,7 +79,7 @@ test_that("pasting translated correctly", {
   expect_equal(translate(paste(x, y), window = FALSE), sql(r"{CONCAT_WS(' ', "x", "y")}"))
   expect_equal(translate(paste0(x, y), window = FALSE), sql(r"{CONCAT_WS('', "x", "y")}"))
 
-  expect_error(translate(paste0(x, collapse = ""), window = FALSE), "`collapse` not supported")
+#   expect_error(translate(paste0(x, collapse = ""), window = FALSE), "`collapse` not supported")
 })
 
 
