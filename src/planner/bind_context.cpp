@@ -1,20 +1,18 @@
 #include "duckdb/planner/bind_context.hpp"
 
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/bound_query_node.hpp"
-
-#include "duckdb/parser/expression/operator_expression.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/pair.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
 #include <algorithm>
 
@@ -357,16 +355,45 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 		}
 	} else {
 		// SELECT tbl.* case
+		// SELECT struct.* case
 		string error;
 		auto binding = GetBinding(expr.relation_name, error);
+		bool is_struct_ref = false;
 		if (!binding) {
-			throw BinderException(error);
-		}
-		for (auto &column_name : binding->names) {
-			if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
-				continue;
+			auto binding_name = GetMatchingBinding(expr.relation_name);
+			if (binding_name.empty()) {
+				throw BinderException(error);
 			}
-			new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+			binding = bindings[binding_name].get();
+			is_struct_ref = true;
+		}
+
+		if (is_struct_ref) {
+			auto col_idx = binding->GetBindingIndex(expr.relation_name);
+			auto col_type = binding->types[col_idx];
+			if (col_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException(StringUtil::Format(
+				    "Cannot extract field from expression \"%s\" because it is not a struct", expr.ToString()));
+			}
+			auto &struct_children = StructType::GetChildTypes(col_type);
+			vector<string> column_names(3);
+			column_names[0] = binding->alias;
+			column_names[1] = expr.relation_name;
+			for (auto &child : struct_children) {
+				if (CheckExclusionList(expr, binding, child.first, new_select_list, excluded_columns)) {
+					continue;
+				}
+				column_names[2] = child.first;
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_names));
+			}
+		} else {
+			for (auto &column_name : binding->names) {
+				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
+					continue;
+				}
+
+				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+			}
 		}
 	}
 	for (auto &excluded : expr.exclude_list) {
