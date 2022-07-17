@@ -372,11 +372,15 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	SelectBinder select_binder(*this, context, *result, info);
 	vector<LogicalType> internal_sql_types;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
+		bool is_window = statement.select_list[i]->IsWindow();
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
+			}
+			if (is_window) {
+				throw BinderException("Cannot group on a window clause");
 			}
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group

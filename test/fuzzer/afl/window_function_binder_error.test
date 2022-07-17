@@ -1,0 +1,16 @@
+# name: test/fuzzer/afl/window_function_binder_error.test
+# description: Invalid column assertion error
+# group: [afl]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT count(x) OVER () FROM (SELECT 1) x(x);
+----
+1
+
+statement error
+SELECT count(x) OVER () FROM (SELECT 1) x(x) GROUP BY ALL;

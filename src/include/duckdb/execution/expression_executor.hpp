@@ -58,7 +58,7 @@ public:
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
 	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value
-	DUCKDB_API static Value EvaluateScalar(const Expression &expr);
+	DUCKDB_API static Value EvaluateScalar(const Expression &expr, bool allow_unfoldable = false);
 	//! Try to evaluate a scalar expression and fold it into a single value, returns false if an exception is thrown
 	DUCKDB_API static bool TryEvaluateScalar(const Expression &expr, Value &result);
 

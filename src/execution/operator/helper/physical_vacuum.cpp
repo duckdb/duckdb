@@ -9,12 +9,6 @@ namespace duckdb {
 PhysicalVacuum::PhysicalVacuum(unique_ptr<VacuumInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::VACUUM, {LogicalType::BOOLEAN}, estimated_cardinality),
       info(move(info_p)) {
-	if (info->has_table) {
-		auto &get = (LogicalGet &)*info->bound_ref->get;
-		for (idx_t i = 0; i < get.column_ids.size(); i++) {
-			column_id_map[i] = get.column_ids[i];
-		}
-	}
 }
 
 class VacuumLocalSinkState : public LocalSinkState {
@@ -51,7 +45,7 @@ unique_ptr<GlobalSinkState> PhysicalVacuum::GetGlobalSinkState(ClientContext &co
 SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                                     DataChunk &input) const {
 	auto &lstate = (VacuumLocalSinkState &)lstate_p;
-	D_ASSERT(lstate.column_distinct_stats.size() == column_id_map.size());
+	D_ASSERT(lstate.column_distinct_stats.size() == info->column_id_map.size());
 
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
 		lstate.column_distinct_stats[col_idx]->Update(input.data[col_idx], input.size(), false);
@@ -75,9 +69,9 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
                                           GlobalSinkState &gstate) const {
 	auto &sink = (VacuumGlobalSinkState &)gstate;
 
-	auto table = info->bound_ref->table;
+	auto table = info->table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {
-		table->storage->SetStatistics(column_id_map.at(col_idx), [&](BaseStatistics &stats) {
+		table->storage->SetStatistics(info->column_id_map.at(col_idx), [&](BaseStatistics &stats) {
 			stats.distinct_stats = move(sink.column_distinct_stats[col_idx]);
 		});
 	}
