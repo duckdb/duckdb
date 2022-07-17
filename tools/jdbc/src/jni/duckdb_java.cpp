@@ -13,8 +13,8 @@ static jint JNI_VERSION = JNI_VERSION_1_6;
 
 // Static global vars of cached Java classes, methods and fields
 static jclass J_Charset;
-static jmethodID J_Charset_forName;
 static jmethodID J_Charset_decode;
+static jobject J_Charset_UTF8;
 
 static jclass J_CharBuffer;
 static jmethodID J_CharBuffer_toString;
@@ -71,8 +71,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_Charset = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
 
-	J_Charset_forName = env->GetStaticMethodID(J_Charset, "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;");
+	jmethodID J_Charset_forName = env->GetStaticMethodID(J_Charset, "forName", "(Ljava/lang/String;)Ljava/nio/charset/Charset;");
 	J_Charset_decode = env->GetMethodID(J_Charset, "decode", "(Ljava/nio/ByteBuffer;)Ljava/nio/CharBuffer;");
+	jobject charset = env->CallStaticObjectMethod(J_Charset, J_Charset_forName, env->NewStringUTF("UTF-8"));
+	J_Charset_UTF8 = env->NewGlobalRef(charset); // Prevent garbage collector from cleaning this up.
+
 
 	tmpLocalRef = env->FindClass("java/nio/CharBuffer");
 	J_CharBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
@@ -160,6 +163,7 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 
 	env->DeleteGlobalRef(J_Charset);
 	env->DeleteGlobalRef(J_CharBuffer);
+	env->DeleteGlobalRef(J_Charset_UTF8);
 	env->DeleteGlobalRef(J_SQLException);
 	env->DeleteGlobalRef(J_Bool);
 	env->DeleteGlobalRef(J_Byte);
@@ -192,16 +196,13 @@ static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
 }
 
 static string jstring_to_string(JNIEnv *env, jstring string_j) {
-	jobject charset = env->CallStaticObjectMethod(J_Charset, J_Charset_forName, env->NewStringUTF("UTF-8"));
-	jbyteArray bytes = (jbyteArray)env->CallObjectMethod(string_j, J_String_getBytes, charset);
+	jbyteArray bytes = (jbyteArray)env->CallObjectMethod(string_j, J_String_getBytes, J_Charset_UTF8);
 	return byte_array_to_string(env, bytes);
 }
 
 static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len) {
-	jobject charset = env->CallStaticObjectMethod(J_Charset, J_Charset_forName, env->NewStringUTF("UTF-8"));
-
 	auto bb = env->NewDirectByteBuffer((void *)d_str, d_str_len);
-	auto j_cb = env->CallObjectMethod(charset, J_Charset_decode, bb);
+	auto j_cb = env->CallObjectMethod(J_Charset_UTF8, J_Charset_decode, bb);
 	auto j_str = env->CallObjectMethod(j_cb, J_CharBuffer_toString);
 	return j_str;
 }
