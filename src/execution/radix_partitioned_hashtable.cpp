@@ -366,7 +366,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	// special case hack to sort out aggregating from empty intermediates
 	// for aggregations without groups
 	if (gstate.is_empty && grouping_set.empty()) {
-		D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size());
+		D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size() + op.grouping_functions.size());
 		// for each column in the aggregates, set to initial state
 		chunk.SetCardinality(1);
 		for (auto null_group : null_groups) {
@@ -385,6 +385,9 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			if (aggr.function.destructor) {
 				aggr.function.destructor(state_vector, 1);
 			}
+		}
+		for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
+			chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
 		}
 		state.finished = true;
 		return;

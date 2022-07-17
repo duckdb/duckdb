@@ -1,0 +1,9 @@
+# name: test/fuzzer/afl/self_referential_alias.test
+# description: Invalid column assertion error
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT x x WHERE x = 0;
