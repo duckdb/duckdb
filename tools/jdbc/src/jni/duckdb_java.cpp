@@ -76,7 +76,6 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	jobject charset = env->CallStaticObjectMethod(J_Charset, forName, env->NewStringUTF("UTF-8"));
 	J_Charset_UTF8 = env->NewGlobalRef(charset); // Prevent garbage collector from cleaning this up.
 
-
 	tmpLocalRef = env->FindClass("java/nio/CharBuffer");
 	J_CharBuffer = (jclass)env->NewGlobalRef(tmpLocalRef);
 	env->DeleteLocalRef(tmpLocalRef);
