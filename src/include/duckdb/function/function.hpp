@@ -33,6 +33,7 @@ class TableFunction;
 
 struct PragmaInfo;
 
+//! The default null handling is NULL in, NULL out
 enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_HANDLING = 1 };
 enum class FunctionSideEffects : uint8_t { NO_SIDE_EFFECTS = 0, HAS_SIDE_EFFECTS = 1 };
 
