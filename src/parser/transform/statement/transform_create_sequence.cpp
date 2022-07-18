@@ -1,6 +1,7 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
@@ -17,7 +18,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 	info->name = qname.name;
 
 	if (stmt->options) {
-		unordered_set<SequenceInfo> used;
+		unordered_set<SequenceInfo, EnumClassHash> used;
 		duckdb_libpgquery::PGListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);

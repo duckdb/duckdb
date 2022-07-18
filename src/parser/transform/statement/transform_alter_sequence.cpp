@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
@@ -19,7 +20,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 		throw InternalException("Expected an argument for ALTER SEQUENCE.");
 	}
 
-	unordered_set<SequenceInfo> used;
+	unordered_set<SequenceInfo, EnumClassHash> used;
 	duckdb_libpgquery::PGListCell *cell = nullptr;
 	for_each_cell(cell, stmt->options->head) {
 		auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
