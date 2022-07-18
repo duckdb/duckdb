@@ -34,10 +34,11 @@ enum class RType {
 	TIME_HOURS_INTEGER,
 	TIME_DAYS_INTEGER,
 	TIME_WEEKS_INTEGER,
+	INTEGER64,
 };
 
 struct RApiTypes {
-	static RType DetectRType(SEXP v);
+	static RType DetectRType(SEXP v, bool integer64);
 	static string DetectLogicalType(const LogicalType &stype, const char *caller);
 	static Value SexpToValue(SEXP valsexp, R_len_t idx);
 	static SEXP ValueToSexp(Value &val, string &timezone_config);
@@ -100,6 +101,11 @@ struct RTimeWeeksType : public RDoubleType {
 struct RIntegerType {
 	static bool IsNull(int val);
 	static int Convert(int val);
+};
+
+struct RInteger64Type {
+	static bool IsNull(int64_t val);
+	static int64_t Convert(int64_t val);
 };
 
 struct RFactorType : public RIntegerType {

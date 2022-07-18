@@ -129,7 +129,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	return construct_retlist(move(stmt), query, n_param);
 }
 
-[[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow) {
+[[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow, bool integer64) {
 	if (!stmt || !stmt->stmt) {
 		cpp11::stop("rapi_bind: Invalid statement");
 	}
@@ -168,7 +168,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 		}
 
 		// No protection, assigned immediately
-		out.push_back(rapi_execute(stmt, arrow));
+		out.push_back(rapi_execute(stmt, arrow, integer64));
 	}
 
 	return out;
@@ -302,7 +302,7 @@ void ConvertTimestampVector(Vector &src_vec, size_t count, SEXP &dest, uint64_t 
 
 std::once_flag nanosecond_coercion_warning;
 
-static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
+static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, bool integer64) {
 	switch (src_vec.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
 		VectorToR<int8_t, uint32_t>(src_vec, n, LOGICAL_POINTER(dest), dest_offset, NA_LOGICAL);
@@ -373,10 +373,23 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		VectorToR<uint32_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
 		break;
 	case LogicalTypeId::UBIGINT:
-		VectorToR<uint64_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+		if (integer64) {
+			// this silently loses the high bit
+			VectorToR<uint64_t, int64_t>(src_vec, n, NUMERIC_POINTER(dest), dest_offset,
+			                             NumericLimits<int64_t>::Minimum());
+			Rf_setAttrib(dest, R_ClassSymbol, RStrings::get().integer64_str);
+		} else {
+			VectorToR<uint64_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+		}
 		break;
 	case LogicalTypeId::BIGINT:
-		VectorToR<int64_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+		if (integer64) {
+			VectorToR<int64_t, int64_t>(src_vec, n, NUMERIC_POINTER(dest), dest_offset,
+			                            NumericLimits<int64_t>::Minimum());
+			Rf_setAttrib(dest, R_ClassSymbol, RStrings::get().integer64_str);
+		} else {
+			VectorToR<int64_t, double>(src_vec, n, NUMERIC_POINTER(dest), dest_offset, NA_REAL);
+		}
 		break;
 	case LogicalTypeId::HUGEINT: {
 		auto src_data = FlatVector::GetData<hugeint_t>(src_vec);
@@ -443,7 +456,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 				// transform the list child vector to a single R SEXP
 				auto list_element =
 				    allocate(ListType::GetChildType(src_vec.GetType()), ele_prot, src_data[row_idx].length);
-				transform(child_vector, list_element, 0, src_data[row_idx].length);
+				transform(child_vector, list_element, 0, src_data[row_idx].length, integer64);
 
 				// call R's own extract subset method
 				SET_ELEMENT(dest, dest_offset + row_idx, list_element);
@@ -457,7 +470,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		for (size_t i = 0; i < children.size(); i++) {
 			const auto &struct_child = children[i];
 			SEXP child_dest = VECTOR_ELT(dest, i);
-			transform(*struct_child, child_dest, dest_offset, n);
+			transform(*struct_child, child_dest, dest_offset, n, integer64);
 		}
 
 		break;
@@ -540,7 +553,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 	}
 }
 
-SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result) {
+SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer64) {
 	// step 2: create result data frame and allocate columns
 	uint32_t ncols = result->types.size();
 	if (ncols == 0) {
@@ -579,7 +592,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		D_ASSERT(chunk->ColumnCount() == (idx_t)Rf_length(data_frame));
 		for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
 			SEXP dest = VECTOR_ELT(data_frame, col_idx);
-			transform(chunk->data[col_idx], dest, dest_offset, chunk->size());
+			transform(chunk->data[col_idx], dest, dest_offset, chunk->size(), integer64);
 		}
 		dest_offset += chunk->size();
 		chunk_idx++;
@@ -681,7 +694,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	return cpp11::safe[Rf_eval](record_batch_reader, arrow_namespace);
 }
 
-[[cpp11::register]] SEXP rapi_execute(duckdb::stmt_eptr_t stmt, bool arrow) {
+[[cpp11::register]] SEXP rapi_execute(duckdb::stmt_eptr_t stmt, bool arrow, bool integer64) {
 	if (!stmt || !stmt->stmt) {
 		cpp11::stop("rapi_execute: Invalid statement");
 	}
@@ -708,6 +721,6 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	} else {
 		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
 		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
-		return duckdb_execute_R_impl(result);
+		return duckdb_execute_R_impl(result, integer64);
 	}
 }
