@@ -16,27 +16,34 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 	info->name = qname.name;
 
 	if (stmt->options) {
+		uint32_t used = 0;
 		duckdb_libpgquery::PGListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
-
 			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
-			if (def_elem->defaction == duckdb_libpgquery::PG_DEFELEM_UNSPEC && !val) { // e.g. NO MINVALUE
-				continue;
-			}
-			D_ASSERT(val);
-			int64_t opt_value;
-			if (val->type == duckdb_libpgquery::T_PGInteger) {
-				opt_value = val->val.ival;
-			} else if (val->type == duckdb_libpgquery::T_PGFloat) {
-				if (!TryCast::Operation<string_t, int64_t>(string_t(val->val.str), opt_value, true)) {
+			bool nodef = def_elem->defaction == duckdb_libpgquery::PG_DEFELEM_UNSPEC && !val; // e.g. NO MINVALUE
+			int64_t opt_value = 0;
+
+			if (val) {
+				if (val->type == duckdb_libpgquery::T_PGInteger) {
+					opt_value = val->val.ival;
+				} else if (val->type == duckdb_libpgquery::T_PGFloat) {
+					if (!TryCast::Operation<string_t, int64_t>(string_t(val->val.str), opt_value, true)) {
+						throw ParserException("Expected an integer argument for option %s", opt_name);
+					}
+				} else {
 					throw ParserException("Expected an integer argument for option %s", opt_name);
 				}
-			} else {
-				throw ParserException("Expected an integer argument for option %s", opt_name);
 			}
 			if (opt_name == "increment") {
+				if (used & SequenceInfo::SEQ_INC) {
+					throw ParserException("Increment value should be passed as most once");
+				}
+				used |= SequenceInfo::SEQ_INC;
+				if (nodef)
+					continue;
+
 				info->increment = opt_value;
 				if (info->increment == 0) {
 					throw ParserException("Increment must not be zero");
@@ -49,18 +56,46 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
+				if (used & SequenceInfo::SEQ_MIN) {
+					throw ParserException("Minvalue should be passed as most once");
+				}
+				used |= SequenceInfo::SEQ_MIN;
+				if (nodef)
+					continue;
+
 				info->min_value = opt_value;
 				if (info->increment > 0) {
 					info->start_value = info->min_value;
 				}
 			} else if (opt_name == "maxvalue") {
+				if (used & SequenceInfo::SEQ_MAX) {
+					throw ParserException("Maxvalue should be passed as most once");
+				}
+				used |= SequenceInfo::SEQ_MAX;
+				if (nodef)
+					continue;
+
 				info->max_value = opt_value;
 				if (info->increment < 0) {
 					info->start_value = info->max_value;
 				}
 			} else if (opt_name == "start") {
+				if (used & SequenceInfo::SEQ_START) {
+					throw ParserException("Start value should be passed as most once");
+				}
+				used |= SequenceInfo::SEQ_START;
+				if (nodef)
+					continue;
+
 				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
+				if (used & SequenceInfo::SEQ_CYCLE) {
+					throw ParserException("Cycle value should be passed as most once");
+				}
+				used |= SequenceInfo::SEQ_CYCLE;
+				if (nodef)
+					continue;
+
 				info->cycle = opt_value > 0;
 			} else {
 				throw ParserException("Unrecognized option \"%s\" for CREATE SEQUENCE", opt_name);

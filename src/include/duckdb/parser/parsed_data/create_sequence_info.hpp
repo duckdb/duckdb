@@ -13,6 +13,16 @@
 
 namespace duckdb {
 
+class SequenceInfo {
+public:
+	static constexpr const uint32_t SEQ_START = (1 << 0);
+	static constexpr const uint32_t SEQ_INC = (1 << 1);
+	static constexpr const uint32_t SEQ_MIN = (1 << 2);
+	static constexpr const uint32_t SEQ_MAX = (1 << 3);
+	static constexpr const uint32_t SEQ_CYCLE = (1 << 4);
+	static constexpr const uint32_t SEQ_OWN = (1 << 5);
+};
+
 struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo()
 	    : CreateInfo(CatalogType::SEQUENCE_ENTRY, INVALID_SCHEMA), name(string()), usage_count(0), increment(1),

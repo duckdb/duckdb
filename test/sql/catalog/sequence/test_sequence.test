@@ -489,3 +489,7 @@ select nextval(1 + 1);
 
 statement error
 select currval(true);
+
+# max value specified more than once
+statement error
+CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
