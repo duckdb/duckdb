@@ -322,7 +322,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
 	auto &db_config = DBConfig::GetConfig(*this);
-	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
+	if (db_config.options.access_mode == AccessMode::READ_ONLY && !statement.properties.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type)));
 	}
@@ -519,7 +519,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        unique_ptr<SQLStatement> statement,
                                                                        PendingQueryParameters parameters) {
 	// prepare the query for execution
-	auto prepared = CreatePreparedStatement(lock, query, move(statement));
+	auto prepared = CreatePreparedStatement(lock, query, move(statement), parameters.parameters);
+	if (prepared->properties.parameter_count > 0 && !parameters.parameters) {
+		return make_unique<PendingQueryResult>(StringUtil::Format("Expected %lld parameters, but none were supplied",
+		                                                          prepared->properties.parameter_count));
+	}
+	if (!prepared->properties.bound_all_parameters) {
+		return make_unique<PendingQueryResult>("Not all parameters were bound");
+	}
 	// execute the prepared statement
 	return PendingPreparedStatement(lock, move(prepared), parameters);
 }
@@ -1260,7 +1267,7 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 
 	// then check the session values
 	const auto &session_config_map = config.set_variables;
-	const auto &global_config_map = db_config.set_variables;
+	const auto &global_config_map = db_config.options.set_variables;
 
 	auto session_value = session_config_map.find(key);
 	bool found_session_value = session_value != session_config_map.end();

@@ -1,0 +1,317 @@
+# name: test/sql/types/nested/map/map_from_entries/data_types.test
+# description: Test basic functionality of map_from_entries with various different types
+# group: [map_from_entries]
+
+statement ok
+PRAGMA enable_verification
+
+# These tests will mostly be focused on testing proper behavior of keys with various different types
+
+# --- VARCHAR ---
+# Valid
+statement ok
+create table string_key as select MAP_FROM_ENTRIES(ARRAY[('a', 'x'), ('b', 'y')]) col;
+
+query I
+select * from string_key;
+----
+{a=x, b=y}
+
+query I
+select col['a'] from string_key;
+----
+[x]
+
+# Invalid
+statement error
+create table string_key_dup as select MAP_FROM_ENTRIES(ARRAY[('a', 'x'), ('a', 'y')]) col;
+
+# -- TINYINT --
+# Valid
+statement ok
+create table tinyint_key as select MAP_FROM_ENTRIES(ARRAY[(123::TINYINT, 'x'), (-123::TINYINT, 'y')]) col;
+
+query I
+select * from tinyint_key;
+----
+{123=x, -123=y}
+
+query I
+select col[123] from tinyint_key;
+----
+[x]
+
+# Invalid
+statement error
+create table tinyint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
+
+# -- SMALLINT --
+# Valid
+statement ok
+create table smallint_key as select MAP_FROM_ENTRIES(ARRAY[(123::SMALLINT, 'x'), (-123::SMALLINT, 'y')]) col;
+
+query I
+select * from smallint_key;
+----
+{123=x, -123=y}
+
+query I
+select col[123] from smallint_key;
+----
+[x]
+
+# Invalid
+statement error
+create table smallint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
+
+# -- INTEGER --
+# Valid
+statement ok
+create table integer_key as select MAP_FROM_ENTRIES(ARRAY[(123::INTEGER, 'x'), (-123::INTEGER, 'y')]) col;
+
+query I
+select * from integer_key;
+----
+{123=x, -123=y}
+
+query I
+select col[123] from integer_key;
+----
+[x]
+
+# Invalid
+statement error
+create table integer_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
+
+# -- BIGINT --
+# Valid
+statement ok
+create table bigint_key as select MAP_FROM_ENTRIES(ARRAY[(123::BIGINT, 'x'), (-123::BIGINT, 'y')]) col;
+
+query I
+select * from bigint_key;
+----
+{123=x, -123=y}
+
+query I
+select col[123] from bigint_key;
+----
+[x]
+
+# Invalid
+statement error
+create table bigint_key_dup as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
+
+# -- HUGEINT --
+# Valid
+statement ok
+create table hugeint_key as select MAP_FROM_ENTRIES(ARRAY[(123::HUGEINT, 'x'), (-123::HUGEINT, 'y')]) col;
+
+query I
+select * from hugeint_key;
+----
+{123=x, -123=y}
+
+query I
+select col[123] from hugeint_key;
+----
+[x]
+
+# Invalid
+statement error
+create table hugeint_key as select MAP_FROM_ENTRIES(ARRAY[(123, 'x'), (123, 'y')]) col;
+
+# -- BOOLEAN --
+# Valid
+statement ok
+create table boolean_key as select MAP_FROM_ENTRIES(ARRAY[(True, 'x'), (False, 'y')]) col;
+
+query I
+select * from boolean_key;
+----
+{True=x, False=y}
+
+query I
+select col[True] from boolean_key;
+----
+[x]
+
+# Invalid
+statement error
+create table boolean_key_dup as select MAP_FROM_ENTRIES(ARRAY[(True, 'x'), (True, 'y')]) col;
+
+# -- BLOB --
+# Valid
+statement ok
+create table blob_key as select MAP_FROM_ENTRIES(ARRAY[('\xF0\x9F\xA6\x86'::BLOB, 'x'), ('\xF0\x9F\xA6\x87'::BLOB, 'y')]) col;
+
+query I
+select * from blob_key;
+----
+{\xF0\x9F\xA6\x86=x, \xF0\x9F\xA6\x87=y}
+
+query I
+select col['\xF0\x9F\xA6\x86'::BLOB] from blob_key;
+----
+[x]
+
+# Invalid
+statement error
+create table blob_key_dup as select MAP_FROM_ENTRIES(ARRAY[('\xF0\x9F\xA6\x86'::BLOB, 'x'), ('\xF0\x9F\xA6\x86'::BLOB, 'y')]) col;
+
+# -- DATE --
+# Valid
+statement ok
+create table date_key as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20'::DATE, 'x'), ('1992-12-20'::DATE, 'y')]) col;
+
+query I
+select * from date_key;
+----
+{1992-09-20=x, 1992-12-20=y}
+
+query I
+select col['1992-09-20'::DATE] from date_key;
+----
+[x]
+
+# Invalid
+statement error
+create table date_key_dup as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20'::DATE, 'x'), ('1992-09-20'::DATE, 'y')]) col;
+
+# -- DOUBLE --
+# Valid
+statement ok
+create table double_key as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DOUBLE, 'x'), ('12.4'::DOUBLE, 'y')]) col;
+
+query I
+select * from double_key;
+----
+{12.3=x, 12.4=y}
+
+query I
+select col['12.3'::DOUBLE] from double_key;
+----
+[x]
+
+# Invalid
+statement error
+create table double_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DOUBLE, 'x'), ('12.3'::DOUBLE, 'y')]) col;
+
+# -- REAL --
+# Valid
+statement ok
+create table real_key as select MAP_FROM_ENTRIES(ARRAY[('12.3'::REAL, 'x'), ('12.4'::REAL, 'y')]) col;
+
+query I
+select * from real_key;
+----
+{12.3=x, 12.4=y}
+
+query I
+select col['12.3'::REAL] from real_key;
+----
+[x]
+
+# Invalid
+statement error
+create table real_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::REAL, 'x'), ('12.3'::REAL, 'y')]) col;
+
+# -- DECIMAL --
+# Valid
+statement ok
+create table decimal_key as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DECIMAL, 'x'), ('12.4'::DECIMAL, 'y')]) col;
+
+query I
+select * from decimal_key;
+----
+{12.300=x, 12.400=y}
+
+query I
+select col['12.3'::DECIMAL] from decimal_key;
+----
+[x]
+
+# Invalid
+statement error
+create table decimal_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DECIMAL, 'x'), ('12.3'::DECIMAL, 'y')]) col;
+
+# -- INTERVAL --
+# Valid
+statement ok
+create table interval_key as select MAP_FROM_ENTRIES(ARRAY[(('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'x'), (('2022-01-02 01:00:00'::TIMESTAMP - '2021-01-01'::TIMESTAMP), 'y')]) col;
+
+query I
+select * from interval_key;
+----
+{1 day 01:00:00=x, 366 days 01:00:00=y}
+
+# Issue #4121 needs to be fixed first
+# Once this test fails, remove it and uncomment the one below
+statement error
+select col[('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP)] from interval_key;
+
+#query I
+#select col[('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP)] from interval_key;
+#----
+#[x]
+
+# Invalid
+statement error
+create table interval_key_dup as select MAP_FROM_ENTRIES(ARRAY[(('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'x'), (('2022-01-02 01:00:00'::TIMESTAMP - '2022-01-01'::TIMESTAMP), 'y')]) col;
+
+# -- TIME --
+# Valid
+statement ok
+create table time_key as select MAP_FROM_ENTRIES(ARRAY[('12:30:00'::TIME, 'x'), ('00:30:00'::TIME, 'y')]) col;
+
+query I
+select * from time_key;
+----
+{12:30:00=x, 00:30:00=y}
+
+query I
+select col['12:30:00'::TIME] from time_key;
+----
+[x]
+
+# Invalid
+statement error
+create table time_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12:30:00'::TIME, 'x'), ('12:30:00'::TIME, 'y')]) col;
+
+# -- TIMESTAMP --
+# Valid
+statement ok
+create table timestamp_key as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20 11:30:00'::TIMESTAMP, 'x'), ('1992-10-20 11:30:00'::TIMESTAMP, 'y')]) col;
+
+query I
+select * from timestamp_key;
+----
+{1992-09-20 11:30:00=x, 1992-10-20 11:30:00=y}
+
+query I
+select col['1992-09-20 11:30:00'::TIMESTAMP] from timestamp_key;
+----
+[x]
+
+# Invalid
+statement error
+create table timestamp_key_dup as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20 11:30:00'::TIMESTAMP, 'x'), ('1992-09-20 11:30:00'::TIMESTAMP, 'y')]) col;
+
+# -- UUID --
+# Valid
+statement ok
+create table uuid_key as select MAP_FROM_ENTRIES(ARRAY[('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'x'), ('eeccb8c5-9943-b2bb-bb5e-222f4e14b600'::UUID, 'y')]) col;
+
+query I
+select * from uuid_key;
+----
+{eeccb8c5-9943-b2bb-bb5e-222f4e14b687=x, eeccb8c5-9943-b2bb-bb5e-222f4e14b600=y}
+
+query I
+select col['eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID] from uuid_key;
+----
+[x]
+
+# Invalid
+statement error
+create table uuid_key_dup as select MAP_FROM_ENTRIES(ARRAY[('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'x'), ('eeccb8c5-9943-b2bb-bb5e-222f4e14b687'::UUID, 'y')]) col;

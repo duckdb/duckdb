@@ -55,7 +55,7 @@ SELECT '123.4'::DECIMAL(9)::VARCHAR;
 query II
 SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;
 ----
-0.100	-0.100
+.100	-.100
 
 # any value >= 1 becomes out of range, though
 statement error

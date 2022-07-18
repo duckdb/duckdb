@@ -48,7 +48,7 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 
 VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
                                             vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
-                                            unique_ptr<VectorData[]> vec_data) {
+                                            unique_ptr<UnifiedVectorFormat[]> vec_data) {
 	VectorType result_vec_type = VectorType::CONSTANT_VECTOR;
 
 	// Casting input data to sqlite_value
@@ -66,7 +66,7 @@ VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &resul
 }
 
 //*** Cast to vectors ***********************************/
-unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, VectorData &vec_data, idx_t size,
+unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, UnifiedVectorFormat &vec_data, idx_t size,
                                                        Vector &result) {
 	LogicalTypeId type_id = type.id();
 	switch (type_id) {

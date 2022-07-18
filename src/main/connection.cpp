@@ -249,5 +249,8 @@ void Connection::SetAutoCommit(bool auto_commit) {
 bool Connection::IsAutoCommit() {
 	return context->transaction.IsAutoCommit();
 }
+bool Connection::HasActiveTransaction() {
+	return context->transaction.HasActiveTransaction();
+}
 
 } // namespace duckdb

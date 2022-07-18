@@ -2,6 +2,9 @@
 # description: Test duckdb_sequences function
 # group: [table_function]
 
+require skip_reload
+
+
 query I
 SELECT COUNT(*) FROM duckdb_sequences();
 ----

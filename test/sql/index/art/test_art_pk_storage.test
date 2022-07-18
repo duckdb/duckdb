@@ -1,0 +1,22 @@
+# name: test/sql/index/art/test_art_pk_storage.test
+# description: ART Storage
+# group: [art]
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE integers(i integer PRIMARY KEY)
+
+# Insert values and create index
+statement ok
+INSERT INTO integers VALUES (1),(2),(3),(4),(5)
+
+statement ok
+checkpoint
+
+restart
+
+# Insert values and create index
+statement error
+INSERT INTO integers VALUES (1)

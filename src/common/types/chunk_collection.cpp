@@ -103,7 +103,7 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		idx_t added_data = MinValue<idx_t>(remaining_data, STANDARD_VECTOR_SIZE - last_chunk.size());
 		if (added_data > 0) {
 			// copy <added_data> elements to the last chunk
-			new_chunk.Normalify();
+			new_chunk.Flatten();
 			// have to be careful here: setting the cardinality without calling normalify can cause incorrect partial
 			// decompression
 			idx_t old_count = new_chunk.size();

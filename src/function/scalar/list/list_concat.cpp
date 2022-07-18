@@ -23,10 +23,10 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 		return;
 	}
 
-	VectorData lhs_data;
-	VectorData rhs_data;
-	lhs.Orrify(count, lhs_data);
-	rhs.Orrify(count, rhs_data);
+	UnifiedVectorFormat lhs_data;
+	UnifiedVectorFormat rhs_data;
+	lhs.ToUnifiedFormat(count, lhs_data);
+	rhs.ToUnifiedFormat(count, rhs_data);
 	auto lhs_entries = (list_entry_t *)lhs_data.data;
 	auto rhs_entries = (list_entry_t *)rhs_data.data;
 
@@ -34,10 +34,10 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto rhs_list_size = ListVector::GetListSize(rhs);
 	auto &lhs_child = ListVector::GetEntry(lhs);
 	auto &rhs_child = ListVector::GetEntry(rhs);
-	VectorData lhs_child_data;
-	VectorData rhs_child_data;
-	lhs_child.Orrify(lhs_list_size, lhs_child_data);
-	rhs_child.Orrify(rhs_list_size, rhs_child_data);
+	UnifiedVectorFormat lhs_child_data;
+	UnifiedVectorFormat rhs_child_data;
+	lhs_child.ToUnifiedFormat(lhs_list_size, lhs_child_data);
+	rhs_child.ToUnifiedFormat(rhs_list_size, rhs_child_data);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);

@@ -296,9 +296,9 @@ public:
 		const idx_t num_paths = info.ptrs.size();
 		const idx_t list_size = count * num_paths;
 
-		VectorData input_data;
+		UnifiedVectorFormat input_data;
 		auto &input_vector = args.data[0];
-		input_vector.Orrify(count, input_data);
+		input_vector.ToUnifiedFormat(count, input_data);
 		auto inputs = (string_t *)input_data.data;
 
 		ListVector::Reserve(result, list_size);

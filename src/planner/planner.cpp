@@ -15,6 +15,15 @@ namespace duckdb {
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
 }
 
+static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
+	if (depth >= max_depth) {
+		throw ParserException("Maximum tree depth of %lld exceeded in logical planner", max_depth);
+	}
+	for (auto &child : op.children) {
+		CheckTreeDepth(*child, max_depth, depth + 1);
+	}
+}
+
 void Planner::CreatePlan(SQLStatement &statement) {
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.n_param;
@@ -33,6 +42,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->types = bound_statement.types;
 		this->plan = move(bound_statement.plan);
 
+		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
+		CheckTreeDepth(*plan, max_tree_depth);
 	} catch (ParameterNotResolvedException &ex) {
 		// parameter types could not be resolved
 		this->names = {"unknown"};

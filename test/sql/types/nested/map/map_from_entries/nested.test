@@ -1,0 +1,47 @@
+# name: test/sql/types/nested/map/map_from_entries/nested.test
+# description: Test basic functionality of map_from_entries function
+# group: [map_from_entries]
+
+statement ok
+PRAGMA enable_verification
+
+
+# LIST - correct
+query I
+SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([3,4], 4)]);
+----
+{[1, 2]=2, [3, 4]=4}
+
+# LIST - duplicate
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[([1,2], 2), ([1,2], 4)]);
+
+# STRUCT - correct
+query I
+SELECT MAP_FROM_ENTRIES(ARRAY[({'a':5, 'b':7}, 2), ({'a':3, 'b':8}, 4)]);
+----
+{{'a': 5, 'b': 7}=2, {'a': 3, 'b': 8}=4}
+
+# STRUCT - duplicate
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[({'a':5, 'b':7}, 2), ({'a':5, 'b':7}, 4)]);
+
+# MAP - correct
+query I
+SELECT MAP_FROM_ENTRIES(ARRAY[(MAP([5,3,4], ['a', 'b', 'c']), 2), (MAP([4,3,5], ['a', 'b', 'c']), 4)]);
+----
+{{5=a, 3=b, 4=c}=2, {4=a, 3=b, 5=c}=4}
+
+# MAP - duplicate
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[(MAP([5,3,4], ['a', 'b', 'c']), 2), (MAP([5,3,4], ['a', 'b', 'c']), 4)]);
+
+# LIST(STRUCT) - correct
+query I
+SELECT MAP_FROM_ENTRIES(ARRAY[([{'a':5, 'b':7}, {'a':5, 'b':7}], 2), ([{'a':5, 'b':7}, {'a':5, 'b':8}], 4)]);
+----
+{[{'a': 5, 'b': 7}, {'a': 5, 'b': 7}]=2, [{'a': 5, 'b': 7}, {'a': 5, 'b': 8}]=4}
+
+# LIST(STRUCT) - duplicate
+statement error
+SELECT MAP_FROM_ENTRIES(ARRAY[([{'a':5, 'b':7}, {'a':5, 'b':8}], 2), ([{'a':5, 'b':7}, {'a':5, 'b':8}], 4)]);

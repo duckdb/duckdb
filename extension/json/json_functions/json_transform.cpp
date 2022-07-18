@@ -369,8 +369,8 @@ template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto count = args.size();
 	auto &input = args.data[0];
-	VectorData input_data;
-	input.Orrify(count, input_data);
+	UnifiedVectorFormat input_data;
+	input.ToUnifiedFormat(count, input_data);
 	auto inputs = (string_t *)input_data.data;
 	// Read documents
 	vector<DocPointer<yyjson_doc>> docs;

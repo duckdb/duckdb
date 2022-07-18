@@ -95,7 +95,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 
 bool Pipeline::IsOrderDependent() const {
 	auto &config = DBConfig::GetConfig(executor.context);
-	if (!config.preserve_insertion_order) {
+	if (!config.options.preserve_insertion_order) {
 		return false;
 	}
 	if (sink && sink->IsOrderDependent()) {
