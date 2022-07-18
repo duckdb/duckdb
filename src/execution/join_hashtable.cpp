@@ -83,27 +83,30 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		swizzled_string_heap->Merge(*other.swizzled_string_heap);
 	}
 
-	if (partition_block_collections.empty()) {
+	{
 		lock_guard<mutex> lock(partition_lock);
-		D_ASSERT(partition_string_heaps.empty());
-		for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
-			partition_block_collections.push_back(move(other.partition_block_collections[idx]));
-			if (!layout.AllConstant()) {
-				partition_string_heaps.push_back(move(other.partition_string_heaps[idx]));
+		// Check if anything changed after grabbing the lock
+		if (partition_block_collections.empty()) {
+			D_ASSERT(partition_string_heaps.empty());
+			// Move partitions to this HT
+			for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
+				partition_block_collections.push_back(move(other.partition_block_collections[idx]));
+				if (!layout.AllConstant()) {
+					partition_string_heaps.push_back(move(other.partition_string_heaps[idx]));
+				}
 			}
+			return;
 		}
-		other.partition_block_collections.clear();
-		other.partition_string_heaps.clear();
-	} else {
-		// Should have same number of partitions
-		D_ASSERT(partition_block_collections.size() == other.partition_block_collections.size());
-		D_ASSERT(partition_string_heaps.size() == other.partition_string_heaps.size());
-		// No need to grab the lock because RowDataCollection::Merge has locks
-		for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
-			partition_block_collections[idx]->Merge(*other.partition_block_collections[idx]);
-			if (!layout.AllConstant()) {
-				partition_string_heaps[idx]->Merge(*other.partition_string_heaps[idx]);
-			}
+	}
+
+	// Should have same number of partitions
+	D_ASSERT(partition_block_collections.size() == other.partition_block_collections.size());
+	D_ASSERT(partition_string_heaps.size() == other.partition_string_heaps.size());
+	// No need to grab the lock because RowDataCollection::Merge has locks
+	for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
+		partition_block_collections[idx]->Merge(*other.partition_block_collections[idx]);
+		if (!layout.AllConstant()) {
+			partition_string_heaps[idx]->Merge(*other.partition_string_heaps[idx]);
 		}
 	}
 }
@@ -1056,15 +1059,12 @@ void JoinHashTable::Partition(JoinHashTable &global_ht) {
 		D_ASSERT(layout.GetTypes()[col_idx] == global_ht.layout.GetTypes()[col_idx]);
 	}
 #endif
+
 	// Swizzle and Partition
 	SwizzleBlocks();
 	RadixPartitioning::Partition(global_ht.buffer_manager, global_ht.layout, global_ht.pointer_offset,
 	                             *swizzled_block_collection, *swizzled_string_heap, partition_block_collections,
 	                             partition_string_heaps, global_ht.radix_bits);
-
-	// Clear input data
-	swizzled_block_collection->Clear();
-	swizzled_string_heap->Clear();
 
 	// Add to global HT
 	global_ht.Merge(*this);

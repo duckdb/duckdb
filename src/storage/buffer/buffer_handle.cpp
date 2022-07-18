@@ -44,7 +44,7 @@ block_id_t BufferHandle::GetBlockId() const {
 }
 
 void BufferHandle::Destroy() {
-	if (!handle) {
+	if (!handle || !IsValid()) {
 		return;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);

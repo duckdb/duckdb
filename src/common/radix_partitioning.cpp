@@ -329,6 +329,13 @@ struct PartitionFunctor {
 				partition_string_heaps[idx]->count += block_counts[idx];
 			}
 		}
+
+		partition_data_handles.clear();
+		partition_heap_handles.clear();
+
+		// Clear input data
+		block_collection.Clear();
+		string_heap.Clear();
 		// TODO: maybe delete empty blocks at the end? (although they are small and unlikely)
 	}
 
