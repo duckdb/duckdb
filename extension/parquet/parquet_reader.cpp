@@ -861,7 +861,8 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	}
 }
 
-bool ParquetReader::CanSkipFile(string filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters, const vector<column_t> &column_ids, const vector<string> &names) {
+bool ParquetReader::CanSkipFile(string filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters,
+                                const vector<column_t> &column_ids, const vector<string> &names) {
 	if (!filters || (!hive_enabled && !filename_enabled)) {
 		return false;
 	}
@@ -871,11 +872,11 @@ bool ParquetReader::CanSkipFile(string filename, bool hive_enabled, bool filenam
 
 	auto partitions = ParseHivePartitions(filename);
 
-	for (auto& filter: filters->filters) {
+	for (auto &filter : filters->filters) {
 		auto filter_col_name = names[column_ids[filter.first]];
 
 		if (hive_enabled) {
-			for (auto& partition: partitions) {
+			for (auto &partition : partitions) {
 				if (filter_col_name == partition.first) {
 					// We filter by a hive partition
 					Vector v(Value(partition.second));

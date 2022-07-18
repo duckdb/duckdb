@@ -7,7 +7,6 @@ require parquet
 # requires notwindows for windows-style path backslash reasons
 require notwindows
 
-# Simple glob with filenames, note that we replace \ for / to make tests pass on windows
 query III
 select i, j, filename from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
 ----

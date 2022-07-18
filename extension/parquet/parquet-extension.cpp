@@ -354,7 +354,9 @@ public:
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
 
-				if (ParquetReader::CanSkipFile(file, bind_data.initial_reader->parquet_options.hive_partitioning, bind_data.initial_reader->parquet_options.filename, scan_data.table_filters, scan_data.column_ids, bind_data.names)) {
+				if (ParquetReader::CanSkipFile(file, bind_data.initial_reader->parquet_options.hive_partitioning,
+				                               bind_data.initial_reader->parquet_options.filename,
+				                               scan_data.table_filters, scan_data.column_ids, bind_data.names)) {
 					continue;
 				}
 
