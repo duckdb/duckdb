@@ -861,7 +861,7 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	}
 }
 
-bool ParquetReader::CanSkipFile(string filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters,
+bool ParquetReader::CanSkipFile(string &filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters,
                                 const vector<column_t> &column_ids, const vector<string> &names) {
 	if (!filters || (!hive_enabled && !filename_enabled)) {
 		return false;
