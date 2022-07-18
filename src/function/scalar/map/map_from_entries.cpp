@@ -97,8 +97,8 @@ static void MapFromEntriesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	auto count = args.size();
 
-	VectorData input_list_data;
-	input_list.Orrify(count, input_list_data);
+	UnifiedVectorFormat input_list_data;
+	input_list.ToUnifiedFormat(count, input_list_data);
 
 	// Current offset into the keys/values list
 	idx_t offset = 0;
