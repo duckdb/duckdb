@@ -20,8 +20,8 @@ public:
 	DUCKDB_API BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node);
 	DUCKDB_API ~BufferHandle();
 	// disable copy constructors
-	DUCKDB_API BufferHandle(const BufferHandle &other) = delete;
-	DUCKDB_API BufferHandle &operator=(const BufferHandle &) = delete;
+	BufferHandle(const BufferHandle &other) = delete;
+	BufferHandle &operator=(const BufferHandle &) = delete;
 	//! enable move constructors
 	DUCKDB_API BufferHandle(BufferHandle &&other) noexcept;
 	DUCKDB_API BufferHandle &operator=(BufferHandle &&) noexcept;
