@@ -13,14 +13,19 @@
 
 namespace duckdb {
 
-class SequenceInfo {
-public:
-	static constexpr const uint32_t SEQ_START = (1 << 0);
-	static constexpr const uint32_t SEQ_INC = (1 << 1);
-	static constexpr const uint32_t SEQ_MIN = (1 << 2);
-	static constexpr const uint32_t SEQ_MAX = (1 << 3);
-	static constexpr const uint32_t SEQ_CYCLE = (1 << 4);
-	static constexpr const uint32_t SEQ_OWN = (1 << 5);
+enum class SequenceInfo : uint8_t {
+	// Sequence start
+	SEQ_START,
+	// Sequence increment
+	SEQ_INC,
+	// Sequence minimum value
+	SEQ_MIN,
+	// Sequence maximum value
+	SEQ_MAX,
+	// Sequence cycle option
+	SEQ_CYCLE,
+	// Sequence owner table
+	SEQ_OWN
 };
 
 struct CreateSequenceInfo : public CreateInfo {

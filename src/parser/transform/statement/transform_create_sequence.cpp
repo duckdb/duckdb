@@ -16,7 +16,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 	info->name = qname.name;
 
 	if (stmt->options) {
-		uint32_t used = 0;
+		unordered_set<SequenceInfo> used;
 		duckdb_libpgquery::PGListCell *cell = nullptr;
 		for_each_cell(cell, stmt->options->head) {
 			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
@@ -37,10 +37,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 				}
 			}
 			if (opt_name == "increment") {
-				if (used & SequenceInfo::SEQ_INC) {
+				if (used.find(SequenceInfo::SEQ_INC) != used.end()) {
 					throw ParserException("Increment value should be passed as most once");
 				}
-				used |= SequenceInfo::SEQ_INC;
+				used.insert(SequenceInfo::SEQ_INC);
 				if (nodef) {
 					continue;
 				}
@@ -57,10 +57,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					info->max_value = NumericLimits<int64_t>::Maximum();
 				}
 			} else if (opt_name == "minvalue") {
-				if (used & SequenceInfo::SEQ_MIN) {
+				if (used.find(SequenceInfo::SEQ_MIN) != used.end()) {
 					throw ParserException("Minvalue should be passed as most once");
 				}
-				used |= SequenceInfo::SEQ_MIN;
+				used.insert(SequenceInfo::SEQ_MIN);
 				if (nodef) {
 					continue;
 				}
@@ -70,10 +70,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					info->start_value = info->min_value;
 				}
 			} else if (opt_name == "maxvalue") {
-				if (used & SequenceInfo::SEQ_MAX) {
+				if (used.find(SequenceInfo::SEQ_MAX) != used.end()) {
 					throw ParserException("Maxvalue should be passed as most once");
 				}
-				used |= SequenceInfo::SEQ_MAX;
+				used.insert(SequenceInfo::SEQ_MAX);
 				if (nodef) {
 					continue;
 				}
@@ -83,20 +83,20 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					info->start_value = info->max_value;
 				}
 			} else if (opt_name == "start") {
-				if (used & SequenceInfo::SEQ_START) {
+				if (used.find(SequenceInfo::SEQ_START) != used.end()) {
 					throw ParserException("Start value should be passed as most once");
 				}
-				used |= SequenceInfo::SEQ_START;
+				used.insert(SequenceInfo::SEQ_START);
 				if (nodef) {
 					continue;
 				}
 
 				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
-				if (used & SequenceInfo::SEQ_CYCLE) {
+				if (used.find(SequenceInfo::SEQ_CYCLE) != used.end()) {
 					throw ParserException("Cycle value should be passed as most once");
 				}
-				used |= SequenceInfo::SEQ_CYCLE;
+				used.insert(SequenceInfo::SEQ_CYCLE);
 				if (nodef) {
 					continue;
 				}

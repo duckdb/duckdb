@@ -18,17 +18,17 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 		throw InternalException("Expected an argument for ALTER SEQUENCE.");
 	}
 
-	uint32_t used = 0;
+	unordered_set<SequenceInfo> used;
 	duckdb_libpgquery::PGListCell *cell = nullptr;
 	for_each_cell(cell, stmt->options->head) {
 		auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
 		string opt_name = string(def_elem->defname);
 
 		if (opt_name == "owned_by") {
-			if (used & SequenceInfo::SEQ_OWN) {
+			if (used.find(SequenceInfo::SEQ_OWN) != used.end()) {
 				throw ParserException("Owned by value should be passed as most once");
 			}
-			used |= SequenceInfo::SEQ_OWN;
+			used.insert(SequenceInfo::SEQ_OWN);
 
 			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
 			if (!val) {
