@@ -239,23 +239,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		everything_referenced = true;
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_VACUUM: {
-		auto &vacuum = (LogicalSimple &)op;
-		auto &info = (VacuumInfo &)*vacuum.info;
-		if (!info.bound_ref) {
-			break;
-		}
-
-		auto &get = (LogicalGet &)*info.bound_ref->get;
-		for (auto &col : info.columns) {
-			for (idx_t col_idx = 0; col_idx < get.names.size(); col_idx++) {
-				if (get.names[col_idx] == col) {
-					get.column_ids.push_back(col_idx);
-					break;
-				}
-			}
-		}
-	}
 	default:
 		break;
 	}

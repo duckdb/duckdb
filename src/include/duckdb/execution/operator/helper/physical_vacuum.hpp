@@ -21,9 +21,6 @@ public:
 
 	unique_ptr<VacuumInfo> info;
 
-private:
-	unordered_map<idx_t, idx_t> column_id_map;
-
 public:
 	// Source interface
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

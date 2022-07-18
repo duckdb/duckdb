@@ -92,7 +92,7 @@ std::string NumericHelper::ToString(hugeint_t value);
 
 struct DecimalToString {
 	template <class SIGNED, class UNSIGNED>
-	static int DecimalLength(SIGNED value, uint8_t scale) {
+	static int DecimalLength(SIGNED value, uint8_t width, uint8_t scale) {
 		if (scale == 0) {
 			// scale is 0: regular number
 			return NumericHelper::SignedLength<SIGNED, UNSIGNED>(value);
@@ -104,11 +104,13 @@ struct DecimalToString {
 		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
-		return MaxValue(scale + 2 + (value < 0 ? 1 : 0), NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
+		auto extra_characters = width > scale ? 2 : 1;
+		return MaxValue(scale + extra_characters + (value < 0 ? 1 : 0),
+		                NumericHelper::SignedLength<SIGNED, UNSIGNED>(value) + 1);
 	}
 
 	template <class SIGNED, class UNSIGNED>
-	static void FormatDecimal(SIGNED value, uint8_t scale, char *dst, idx_t len) {
+	static void FormatDecimal(SIGNED value, uint8_t width, uint8_t scale, char *dst, idx_t len) {
 		char *end = dst + len;
 		if (value < 0) {
 			value = -value;
@@ -131,14 +133,18 @@ struct DecimalToString {
 		}
 		*--dst = '.';
 		// now write the part before the decimal
-		dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
+		D_ASSERT(width > scale || major == 0);
+		if (width > scale) {
+			// there are numbers after the comma
+			dst = NumericHelper::FormatUnsigned<UNSIGNED>(major, dst);
+		}
 	}
 
 	template <class SIGNED, class UNSIGNED>
-	static string_t Format(SIGNED value, uint8_t scale, Vector &vector) {
-		int len = DecimalLength<SIGNED, UNSIGNED>(value, scale);
+	static string_t Format(SIGNED value, uint8_t width, uint8_t scale, Vector &vector) {
+		int len = DecimalLength<SIGNED, UNSIGNED>(value, width, scale);
 		string_t result = StringVector::EmptyString(vector, len);
-		FormatDecimal<SIGNED, UNSIGNED>(value, scale, result.GetDataWriteable(), len);
+		FormatDecimal<SIGNED, UNSIGNED>(value, width, scale, result.GetDataWriteable(), len);
 		result.Finalize();
 		return result;
 	}
@@ -261,7 +267,7 @@ struct HugeintToStringCast {
 		return result;
 	}
 
-	static int DecimalLength(hugeint_t value, uint8_t scale) {
+	static int DecimalLength(hugeint_t value, uint8_t width, uint8_t scale) {
 		int negative;
 		if (value.upper < 0) {
 			Hugeint::NegateInPlace(value);
@@ -280,10 +286,11 @@ struct HugeintToStringCast {
 		// in that case we print "0.XXX", which is the scale, plus "0." (2 chars)
 		// integer length + 1 happens when the number is outside of that range
 		// in that case we print the integer number, but with one extra character ('.')
-		return MaxValue(scale + 2, UnsignedLength(value) + 1) + negative;
+		auto extra_numbers = width > scale ? 2 : 1;
+		return MaxValue(scale + extra_numbers, UnsignedLength(value) + 1) + negative;
 	}
 
-	static void FormatDecimal(hugeint_t value, uint8_t scale, char *dst, int len) {
+	static void FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, char *dst, int len) {
 		auto endptr = dst + len;
 
 		int negative = value.upper < 0;
@@ -312,16 +319,19 @@ struct HugeintToStringCast {
 		}
 		*--dst = '.';
 		// now write the part before the decimal
-		dst = FormatUnsigned(major, dst);
+		D_ASSERT(width > scale || major == 0);
+		if (width > scale) {
+			dst = FormatUnsigned(major, dst);
+		}
 	}
 
-	static string_t FormatDecimal(hugeint_t value, uint8_t scale, Vector &vector) {
-		int length = DecimalLength(value, scale);
+	static string_t FormatDecimal(hugeint_t value, uint8_t width, uint8_t scale, Vector &vector) {
+		int length = DecimalLength(value, width, scale);
 		string_t result = StringVector::EmptyString(vector, length);
 
 		auto dst = result.GetDataWriteable();
 
-		FormatDecimal(value, scale, dst, length);
+		FormatDecimal(value, width, scale, dst, length);
 
 		result.Finalize();
 		return result;
