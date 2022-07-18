@@ -41,8 +41,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Increment value should be passed as most once");
 				}
 				used |= SequenceInfo::SEQ_INC;
-				if (nodef)
+				if (nodef) {
 					continue;
+				}
 
 				info->increment = opt_value;
 				if (info->increment == 0) {
@@ -60,8 +61,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Minvalue should be passed as most once");
 				}
 				used |= SequenceInfo::SEQ_MIN;
-				if (nodef)
+				if (nodef) {
 					continue;
+				}
 
 				info->min_value = opt_value;
 				if (info->increment > 0) {
@@ -72,8 +74,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Maxvalue should be passed as most once");
 				}
 				used |= SequenceInfo::SEQ_MAX;
-				if (nodef)
+				if (nodef) {
 					continue;
+				}
 
 				info->max_value = opt_value;
 				if (info->increment < 0) {
@@ -84,8 +87,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Start value should be passed as most once");
 				}
 				used |= SequenceInfo::SEQ_START;
-				if (nodef)
+				if (nodef) {
 					continue;
+				}
 
 				info->start_value = opt_value;
 			} else if (opt_name == "cycle") {
@@ -93,8 +97,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 					throw ParserException("Cycle value should be passed as most once");
 				}
 				used |= SequenceInfo::SEQ_CYCLE;
-				if (nodef)
+				if (nodef) {
 					continue;
+				}
 
 				info->cycle = opt_value > 0;
 			} else {
