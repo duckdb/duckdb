@@ -86,3 +86,17 @@ SELECT list_count(LIST(i)) FROM lists GROUP BY g ORDER BY g LIMIT 2;
 ----
 10
 10
+
+# structs
+
+statement ok
+CREATE TABLE structs AS SELECT 1 AS g, {'x': 3, 'b': 2} AS s
+
+statement ok
+INSERT INTO structs VALUES (1, {'x': 5, 'b': 4}), (2, {'x': 50, 'b': 40})
+
+query I
+SELECT LIST(s) FROM structs GROUP BY g ORDER BY g
+----
+[{'x': 3, 'b': 2}, {'x': 5, 'b': 4}]
+[{'x': 50, 'b': 40}]
