@@ -861,6 +861,39 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 	}
 }
 
+bool ParquetReader::CanSkipFile(string filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters, const vector<column_t> &column_ids, const vector<string> &names) {
+	if (!filters || (!hive_enabled && !filename_enabled)) {
+		return false;
+	}
+
+	parquet_filter_t filter_mask;
+	filter_mask.set();
+
+	auto partitions = ParseHivePartitions(filename);
+
+	for (auto& filter: filters->filters) {
+		auto filter_col_name = names[column_ids[filter.first]];
+
+		if (hive_enabled) {
+			for (auto& partition: partitions) {
+				if (filter_col_name == partition.first) {
+					// We filter by a hive partition
+					Vector v(Value(partition.second));
+					ApplyFilter(v, *filter.second, filter_mask, 1);
+				}
+			}
+		}
+		if (filename_enabled) {
+			if (filter_col_name == "filename") {
+				Vector v((Value(filename)));
+				ApplyFilter(v, *filter.second, filter_mask, 1);
+			}
+		}
+	}
+
+	return !filter_mask.test(0);
+}
+
 void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 	while (ScanInternal(state, result)) {
 		if (result.size() > 0) {

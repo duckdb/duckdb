@@ -10,6 +10,10 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -114,6 +118,9 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(ParquetReader &reader, LogicalType &type, column_t column_index,
 	                                                 const duckdb_parquet::format::FileMetaData *file_meta_data);
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
+
+	// This method can be used to skip a file to be scanned based on its name
+	static bool CanSkipFile(string filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters, const vector<column_t> &column_ids, const vector<string> &names);
 
 private:
 	void InitializeSchema(const vector<string> &names, const vector<LogicalType> &expected_types_p,

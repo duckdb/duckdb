@@ -1,0 +1,31 @@
+# name: test/sql/copy/parquet/parquet_filename_filter.test
+# description: Test the filename filter pushdown
+# group: [parquet]
+
+require parquet
+
+# requires notwindows for windows-style path backslash reasons
+require notwindows
+
+# Simple glob with filenames, note that we replace \ for / to make tests pass on windows
+query III
+select i, j, filename from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
+----
+1	a	data/parquet-testing/glob/t1.parquet
+2	b	data/parquet-testing/glob/t2.parquet
+3	c	data/parquet-testing/glob2/t1.parquet
+
+query III
+select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet' or file='data/parquet-testing/glob/t2.parquet' order by i;
+----
+2	b	data/parquet-testing/glob/t2.parquet
+3	c	data/parquet-testing/glob2/t1.parquet
+
+query III
+select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet' and i=3 order by i;
+----
+3	c	data/parquet-testing/glob2/t1.parquet
+
+query III
+select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet' and i=2 order by i;
+----

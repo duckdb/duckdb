@@ -13,6 +13,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
@@ -352,8 +353,11 @@ public:
 			while (parallel_state.file_index + 1 < bind_data.files.size()) {
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
-				// TODO check if any of the hivepartitioning/filename columns are in a filter, in this case we may be
-				// 		able to skip the file here.
+
+				if (ParquetReader::CanSkipFile(file, bind_data.initial_reader->parquet_options.hive_partitioning, bind_data.initial_reader->parquet_options.filename, scan_data.table_filters, scan_data.column_ids, bind_data.names)) {
+					continue;
+				}
+
 				parallel_state.current_reader =
 				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
 				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);
