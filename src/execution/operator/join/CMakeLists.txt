@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_operator_join
   OBJECT
+  outer_join_marker.cpp
   physical_blockwise_nl_join.cpp
   physical_comparison_join.cpp
   physical_cross_product.cpp

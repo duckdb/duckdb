@@ -11,6 +11,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -32,6 +33,18 @@ struct ColumnDataScanState {
 	ChunkManagementState current_chunk_state;
 	idx_t segment_index;
 	idx_t chunk_index;
+	idx_t current_row_index;
+	idx_t next_row_index;
+};
+
+struct ColumnDataParallelScanState {
+	ColumnDataScanState scan_state;
+	mutex lock;
+};
+
+struct ColumnDataLocalScanState {
+	ChunkManagementState current_chunk_state;
+	idx_t current_row_index;
 };
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
@@ -66,10 +79,16 @@ public:
 	//! Append a DataChunk to this ColumnDataCollection using the specified append state
 	DUCKDB_API void Append(ColumnDataAppendState &state, DataChunk &new_chunk);
 
+	//! Initializes a chunk with the correct types that can be used to call Scan
+	DUCKDB_API void InitializeScanChunk(DataChunk &chunk) const;
 	//! Initializes a Scan state
 	DUCKDB_API void InitializeScan(ColumnDataScanState &state) const;
+	//! Initialize a parallel scan over the column data collection
+	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state) const;
 	//! Scans a DataChunk from the ColumnDataCollection
-	DUCKDB_API void Scan(ColumnDataScanState &state, DataChunk &result) const;
+	DUCKDB_API bool Scan(ColumnDataScanState &state, DataChunk &result) const;
+	//! Scans a DataChunk from the ColumnDataCollection
+	DUCKDB_API bool Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result) const;
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
@@ -91,6 +110,9 @@ private:
 	void CreateSegment();
 
 	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
+
+	//! Obtains the next scan index to scan from
+	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 
 private:
 	//! BufferManager

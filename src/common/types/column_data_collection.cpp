@@ -102,9 +102,9 @@ public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset);
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
-	void InitializeChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
+	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
 
-	idx_t InitializeVector(ChunkManagementState &state, VectorDataIndex vector_index, Vector &result);
+	idx_t ReadVector(ChunkManagementState &state, VectorDataIndex vector_index, Vector &result);
 
 	VectorDataIndex GetChildIndex(VectorChildIndex index, idx_t child_entry = 0);
 	VectorChildIndex AddChildIndex(VectorDataIndex index);
@@ -290,8 +290,8 @@ void ColumnDataCollectionSegment::SetChildIndex(VectorChildIndex base_idx, idx_t
 	child_indices[base_idx.index + child_number] = index;
 }
 
-idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state, VectorDataIndex vector_index,
-                                                    Vector &result) {
+idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, VectorDataIndex vector_index,
+                                              Vector &result) {
 	auto &vector_type = result.GetType();
 	auto internal_type = vector_type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
@@ -299,14 +299,14 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
 		auto &child_vector = ListVector::GetEntry(result);
-		auto child_count = InitializeVector(state, GetChildIndex(vdata.child_index), child_vector);
+		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
 	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &child_vectors = StructVector::GetEntries(result);
 		idx_t child_count = 0;
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
 			auto current_count =
-			    InitializeVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
+			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
 			if (child_idx == 0) {
 				child_count = current_count;
 			} else {
@@ -359,11 +359,11 @@ idx_t ColumnDataCollectionSegment::InitializeVector(ChunkManagementState &state,
 	return vector_count;
 }
 
-void ColumnDataCollectionSegment::InitializeChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk) {
+void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk) {
 	InitializeChunkState(chunk_index, state);
 	auto &chunk_meta = chunk_data[chunk_index];
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
-		InitializeVector(state, chunk_meta.vector_data[vector_idx], chunk.data[vector_idx]);
+		ReadVector(state, chunk_meta.vector_data[vector_idx], chunk.data[vector_idx]);
 	}
 	chunk.SetCardinality(chunk_meta.count);
 }
@@ -673,16 +673,46 @@ void ColumnDataCollection::Append(DataChunk &input) {
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state) const {
 	state.chunk_index = 0;
 	state.segment_index = 0;
+	state.current_row_index = 0;
+	state.next_row_index = 0;
 	state.current_chunk_state.handles.clear();
 }
 
-void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state) const {
+	InitializeScan(state.scan_state);
+}
+
+bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
+                                DataChunk &result) const {
 	result.Reset();
 
+	idx_t chunk_index;
+	idx_t segment_index;
+	idx_t row_index;
+	{
+		lock_guard<mutex> l(state.lock);
+		if (!NextScanIndex(state.scan_state, chunk_index, segment_index, row_index)) {
+			return false;
+		}
+	}
+	auto &segment = *segments[segment_index];
+	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result);
+	lstate.current_row_index = row_index;
+	result.Verify();
+	return true;
+}
+
+void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
+	chunk.Initialize(buffer_manager.GetBufferAllocator(), types);
+}
+
+bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index,
+                                         idx_t &row_index) const {
+	row_index = state.current_row_index = state.next_row_index;
 	// check if we still have collections to scan
 	if (state.segment_index >= segments.size()) {
 		// no more data left in the scan
-		return;
+		return false;
 	}
 	// check within the current collection if we still have chunks to scan
 	while (state.chunk_index >= segments[state.segment_index]->chunk_data.size()) {
@@ -691,14 +721,30 @@ void ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 		state.segment_index++;
 		state.current_chunk_state.handles.clear();
 		if (state.segment_index >= segments.size()) {
-			return;
+			return false;
 		}
 	}
+	state.next_row_index += segments[state.segment_index]->chunk_data[state.chunk_index].count;
+	segment_index = state.segment_index;
+	chunk_index = state.chunk_index++;
+	return true;
+}
+
+bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {
+	result.Reset();
+
+	idx_t chunk_index;
+	idx_t segment_index;
+	idx_t row_index;
+	if (!NextScanIndex(state, chunk_index, segment_index, row_index)) {
+		return false;
+	}
+
 	// found a chunk to scan -> scan it
-	auto &segment = *segments[state.segment_index];
-	segment.InitializeChunk(state.chunk_index, state.current_chunk_state, result);
+	auto &segment = *segments[segment_index];
+	segment.ReadChunk(chunk_index, state.current_chunk_state, result);
 	result.Verify();
-	state.chunk_index++;
+	return true;
 }
 
 void ColumnDataCollection::Combine(ColumnDataCollection &other) {
