@@ -1,4 +1,4 @@
-# name: test/sql/function/date/date_part_stats.test
+# name: test/sql/function/date/date_trunc_stats.test
 # description: Test date part stats on empty table
 # group: [date]
 
