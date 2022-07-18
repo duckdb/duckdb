@@ -26,7 +26,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				// bindings match right side: push into right
 				right_pushdown.filters.push_back(move(f));
 			} else {
-				D_ASSERT(side == JoinSide::BOTH);
+				D_ASSERT(side == JoinSide::BOTH || side == JoinSide::NONE);
 				// bindings match both: turn into join condition
 				join_conditions.push_back(move(f->filter));
 			}

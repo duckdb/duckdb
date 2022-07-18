@@ -1,0 +1,9 @@
+# name: test/fuzzer/afl/non_foldable_parameter.test
+# description: Execute prepared statement with random function
+# group: [afl]
+
+statement ok
+PREPARE p AS SELECT ?;
+
+statement ok
+EXECUTE p (random());

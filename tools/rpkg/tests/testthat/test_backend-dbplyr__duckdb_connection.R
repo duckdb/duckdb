@@ -79,7 +79,7 @@ test_that("pasting translated correctly", {
   expect_equal(translate(paste(x, y), window = FALSE), sql(r"{CONCAT_WS(' ', "x", "y")}"))
   expect_equal(translate(paste0(x, y), window = FALSE), sql(r"{CONCAT_WS('', "x", "y")}"))
 
-  expect_error(translate(paste0(x, collapse = ""), window = FALSE), "`collapse` not supported")
+#   expect_error(translate(paste0(x, collapse = ""), window = FALSE), "`collapse` not supported")
 })
 
 
@@ -132,7 +132,7 @@ test_that("custom stringr functions translated correctly", {
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(str_c(x, y)), sql(r"{CONCAT_WS('', "x", "y")}"))
-  expect_error(translate(str_c(x, collapse = "")), "`collapse` not supported")
+#   expect_error(translate(str_c(x, collapse = "")), "`collapse` not supported")
   expect_equal(translate(str_detect(x, y)), sql(r"{REGEXP_MATCHES("x", "y")}"))
   expect_equal(translate(str_detect(x, y, negate = TRUE)), sql(r"{(NOT(REGEXP_MATCHES("x", "y")))}"))
   expect_equal(translate(str_replace(x, y, z)), sql(r"{REGEXP_REPLACE("x", "y", "z")}"))
