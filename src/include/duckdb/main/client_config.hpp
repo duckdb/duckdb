@@ -50,8 +50,10 @@ struct ClientConfig {
 	//! The maximum expression depth limit in the parser
 	idx_t max_expression_depth = 1000;
 
-	// Whether or not aggressive query verification is enabled
+	//! Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
+	//! Whether or not verification of external operators is enabled, used for testing
+	bool verify_external = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
@@ -80,6 +82,10 @@ public:
 	static ClientConfig &GetConfig(ClientContext &context);
 
 	static string ExtractTimezoneFromConfig(ClientConfig &config);
+
+	bool AnyVerification() {
+		return query_verification_enabled || verify_external;
+	}
 };
 
 } // namespace duckdb

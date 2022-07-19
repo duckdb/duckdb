@@ -18,7 +18,7 @@ public:
 	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement);
 
 	bool ForceExternal() const override {
-		return false;
+		return true;
 	}
 };
 

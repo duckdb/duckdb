@@ -565,7 +565,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
 	// check if we are on AutoCommit. In this case we should start a transaction.
-	if (statement && config.query_verification_enabled) {
+	if (statement && config.AnyVerification()) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties

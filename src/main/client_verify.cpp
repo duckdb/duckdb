@@ -17,11 +17,17 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	const auto &stmt = *statement;
 	vector<unique_ptr<StatementVerifier>> statement_verifiers;
-	statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
-	statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
-	statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::PARSED, stmt));
-	statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
-	auto prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
+	unique_ptr<StatementVerifier> prepared_statement_verifier;
+	if (config.query_verification_enabled) {
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::COPIED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::DESERIALIZED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::PARSED, stmt));
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::UNOPTIMIZED, stmt));
+		prepared_statement_verifier = StatementVerifier::Create(VerificationType::PREPARED, stmt);
+	}
+	if (config.verify_external) {
+		statement_verifiers.emplace_back(StatementVerifier::Create(VerificationType::EXTERNAL, stmt));
+	}
 
 	auto original = make_unique<StatementVerifier>(move(statement));
 	for (auto &verifier : statement_verifiers) {
@@ -55,7 +61,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		any_failed = any_failed || failed;
 	}
 
-	if (!any_failed) {
+	if (!any_failed && prepared_statement_verifier) {
 		// If none failed, we execute the prepared statement verifier
 		prepared_statement_verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 			return RunStatementInternal(lock, q, move(s), false, false);
