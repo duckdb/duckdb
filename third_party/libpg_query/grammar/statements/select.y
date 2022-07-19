@@ -835,6 +835,15 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->sample = $3;
 					$$ = (PGNode *) n;
 				}
+			| values_clause_opt_comma alias_clause opt_tablesample_clause
+			{
+				PGRangeSubselect *n = makeNode(PGRangeSubselect);
+				n->lateral = false;
+				n->subquery = $1;
+				n->alias = $2;
+				n->sample = $3;
+				$$ = (PGNode *) n;
+			}
 			| LATERAL_P func_table func_alias_clause
 				{
 					PGRangeFunction *n = (PGRangeFunction *) $2;
@@ -965,7 +974,7 @@ joined_table:
 		;
 
 alias_clause:
-			AS ColId '(' name_list_opt_comma ')'
+			AS ColIdOrString '(' name_list_opt_comma ')'
 				{
 					$$ = makeNode(PGAlias);
 					$$->aliasname = $2;
@@ -1006,7 +1015,7 @@ func_alias_clause:
 				{
 					$$ = list_make2(NULL, $3);
 				}
-			| AS ColId '(' TableFuncElementList ')'
+			| AS ColIdOrString '(' TableFuncElementList ')'
 				{
 					PGAlias *a = makeNode(PGAlias);
 					a->aliasname = $2;
@@ -1162,7 +1171,7 @@ TableFuncElementList:
 				}
 		;
 
-TableFuncElement:	ColId Typename opt_collate_clause
+TableFuncElement:	ColIdOrString Typename opt_collate_clause
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
 					n->colname = $1;
@@ -1212,6 +1221,10 @@ colid_type_list:
             }
 
 RowOrStruct: ROW | STRUCT
+
+opt_Typename:
+			Typename						{ $$ = $1; }
+			| /*EMPTY*/						{ $$ = NULL; }
 
 Typename:	SimpleTypename opt_array_bounds
 				{
@@ -1329,7 +1342,7 @@ GenericType:
 			// 	}
 		;
 
-opt_type_modifiers: '(' expr_list_opt_comma	 ')'				{ $$ = $2; }
+opt_type_modifiers: '(' opt_expr_list_opt_comma	 ')'				{ $$ = $2; }
 					| /* EMPTY */					{ $$ = NIL; }
 		;
 
@@ -1787,7 +1800,6 @@ a_expr:		c_expr									{ $$ = $1; }
 				{ $$ = makeNotExpr($2, @1); }
 			| NOT_LA a_expr						%prec NOT
 				{ $$ = makeNotExpr($2, @1); }
-
 			| a_expr GLOB a_expr %prec GLOB
 				{
 					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_GLOB, "~~~",
@@ -1936,7 +1948,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| a_expr LAMBDA_ARROW a_expr %prec Op
+			| a_expr LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
 				n->lhs = $1;
@@ -1944,6 +1956,10 @@ a_expr:		c_expr									{ $$ = $1; }
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
+			| a_expr DOUBLE_ARROW a_expr %prec Op
+                        {
+                                        $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "->>", $1, $3, @2);
+                        }
 			| row OVERLAPS row
 				{
 					if (list_length($1) != 2)
@@ -2115,6 +2131,17 @@ a_expr:		c_expr									{ $$ = $1; }
 						$$ = (PGNode *) makeAExpr(PG_AEXPR_OP_ANY, $2, $1, $5, @2);
 					else
 						$$ = (PGNode *) makeAExpr(PG_AEXPR_OP_ALL, $2, $1, $5, @2);
+				}
+			| ARRAY select_with_parens
+				{
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_ARRAY_SUBLINK;
+					n->subLinkId = 0;
+					n->testexpr = NULL;
+					n->operName = NULL;
+					n->subselect = $2;
+					n->location = @2;
+					$$ = (PGNode *)n;
 				}
 			| DEFAULT
 				{
@@ -2611,6 +2638,7 @@ within_group_clause:
 
 filter_clause:
 			FILTER '(' WHERE a_expr ')'				{ $$ = $4; }
+			| FILTER '(' a_expr ')'					{ $$ = $3; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
@@ -2961,17 +2989,6 @@ expr_list_opt_comma:
 			expr_list ','
 				{
 					$$ = $1;
-				}
-		;
-
-opt_expr_list:
-			expr_list
-				{
-					$$ = $1;
-				}
-			| /* empty */
-				{
-					$$ = NULL;
 				}
 		;
 
@@ -3422,7 +3439,7 @@ name_list_opt_comma:
 			| name_list ','							{ $$ = $1; }
 		;
 
-name:		ColId									{ $$ = $1; };
+name:		ColIdOrString							{ $$ = $1; };
 
 attr_name:	ColLabel								{ $$ = $1; };
 
@@ -3611,7 +3628,7 @@ attrs:		'.' attr_name
 		;
 
 opt_name_list:
-			'(' name_list ')'						{ $$ = $2; }
+			'(' name_list_opt_comma ')'						{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 

@@ -1,0 +1,77 @@
+# name: test/sql/types/alias/test_alias_struct.test
+# description: Test creates alias for struct type
+# group: [alias]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE POINT AS STRUCT(i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE a(b POINT);
+
+statement ok
+INSERT INTO a VALUES ({'i': 3, 'j': 4});
+
+query I
+SELECT * FROM a;
+----
+{'i': 3, 'j': 4}
+
+query I
+SELECT * FROM a;
+----
+{'i': 3, 'j': 4}
+
+statement ok
+INSERT INTO a VALUES (NULL);
+
+query I
+SELECT * FROM a;
+----
+{'i': 3, 'j': 4}
+NULL
+
+# unnamed struct
+statement ok
+INSERT INTO a VALUES (ROW(2, 3));
+
+query I
+SELECT * FROM a;
+----
+{'i': 3, 'j': 4}
+NULL
+{'i': 2, 'j': 3}
+
+# null values in children
+statement ok
+INSERT INTO a VALUES (ROW(3, NULL)), (ROW(NULL, 4));
+
+query I
+SELECT * FROM a;
+----
+{'i': 3, 'j': 4}
+NULL
+{'i': 2, 'j': 3}
+{'i': 3, 'j': NULL}
+{'i': NULL, 'j': 4}
+
+# incorrect number of struct entries
+statement error
+INSERT INTO a VALUES (ROW(1, 2, 3))
+
+statement error
+INSERT INTO a VALUES (ROW(1))
+
+# incorrect types
+statement error
+INSERT INTO a VALUES (ROW('hello', 1))
+
+statement error
+INSERT INTO a VALUES (ROW('hello', [1, 2]))
+
+statement error
+INSERT INTO a VALUES (ROW(1, ROW(1, 7)))

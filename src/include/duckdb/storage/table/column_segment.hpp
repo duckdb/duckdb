@@ -76,7 +76,7 @@ public:
 	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the segment, returns the amount of entries successfully appended
-	idx_t Append(ColumnAppendState &state, VectorData &data, idx_t offset, idx_t count);
+	idx_t Append(ColumnAppendState &state, UnifiedVectorFormat &data, idx_t offset, idx_t count);
 	//! Finalize the segment for appending - no more appends can follow on this segment
 	//! The segment should be compacted as much as possible
 	//! Returns the number of bytes occupied within the segment

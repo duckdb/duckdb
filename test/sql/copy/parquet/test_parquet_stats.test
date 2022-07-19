@@ -4,6 +4,9 @@
 
 require parquet
 
+require skip_reload
+
+
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY
 

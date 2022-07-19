@@ -119,6 +119,14 @@ struct EnableExternalAccessSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct AllowUnsignedExtensionsSetting {
+	static constexpr const char *Name = "allow_unsigned_extensions";
+	static constexpr const char *Description = "Allow to load extensions with invalid or missing signatures";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "Whether or not object cache is used to cache e.g. Parquet metadata";
@@ -158,6 +166,14 @@ struct ExternalThreadsSetting {
 	static constexpr const char *Description = "The number of external threads that work on DuckDB tasks.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct FileSearchPathSetting {
+	static constexpr const char *Name = "file_search_path";
+	static constexpr const char *Description = "A comma separated list of directories to search for input files";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
 

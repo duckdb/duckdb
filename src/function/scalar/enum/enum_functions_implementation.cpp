@@ -61,8 +61,15 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	result.Reference(val);
 }
 
+static void CheckEnumParameter(const Expression &expr) {
+	if (expr.HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+}
+
 unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction &bound_function,
                                           vector<unique_ptr<Expression>> &arguments) {
+	CheckEnumParameter(*arguments[0]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
@@ -71,6 +78,8 @@ unique_ptr<FunctionData> BindEnumFunction(ClientContext &context, ScalarFunction
 
 unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, ScalarFunction &bound_function,
                                                        vector<unique_ptr<Expression>> &arguments) {
+	CheckEnumParameter(*arguments[0]);
+	CheckEnumParameter(*arguments[1]);
 	if (arguments[0]->return_type.id() != LogicalTypeId::ENUM && arguments[0]->return_type != LogicalType::SQLNULL) {
 		throw BinderException("This function needs an ENUM as an argument");
 	}
@@ -83,31 +92,38 @@ unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(ClientContext &context, S
 	if (arguments[0]->return_type.id() == LogicalTypeId::ENUM &&
 	    arguments[1]->return_type.id() == LogicalTypeId::ENUM &&
 	    arguments[0]->return_type != arguments[1]->return_type) {
-
 		throw BinderException("The parameters need to link to ONLY one enum OR be NULL ");
 	}
 	return nullptr;
 }
 
 void EnumFirst::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_first", {LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, false,
-	                               BindEnumFunction));
+	auto fun =
+	    ScalarFunction("enum_first", {LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 void EnumLast::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_last", {LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, false,
-	                               BindEnumFunction));
+	auto fun =
+	    ScalarFunction("enum_last", {LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 void EnumRange::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_range", {LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
-	                               EnumRangeFunction, false, BindEnumFunction));
+	auto fun = ScalarFunction("enum_range", {LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
+	                          EnumRangeFunction, BindEnumFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 void EnumRangeBoundary::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
-	                               LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction, false,
-	                               BindEnumRangeBoundaryFunction));
+	auto fun = ScalarFunction("enum_range_boundary", {LogicalType::ANY, LogicalType::ANY},
+	                          LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction,
+	                          BindEnumRangeBoundaryFunction);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

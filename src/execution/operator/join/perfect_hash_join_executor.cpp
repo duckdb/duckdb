@@ -99,8 +99,8 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	}
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
-	VectorData vector_data;
-	source.Orrify(count, vector_data);
+	UnifiedVectorFormat vector_data;
+	source.ToUnifiedFormat(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
@@ -127,6 +127,16 @@ bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 //===--------------------------------------------------------------------===//
 class PerfectHashJoinState : public OperatorState {
 public:
+	PerfectHashJoinState(Allocator &allocator, const PhysicalHashJoin &join) : probe_executor(allocator) {
+		join_keys.Initialize(allocator, join.condition_types);
+		for (auto &cond : join.conditions) {
+			probe_executor.AddExpression(*cond.left);
+		}
+		build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+		probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+		seq_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	}
+
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	SelectionVector build_sel_vec;
@@ -134,15 +144,8 @@ public:
 	SelectionVector seq_sel_vec;
 };
 
-unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ClientContext &context) {
-	auto state = make_unique<PerfectHashJoinState>();
-	state->join_keys.Initialize(join.condition_types);
-	for (auto &cond : join.conditions) {
-		state->probe_executor.AddExpression(*cond.left);
-	}
-	state->build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
-	state->probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
-	state->seq_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionContext &context) {
+	auto state = make_unique<PerfectHashJoinState>(Allocator::Get(context.client), join);
 	return move(state);
 }
 
@@ -219,8 +222,8 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 
-	VectorData vector_data;
-	source.Orrify(count, vector_data);
+	UnifiedVectorFormat vector_data;
+	source.ToUnifiedFormat(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
 	auto validity_mask = &vector_data.validity;
 	// build selection vector for non-dense build

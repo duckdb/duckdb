@@ -10,5 +10,5 @@ PRAGMA enable_verification
 query IIIIIIIIIIIIIIII
 select * from parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet')
 ----
-160000 values hashing to 06285f9574c31130c01a6723d3d667ec
+160000 values hashing to 96cd23a0712a6a753aedcb8a2bcfcfa0
 

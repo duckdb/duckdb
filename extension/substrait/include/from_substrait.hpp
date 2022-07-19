@@ -34,6 +34,8 @@ private:
 	unique_ptr<ParsedExpression> TransformScalarFunctionExpr(const substrait::Expression &sexpr);
 	unique_ptr<ParsedExpression> TransformIfThenExpr(const substrait::Expression &sexpr);
 	unique_ptr<ParsedExpression> TransformCastExpr(const substrait::Expression &sexpr);
+	unique_ptr<ParsedExpression> TransformInExpr(const substrait::Expression &sexpr);
+
 	LogicalType SubstraitToDuckType(const ::substrait::Type &s_type);
 	//! Looks up for aggregation function in functions_map
 	string FindFunction(uint64_t id);

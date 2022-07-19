@@ -1,0 +1,18 @@
+# name: test/extension/load_test_alias.test
+# description: Enable TestAliasExtension.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+query I
+SELECT test_alias_hello();
+----
+Hello Alias!

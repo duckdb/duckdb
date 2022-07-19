@@ -100,7 +100,7 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	if (!function) {
 		throw BinderException(error);
 	}
-	return move(function);
+	return function;
 }
 
 } // namespace duckdb

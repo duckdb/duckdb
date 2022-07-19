@@ -40,13 +40,13 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
 }
 
 duckdb_execute <- function(res) {
-  out <- rapi_execute(res@stmt_lst$ref, res@arrow)
+  out <- rapi_execute(res@stmt_lst$ref, res@arrow, res@connection@driver@bigint == "integer64")
   duckdb_post_execute(res, out)
 }
 
 duckdb_post_execute <- function(res, out) {
   if (!res@arrow) {
-    out <- list_to_df(out)
+    stopifnot(is.data.frame(out))
 
     if (!res@stmt_lst$type %in% c("SELECT", "EXPLAIN")) {
       res@env$rows_affected <- sum(as.numeric(out[[1]]))
@@ -56,15 +56,6 @@ duckdb_post_execute <- function(res, out) {
   }
 
   out
-}
-
-list_to_df <- function(x) {
-  if (is.data.frame(x)) {
-    return(x)
-  }
-  attr(x, "row.names") <- c(NA_integer_, -length(x[[1]]))
-  class(x) <- "data.frame"
-  x
 }
 
 # as per is.integer documentation

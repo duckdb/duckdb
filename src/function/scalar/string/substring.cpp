@@ -169,9 +169,9 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                          FunctionData *bind_data,
-                                                          vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
 		return nullptr;
@@ -187,10 +187,10 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet substr("substring");
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
-	                                  LogicalType::VARCHAR, SubstringFunction, false, false, nullptr, nullptr,
+	                                  LogicalType::VARCHAR, SubstringFunction, nullptr, nullptr,
 	                                  SubstringPropagateStats));
 	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
-	                                  SubstringFunction, false, false, nullptr, nullptr, SubstringPropagateStats));
+	                                  SubstringFunction, nullptr, nullptr, SubstringPropagateStats));
 	set.AddFunction(substr);
 	substr.name = "substr";
 	set.AddFunction(substr);

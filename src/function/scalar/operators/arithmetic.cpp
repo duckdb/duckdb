@@ -112,9 +112,9 @@ struct SubtractPropagateStatistics {
 };
 
 template <class OP, class PROPAGATE, class BASEOP>
-static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                        FunctionData *bind_data,
-                                                        vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 2);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0] || !child_stats[1]) {
@@ -234,7 +234,7 @@ unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &
 ScalarFunction AddFun::GetFunction(const LogicalType &type) {
 	D_ASSERT(type.IsNumeric());
 	if (type.id() == LogicalTypeId::DECIMAL) {
-		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, false, NopDecimalBind);
+		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, NopDecimalBind);
 	} else {
 		return ScalarFunction("+", {type}, type, ScalarFunction::NopFunction);
 	}
@@ -243,13 +243,12 @@ ScalarFunction AddFun::GetFunction(const LogicalType &type) {
 ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
-			return ScalarFunction("+", {left_type, right_type}, left_type, nullptr, false,
+			return ScalarFunction("+", {left_type, right_type}, left_type, nullptr,
 			                      BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
 		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
-			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), false,
-			                      nullptr, nullptr,
-			                      PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
+			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
+			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 		} else {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
@@ -345,6 +344,9 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
+
+	functions.name = "add";
+	set.AddFunction(functions);
 }
 
 //===--------------------------------------------------------------------===//
@@ -422,9 +424,9 @@ struct NegatePropagateStatistics {
 	}
 };
 
-static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, BoundFunctionExpression &expr,
-                                                       FunctionData *bind_data,
-                                                       vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -471,24 +473,24 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
 		return ScalarFunction("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
-		return ScalarFunction("-", {type}, type, nullptr, false, DecimalNegateBind, nullptr, NegateBindStatistics);
+		return ScalarFunction("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
 	} else {
 		D_ASSERT(type.IsNumeric());
-		return ScalarFunction("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), false,
-		                      nullptr, nullptr, NegateBindStatistics);
+		return ScalarFunction("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
+		                      nullptr, NegateBindStatistics);
 	}
 }
 
 ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const LogicalType &right_type) {
 	if (left_type.IsNumeric() && left_type.id() == right_type.id()) {
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
-			return ScalarFunction("-", {left_type, right_type}, left_type, nullptr, false,
+			return ScalarFunction("-", {left_type, right_type}, left_type, nullptr,
 			                      BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
 			return ScalarFunction(
 			    "-", {left_type, right_type}, left_type,
-			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), false, nullptr,
-			    nullptr, PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
+			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
+			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 		} else {
 			return ScalarFunction("-", {left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
@@ -562,6 +564,9 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	// we can negate intervals
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL));
+	set.AddFunction(functions);
+
+	functions.name = "subtract";
 	set.AddFunction(functions);
 }
 
@@ -677,23 +682,26 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet functions("*");
 	for (auto &type : LogicalType::Numeric()) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
-			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, true, false, BindDecimalMultiply));
+			functions.AddFunction(ScalarFunction({type, type}, type, nullptr, BindDecimalMultiply));
 		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
 			functions.AddFunction(ScalarFunction(
-			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()), true,
-			    false, nullptr, nullptr,
+			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
+			    nullptr, nullptr,
 			    PropagateNumericStats<TryMultiplyOperator, MultiplyPropagateStatistics, MultiplyOperator>));
 		} else {
-			functions.AddFunction(ScalarFunction({type, type}, type,
-			                                     GetScalarBinaryFunction<MultiplyOperator>(type.InternalType()), true));
+			functions.AddFunction(
+			    ScalarFunction({type, type}, type, GetScalarBinaryFunction<MultiplyOperator>(type.InternalType())));
 		}
 	}
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>, true));
+	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTERVAL}, LogicalType::INTERVAL,
-	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>, true));
+	                   ScalarFunction::BinaryFunction<int64_t, interval_t, interval_t, MultiplyOperator>));
+	set.AddFunction(functions);
+
+	functions.name = "multiply";
 	set.AddFunction(functions);
 }
 
@@ -815,6 +823,9 @@ void DivideFun::RegisterFunction(BuiltinFunctions &set) {
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::BIGINT}, LogicalType::INTERVAL,
 	                   BinaryScalarFunctionIgnoreZero<interval_t, int64_t, interval_t, DivideOperator>));
 
+	set.AddFunction(functions);
+
+	functions.name = "divide";
 	set.AddFunction(functions);
 }
 

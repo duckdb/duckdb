@@ -61,6 +61,7 @@
 #include <google/protobuf/stubs/hash.h>
 
 #include <google/protobuf/port_def.inc>
+namespace duckdb {
 
 namespace google {
 namespace protobuf {
@@ -70,304 +71,289 @@ namespace internal {
 // TODO(gerbens) make this factorized better. This should not have to hop
 // to reflection. Currently uses GeneratedMessageReflection and thus is
 // defined in generated_message_reflection.cc
-void RegisterFileLevelMetadata(const DescriptorTable* descriptor_table);
+void RegisterFileLevelMetadata(const DescriptorTable *descriptor_table);
 
-}  // namespace internal
+} // namespace internal
 
 using internal::ReflectionOps;
 using internal::WireFormat;
 using internal::WireFormatLite;
 
-void Message::MergeFrom(const Message& from) {
-  auto* class_to = GetClassData();
-  auto* class_from = from.GetClassData();
-  auto* merge_to_from = class_to ? class_to->merge_to_from : nullptr;
-  if (class_to == nullptr || class_to != class_from) {
-    merge_to_from = [](Message* to, const Message& from) {
-      ReflectionOps::Merge(from, to);
-    };
-  }
-  merge_to_from(this, from);
+void Message::MergeFrom(const Message &from) {
+	auto *class_to = GetClassData();
+	auto *class_from = from.GetClassData();
+	auto *merge_to_from = class_to ? class_to->merge_to_from : nullptr;
+	if (class_to == nullptr || class_to != class_from) {
+		merge_to_from = [](Message *to, const Message &from) {
+			ReflectionOps::Merge(from, to);
+		};
+	}
+	merge_to_from(this, from);
 }
 
-void Message::CheckTypeAndMergeFrom(const MessageLite& other) {
-  MergeFrom(*down_cast<const Message*>(&other));
+void Message::CheckTypeAndMergeFrom(const MessageLite &other) {
+	MergeFrom(*down_cast<const Message *>(&other));
 }
 
-void Message::CopyFrom(const Message& from) {
-  if (&from == this) return;
+void Message::CopyFrom(const Message &from) {
+	if (&from == this)
+		return;
 
-  auto* class_to = GetClassData();
-  auto* class_from = from.GetClassData();
-  auto* copy_to_from = class_to ? class_to->copy_to_from : nullptr;
+	auto *class_to = GetClassData();
+	auto *class_from = from.GetClassData();
+	auto *copy_to_from = class_to ? class_to->copy_to_from : nullptr;
 
-  if (class_to == nullptr || class_to != class_from) {
-    const Descriptor* descriptor = GetDescriptor();
-    GOOGLE_CHECK_EQ(from.GetDescriptor(), descriptor)
-        << ": Tried to copy from a message with a different type. "
-           "to: "
-        << descriptor->full_name()
-        << ", "
-           "from: "
-        << from.GetDescriptor()->full_name();
-    copy_to_from = [](Message* to, const Message& from) {
-      ReflectionOps::Copy(from, to);
-    };
-  }
-  copy_to_from(this, from);
+	if (class_to == nullptr || class_to != class_from) {
+		const Descriptor *descriptor = GetDescriptor();
+		GOOGLE_CHECK_EQ(from.GetDescriptor(), descriptor) << ": Tried to copy from a message with a different type. "
+		                                                     "to: "
+		                                                  << descriptor->full_name()
+		                                                  << ", "
+		                                                     "from: "
+		                                                  << from.GetDescriptor()->full_name();
+		copy_to_from = [](Message *to, const Message &from) {
+			ReflectionOps::Copy(from, to);
+		};
+	}
+	copy_to_from(this, from);
 }
 
-void Message::CopyWithSizeCheck(Message* to, const Message& from) {
+void Message::CopyWithSizeCheck(Message *to, const Message &from) {
 #ifndef NDEBUG
-  size_t from_size = from.ByteSizeLong();
+	size_t from_size = from.ByteSizeLong();
 #endif
-  to->Clear();
+	to->Clear();
 #ifndef NDEBUG
-  GOOGLE_CHECK_EQ(from_size, from.ByteSizeLong())
-      << "Source of CopyFrom changed when clearing target.  Either "
-         "source is a nested message in target (not allowed), or "
-         "another thread is modifying the source.";
+	GOOGLE_CHECK_EQ(from_size, from.ByteSizeLong()) << "Source of CopyFrom changed when clearing target.  Either "
+	                                                   "source is a nested message in target (not allowed), or "
+	                                                   "another thread is modifying the source.";
 #endif
-  to->GetClassData()->merge_to_from(to, from);
+	to->GetClassData()->merge_to_from(to, from);
 }
 
 std::string Message::GetTypeName() const {
-  return GetDescriptor()->full_name();
+	return GetDescriptor()->full_name();
 }
 
-void Message::Clear() { ReflectionOps::Clear(this); }
+void Message::Clear() {
+	ReflectionOps::Clear(this);
+}
 
 bool Message::IsInitialized() const {
-  return ReflectionOps::IsInitialized(*this);
+	return ReflectionOps::IsInitialized(*this);
 }
 
-void Message::FindInitializationErrors(std::vector<std::string>* errors) const {
-  return ReflectionOps::FindInitializationErrors(*this, "", errors);
+void Message::FindInitializationErrors(std::vector<std::string> *errors) const {
+	return ReflectionOps::FindInitializationErrors(*this, "", errors);
 }
 
 std::string Message::InitializationErrorString() const {
-  std::vector<std::string> errors;
-  FindInitializationErrors(&errors);
-  return Join(errors, ", ");
+	std::vector<std::string> errors;
+	FindInitializationErrors(&errors);
+	return Join(errors, ", ");
 }
 
 void Message::CheckInitialized() const {
-  GOOGLE_CHECK(IsInitialized()) << "Message of type \"" << GetDescriptor()->full_name()
-                         << "\" is missing required fields: "
-                         << InitializationErrorString();
+	GOOGLE_CHECK(IsInitialized()) << "Message of type \"" << GetDescriptor()->full_name()
+	                              << "\" is missing required fields: " << InitializationErrorString();
 }
 
 void Message::DiscardUnknownFields() {
-  return ReflectionOps::DiscardUnknownFields(this);
+	return ReflectionOps::DiscardUnknownFields(this);
 }
 
-const char* Message::_InternalParse(const char* ptr,
-                                    internal::ParseContext* ctx) {
-  return WireFormat::_InternalParse(this, ptr, ctx);
+const char *Message::_InternalParse(const char *ptr, internal::ParseContext *ctx) {
+	return WireFormat::_InternalParse(this, ptr, ctx);
 }
 
-uint8_t* Message::_InternalSerialize(uint8_t* target,
-                                     io::EpsCopyOutputStream* stream) const {
-  return WireFormat::_InternalSerialize(*this, target, stream);
+uint8_t *Message::_InternalSerialize(uint8_t *target, io::EpsCopyOutputStream *stream) const {
+	return WireFormat::_InternalSerialize(*this, target, stream);
 }
 
 size_t Message::ByteSizeLong() const {
-  size_t size = WireFormat::ByteSize(*this);
-  SetCachedSize(internal::ToCachedSize(size));
-  return size;
+	size_t size = WireFormat::ByteSize(*this);
+	SetCachedSize(internal::ToCachedSize(size));
+	return size;
 }
 
 void Message::SetCachedSize(int /* size */) const {
-  GOOGLE_LOG(FATAL) << "Message class \"" << GetDescriptor()->full_name()
-             << "\" implements neither SetCachedSize() nor ByteSize().  "
-                "Must implement one or the other.";
+	GOOGLE_LOG(FATAL) << "Message class \"" << GetDescriptor()->full_name()
+	                  << "\" implements neither SetCachedSize() nor ByteSize().  "
+	                     "Must implement one or the other.";
 }
 
-size_t Message::ComputeUnknownFieldsSize(
-    size_t total_size, internal::CachedSize* cached_size) const {
-  total_size += WireFormat::ComputeUnknownFieldsSize(
-      _internal_metadata_.unknown_fields<UnknownFieldSet>(
-          UnknownFieldSet::default_instance));
-  cached_size->Set(internal::ToCachedSize(total_size));
-  return total_size;
+size_t Message::ComputeUnknownFieldsSize(size_t total_size, internal::CachedSize *cached_size) const {
+	total_size += WireFormat::ComputeUnknownFieldsSize(
+	    _internal_metadata_.unknown_fields<UnknownFieldSet>(UnknownFieldSet::default_instance));
+	cached_size->Set(internal::ToCachedSize(total_size));
+	return total_size;
 }
 
-size_t Message::MaybeComputeUnknownFieldsSize(
-    size_t total_size, internal::CachedSize* cached_size) const {
-  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
-    return ComputeUnknownFieldsSize(total_size, cached_size);
-  }
-  cached_size->Set(internal::ToCachedSize(total_size));
-  return total_size;
+size_t Message::MaybeComputeUnknownFieldsSize(size_t total_size, internal::CachedSize *cached_size) const {
+	if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+		return ComputeUnknownFieldsSize(total_size, cached_size);
+	}
+	cached_size->Set(internal::ToCachedSize(total_size));
+	return total_size;
 }
 
 size_t Message::SpaceUsedLong() const {
-  return GetReflection()->SpaceUsedLong(*this);
+	return GetReflection()->SpaceUsedLong(*this);
 }
 
 uint64_t Message::GetInvariantPerBuild(uint64_t salt) {
-  return salt;
+	return salt;
 }
 
 // =============================================================================
 // MessageFactory
 
-MessageFactory::~MessageFactory() {}
+MessageFactory::~MessageFactory() {
+}
 
 namespace {
 
-
-#define HASH_MAP std::unordered_map
-#define STR_HASH_FXN hash<::google::protobuf::StringPiece>
-
+#define HASH_MAP     std::unordered_map
+#define STR_HASH_FXN hash<duckdb::google::protobuf::StringPiece>
 
 class GeneratedMessageFactory final : public MessageFactory {
- public:
-  static GeneratedMessageFactory* singleton();
+public:
+	static GeneratedMessageFactory *singleton();
 
-  void RegisterFile(const google::protobuf::internal::DescriptorTable* table);
-  void RegisterType(const Descriptor* descriptor, const Message* prototype);
+	void RegisterFile(const google::protobuf::internal::DescriptorTable *table);
+	void RegisterType(const Descriptor *descriptor, const Message *prototype);
 
-  // implements MessageFactory ---------------------------------------
-  const Message* GetPrototype(const Descriptor* type) override;
+	// implements MessageFactory ---------------------------------------
+	const Message *GetPrototype(const Descriptor *type) override;
 
- private:
-  // Only written at static init time, so does not require locking.
-  HASH_MAP<StringPiece, const google::protobuf::internal::DescriptorTable*,
-           STR_HASH_FXN>
-      file_map_;
+private:
+	// Only written at static init time, so does not require locking.
+	HASH_MAP<StringPiece, const google::protobuf::internal::DescriptorTable *, STR_HASH_FXN> file_map_;
 
-  internal::WrappedMutex mutex_;
-  // Initialized lazily, so requires locking.
-  std::unordered_map<const Descriptor*, const Message*> type_map_;
+	internal::WrappedMutex mutex_;
+	// Initialized lazily, so requires locking.
+	std::unordered_map<const Descriptor *, const Message *> type_map_;
 };
 
-GeneratedMessageFactory* GeneratedMessageFactory::singleton() {
-  static auto instance =
-      internal::OnShutdownDelete(new GeneratedMessageFactory);
-  return instance;
+GeneratedMessageFactory *GeneratedMessageFactory::singleton() {
+	static auto instance = internal::OnShutdownDelete(new GeneratedMessageFactory);
+	return instance;
 }
 
-void GeneratedMessageFactory::RegisterFile(
-    const google::protobuf::internal::DescriptorTable* table) {
-  if (!InsertIfNotPresent(&file_map_, table->filename, table)) {
-    GOOGLE_LOG(FATAL) << "File is already registered: " << table->filename;
-  }
+void GeneratedMessageFactory::RegisterFile(const google::protobuf::internal::DescriptorTable *table) {
+	if (!InsertIfNotPresent(&file_map_, table->filename, table)) {
+		GOOGLE_LOG(FATAL) << "File is already registered: " << table->filename;
+	}
 }
 
-void GeneratedMessageFactory::RegisterType(const Descriptor* descriptor,
-                                           const Message* prototype) {
-  GOOGLE_DCHECK_EQ(descriptor->file()->pool(), DescriptorPool::generated_pool())
-      << "Tried to register a non-generated type with the generated "
-         "type registry.";
+void GeneratedMessageFactory::RegisterType(const Descriptor *descriptor, const Message *prototype) {
+	GOOGLE_DCHECK_EQ(descriptor->file()->pool(), DescriptorPool::generated_pool())
+	    << "Tried to register a non-generated type with the generated "
+	       "type registry.";
 
-  // This should only be called as a result of calling a file registration
-  // function during GetPrototype(), in which case we already have locked
-  // the mutex.
-  mutex_.AssertHeld();
-  if (!InsertIfNotPresent(&type_map_, descriptor, prototype)) {
-    GOOGLE_LOG(DFATAL) << "Type is already registered: " << descriptor->full_name();
-  }
+	// This should only be called as a result of calling a file registration
+	// function during GetPrototype(), in which case we already have locked
+	// the mutex.
+	mutex_.AssertHeld();
+	if (!InsertIfNotPresent(&type_map_, descriptor, prototype)) {
+		GOOGLE_LOG(DFATAL) << "Type is already registered: " << descriptor->full_name();
+	}
 }
 
+const Message *GeneratedMessageFactory::GetPrototype(const Descriptor *type) {
+	{
+		ReaderMutexLock lock(&mutex_);
+		const Message *result = FindPtrOrNull(type_map_, type);
+		if (result != nullptr)
+			return result;
+	}
 
-const Message* GeneratedMessageFactory::GetPrototype(const Descriptor* type) {
-  {
-    ReaderMutexLock lock(&mutex_);
-    const Message* result = FindPtrOrNull(type_map_, type);
-    if (result != nullptr) return result;
-  }
+	// If the type is not in the generated pool, then we can't possibly handle
+	// it.
+	if (type->file()->pool() != DescriptorPool::generated_pool())
+		return nullptr;
 
-  // If the type is not in the generated pool, then we can't possibly handle
-  // it.
-  if (type->file()->pool() != DescriptorPool::generated_pool()) return nullptr;
+	// Apparently the file hasn't been registered yet.  Let's do that now.
+	const internal::DescriptorTable *registration_data = FindPtrOrNull(file_map_, type->file()->name().c_str());
+	if (registration_data == nullptr) {
+		GOOGLE_LOG(DFATAL) << "File appears to be in generated pool but wasn't "
+		                      "registered: "
+		                   << type->file()->name();
+		return nullptr;
+	}
 
-  // Apparently the file hasn't been registered yet.  Let's do that now.
-  const internal::DescriptorTable* registration_data =
-      FindPtrOrNull(file_map_, type->file()->name().c_str());
-  if (registration_data == nullptr) {
-    GOOGLE_LOG(DFATAL) << "File appears to be in generated pool but wasn't "
-                   "registered: "
-                << type->file()->name();
-    return nullptr;
-  }
+	WriterMutexLock lock(&mutex_);
 
-  WriterMutexLock lock(&mutex_);
+	// Check if another thread preempted us.
+	const Message *result = FindPtrOrNull(type_map_, type);
+	if (result == nullptr) {
+		// Nope.  OK, register everything.
+		internal::RegisterFileLevelMetadata(registration_data);
+		// Should be here now.
+		result = FindPtrOrNull(type_map_, type);
+	}
 
-  // Check if another thread preempted us.
-  const Message* result = FindPtrOrNull(type_map_, type);
-  if (result == nullptr) {
-    // Nope.  OK, register everything.
-    internal::RegisterFileLevelMetadata(registration_data);
-    // Should be here now.
-    result = FindPtrOrNull(type_map_, type);
-  }
+	if (result == nullptr) {
+		GOOGLE_LOG(DFATAL) << "Type appears to be in generated pool but wasn't "
+		                   << "registered: " << type->full_name();
+	}
 
-  if (result == nullptr) {
-    GOOGLE_LOG(DFATAL) << "Type appears to be in generated pool but wasn't "
-                << "registered: " << type->full_name();
-  }
-
-  return result;
+	return result;
 }
 
-}  // namespace
+} // namespace
 
-MessageFactory* MessageFactory::generated_factory() {
-  return GeneratedMessageFactory::singleton();
+MessageFactory *MessageFactory::generated_factory() {
+	return GeneratedMessageFactory::singleton();
 }
 
-void MessageFactory::InternalRegisterGeneratedFile(
-    const google::protobuf::internal::DescriptorTable* table) {
-  GeneratedMessageFactory::singleton()->RegisterFile(table);
+void MessageFactory::InternalRegisterGeneratedFile(const google::protobuf::internal::DescriptorTable *table) {
+	GeneratedMessageFactory::singleton()->RegisterFile(table);
 }
 
-void MessageFactory::InternalRegisterGeneratedMessage(
-    const Descriptor* descriptor, const Message* prototype) {
-  GeneratedMessageFactory::singleton()->RegisterType(descriptor, prototype);
+void MessageFactory::InternalRegisterGeneratedMessage(const Descriptor *descriptor, const Message *prototype) {
+	GeneratedMessageFactory::singleton()->RegisterType(descriptor, prototype);
 }
-
 
 namespace {
 template <typename T>
-T* GetSingleton() {
-  static T singleton;
-  return &singleton;
+T *GetSingleton() {
+	static T singleton;
+	return &singleton;
 }
-}  // namespace
+} // namespace
 
-const internal::RepeatedFieldAccessor* Reflection::RepeatedFieldAccessor(
-    const FieldDescriptor* field) const {
-  GOOGLE_CHECK(field->is_repeated());
-  switch (field->cpp_type()) {
+const internal::RepeatedFieldAccessor *Reflection::RepeatedFieldAccessor(const FieldDescriptor *field) const {
+	GOOGLE_CHECK(field->is_repeated());
+	switch (field->cpp_type()) {
 #define HANDLE_PRIMITIVE_TYPE(TYPE, type) \
   case FieldDescriptor::CPPTYPE_##TYPE:   \
-    return GetSingleton<internal::RepeatedFieldPrimitiveAccessor<type> >();
-    HANDLE_PRIMITIVE_TYPE(INT32, int32_t)
-    HANDLE_PRIMITIVE_TYPE(UINT32, uint32_t)
-    HANDLE_PRIMITIVE_TYPE(INT64, int64_t)
-    HANDLE_PRIMITIVE_TYPE(UINT64, uint64_t)
-    HANDLE_PRIMITIVE_TYPE(FLOAT, float)
-    HANDLE_PRIMITIVE_TYPE(DOUBLE, double)
-    HANDLE_PRIMITIVE_TYPE(BOOL, bool)
-    HANDLE_PRIMITIVE_TYPE(ENUM, int32_t)
+    return GetSingleton<internal::RepeatedFieldPrimitiveAccessor<type>>();
+		HANDLE_PRIMITIVE_TYPE(INT32, int32_t)
+		HANDLE_PRIMITIVE_TYPE(UINT32, uint32_t)
+		HANDLE_PRIMITIVE_TYPE(INT64, int64_t)
+		HANDLE_PRIMITIVE_TYPE(UINT64, uint64_t)
+		HANDLE_PRIMITIVE_TYPE(FLOAT, float)
+		HANDLE_PRIMITIVE_TYPE(DOUBLE, double)
+		HANDLE_PRIMITIVE_TYPE(BOOL, bool)
+		HANDLE_PRIMITIVE_TYPE(ENUM, int32_t)
 #undef HANDLE_PRIMITIVE_TYPE
-    case FieldDescriptor::CPPTYPE_STRING:
-      switch (field->options().ctype()) {
-        default:
-        case FieldOptions::STRING:
-          return GetSingleton<internal::RepeatedPtrFieldStringAccessor>();
-      }
-      break;
-    case FieldDescriptor::CPPTYPE_MESSAGE:
-      if (field->is_map()) {
-        return GetSingleton<internal::MapFieldAccessor>();
-      } else {
-        return GetSingleton<internal::RepeatedPtrFieldMessageAccessor>();
-      }
-  }
-  GOOGLE_LOG(FATAL) << "Should not reach here.";
-  return nullptr;
+	case FieldDescriptor::CPPTYPE_STRING:
+		switch (field->options().ctype()) {
+		default:
+		case FieldOptions::STRING:
+			return GetSingleton<internal::RepeatedPtrFieldStringAccessor>();
+		}
+		break;
+	case FieldDescriptor::CPPTYPE_MESSAGE:
+		if (field->is_map()) {
+			return GetSingleton<internal::MapFieldAccessor>();
+		} else {
+			return GetSingleton<internal::RepeatedPtrFieldMessageAccessor>();
+		}
+	}
+	GOOGLE_LOG(FATAL) << "Should not reach here.";
+	return nullptr;
 }
 
 namespace internal {
@@ -377,10 +363,9 @@ template <>
 // #240
 PROTOBUF_NOINLINE
 #endif
-    Message*
-    GenericTypeHandler<Message>::NewFromPrototype(const Message* prototype,
-                                                  Arena* arena) {
-  return prototype->New(arena);
+    Message *
+    GenericTypeHandler<Message>::NewFromPrototype(const Message *prototype, Arena *arena) {
+	return prototype->New(arena);
 }
 template <>
 #if defined(_MSC_VER) && (_MSC_VER >= 1800)
@@ -388,13 +373,13 @@ template <>
 // #240
 PROTOBUF_NOINLINE
 #endif
-    Arena*
-    GenericTypeHandler<Message>::GetOwningArena(Message* value) {
-  return value->GetOwningArena();
+    Arena *
+    GenericTypeHandler<Message>::GetOwningArena(Message *value) {
+	return value->GetOwningArena();
 }
-}  // namespace internal
+} // namespace internal
 
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace protobuf
+} // namespace google
+} //namespace duckdb
 #include <google/protobuf/port_undef.inc>

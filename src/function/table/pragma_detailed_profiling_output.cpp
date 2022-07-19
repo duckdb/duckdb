@@ -111,11 +111,11 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableF
 
 	if (!state.initialized) {
 		// create a ChunkCollection
-		auto collection = make_unique<ChunkCollection>();
+		auto collection = make_unique<ChunkCollection>(context);
 
 		// create a chunk
 		DataChunk chunk;
-		chunk.Initialize(data.types);
+		chunk.Initialize(context, data.types);
 
 		// Initialize ids
 		int operator_counter = 1;

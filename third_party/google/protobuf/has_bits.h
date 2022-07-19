@@ -39,78 +39,81 @@
 #ifdef SWIG
 #error "You cannot SWIG proto headers"
 #endif
-
+namespace duckdb {
 namespace google {
 namespace protobuf {
 namespace internal {
 
 template <size_t doublewords>
 class HasBits {
- public:
-  PROTOBUF_NDEBUG_INLINE constexpr HasBits() : has_bits_{} {}
+public:
+	PROTOBUF_NDEBUG_INLINE constexpr HasBits() : has_bits_ {} {
+	}
 
-  PROTOBUF_NDEBUG_INLINE void Clear() {
-    memset(has_bits_, 0, sizeof(has_bits_));
-  }
+	PROTOBUF_NDEBUG_INLINE void Clear() {
+		memset(has_bits_, 0, sizeof(has_bits_));
+	}
 
-  PROTOBUF_NDEBUG_INLINE uint32_t& operator[](int index) {
-    return has_bits_[index];
-  }
+	PROTOBUF_NDEBUG_INLINE uint32_t &operator[](int index) {
+		return has_bits_[index];
+	}
 
-  PROTOBUF_NDEBUG_INLINE const uint32_t& operator[](int index) const {
-    return has_bits_[index];
-  }
+	PROTOBUF_NDEBUG_INLINE const uint32_t &operator[](int index) const {
+		return has_bits_[index];
+	}
 
-  bool operator==(const HasBits<doublewords>& rhs) const {
-    return memcmp(has_bits_, rhs.has_bits_, sizeof(has_bits_)) == 0;
-  }
+	bool operator==(const HasBits<doublewords> &rhs) const {
+		return memcmp(has_bits_, rhs.has_bits_, sizeof(has_bits_)) == 0;
+	}
 
-  bool operator!=(const HasBits<doublewords>& rhs) const {
-    return !(*this == rhs);
-  }
+	bool operator!=(const HasBits<doublewords> &rhs) const {
+		return !(*this == rhs);
+	}
 
-  void Or(const HasBits<doublewords>& rhs) {
-    for (size_t i = 0; i < doublewords; i++) has_bits_[i] |= rhs[i];
-  }
+	void Or(const HasBits<doublewords> &rhs) {
+		for (size_t i = 0; i < doublewords; i++)
+			has_bits_[i] |= rhs[i];
+	}
 
-  bool empty() const;
+	bool empty() const;
 
- private:
-  uint32_t has_bits_[doublewords];
+private:
+	uint32_t has_bits_[doublewords];
 };
 
 template <>
 inline bool HasBits<1>::empty() const {
-  return !has_bits_[0];
+	return !has_bits_[0];
 }
 
 template <>
 inline bool HasBits<2>::empty() const {
-  return !(has_bits_[0] | has_bits_[1]);
+	return !(has_bits_[0] | has_bits_[1]);
 }
 
 template <>
 inline bool HasBits<3>::empty() const {
-  return !(has_bits_[0] | has_bits_[1] | has_bits_[2]);
+	return !(has_bits_[0] | has_bits_[1] | has_bits_[2]);
 }
 
 template <>
 inline bool HasBits<4>::empty() const {
-  return !(has_bits_[0] | has_bits_[1] | has_bits_[2] | has_bits_[3]);
+	return !(has_bits_[0] | has_bits_[1] | has_bits_[2] | has_bits_[3]);
 }
 
 template <size_t doublewords>
 inline bool HasBits<doublewords>::empty() const {
-  for (size_t i = 0; i < doublewords; ++i) {
-    if (has_bits_[i]) return false;
-  }
-  return true;
+	for (size_t i = 0; i < doublewords; ++i) {
+		if (has_bits_[i])
+			return false;
+	}
+	return true;
 }
 
-}  // namespace internal
-}  // namespace protobuf
-}  // namespace google
-
+} // namespace internal
+} // namespace protobuf
+} // namespace google
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_HAS_BITS_H__

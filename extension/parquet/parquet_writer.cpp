@@ -151,7 +151,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.converted_type = ConvertedType::TIME_MICROS;
 		schema_ele.__isset.converted_type = true;
 		schema_ele.logicalType.__isset.TIME = true;
-		schema_ele.logicalType.TIME.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIME.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIME_TZ);
 		schema_ele.logicalType.TIME.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ:
@@ -162,7 +162,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = (duckdb_type.id() == LogicalTypeId::TIMESTAMP_TZ);
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MICROS = true;
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -170,7 +170,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
 		schema_ele.__isset.converted_type = true;
 		schema_ele.__isset.logicalType = true;
 		schema_ele.logicalType.__isset.TIMESTAMP = true;
-		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = true;
+		schema_ele.logicalType.TIMESTAMP.isAdjustedToUTC = false;
 		schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS = true;
 		break;
 	case LogicalTypeId::ENUM:
@@ -261,16 +261,22 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	auto &chunks = buffer.Chunks();
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group);
-		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
-			column_writers[col_idx]->Prepare(*write_state, nullptr, chunks[chunk_idx]->data[col_idx],
-			                                 chunks[chunk_idx]->size());
+		const unique_ptr<ColumnWriter> &col_writer = column_writers[col_idx];
+		auto write_state = col_writer->InitializeWriteState(row_group);
+		if (col_writer->HasAnalyze()) {
+			for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
+				col_writer->Analyze(*write_state, nullptr, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
+			}
+			col_writer->FinalizeAnalyze(*write_state);
 		}
-		column_writers[col_idx]->BeginWrite(*write_state);
 		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
-			column_writers[col_idx]->Write(*write_state, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
+			col_writer->Prepare(*write_state, nullptr, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
 		}
-		column_writers[col_idx]->FinalizeWrite(*write_state);
+		col_writer->BeginWrite(*write_state);
+		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
+			col_writer->Write(*write_state, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
+		}
+		col_writer->FinalizeWrite(*write_state);
 	}
 
 	// append the row group to the file meta data

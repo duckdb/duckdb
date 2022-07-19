@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include "duckdb/common/mutex.hpp"
 
@@ -27,6 +28,14 @@ struct TableScanLocalState : public LocalTableFunctionState {
 	vector<column_t> column_ids;
 };
 
+static storage_t GetStorageIndex(TableCatalogEntry &table, column_t column_id) {
+	if (column_id == DConstants::INVALID_INDEX) {
+		return column_id;
+	}
+	auto &col = table.columns[column_id];
+	return col.StorageOid();
+}
+
 struct TableScanGlobalState : public GlobalTableFunctionState {
 	TableScanGlobalState(ClientContext &context, const FunctionData *bind_data_p) {
 		D_ASSERT(bind_data_p);
@@ -43,12 +52,17 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
+	auto &bind_data = (TableScanBindData &)*input.bind_data;
 	result->column_ids = input.column_ids;
+	for (auto &col : result->column_ids) {
+		auto storage_idx = GetStorageIndex(*bind_data.table, col);
+		col = storage_idx;
+	}
 	result->scan_state.table_filters = input.filters;
-	TableScanParallelStateNext(context, input.bind_data, result.get(), gstate);
+	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
@@ -68,7 +82,8 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 		// we don't emit any statistics for tables that have outstanding transaction-local data
 		return nullptr;
 	}
-	return bind_data.table->storage->GetStatistics(context, column_id);
+	auto storage_idx = GetStorageIndex(*bind_data.table, column_id);
+	return bind_data.table->storage->GetStatistics(context, storage_idx);
 }
 
 static void TableScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -209,6 +224,11 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	auto table = bind_data.table;
 	auto &storage = *table->storage;
 
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_optimizer) {
+		// we only push index scans if the optimizer is enabled
+		return;
+	}
 	if (bind_data.is_index_scan) {
 		return;
 	}
@@ -321,6 +341,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
+				get.function.name = "index_scan";
 				get.function.init_local = nullptr;
 				get.function.init_global = IndexScanInitGlobal;
 				get.function.function = IndexScanFunction;

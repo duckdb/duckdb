@@ -21,7 +21,7 @@ public:
 	DatabaseInstance &db;
 
 	//! Temporary buffer
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 	//! The block on-disk to which we are writing
 	block_id_t block_id;
 	//! The offset within the current block

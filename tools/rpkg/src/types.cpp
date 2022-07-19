@@ -8,7 +8,7 @@
 
 using namespace duckdb;
 
-RType RApiTypes::DetectRType(SEXP v) {
+RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
@@ -60,11 +60,61 @@ RType RApiTypes::DetectRType(SEXP v) {
 	} else if (TYPEOF(v) == INTSXP) {
 		return RType::INTEGER;
 	} else if (TYPEOF(v) == REALSXP) {
+		if (integer64 && Rf_inherits(v, "integer64")) {
+			return RType::INTEGER64;
+		}
 		return RType::NUMERIC;
 	} else if (TYPEOF(v) == STRSXP) {
 		return RType::STRING;
 	}
 	return RType::UNKNOWN;
+}
+
+string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller) {
+	switch (stype.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return "logical";
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+		return "integer";
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_NS:
+		return "POSIXct";
+	case LogicalTypeId::DATE:
+		return "Date";
+	case LogicalTypeId::TIME:
+		return "difftime";
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+		return "numeric";
+	case LogicalTypeId::VARCHAR:
+		return "character";
+	case LogicalTypeId::BLOB:
+		return "raw";
+	case LogicalTypeId::LIST:
+		return "list";
+	case LogicalTypeId::STRUCT:
+		return "data.frame";
+	case LogicalTypeId::ENUM:
+		return "factor";
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::SQLNULL:
+		return "unknown";
+	default:
+		cpp11::stop("%s: Unknown column type for prepare: %s", caller, stype.ToString().c_str());
+		break;
+	}
 }
 
 bool RDoubleType::IsNull(double val) {
@@ -108,6 +158,14 @@ bool RIntegerType::IsNull(int val) {
 }
 
 int RIntegerType::Convert(int val) {
+	return val;
+}
+
+bool RInteger64Type::IsNull(int64_t val) {
+	return val == NumericLimits<int64_t>::Minimum();
+}
+
+int64_t RInteger64Type::Convert(int64_t val) {
 	return val;
 }
 

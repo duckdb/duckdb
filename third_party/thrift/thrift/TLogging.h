@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_TLOGGING_H_
-#define _THRIFT_TLOGGING_H_ 1
+#ifndef _DUCKDB_THRIFT_TLOGGING_H_
+#define _DUCKDB_THRIFT_TLOGGING_H_ 1
 
 #include "thrift/thrift-config.h"
 
@@ -142,4 +142,4 @@
 #define T_GENERIC_PROTOCOL(template_class, generic_prot, specific_prot)
 #endif
 
-#endif // #ifndef _THRIFT_TLOGGING_H_
+#endif // #ifndef _DUCKDB_THRIFT_TLOGGING_H_

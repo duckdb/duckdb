@@ -9,9 +9,12 @@
 
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/catalog/standard_entry.hpp"
 
 #include <algorithm>
 
@@ -141,7 +144,7 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 	if (!binding) {
 		throw InternalException("No binding with name \"%s\"", binding_name);
 	}
-	idx_t binding_index;
+	column_t binding_index;
 	if (!binding->TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
 		                        column_name);
@@ -160,9 +163,36 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
+unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &table_name, const string &column_name) {
+	string error_message;
+
+	auto binding = GetBinding(table_name, error_message);
+	D_ASSERT(binding);
+	auto &table_binding = *(TableBinding *)binding;
+	return table_binding.ExpandGeneratedColumn(column_name);
+}
+
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
 	string schema_name;
 	return CreateColumnReference(schema_name, table_name, column_name);
+}
+
+static bool ColumnIsGenerated(Binding *binding, column_t index) {
+	if (binding->binding_type != BindingType::TABLE) {
+		return false;
+	}
+	auto table_binding = (TableBinding *)binding;
+	auto catalog_entry = table_binding->GetStandardEntry();
+	if (!catalog_entry) {
+		return false;
+	}
+	if (index == COLUMN_IDENTIFIER_ROW_ID) {
+		return false;
+	}
+	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
+	auto table_entry = (TableCatalogEntry *)catalog_entry;
+	D_ASSERT(table_entry->columns.size() >= index);
+	return table_entry->columns[index].Generated();
 }
 
 unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
@@ -176,14 +206,17 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	names.push_back(column_name);
 
 	auto result = make_unique<ColumnRefExpression>(move(names));
-	// because of case insensitivity in the binder we rename the column to the original name
-	// as it appears in the binding itself
 	auto binding = GetBinding(table_name, error_message);
-	if (binding) {
-		auto column_index = binding->GetBindingIndex(column_name);
-		if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
-			result->alias = binding->names[column_index];
-		}
+	if (!binding) {
+		return move(result);
+	}
+	auto column_index = binding->GetBindingIndex(column_name);
+	if (ColumnIsGenerated(binding, column_index)) {
+		return ExpandGeneratedColumn(table_name, column_name);
+	} else if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
+		// because of case insensitivity in the binder we rename the column to the original name
+		// as it appears in the binding itself
+		result->alias = binding->names[column_index];
 	}
 	return move(result);
 }
@@ -402,6 +435,18 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
+void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
+                                  const vector<LogicalType> &types, StandardEntry *entry) {
+	D_ASSERT(entry);
+	AddBinding(alias, make_unique<EntryBinding>(alias, types, names, index, *entry));
+}
+
+void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
+                          ViewCatalogEntry *view) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddEntryBinding(index, alias, names, subquery.types, (StandardEntry *)view);
+}
+
 void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
 	AddGenericBinding(index, alias, names, subquery.types);
@@ -409,12 +454,12 @@ void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
-	AddBinding(alias, make_unique<Binding>(alias, types, names, index));
+	AddBinding(alias, make_unique<Binding>(BindingType::BASE, alias, types, names, index));
 }
 
 void BindContext::AddCTEBinding(idx_t index, const string &alias, const vector<string> &names,
                                 const vector<LogicalType> &types) {
-	auto binding = make_shared<Binding>(alias, types, names, index);
+	auto binding = make_shared<Binding>(BindingType::BASE, alias, types, names, index);
 
 	if (cte_bindings.find(alias) != cte_bindings.end()) {
 		throw BinderException("Duplicate alias \"%s\" in query!", alias);

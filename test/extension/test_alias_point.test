@@ -1,0 +1,106 @@
+# name: test/extension/test_alias_point.test
+# description: Enable Test alias for point.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+CREATE TABLE points(i INTEGER, point POINT, pt STRUCT(i INTEGER, j INTEGER));
+
+statement ok
+INSERT INTO points VALUES (2, ({'x': 1, 'y': 2}), ({'i': 3, 'j': 1}));
+
+statement ok
+INSERT INTO points VALUES (3, ({'x': 2, 'y': 3}), ({'i': 5, 'j': 4}));
+
+query III
+SELECT * FROM points;
+----
+2	{'x': 1, 'y': 2}	{'i': 3, 'j': 1}	
+3	{'x': 2, 'y': 3}	{'i': 5, 'j': 4}
+
+query I
+SELECT add_point(({'x': 2, 'y': 3})::POINT, ({'x': 3, 'y': 4})::POINT)
+----
+{'x': 5, 'y': 7}
+
+query I
+SELECT sub_point(({'x': 2, 'y': 3})::POINT, ({'x': 3, 'y': 4})::POINT)
+----
+{'x': -1, 'y': -1}
+
+statement error
+SELECT add_point(pt, pt) from points;
+
+statement error
+SELECT sub_point(pt, pt) from points;
+
+query I
+SELECT add_point(point, point) from points;
+----
+{'x': 2, 'y': 4}
+{'x': 4, 'y': 6}
+
+query I
+SELECT sub_point(point, point) from points;
+----
+{'x': 0, 'y': 0}
+{'x': 0, 'y': 0}
+
+query I
+SELECT add_point(point, ({'x': 3, 'y': 4})::POINT) from points;
+----
+{'x': 4, 'y': 6}
+{'x': 5, 'y': 7}
+
+query I
+SELECT sub_point(point, ({'x': 3, 'y': 4})::POINT) from points;
+----
+{'x': -2, 'y': -2}
+{'x': -1, 'y': -1}
+
+statement ok
+INSERT INTO points VALUES (4, NULL, NULL);
+
+statement ok
+INSERT INTO points VALUES (5, ({'x': 54, 'y': 23}), ({'i': 10, 'j': 100}));
+
+query I
+SELECT add_point(point, point) from points;
+----
+{'x': 2, 'y': 4}
+{'x': 4, 'y': 6}
+NULL
+{'x': 108, 'y': 46}
+
+query I
+SELECT sub_point(point, point) from points;
+----
+{'x': 0, 'y': 0}
+{'x': 0, 'y': 0}
+NULL
+{'x': 0, 'y': 0}
+
+query I
+SELECT add_point(point, NULL::POINT) from points;
+----
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT sub_point(point, NULL::POINT) from points;
+----
+NULL
+NULL
+NULL
+NULL

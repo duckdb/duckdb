@@ -42,7 +42,7 @@
 
 
 #include <google/protobuf/port_def.inc>
-
+namespace duckdb{
 namespace google {
 namespace protobuf {
 namespace internal {
@@ -868,7 +868,7 @@ bool MergePartialFromCodedStreamImpl(MessageLite* msg, const ParseTable& table,
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
 
 #endif  // GOOGLE_PROTOBUF_GENERATED_MESSAGE_TABLE_DRIVEN_LITE_H__

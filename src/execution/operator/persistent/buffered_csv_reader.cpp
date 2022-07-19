@@ -161,6 +161,10 @@ public:
 		return plain_file_source;
 	}
 
+	bool OnDiskFile() {
+		return file_handle->OnDiskFile();
+	}
+
 	idx_t FileSize() {
 		return file_size;
 	}
@@ -251,6 +255,22 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
+void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
+	string error;
+	if (read_format) {
+		auto &date_format = this->date_format[type];
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		date_format.format_specifier = format;
+	} else {
+		auto &date_format = this->write_date_format[type];
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+	}
+	if (!error.empty()) {
+		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	}
+	has_format[type] = true;
+}
+
 void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value &value,
                                              vector<string> &expected_names) {
 	if (SetBaseOption(loption, value)) {
@@ -295,22 +315,10 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		force_not_null = ParseColumnList(value, expected_names, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
-		auto &date_format = this->date_format[LogicalTypeId::DATE];
-		string error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
-		date_format.format_specifier = format;
-		if (!error.empty()) {
-			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
-		}
-		has_format[LogicalTypeId::DATE] = true;
+		SetDateFormat(LogicalTypeId::DATE, format, true);
 	} else if (loption == "timestamp_format" || loption == "timestampformat") {
 		string format = ParseString(value, loption);
-		auto &timestamp_format = date_format[LogicalTypeId::TIMESTAMP];
-		string error = StrTimeFormat::ParseFormatSpecifier(format, timestamp_format);
-		timestamp_format.format_specifier = format;
-		if (!error.empty()) {
-			throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
-		}
-		has_format[LogicalTypeId::TIMESTAMP] = true;
+		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "escape") {
 		escape = ParseString(value, loption);
 		has_escape = true;
@@ -328,6 +336,15 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 
 	if (loption == "force_quote") {
 		force_quote = ParseColumnList(value, names, loption);
+	} else if (loption == "date_format" || loption == "dateformat") {
+		string format = ParseString(value, loption);
+		SetDateFormat(LogicalTypeId::DATE, format, false);
+	} else if (loption == "timestamp_format" || loption == "timestampformat") {
+		string format = ParseString(value, loption);
+		if (StringUtil::Lower(format) == "iso") {
+			format = "%Y-%m-%dT%H:%M:%S.%fZ";
+		}
+		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}
@@ -475,17 +492,18 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, FileOpener *opener_p, BufferedCSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types)
-    : fs(fs_p), opener(opener_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
+BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, Allocator &allocator, FileOpener *opener_p,
+                                     BufferedCSVReaderOptions options_p, const vector<LogicalType> &requested_types)
+    : fs(fs_p), allocator(allocator), opener(opener_p), options(move(options_p)), buffer_size(0), position(0),
+      start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), FileSystem::GetFileOpener(context), move(options_p),
-                        requested_types) {
+    : BufferedCSVReader(FileSystem::GetFileSystem(context), Allocator::Get(context), FileSystem::GetFileOpener(context),
+                        move(options_p), requested_types) {
 }
 
 BufferedCSVReader::~BufferedCSVReader() {
@@ -652,7 +670,7 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 
 		// initialize the parse_chunk with a set of VARCHAR types
 		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
-		parse_chunk.Initialize(varchar_types);
+		parse_chunk.Initialize(allocator, varchar_types);
 	}
 }
 
@@ -979,7 +997,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		// jump to beginning and skip potential header
 		JumpToBeginning(options.skip_rows, true);
 		DataChunk header_row;
-		header_row.Initialize(sql_types);
+		header_row.Initialize(allocator, sql_types);
 		parse_chunk.Copy(header_row);
 
 		if (header_row.size() == 0) {
@@ -1099,7 +1117,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 			best_format_candidates = format_candidates;
 			best_header_row.Destroy();
 			auto header_row_types = header_row.GetTypes();
-			best_header_row.Initialize(header_row_types);
+			best_header_row.Initialize(allocator, header_row_types);
 			header_row.Copy(best_header_row);
 		}
 	}
@@ -1743,13 +1761,19 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
-	idx_t buffer_read_size = INITIAL_BUFFER_SIZE;
+
+	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
+	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;
+
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;
 	}
-	if (remaining + buffer_read_size > options.maximum_line_size) {
+
+	// Check line length
+	if (remaining > options.maximum_line_size) {
 		throw InvalidInputException("Maximum line size of %llu bytes exceeded!", options.maximum_line_size);
 	}
+
 	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
 	buffer_size = remaining + buffer_read_size;
 	if (remaining > 0) {

@@ -1,0 +1,144 @@
+name: "Build Extensions"
+description: "Build, test and deploy the in-tree DuckDB extensions"
+inputs:
+  # Test config
+  run_tests:
+    description: 'Run extension tests after build'
+    default: 1
+
+  # Deploy config
+  deploy_as:
+    description: 'Binary name for deploy step'
+    default: ''
+  s3_id:
+    description: 'S3 key ID'
+    default: ''
+  s3_key:
+    description: 'S3 key secret'
+    default: ''
+  signing_pk:
+    description: 'Extension signing RSA private key'
+    default: ''
+
+  # Build config
+  force_32_bit:
+    description: 'Force the 32 bit build'
+    default: 0
+  static_link_build:
+    description: 'Links duckdb statically to the built extensions'
+    default: 0
+  openssl_path:
+    description: 'Directory of OpenSSL installation'
+    default: '/usr/local/ssl'
+  post_install:
+    description: 'Post-install scripts to run'
+    default: ''
+  treat_warn_as_error:
+    description: 'Treat compilation warnings as errors'
+    default: 1
+  visualizer:
+    description: 'Build Visualizer'
+    default: 1
+  icu:
+    description: 'Build ICU'
+    default: 1
+  tpch:
+    description: 'Build TPCH'
+    default: 1
+  tpcds:
+    description: 'Build TPCDS'
+    default: 1
+  httpfs:
+    description: 'Build HTTPFS'
+    default: 1
+  fts:
+    description: 'Build FTS'
+    default: 1
+  json:
+    description: 'Build JSON'
+    default: 1
+  excel:
+    description: 'Build Excel'
+    default: 1
+  out_of_tree_ext:
+    description: 'Build Out-Of-Tree Extensions'
+    default: 1
+  python_name:
+    description: 'Python binary name because wtf Python'
+    default: 'python3'
+  substrait:
+    description: 'Build Substrait'
+    default: 0
+  osx_universal:
+    description: 'Build Universal Binary for OSX'
+    default: 0
+runs:
+  using: "composite"
+  steps:
+    - name: Build
+      shell: bash
+      env:
+        BUILD_VISUALIZER: ${{ inputs.visualizer }}
+        BUILD_ICU: ${{ inputs.icu }}
+        BUILD_TPCH: ${{ inputs.tpch }}
+        BUILD_TPCDS: ${{ inputs.tpcds }}
+        BUILD_FTS: ${{ inputs.fts }}
+        BUILD_HTTPFS: ${{ inputs.httpfs }}
+        BUILD_JSON: ${{ inputs.json }}
+        BUILD_EXCEL: ${{ inputs.excel }}
+        FORCE_32_BIT: ${{ inputs.force_32_bit }}
+        BUILD_SUBSTRAIT_EXTENSION: ${{ inputs.substrait }}
+        TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
+        FORCE_WARN_UNUSED: 1
+        STATIC_OPENSSL: 1
+        DISABLE_BUILTIN_EXTENSIONS: 1
+        EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
+        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+        OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+
+      run: |
+        ls -al
+        pwd
+        echo "$USER"
+        git config --global --add safe.directory '*'
+        make
+
+    - name: Build External Extensions
+      if: ${{ inputs.out_of_tree_ext != 0 }}
+      shell: bash
+      run: |
+        mkdir -p build/release/extension/out_of_tree
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
+
+    - name: Run post-install scripts
+      if: ${{ inputs.post_install != '' }}
+      shell: bash
+      run: |
+        ${{ inputs.post_install }}
+
+    - name: Deploy
+      if: ${{ inputs.deploy_as != '' }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
+        DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload.sh ${{ inputs.deploy_as }}
+        fi
+
+    - name: Test
+      if: ${{ inputs.run_tests == 1 }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
+        fi

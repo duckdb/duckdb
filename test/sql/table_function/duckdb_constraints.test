@@ -2,6 +2,9 @@
 # description: Test duckdb_constraints function
 # group: [table_function]
 
+require skip_reload
+
+
 statement ok
 create table integers(i int primary key, check (i < 10));
 

@@ -213,8 +213,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_me
 		                error_message, nullptr);
 	}
 	default: {
-		VectorData vdata;
-		source.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -584,7 +584,7 @@ static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *
 			auto tdata = ConstantVector::GetData<list_entry_t>(result);
 			*tdata = *ldata;
 		} else {
-			source.Normalify(count);
+			source.Flatten(count);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
 
@@ -620,8 +620,8 @@ bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message
 
 	auto res_enum_type = result.GetType();
 
-	VectorData vdata;
-	source.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(count, vdata);
 
 	auto source_data = (SRC_TYPE *)vdata.data;
 	auto source_sel = vdata.sel;
@@ -678,6 +678,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
 	auto res_vec_ptr = FlatVector::GetData<string_t>(result);
 
+	// TODO remove value api from this loop
 	for (idx_t i = 0; i < count; i++) {
 		auto src_val = source.GetValue(i);
 		if (src_val.IsNull()) {
@@ -696,8 +697,14 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 		case PhysicalType::UINT32:
 			enum_idx = UIntegerValue::Get(src_val);
 			break;
+		case PhysicalType::UINT64: //  DEDUP_POINTER_ENUM
+		{
+			res_vec_ptr[i] = (const char *)UBigIntValue::Get(src_val);
+			continue;
+		}
+
 		default:
-			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 		res_vec_ptr[i] = str_vec_ptr[enum_idx];
 	}
@@ -771,7 +778,7 @@ static bool StructCastSwitch(Vector &source, Vector &result, idx_t count, string
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 		} else {
-			source.Normalify(count);
+			source.Flatten(count);
 			FlatVector::Validity(result) = FlatVector::Validity(source);
 		}
 		return true;

@@ -29,7 +29,9 @@ utf8proc_dir = os.path.join('third_party', 'utf8proc')
 utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
 httplib_include_dir = os.path.join('third_party', 'httplib')
 fastfloat_include_dir = os.path.join('third_party', 'fast_float')
-
+mbedtls_dir = os.path.join('third_party', 'mbedtls')
+mbedtls_include_dir = os.path.join('third_party', 'mbedtls', 'include')
+mbedtls_include_dir2 = os.path.join('third_party', 'mbedtls', 'library')
 moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 pcg_include_dir = os.path.join('third_party', 'pcg')
 
@@ -81,6 +83,7 @@ if '--extended' in sys.argv:
         "duckdb/common/types/vector_cache.hpp",
         "duckdb/planner/filter/null_filter.hpp",
         "duckdb/common/arrow_wrapper.hpp",
+        "duckdb/common/hive_partitioning.hpp",
         "duckdb/common/compressed_file_system.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
@@ -88,9 +91,9 @@ if '--extended' in sys.argv:
     main_header_files = normalize_path(main_header_files)
 
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir]
+include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir, mbedtls_include_dir, mbedtls_include_dir2, mbedtls_dir]
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir]
+compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir, mbedtls_dir]
 
 # files always excluded
 always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])
@@ -113,6 +116,8 @@ def get_includes(fpath, text):
             continue
         if 'extension_helper.cpp' in fpath and included_file.endswith('-extension.hpp'):
             continue
+        if x[0] in include_statements:
+            raise Exception(f"duplicate include {x[0]} in file {fpath}")
         include_statements.append(x[0])
         included_file = os.sep.join(included_file.split('/'))
         found = False
@@ -392,6 +397,8 @@ def gather_files(dir, source_files, header_files):
         elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
             gather_file(fpath, source_files, header_files)
 
+def write_license(hfile):
+    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE for licensing information\n\n")
 
 def generate_amalgamation_splits(source_file, header_file, nsplits):
     # construct duckdb.hpp from these headers
