@@ -58,8 +58,9 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, BoundFunctionExpression &expr,
-                                           FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
+unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	auto struct_stats = make_unique<StructStatistics>(expr.return_type);
 	D_ASSERT(child_stats.size() == struct_stats->child_stats.size());
 	for (idx_t i = 0; i < struct_stats->child_stats.size(); i++) {
@@ -70,9 +71,10 @@ unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, BoundFunction
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_pack", {}, LogicalTypeId::STRUCT, StructPackFunction, false, StructPackBind, nullptr,
+	ScalarFunction fun("struct_pack", {}, LogicalTypeId::STRUCT, StructPackFunction, StructPackBind, nullptr,
 	                   StructPackStats);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 	fun.name = "row";
 	set.AddFunction(fun);

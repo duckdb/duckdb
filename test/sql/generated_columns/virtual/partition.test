@@ -1,0 +1,43 @@
+# name: test/sql/generated_columns/virtual/partition.test
+# description: Using a generated column as a PARTITION BY key
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+require vector_size 512
+
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold INTEGER,
+	name VARCHAR,
+	total_profit AS (price * amount_sold)
+);
+
+statement ok
+INSERT INTO unit VALUES (5,4, 'Soda can')
+
+statement ok
+INSERT INTO unit VALUES (5,8, 'Mars bar')
+
+statement ok
+INSERT INTO unit VALUES (4, 5, 'Chewing gum')
+
+query IIII
+SELECT total_profit, COUNT(total_profit), SUM(amount_sold), SUM(price) FROM unit GROUP BY total_profit
+----
+20	2	9	9
+40	1	8	5
+
+query IIIII
+SELECT total_profit,
+		name,
+		COUNT(total_profit) OVER(PARTITION BY total_profit) AS CountTotalProfit,
+		SUM(amount_sold) OVER(PARTITION BY total_profit) AS SumAmountSold,
+		SUM(price) OVER(PARTITION BY total_profit) AS SumPrice
+FROM unit;
+----
+20	Soda can	2	9	9
+20	Chewing gum	2	9	9
+40	Mars bar	1	8	5

@@ -116,27 +116,39 @@ class TestArrowNested(object):
             return
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t")
         
-        with pytest.raises(Exception):
-            compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4,2, NULL),LIST_VALUE(10, 9, 8, 7,11,42)) as a) as t")
+        compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t")
         
         compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t")
-        compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t")
-        with pytest.raises(Exception):
-            compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t")
-        with pytest.raises(Exception):
-            compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t")
-        with pytest.raises(Exception):
-            compare_results("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t")
+        compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t")
+        compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie','Tenacious D'),LIST_VALUE(10,10)) as a) as t")
         compare_results("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)")
         compare_results("SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5) as lst_tbl) as T")
 
+    def test_map_arrow_to_duckdb(self, duckdb_cursor):
+        if not can_run:
+            return
+        map_type = pa.map_(pa.int32(), pa.int32())
+        values = [
+            [
+                (3, 12),
+                (3, 21)
+            ],
+            [
+                (5, 42)
+            ]
+        ]
+        arrow_table = pa.table(
+            {'detail': pa.array(values, map_type)}
+        )
+        with pytest.raises(Exception, match="Invalid Input Error: Arrow map contains duplicate key, which isn't supported by DuckDB map type"):
+            rel = duckdb.from_arrow(arrow_table).fetchall()
     
     def test_map_arrow_to_pandas(self,duckdb_cursor):
         if not can_run:
             return
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t") == [[(1, 10), (2, 9), (3, 8), (4, 7)]]
         assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t") == [[]]
-        assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t") == [[('Jon Lajoie', 10), ('Backstreet Boys', 9), ('Tenacious D', 10), ('Jon Lajoie', 11)]]
+        assert arrow_to_pandas("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t") == [[('Jon Lajoie', 10), ('Backstreet Boys', 9), ('Tenacious D', 10)]]
         assert arrow_to_pandas("SELECT a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(a)") == [[(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)]]
         assert arrow_to_pandas("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a") == [[({'i': 1, 'j': 2}, {'i': 1, 'j': 2}), ({'i': 3, 'j': 4}, {'i': 3, 'j': 4})]]
 

@@ -31,7 +31,7 @@ typedef struct {
 	int clen;
 } customer_t;
 /* customers.c */
-long mk_cust PROTO((DSS_HUGE n_cust, customer_t *c));
+long mk_cust PROTO((DSS_HUGE n_cust, customer_t *c, DBGenContext *ctx));
 int pr_cust PROTO((customer_t * c, int mode));
 int ld_cust PROTO((customer_t * c, int mode));
 
@@ -71,7 +71,7 @@ typedef struct {
 } order_t;
 
 /* order.c */
-long mk_order PROTO((DSS_HUGE index, order_t *o, long upd_num));
+long mk_order PROTO((DSS_HUGE index, order_t *o, DBGenContext *ctx, long upd_num));
 int pr_order PROTO((order_t * o, int mode));
 int ld_order PROTO((order_t * o, int mode));
 void mk_sparse PROTO((DSS_HUGE index, DSS_HUGE *ok, long seq));
@@ -102,7 +102,7 @@ typedef struct {
 } part_t;
 
 /* parts.c */
-long mk_part PROTO((DSS_HUGE index, part_t *p));
+long mk_part PROTO((DSS_HUGE index, part_t *p, DBGenContext *ctx));
 int pr_part PROTO((part_t * part, int mode));
 int ld_part PROTO((part_t * part, int mode));
 
@@ -118,7 +118,7 @@ typedef struct {
 	int clen;
 } supplier_t;
 /* supplier.c */
-long mk_supp PROTO((DSS_HUGE index, supplier_t *s));
+long mk_supp PROTO((DSS_HUGE index, supplier_t *s, DBGenContext *ctx));
 int pr_supp PROTO((supplier_t * supp, int mode));
 int ld_supp PROTO((supplier_t * supp, int mode));
 
@@ -146,9 +146,19 @@ typedef struct {
 } code_t;
 
 /* code table */
-int mk_nation PROTO((DSS_HUGE i, code_t *c));
+int mk_nation PROTO((DSS_HUGE i, code_t *c, DBGenContext *ctx));
 int pr_nation PROTO((code_t * c, int mode));
 int ld_nation PROTO((code_t * c, int mode));
-int mk_region PROTO((DSS_HUGE i, code_t *c));
+int mk_region PROTO((DSS_HUGE i, code_t *c, DBGenContext *ctx));
 int pr_region PROTO((code_t * c, int mode));
 int ld_region PROTO((code_t * c, int mode));
+
+/* speed seed - advances seeds `skip_count` times */
+long sd_nation(int child, DSS_HUGE skip_count, DBGenContext *ctx);
+long sd_region(int child, DSS_HUGE skip_coun, DBGenContext *ctx);
+long sd_order(int child, DSS_HUGE skip_count, DBGenContext *ctx);
+long sd_line(int child, DSS_HUGE skip_count, DBGenContext *ctx);
+long sd_supp(int child, DSS_HUGE skip_count, DBGenContext *ctx);
+long sd_part(int child, DSS_HUGE skip_count, DBGenContext *ctx);
+long sd_psupp(int child, DSS_HUGE skip_count, DBGenContext *ctx);
+long sd_cust(int child, DSS_HUGE skip_count, DBGenContext *ctx);

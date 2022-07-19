@@ -22,8 +22,21 @@ struct FunctionLocalState {
 	DUCKDB_API virtual ~FunctionLocalState();
 };
 
+class Binder;
 class BoundFunctionExpression;
 class ScalarFunctionCatalogEntry;
+
+struct FunctionStatisticsInput {
+	FunctionStatisticsInput(BoundFunctionExpression &expr_p, FunctionData *bind_data_p,
+	                        vector<unique_ptr<BaseStatistics>> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
+	    : expr(expr_p), bind_data(bind_data_p), child_stats(child_stats_p), expr_ptr(expr_ptr_p) {
+	}
+
+	BoundFunctionExpression &expr;
+	FunctionData *bind_data;
+	vector<unique_ptr<BaseStatistics>> &child_stats;
+	unique_ptr<Expression> *expr_ptr;
+};
 
 //! The type used for scalar functions
 typedef std::function<void(DataChunk &, ExpressionState &, Vector &)> scalar_function_t;
@@ -32,26 +45,26 @@ typedef unique_ptr<FunctionData> (*bind_scalar_function_t)(ClientContext &contex
                                                            vector<unique_ptr<Expression>> &arguments);
 typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(const BoundFunctionExpression &expr,
                                                              FunctionData *bind_data);
-typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data,
-                                                            vector<unique_ptr<BaseStatistics>> &child_stats);
+typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
 class ScalarFunction : public BaseScalarFunction {
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                          scalar_function_t function, bool has_side_effects = false,
+	                          scalar_function_t function, bind_scalar_function_t bind = nullptr,
+	                          dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
+	                          init_local_state_t init_local_state = nullptr,
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                          FunctionSideEffects side_effects = FunctionSideEffects::NO_SIDE_EFFECTS,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
+
+	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
 	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                          bool propagate_null_values = false);
-
-	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-	                          bool propagate_null_values = false, bool has_side_effects = false,
-	                          bind_scalar_function_t bind = nullptr, dependency_function_t dependency = nullptr,
-	                          function_statistics_t statistics = nullptr, init_local_state_t init_local_state = nullptr,
-	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	                          FunctionSideEffects side_effects = FunctionSideEffects::NO_SIDE_EFFECTS,
+	                          FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 
 	//! The main scalar function to execute
 	scalar_function_t function;
@@ -64,18 +77,19 @@ public:
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;
 
-	DUCKDB_API static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
-	                                                                         const string &schema, const string &name,
-	                                                                         vector<unique_ptr<Expression>> children,
-	                                                                         string &error, bool is_operator = false);
-	DUCKDB_API static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
-	                                                                         ScalarFunctionCatalogEntry &function,
-	                                                                         vector<unique_ptr<Expression>> children,
-	                                                                         string &error, bool is_operator = false);
+	DUCKDB_API static unique_ptr<Expression> BindScalarFunction(ClientContext &context, const string &schema,
+	                                                            const string &name,
+	                                                            vector<unique_ptr<Expression>> children, string &error,
+	                                                            bool is_operator = false, Binder *binder = nullptr);
+	DUCKDB_API static unique_ptr<Expression> BindScalarFunction(ClientContext &context,
+	                                                            ScalarFunctionCatalogEntry &function,
+	                                                            vector<unique_ptr<Expression>> children, string &error,
+	                                                            bool is_operator = false, Binder *binder = nullptr);
 
-	DUCKDB_API static unique_ptr<BoundFunctionExpression>
-	BindScalarFunction(ClientContext &context, ScalarFunction bound_function, vector<unique_ptr<Expression>> children,
-	                   bool is_operator = false, bool cast_parameters = true);
+	DUCKDB_API static unique_ptr<BoundFunctionExpression> BindScalarFunction(ClientContext &context,
+	                                                                         ScalarFunction bound_function,
+	                                                                         vector<unique_ptr<Expression>> children,
+	                                                                         bool is_operator = false);
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;

@@ -8,19 +8,20 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/index_type.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/index.hpp"
-#include "duckdb/storage/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/index.hpp"
+#include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/enums/scan_options.hpp"
-
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/table_index.hpp"
+#include "duckdb/storage/table_statistics.hpp"
+#include "duckdb/transaction/local_storage.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -32,57 +33,6 @@ class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
-
-class TableIndexList {
-public:
-	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T>
-	void Scan(T &&callback) {
-		// lock the catalog set
-		lock_guard<mutex> lock(indexes_lock);
-		for (auto &index : indexes) {
-			if (callback(*index)) {
-				break;
-			}
-		}
-	}
-
-	void AddIndex(unique_ptr<Index> index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-		indexes.push_back(move(index));
-	}
-
-	void RemoveIndex(Index *index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-
-		for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
-			auto &index_entry = indexes[index_idx];
-			if (index_entry.get() == index) {
-				indexes.erase(indexes.begin() + index_idx);
-				break;
-			}
-		}
-	}
-
-	bool Empty() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.empty();
-	}
-
-	idx_t Count() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.size();
-	}
-
-	Index *FindForeignKeyIndex(const vector<idx_t> &fk_keys, ForeignKeyType fk_type);
-
-private:
-	//! Indexes associated with the current table
-	mutex indexes_lock;
-	vector<unique_ptr<Index>> indexes;
-};
 
 struct DataTableInfo {
 	DataTableInfo(DatabaseInstance &db, string schema, string table)
@@ -99,7 +49,7 @@ struct DataTableInfo {
 	// name of the table
 	string table;
 
-	TableIndexList indexes;
+	TableIndex indexes;
 
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
@@ -212,9 +162,10 @@ public:
 	}
 
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id);
+	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
 
 	//! Checkpoint the table to the specified table data writer
-	BlockPointer Checkpoint(TableDataWriter &writer);
+	void Checkpoint(TableDataWriter &writer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 
@@ -224,6 +175,7 @@ public:
 	void AppendRowGroup(idx_t start_row);
 
 	vector<vector<Value>> GetStorageInfo();
+	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 private:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
@@ -252,7 +204,7 @@ private:
 	//! The segment trees holding the various row_groups of the table
 	shared_ptr<SegmentTree> row_groups;
 	//! Column statistics
-	vector<unique_ptr<BaseStatistics>> column_stats;
+	vector<shared_ptr<ColumnStatistics>> column_stats;
 	//! The statistics lock
 	mutex stats_lock;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version

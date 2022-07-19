@@ -1,22 +1,22 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/vector_operations/binary_executor.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
 template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
-void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets_data, Vector &child_vector,
-                         idx_t list_size, Vector &result) {
-	VectorData child_data;
-	child_vector.Orrify(list_size, child_data);
+void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVectorFormat &offsets_data,
+                         Vector &child_vector, idx_t list_size, Vector &result) {
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(list_size, child_data);
 
 	T *result_data;
 
@@ -76,8 +76,8 @@ void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
-static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector,
-                                       idx_t list_size, Vector &result) {
+static void ExecuteListExtractInternal(const idx_t count, UnifiedVectorFormat &list, UnifiedVectorFormat &offsets,
+                                       Vector &child_vector, idx_t list_size, Vector &result) {
 	D_ASSERT(child_vector.GetType() == result.GetType());
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
@@ -148,11 +148,11 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 
 static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
 	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
-	VectorData list_data;
-	VectorData offsets_data;
+	UnifiedVectorFormat list_data;
+	UnifiedVectorFormat offsets_data;
 
-	list.Orrify(count, list_data);
-	offsets.Orrify(count, offsets_data);
+	list.ToUnifiedFormat(count, list_data);
+	offsets.ToUnifiedFormat(count, offsets_data);
 	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list),
 	                           ListVector::GetListSize(list), result);
 	result.Verify(count);
@@ -198,20 +198,14 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-	} else {
-		D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-		// list extract returns the child type of the list as return type
-		bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
-	}
+	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
+	// list extract returns the child type of the list as return type
+	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                   FunctionData *bind_data,
-                                                   vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
 	if (!child_stats[0]) {
 		return nullptr;
 	}
@@ -228,10 +222,9 @@ static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, Bound
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
-	                    ListExtractFunction, false, false, ListExtractBind, nullptr, ListExtractStats);
+	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
-	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction, false,
-	                    false, nullptr);
+	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
 
 	ScalarFunctionSet list_extract("list_extract");
 	list_extract.AddFunction(lfun);

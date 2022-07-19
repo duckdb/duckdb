@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_
-#define _THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1
+#ifndef _DUCKDB_THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_
+#define _DUCKDB_THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1
 
 #include "thrift/protocol/TProtocol.h"
 
@@ -510,4 +510,4 @@ protected:
 }
 } // duckdb_apache::thrift::protocol
 
-#endif // #define _THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1
+#endif // #define _DUCKDB_THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1

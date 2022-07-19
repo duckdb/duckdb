@@ -22,6 +22,7 @@
 #include <unistd.h>
 #else
 #include <string>
+#include <sysinfoapi.h>
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
@@ -59,7 +60,7 @@ idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
 	if (errno != 0) {
-		throw IOException("Could not fetch available system memory!");
+		return DConstants::INVALID_INDEX;
 	}
 	return max_memory;
 }
@@ -86,10 +87,17 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	ULONGLONG available_memory_kb;
-	if (!GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
-		throw IOException("Could not fetch available system memory!");
+	if (GetPhysicallyInstalledSystemMemory(&available_memory_kb)) {
+		return MinValue<idx_t>(available_memory_kb * 1000, UINTPTR_MAX);
 	}
-	return MinValue<idx_t>(available_memory_kb * 1024, UINTPTR_MAX);
+	// fallback: try GlobalMemoryStatusEx
+	MEMORYSTATUSEX mem_state;
+	mem_state.dwLength = sizeof(MEMORYSTATUSEX);
+
+	if (GlobalMemoryStatusEx(&mem_state)) {
+		return MinValue<idx_t>(mem_state.ullTotalPhys, UINTPTR_MAX);
+	}
+	return DConstants::INVALID_INDEX;
 }
 
 string FileSystem::GetWorkingDirectory() {

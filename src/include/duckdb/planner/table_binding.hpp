@@ -13,6 +13,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -23,12 +24,18 @@ class LogicalGet;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class BoundTableFunction;
+class StandardEntry;
+
+enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
-	Binding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index);
+	Binding(BindingType binding_type, const string &alias, vector<LogicalType> types, vector<string> names,
+	        idx_t index);
 	virtual ~Binding() = default;
 
+	//! The type of Binding
+	BindingType binding_type;
 	//! The alias of the binding
 	string alias;
 	//! The table index of the binding
@@ -45,7 +52,17 @@ public:
 	bool HasMatchingBinding(const string &column_name);
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
-	virtual TableCatalogEntry *GetTableEntry();
+	virtual StandardEntry *GetStandardEntry();
+};
+
+struct EntryBinding : public Binding {
+public:
+	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
+	             StandardEntry &entry);
+	StandardEntry &entry;
+
+public:
+	StandardEntry *GetStandardEntry() override;
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
@@ -58,23 +75,25 @@ struct TableBinding : public Binding {
 	LogicalGet &get;
 
 public:
+	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	TableCatalogEntry *GetTableEntry() override;
+	StandardEntry *GetStandardEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;
 };
 
-//! MacroBinding is like the Binding, except the alias and index are set by default. Used for binding Macro
-//! Params/Arguments.
-struct MacroBinding : public Binding {
-	static constexpr const char *MACRO_NAME = "0_macro_parameters";
+//! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
+//! parameters.
+struct DummyBinding : public Binding {
+	// NOTE: changing this string conflicts with the storage version
+	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
+	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
 
 	//! Arguments
-	vector<unique_ptr<ParsedExpression>> arguments;
-	//! The name of the macro
-	string macro_name;
+	vector<unique_ptr<ParsedExpression>> *arguments;
+	//! The name of the dummy binding
+	string dummy_name;
 
 public:
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;

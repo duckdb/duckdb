@@ -21,12 +21,17 @@ TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &
 
 void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
-	D_ASSERT(columns.size() > 0);
+	D_ASSERT(!columns.empty());
 
 	// deserialize the total table statistics
 	info.data->column_stats.reserve(columns.size());
 	for (idx_t i = 0; i < columns.size(); i++) {
-		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, columns[i].type));
+		auto &col = columns[i];
+		// Have to use 'Generated()' here, storage_oid is uninitialized here
+		if (col.Generated()) {
+			continue;
+		}
+		info.data->column_stats.push_back(BaseStatistics::Deserialize(reader, columns[i].Type()));
 	}
 
 	// deserialize each of the individual row groups

@@ -44,9 +44,9 @@ uint64_t MurmurHash64A(const void *key, int len, unsigned int seed);
 
 namespace duckdb {
 
-void AddToLogsInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void ***logs[],
+void AddToLogsInternal(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void ***logs[],
                        const SelectionVector *log_sel);
 
-void AddToSingleLogInternal(VectorData &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void *log);
+void AddToSingleLogInternal(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[], void *log);
 
 } // namespace duckdb

@@ -1,0 +1,43 @@
+# name: test/optimizer/index_optimizer.test
+# description: Test Optimizer uses indexes on point queries
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+insert into integers values (1,1), (2,2), (3,3)
+
+# Test single column
+
+statement ok
+create index i_index on integers(i);
+
+query II
+EXPLAIN SELECT i FROM integers  where i = 1
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+statement ok
+drop index i_index
+
+# Test more complex expression
+
+statement ok
+create index i_index on integers using art((i+j))
+
+query II
+EXPLAIN SELECT i FROM integers  where i+j = 2
+----
+logical_opt	<REGEX>:.*INDEX_SCAN.*
+
+query I
+SELECT i FROM integers  where i+j = 2
+----
+1
+
+statement ok
+drop index i_index

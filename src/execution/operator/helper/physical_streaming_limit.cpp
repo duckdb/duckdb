@@ -34,7 +34,7 @@ public:
 	std::atomic<idx_t> current_offset;
 };
 
-unique_ptr<OperatorState> PhysicalStreamingLimit::GetOperatorState(ClientContext &context) const {
+unique_ptr<OperatorState> PhysicalStreamingLimit::GetOperatorState(ExecutionContext &context) const {
 	return make_unique<StreamingLimitOperatorState>(*this);
 }
 
@@ -50,8 +50,8 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	auto &offset = state.offset;
 	idx_t current_offset = gstate.current_offset.fetch_add(input.size());
 	idx_t max_element;
-	if (!PhysicalLimit::ComputeOffset(input, limit, offset, current_offset, max_element, limit_expression.get(),
-	                                  offset_expression.get())) {
+	if (!PhysicalLimit::ComputeOffset(context, input, limit, offset, current_offset, max_element,
+	                                  limit_expression.get(), offset_expression.get())) {
 		return OperatorResultType::FINISHED;
 	}
 	if (PhysicalLimit::HandleOffset(input, current_offset, offset, limit)) {

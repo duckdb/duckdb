@@ -18,6 +18,10 @@ namespace duckdb {
 //! The Date class is a static class that holds helper functions for the Date type.
 class Date {
 public:
+	static const char *PINF;  // NOLINT
+	static const char *NINF;  // NOLINT
+	static const char *EPOCH; // NOLINT
+
 	static const string_t MONTH_NAMES[12];
 	static const string_t MONTH_NAMES_ABBREVIATED[12];
 	static const string_t DAY_NAMES[7];

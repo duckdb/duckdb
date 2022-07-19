@@ -57,7 +57,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		if (ordered_set_agg) {
 			auto &config = DBConfig::GetConfig(context);
 			const auto &order = aggr.order_bys->orders[0];
-			const auto sense = (order.type == OrderType::ORDER_DEFAULT) ? config.default_order_type : order.type;
+			const auto sense =
+			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
 			invert_fractions = (sense == OrderType::DESCENDING);
 		}
 	}
@@ -148,8 +149,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	// bind the aggregate
-	bool cast_parameters;
-	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error, cast_parameters);
+	idx_t best_function = Function::BindFunction(func->name, func->functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
@@ -162,15 +162,17 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
 			auto &order_expr = (BoundExpression &)*order.expression;
-			const auto sense = (order.type == OrderType::ORDER_DEFAULT) ? config.default_order_type : order.type;
-			const auto null_order =
-			    (order.null_order == OrderByNullType::ORDER_DEFAULT) ? config.default_null_order : order.null_order;
+			const auto sense =
+			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
+			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
+			                            ? config.options.default_null_order
+			                            : order.null_order;
 			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, move(order_expr.expr)));
 		}
 	}
 
-	auto aggregate = AggregateFunction::BindAggregateFunction(
-	    context, bound_function, move(children), move(bound_filter), aggr.distinct, move(order_bys), cast_parameters);
+	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
+	                                                          move(bound_filter), aggr.distinct, move(order_bys));
 	if (aggr.export_state) {
 		aggregate = ExportAggregateFunction::Bind(move(aggregate));
 	}

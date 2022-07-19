@@ -14,9 +14,9 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <sstream>
-#include <queue>
 
 namespace duckdb {
 struct CopyInfo;
@@ -85,6 +85,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! The column names of the columns to read/write
+	vector<string> names;
 
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
@@ -93,6 +95,7 @@ struct BufferedCSVReaderOptions {
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
+	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
 	//! Whether or not header names shall be normalized
 	bool normalize_names = false;
@@ -110,18 +113,21 @@ struct BufferedCSVReaderOptions {
 	string file_path;
 	//! Whether or not to include a file name column
 	bool include_file_name = false;
+	//! Whether or not to include a parsed hive partition columns
+	bool include_parsed_hive_partitions = false;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
 
-	//! The column names of the columns to write
-	vector<string> names;
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! The date format to use for writing (if any is specified)
+	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
+	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
@@ -136,6 +142,7 @@ struct BufferedCSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 
 	void SetWriteOption(const string &loption, const Value &value);
+	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 
 	std::string ToString() const;
 };
@@ -146,17 +153,20 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
 	static constexpr idx_t INITIAL_BUFFER_SIZE = 16384;
+	//! Larger buffer size for non disk files
+	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 	ParserMode mode;
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(FileSystem &fs, FileOpener *opener, BufferedCSVReaderOptions options,
+	BufferedCSVReader(FileSystem &fs, Allocator &allocator, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BufferedCSVReader();
 
 	FileSystem &fs;
+	Allocator &allocator;
 	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;

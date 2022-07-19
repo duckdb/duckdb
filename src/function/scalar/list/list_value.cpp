@@ -35,8 +35,8 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
-	LogicalType child_type = LogicalType::SQLNULL;
-	for (idx_t i = 0; i < arguments.size(); i++) {
+	LogicalType child_type = arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type;
+	for (idx_t i = 1; i < arguments.size(); i++) {
 		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
 
@@ -46,8 +46,9 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
-unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, BoundFunctionExpression &expr,
-                                          FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
+unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	auto list_stats = make_unique<ListStatistics>(expr.return_type);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		if (child_stats[i]) {
@@ -62,9 +63,10 @@ unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, BoundFunctionE
 
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, false, ListValueBind, nullptr,
+	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, ListValueBind, nullptr,
 	                   ListValueStats);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction(fun);
 	fun.name = "list_pack";
 	set.AddFunction(fun);

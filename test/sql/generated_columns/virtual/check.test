@@ -1,0 +1,44 @@
+# name: test/sql/generated_columns/virtual/check.test
+# description: Test generated columns with the CHECK constraint
+# group: [virtual]
+
+statement ok
+PRAGMA enable_verification
+
+#Check constraint involving a generated column is not supported
+
+# Using a CHECK constraint that doesnt involve the generated column itself is fine
+statement ok
+CREATE TABLE unit (
+	price INTEGER,
+	amount_sold AS (price) CHECK (price > 5),
+);
+
+# When it references a generated column, it fails
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	amount_sold AS (price) CHECK (amount_sold > 5)
+);
+
+# Also when used in this way
+statement error
+CREATE TABLE tbl (
+	price INTEGER,
+	amount_sold AS (price),
+	CHECK (amount_sold > price)
+);
+
+statement ok
+CREATE TABLE chk (
+	g1 AS (x),
+	g2 AS (x),
+	x INTEGER,
+	CHECK (x > 5)
+);
+
+statement ok
+INSERT INTO chk VALUES (6);
+
+statement error
+INSERT INTO chk VALUES (3);

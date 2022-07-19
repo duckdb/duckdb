@@ -12,10 +12,11 @@
 
 namespace duckdb {
 
-BaseAppender::BaseAppender() : column(0) {
+BaseAppender::BaseAppender(Allocator &allocator) : allocator(allocator), collection(allocator), column(0) {
 }
 
-BaseAppender::BaseAppender(vector<LogicalType> types_p) : types(move(types_p)), column(0) {
+BaseAppender::BaseAppender(Allocator &allocator, vector<LogicalType> types_p)
+    : allocator(allocator), types(move(types_p)), collection(allocator), column(0) {
 	InitializeChunk();
 }
 
@@ -35,7 +36,7 @@ void BaseAppender::Destructor() {
 }
 
 InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p)
-    : BaseAppender(table_p.GetTypes()), context(context_p), table(table_p) {
+    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes()), context(context_p), table(table_p) {
 }
 
 InternalAppender::~InternalAppender() {
@@ -43,14 +44,14 @@ InternalAppender::~InternalAppender() {
 }
 
 Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
-    : BaseAppender(), context(con.context) {
+    : BaseAppender(Allocator::DefaultAllocator()), context(con.context) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
 		throw CatalogException(StringUtil::Format("Table \"%s.%s\" could not be found", schema_name, table_name));
 	}
 	for (auto &column : description->columns) {
-		types.push_back(column.type);
+		types.push_back(column.Type());
 	}
 	InitializeChunk();
 }
@@ -64,7 +65,7 @@ Appender::~Appender() {
 
 void BaseAppender::InitializeChunk() {
 	chunk = make_unique<DataChunk>();
-	chunk->Initialize(types);
+	chunk->Initialize(allocator, types);
 }
 
 void BaseAppender::BeginRow() {

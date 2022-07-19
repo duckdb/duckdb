@@ -22,6 +22,8 @@ public:
 	~LocalTableStorage();
 
 	DataTable &table;
+
+	Allocator &allocator;
 	//! The main chunk collection holding the data
 	ChunkCollection collection;
 	//! The set of unique indexes

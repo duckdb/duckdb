@@ -8,6 +8,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include <cmath>
 #include <errno.h>
 
@@ -41,7 +42,6 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 //===--------------------------------------------------------------------===//
 // nextafter
 //===--------------------------------------------------------------------===//
-
 struct NextAfterOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA base, TB exponent) {
@@ -62,16 +62,80 @@ void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet next_after_fun("nextafter");
 	next_after_fun.AddFunction(
 	    ScalarFunction("nextafter", {LogicalType::DOUBLE, LogicalType::DOUBLE}, LogicalType::DOUBLE,
-	                   ScalarFunction::BinaryFunction<double, double, double, NextAfterOperator>, false));
+	                   ScalarFunction::BinaryFunction<double, double, double, NextAfterOperator>));
 	next_after_fun.AddFunction(ScalarFunction("nextafter", {LogicalType::FLOAT, LogicalType::FLOAT}, LogicalType::FLOAT,
-	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>,
-	                                          false));
+	                                          ScalarFunction::BinaryFunction<float, float, float, NextAfterOperator>));
 	set.AddFunction(next_after_fun);
 }
 
 //===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
+static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	D_ASSERT(child_stats.size() == 1);
+	// can only propagate stats if the children have stats
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &lstats = (NumericStatistics &)*child_stats[0];
+	Value new_min, new_max;
+	bool potential_overflow = true;
+	if (!lstats.min.IsNull() && !lstats.max.IsNull()) {
+		switch (expr.return_type.InternalType()) {
+		case PhysicalType::INT8:
+			potential_overflow = lstats.min.GetValue<int8_t>() == NumericLimits<int8_t>::Minimum();
+			break;
+		case PhysicalType::INT16:
+			potential_overflow = lstats.min.GetValue<int16_t>() == NumericLimits<int16_t>::Minimum();
+			break;
+		case PhysicalType::INT32:
+			potential_overflow = lstats.min.GetValue<int32_t>() == NumericLimits<int32_t>::Minimum();
+			break;
+		case PhysicalType::INT64:
+			potential_overflow = lstats.min.GetValue<int64_t>() == NumericLimits<int64_t>::Minimum();
+			break;
+		default:
+			return nullptr;
+		}
+	}
+	if (potential_overflow) {
+		new_min = Value(expr.return_type);
+		new_max = Value(expr.return_type);
+	} else {
+		// no potential overflow
+
+		// compute stats
+		auto current_min = lstats.min.GetValue<int64_t>();
+		auto current_max = lstats.max.GetValue<int64_t>();
+
+		int64_t min_val, max_val;
+
+		if (current_min < 0 && current_max < 0) {
+			// if both min and max are below zero, then min=abs(cur_max) and max=abs(cur_min)
+			min_val = AbsValue(current_max);
+			max_val = AbsValue(current_min);
+		} else if (current_min < 0) {
+			D_ASSERT(current_max >= 0);
+			// if min is below zero and max is above 0, then min=0 and max=max(cur_max, abs(cur_min))
+			min_val = 0;
+			max_val = MaxValue(AbsValue(current_min), current_max);
+		} else {
+			// if both current_min and current_max are > 0, then the abs is a no-op and can be removed entirely
+			*input.expr_ptr = move(input.expr.children[0]);
+			return move(child_stats[0]);
+		}
+		new_min = Value::Numeric(expr.return_type, min_val);
+		new_max = Value::Numeric(expr.return_type, max_val);
+		expr.function.function = ScalarFunction::GetScalarUnaryFunction<AbsOperator>(expr.return_type);
+	}
+	auto stats =
+	    make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max), StatisticsType::LOCAL_STATS);
+	stats->validity_stats = lstats.validity_stats->Copy();
+	return move(stats);
+}
+
 template <class OP>
 unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
@@ -98,10 +162,28 @@ unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFuncti
 void AbsFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet abs("abs");
 	for (auto &type : LogicalType::Numeric()) {
-		if (type.id() == LogicalTypeId::DECIMAL) {
-			abs.AddFunction(ScalarFunction({type}, type, nullptr, false, false, DecimalUnaryOpBind<AbsOperator>));
-		} else {
+		switch (type.id()) {
+		case LogicalTypeId::DECIMAL:
+			abs.AddFunction(ScalarFunction({type}, type, nullptr, DecimalUnaryOpBind<AbsOperator>));
+			break;
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT: {
+			ScalarFunction func({type}, type, ScalarFunction::GetScalarUnaryFunction<TryAbsOperator>(type));
+			func.statistics = PropagateAbsStats;
+			abs.AddFunction(func);
+			break;
+		}
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::NopFunction));
+			break;
+		default:
 			abs.AddFunction(ScalarFunction({type}, type, ScalarFunction::GetScalarUnaryFunction<AbsOperator>(type)));
+			break;
 		}
 	}
 	set.AddFunction(abs);
@@ -273,7 +355,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"ceil\"");
 		}
-		ceil.AddFunction(ScalarFunction({type}, type, func, false, false, bind_func));
+		ceil.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
 
 	set.AddFunction(ceil);
@@ -329,7 +411,7 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
-		floor.AddFunction(ScalarFunction({type}, type, func, false, false, bind_func));
+		floor.AddFunction(ScalarFunction({type}, type, func, bind_func));
 	}
 	set.AddFunction(floor);
 }
@@ -454,6 +536,9 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &decimal_type = arguments[0]->return_type;
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ROUND(DECIMAL, INTEGER) with non-constant precision is not supported");
 	}
@@ -541,9 +626,8 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
-		round.AddFunction(ScalarFunction({type}, type, round_func, false, false, bind_func));
-		round.AddFunction(
-		    ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, false, false, bind_prec_func));
+		round.AddFunction(ScalarFunction({type}, type, round_func, bind_func));
+		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, bind_prec_func));
 	}
 	set.AddFunction(round);
 }
@@ -754,12 +838,28 @@ struct IsInfiniteOperator {
 	}
 };
 
+template <>
+bool IsInfiniteOperator::Operation(date_t input) {
+	return !Value::IsFinite(input);
+}
+
+template <>
+bool IsInfiniteOperator::Operation(timestamp_t input) {
+	return !Value::IsFinite(input);
+}
+
 void IsInfiniteFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet funcs("isinf");
 	funcs.AddFunction(ScalarFunction({LogicalType::FLOAT}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<float, bool, IsInfiniteOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<double, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<date_t, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsInfiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsInfiniteOperator>));
 	set.AddFunction(funcs);
 }
 
@@ -779,6 +879,12 @@ void IsFiniteFun::RegisterFunction(BuiltinFunctions &set) {
 	                                 ScalarFunction::UnaryFunction<float, bool, IsFiniteOperator>));
 	funcs.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::BOOLEAN,
 	                                 ScalarFunction::UnaryFunction<double, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<date_t, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsFiniteOperator>));
+	funcs.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BOOLEAN,
+	                                 ScalarFunction::UnaryFunction<timestamp_t, bool, IsFiniteOperator>));
 	set.AddFunction(funcs);
 }
 

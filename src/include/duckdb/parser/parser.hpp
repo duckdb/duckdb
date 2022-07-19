@@ -20,10 +20,12 @@ struct PGList;
 } // namespace duckdb_libpgquery
 
 namespace duckdb {
+class ParserExtension;
 
 struct ParserOptions {
 	bool preserve_identifier_case = true;
 	idx_t max_expression_depth = 1000;
+	vector<ParserExtension> *extensions = nullptr;
 };
 
 //! The parser is responsible for parsing the query and converting it into a set

@@ -175,8 +175,8 @@ void StringStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t 
 	string_t min_string((const char *)min, MAX_STRING_MINMAX_SIZE);
 	string_t max_string((const char *)max, MAX_STRING_MINMAX_SIZE);
 
-	VectorData vdata;
-	vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	vector.ToUnifiedFormat(count, vdata);
 	auto data = (string_t *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);

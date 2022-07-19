@@ -1,0 +1,53 @@
+# name: test/sql/prepared/prepare_lambda.test
+# description: PREPARE of lambda functions
+# group: [prepared]
+
+# list_transform
+statement ok
+PREPARE v1 AS SELECT list_transform(?, x -> x + 1)
+
+query I
+EXECUTE v1([1, 2, 3])
+----
+[2, 3, 4]
+
+statement ok
+PREPARE v2 AS SELECT list_transform([1, 2, 3], x -> x + ?)
+
+query I
+EXECUTE v2(1)
+----
+[2, 3, 4]
+
+statement ok
+PREPARE v3 AS SELECT list_transform(?, x -> x + ? + ?)
+
+query I
+EXECUTE v3([1, 2, 3], 1, 1)
+----
+[3, 4, 5]
+
+# list_filter
+statement ok
+PREPARE v4 AS SELECT list_filter(?, x -> x > 1)
+
+query I
+EXECUTE v4([1, 2, 3])
+----
+[2, 3]
+
+statement ok
+PREPARE v5 AS SELECT list_filter([1, 2, 3], x -> x > ?)
+
+query I
+EXECUTE v5(1)
+----
+[2, 3]
+
+statement ok
+PREPARE v6 AS SELECT list_filter(?, x -> x > ? AND ?)
+
+query I
+EXECUTE v6([1, 2, 3], 1, True)
+----
+[2, 3]

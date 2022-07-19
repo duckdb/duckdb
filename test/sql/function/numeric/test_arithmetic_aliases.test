@@ -1,0 +1,44 @@
+# name: test/sql/function/numeric/test_arithmetic_aliases.test
+# description: Check aliases for + - * /
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(a integer)
+
+statement ok
+insert into test values (1), (2), (3), (NULL)
+
+query I
+select add(a,a) from test
+----
+2
+4
+6
+NULL
+
+query I
+select subtract(a,a) from test
+----
+0
+0
+0
+NULL
+
+query I
+select multiply(a,a) from test
+----
+1
+4
+9
+NULL
+
+query I
+select divide(a,a) from test
+----
+1
+1
+1
+NULL

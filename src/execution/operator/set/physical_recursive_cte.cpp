@@ -9,7 +9,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/parallel/event.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 
@@ -29,9 +28,10 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : new_groups(STANDARD_VECTOR_SIZE) {
-		ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), op.types,
-		                                            vector<LogicalType>(), vector<BoundAggregateExpression *>());
+	    : intermediate_table(Allocator::Get(context)), new_groups(STANDARD_VECTOR_SIZE) {
+		ht = make_unique<GroupedAggregateHashTable>(Allocator::Get(context), BufferManager::GetBufferManager(context),
+		                                            op.types, vector<LogicalType>(),
+		                                            vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;

@@ -148,9 +148,9 @@ static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Ve
 }
 
 template <bool IS_UPPER>
-static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &context, BoundFunctionExpression &expr,
-                                                            FunctionData *bind_data,
-                                                            vector<unique_ptr<BaseStatistics>> &child_stats) {
+static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() == 1);
 	// can only propagate stats if the children have stats
 	if (!child_stats[0]) {
@@ -164,8 +164,8 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 }
 
 ScalarFunction LowerFun::GetFunction() {
-	return ScalarFunction("lower", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, false,
-	                      nullptr, nullptr, CaseConvertPropagateStats<false>);
+	return ScalarFunction("lower", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, nullptr,
+	                      nullptr, CaseConvertPropagateStats<false>);
 }
 
 void LowerFun::RegisterFunction(BuiltinFunctions &set) {
@@ -174,8 +174,8 @@ void LowerFun::RegisterFunction(BuiltinFunctions &set) {
 
 void UpperFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"upper", "ucase"},
-	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, false,
-	                               false, nullptr, nullptr, CaseConvertPropagateStats<true>));
+	                ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, nullptr,
+	                               nullptr, CaseConvertPropagateStats<true>));
 }
 
 } // namespace duckdb

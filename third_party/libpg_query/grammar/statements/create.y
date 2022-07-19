@@ -199,15 +199,6 @@ ColConstraintElem:
 					n->cooked_expr = NULL;
 					$$ = (PGNode *)n;
 				}
-			| GENERATED generated_when AS IDENTITY_P OptParenthesizedSeqOptList
-				{
-					PGConstraint *n = makeNode(PGConstraint);
-					n->contype = PG_CONSTR_IDENTITY;
-					n->generated_when = $2;
-					n->options = $5;
-					n->location = @1;
-					$$ = (PGNode *)n;
-				}
 			| REFERENCES qualified_name opt_column_list key_match key_actions
 				{
 					PGConstraint *n = makeNode(PGConstraint);
@@ -224,6 +215,61 @@ ColConstraintElem:
 					$$ = (PGNode *)n;
 				}
 		;
+
+GeneratedColumnType:
+			VIRTUAL { $$ = PG_CONSTR_GENERATED_VIRTUAL; }
+			| STORED { $$ = PG_CONSTR_GENERATED_STORED; }
+			;
+
+opt_GeneratedColumnType:
+			GeneratedColumnType { $$ = $1 }
+			| /* EMPTY */ { $$ = PG_CONSTR_GENERATED_VIRTUAL; }
+			;
+
+GeneratedConstraintElem:
+			GENERATED generated_when AS IDENTITY_P OptParenthesizedSeqOptList
+				{
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_IDENTITY;
+					n->generated_when = $2;
+					n->options = $5;
+					n->location = @1;
+					$$ = (PGNode *)n;
+				}
+			| GENERATED generated_when AS '(' a_expr ')' opt_GeneratedColumnType
+				{
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = $7;
+					n->generated_when = $2;
+					n->raw_expr = $5;
+					n->cooked_expr = NULL;
+					n->location = @1;
+
+					/*
+					 * Can't do this in the grammar because of shift/reduce
+					 * conflicts.  (IDENTITY allows both ALWAYS and BY
+					 * DEFAULT, but generated columns only allow ALWAYS.)  We
+					 * can also give a more useful error message and location.
+					 */
+					if ($2 != PG_ATTRIBUTE_IDENTITY_ALWAYS)
+						ereport(ERROR,
+								(errcode(PG_ERRCODE_SYNTAX_ERROR),
+								 errmsg("for a generated column, GENERATED ALWAYS must be specified"),
+								 parser_errposition(@2)));
+
+					$$ = (PGNode *)n;
+				}
+			| AS '(' a_expr ')' opt_GeneratedColumnType
+				{
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = $5;
+					n->generated_when = PG_ATTRIBUTE_IDENTITY_ALWAYS;
+					n->raw_expr = $3;
+					n->cooked_expr = NULL;
+					n->location = @1;
+					$$ = (PGNode *)n;
+				}
+	    ;
 
 
 generic_option_elem:
@@ -250,13 +296,6 @@ key_actions:
 			| /*EMPTY*/
 				{ $$ = (PG_FKCONSTR_ACTION_NOACTION << 8) | (PG_FKCONSTR_ACTION_NOACTION & 0xFF); }
 		;
-
-
-create_generic_options:
-			OPTIONS '(' generic_option_list ')'			{ $$ = $3; }
-			| /*EMPTY*/									{ $$ = NIL; }
-		;
-
 
 OnCommitOption:  ON COMMIT DROP				{ $$ = ONCOMMIT_DROP; }
 			| ON COMMIT DELETE_P ROWS		{ $$ = PG_ONCOMMIT_DELETE_ROWS; }
@@ -378,9 +417,10 @@ ConstraintAttributeElem:
 
 
 
-columnDef:	ColId Typename create_generic_options ColQualList
+columnDef:	ColId Typename ColQualList
 				{
 					PGColumnDef *n = makeNode(PGColumnDef);
+					n->category = COL_STANDARD;
 					n->colname = $1;
 					n->typeName = $2;
 					n->inhcount = 0;
@@ -391,24 +431,38 @@ columnDef:	ColId Typename create_generic_options ColQualList
 					n->raw_default = NULL;
 					n->cooked_default = NULL;
 					n->collOid = InvalidOid;
-					n->fdwoptions = $3;
-					SplitColQualList($4, &n->constraints, &n->collClause,
+					SplitColQualList($3, &n->constraints, &n->collClause,
 									 yyscanner);
 					n->location = @1;
 					$$ = (PGNode *)n;
-				}
-		;
-
-
-generic_option_list:
-			generic_option_elem
+			}
+			|
+			ColId opt_Typename GeneratedConstraintElem ColQualList
 				{
-					$$ = list_make1($1);
-				}
-			| generic_option_list ',' generic_option_elem
-				{
-					$$ = lappend($1, $3);
-				}
+					PGColumnDef *n = makeNode(PGColumnDef);
+					n->category = COL_GENERATED;
+					n->colname = $1;
+					n->typeName = $2;
+					n->inhcount = 0;
+					n->is_local = true;
+					n->is_not_null = false;
+					n->is_from_type = false;
+					n->storage = 0;
+					n->raw_default = NULL;
+					n->cooked_default = NULL;
+					n->collOid = InvalidOid;
+					// merge the constraints with the generated column constraint
+					auto constraints = $4;
+					if (constraints) {
+					    constraints = lappend(constraints, $3);
+					} else {
+					    constraints = list_make1($3);
+					}
+					SplitColQualList(constraints, &n->constraints, &n->collClause,
+									 yyscanner);
+					n->location = @1;
+					$$ = (PGNode *)n;
+			}
 		;
 
 

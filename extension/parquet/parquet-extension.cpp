@@ -13,6 +13,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
@@ -78,6 +79,8 @@ public:
 		table_function.cardinality = ParquetCardinality;
 		table_function.table_scan_progress = ParquetProgress;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -85,6 +88,8 @@ public:
 		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
 		table_function.bind = ParquetScanBindList;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
+		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		set.AddFunction(table_function);
 		return set;
 	}
@@ -93,11 +98,17 @@ public:
 	                                                vector<string> &expected_names,
 	                                                vector<LogicalType> &expected_types) {
 		D_ASSERT(expected_names.size() == expected_types.size());
+		ParquetOptions parquet_options(context);
+
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
 			if (loption == "compression" || loption == "codec") {
 				// CODEC option has no effect on parquet read: we determine codec from the file
 				continue;
+			} else if (loption == "filename") {
+				parquet_options.filename = true;
+			} else if (loption == "hive_partitioning") {
+				parquet_options.hive_partitioning = true;
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
@@ -109,7 +120,6 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
 		result->names = result->initial_reader->names;
 		result->types = result->initial_reader->return_types;
@@ -139,7 +149,7 @@ public:
 		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
 			return overall_stats;
-		} else if (config.object_cache_enable) {
+		} else if (config.options.object_cache_enable) {
 			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
@@ -197,14 +207,19 @@ public:
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
-		if (!config.enable_external_access) {
+		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
 		auto file_name = input.inputs[0].GetValue<string>();
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
-			if (kv.first == "binary_as_string") {
+			auto loption = StringUtil::Lower(kv.first);
+			if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
+			} else if (loption == "filename") {
+				parquet_options.filename = BooleanValue::Get(kv.second);
+			} else if (loption == "hive_partitioning") {
+				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -215,7 +230,7 @@ public:
 	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, TableFunctionBindInput &input,
 	                                                    vector<LogicalType> &return_types, vector<string> &names) {
 		auto &config = DBConfig::GetConfig(context);
-		if (!config.enable_external_access) {
+		if (!config.options.enable_external_access) {
 			throw PermissionException("Scanning Parquet files is disabled through configuration");
 		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
@@ -229,8 +244,13 @@ public:
 		}
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
-			if (kv.first == "binary_as_string") {
+			auto loption = StringUtil::Lower(kv.first);
+			if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
+			} else if (loption == "filename") {
+				parquet_options.filename = BooleanValue::Get(kv.second);
+			} else if (loption == "hive_partitioning") {
+				parquet_options.hive_partitioning = BooleanValue::Get(kv.second);
 			}
 		}
 		return ParquetScanBindInternal(context, move(files), return_types, names, parquet_options);
@@ -249,7 +269,7 @@ public:
 	}
 
 	static unique_ptr<LocalTableFunctionState>
-	ParquetScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
+	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
 
@@ -258,7 +278,7 @@ public:
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->table_filters = input.filters;
-		if (!ParquetParallelStateNext(context, bind_data, *result, gstate)) {
+		if (!ParquetParallelStateNext(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
 		return move(result);
@@ -332,6 +352,8 @@ public:
 			while (parallel_state.file_index + 1 < bind_data.files.size()) {
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
+				// TODO check if any of the hivepartitioning/filename columns are in a filter, in this case we may be
+				// 		able to skip the file here.
 				parallel_state.current_reader =
 				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
 				                               parallel_state.current_reader->parquet_options, bind_data.files[0]);
@@ -367,8 +389,8 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	ParquetWriteLocalState() {
-		buffer = make_unique<ChunkCollection>();
+	explicit ParquetWriteLocalState(Allocator &allocator) {
+		buffer = make_unique<ChunkCollection>(allocator);
 	}
 
 	unique_ptr<ChunkCollection> buffer;
@@ -421,7 +443,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	return move(global_state);
 }
 
-void ParquetWriteSink(ClientContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
+void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
@@ -433,11 +455,11 @@ void ParquetWriteSink(ClientContext &context, FunctionData &bind_data_p, GlobalF
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		global_state.writer->Flush(*local_state.buffer);
 		// and reset the buffer
-		local_state.buffer = make_unique<ChunkCollection>();
+		local_state.buffer = make_unique<ChunkCollection>(Allocator::Get(context.client));
 	}
 }
 
-void ParquetWriteCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate) {
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
@@ -451,8 +473,8 @@ void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, Globa
 	global_state.writer->Finalize();
 }
 
-unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ClientContext &context, FunctionData &bind_data) {
-	return make_unique<ParquetWriteLocalState>();
+unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
+	return make_unique<ParquetWriteLocalState>(Allocator::Get(context.client));
 }
 
 unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,

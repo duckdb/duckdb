@@ -41,7 +41,7 @@ struct ExpressionInfo {
 	//! The function Name
 	string function_name;
 	//! The function time
-	uint64_t function_time;
+	uint64_t function_time = 0;
 	//! Count the number of ALL tuples
 	uint64_t tuples_count = 0;
 	//! Count the number of tuples sampled
@@ -166,9 +166,13 @@ public:
 
 	DUCKDB_API void Initialize(PhysicalOperator *root);
 
-	DUCKDB_API string ToString(bool print_optimizer_output = false) const;
-	DUCKDB_API void ToStream(std::ostream &str, bool print_optimizer_output = false) const;
+	DUCKDB_API string QueryTreeToString(bool print_optimizer_output = false) const;
+	DUCKDB_API void QueryTreeToStream(std::ostream &str, bool print_optimizer_output = false) const;
 	DUCKDB_API void Print();
+
+	//! return the printed as a string. Unlike ToString, which is always formatted as a string,
+	//! the return value is formatted based on the current print format (see GetPrintFormat()).
+	DUCKDB_API string ToString() const;
 
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;

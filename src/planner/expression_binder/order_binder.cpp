@@ -6,6 +6,9 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -38,6 +41,22 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	return result;
 }
 
+unique_ptr<Expression> OrderBinder::BindConstant(ParsedExpression &expr, const Value &val) {
+	// ORDER BY a constant
+	if (!val.type().IsIntegral()) {
+		// non-integral expression, we just leave the constant here.
+		// ORDER BY <constant> has no effect
+		// CONTROVERSIAL: maybe we should throw an error
+		return nullptr;
+	}
+	// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
+	auto index = (idx_t)val.GetValue<int64_t>();
+	if (index < 1 || index > max_count) {
+		throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
+	}
+	return CreateProjectionReference(expr, index - 1);
+}
+
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// in the ORDER BY clause we do not bind children
 	// we bind ONLY to the select list
@@ -49,19 +68,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
 		auto &constant = (ConstantExpression &)*expr;
-		// ORDER BY a constant
-		if (!constant.value.type().IsIntegral()) {
-			// non-integral expression, we just leave the constant here.
-			// ORDER BY <constant> has no effect
-			// CONTROVERSIAL: maybe we should throw an error
-			return nullptr;
-		}
-		// INTEGER constant: we use the integer as an index into the select list (e.g. ORDER BY 1)
-		auto index = (idx_t)constant.value.GetValue<int64_t>();
-		if (index < 1 || index > max_count) {
-			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
-		}
-		return CreateProjectionReference(*expr, index - 1);
+		return BindConstant(*expr, constant.value);
 	}
 	case ExpressionClass::COLUMN_REF: {
 		// COLUMN REF expression
@@ -82,6 +89,9 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	case ExpressionClass::POSITIONAL_REFERENCE: {
 		auto &posref = (PositionalReferenceExpression &)*expr;
 		return CreateProjectionReference(*expr, posref.index - 1);
+	}
+	case ExpressionClass::PARAMETER: {
+		throw ParameterNotAllowedException("Parameter not supported in ORDER BY clause");
 	}
 	default:
 		break;

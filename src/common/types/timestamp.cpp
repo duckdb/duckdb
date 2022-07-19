@@ -143,9 +143,9 @@ timestamp_t Timestamp::FromString(const string &str) {
 
 string Timestamp::ToString(timestamp_t timestamp) {
 	if (timestamp == timestamp_t::infinity()) {
-		return "infinity";
+		return Date::PINF;
 	} else if (timestamp == timestamp_t::ninfinity()) {
-		return "-infinity";
+		return Date::NINF;
 	}
 	date_t date;
 	dtime_t time;
@@ -163,6 +163,9 @@ date_t Timestamp::GetDate(timestamp_t timestamp) {
 }
 
 dtime_t Timestamp::GetTime(timestamp_t timestamp) {
+	if (!IsFinite(timestamp)) {
+		throw ConversionException("Can't get TIME of infinite TIMESTAMP");
+	}
 	date_t date = Timestamp::GetDate(timestamp);
 	return dtime_t(timestamp.value - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
 }

@@ -16,7 +16,7 @@ string ConstantExpression::ToString() const {
 }
 
 bool ConstantExpression::Equals(const ConstantExpression *a, const ConstantExpression *b) {
-	return !ValueOperations::DistinctFrom(a->value, b->value);
+	return a->value.type() == b->value.type() && !ValueOperations::DistinctFrom(a->value, b->value);
 }
 
 hash_t ConstantExpression::Hash() const {

@@ -27,7 +27,7 @@ struct FirstFunctionBase {
 template <bool LAST>
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (LAST || !state->is_set) {
 			state->is_set = true;
 			if (!mask.RowIsValid(idx)) {
@@ -40,20 +40,20 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!target->is_set) {
 			*target = source;
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set || state->is_null) {
 			mask.SetInvalid(idx);
 		} else {
@@ -84,27 +84,27 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (LAST || !state->is_set) {
 			SetValue(state, input[idx], !mask.RowIsValid(idx));
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, bind_data, input, mask, 0);
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.is_set && (LAST || !target->is_set)) {
 			SetValue(target, source.value, source.is_null);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->is_set || state->is_null) {
 			mask.SetInvalid(idx);
 		} else {
@@ -152,10 +152,10 @@ struct FirstVectorFunction {
 		VectorOperations::Copy(input, *state->value, sel, 1, 0, 0);
 	}
 
-	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
+	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
-		VectorData sdata;
-		state_vector.Orrify(count, sdata);
+		UnifiedVectorFormat sdata;
+		state_vector.ToUnifiedFormat(count, sdata);
 
 		auto states = (FirstStateVector **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {
@@ -167,14 +167,14 @@ struct FirstVectorFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (source.value && (LAST || !target->value)) {
 			SetValue(target, *source.value, 0);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
 			// we need to use FlatVector::SetNull here
 			// since for STRUCT columns only setting the validity mask of the struct is incorrect

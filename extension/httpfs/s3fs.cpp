@@ -101,6 +101,25 @@ static unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(Heade
 	return headers;
 }
 
+std::string S3FileSystem::UrlDecode(std::string input) {
+	std::string result;
+	result.reserve(input.size());
+	char ch;
+	std::replace(input.begin(), input.end(), '+', ' ');
+	for (idx_t i = 0; i < input.length(); i++) {
+		if (int(input[i]) == 37) {
+			int ii;
+			sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
+			ch = static_cast<char>(ii);
+			result += ch;
+			i += 2;
+		} else {
+			result += input[i];
+		}
+	}
+	return result;
+}
+
 std::string S3FileSystem::UrlEncode(const std::string &input, bool encode_slash) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
@@ -414,7 +433,7 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 	}
 
 	// Try to allocate a buffer from the buffer manager
-	unique_ptr<BufferHandle> duckdb_buffer;
+	BufferHandle duckdb_buffer;
 	bool set_waiting_for_memory = false;
 
 	while (true) {
@@ -447,8 +466,8 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 		}
 	}
 
-	auto new_write_buffer =
-	    make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size, duckdb_buffer);
+	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size,
+	                                                   move(duckdb_buffer));
 
 	{
 		std::unique_lock<std::mutex> lck(file_handle.write_buffers_lock);
@@ -895,7 +914,8 @@ void AWSListObjectV2::ParseKey(string &aws_response, vector<string> &result) {
 			if (next_close_tag_pos == string::npos) {
 				throw InternalException("Failed to parse S3 result");
 			}
-			auto parsed_path = aws_response.substr(next_open_tag_pos + 5, next_close_tag_pos - next_open_tag_pos - 5);
+			auto parsed_path = S3FileSystem::UrlDecode(
+			    aws_response.substr(next_open_tag_pos + 5, next_close_tag_pos - next_open_tag_pos - 5));
 			if (parsed_path.back() != '/') {
 				result.push_back(parsed_path);
 			}

@@ -74,7 +74,7 @@ protected:
 	//! Format is literals[0], specifiers[0], literals[1], ..., specifiers[n - 1], literals[n]
 	vector<string> literals;
 	//! The constant size that appears in the format string
-	idx_t constant_size;
+	idx_t constant_size = 0;
 	//! The max numeric width of the specifier (if it is parsed as a number), or -1 if it is not a number
 	vector<int> numeric_width;
 
@@ -90,6 +90,9 @@ struct StrfTimeFormat : public StrTimeFormat {
 	void FormatString(date_t date, dtime_t time, char *target);
 
 	DUCKDB_API static string Format(timestamp_t timestamp, const string &format);
+
+	DUCKDB_API void ConvertDateVector(Vector &input, Vector &result, idx_t count);
+	DUCKDB_API void ConvertTimestampVector(Vector &input, Vector &result, idx_t count);
 
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.

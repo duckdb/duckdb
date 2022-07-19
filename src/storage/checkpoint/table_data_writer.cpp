@@ -9,20 +9,21 @@
 namespace duckdb {
 
 TableDataWriter::TableDataWriter(DatabaseInstance &, CheckpointManager &checkpoint_manager, TableCatalogEntry &table,
-                                 MetaBlockWriter &meta_writer)
-    : checkpoint_manager(checkpoint_manager), table(table), meta_writer(meta_writer) {
+                                 MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer)
+    : checkpoint_manager(checkpoint_manager), table(table), table_data_writer(table_data_writer),
+      meta_data_writer(meta_data_writer) {
 }
 
 TableDataWriter::~TableDataWriter() {
 }
 
-BlockPointer TableDataWriter::WriteTableData() {
+void TableDataWriter::WriteTableData() {
 	// start scanning the table and append the data to the uncompressed segments
-	return table.storage->Checkpoint(*this);
+	table.storage->Checkpoint(*this);
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns[i].compression_type;
+	return table.columns[i].CompressionType();
 }
 
 } // namespace duckdb

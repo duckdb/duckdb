@@ -27,6 +27,7 @@ class FileOpener;
 
 class ParquetWriter {
 	friend class ColumnWriter;
+	friend class BasicColumnWriter;
 	friend class ListColumnWriter;
 	friend class StructColumnWriter;
 

@@ -60,22 +60,22 @@
 
 #define GOOGLE_PROTOBUF_HAS_ONEOF
 
-using google::protobuf::internal::ArenaStringPtr;
-using google::protobuf::internal::DescriptorTable;
-using google::protobuf::internal::ExtensionSet;
-using google::protobuf::internal::GenericTypeHandler;
-using google::protobuf::internal::GetEmptyString;
-using google::protobuf::internal::InlinedStringField;
-using google::protobuf::internal::InternalMetadata;
-using google::protobuf::internal::LazyField;
-using google::protobuf::internal::MapFieldBase;
-using google::protobuf::internal::MigrationSchema;
-using google::protobuf::internal::OnShutdownDelete;
-using google::protobuf::internal::ReflectionSchema;
-using google::protobuf::internal::RepeatedPtrFieldBase;
-using google::protobuf::internal::StringSpaceUsedExcludingSelfLong;
-using google::protobuf::internal::WrappedMutex;
-
+using duckdb::google::protobuf::internal::ArenaStringPtr;
+using duckdb::google::protobuf::internal::DescriptorTable;
+using duckdb::google::protobuf::internal::ExtensionSet;
+using duckdb::google::protobuf::internal::GenericTypeHandler;
+using duckdb::google::protobuf::internal::GetEmptyString;
+using duckdb::google::protobuf::internal::InlinedStringField;
+using duckdb::google::protobuf::internal::InternalMetadata;
+using duckdb::google::protobuf::internal::LazyField;
+using duckdb::google::protobuf::internal::MapFieldBase;
+using duckdb::google::protobuf::internal::MigrationSchema;
+using duckdb::google::protobuf::internal::OnShutdownDelete;
+using duckdb::google::protobuf::internal::ReflectionSchema;
+using duckdb::google::protobuf::internal::RepeatedPtrFieldBase;
+using duckdb::google::protobuf::internal::StringSpaceUsedExcludingSelfLong;
+using duckdb::google::protobuf::internal::WrappedMutex;
+namespace duckdb{
 namespace google {
 namespace protobuf {
 
@@ -3037,5 +3037,5 @@ void UnknownFieldSetSerializer(const uint8_t* base, uint32_t offset,
 }  // namespace internal
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>

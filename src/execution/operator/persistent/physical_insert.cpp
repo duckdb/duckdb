@@ -14,7 +14,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class InsertGlobalState : public GlobalSinkState {
 public:
-	InsertGlobalState() : insert_count(0), returned_chunk_count(0) {
+	explicit InsertGlobalState(Allocator &allocator)
+	    : insert_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
 	}
 
 	mutex lock;
@@ -25,9 +26,10 @@ public:
 
 class InsertLocalState : public LocalSinkState {
 public:
-	InsertLocalState(const vector<LogicalType> &types, const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(bound_defaults) {
-		insert_chunk.Initialize(types);
+	InsertLocalState(Allocator &allocator, const vector<LogicalType> &types,
+	                 const vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(allocator, bound_defaults) {
+		insert_chunk.Initialize(allocator, types);
 	}
 
 	DataChunk insert_chunk;
@@ -47,7 +49,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
 
-	chunk.Normalify();
+	chunk.Flatten();
 	istate.default_executor.SetChunk(chunk);
 
 	istate.insert_chunk.Reset();
@@ -56,14 +58,19 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	if (!column_index_map.empty()) {
 		// columns specified by the user, use column_index_map
 		for (idx_t i = 0; i < table->columns.size(); i++) {
+			auto &col = table->columns[i];
+			if (col.Generated()) {
+				continue;
+			}
+			auto storage_idx = col.StorageOid();
 			if (column_index_map[i] == DConstants::INVALID_INDEX) {
 				// insert default value
-				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[i]);
+				istate.default_executor.ExecuteExpression(i, istate.insert_chunk.data[storage_idx]);
 			} else {
 				// get value from child chunk
 				D_ASSERT((idx_t)column_index_map[i] < chunk.ColumnCount());
-				D_ASSERT(istate.insert_chunk.data[i].GetType() == chunk.data[column_index_map[i]].GetType());
-				istate.insert_chunk.data[i].Reference(chunk.data[column_index_map[i]]);
+				D_ASSERT(istate.insert_chunk.data[storage_idx].GetType() == chunk.data[column_index_map[i]].GetType());
+				istate.insert_chunk.data[storage_idx].Reference(chunk.data[column_index_map[i]]);
 			}
 		}
 	} else {
@@ -86,11 +93,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<InsertGlobalState>();
+	return make_unique<InsertGlobalState>(Allocator::Get(context));
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<InsertLocalState>(table->GetTypes(), bound_defaults);
+	return make_unique<InsertLocalState>(Allocator::Get(context.client), table->GetTypes(), bound_defaults);
 }
 
 void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

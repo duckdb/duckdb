@@ -17,8 +17,8 @@
  * under the License.
  */
 
-#ifndef _THRIFT_TRANSPORT_TTRANSPORT_H_
-#define _THRIFT_TRANSPORT_TTRANSPORT_H_ 1
+#ifndef _DUCKDB_THRIFT_TRANSPORT_TTRANSPORT_H_
+#define _DUCKDB_THRIFT_TRANSPORT_TTRANSPORT_H_ 1
 
 #include "thrift/Thrift.h"
 #include "thrift/transport/TTransportException.h"
@@ -268,4 +268,4 @@ public:
 }
 } // duckdb_apache::thrift::transport
 
-#endif // #ifndef _THRIFT_TRANSPORT_TTRANSPORT_H_
+#endif // #ifndef _DUCKDB_THRIFT_TRANSPORT_TTRANSPORT_H_

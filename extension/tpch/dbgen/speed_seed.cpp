@@ -17,22 +17,21 @@
 
 /*  _tal long RandSeed = "Random^SeedFromTimestamp" (void); */
 
-#define ADVANCE_STREAM(stream_id, num_calls) advanceStream(stream_id, num_calls, 0)
-#define ADVANCE_STREAM64(stream_id, num_calls) advanceStream(stream_id, num_calls, 1)
-#define MAX_COLOR 92
+#define ADVANCE_STREAM(stream, num_calls)   advanceStream(stream, num_calls, 0)
+#define ADVANCE_STREAM64(stream, num_calls) advanceStream(stream, num_calls, 1)
+#define MAX_COLOR                              92
 long name_bits[MAX_COLOR / BITS_PER_LONG];
-static seed_t *Seed = DBGenGlobals::Seed;
 void fakeVStr(int nAvg, long nSeed, DSS_HUGE nCount);
 void NthElement(DSS_HUGE N, DSS_HUGE *StartSeed);
 
-void advanceStream(int nStream, DSS_HUGE nCalls, int bUse64Bit) {
+void advanceStream(seed_t *seed, DSS_HUGE nCalls, int bUse64Bit) {
 	if (bUse64Bit)
-		Seed[nStream].value = AdvanceRand64(Seed[nStream].value, nCalls);
+		seed->value = AdvanceRand64(seed->value, nCalls);
 	else
-		NthElement(nCalls, &Seed[nStream].value);
+		NthElement(nCalls, &seed->value);
 
 #ifdef RNG_TEST
-	Seed[nStream].nCalls += nCalls;
+	seed->nCalls += nCalls;
 #endif
 
 	return;
@@ -88,115 +87,131 @@ void NthElement(DSS_HUGE N, DSS_HUGE *StartSeed) {
 	return;
 }
 
-/* updates Seed[column] using the tpch_a_rnd algorithm */
-void fake_tpch_a_rnd(int min, int max, int column) {
+/* updates 'seed' using the tpch_a_rnd algorithm */
+void fake_tpch_a_rnd(int min, int max, seed_t *seed) {
 	DSS_HUGE len;
 	DSS_HUGE itcount;
 
-	RANDOM(len, min, max, column);
+	RANDOM(len, min, max, seed);
 	if (len % 5L == 0)
 		itcount = len / 5;
 	else
 		itcount = len / 5 + 1L;
-	NthElement(itcount, &Seed[column].usage);
+	NthElement(itcount, &seed->usage);
 #ifdef RNG_TEST
-	Seed[column].nCalls += itcount;
+	seed->nCalls += itcount;
 #endif
 	return;
 }
 
-long sd_part(int child, DSS_HUGE skip_count) {
+long sd_part(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
 	(void)child;
 	int i;
 
 	for (i = P_MFG_SD; i <= P_CNTR_SD; i++)
-		ADVANCE_STREAM(i, skip_count);
+		ADVANCE_STREAM(&ctx->Seed[i], skip_count);
 
-	ADVANCE_STREAM(P_CMNT_SD, skip_count * 2);
-	ADVANCE_STREAM(P_NAME_SD, skip_count * 92);
+	ADVANCE_STREAM(&ctx->Seed[P_CMNT_SD], skip_count * 2);
+	ADVANCE_STREAM(&ctx->Seed[P_NAME_SD], skip_count * 92);
 
 	return (0L);
 }
 
-long sd_line(int child, DSS_HUGE skip_count) {
+long sd_line(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
 	int i, j;
 
 	for (j = 0; j < O_LCNT_MAX; j++) {
 		for (i = L_QTY_SD; i <= L_RFLG_SD; i++)
 			/*
-			            if (scale >= 30000 && i == L_PKEY_SD)
-			                ADVANCE_STREAM64(i, skip_count);
+			            if (ctx->scale_factor >= 30000 && i == L_PKEY_SD)
+			                ADVANCE_STREAM64(&ctx->Seed[i], skip_count);
 			            else
 			*/
-			ADVANCE_STREAM(i, skip_count);
-		ADVANCE_STREAM(L_CMNT_SD, skip_count * 2);
+			ADVANCE_STREAM(&ctx->Seed[i], skip_count);
+		ADVANCE_STREAM(&ctx->Seed[L_CMNT_SD], skip_count * 2);
 	}
 
 	/* need to special case this as the link between master and detail */
 	if (child == 1) {
-		ADVANCE_STREAM(O_ODATE_SD, skip_count);
-		ADVANCE_STREAM(O_LCNT_SD, skip_count);
+		ADVANCE_STREAM(&ctx->Seed[O_ODATE_SD], skip_count);
+		ADVANCE_STREAM(&ctx->Seed[O_LCNT_SD], skip_count);
 	}
 
 	return (0L);
 }
 
-long sd_order(int child, DSS_HUGE skip_count) {
+long sd_order(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
 	(void)child;
-	ADVANCE_STREAM(O_LCNT_SD, skip_count);
+	ADVANCE_STREAM(&ctx->Seed[O_LCNT_SD], skip_count);
 	/*
-	    if (scale >= 30000)
-	        ADVANCE_STREAM64(O_CKEY_SD, skip_count);
+	    if (ctx->scale_factor >= 30000)
+	        ADVANCE_STREAM64(&ctx->Seed[O_CKEY_SD], skip_count);
 	    else
 	*/
-	ADVANCE_STREAM(O_CKEY_SD, skip_count);
-	ADVANCE_STREAM(O_CMNT_SD, skip_count * 2);
-	ADVANCE_STREAM(O_SUPP_SD, skip_count);
-	ADVANCE_STREAM(O_CLRK_SD, skip_count);
-	ADVANCE_STREAM(O_PRIO_SD, skip_count);
-	ADVANCE_STREAM(O_ODATE_SD, skip_count);
+	ADVANCE_STREAM(&ctx->Seed[O_CKEY_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[O_CMNT_SD], skip_count * 2);
+	ADVANCE_STREAM(&ctx->Seed[O_SUPP_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[O_CLRK_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[O_PRIO_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[O_ODATE_SD], skip_count);
 
 	return (0L);
 }
 
-long sd_psupp(int child, DSS_HUGE skip_count) {
+long sd_psupp(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
 	(void)child;
 
 	int j;
 
 	for (j = 0; j < SUPP_PER_PART; j++) {
-		ADVANCE_STREAM(PS_QTY_SD, skip_count);
-		ADVANCE_STREAM(PS_SCST_SD, skip_count);
-		ADVANCE_STREAM(PS_CMNT_SD, skip_count * 2);
+		ADVANCE_STREAM(&ctx->Seed[PS_QTY_SD], skip_count);
+		ADVANCE_STREAM(&ctx->Seed[PS_SCST_SD], skip_count);
+		ADVANCE_STREAM(&ctx->Seed[PS_CMNT_SD], skip_count * 2);
 	}
 
 	return (0L);
 }
 
-long sd_cust(int child, DSS_HUGE skip_count) {
+long sd_cust(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
 	(void)child;
 
-	ADVANCE_STREAM(C_ADDR_SD, skip_count * 9);
-	ADVANCE_STREAM(C_CMNT_SD, skip_count * 2);
-	ADVANCE_STREAM(C_NTRG_SD, skip_count);
-	ADVANCE_STREAM(C_PHNE_SD, 3L * skip_count);
-	ADVANCE_STREAM(C_ABAL_SD, skip_count);
-	ADVANCE_STREAM(C_MSEG_SD, skip_count);
+	ADVANCE_STREAM(&ctx->Seed[C_ADDR_SD], skip_count * 9);
+	ADVANCE_STREAM(&ctx->Seed[C_CMNT_SD], skip_count * 2);
+	ADVANCE_STREAM(&ctx->Seed[C_NTRG_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[C_PHNE_SD], 3L * skip_count);
+	ADVANCE_STREAM(&ctx->Seed[C_ABAL_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[C_MSEG_SD], skip_count);
 	return (0L);
 }
 
-long sd_supp(int child, DSS_HUGE skip_count) {
+long sd_supp(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
 	(void)child;
 
-	ADVANCE_STREAM(S_NTRG_SD, skip_count);
-	ADVANCE_STREAM(S_PHNE_SD, 3L * skip_count);
-	ADVANCE_STREAM(S_ABAL_SD, skip_count);
-	ADVANCE_STREAM(S_ADDR_SD, skip_count * 9);
-	ADVANCE_STREAM(S_CMNT_SD, skip_count * 2);
-	ADVANCE_STREAM(BBB_CMNT_SD, skip_count);
-	ADVANCE_STREAM(BBB_JNK_SD, skip_count);
-	ADVANCE_STREAM(BBB_OFFSET_SD, skip_count);
-	ADVANCE_STREAM(BBB_TYPE_SD, skip_count); /* avoid one trudge */
+	ADVANCE_STREAM(&ctx->Seed[S_NTRG_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[S_PHNE_SD], 3L * skip_count);
+	ADVANCE_STREAM(&ctx->Seed[S_ABAL_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[S_ADDR_SD], skip_count * 9);
+	ADVANCE_STREAM(&ctx->Seed[S_CMNT_SD], skip_count * 2);
+	ADVANCE_STREAM(&ctx->Seed[BBB_CMNT_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[BBB_JNK_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[BBB_OFFSET_SD], skip_count);
+	ADVANCE_STREAM(&ctx->Seed[BBB_TYPE_SD], skip_count); /* avoid one trudge */
+
+	return (0L);
+}
+
+long sd_nation(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
+	(void)child;
+
+	ADVANCE_STREAM(&ctx->Seed[N_CMNT_SD], skip_count * 2);
+
+	return (0L);
+}
+
+long sd_region(int child, DSS_HUGE skip_count, DBGenContext *ctx) {
+	(void)child;
+
+	ADVANCE_STREAM(&ctx->Seed[R_CMNT_SD], skip_count * 2);
 
 	return (0L);
 }

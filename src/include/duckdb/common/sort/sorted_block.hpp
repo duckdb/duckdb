@@ -8,6 +8,9 @@
 #pragma once
 
 #include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/sort/comparators.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 
@@ -114,13 +117,13 @@ public:
 	idx_t block_idx;
 	idx_t entry_idx;
 
-	unique_ptr<BufferHandle> radix_handle = nullptr;
+	BufferHandle radix_handle;
 
-	unique_ptr<BufferHandle> blob_sorting_data_handle = nullptr;
-	unique_ptr<BufferHandle> blob_sorting_heap_handle = nullptr;
+	BufferHandle blob_sorting_data_handle;
+	BufferHandle blob_sorting_heap_handle;
 
-	unique_ptr<BufferHandle> payload_data_handle = nullptr;
-	unique_ptr<BufferHandle> payload_heap_handle = nullptr;
+	BufferHandle payload_data_handle;
+	BufferHandle payload_heap_handle;
 };
 
 //! Used to scan the data into DataChunks after sorting
@@ -165,6 +168,84 @@ private:
 	idx_t total_scanned;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
+};
+
+struct SBIterator {
+	static int ComparisonValue(ExpressionType comparison);
+
+	SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p = 0);
+
+	inline idx_t GetIndex() const {
+		return entry_idx;
+	}
+
+	inline void SetIndex(idx_t entry_idx_p) {
+		const auto new_block_idx = entry_idx_p / block_capacity;
+		if (new_block_idx != scan.block_idx) {
+			scan.SetIndices(new_block_idx, 0);
+			if (new_block_idx < block_count) {
+				scan.PinRadix(scan.block_idx);
+				block_ptr = scan.RadixPtr();
+				if (!all_constant) {
+					scan.PinData(*scan.sb->blob_sorting_data);
+				}
+			}
+		}
+
+		scan.entry_idx = entry_idx_p % block_capacity;
+		entry_ptr = block_ptr + scan.entry_idx * entry_size;
+		entry_idx = entry_idx_p;
+	}
+
+	inline SBIterator &operator++() {
+		if (++scan.entry_idx < block_capacity) {
+			entry_ptr += entry_size;
+			++entry_idx;
+		} else {
+			SetIndex(entry_idx + 1);
+		}
+
+		return *this;
+	}
+
+	inline SBIterator &operator--() {
+		if (scan.entry_idx) {
+			--scan.entry_idx;
+			--entry_idx;
+			entry_ptr -= entry_size;
+		} else {
+			SetIndex(entry_idx - 1);
+		}
+
+		return *this;
+	}
+
+	inline bool Compare(const SBIterator &other) const {
+		int comp_res;
+		if (all_constant) {
+			comp_res = FastMemcmp(entry_ptr, other.entry_ptr, cmp_size);
+		} else {
+			comp_res = Comparators::CompareTuple(scan, other.scan, entry_ptr, other.entry_ptr, sort_layout, external);
+		}
+
+		return comp_res <= cmp;
+	}
+
+	// Fixed comparison parameters
+	const SortLayout &sort_layout;
+	const idx_t block_count;
+	const idx_t block_capacity;
+	const size_t cmp_size;
+	const size_t entry_size;
+	const bool all_constant;
+	const bool external;
+	const int cmp;
+
+	// Iteration state
+	SBScanState scan;
+	idx_t entry_idx;
+	data_ptr_t block_ptr;
+	data_ptr_t entry_ptr;
 };
 
 } // namespace duckdb

@@ -44,6 +44,7 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 	proto_host_port_out = url.substr(0, slash_pos);
 
 	path_out = url.substr(slash_pos);
+
 	if (path_out.empty()) {
 		throw std::runtime_error("URL needs to contain a path");
 	}
@@ -143,33 +144,49 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 	headers->insert(std::pair<std::string, std::string>("Range", range_expr));
 
 	idx_t out_offset = 0;
+	idx_t tries = 0;
+	idx_t max_tries = 2;
 
-	auto res = hfs.http_client->Get(
-	    path.c_str(), *headers,
-	    [&](const duckdb_httplib_openssl::Response &response) {
-		    if (response.status >= 400) {
-			    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " + std::to_string(response.status) +
-			                             ")");
-		    }
-		    if (response.status < 300) { // done redirecting
-			    out_offset = 0;
-			    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
-			    if ((idx_t)content_length != buffer_out_len) {
-				    throw std::runtime_error("offset error");
+	while (true) {
+		auto res = hfs.http_client->Get(
+		    path.c_str(), *headers,
+		    [&](const duckdb_httplib_openssl::Response &response) {
+			    if (response.status >= 400) {
+				    throw std::runtime_error("HTTP GET error on '" + url + "' (HTTP " +
+				                             std::to_string(response.status) + ")");
 			    }
-		    }
-		    return true;
-	    },
-	    [&](const char *data, size_t data_length) {
-		    memcpy(buffer_out + out_offset, data, data_length);
-		    out_offset += data_length;
-		    return true;
-	    });
-	if (res.error() != duckdb_httplib_openssl::Error::Success) {
-		throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " + std::to_string((int)res.error()) +
-		                         ")");
+			    if (response.status < 300) { // done redirecting
+				    out_offset = 0;
+				    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
+				    if ((idx_t)content_length != buffer_out_len) {
+					    throw std::runtime_error("offset error");
+				    }
+			    }
+			    return true;
+		    },
+		    [&](const char *data, size_t data_length) {
+			    memcpy(buffer_out + out_offset, data, data_length);
+			    out_offset += data_length;
+			    return true;
+		    });
+
+		if (res.error() == duckdb_httplib_openssl::Error::Success) {
+			return make_unique<ResponseWrapper>(res.value());
+		} else {
+			// Retry mechanism for the keep-alive connection: sometimes the connection times out and the request will
+			// fail with a Read error. Refreshing the connection will solve this.
+
+			if (res.error() == duckdb_httplib_openssl::Error::Read) {
+				tries += 1;
+				hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str());
+			}
+
+			if (tries >= max_tries) {
+				throw std::runtime_error("HTTP GET error on '" + url + "' (Error code " +
+				                         std::to_string((int)res.error()) + ")");
+			}
+		}
 	}
-	return make_unique<ResponseWrapper>(res.value());
 }
 
 HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path, uint8_t flags, const HTTPParams &http_params)
@@ -192,12 +209,23 @@ std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t
 	return move(handle);
 }
 
+// Buffered read from http file.
+// Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t to_read = nr_bytes;
 	idx_t buffer_offset = 0;
 	if (location + nr_bytes > hfh.length) {
 		throw std::runtime_error("out of file");
+	}
+
+	// Don't buffer when DirectIO is set.
+	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
+		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
+		hfh.buffer_available = 0;
+		hfh.buffer_idx = 0;
+		hfh.file_offset = location + nr_bytes;
+		return;
 	}
 
 	if (location >= hfh.buffer_start && location < hfh.buffer_end) {
@@ -227,11 +255,22 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 		if (to_read > 0 && hfh.buffer_available == 0) {
 			auto new_buffer_available = MinValue<idx_t>(hfh.READ_BUFFER_LEN, hfh.length - hfh.file_offset);
-			GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(), new_buffer_available);
-			hfh.buffer_available = new_buffer_available;
-			hfh.buffer_idx = 0;
-			hfh.buffer_start = hfh.file_offset;
-			hfh.buffer_end = hfh.buffer_start + new_buffer_available;
+
+			// Bypass buffer if we read more than buffer size
+			if (to_read > new_buffer_available) {
+				GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer + buffer_offset, to_read);
+				hfh.buffer_available = 0;
+				hfh.buffer_idx = 0;
+				hfh.file_offset += to_read;
+				break;
+			} else {
+				GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(),
+				                new_buffer_available);
+				hfh.buffer_available = new_buffer_available;
+				hfh.buffer_idx = 0;
+				hfh.buffer_start = hfh.file_offset;
+				hfh.buffer_end = hfh.buffer_start + new_buffer_available;
+			}
 		}
 	}
 }
@@ -273,7 +312,7 @@ bool HTTPFileSystem::FileExists(const string &filename) {
 		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
 		auto &sfh = (HTTPFileHandle &)handle;
 		if (sfh.length == 0) {
-			throw std::runtime_error("not there this file");
+			return false;
 		}
 		return true;
 	} catch (...) {

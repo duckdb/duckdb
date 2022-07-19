@@ -58,6 +58,7 @@
 #include <google/protobuf/stubs/int128.h>
 
 #include <google/protobuf/port_def.inc>
+namespace duckdb{
 
 namespace google {
 namespace protobuf {
@@ -320,5 +321,5 @@ const char* FatalException::what() const throw() {
 
 }  // namespace protobuf
 }  // namespace google
-
+} // namespace duckdb
 #include <google/protobuf/port_undef.inc>
