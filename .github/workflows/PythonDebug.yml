@@ -39,7 +39,7 @@ jobs:
       run: |
         export DUCKDEBUG=1
         export ASAN_OPTIONS=detect_leaks=0
-        apt-get install libbz2-dev
+        apt-get install -y -qq libbz2-dev
         
         wget https://www.openssl.org/source/openssl-1.0.2o.tar.gz
         tar -xf openssl-1.0.2o.tar.gz
