@@ -236,7 +236,11 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
+	//! TODO
 	bool external;
+	//! The current number of radix bits used to partition
+	idx_t radix_bits;
+
 	idx_t SwizzledCount() {
 		return swizzled_block_collection->count;
 	}
@@ -277,9 +281,7 @@ public:
 	                         idx_t block_position, idx_t count);
 
 private:
-	//! The current number of radix bits used to partition
-	idx_t radix_bits;
-	//!
+	//! TODO
 	idx_t tuples_per_iteration;
 	//! TODO: rename this to something better
 	idx_t partitions_start;

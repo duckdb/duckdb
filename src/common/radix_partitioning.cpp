@@ -336,6 +336,24 @@ struct PartitionFunctor {
 		// Clear input data
 		block_collection.Clear();
 		string_heap.Clear();
+
+#ifdef DEBUG
+		for (idx_t p = 0; p < CONSTANTS::NUM_PARTITIONS; p++) {
+			auto &p_block_collection = *partition_block_collections[p];
+			idx_t p_count = 0;
+			for (idx_t b = 0; b < p_block_collection.blocks.size(); b++) {
+				auto &data_block = *p_block_collection.blocks[b];
+				p_count += data_block.count;
+				if (!layout.AllConstant()) {
+					auto &p_string_heap = *partition_string_heaps[p];
+					D_ASSERT(p_block_collection.blocks.size() == p_string_heap.blocks.size());
+					auto &heap_block = *p_string_heap.blocks[b];
+					D_ASSERT(data_block.count == heap_block.count);
+				}
+			}
+			D_ASSERT(p_count == p_block_collection.count);
+		}
+#endif
 		// TODO: maybe delete empty blocks at the end? (although they are small and unlikely)
 	}
 
@@ -387,6 +405,7 @@ struct PartitionFunctor {
 		RowOperations::CopyHeapAndSwizzle(layout, base_row_ptr, heap_handle.Ptr(), heap_ptr, count);
 		heap_block.count += count;
 		heap_block.byte_offset += size;
+		D_ASSERT(data_block.count == heap_block.count);
 		D_ASSERT(heap_ptr + size == heap_handle.Ptr() + heap_block.byte_offset);
 		D_ASSERT(heap_ptr <= heap_handle.Ptr() + heap_block.capacity);
 	}

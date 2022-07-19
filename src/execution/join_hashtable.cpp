@@ -83,26 +83,22 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		swizzled_string_heap->Merge(*other.swizzled_string_heap);
 	}
 
-	{
-		lock_guard<mutex> lock(partition_lock);
-		// Check if anything changed after grabbing the lock
-		if (partition_block_collections.empty()) {
-			D_ASSERT(partition_string_heaps.empty());
-			// Move partitions to this HT
-			for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
-				partition_block_collections.push_back(move(other.partition_block_collections[idx]));
-				if (!layout.AllConstant()) {
-					partition_string_heaps.push_back(move(other.partition_string_heaps[idx]));
-				}
+	lock_guard<mutex> lock(partition_lock);
+	if (partition_block_collections.empty()) {
+		D_ASSERT(partition_string_heaps.empty());
+		// Move partitions to this HT
+		for (idx_t p = 0; p < other.partition_block_collections.size(); p++) {
+			partition_block_collections.push_back(move(other.partition_block_collections[p]));
+			if (!layout.AllConstant()) {
+				partition_string_heaps.push_back(move(other.partition_string_heaps[p]));
 			}
-			return;
 		}
+		return;
 	}
 
 	// Should have same number of partitions
 	D_ASSERT(partition_block_collections.size() == other.partition_block_collections.size());
 	D_ASSERT(partition_string_heaps.size() == other.partition_string_heaps.size());
-	// No need to grab the lock because RowDataCollection::Merge has locks
 	for (idx_t idx = 0; idx < other.partition_block_collections.size(); idx++) {
 		partition_block_collections[idx]->Merge(*other.partition_block_collections[idx]);
 		if (!layout.AllConstant()) {
@@ -951,17 +947,21 @@ void JoinHashTable::UnswizzleBlocks() {
 	auto &blocks = swizzled_block_collection->blocks;
 	auto &heap_blocks = swizzled_string_heap->blocks;
 	D_ASSERT(blocks.size() == heap_blocks.size());
+	D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
 
 	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
 		auto &data_block = blocks[block_idx];
 
 		if (!layout.AllConstant()) {
 			auto block_handle = buffer_manager.Pin(data_block->block);
-			auto heap_handle = buffer_manager.Pin(heap_blocks[block_idx]->block);
+
+			auto &heap_block = heap_blocks[block_idx];
+			D_ASSERT(data_block->count == heap_block->count);
+			auto heap_handle = buffer_manager.Pin(heap_block->block);
 
 			// Unswizzle and move
 			RowOperations::UnswizzlePointers(layout, block_handle.Ptr(), heap_handle.Ptr(), data_block->count);
-			string_heap->blocks.push_back(move(heap_blocks[block_idx]));
+			string_heap->blocks.push_back(move(heap_block));
 			string_heap->pinned_blocks.push_back(move(heap_handle));
 		}
 
@@ -1042,6 +1042,18 @@ void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable
 	}
 
 	// TODO: set number of radix bits (determine what's best?)
+	idx_t bits = 4;
+	idx_t magic_number = 1 << bits;
+
+	idx_t partition_size = max_ht_size / magic_number;
+	idx_t num_partitions = total_size / partition_size;
+	num_partitions = NextPowerOfTwo(num_partitions);
+	num_partitions = MaxValue<idx_t>(num_partitions, magic_number);
+
+	for (bits = 1; (1 << bits) < num_partitions && bits < 8; bits++) {
+	}
+
+	radix_bits = bits;
 }
 
 void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
@@ -1104,10 +1116,17 @@ void JoinHashTable::FinalizeExternal() {
 	// Move specific partitions to the swizzled_... collections so they can be unswizzled
 	D_ASSERT(SwizzledCount() == 0);
 	for (idx_t p = partitions_start; p < partitions_end; p++) {
-		swizzled_block_collection->Merge(*partition_block_collections[p]);
+		auto &p_block_collection = *partition_block_collections[p];
 		if (!layout.AllConstant()) {
-			swizzled_string_heap->Merge(*partition_string_heaps[p]);
+			auto &p_string_heap = *partition_string_heaps[p];
+			D_ASSERT(p_block_collection.count == p_string_heap.count);
+			swizzled_string_heap->Merge(p_string_heap);
+			// Remove after merging
+			partition_string_heaps[p] = nullptr;
 		}
+		swizzled_block_collection->Merge(p_block_collection);
+		// Remove after merging
+		partition_block_collections[p] = nullptr;
 	}
 	D_ASSERT(count == SwizzledCount());
 

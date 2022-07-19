@@ -478,6 +478,10 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		// Check if anything has changed after we grab the lock
 		if (!sink.local_hash_tables.empty()) {
 			lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
+
+			// TODO have to put this here for now, doesn't work if it's in GetGlobalSourceState
+			gstate.probe_ht->radix_bits = sink.hash_table->radix_bits;
+
 			local_ht = move(sink.local_hash_tables.back());
 			sink.local_hash_tables.pop_back();
 		}
