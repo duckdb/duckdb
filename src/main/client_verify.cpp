@@ -264,4 +264,4 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	return "";
 }
 
-}
+} // namespace duckdb

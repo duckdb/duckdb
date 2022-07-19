@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/verification/tostringed_statement_verifier.hpp
+// duckdb/verification/deserialized_statement_verifier.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,6 +12,11 @@
 
 namespace duckdb {
 
-class ToStringedStatementVerifier : public StatementVerifier {};
+class DeserializedStatementVerifier : public StatementVerifier {
+public:
+	explicit DeserializedStatementVerifier(unique_ptr<SQLStatement> statement_p);
+
+	static StatementVerifier Create(const SQLStatement &statement);
+};
 
 } // namespace duckdb

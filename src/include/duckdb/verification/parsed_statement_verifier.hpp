@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/verification/prepared_statement_verifier.hpp
+// duckdb/verification/parsed_statement_verifier.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,10 +12,13 @@
 
 namespace duckdb {
 
-class PreparedStatementVerifier : public StatementVerifier {
+class ParsedStatementVerifier : public StatementVerifier {
 public:
-	explicit PreparedStatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static StatementVerifier Create(const SQLStatement &statement_p);
+	explicit ParsedStatementVerifier(unique_ptr<SQLStatement> statement_p);
+	static StatementVerifier Create(const SQLStatement &statement);
+	bool RequireEquality() const override {
+		return false;
+	}
 };
 
 } // namespace duckdb
