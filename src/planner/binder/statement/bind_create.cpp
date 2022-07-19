@@ -149,33 +149,70 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 	}
 }
 
-static void FindMatchingPrimaryKeyColumns(vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk) {
-	if (!fk.pk_columns.empty()) {
-		return;
-	}
+static void FindMatchingPrimaryKeyColumns(const vector<ColumnDefinition> &columns,
+                                          const vector<unique_ptr<Constraint>> &constraints, ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
+	bool found_constraint = false;
+	// if no columns are defined, we will automatically try to bind to the primary key
+	bool find_primary_key = fk.pk_columns.empty();
 	for (auto &constr : constraints) {
 		if (constr->type != ConstraintType::UNIQUE) {
 			continue;
 		}
 		auto &unique = (UniqueConstraint &)*constr;
-		if (!unique.is_primary_key) {
+		if (find_primary_key && !unique.is_primary_key) {
 			continue;
 		}
-		idx_t column_count;
+		found_constraint = true;
+
+		vector<string> pk_names;
 		if (unique.index != DConstants::INVALID_INDEX) {
-			fk.info.pk_keys.push_back(unique.index);
-			column_count = 1;
+			pk_names.push_back(columns[unique.index].Name());
 		} else {
-			fk.pk_columns = unique.columns;
-			column_count = unique.columns.size();
+			pk_names = unique.columns;
 		}
-		if (column_count != fk.fk_columns.size()) {
-			throw BinderException("The number of referencing and referenced columns for foreign keys must be the same");
+		if (pk_names.size() != fk.fk_columns.size()) {
+			// the number of referencing and referenced columns for foreign keys must be the same
+			continue;
 		}
+		if (find_primary_key) {
+			// found matching primary key
+			fk.pk_columns = pk_names;
+			return;
+		}
+		if (fk.pk_columns != pk_names) {
+			// Name mismatch
+			continue;
+		}
+		// found match
 		return;
 	}
-	throw BinderException("there is no primary key for referenced table \"%s\"", fk.info.table);
+	// no match found! examine why
+	if (!found_constraint) {
+		// no unique constraint or primary key
+		string search_term = find_primary_key ? "primary key" : "primary key or unique constraint";
+		throw BinderException("Failed to create foreign key: there is no %s for referenced table \"%s\"", search_term,
+		                      fk.info.table);
+	}
+	// check if all the columns exist
+	for (auto &name : fk.pk_columns) {
+		bool found = false;
+		for (auto &col : columns) {
+			if (col.Name() == name) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			throw BinderException(
+			    "Failed to create foreign key: referenced table \"%s\" does not have a column named \"%s\"",
+			    fk.info.table, name);
+		}
+	}
+	auto fk_names = StringUtil::Join(fk.pk_columns, ",");
+	throw BinderException("Failed to create foreign key: referenced table \"%s\" does not have a primary key or unique "
+	                      "constraint on the columns %s",
+	                      fk.info.table, fk_names);
 }
 
 void ExpressionContainsGeneratedColumn(const ParsedExpression &expr, const unordered_set<string> &gcols,
@@ -340,13 +377,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			D_ASSERT(fk.info.pk_keys.empty());
 			if (create_info.table == fk.info.table) {
 				fk.info.type = ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
-				FindMatchingPrimaryKeyColumns(create_info.constraints, fk);
+				FindMatchingPrimaryKeyColumns(create_info.columns, create_info.constraints, fk);
 			} else {
 				// have to resolve referenced table
 				auto pk_table_entry_ptr = catalog.GetEntry<TableCatalogEntry>(context, fk.info.schema, fk.info.table);
 				fk_schemas.insert(pk_table_entry_ptr->schema);
 				D_ASSERT(fk.info.pk_keys.empty());
-				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->constraints, fk);
+				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr->columns, pk_table_entry_ptr->constraints, fk);
 				for (auto &keyname : fk.pk_columns) {
 					auto entry = pk_table_entry_ptr->name_map.find(keyname);
 					if (entry == pk_table_entry_ptr->name_map.end()) {

@@ -79,8 +79,8 @@ void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
 }
 
-Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
-	D_ASSERT(expr.IsFoldable());
+Value ExpressionExecutor::EvaluateScalar(const Expression &expr, bool allow_unfoldable) {
+	D_ASSERT(allow_unfoldable || expr.IsFoldable());
 	D_ASSERT(expr.IsScalar());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
@@ -88,7 +88,7 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
 
-	D_ASSERT(result.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(allow_unfoldable || result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
 	D_ASSERT(result_value.type().InternalType() == expr.return_type.InternalType());
 	return result_value;

@@ -1,0 +1,11 @@
+# name: test/fuzzer/sqlsmith/like_null_pattern.test
+# description: Test LIKE with a NULL pattern
+# group: [sqlsmith]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT current_schema() ~~ CAST(NULL AS VARCHAR)
+----
+NULL
