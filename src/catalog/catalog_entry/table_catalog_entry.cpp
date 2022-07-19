@@ -393,20 +393,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
 	
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	// columns
-	vector<column_t> column_ids;
-	// types
-	vector<LogicalType> types;
-
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
 		create_info->columns.push_back(move(copy));
-		// has to push all to avoid CheckZonemap() error
 	}
 
 	idx_t not_null_idx = GetColumnIndex(info.column_name);
-	column_ids.push_back(not_null_idx);
-	types.push_back(columns[not_null_idx].type);
 	bool has_not_null = false;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
@@ -418,36 +410,22 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 		}
 		create_info->constraints.push_back(move(constraint));
 	}
-	// If this column has NULL value, throw exception
 	if (!has_not_null) {
-		//check!
-		// Transaction
-		auto &transaction = Transaction::GetTransaction(context);
-
-		// result
-		DataChunk result;
-		result.Initialize(types);
-
-		// filter
-		TableFilterSet table_filters;
-		table_filters.PushFilter(0, make_unique<IsNullFilter>());
-
-		// state
-		TableScanState state;
-
-		storage->InitializeScan(transaction, state, column_ids, &table_filters);
-		storage->Scan(transaction, result, state, column_ids);
-
-		if(result.size()){
-			throw CatalogException("NOT NULL constraint failed: %s.%s", storage->info->table, columns[not_null_idx].name); 
-		}
-		// Able to set, add constraint
 		create_info->constraints.push_back(make_unique<NotNullConstraint>(not_null_idx));
 	}
-
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
-	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+
+	// Early return
+	if (has_not_null) {
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+	}
+
+	// Return with new storage info
+	auto new_storage =
+	    make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+	                                      new_storage);
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {

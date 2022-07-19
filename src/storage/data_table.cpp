@@ -6,6 +6,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/planner/constraints/list.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -158,6 +159,78 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
+}
+
+// Alter column to add new constraint
+DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Constraint> constraint)
+    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
+	// prevent any tuples from being added to the parent
+	lock_guard<mutex> lock(append_lock);
+	if(constraint->type != ConstraintType::NOT_NULL){
+		throw NotImplementedException("FIXME: ALTER COLUMN with not NOT_NULL constraint not supported yet");
+	}
+	for (auto &column_def : parent.column_definitions) {
+		column_definitions.emplace_back(column_def.Copy());
+	}
+	for (idx_t i = 0; i < column_definitions.size(); i++) {
+		column_stats.push_back(parent.column_stats[i]->Copy());
+	}
+
+	// TODO: Get not_null_idx, scan_state.column_ids
+	// scan the original table, and fill the new column with the transformed value
+	auto &not_null_constraint = (NotNullConstraint &)*constraint;
+	auto &transaction = Transaction::GetTransaction(context);
+	vector<LogicalType> scan_types;
+	scan_types.push_back(parent.column_definitions[not_null_constraint.index].type);
+	DataChunk scan_chunk;
+	scan_chunk.Initialize(scan_types);
+
+	TableScanState scan_state;
+	scan_state.column_ids.push_back(not_null_constraint.index);
+	scan_state.max_row = total_rows;
+	// scan the original table, and fill the new column with the transformed value
+	this->row_groups = make_shared<SegmentTree>();
+	auto current_row_group = (RowGroup *)parent.row_groups->GetRootSegment();
+
+	while (current_row_group) {
+		current_row_group->InitializeScan(scan_state.row_group_scan_state);
+		while(true){
+			scan_chunk.Reset();
+			current_row_group->Scan(transaction, scan_state.row_group_scan_state, scan_chunk);
+			if(scan_chunk.size() == 0){
+				break;
+			}
+			// TODO: Check constraint
+			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+				//throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", "tablename", "colname");
+			}
+		}
+		// Append to this new DataTable
+		current_row_group = (RowGroup *)current_row_group->next.get();
+	}
+
+	// For local storage
+	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);
+	if(scan_state.local_state.GetStorage()){
+		while(scan_state.local_state.chunk_index <= scan_state.local_state.max_index){
+			scan_chunk.Reset();
+			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
+			if(scan_chunk.size() == 0){
+				break;
+				// throw NotImplementedException("FIXME: ALTER COLUMN SET CONSTRAINT with transaction local data not currently supported");
+			}
+			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", "tablename", "colname");
+			}
+		}
+		transaction.storage.MoveStorage(&parent, this);
+	}
+
+	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	row_groups = parent.row_groups;
+	parent.is_root = false;
+
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
