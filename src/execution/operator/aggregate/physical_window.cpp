@@ -542,6 +542,9 @@ public:
 	    : chunks(allocator), window_results(allocator), position(0) {
 	}
 
+	void GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin);
+	void Scan(DataChunk &chunk);
+
 	HashGroupPtr hash_group;
 
 	//! The generated input chunks
@@ -1501,46 +1504,45 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 }
 
 using WindowExpressions = vector<BoundWindowExpression *>;
+using WindowExecutorPtr = unique_ptr<WindowExecutor>;
+using WindowExecutors = vector<WindowExecutorPtr>;
 
-static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkCollection &input,
-                                     ChunkCollection &window_results, const ValidityMask &partition_mask,
-                                     const ValidityMask &order_mask, WindowAggregationMode mode) {
+static void ComputeWindowExpressions(WindowExecutors &window_execs, ChunkCollection &input, ChunkCollection &output,
+                                     const ValidityMask &partition_mask, const ValidityMask &order_mask) {
 	//	Idempotency
 	if (input.Count() == 0) {
 		return;
 	}
-	//	Compute the functions columnwise
-	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
-		auto wexpr = window_exprs[expr_idx];
-		WindowExecutor executor(wexpr, input, mode);
-		ChunkCollection output(input.GetAllocator());
-		DataChunk output_chunk;
-		const vector<LogicalType> output_types(1, wexpr->return_type);
-		output_chunk.Initialize(input.GetAllocator(), output_types);
-		idx_t row_idx = 0;
-		for (auto &input_chunk : input.Chunks()) {
-			output_chunk.Reset();
-			executor.Evaluate(row_idx, *input_chunk, output_chunk.data[0], partition_mask, order_mask);
-			output_chunk.SetCardinality(*input_chunk);
-			output_chunk.Verify();
-			output.Append(output_chunk);
-			row_idx += input_chunk->size();
+	//	Compute the functions chunkwise
+	vector<LogicalType> output_types;
+	for (auto &wexec : window_execs) {
+		output_types.emplace_back(wexec->wexpr->return_type);
+	}
+	DataChunk output_chunk;
+	output_chunk.Initialize(input.GetAllocator(), output_types);
+
+	idx_t row_idx = 0;
+	for (auto &input_chunk : input.Chunks()) {
+		output_chunk.Reset();
+		for (idx_t expr_idx = 0; expr_idx < window_execs.size(); ++expr_idx) {
+			auto &executor = *window_execs[expr_idx];
+			executor.Evaluate(row_idx, *input_chunk, output_chunk.data[expr_idx], partition_mask, order_mask);
 		}
-		window_results.Fuse(output);
+		output_chunk.SetCardinality(*input_chunk);
+		output_chunk.Verify();
+		output.Append(output_chunk);
+
+		row_idx += input_chunk->size();
 	}
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkState &gstate, const idx_t hash_bin) {
+void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin) {
+	auto &state = *this;
+
 	auto &op = (PhysicalWindow &)gstate.op;
-	WindowExpressions window_exprs;
-	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
-		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
-		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
-		window_exprs.emplace_back(wexpr);
-	}
 
 	//	Get rid of any stale data
 	state.chunks.Reset();
@@ -1574,8 +1576,7 @@ static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkSta
 	ValidityMask order_mask(order_bits.data());
 
 	// Scan the sorted data into new Collections
-	auto &allocator = gstate.allocator;
-	ChunkCollection input(allocator);
+	auto &input = state.chunks;
 	if (gstate.rows && !hash_bin) {
 		//	No partition - convert row collection to chunk collection
 		ScanRowCollection(*gstate.rows, *gstate.strings, input, input_types);
@@ -1590,13 +1591,20 @@ static void GeneratePartition(WindowLocalSourceState &state, WindowGlobalSinkSta
 		return;
 	}
 
-	ChunkCollection output(allocator);
-	ComputeWindowExpressions(window_exprs, input, output, partition_mask, order_mask, gstate.mode);
-	state.chunks.Merge(input);
-	state.window_results.Merge(output);
+	WindowExecutors window_execs;
+	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
+		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(op.select_list[expr_idx].get());
+		auto wexec = make_unique<WindowExecutor>(wexpr, input, gstate.mode);
+		window_execs.emplace_back(move(wexec));
+	}
+
+	ComputeWindowExpressions(window_execs, input, state.window_results, partition_mask, order_mask);
 }
 
-static void Scan(WindowLocalSourceState &state, DataChunk &chunk) {
+void WindowLocalSourceState::Scan(DataChunk &chunk) {
+	auto &state = *this;
+
 	ChunkCollection &big_data = state.chunks;
 	ChunkCollection &window_results = state.window_results;
 
@@ -1821,10 +1829,10 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 				break;
 			}
 		}
-		GeneratePartition(state, gstate, hash_bin);
+		state.GeneratePartition(gstate, hash_bin);
 	}
 
-	Scan(state, chunk);
+	state.Scan(chunk);
 }
 
 string PhysicalWindow::ParamsToString() const {
