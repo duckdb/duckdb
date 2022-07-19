@@ -54,6 +54,8 @@ class ColumnDataCollection {
 public:
 	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	ColumnDataCollection(ClientContext &context, vector<LogicalType> types);
+	//! Creates a column data collection that inherits the
+	ColumnDataCollection(ColumnDataCollection &parent);
 	~ColumnDataCollection();
 
 public:
@@ -128,6 +130,9 @@ private:
 	vector<unique_ptr<ColumnDataCollectionSegment>> segments;
 	//! The set of copy functions
 	vector<ColumnDataCopyFunction> copy_functions;
+	//! When the column data collection is marked as finished with appending - new tuples can no longer be appended to
+	//! it
+	bool finished_append;
 };
 
 } // namespace duckdb

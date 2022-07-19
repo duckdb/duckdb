@@ -43,9 +43,16 @@ public:
 	DUCKDB_API void Print() const;
 
 private:
+	struct CachedCollection {
+		idx_t batch_index = DConstants::INVALID_INDEX;
+		ColumnDataCollection *collection = nullptr;
+	};
+
 	BufferManager &buffer_manager;
 	vector<LogicalType> types;
 	//! The data of the batched chunk collection - a set of batch_index -> ChunkCollection pointers
 	map<idx_t, unique_ptr<ColumnDataCollection>> data;
+	//! The last batch collection that was inserted into
+	CachedCollection last_collection;
 };
 } // namespace duckdb

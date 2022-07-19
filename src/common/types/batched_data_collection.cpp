@@ -14,14 +14,23 @@ BatchedDataCollection::BatchedDataCollection(ClientContext &context, vector<Logi
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
-	auto entry = data.find(batch_index);
 	ColumnDataCollection *collection;
-	if (entry == data.end()) {
-		auto new_collection = make_unique<ColumnDataCollection>(buffer_manager, types);
+	if (last_collection.collection && last_collection.batch_index == batch_index) {
+		// we are inserting into the same collection as before: use it directly
+		collection = last_collection.collection;
+	} else {
+		// new collection: check if there is already an entry
+		D_ASSERT(data.find(batch_index) == data.end());
+		unique_ptr<ColumnDataCollection> new_collection;
+		if (last_collection.collection) {
+			new_collection = make_unique<ColumnDataCollection>(*last_collection.collection);
+		} else {
+			new_collection = make_unique<ColumnDataCollection>(buffer_manager, types);
+		}
+		last_collection.collection = new_collection.get();
+		last_collection.batch_index = batch_index;
 		collection = new_collection.get();
 		data.insert(make_pair(batch_index, move(new_collection)));
-	} else {
-		collection = entry->second.get();
 	}
 	collection->Append(input);
 }

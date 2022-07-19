@@ -67,19 +67,39 @@ struct BlockMetaData {
 	uint32_t Capacity();
 };
 
+class ColumnDataAllocator {
+public:
+	ColumnDataAllocator(Allocator &allocator);
+	ColumnDataAllocator(BufferManager &buffer_manager);
+
+	void AllocateBlock();
+	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
+
+	BufferHandle Pin(uint32_t block_id);
+
+	bool HasBlocks() {
+		return !blocks.empty();
+	}
+	void Initialize(ColumnDataAllocator &other);
+
+private:
+	//! The buffer manager
+	BufferManager &buffer_manager;
+	//! The set of blocks used by the column data collection
+	vector<BlockMetaData> blocks;
+};
+
 class ColumnDataCollectionSegment {
 public:
 	ColumnDataCollectionSegment(BufferManager &buffer_manager, vector<LogicalType> types_p)
-	    : buffer_manager(buffer_manager), types(move(types_p)), count(0) {
+	    : allocator(buffer_manager), types(move(types_p)), count(0) {
 	}
 
-	BufferManager &buffer_manager;
+	ColumnDataAllocator allocator;
 	//! The types of the chunks
 	vector<LogicalType> types;
 	//! The number of entries in the internal column data
 	idx_t count;
-	//! The set of blocks used by the column data collection
-	vector<BlockMetaData> blocks;
 	//! Set of chunk meta data
 	vector<ChunkMetaData> chunk_data;
 	//! Set of vector meta data
@@ -93,13 +113,11 @@ public:
 public:
 	void AllocateNewChunk();
 	//! Allocate space for a vector of a specific type in the segment
-	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data);
+	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+	                               ChunkManagementState *chunk_state = nullptr);
 	//! Allocate space for a vector during append,
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
 	                               ColumnDataAppendState &append_state);
-
-	void AllocateBlock();
-	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset);
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
@@ -154,7 +172,7 @@ struct ColumnDataMetaData {
 };
 
 ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
-    : buffer_manager(buffer_manager), types(move(types_p)), count(0) {
+    : buffer_manager(buffer_manager), types(move(types_p)), count(0), finished_append(false) {
 	copy_functions.reserve(types.size());
 	for (auto &type : types) {
 		copy_functions.push_back(GetCopyFunction(type));
@@ -165,6 +183,22 @@ ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<Logica
     : ColumnDataCollection(BufferManager::GetBufferManager(context), move(types_p)) {
 }
 
+ColumnDataCollection::ColumnDataCollection(ColumnDataCollection &other)
+    : ColumnDataCollection(other.buffer_manager, other.types) {
+	// take over the last segment
+	other.finished_append = true;
+	//! create a new segment, and take over the last block of the other column data collection
+	if (other.segments.empty()) {
+		return;
+	}
+	auto &last_segment = other.segments.back();
+	if (!last_segment->allocator.HasBlocks()) {
+		return;
+	}
+	CreateSegment();
+	segments.back()->allocator.Initialize(last_segment->allocator);
+}
+
 ColumnDataCollection::~ColumnDataCollection() {
 }
 
@@ -172,12 +206,17 @@ void ColumnDataCollection::CreateSegment() {
 	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(buffer_manager, types));
 }
 
-uint32_t BlockMetaData::Capacity() {
-	D_ASSERT(size <= capacity);
-	return capacity - size;
+//===--------------------------------------------------------------------===//
+// ColumnDataCollectionAllocator
+//===--------------------------------------------------------------------===//
+ColumnDataAllocator::ColumnDataAllocator(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
 }
 
-void ColumnDataCollectionSegment::AllocateBlock() {
+BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
+	return buffer_manager.Pin(blocks[block_id].handle);
+}
+
+void ColumnDataAllocator::AllocateBlock() {
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = Storage::BLOCK_ALLOC_SIZE;
@@ -185,9 +224,16 @@ void ColumnDataCollectionSegment::AllocateBlock() {
 	blocks.push_back(move(data));
 }
 
-void ColumnDataCollectionSegment::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset) {
+void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
+                                       ChunkManagementState *chunk_state) {
 	if (blocks.empty() || blocks.back().Capacity() < size) {
 		AllocateBlock();
+		if (chunk_state && !blocks.empty()) {
+			auto &last_block = blocks.back();
+			auto block_id = blocks.size() - 1;
+			auto pinned_block = buffer_manager.Pin(last_block.handle);
+			chunk_state->handles[block_id] = move(pinned_block);
+		}
 	}
 	auto &block = blocks.back();
 	D_ASSERT(size <= block.capacity - block.size);
@@ -196,14 +242,28 @@ void ColumnDataCollectionSegment::AllocateData(idx_t size, uint32_t &block_id, u
 	block.size += size;
 }
 
-VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data) {
+void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
+	D_ASSERT(other.HasBlocks());
+	blocks.push_back(other.blocks.back());
+}
+
+uint32_t BlockMetaData::Capacity() {
+	D_ASSERT(size <= capacity);
+	return capacity - size;
+}
+
+//===--------------------------------------------------------------------===//
+// ColumnDataCollectionSegment
+//===--------------------------------------------------------------------===//
+VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+                                                            ChunkManagementState *chunk_state) {
 	VectorMetaData meta_data;
 	meta_data.count = 0;
 
 	auto internal_type = type.InternalType();
 	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
-	AllocateData(type_size * STANDARD_VECTOR_SIZE + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
-	             meta_data.offset);
+	allocator.AllocateData(type_size * STANDARD_VECTOR_SIZE + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
+	                       meta_data.offset, chunk_state);
 	chunk_data.block_ids.insert(meta_data.block_id);
 
 	auto index = vector_data.size();
@@ -213,16 +273,7 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 
 VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
                                                             ColumnDataAppendState &append_state) {
-	idx_t block_count = blocks.size();
-	auto vector_index = AllocateVector(type, chunk_data);
-	if (blocks.size() != block_count) {
-		// we allocated a new block for this vector: pin it
-		auto &vdata = GetVectorData(vector_index);
-		D_ASSERT(blocks.size() == block_count + 1);
-		auto &last_block = blocks.back();
-		append_state.current_chunk_state.handles[vdata.block_id] = buffer_manager.Pin(last_block.handle);
-	}
-	return vector_index;
+	return AllocateVector(type, chunk_data, &append_state.current_chunk_state);
 }
 
 void ColumnDataCollectionSegment::AllocateNewChunk() {
@@ -259,7 +310,7 @@ void ColumnDataCollectionSegment::InitializeChunkState(idx_t chunk_index, ChunkM
 			// already pinned: don't need to do anything
 			continue;
 		}
-		state.handles[block_id] = buffer_manager.Pin(blocks[block_id].handle);
+		state.handles[block_id] = allocator.Pin(block_id);
 	}
 }
 
@@ -381,7 +432,11 @@ void ColumnDataCollectionSegment::Verify() {
 #endif
 }
 
+//===--------------------------------------------------------------------===//
+// Append
+//===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
+	D_ASSERT(!finished_append);
 	state.vector_data.resize(types.size());
 	if (segments.empty()) {
 		CreateSegment();
@@ -631,6 +686,7 @@ static bool IsComplexType(const LogicalType &type) {
 }
 
 void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input) {
+	D_ASSERT(!finished_append);
 	D_ASSERT(types == input.GetTypes());
 
 	auto &segment = *segments.back();
@@ -673,6 +729,9 @@ void ColumnDataCollection::Append(DataChunk &input) {
 	Append(state, input);
 }
 
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state) const {
 	state.chunk_index = 0;
 	state.segment_index = 0;
@@ -756,11 +815,14 @@ void ColumnDataCollection::Scan(const std::function<void(DataChunk &)> &callback
 
 	DataChunk chunk;
 	InitializeScanChunk(chunk);
-	while(Scan(state, chunk)) {
+	while (Scan(state, chunk)) {
 		callback(chunk);
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Combine
+//===--------------------------------------------------------------------===//
 void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	if (types != other.types) {
 		throw InternalException("Attempting to combine ColumnDataCollections with mismatching types");

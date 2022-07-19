@@ -2,9 +2,7 @@
 
 namespace duckdb {
 
-OuterJoinMarker::OuterJoinMarker(bool enabled_p) :
-	enabled(enabled_p), count(0) {
-
+OuterJoinMarker::OuterJoinMarker(bool enabled_p) : enabled(enabled_p), count(0) {
 }
 
 void OuterJoinMarker::Initialize(idx_t count_p) {
@@ -35,7 +33,7 @@ void OuterJoinMarker::SetMatches(const SelectionVector &sel, idx_t count, idx_t 
 	if (!enabled) {
 		return;
 	}
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto pos = base_idx + idx;
 		D_ASSERT(pos < this->count);
@@ -79,7 +77,6 @@ void OuterJoinMarker::InitializeScan(OuterJoinGlobalScanState &gstate, OuterJoin
 	lstate.match_sel.Initialize(STANDARD_VECTOR_SIZE);
 	gstate.data->InitializeScanChunk(lstate.scan_chunk);
 	gstate.data->InitializeScan(gstate.global_scan);
-
 }
 
 void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result) {
@@ -101,7 +98,8 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 				ConstantVector::SetNull(result.data[i], true);
 			}
 			for (idx_t col_idx = left_column_count; col_idx < result.ColumnCount(); col_idx++) {
-				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel, result_count);
+				result.data[col_idx].Slice(lstate.scan_chunk.data[col_idx - left_column_count], lstate.match_sel,
+				                           result_count);
 			}
 			result.SetCardinality(result_count);
 			return;
@@ -109,4 +107,4 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 	}
 }
 
-}
+} // namespace duckdb
