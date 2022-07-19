@@ -15,7 +15,7 @@ dbBind__duckdb_result <- function(res, params, ...) {
 
   params <- encode_values(params)
 
-  out <- rapi_bind(res@stmt_lst$ref, params, res@arrow)
+  out <- rapi_bind(res@stmt_lst$ref, params, res@arrow, res@connection@driver@bigint == "integer64")
   if (length(out) == 1) {
     out <- out[[1]]
   } else if (length(out) == 0) {

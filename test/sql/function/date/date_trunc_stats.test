@@ -1,0 +1,12 @@
+# name: test/sql/function/date/date_trunc_stats.test
+# description: Test date part stats on empty table
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE table T1(A0 TIMESTAMP)
+
+statement ok
+SELECT date_trunc('DAY', A0) FROM T1

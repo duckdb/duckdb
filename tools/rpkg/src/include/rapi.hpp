@@ -104,6 +104,7 @@ struct RStrings {
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
+	SEXP integer64_str;
 	SEXP enc2utf8_sym; // Rf_install
 	SEXP tzone_sym;
 	SEXP units_sym;
@@ -123,7 +124,7 @@ private:
 	RStrings();
 };
 
-SEXP duckdb_execute_R_impl(MaterializedQueryResult *result);
+SEXP duckdb_execute_R_impl(MaterializedQueryResult *result, bool);
 
 } // namespace duckdb
 
@@ -141,11 +142,11 @@ cpp11::list rapi_prepare(duckdb::conn_eptr_t, std::string);
 
 cpp11::list rapi_bind(duckdb::stmt_eptr_t, SEXP paramsexp, bool);
 
-SEXP rapi_execute(duckdb::stmt_eptr_t, bool);
+SEXP rapi_execute(duckdb::stmt_eptr_t, bool, bool);
 
 void rapi_release(duckdb::stmt_eptr_t);
 
-void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame);
+void rapi_register_df(duckdb::conn_eptr_t, std::string, cpp11::data_frame, bool);
 
 void rapi_unregister_df(duckdb::conn_eptr_t, std::string);
 

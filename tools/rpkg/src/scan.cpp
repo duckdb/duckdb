@@ -80,6 +80,7 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	data_frame df((SEXP)input.inputs[0].GetPointer());
 
+	auto integer64 = get_bool_param(input.named_parameters, "integer64", false);
 	auto experimental = get_bool_param(input.named_parameters, "experimental", false);
 
 	auto df_names = df.names();
@@ -92,7 +93,7 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 		data_ptr_t coldata_ptr = nullptr;
 
 		names.push_back(df_names[col_idx]);
-		rtypes.push_back(RApiTypes::DetectRType(coldata));
+		rtypes.push_back(RApiTypes::DetectRType(coldata, integer64));
 
 		switch (rtypes[col_idx]) {
 		case RType::LOGICAL:
@@ -105,6 +106,10 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 			break;
 		case RType::NUMERIC:
 			duckdb_col_type = LogicalType::DOUBLE;
+			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			break;
+		case RType::INTEGER64:
+			duckdb_col_type = LogicalType::BIGINT;
 			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
 			break;
 		case RType::FACTOR: {
@@ -153,7 +158,7 @@ static unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context, TableF
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		default:
-			cpp11::stop("rapi_execute: Unsupported column type for scan");
+			cpp11::stop("rapi_execute: Unsupported column type for bind");
 		}
 
 		return_types.push_back(duckdb_col_type);
@@ -263,6 +268,11 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
 			break;
 		}
+		case RType::INTEGER64: {
+			auto data_ptr = (int64_t *)coldata_ptr + sexp_offset;
+			AppendColumnSegment<int64_t, int64_t, RInteger64Type>(data_ptr, v, this_count);
+			break;
+		}
 		case RType::STRING: {
 			if (bind_data.experimental) {
 				auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
@@ -361,7 +371,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			break;
 		}
 		default:
-			throw;
+			cpp11::stop("rapi_execute: Unsupported column type for scan");
 		}
 	}
 
@@ -383,5 +393,6 @@ DataFrameScanFunction::DataFrameScanFunction()
 	cardinality = DataFrameScanCardinality;
 	to_string = DataFrameScanToString;
 	named_parameters["experimental"] = LogicalType::BOOLEAN;
+	named_parameters["integer64"] = LogicalType::BOOLEAN;
 	projection_pushdown = true;
 }
