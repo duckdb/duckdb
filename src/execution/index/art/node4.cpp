@@ -1,11 +1,16 @@
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
 
 namespace duckdb {
 
-Node4::Node4(ART &art, size_t compression_length) : Node(art, NodeType::N4, compression_length) {
+Node4::Node4(size_t compression_length) : Node(NodeType::N4, compression_length) {
 	memset(key, 0, sizeof(key));
+}
+
+void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
 }
 
 idx_t Node4::GetChildPos(uint8_t k) {
@@ -43,13 +48,13 @@ idx_t Node4::GetNextPos(idx_t pos) {
 	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
-unique_ptr<Node> *Node4::GetChild(idx_t pos) {
+Node *Node4::GetChild(ART &art, idx_t pos) {
 	D_ASSERT(pos < count);
-	return &child[pos];
+	return children[pos].Unswizzle(art);
 }
 
-void Node4::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
-	Node4 *n = static_cast<Node4 *>(node.get());
+void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
+	Node4 *n = (Node4 *)node;
 
 	// Insert leaf into inner node
 	if (node->count < 4) {
@@ -58,64 +63,72 @@ void Node4::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_pt
 		while ((pos < node->count) && (n->key[pos] < key_byte)) {
 			pos++;
 		}
-		if (n->child[pos] != nullptr) {
+		if (n->children[pos] != 0) {
 			for (idx_t i = n->count; i > pos; i--) {
 				n->key[i] = n->key[i - 1];
-				n->child[i] = move(n->child[i - 1]);
+				n->children[i] = n->children[i - 1];
 			}
 		}
 		n->key[pos] = key_byte;
-		n->child[pos] = move(child);
+		n->children[pos] = new_child;
 		n->count++;
 	} else {
 		// Grow to Node16
-		auto new_node = make_unique<Node16>(art, n->prefix_length);
+		auto new_node = new Node16(n->prefix_length);
 		new_node->count = 4;
-		CopyPrefix(art, node.get(), new_node.get());
+		CopyPrefix(node, new_node);
 		for (idx_t i = 0; i < 4; i++) {
 			new_node->key[i] = n->key[i];
-			new_node->child[i] = move(n->child[i]);
+			new_node->children[i] = n->children[i];
+			n->children[i] = nullptr;
 		}
-		node = move(new_node);
-		Node16::Insert(art, node, key_byte, child);
+		// Delete old node and replace it with new node
+		delete node;
+		node = new_node;
+		Node16::Insert(node, key_byte, new_child);
 	}
 }
 
-void Node4::Erase(ART &art, unique_ptr<Node> &node, int pos) {
-	Node4 *n = static_cast<Node4 *>(node.get());
+void Node4::Erase(Node *&node, int pos, ART &art) {
+	Node4 *n = (Node4 *)node;
 	D_ASSERT(pos < n->count);
-
 	// erase the child and decrease the count
-	n->child[pos].reset();
+	n->children[pos].Reset();
 	n->count--;
 	// potentially move any children backwards
 	for (; pos < n->count; pos++) {
 		n->key[pos] = n->key[pos + 1];
-		n->child[pos] = move(n->child[pos + 1]);
+		n->children[pos] = n->children[pos + 1];
+	}
+	// set any remaining nodes as nullptr
+	for (; pos < 4; pos++) {
+		n->children[pos] = nullptr;
 	}
 
 	// This is a one way node
 	if (n->count == 1) {
-		auto childref = n->child[0].get();
-		//! concatenate prefixes
-		auto new_length = node->prefix_length + childref->prefix_length + 1;
-		//! have to allocate space in our prefix array
+		auto child_ref = n->GetChild(art, 0);
+		// concatenate prefixes
+		auto new_length = node->prefix_length + child_ref->prefix_length + 1;
+		// have to allocate space in our prefix array
 		unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
 
-		//! first move the existing prefix (if any)
-		for (uint32_t i = 0; i < childref->prefix_length; i++) {
-			new_prefix[new_length - (i + 1)] = childref->prefix[childref->prefix_length - (i + 1)];
+		// first move the existing prefix (if any)
+		for (uint32_t i = 0; i < child_ref->prefix_length; i++) {
+			new_prefix[new_length - (i + 1)] = child_ref->prefix[child_ref->prefix_length - (i + 1)];
 		}
-		//! now move the current key as part of the prefix
+		// now move the current key as part of the prefix
 		new_prefix[node->prefix_length] = n->key[0];
-		//! finally add the old prefix
+		// finally add the old prefix
 		for (uint32_t i = 0; i < node->prefix_length; i++) {
 			new_prefix[i] = node->prefix[i];
 		}
-		//! set new prefix and move the child
-		childref->prefix = move(new_prefix);
-		childref->prefix_length = new_length;
-		node = move(n->child[0]);
+		// set new prefix and move the child
+		child_ref->prefix = move(new_prefix);
+		child_ref->prefix_length = new_length;
+		n->children[0] = nullptr;
+		delete node;
+		node = child_ref;
 	}
 }
 

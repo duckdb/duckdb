@@ -8,6 +8,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
@@ -60,6 +61,9 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 
 	result = prepared->Execute(1);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// no prepared statement
+	REQUIRE_FAIL(con.SendQuery("SELECT ?"));
 }
 
 TEST_CASE("Test prepared statements and dependencies", "[api]") {

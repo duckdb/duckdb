@@ -236,35 +236,70 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class PhysicalHashAggregateState : public GlobalSourceState {
+class PhysicalHashAggregateGlobalSourceState : public GlobalSourceState {
 public:
-	explicit PhysicalHashAggregateState(ClientContext &context, const PhysicalHashAggregate &op) : scan_index(0) {
+	PhysicalHashAggregateGlobalSourceState(ClientContext &context, const PhysicalHashAggregate &op)
+	    : op(op), state_index(0) {
 		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetGlobalSourceState(context));
 		}
 	}
 
-	idx_t scan_index;
+	const PhysicalHashAggregate &op;
+	std::atomic<size_t> state_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
+
+public:
+#if 0
+	idx_t MaxThreads() override {
+		// If there are no tables, we only need one thread.
+		if (op.radix_tables.empty()) {
+			return 1;
+		}
+
+		auto &ht_state = (HashAggregateGlobalState &)*op.sink_state;
+		idx_t count = 0;
+		for (size_t sidx = 0; sidx < op.radix_tables.size(); ++sidx) {
+			count += op.radix_tables[sidx].Size(*ht_state.radix_states[sidx]);
+		}
+
+		return (count + STANDARD_VECTOR_SIZE - 1 ) / STANDARD_VECTOR_SIZE;
+	}
+#endif
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalHashAggregateState>(context, *this);
+	return make_unique<PhysicalHashAggregateGlobalSourceState>(context, *this);
+}
+
+class PhysicalHashAggregateLocalSourceState : public LocalSourceState {
+public:
+	explicit PhysicalHashAggregateLocalSourceState(ExecutionContext &context, const PhysicalHashAggregate &op) {
+		for (auto &rt : op.radix_tables) {
+			radix_states.push_back(rt.GetLocalSourceState(context));
+		}
+	}
+
+	vector<unique_ptr<LocalSourceState>> radix_states;
+};
+
+unique_ptr<LocalSourceState> PhysicalHashAggregate::GetLocalSourceState(ExecutionContext &context,
+                                                                        GlobalSourceState &gstate) const {
+	return make_unique<PhysicalHashAggregateLocalSourceState>(context, *this);
 }
 
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                    LocalSourceState &lstate) const {
-	auto &gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &state = (PhysicalHashAggregateState &)gstate_p;
-	while (state.scan_index < state.radix_states.size()) {
-		radix_tables[state.scan_index].GetData(context, chunk, *gstate.radix_states[state.scan_index],
-		                                       *state.radix_states[state.scan_index]);
+                                    LocalSourceState &lstate_p) const {
+	auto &ht_state = (HashAggregateGlobalState &)*sink_state;
+	auto &gstate = (PhysicalHashAggregateGlobalSourceState &)gstate_p;
+	auto &lstate = (PhysicalHashAggregateLocalSourceState &)lstate_p;
+	for (size_t sidx = gstate.state_index; sidx < radix_tables.size(); sidx = ++gstate.state_index) {
+		radix_tables[sidx].GetData(context, chunk, *ht_state.radix_states[sidx], *gstate.radix_states[sidx],
+		                           *lstate.radix_states[sidx]);
 		if (chunk.size() != 0) {
 			return;
 		}
-
-		state.scan_index++;
 	}
 }
 

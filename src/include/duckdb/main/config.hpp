@@ -66,29 +66,15 @@ struct ExtensionOption {
 	set_option_callback_t set_function;
 };
 
-struct DBConfig {
-	friend class DatabaseInstance;
-	friend class StorageManager;
-
-public:
-	DUCKDB_API DBConfig();
-	DUCKDB_API ~DBConfig();
-
+struct DBConfigOptions {
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
-	//! The allocator used by the system
-	unique_ptr<Allocator> allocator;
-	// Checkpoint when WAL reaches this size (default: 16MB)
+	//! Checkpoint when WAL reaches this size (default: 16MB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
-	//! Whether unsigned extensions should be loaded
-	bool allow_unsigned_extensions = false;
-	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
-	//! RamFS or something similar)
-	unique_ptr<FileSystem> file_system;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.
@@ -115,8 +101,6 @@ public:
 	bool checkpoint_on_shutdown = true;
 	//! Debug flag that decides when a checkpoing should be aborted. Only used for testing purposes.
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
-	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
-	vector<ReplacementScan> replacement_scans;
 	//! Initialize the database with the standard set of DuckDB functions
 	//! You should probably not touch this unless you know what you are doing
 	bool initialize_default_database = true;
@@ -130,14 +114,33 @@ public:
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
-	//! Extensions made to the parser
-	vector<ParserExtension> parser_extensions;
-
-	//! Extra parameters that can be SET for loaded extensions
-	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
+	//! Whether unsigned extensions should be loaded
+	bool allow_unsigned_extensions = false;
+};
+struct DBConfig {
+	friend class DatabaseInstance;
+	friend class StorageManager;
 
+public:
+	DUCKDB_API DBConfig();
+	DUCKDB_API ~DBConfig();
+
+	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
+	vector<ReplacementScan> replacement_scans;
+	//! Extra parameters that can be SET for loaded extensions
+	case_insensitive_map_t<ExtensionOption> extension_parameters;
+	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
+	//! RamFS or something similar)
+	unique_ptr<FileSystem> file_system;
+	//! The allocator used by the system
+	unique_ptr<Allocator> allocator;
+	//! Database configuration options
+	DBConfigOptions options;
+
+	//! Extensions made to the parser
+	vector<ParserExtension> parser_extensions;
 	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
 	                                   set_option_callback_t function = nullptr);
 

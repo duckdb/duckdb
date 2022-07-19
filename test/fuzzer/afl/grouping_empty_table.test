@@ -1,0 +1,14 @@
+# name: test/fuzzer/afl/grouping_empty_table.test
+# description: Grouping on empty table assertion error
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c1 INT);
+
+query I
+SELECT GROUPING(c1) FROM t0 GROUP BY CUBE(c1) ORDER BY 1;
+----
+1

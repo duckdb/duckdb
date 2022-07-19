@@ -50,6 +50,7 @@ Imports:
     utils
 Suggests:
     arrow,
+    bit64,
     callr,
     DBItest,
     dplyr,

@@ -1,0 +1,253 @@
+# name: test/sql/copy/parquet/writer/parquet_write_strings.test
+# description: Strings tests
+# group: [writer]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR);
+
+statement ok
+INSERT INTO strings VALUES
+	('happy'), ('happy'), ('joy'), ('joy'),
+	('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'),
+    ('happy'), ('happy'), ('joy'), ('joy'), ('surprise')
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+----
+PLAIN, RLE_DICTIONARY
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+happy
+happy
+joy
+joy
+surprise
+
+# strings with null values
+statement ok
+UPDATE strings SET s=NULL WHERE s='joy'
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+happy
+happy
+NULL
+NULL
+surprise
+
+# all values are null
+statement ok
+UPDATE strings SET s=NULL
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# empty table
+statement ok
+DELETE FROM strings
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+
+
+# non-dictionary table
+statement ok
+DELETE FROM strings
+
+statement ok
+INSERT INTO strings VALUES
+	('0'), ('1'), ('2'), ('3'), ('4'), ('5'), ('6'), ('7'), ('8'), ('9'),
+	('10'), ('11'), ('12'), ('13'), ('14'), ('15'), ('16'), ('17'), ('18'), ('19'),
+	('20'), ('21'), ('22'), ('23'), ('24'), ('25'), ('26'), ('27'), ('28'), ('29')
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT encodings FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+----
+PLAIN
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+
+# non-dictionary table with null
+statement ok
+DELETE FROM strings
+
+statement ok
+INSERT INTO strings VALUES
+	('0'), ('1'), ('2'), (NULL), ('4'), ('5'), ('6'), (NULL), ('8'), ('9'),
+	('10'), ('11'), ('12'), ('13'), ('14'), ('15'), ('16'), ('17'), ('18'), ('19'),
+	('20'), (NULL), ('22'), ('23'), ('24'), ('25'), (NULL), ('27'), ('28'), ('29')
+
+statement ok
+COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
+
+query I
+SELECT * FROM '__TEST_DIR__/strings.parquet'
+----
+0
+1
+2
+NULL
+4
+5
+6
+NULL
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+NULL
+22
+23
+24
+25
+NULL
+27
+28
+29

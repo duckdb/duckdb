@@ -2,6 +2,11 @@
 #include "test_helper_extension.hpp"
 #include "sqllogic_test_runner.hpp"
 #include "result_helper.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "test_helpers.hpp"
 
 namespace duckdb {
 
@@ -36,9 +41,35 @@ Connection *Command::CommandConnection() {
 	}
 }
 
+void Command::RestartDatabase(Connection *&connection, string sql_query) {
+	vector<unique_ptr<SQLStatement>> statements;
+	bool query_fail = false;
+	try {
+		statements = connection->context->ParseStatements(sql_query);
+	} catch (...) {
+		query_fail = true;
+	}
+	bool is_any_transaction_active = false;
+	for (auto &conn : connection->context->db->GetConnectionManager().connections) {
+		if (conn.first->transaction.HasActiveTransaction()) {
+			is_any_transaction_active = true;
+		}
+	}
+	if (!query_fail && !is_any_transaction_active && !runner.skip_reload) {
+		// We basically restart the database if no transaction is active and if the query is valid
+		auto command = make_unique<RestartCommand>(runner);
+		runner.ExecuteCommand(move(command));
+		connection = CommandConnection();
+	}
+}
+
 unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection, string file_name, idx_t query_line,
                                                           string sql_query) {
 	query_break(query_line);
+	if (TestForceReload() && TestForceStorage()) {
+		RestartDatabase(connection, sql_query);
+	}
+
 	auto result = connection->Query(sql_query);
 
 	if (!result->success) {
@@ -137,7 +168,28 @@ void Query::ExecuteInternal() {
 }
 
 void RestartCommand::ExecuteInternal() {
+	// We save the main connection configurations to pass it to the new connection
+	runner.config->options = runner.con->context->db->config.options;
+	auto client_config = runner.con->context->config;
+	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
+	string low_query_writer_path;
+	if (runner.con->context->client_data->log_query_writer) {
+		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
+	}
+
+	auto prepared_statements = move(runner.con->context->client_data->prepared_statements);
+
 	runner.LoadDatabase(runner.dbpath);
+
+	runner.con->context->config = client_config;
+
+	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	if (!low_query_writer_path.empty()) {
+		runner.con->context->client_data->log_query_writer =
+		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
+		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
+	}
+	runner.con->context->client_data->prepared_statements = move(prepared_statements);
 }
 
 void Statement::ExecuteInternal() {

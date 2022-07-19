@@ -25,8 +25,11 @@ Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool i
     : context(context), parent(move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
 	parameters = nullptr;
 	if (parent) {
-		// We have to inherit macro parameter bindings from the parent binder, if there is a parent.
+
+		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
+		lambda_bindings = parent->lambda_bindings;
+
 		if (inherit_ctes) {
 			// We have to inherit CTE bindings from the parent bind_context, if there is a parent.
 			bind_context.SetCTEBindings(parent->bind_context.GetCTEBindings());
@@ -321,12 +324,14 @@ bool Binder::HasMatchingBinding(const string &table_name, const string &column_n
 
 bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
                                 string &error_message) {
-	Binding *binding;
+	Binding *binding = nullptr;
+	D_ASSERT(!lambda_bindings);
 	if (macro_binding && table_name == macro_binding->alias) {
 		binding = macro_binding;
 	} else {
 		binding = bind_context.GetBinding(table_name, error_message);
 	}
+
 	if (!binding) {
 		return false;
 	}

@@ -1800,7 +1800,6 @@ a_expr:		c_expr									{ $$ = $1; }
 				{ $$ = makeNotExpr($2, @1); }
 			| NOT_LA a_expr						%prec NOT
 				{ $$ = makeNotExpr($2, @1); }
-
 			| a_expr GLOB a_expr %prec GLOB
 				{
 					$$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_GLOB, "~~~",
@@ -1949,7 +1948,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
 				$$ = (PGNode *) n;
 			}
-			| a_expr LAMBDA_ARROW a_expr %prec Op
+			| a_expr LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
 				n->lhs = $1;
@@ -1957,6 +1956,10 @@ a_expr:		c_expr									{ $$ = $1; }
 				n->location = @2;
 				$$ = (PGNode *) n;
 			}
+			| a_expr DOUBLE_ARROW a_expr %prec Op
+                        {
+                                        $$ = (PGNode *) makeSimpleAExpr(PG_AEXPR_OP, "->>", $1, $3, @2);
+                        }
 			| row OVERLAPS row
 				{
 					if (list_length($1) != 2)
@@ -2128,6 +2131,17 @@ a_expr:		c_expr									{ $$ = $1; }
 						$$ = (PGNode *) makeAExpr(PG_AEXPR_OP_ANY, $2, $1, $5, @2);
 					else
 						$$ = (PGNode *) makeAExpr(PG_AEXPR_OP_ALL, $2, $1, $5, @2);
+				}
+			| ARRAY select_with_parens
+				{
+					PGSubLink *n = makeNode(PGSubLink);
+					n->subLinkType = PG_ARRAY_SUBLINK;
+					n->subLinkId = 0;
+					n->testexpr = NULL;
+					n->operName = NULL;
+					n->subselect = $2;
+					n->location = @2;
+					$$ = (PGNode *)n;
 				}
 			| DEFAULT
 				{

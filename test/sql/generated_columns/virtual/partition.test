@@ -38,6 +38,6 @@ SELECT total_profit,
 		SUM(price) OVER(PARTITION BY total_profit) AS SumPrice
 FROM unit;
 ----
-40	Mars bar	1	8	5
 20	Soda can	2	9	9
 20	Chewing gum	2	9	9
+40	Mars bar	1	8	5

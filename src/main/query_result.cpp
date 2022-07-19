@@ -46,7 +46,7 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 	if (!chunk) {
 		return nullptr;
 	}
-	chunk->Normalify();
+	chunk->Flatten();
 	return chunk;
 }
 

@@ -48,7 +48,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 
 	lock_guard<mutex> delete_guard(gstate.delete_lock);
 	if (return_chunk) {
-		row_identifiers.Normalify(input.size());
+		row_identifiers.Flatten(input.size());
 		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, input.size(), cfs);
 		gstate.return_chunk_collection.Append(ustate.delete_chunk);
 	}

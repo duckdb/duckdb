@@ -2,6 +2,9 @@
 # description: Test free_list with multiple blocks
 # group: [storage]
 
+require skip_reload
+
+
 load __TEST_DIR__/free_list_blocks.db
 
 statement ok
