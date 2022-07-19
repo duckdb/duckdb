@@ -20,7 +20,7 @@ BEGIN TRANSACTION
 statement ok 
 INSERT INTO t VALUES(9999, NULL);
 
-statement error 
+statement ok
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
 statement ok
@@ -88,8 +88,8 @@ BEGIN TRANSACTION
 statement ok
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
-statement error
-INSERT INTO t VALUES(2, NULL)
+statement ok
+INSERT INTO t VALUES(2, 2)
 
 statement ok
 ALTER TABLE t ALTER COLUMN j DROP NOT NULL 
@@ -127,8 +127,8 @@ BEGIN TRANSACTION
 statement ok
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
-statement error
-INSERT INTO T VALUES(8888, NULL)
+statement ok
+INSERT INTO T VALUES(8888, 9999)
 
 statement ok
 ROLLBACK

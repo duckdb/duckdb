@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-# Scenario #1, tran2 insert null, tran1 failed to commit
+# Scenario #1, tran1 alter column, tran2 not able to insert
 statement ok con1
 CREATE TABLE t(i INTEGER, j INTEGER)
 
@@ -18,19 +18,22 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 statement ok con2
 BEGIN TRANSACTION
 
-statement ok con2
+statement error con2
 INSERT INTO t VALUES(7777, NULL)
 
-statement ok con2
-COMMIT
+statement ok con1
+INSERT INTO t VALUES(7, 7)
 
-statement error con1
+statement ok con2
+ROLLBACK
+
+statement ok con1
 COMMIT
 
 query I con1
-SELECT i FROM t WHERE j IS NULL
+SELECT i FROM t
 ----
-7777
+7
 
 # Scenario #2, tran1 set not null, tran2 failed to commit
 statement ok con1
@@ -45,22 +48,19 @@ BEGIN TRANSACTION
 statement ok con2
 BEGIN TRANSACTION
 
-statement ok con1
-ALTER TABLE t ALTER COLUMN j SET NOT NULL
-
-statement ok con2
-BEGIN TRANSACTION
-
 statement ok con2
 INSERT INTO t VALUES(7777, NULL)
 
 statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con1
 COMMIT
 
-statement error con2
+statement ok con2
 COMMIT
 
-statement error con1
+statement ok con1
 INSERT INTO t VALUES(7777, NULL)
 
 query I con1
@@ -76,9 +76,6 @@ statement ok con1
 CREATE TABLE t(i INTEGER, j INTEGER)
 
 statement ok con1
-BEGIN TRANSACTION
-
-statement ok con2
 BEGIN TRANSACTION
 
 statement ok con1
