@@ -344,9 +344,9 @@ std::string ProtoWriter::ProtoElement::ToString() const {
 		if (!ow_->IsRepeated(*(now->parent_field_)) || now->parent()->parent_field_ != now->parent_field_) {
 			std::string name = now->parent_field_->name();
 			int i = 0;
-			while (i < name.size() && (ascii_isalnum(name[i]) || name[i] == '_'))
+			while (i < (int) name.size() && (ascii_isalnum(name[i]) || name[i] == '_'))
 				++i;
-			if (i > 0 && i == name.size()) { // safe field name
+			if (i > 0 && i == (int) name.size()) { // safe field name
 				if (loc.empty()) {
 					loc = name;
 				} else {

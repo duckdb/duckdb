@@ -174,7 +174,7 @@ bool ReadCodePoint(StringPiece str, int index, uint32_t *cp, int *num_left, int 
 		// the last unicode code point.
 		*num_read = 0;
 	}
-	while (*num_left > 0 && index < str.size()) {
+	while (*num_left > 0 && index < (int)str.size()) {
 		uint32_t ch = static_cast<uint8_t>(str[index++]);
 		--(*num_left);
 		++(*num_read);
@@ -322,7 +322,7 @@ void JsonEscaping::Escape(strings::ByteSource *input, strings::ByteSink *output)
 				break; // case i or ii
 			i += num_read;
 			num_read = 0;
-		} while (i < str.length()); // case iv
+		} while (i < (int) str.length()); // case iv
 		// First copy the un-escaped prefix, if any, to the output ByteSink.
 		if (i > 0)
 			input->CopyTo(output, i);
@@ -348,7 +348,7 @@ void JsonEscaping::Escape(StringPiece input, strings::ByteSink *output) {
 	const char *p = input.data();
 
 	bool can_skip_escaping = true;
-	for (int i = 0; i < len; i++) {
+	for (int i = 0; i < (int) len; i++) {
 		char c = p[i];
 		if (c < 0x20 || c >= 0x7F || c == '"' || c == '<' || c == '>' || c == '\\') {
 			can_skip_escaping = false;

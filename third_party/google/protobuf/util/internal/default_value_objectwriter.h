@@ -144,7 +144,7 @@ protected:
 		     bool is_placeholder, const std::vector<std::string> &path, bool suppress_empty_list,
 		     bool preserve_proto_field_names, bool use_ints_for_enums, FieldScrubCallBack field_scrub_callback);
 		virtual ~Node() {
-			for (int i = 0; i < children_.size(); ++i) {
+			for (int i = 0; i < (int) children_.size(); ++i) {
 				delete children_[i];
 			}
 		}

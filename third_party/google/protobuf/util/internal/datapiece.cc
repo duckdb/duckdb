@@ -54,7 +54,7 @@ namespace {
 
 template <typename To, typename From>
 util::StatusOr<To> ValidateNumberConversion(To after, From before) {
-	if (after == before && MathUtil::Sign<From>(before) == MathUtil::Sign<To>(after)) {
+	if ((int) after == (int) before && (int) MathUtil::Sign<From>(before) == (int) MathUtil::Sign<To>(after)) {
 		return after;
 	} else {
 		return util::InvalidArgumentError(std::is_integral<From>::value       ? ValueAsString(before)
