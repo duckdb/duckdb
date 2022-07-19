@@ -296,6 +296,9 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	auto internal_type = vector_type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	auto &vdata = GetVectorData(vector_index);
+	if (vdata.count == 0) {
+		return 0;
+	}
 	if (internal_type == PhysicalType::LIST) {
 		// list: copy child
 		auto &child_vector = ListVector::GetEntry(result);
@@ -745,6 +748,17 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result);
 	result.Verify();
 	return true;
+}
+
+void ColumnDataCollection::Scan(const std::function<void(DataChunk &)> &callback) {
+	ColumnDataScanState state;
+	InitializeScan(state);
+
+	DataChunk chunk;
+	InitializeScanChunk(chunk);
+	while(Scan(state, chunk)) {
+		callback(chunk);
+	}
 }
 
 void ColumnDataCollection::Combine(ColumnDataCollection &other) {

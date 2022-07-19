@@ -12,6 +12,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/mutex.hpp"
+#include <functional>
 
 namespace duckdb {
 class BufferManager;
@@ -56,7 +57,6 @@ public:
 	~ColumnDataCollection();
 
 public:
-	//! The amount of columns in the ChunkCollection
 	DUCKDB_API vector<LogicalType> &Types() {
 		return types;
 	}
@@ -64,12 +64,12 @@ public:
 		return types;
 	}
 
-	//! The amount of rows in the ChunkCollection
+	//! The amount of rows in the ColumnDataCollection
 	DUCKDB_API const idx_t &Count() const {
 		return count;
 	}
 
-	//! The amount of columns in the ChunkCollection
+	//! The amount of columns in the ColumnDataCollection
 	DUCKDB_API idx_t ColumnCount() const {
 		return types.size();
 	}
@@ -89,6 +89,9 @@ public:
 	DUCKDB_API bool Scan(ColumnDataScanState &state, DataChunk &result) const;
 	//! Scans a DataChunk from the ColumnDataCollection
 	DUCKDB_API bool Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result) const;
+
+	//! Performs a scan of the ColumnDataCollection, invoking the callback for each chunk
+	DUCKDB_API void Scan(const std::function<void(DataChunk &)> &callback);
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
