@@ -700,7 +700,7 @@ void LogicalType::Verify() const {
 #ifdef DEBUG
 	if (id_ == LogicalTypeId::DECIMAL) {
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
-		D_ASSERT(DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
 	}
 #endif
 }
