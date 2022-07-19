@@ -946,8 +946,12 @@ void JoinHashTable::SwizzleBlocks() {
 void JoinHashTable::UnswizzleBlocks() {
 	auto &blocks = swizzled_block_collection->blocks;
 	auto &heap_blocks = swizzled_string_heap->blocks;
-	D_ASSERT(blocks.size() == heap_blocks.size());
-	D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
+#ifdef DEBUG
+	if (!layout.AllConstant()) {
+		D_ASSERT(blocks.size() == heap_blocks.size());
+		D_ASSERT(swizzled_block_collection->count == swizzled_string_heap->count);
+	}
+#endif
 
 	for (idx_t block_idx = 0; block_idx < blocks.size(); block_idx++) {
 		auto &data_block = blocks[block_idx];

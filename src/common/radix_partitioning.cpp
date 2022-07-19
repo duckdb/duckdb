@@ -317,7 +317,9 @@ struct PartitionFunctor {
 
 			// Delete references to input blocks that have been processed to free up memory
 			data_blocks[block_idx] = nullptr;
-			heap_blocks[block_idx] = nullptr;
+			if (has_heap) {
+				heap_blocks[block_idx] = nullptr;
+			}
 		}
 
 		// Update counts of the last block
