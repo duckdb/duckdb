@@ -1149,37 +1149,67 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 	}
 }
 
-static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                    const ValidityMask &partition_mask, const ValidityMask &order_mask,
-                                    WindowAggregationMode mode) {
+struct WindowExecutor {
+	using WindowInputExpressionPtr = unique_ptr<WindowInputExpression>;
+
+	WindowExecutor(BoundWindowExpression *wexpr, ChunkCollection &input, WindowAggregationMode mode);
+
+	void Evaluate(ChunkCollection &input, ChunkCollection &output, const ValidityMask &partition_mask,
+	              const ValidityMask &order_mask);
+
+	// The function
+	BoundWindowExpression *wexpr;
+
+	// Frame management
+	WindowBoundariesState bounds;
+	uint64_t dense_rank;
+	uint64_t rank_equal;
+	uint64_t rank;
+
+	// Expression collections
+	ChunkCollection payload_collection;
+
+	WindowInputExpression leadlag_offset;
+	WindowInputExpression leadlag_default;
+
+	// evaluate boundaries if present. Parser has checked boundary types.
+	WindowInputExpression boundary_start;
+	WindowInputExpression boundary_end;
+
+	// evaluate RANGE expressions, if needed
+	WindowInputExpression range;
+
+	// IGNORE NULLS
+	ValidityMask ignore_nulls;
+
+	// build a segment tree for frame-adhering aggregates
+	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
+	ValidityMask filter_mask;
+	vector<validity_t> filter_bits;
+	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
+
+	// Computation
+	DataChunk output_chunk;
+};
+
+WindowExecutor::WindowExecutor(BoundWindowExpression *wexpr, ChunkCollection &input, WindowAggregationMode mode)
+    : wexpr(wexpr), bounds(wexpr), dense_rank(1), rank_equal(0), rank(1), payload_collection(input.GetAllocator()),
+      leadlag_offset(wexpr->offset_expr.get(), input.GetAllocator()),
+      leadlag_default(wexpr->default_expr.get(), input.GetAllocator()),
+      boundary_start(wexpr->start_expr.get(), input.GetAllocator()),
+      boundary_end(wexpr->end_expr.get(), input.GetAllocator()),
+      range((bounds.has_preceding_range || bounds.has_following_range) ? wexpr->orders[0].expression.get() : nullptr,
+            input.GetAllocator())
+
+{
+	auto &allocator = input.GetAllocator();
 
 	// TODO we could evaluate those expressions in parallel
-	WindowBoundariesState bounds(wexpr);
-	uint64_t dense_rank = 1, rank_equal = 0, rank = 1;
 
 	// Single pass over the input to produce the payload columns.
 	// Vectorisation for the win...
 
-	auto &allocator = input.GetAllocator();
-
-	// evaluate inner expressions of window functions, could be more complex
-	ChunkCollection payload_collection(allocator);
-	vector<Expression *> exprs;
-	for (auto &child : wexpr->children) {
-		exprs.push_back(child.get());
-	}
-
-	// TODO: child may be a scalar, don't need to materialize the whole collection then
-	ExpressionExecutor payload_executor(allocator);
-	DataChunk payload_chunk;
-	PrepareInputExpressions(exprs.data(), exprs.size(), payload_collection, payload_executor, payload_chunk);
-
-	WindowInputExpression leadlag_offset(wexpr->offset_expr.get(), allocator);
-	WindowInputExpression leadlag_default(wexpr->default_expr.get(), allocator);
-
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
-	ValidityMask filter_mask;
-	vector<validity_t> filter_bits;
 	ExpressionExecutor filter_executor(allocator);
 	SelectionVector filter_sel;
 	if (wexpr->filter_expr) {
@@ -1190,20 +1220,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
 
-	// evaluate boundaries if present. Parser has checked boundary types.
-	WindowInputExpression boundary_start(wexpr->start_expr.get(), allocator);
-	WindowInputExpression boundary_end(wexpr->end_expr.get(), allocator);
-
-	// evaluate RANGE expressions, if needed
-	Expression *range_expr = nullptr;
-	if (bounds.has_preceding_range || bounds.has_following_range) {
-		D_ASSERT(wexpr->orders.size() == 1);
-		range_expr = wexpr->orders[0].expression.get();
-	}
-	WindowInputExpression range(range_expr, allocator);
-
 	// Set up a validity mask for IGNORE NULLS
-	ValidityMask ignore_nulls;
 	bool check_nulls = false;
 	if (wexpr->ignore_nulls) {
 		switch (wexpr->type) {
@@ -1218,6 +1235,17 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 	}
+
+	// TODO: child may be a scalar, don't need to materialize the whole collection then
+	ExpressionExecutor payload_executor(allocator);
+	DataChunk payload_chunk;
+
+	// evaluate inner expressions of window functions, could be more complex
+	vector<Expression *> exprs;
+	for (auto &child : wexpr->children) {
+		exprs.push_back(child.get());
+	}
+	PrepareInputExpressions(exprs.data(), exprs.size(), payload_collection, payload_executor, payload_chunk);
 
 	// Single pass over the input to produce the payload columns.
 	// Vectorisation for the win...
@@ -1271,17 +1299,19 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
 	if (wexpr->aggregate) {
 		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
 		                                              &payload_collection, filter_mask, mode);
 	}
 
-	// this is the main loop, go through all sorted rows and compute window function result
 	const vector<LogicalType> output_types(1, wexpr->return_type);
-	DataChunk output_chunk;
 	output_chunk.Initialize(allocator, output_types);
+}
+
+void WindowExecutor::Evaluate(ChunkCollection &input, ChunkCollection &output, const ValidityMask &partition_mask,
+                              const ValidityMask &order_mask) {
+	// this is the main loop, go through all sorted rows and compute window function result
 	for (idx_t row_idx = 0; row_idx < input.Count(); row_idx++) {
 		// Grow the chunk if necessary.
 		const auto output_offset = row_idx % STANDARD_VECTOR_SIZE;
@@ -1475,8 +1505,9 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	}
 	//	Compute the functions columnwise
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
+		WindowExecutor executor(window_exprs[expr_idx], input, mode);
 		ChunkCollection output(input.GetAllocator());
-		ComputeWindowExpression(window_exprs[expr_idx], input, output, partition_mask, order_mask, mode);
+		executor.Evaluate(input, output, partition_mask, order_mask);
 		window_results.Fuse(output);
 	}
 }
