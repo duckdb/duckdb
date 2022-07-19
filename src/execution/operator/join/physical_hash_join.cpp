@@ -534,9 +534,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 				break;
 			} while (true);
 			// If we found entries from the full outer join, gather them
-			if (found_entries != 0) {
-				sink.hash_table->GatherFullOuter(chunk, lstate.addresses, found_entries);
-			}
+			sink.hash_table->GatherFullOuter(chunk, lstate.addresses, found_entries);
 		}
 	}
 }

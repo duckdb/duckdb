@@ -812,7 +812,9 @@ idx_t JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses) {
 }
 
 void JoinHashTable::GatherFullOuter(DataChunk &result, Vector &addresses, idx_t found_entries) {
-	D_ASSERT(found_entries > 0);
+	if (found_entries == 0) {
+		return;
+	}
 	result.SetCardinality(found_entries);
 	idx_t left_column_count = result.ColumnCount() - build_types.size();
 	const auto &sel_vector = *FlatVector::IncrementalSelectionVector();
@@ -1031,6 +1033,8 @@ void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (auto &ht : local_hts) {
+		// TODO: SizeInBytes / SwizzledSize overestimates size by a lot because we make copies of heap blocks
+		//  Need to re-compute this somehow
 		total_count += ht->Count() + ht->SwizzledCount();
 		total_size += ht->SizeInBytes() + ht->SwizzledSize();
 	}
@@ -1042,7 +1046,7 @@ void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable
 		// We decided to do an external join, but the data fits
 		// This can happen when we force an external join
 		// Just do three probe iterations
-		tuples_per_iteration = (total_count + 1) / 3;
+		tuples_per_iteration = (total_count + 2) / 3;
 	}
 
 	// TODO: set number of radix bits (determine what's best?)
