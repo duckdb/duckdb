@@ -27,7 +27,7 @@ class ScalarMacroCatalogEntry;
 class CatalogEntry;
 class SimpleFunction;
 
-struct MacroBinding;
+struct DummyBinding;
 
 struct BoundColumnReferenceInfo {
 	string name;
@@ -59,7 +59,8 @@ public:
 	//! be added. Defaults to INVALID.
 	LogicalType target_type;
 
-	MacroBinding *macro_binding;
+	DummyBinding *macro_binding;
+	vector<DummyBinding> *lambda_bindings = nullptr;
 
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
@@ -117,15 +118,23 @@ protected:
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> *expr_ptr);
-	BindResult BindExpression(LambdaExpression &expr, idx_t depth);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
+	                          const LogicalType &list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 
+	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
+	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                                   string &alias);
+	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                          unique_ptr<Expression> &expr, string &alias);
+
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
+	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth);
 	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry *macro, idx_t depth,

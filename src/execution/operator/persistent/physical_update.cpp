@@ -15,7 +15,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class UpdateGlobalState : public GlobalSinkState {
 public:
-	UpdateGlobalState() : updated_count(0), returned_chunk_count(0) {
+	explicit UpdateGlobalState(Allocator &allocator)
+	    : updated_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
 	}
 
 	mutex lock;
@@ -27,18 +28,18 @@ public:
 
 class UpdateLocalState : public LocalSinkState {
 public:
-	UpdateLocalState(const vector<unique_ptr<Expression>> &expressions, const vector<LogicalType> &table_types,
-	                 const vector<unique_ptr<Expression>> &bound_defaults)
-	    : default_executor(bound_defaults) {
+	UpdateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &expressions,
+	                 const vector<LogicalType> &table_types, const vector<unique_ptr<Expression>> &bound_defaults)
+	    : default_executor(allocator, bound_defaults) {
 		// initialize the update chunk
 		vector<LogicalType> update_types;
 		update_types.reserve(expressions.size());
 		for (auto &expr : expressions) {
 			update_types.push_back(expr->return_type);
 		}
-		update_chunk.Initialize(update_types);
+		update_chunk.Initialize(allocator, update_types);
 		// initialize the mock chunk
-		mock_chunk.Initialize(table_types);
+		mock_chunk.Initialize(allocator, table_types);
 	}
 
 	DataChunk update_chunk;
@@ -54,7 +55,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	DataChunk &update_chunk = ustate.update_chunk;
 	DataChunk &mock_chunk = ustate.mock_chunk;
 
-	chunk.Normalify();
+	chunk.Flatten();
 	ustate.default_executor.SetChunk(chunk);
 
 	// update data in the base table
@@ -121,11 +122,11 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<UpdateGlobalState>();
+	return make_unique<UpdateGlobalState>(Allocator::Get(context));
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<UpdateLocalState>(expressions, table.GetTypes(), bound_defaults);
+	return make_unique<UpdateLocalState>(Allocator::Get(context.client), expressions, table.GetTypes(), bound_defaults);
 }
 
 void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

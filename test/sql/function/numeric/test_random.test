@@ -5,6 +5,9 @@
 # we need to be a bit more clever here for testing random
 # it's very unlikely that three random variables are exactly equivalent
 
+require skip_reload
+
+
 statement ok
 BEGIN TRANSACTION
 

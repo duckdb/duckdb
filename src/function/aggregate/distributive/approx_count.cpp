@@ -19,7 +19,7 @@ struct ApproxCountDistinctFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, FunctionData *bind_data) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
 		if (!source.log) {
 			return;
 		}
@@ -34,7 +34,7 @@ struct ApproxCountDistinctFunction {
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->log) {
 			target[idx] = state->log->Count();
 		} else {
@@ -53,7 +53,7 @@ struct ApproxCountDistinctFunction {
 	}
 };
 
-static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
+static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count,
                                                     data_ptr_t state, idx_t count) {
 	D_ASSERT(input_count == 1);
 
@@ -62,8 +62,8 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionDat
 		agg_state->log = new HyperLogLog();
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	inputs[0].ToUnifiedFormat(count, vdata);
 
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
@@ -72,12 +72,12 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], FunctionDat
 	agg_state->log->AddToLog(vdata, count, indices, counts);
 }
 
-static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bind_data, idx_t input_count,
+static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputData &, idx_t input_count,
                                               Vector &state_vector, idx_t count) {
 	D_ASSERT(input_count == 1);
 
-	VectorData sdata;
-	state_vector.Orrify(count, sdata);
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = (ApproxDistinctCountState **)sdata.data;
 
 	for (idx_t i = 0; i < count; i++) {
@@ -87,8 +87,8 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bin
 		}
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	inputs[0].ToUnifiedFormat(count, vdata);
 
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
@@ -98,7 +98,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], FunctionData *bin
 }
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {
-	return AggregateFunction(
+	auto fun = AggregateFunction(
 	    {input_type}, LogicalTypeId::BIGINT, AggregateFunction::StateSize<ApproxDistinctCountState>,
 	    AggregateFunction::StateInitialize<ApproxDistinctCountState, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctUpdateFunction,
@@ -106,6 +106,8 @@ AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) 
 	    AggregateFunction::StateFinalize<ApproxDistinctCountState, int64_t, ApproxCountDistinctFunction>,
 	    ApproxCountDistinctSimpleUpdateFunction, nullptr,
 	    AggregateFunction::StateDestroy<ApproxDistinctCountState, ApproxCountDistinctFunction>);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {

@@ -13,6 +13,9 @@ PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : Ph
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
+	explicit BatchCollectorGlobalState(Allocator &allocator) : data(allocator) {
+	}
+
 	mutex glock;
 	BatchedChunkCollection data;
 	unique_ptr<MaterializedQueryResult> result;
@@ -20,6 +23,9 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
+	explicit BatchCollectorLocalState(Allocator &allocator) : data(allocator) {
+	}
+
 	BatchedChunkCollection data;
 };
 
@@ -45,7 +51,7 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto result =
 	    make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
 	DataChunk output;
-	output.Initialize(types);
+	output.Initialize(BufferAllocator::Get(context), types);
 
 	BatchedChunkScanState state;
 	gstate.data.InitializeScan(state);
@@ -63,11 +69,11 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchCollector::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BatchCollectorLocalState>();
+	return make_unique<BatchCollectorLocalState>(Allocator::DefaultAllocator());
 }
 
 unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<BatchCollectorGlobalState>();
+	return make_unique<BatchCollectorGlobalState>(Allocator::DefaultAllocator());
 }
 
 unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {

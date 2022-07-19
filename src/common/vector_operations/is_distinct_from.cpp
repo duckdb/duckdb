@@ -41,10 +41,10 @@ static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, 
 	if (left.GetVectorType() == VectorType::CONSTANT_VECTOR && right.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		DistinctExecuteConstant<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(left, right, result);
 	} else {
-		VectorData ldata, rdata;
+		UnifiedVectorFormat ldata, rdata;
 
-		left.Orrify(count, ldata);
-		right.Orrify(count, rdata);
+		left.ToUnifiedFormat(count, ldata);
+		right.ToUnifiedFormat(count, rdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
@@ -140,10 +140,10 @@ DistinctSelectGenericLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restr
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                    SelectionVector *true_sel, SelectionVector *false_sel) {
-	VectorData ldata, rdata;
+	UnifiedVectorFormat ldata, rdata;
 
-	left.Orrify(count, ldata);
-	right.Orrify(count, rdata);
+	left.ToUnifiedFormat(count, ldata);
+	right.ToUnifiedFormat(count, rdata);
 
 	return DistinctSelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data,
 	                                                                  ldata.sel, rdata.sel, sel, count, ldata.validity,
@@ -279,9 +279,9 @@ template <class OP>
 static idx_t DistinctSelectNotNull(Vector &left, Vector &right, const idx_t count, idx_t &true_count,
                                    const SelectionVector &sel, SelectionVector &maybe_vec, OptionalSelection &true_opt,
                                    OptionalSelection &false_opt) {
-	VectorData lvdata, rvdata;
-	left.Orrify(count, lvdata);
-	right.Orrify(count, rvdata);
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(count, lvdata);
+	right.ToUnifiedFormat(count, rvdata);
 
 	auto &lmask = lvdata.validity;
 	auto &rmask = rvdata.validity;
@@ -444,22 +444,6 @@ idx_t PositionComparator::Final<duckdb::DistinctGreaterThan>(Vector &left, Vecto
 
 using StructEntries = vector<unique_ptr<Vector>>;
 
-static StructEntries &StructVectorGetSlicedEntries(Vector &parent, StructEntries &sliced, const idx_t count) {
-	// We have to manually slice STRUCT dictionaries.
-	auto &children = StructVector::GetEntries(parent);
-	if (parent.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
-		auto &dict_sel = DictionaryVector::SelVector(parent);
-		for (auto &child : children) {
-			auto v = make_unique<Vector>(*child, dict_sel, count);
-			sliced.push_back(move(v));
-		}
-
-		return sliced;
-	}
-
-	return children;
-}
-
 static void ExtractNestedSelection(const SelectionVector &slice_sel, const idx_t count, const SelectionVector &sel,
                                    OptionalSelection &opt) {
 
@@ -486,8 +470,8 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 
 	// Avoid allocating in the 99% of the cases where we don't need to.
 	StructEntries lsliced, rsliced;
-	auto &lchildren = StructVectorGetSlicedEntries(left, lsliced, count);
-	auto &rchildren = StructVectorGetSlicedEntries(right, rsliced, count);
+	auto &lchildren = StructVector::GetEntries(left);
+	auto &rchildren = StructVector::GetEntries(right);
 	D_ASSERT(lchildren.size() == rchildren.size());
 
 	// In order to reuse the comparators, we have to track what passed and failed internally.
@@ -505,11 +489,11 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 	for (idx_t col_no = 0; col_no < lchildren.size(); ++col_no) {
 		// Slice the children to maintain density
 		Vector lchild(*lchildren[col_no]);
-		lchild.Normalify(vcount);
+		lchild.Flatten(vcount);
 		lchild.Slice(slice_sel, count);
 
 		Vector rchild(*rchildren[col_no]);
-		rchild.Normalify(vcount);
+		rchild.Flatten(vcount);
 		rchild.Slice(slice_sel, count);
 
 		// Find everything that definitely matches
@@ -554,11 +538,10 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 			match_count += true_count;
 		}
 	}
-
 	return match_count;
 }
 
-static void PositionListCursor(SelectionVector &cursor, VectorData &vdata, const idx_t pos,
+static void PositionListCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
                                const SelectionVector &slice_sel, const idx_t count) {
 	const auto data = (const list_entry_t *)vdata.data;
 	for (idx_t i = 0; i < count; ++i) {
@@ -581,6 +564,8 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
+	ListVector::GetEntry(left).Flatten(count);
+	ListVector::GetEntry(right).Flatten(count);
 	Vector lchild(ListVector::GetEntry(left), lcursor, count);
 	Vector rchild(ListVector::GetEntry(right), rcursor, count);
 
@@ -599,12 +584,12 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	// }
 
 	// Get pointers to the list entries
-	VectorData lvdata;
-	left.Orrify(count, lvdata);
+	UnifiedVectorFormat lvdata;
+	left.ToUnifiedFormat(count, lvdata);
 	const auto ldata = (const list_entry_t *)lvdata.data;
 
-	VectorData rvdata;
-	right.Orrify(count, rvdata);
+	UnifiedVectorFormat rvdata;
+	right.ToUnifiedFormat(count, rvdata);
 	const auto rdata = (const list_entry_t *)rvdata.data;
 
 	// In order to reuse the comparators, we have to track what passed and failed internally.

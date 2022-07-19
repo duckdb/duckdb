@@ -3,6 +3,10 @@
 
 namespace duckdb {
 
+ReservoirSample::ReservoirSample(Allocator &allocator, idx_t sample_count, int64_t seed)
+    : BlockingSample(seed), sample_count(sample_count), reservoir(allocator) {
+}
+
 void ReservoirSample::AddToReservoir(DataChunk &input) {
 	if (sample_count == 0) {
 		return;
@@ -50,7 +54,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	idx_t chunk_count = input.size();
-	input.Normalify();
+	input.Flatten();
 
 	// we have not: append to the reservoir
 	idx_t required_count;
@@ -85,10 +89,11 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	return input.size();
 }
 
-ReservoirSamplePercentage::ReservoirSamplePercentage(double percentage, int64_t seed)
-    : BlockingSample(seed), sample_percentage(percentage / 100.0), current_count(0), is_finalized(false) {
+ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, double percentage, int64_t seed)
+    : BlockingSample(seed), allocator(allocator), sample_percentage(percentage / 100.0), current_count(0),
+      is_finalized(false) {
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
-	current_sample = make_unique<ReservoirSample>(reservoir_sample_size, random.NextRandomInteger());
+	current_sample = make_unique<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
@@ -99,7 +104,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		idx_t append_to_next_sample = input.size() - append_to_current_sample_count;
 		if (append_to_current_sample_count > 0) {
 			// we have elements remaining, first add them to the current sample
-			input.Normalify();
+			input.Flatten();
 
 			input.SetCardinality(append_to_current_sample_count);
 			current_sample->AddToReservoir(input);
@@ -116,7 +121,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		finished_samples.push_back(move(current_sample));
 
 		// allocate a new sample, and potentially add the remainder of the current input to that sample
-		current_sample = make_unique<ReservoirSample>(reservoir_sample_size, random.NextRandomInteger());
+		current_sample = make_unique<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 		if (append_to_next_sample > 0) {
 			current_sample->AddToReservoir(input);
 		}
@@ -149,7 +154,7 @@ void ReservoirSamplePercentage::Finalize() {
 	if (current_count > 0) {
 		// create a new sample
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));
-		auto new_sample = make_unique<ReservoirSample>(new_sample_size, random.NextRandomInteger());
+		auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
 		while (true) {
 			auto chunk = current_sample->GetChunk();
 			if (!chunk || chunk->size() == 0) {

@@ -71,6 +71,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			throw NotImplementedException("ALTER TABLE option not supported yet!");
 		}
 	}
+	result->info->if_exists = stmt->missing_ok;
 
 	return result;
 }

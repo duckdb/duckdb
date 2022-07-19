@@ -16,6 +16,9 @@ inputs:
   s3_key:
     description: 'S3 key secret'
     default: ''
+  signing_pk:
+    description: 'Extension signing RSA private key'
+    default: ''
 
   # Build config
   force_32_bit:
@@ -57,10 +60,18 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
-  oote:
+  out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
+    default: 1
+  python_name:
+    description: 'Python binary name because wtf Python'
+    default: 'python3'
+  substrait:
+    description: 'Build Substrait'
     default: 0
-
+  osx_universal:
+    description: 'Build Universal Binary for OSX'
+    default: 0
 runs:
   using: "composite"
   steps:
@@ -83,6 +94,8 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+        OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+
       run: |
         ls -al
         pwd
@@ -95,7 +108,7 @@ runs:
       shell: bash
       run: |
         mkdir -p build/release/extension/out_of_tree
-        python3.7 scripts/build_out_of_tree_extensions.py --output build/release/extension/out_of_tree
+        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -109,6 +122,7 @@ runs:
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
+        DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then

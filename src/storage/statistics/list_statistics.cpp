@@ -59,8 +59,8 @@ void ListStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 
 	if (child_stats) {
 		auto &child_entry = ListVector::GetEntry(vector);
-		VectorData vdata;
-		vector.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		vector.ToUnifiedFormat(count, vdata);
 
 		auto list_data = (list_entry_t *)vdata.data;
 		idx_t total_list_count = 0;

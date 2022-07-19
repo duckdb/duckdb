@@ -18,7 +18,7 @@ namespace duckdb {
 using ValidityBytes = RowLayout::ValidityBytes;
 
 template <class T>
-static void TemplatedScatter(VectorData &col, Vector &rows, const SelectionVector &sel, const idx_t count,
+static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const SelectionVector &sel, const idx_t count,
                              const idx_t col_offset, const idx_t col_no) {
 	auto data = (T *)col.data;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
@@ -48,7 +48,7 @@ static void TemplatedScatter(VectorData &col, Vector &rows, const SelectionVecto
 	}
 }
 
-static void ComputeStringEntrySizes(const VectorData &col, idx_t entry_sizes[], const SelectionVector &sel,
+static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_sizes[], const SelectionVector &sel,
                                     const idx_t count, const idx_t offset = 0) {
 	auto data = (const string_t *)col.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -61,8 +61,9 @@ static void ComputeStringEntrySizes(const VectorData &col, idx_t entry_sizes[], 
 	}
 }
 
-static void ScatterStringVector(VectorData &col, Vector &rows, data_ptr_t str_locations[], const SelectionVector &sel,
-                                const idx_t count, const idx_t col_offset, const idx_t col_no) {
+static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr_t str_locations[],
+                                const SelectionVector &sel, const idx_t count, const idx_t col_offset,
+                                const idx_t col_no) {
 	auto string_data = (string_t *)col.data;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
@@ -87,7 +88,7 @@ static void ScatterStringVector(VectorData &col, Vector &rows, data_ptr_t str_lo
 	}
 }
 
-static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, data_ptr_t data_locations[],
+static void ScatterNestedVector(Vector &vec, UnifiedVectorFormat &col, Vector &rows, data_ptr_t data_locations[],
                                 const SelectionVector &sel, const idx_t count, const idx_t col_offset,
                                 const idx_t col_no, const idx_t vcount) {
 	// Store pointers to the data in the row
@@ -106,7 +107,7 @@ static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, data
 	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, validitymask_locations);
 }
 
-void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], const RowLayout &layout, Vector &rows,
                             RowDataCollection &string_heap, const SelectionVector &sel, idx_t count) {
 	if (count == 0) {
 		return;
@@ -125,7 +126,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	auto &types = layout.GetTypes();
 
 	// Compute the entry size of the variable size columns
-	vector<unique_ptr<BufferHandle>> handles;
+	vector<BufferHandle> handles;
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
 	if (!layout.AllConstant()) {
 		idx_t entry_sizes[STANDARD_VECTOR_SIZE];

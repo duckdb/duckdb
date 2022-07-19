@@ -213,8 +213,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_me
 		                error_message, nullptr);
 	}
 	default: {
-		VectorData vdata;
-		source.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -584,7 +584,7 @@ static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *
 			auto tdata = ConstantVector::GetData<list_entry_t>(result);
 			*tdata = *ldata;
 		} else {
-			source.Normalify(count);
+			source.Flatten(count);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
 
@@ -620,8 +620,8 @@ bool FillEnum(Vector &source, Vector &result, idx_t count, string *error_message
 
 	auto res_enum_type = result.GetType();
 
-	VectorData vdata;
-	source.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	source.ToUnifiedFormat(count, vdata);
 
 	auto source_data = (SRC_TYPE *)vdata.data;
 	auto source_sel = vdata.sel;
@@ -778,7 +778,7 @@ static bool StructCastSwitch(Vector &source, Vector &result, idx_t count, string
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
 		} else {
-			source.Normalify(count);
+			source.Flatten(count);
 			FlatVector::Validity(result) = FlatVector::Validity(source);
 		}
 		return true;

@@ -39,6 +39,15 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
 	}
 }
 
+VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count)
+    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+	auto &other_vector = StructVector::GetEntries(other);
+	for (auto &child_vector : other_vector) {
+		auto vector = make_unique<Vector>(*child_vector, sel, count);
+		children.push_back(move(vector));
+	}
+}
+
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
@@ -84,7 +93,7 @@ void VectorListBuffer::PushBack(const Value &insert) {
 VectorListBuffer::~VectorListBuffer() {
 }
 
-ManagedVectorBuffer::ManagedVectorBuffer(unique_ptr<BufferHandle> handle)
+ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
     : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
 }
 

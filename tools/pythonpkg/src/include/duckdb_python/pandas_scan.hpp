@@ -28,7 +28,7 @@ public:
 	static unique_ptr<GlobalTableFunctionState> PandasScanInitGlobal(ClientContext &context,
 	                                                                 TableFunctionInitInput &input);
 	static unique_ptr<LocalTableFunctionState>
-	PandasScanInitLocal(ClientContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate);
+	PandasScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate);
 
 	static idx_t PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
 

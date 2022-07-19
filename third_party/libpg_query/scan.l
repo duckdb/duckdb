@@ -332,6 +332,7 @@ typecast		"::"
 dot_dot			\.\.
 colon_equals	":="
 lambda_arrow	"->"
+double_arrow    "->>"
 power_of        "**"
 
 /* " */
@@ -827,6 +828,11 @@ other			.
 					SET_YYLLOC();
 					return LAMBDA_ARROW;
 				}
+
+{double_arrow}  {
+                    SET_YYLLOC();
+                    return DOUBLE_ARROW;
+                		}
 
 {power_of}	{
 					SET_YYLLOC();

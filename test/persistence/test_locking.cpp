@@ -71,7 +71,7 @@ TEST_CASE("Test read lock with multiple processes", "[persistence][.]") {
 	// test read lock
 	pid_t pid = fork();
 	DBConfig config;
-	config.access_mode = AccessMode::READ_ONLY;
+	config.options.access_mode = AccessMode::READ_ONLY;
 	if (pid == 0) {
 		// child process
 		// open db for reading

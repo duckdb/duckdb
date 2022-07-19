@@ -18,6 +18,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
 
@@ -36,15 +37,19 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	}
 }
 
-void DataChunk::Initialize(const vector<LogicalType> &types) {
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types) {
 	D_ASSERT(data.empty());   // can only be initialized once
 	D_ASSERT(!types.empty()); // empty chunk not allowed
 	capacity = STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < types.size(); i++) {
-		VectorCache cache(types[i]);
+		VectorCache cache(allocator, types[i]);
 		data.emplace_back(cache);
 		vector_caches.push_back(move(cache));
 	}
+}
+
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types) {
+	Initialize(Allocator::Get(context), types);
 }
 
 void DataChunk::Reset() {
@@ -174,9 +179,9 @@ void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel
 	SetCardinality(new_size);
 }
 
-void DataChunk::Normalify() {
+void DataChunk::Flatten() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
-		data[i].Normalify(size());
+		data[i].Flatten(size());
 	}
 }
 
@@ -218,7 +223,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	for (idx_t i = 0; i < column_count; i++) {
 		types.push_back(LogicalType::Deserialize(source));
 	}
-	Initialize(types);
+	Initialize(Allocator::DefaultAllocator(), types);
 	// now load the column data
 	SetCardinality(rows);
 	for (idx_t i = 0; i < column_count; i++) {
@@ -250,16 +255,16 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 	}
 }
 
-unique_ptr<VectorData[]> DataChunk::Orrify() {
-	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[ColumnCount()]);
+unique_ptr<UnifiedVectorFormat[]> DataChunk::ToUnifiedFormat() {
+	auto orrified_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[ColumnCount()]);
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].Orrify(size(), orrified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(size(), orrified_data[col_idx]);
 	}
 	return orrified_data;
 }
 
 void DataChunk::Hash(Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalTypeId::HASH);
+	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	VectorOperations::Hash(data[0], result, size());
 	for (idx_t i = 1; i < ColumnCount(); i++) {
 		VectorOperations::CombineHash(result, data[i], size());
@@ -412,8 +417,8 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
 		auto &list_vector_child = ListVector::GetEntry(*children[child_idx]);
 		if (child_idx == 0) {
-			VectorData list_data;
-			children[child_idx]->Orrify(size, list_data);
+			UnifiedVectorFormat list_data;
+			children[child_idx]->ToUnifiedFormat(size, list_data);
 			auto list_child_validity = FlatVector::Validity(list_vector_child);
 			if (!list_child_validity.AllValid()) {
 				//! Get the offsets to check from the selection vector
@@ -694,7 +699,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 }
 
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
-	Normalify();
+	Flatten();
 	D_ASSERT(out_array);
 
 	// Allocate as unique_ptr first to cleanup properly on error

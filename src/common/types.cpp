@@ -93,7 +93,7 @@ PhysicalType LogicalType::GetInternalType() {
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
 		} else {
-			throw InternalException("Widths bigger than 38 are not supported");
+			throw InternalException("Widths bigger than %d are not supported", DecimalType::MaxWidth());
 		}
 	}
 	case LogicalTypeId::VARCHAR:
@@ -108,9 +108,6 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::STRUCT;
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
-	case LogicalTypeId::HASH:
-		static_assert(sizeof(hash_t) == sizeof(uint64_t), "Hash must be uint64_t");
-		return PhysicalType::UINT64;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -128,6 +125,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return EnumType::GetPhysicalType(*this);
 	}
 	case LogicalTypeId::TABLE:
+	case LogicalTypeId::LAMBDA:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
@@ -180,6 +178,7 @@ constexpr const LogicalTypeId LogicalType::ROW_TYPE;
 
 // TODO these are incomplete and should maybe not exist as such
 constexpr const LogicalTypeId LogicalType::TABLE;
+constexpr const LogicalTypeId LogicalType::LAMBDA;
 
 constexpr const LogicalTypeId LogicalType::ANY;
 
@@ -419,12 +418,12 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "LIST";
 	case LogicalTypeId::MAP:
 		return "MAP";
-	case LogicalTypeId::HASH:
-		return "HASH";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
 	case LogicalTypeId::TABLE:
 		return "TABLE";
+	case LogicalTypeId::LAMBDA:
+		return "LAMBDA";
 	case LogicalTypeId::INVALID:
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:
@@ -562,6 +561,10 @@ bool LogicalType::IsNumeric() const {
 	}
 }
 
+bool LogicalType::IsValid() const {
+	return id() != LogicalTypeId::INVALID && id() != LogicalTypeId::UNKNOWN;
+}
+
 bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	switch (id_) {
 	case LogicalTypeId::SQLNULL:
@@ -629,7 +632,11 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	if (left.id() < right.id()) {
+	if (left.id() == LogicalTypeId::UNKNOWN) {
+		return right;
+	} else if (right.id() == LogicalTypeId::UNKNOWN) {
+		return left;
+	} else if (left.id() < right.id()) {
 		return right;
 	} else if (right.id() < left.id()) {
 		return left;
@@ -648,9 +655,20 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 				return right;
 			}
 		} else if (type_id == LogicalTypeId::DECIMAL) {
-			// use max width/scale of the two types
-			auto width = MaxValue<uint8_t>(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
+			// unify the width/scale so that the resulting decimal always fits
+			// "width - scale" gives us the number of digits on the left side of the decimal point
+			// "scale" gives us the number of digits allowed on the right of the deciaml point
+			// using the max of these of the two types gives us the new decimal size
+			auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
+			auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
+			auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
 			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
+			auto width = extra_width + scale;
+			if (width > DecimalType::MaxWidth()) {
+				// if the resulting decimal does not fit, we truncate the scale
+				width = DecimalType::MaxWidth();
+				scale = width - extra_width;
+			}
 			return LogicalType::DECIMAL(width, scale);
 		} else if (type_id == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
@@ -694,7 +712,7 @@ bool ApproxEqual(float ldecimal, float rdecimal) {
 	if (!Value::FloatIsFinite(ldecimal) || !Value::FloatIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	float epsilon = std::fabs(rdecimal) * 0.01;
+	float epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
@@ -705,7 +723,7 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 	if (!Value::DoubleIsFinite(ldecimal) || !Value::DoubleIsFinite(rdecimal)) {
 		return ldecimal == rdecimal;
 	}
-	double epsilon = std::fabs(rdecimal) * 0.01;
+	double epsilon = std::fabs(rdecimal) * 0.01 + 0.00000001;
 	return std::fabs(ldecimal - rdecimal) <= epsilon;
 }
 
@@ -845,6 +863,10 @@ uint8_t DecimalType::GetScale(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((DecimalTypeInfo &)*info).scale;
+}
+
+uint8_t DecimalType::MaxWidth() {
+	return 38;
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {

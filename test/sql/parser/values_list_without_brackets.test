@@ -1,0 +1,16 @@
+# name: test/sql/parser/values_list_without_brackets.test
+# description: Test values list without brackets
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT * FROM values (42) t;
+----
+42
+
+query II
+SELECT * FROM values (42) t, values (84) x;
+----
+42	84

@@ -81,10 +81,10 @@ public:
 		} else {
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 
-			VectorData adata, bdata, cdata;
-			a.Orrify(count, adata);
-			b.Orrify(count, bdata);
-			c.Orrify(count, cdata);
+			UnifiedVectorFormat adata, bdata, cdata;
+			a.ToUnifiedFormat(count, adata);
+			b.ToUnifiedFormat(count, bdata);
+			c.ToUnifiedFormat(count, cdata);
 
 			ExecuteLoop<A_TYPE, B_TYPE, C_TYPE, RESULT_TYPE, OPWRAPPER>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data,
@@ -139,9 +139,9 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP, bool NO_NULL>
-	static inline idx_t SelectLoopSelSwitch(VectorData &adata, VectorData &bdata, VectorData &cdata,
-	                                        const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-	                                        SelectionVector *false_sel) {
+	static inline idx_t SelectLoopSelSwitch(UnifiedVectorFormat &adata, UnifiedVectorFormat &bdata,
+	                                        UnifiedVectorFormat &cdata, const SelectionVector *sel, idx_t count,
+	                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, true>(
 			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
@@ -159,9 +159,9 @@ private:
 	}
 
 	template <class A_TYPE, class B_TYPE, class C_TYPE, class OP>
-	static inline idx_t SelectLoopSwitch(VectorData &adata, VectorData &bdata, VectorData &cdata,
-	                                     const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
-	                                     SelectionVector *false_sel) {
+	static inline idx_t SelectLoopSwitch(UnifiedVectorFormat &adata, UnifiedVectorFormat &bdata,
+	                                     UnifiedVectorFormat &cdata, const SelectionVector *sel, idx_t count,
+	                                     SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (!adata.validity.AllValid() || !bdata.validity.AllValid() || !cdata.validity.AllValid()) {
 			return SelectLoopSelSwitch<A_TYPE, B_TYPE, C_TYPE, OP, false>(adata, bdata, cdata, sel, count, true_sel,
 			                                                              false_sel);
@@ -178,10 +178,10 @@ public:
 		if (!sel) {
 			sel = FlatVector::IncrementalSelectionVector();
 		}
-		VectorData adata, bdata, cdata;
-		a.Orrify(count, adata);
-		b.Orrify(count, bdata);
-		c.Orrify(count, cdata);
+		UnifiedVectorFormat adata, bdata, cdata;
+		a.ToUnifiedFormat(count, adata);
+		b.ToUnifiedFormat(count, bdata);
+		c.ToUnifiedFormat(count, cdata);
 
 		return SelectLoopSwitch<A_TYPE, B_TYPE, C_TYPE, OP>(adata, bdata, cdata, sel, count, true_sel, false_sel);
 	}

@@ -85,8 +85,8 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		ForceCompression(compression_functions, compression_type);
 	}
 	if (compression_type == CompressionType::COMPRESSION_AUTO &&
-	    config.force_compression != CompressionType::COMPRESSION_AUTO) {
-		ForceCompression(compression_functions, config.force_compression);
+	    config.options.force_compression != CompressionType::COMPRESSION_AUTO) {
+		ForceCompression(compression_functions, config.options.force_compression);
 	}
 	// set up the analyze states for each compression method
 	vector<unique_ptr<AnalyzeState>> analyze_states;
@@ -168,7 +168,6 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
 
-	// now we actually write the data to disk
 	owned_segment.reset();
 }
 

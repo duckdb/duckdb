@@ -262,7 +262,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	unique_ptr<FileHandle> handle;
 };
 
-static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &context, FunctionData &bind_data) {
+static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto local_data = make_unique<LocalReadCSVData>();
 
@@ -270,7 +270,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 	vector<LogicalType> types;
 	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
 
-	local_data->cast_chunk.Initialize(types);
+	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
 	return move(local_data);
 }
 
@@ -298,7 +298,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	return move(global_data);
 }
 
-static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate, DataChunk &input) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
@@ -314,13 +314,22 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just create a reference
 			cast_chunk.data[col_idx].Reference(input.data[col_idx]);
+		} else if (options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
+			// use the date format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
+		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+			// use the timestamp format to cast the chunk
+			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].ConvertTimestampVector(
+			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
 			VectorOperations::Cast(input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		}
 	}
 
-	cast_chunk.Normalify();
+	cast_chunk.Flatten();
 	auto &writer = local_data.serializer;
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {
@@ -356,7 +365,7 @@ static void WriteCSVSink(ClientContext &context, FunctionData &bind_data, Global
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                             LocalFunctionData &lstate) {
 	auto &local_data = (LocalReadCSVData &)lstate;
 	auto &global_state = (GlobalWriteCSVData &)gstate;

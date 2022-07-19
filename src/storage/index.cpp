@@ -9,7 +9,8 @@ namespace duckdb {
 
 Index::Index(IndexType type, const vector<column_t> &column_ids_p,
              const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type_p)
-    : type(type), column_ids(column_ids_p), constraint_type(constraint_type_p) {
+    : type(type), column_ids(column_ids_p), constraint_type(constraint_type_p),
+      executor(Allocator::DefaultAllocator()) {
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
@@ -62,6 +63,10 @@ bool Index::IndexIsUpdated(const vector<column_t> &column_ids) const {
 		}
 	}
 	return false;
+}
+
+BlockPointer Index::Serialize(duckdb::MetaBlockWriter &writer) {
+	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 
 } // namespace duckdb

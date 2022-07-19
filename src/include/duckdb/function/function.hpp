@@ -8,9 +8,10 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/named_parameter_map.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/column_definition.hpp"
 
 namespace duckdb {
@@ -32,6 +33,10 @@ class TableFunction;
 
 struct PragmaInfo;
 
+//! The default null handling is NULL in, NULL out
+enum class FunctionNullHandling : uint8_t { DEFAULT_NULL_HANDLING = 0, SPECIAL_HANDLING = 1 };
+enum class FunctionSideEffects : uint8_t { NO_SIDE_EFFECTS = 0, HAS_SIDE_EFFECTS = 1 };
+
 struct FunctionData {
 	DUCKDB_API virtual ~FunctionData();
 
@@ -48,6 +53,11 @@ struct TableFunctionData : public FunctionData {
 
 	DUCKDB_API unique_ptr<FunctionData> Copy() const override;
 	DUCKDB_API bool Equals(const FunctionData &other) const override;
+};
+
+struct PyTableFunctionData : public TableFunctionData {
+	//! External dependencies of this table function
+	unique_ptr<ExternalDependency> external_dependency;
 };
 
 struct FunctionParameters {
@@ -77,14 +87,11 @@ public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns DConstants::INVALID_INDEX and sets error if none could be found
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
-	                                     vector<LogicalType> &arguments, string &error, bool &cast_parameters);
+	                                     vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
-	                                     vector<unique_ptr<Expression>> &arguments, string &error,
-	                                     bool &cast_parameters);
+	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
-	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
-	                                     vector<LogicalType> &arguments, string &error, bool &cast_parameters);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
 	                                     vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
@@ -135,24 +142,24 @@ public:
 class BaseScalarFunction : public SimpleFunction {
 public:
 	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-	                              bool has_side_effects, LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
-	                              bool propagates_null_values = false);
+	                              FunctionSideEffects side_effects,
+	                              LogicalType varargs = LogicalType(LogicalTypeId::INVALID),
+	                              FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING);
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function
 	LogicalType return_type;
 	//! Whether or not the function has side effects (e.g. sequence increments, random() functions, NOW()). Functions
 	//! with side-effects cannot be constant-folded.
-	bool has_side_effects;
-	//! Whether or not the function propagates null values
-	bool propagates_null_values;
+	FunctionSideEffects side_effects;
+	//! How this function handles NULL values
+	FunctionNullHandling null_handling;
 
 public:
 	DUCKDB_API hash_t Hash() const;
 
 	//! Cast a set of expressions to the arguments of this function
-	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children,
-	                                        bool cast_parameter_expressions = true);
+	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 
 	DUCKDB_API string ToString() override;
 };

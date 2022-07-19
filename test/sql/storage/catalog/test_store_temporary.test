@@ -2,6 +2,8 @@
 # description: Temporary tables are not written to disk
 # group: [catalog]
 
+require skip_reload
+
 # load the DB from disk
 load __TEST_DIR__/test_store_temporary.db
 

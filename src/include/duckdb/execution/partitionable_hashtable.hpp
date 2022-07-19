@@ -13,18 +13,22 @@
 namespace duckdb {
 
 struct RadixPartitionInfo {
-	explicit RadixPartitionInfo(idx_t _n_partitions_upper_bound);
+	explicit RadixPartitionInfo(idx_t n_partitions_upper_bound);
 	const idx_t n_partitions;
 	const idx_t radix_bits;
 	const hash_t radix_mask;
 	constexpr static idx_t RADIX_SHIFT = 40;
+
+	inline hash_t GetHashPartition(hash_t hash) const {
+		return (hash & radix_mask) >> RADIX_SHIFT;
+	}
 };
 
-typedef vector<unique_ptr<GroupedAggregateHashTable>> HashTableList;
+typedef vector<unique_ptr<GroupedAggregateHashTable>> HashTableList; // NOLINT
 
 class PartitionableHashTable {
 public:
-	PartitionableHashTable(BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
+	PartitionableHashTable(Allocator &allocator, BufferManager &buffer_manager_p, RadixPartitionInfo &partition_info_p,
 	                       vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
 	                       vector<BoundAggregateExpression *> bindings_p);
 
@@ -38,6 +42,7 @@ public:
 	void Finalize();
 
 private:
+	Allocator &allocator;
 	BufferManager &buffer_manager;
 	vector<LogicalType> group_types;
 	vector<LogicalType> payload_types;

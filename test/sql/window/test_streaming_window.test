@@ -108,29 +108,26 @@ explain select first_value(i IGNORE NULLS) over () from integers
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
-# When we combine a streaming and a blocking window function over the same window,
-# We get both a streaming and a blocking window operator
-# The streaming window should always come last
+#
 query TT
 explain select first_value(i) over (), last_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 explain select last_value(i) over (), first_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
-# Same when the streaming and blocking window functions have different windows
 query TT
 explain select first_value(i) over (), last_value(i) over (order by j) from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 query TT
 explain select last_value(i) over (order by j), first_value(i) over () from integers
 ----
-physical_plan	<REGEX>:.*STREAMING_WINDOW.*WINDOW.*
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 #
 # Global state tests from #3275

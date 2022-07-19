@@ -10,6 +10,7 @@
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 
 namespace duckdb {
 
@@ -48,24 +49,19 @@ void RowOperations::DestroyStates(RowLayout &layout, Vector &addresses, idx_t co
 
 void RowOperations::UpdateStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx,
                                  idx_t count) {
-	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr.bind_data, aggr.child_count,
+	AggregateInputData aggr_input_data(aggr.bind_data);
+	aggr.function.update(aggr.child_count == 0 ? nullptr : &payload.data[arg_idx], aggr_input_data, aggr.child_count,
 	                     addresses, count);
 }
 
-void RowOperations::UpdateFilteredStates(AggregateObject &aggr, Vector &addresses, DataChunk &payload, idx_t arg_idx) {
-	ExpressionExecutor filter_execution(aggr.filter);
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE);
-	auto count = filter_execution.SelectExpression(payload, true_sel);
+void RowOperations::UpdateFilteredStates(AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
+                                         DataChunk &payload, idx_t arg_idx) {
+	idx_t count = filter_data.ApplyFilter(payload);
 
-	DataChunk filtered_payload;
-	auto pay_types = payload.GetTypes();
-	filtered_payload.Initialize(pay_types);
-	filtered_payload.Slice(payload, true_sel, count);
+	Vector filtered_addresses(addresses, filter_data.true_sel, count);
+	filtered_addresses.Flatten(count);
 
-	Vector filtered_addresses(addresses, true_sel, count);
-	filtered_addresses.Normalify(count);
-
-	UpdateStates(aggr, filtered_addresses, filtered_payload, arg_idx, filtered_payload.size());
+	UpdateStates(aggr, filtered_addresses, filter_data.filtered_payload, arg_idx, count);
 }
 
 void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &targets, idx_t count) {
@@ -78,7 +74,8 @@ void RowOperations::CombineStates(RowLayout &layout, Vector &sources, Vector &ta
 	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
-		aggr.function.combine(sources, targets, aggr.bind_data, count);
+		AggregateInputData aggr_input_data(aggr.bind_data);
+		aggr.function.combine(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
 		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
@@ -94,7 +91,8 @@ void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChu
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, result.size(), 0);
+		AggregateInputData aggr_input_data(aggr.bind_data);
+		aggr.function.finalize(addresses, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());

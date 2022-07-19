@@ -789,7 +789,7 @@ template <typename T>
 struct IntegerCastData {
 	using Result = T;
 	Result result;
-	uint8_t decimal_count;
+	bool seen_decimal;
 };
 
 struct IntegerCastOperation {
@@ -823,14 +823,27 @@ struct IntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleDecimal(T &state, uint8_t digit) {
-		if (!state.decimal_count) {
-			if (NEGATIVE) {
-				state.result -= (digit >= 5);
-			} else {
-				state.result += (digit >= 5);
-			}
+		if (state.seen_decimal) {
+			return true;
 		}
-		++state.decimal_count;
+		state.seen_decimal = true;
+		// round the integer based on what is after the decimal point
+		// if digit >= 5, then we round up (or down in case of negative numbers)
+		auto increment = digit >= 5;
+		if (!increment) {
+			return true;
+		}
+		if (NEGATIVE) {
+			if (state.result == NumericLimits<typename T::Result>::Minimum()) {
+				return false;
+			}
+			state.result--;
+		} else {
+			if (state.result == NumericLimits<typename T::Result>::Maximum()) {
+				return false;
+			}
+			state.result++;
+		}
 		return true;
 	}
 
@@ -1120,6 +1133,9 @@ bool TryCast::Operation(timestamp_t input, date_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
+	if (!Timestamp::IsFinite(input)) {
+		return false;
+	}
 	result = Timestamp::GetTime(input);
 	return true;
 }
@@ -1528,7 +1544,7 @@ struct DecimalCastOperation {
 	static bool HandleExponent(T &state, int32_t exponent) {
 		Finalize<T>(state);
 		if (exponent < 0) {
-			for (idx_t i = 0; i < idx_t(-exponent); i++) {
+			for (idx_t i = 0; i < idx_t(-int64_t(exponent)); i++) {
 				state.result /= 10;
 				if (state.result == 0) {
 					break;
@@ -1617,22 +1633,22 @@ bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, string *erro
 
 template <>
 string_t StringCastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int16_t, uint16_t>(input, scale, result);
+	return DecimalToString::Format<int16_t, uint16_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int32_t, uint32_t>(input, scale, result);
+	return DecimalToString::Format<int32_t, uint32_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return DecimalToString::Format<int64_t, uint64_t>(input, scale, result);
+	return DecimalToString::Format<int64_t, uint64_t>(input, width, scale, result);
 }
 
 template <>
 string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result) {
-	return HugeintToStringCast::FormatDecimal(input, scale, result);
+	return HugeintToStringCast::FormatDecimal(input, width, scale, result);
 }
 
 //===--------------------------------------------------------------------===//

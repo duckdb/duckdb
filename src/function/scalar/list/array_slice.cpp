@@ -1,11 +1,11 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/pair.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/parser/expression/bound_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
@@ -102,11 +102,11 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
 		}
 	} else {
-		VectorData sdata, bdata, edata;
+		UnifiedVectorFormat sdata, bdata, edata;
 
-		s.Orrify(count, sdata);
-		b.Orrify(count, bdata);
-		e.Orrify(count, edata);
+		s.ToUnifiedFormat(count, sdata);
+		b.ToUnifiedFormat(count, bdata);
+		e.ToUnifiedFormat(count, edata);
 
 		auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
@@ -147,7 +147,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
 
-	s.Normalify(count);
+	s.Flatten(count);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
@@ -184,6 +184,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		bound_function.arguments[1] = LogicalType::INTEGER;
 		bound_function.arguments[2] = LogicalType::INTEGER;
 		break;
+	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:
 		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
 		bound_function.return_type = LogicalType::SQLNULL;
@@ -198,8 +199,9 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ArraySliceFunction, false, false, ArraySliceBind);
+	                   ArraySliceFunction, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	set.AddFunction({"array_slice", "list_slice"}, fun);
 }
 

@@ -44,6 +44,7 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 	proto_host_port_out = url.substr(0, slash_pos);
 
 	path_out = url.substr(slash_pos);
+
 	if (path_out.empty()) {
 		throw std::runtime_error("URL needs to contain a path");
 	}
@@ -311,7 +312,7 @@ bool HTTPFileSystem::FileExists(const string &filename) {
 		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
 		auto &sfh = (HTTPFileHandle &)handle;
 		if (sfh.length == 0) {
-			throw std::runtime_error("not there this file");
+			return false;
 		}
 		return true;
 	} catch (...) {
