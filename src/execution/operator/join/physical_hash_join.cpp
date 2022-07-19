@@ -219,6 +219,11 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables);
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
+	} else {
+		for (auto &local_ht : sink.local_hash_tables) {
+			sink.hash_table->Merge(*local_ht);
+		}
+		sink.local_hash_tables.clear();
 	}
 
 	// check for possible perfect hash table
@@ -347,7 +352,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	HashJoinGlobalSourceState() {
+	HashJoinGlobalSourceState() : probe_count(0) {
 	}
 
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
@@ -357,8 +362,10 @@ public:
 	unique_ptr<JoinHashTable> probe_ht;
 	JoinHTScanState probe_scan_state;
 
+	idx_t probe_count;
+
 	idx_t MaxThreads() override {
-		return probe_ht->SwizzledCount() / ((idx_t)STANDARD_VECTOR_SIZE * 10);
+		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * 10);
 	}
 };
 
@@ -384,7 +391,11 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 		result->probe_ht =
 		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, children[0]->types, join_type);
 	}
-	// TODO set MaxThreads of HashJoinGlobalSourceState here!
+
+	for (auto &local_ht : sink.local_hash_tables) {
+		result->probe_count += local_ht->Count() + local_ht->SwizzledCount();
+	}
+
 	return result;
 }
 
@@ -446,7 +457,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	auto &lstate = (HashJoinLocalSourceState &)lstate_p;
 
 	if (!sink.external) {
-		if (!IsRightOuterJoin(join_type)) {
+		if (IsRightOuterJoin(join_type)) {
 			// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 			idx_t found_entries;
 			{

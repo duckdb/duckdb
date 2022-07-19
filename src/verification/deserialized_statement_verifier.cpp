@@ -5,15 +5,15 @@
 namespace duckdb {
 
 DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier("Deserialized", move(statement_p)) {
+    : StatementVerifier(VerificationType::DESERIALIZED, "Deserialized", move(statement_p)) {
 }
 
-StatementVerifier DeserializedStatementVerifier::Create(const SQLStatement &statement) {
+unique_ptr<StatementVerifier> DeserializedStatementVerifier::Create(const SQLStatement &statement) {
 	auto &select_stmt = (SelectStatement &)statement;
 	BufferedSerializer serializer;
 	select_stmt.Serialize(serializer);
 	BufferedDeserializer source(serializer);
-	return DeserializedStatementVerifier(SelectStatement::Deserialize(source));
+	return make_unique<DeserializedStatementVerifier>(SelectStatement::Deserialize(source));
 }
 
 } // namespace duckdb

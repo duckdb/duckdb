@@ -3,11 +3,11 @@
 namespace duckdb {
 
 CopiedStatementVerifier::CopiedStatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier("Copied", move(statement_p)) {
+    : StatementVerifier(VerificationType::COPIED, "Copied", move(statement_p)) {
 }
 
-StatementVerifier CopiedStatementVerifier::Create(const SQLStatement &statement) {
-	return CopiedStatementVerifier(statement.Copy());
+unique_ptr<StatementVerifier> CopiedStatementVerifier::Create(const SQLStatement &statement) {
+	return make_unique<CopiedStatementVerifier>(statement.Copy());
 }
 
 } // namespace duckdb

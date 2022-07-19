@@ -15,7 +15,8 @@ namespace duckdb {
 class ExternalStatementVerifier : public StatementVerifier {
 public:
 	explicit ExternalStatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static StatementVerifier Create(const SQLStatement &statement);
+	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement);
+
 	bool ForceExternal() const override {
 		return false;
 	}

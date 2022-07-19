@@ -35,14 +35,16 @@ void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, Pip
 	// FULL/RIGHT outer join and external hash joins are source operators too
 	// schedule a scan of the node as a child pipeline
 	// this scan has to be performed AFTER all the probing has happened
-	auto &join_op = (PhysicalJoin &)op;
-	if (IsRightOuterJoin(join_op.join_type)) {
-		if (state.recursive_cte) {
-			throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
+	if (op.type != PhysicalOperatorType::CROSS_PRODUCT) {
+		auto &join_op = (PhysicalJoin &)op;
+		if (IsRightOuterJoin(join_op.join_type)) {
+			if (state.recursive_cte) {
+				throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
+			}
+			state.AddChildPipeline(executor, current);
+		} else if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
+			state.AddChildPipeline(executor, current);
 		}
-		state.AddChildPipeline(executor, current);
-	} else if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
-		state.AddChildPipeline(executor, current);
 	}
 
 	// continue building the pipeline on this child

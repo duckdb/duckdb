@@ -15,7 +15,8 @@ namespace duckdb {
 class ParsedStatementVerifier : public StatementVerifier {
 public:
 	explicit ParsedStatementVerifier(unique_ptr<SQLStatement> statement_p);
-	static StatementVerifier Create(const SQLStatement &statement);
+	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement);
+
 	bool RequireEquality() const override {
 		return false;
 	}
