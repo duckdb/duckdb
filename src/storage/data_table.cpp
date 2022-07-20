@@ -182,7 +182,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 		column_definitions.emplace_back(column_def.Copy());
 	}
 	for (idx_t i = 0; i < column_definitions.size(); i++) {
-		column_stats.push_back(parent.column_stats[i]->Copy());
+		column_stats.push_back(parent.column_stats[i]);
 	}
 
 	// TODO: Get not_null_idx, scan_state.column_ids
@@ -190,9 +190,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	auto &not_null_constraint = (NotNullConstraint &)*constraint;
 	auto &transaction = Transaction::GetTransaction(context);
 	vector<LogicalType> scan_types;
-	scan_types.push_back(parent.column_definitions[not_null_constraint.index].type);
+	scan_types.push_back(parent.column_definitions[not_null_constraint.index].Type());
 	DataChunk scan_chunk;
-	scan_chunk.Initialize(scan_types);
+	auto &allocator = Allocator::Get(context);
+	scan_chunk.Initialize(allocator, scan_types);
 
 	TableScanState scan_state;
 	scan_state.column_ids.push_back(not_null_constraint.index);

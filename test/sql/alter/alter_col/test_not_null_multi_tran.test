@@ -57,10 +57,10 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 statement ok con1
 COMMIT
 
-statement ok con2
+statement error con2
 COMMIT
 
-statement ok con1
+statement error con1
 INSERT INTO t VALUES(7777, NULL)
 
 query I con1
@@ -84,7 +84,7 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 statement ok con2
 BEGIN TRANSACTION
 
-statement ok con2
+statement error con2
 INSERT INTO t VALUES(1, 1)
 
 statement ok con1
@@ -94,7 +94,7 @@ statement ok con2
 COMMIT
 
 query I con1
-SELECT * from t
+SELECT count(*) from t
 ----
-1	1
+0
 
