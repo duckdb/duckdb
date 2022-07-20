@@ -391,10 +391,7 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 		result->probe_ht =
 		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, children[0]->types, join_type);
 	}
-
-	for (auto &local_ht : sink.local_hash_tables) {
-		result->probe_count += local_ht->Count() + local_ht->SwizzledCount();
-	}
+	result->probe_count = children[0]->estimated_cardinality;
 
 	return result;
 }

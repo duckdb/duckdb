@@ -1149,26 +1149,20 @@ void JoinHashTable::FinalizeExternal() {
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
                                                        DataChunk &sink_keys, DataChunk &sink_payload) {
-	const SelectionVector *current_sel;
-	auto ss = InitializeScanStructure(keys, current_sel);
-	if (ss->count == 0) {
-		return ss;
-	}
-
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
-	Hash(keys, *current_sel, ss->count, hashes);
+	Hash(keys, *FlatVector::IncrementalSelectionVector(), payload.size(), hashes);
 
 	// find out which keys we can match with the current pinned partitions
 	SelectionVector true_sel;
 	SelectionVector false_sel;
 	true_sel.Initialize();
 	false_sel.Initialize();
-	auto true_count =
-	    RadixPartitioning::Select(hashes, current_sel, ss->count, radix_bits, partitions_end, &true_sel, &false_sel);
+	auto true_count = RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), payload.size(),
+	                                            radix_bits, partitions_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	// sink non-matching stuff into HT for later
+	// slice the stuff we can't probe right now
 	sink_keys.Reset();
 	sink_keys.Reference(keys);
 	sink_keys.Slice(false_sel, false_count);
@@ -1179,11 +1173,19 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	sink_payload.Slice(false_sel, false_count);
 	sink_payload.Verify();
 
+	// sink it into the local ht for later
 	local_ht.Build(sink_keys, sink_payload); // TODO optimization: we already have the hashes
 
-	// only probe the matching stuff
-	ss->count = true_count;
-	current_sel = &true_sel;
+	// slice the stuff that we can probe right now
+	hashes.Slice(true_sel, true_count);
+	keys.Slice(true_sel, true_count);
+	payload.Slice(true_sel, true_count);
+
+	const SelectionVector *current_sel;
+	auto ss = InitializeScanStructure(keys, current_sel);
+	if (ss->count == 0) {
+		return ss;
+	}
 
 	// now initialize the pointers of the scan structure based on the hashes
 	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);

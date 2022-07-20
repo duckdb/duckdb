@@ -9,6 +9,9 @@ statement ok
 PRAGMA verify_parallelism
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 CREATE TABLE integers AS SELECT a i, 1 j FROM generate_series(0, 1999, 1) t1(a);
 
 statement ok

@@ -2,17 +2,23 @@
 # description: Test full outer join with parallelism
 # group: [full_outer]
 
-statement ok
-PRAGMA enable_verification
+#statement ok
+#PRAGMA enable_verification
+
+#statement ok
+#PRAGMA threads=4
+#
+#statement ok
+#PRAGMA verify_parallelism
+
+#statement ok
+#pragma verify_external
 
 statement ok
-PRAGMA threads=4
+pragma threads=1
 
 statement ok
-PRAGMA verify_parallelism
-
-statement ok
-pragma verify_external
+PRAGMA debug_force_external=true
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(75000) tbl(i);
