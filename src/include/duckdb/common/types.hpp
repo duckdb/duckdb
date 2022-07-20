@@ -461,6 +461,7 @@ private:
 
 public:
 	static constexpr const LogicalTypeId SQLNULL = LogicalTypeId::SQLNULL;
+	static constexpr const LogicalTypeId UNKNOWN = LogicalTypeId::UNKNOWN;
 	static constexpr const LogicalTypeId BOOLEAN = LogicalTypeId::BOOLEAN;
 	static constexpr const LogicalTypeId TINYINT = LogicalTypeId::TINYINT;
 	static constexpr const LogicalTypeId UTINYINT = LogicalTypeId::UTINYINT;

@@ -638,62 +638,64 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		return left;
 	} else if (left.id() < right.id()) {
 		return right;
-	} else if (right.id() < left.id()) {
+	}
+	if (right.id() < left.id()) {
 		return left;
-	} else {
-		// Since both left and right are equal we get the left type as our type_id for checks
-		auto type_id = left.id();
-		if (type_id == LogicalTypeId::ENUM) {
-			// If both types are different ENUMs we do a string comparison.
-			return left == right ? left : LogicalType::VARCHAR;
-		}
-		if (type_id == LogicalTypeId::VARCHAR) {
-			// varchar: use type that has collation (if any)
-			if (StringType::GetCollation(right).empty()) {
-				return left;
-			} else {
-				return right;
-			}
-		} else if (type_id == LogicalTypeId::DECIMAL) {
-			// unify the width/scale so that the resulting decimal always fits
-			// "width - scale" gives us the number of digits on the left side of the decimal point
-			// "scale" gives us the number of digits allowed on the right of the deciaml point
-			// using the max of these of the two types gives us the new decimal size
-			auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
-			auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
-			auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
-			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
-			auto width = extra_width + scale;
-			if (width > DecimalType::MaxWidth()) {
-				// if the resulting decimal does not fit, we truncate the scale
-				width = DecimalType::MaxWidth();
-				scale = width - extra_width;
-			}
-			return LogicalType::DECIMAL(width, scale);
-		} else if (type_id == LogicalTypeId::LIST) {
-			// list: perform max recursively on child type
-			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
-			return LogicalType::LIST(move(new_child));
-		} else if (type_id == LogicalTypeId::STRUCT) {
-			// struct: perform recursively
-			auto &left_child_types = StructType::GetChildTypes(left);
-			auto &right_child_types = StructType::GetChildTypes(right);
-			if (left_child_types.size() != right_child_types.size()) {
-				// child types are not of equal size, we can't cast anyway
-				// just return the left child
-				return left;
-			}
-			child_list_t<LogicalType> child_types;
-			for (idx_t i = 0; i < left_child_types.size(); i++) {
-				auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
-				child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
-			}
-			return LogicalType::STRUCT(move(child_types));
-		} else {
-			// types are equal but no extra specifier: just return the type
+	}
+	// Since both left and right are equal we get the left type as our type_id for checks
+	auto type_id = left.id();
+	if (type_id == LogicalTypeId::ENUM) {
+		// If both types are different ENUMs we do a string comparison.
+		return left == right ? left : LogicalType::VARCHAR;
+	}
+	if (type_id == LogicalTypeId::VARCHAR) {
+		// varchar: use type that has collation (if any)
+		if (StringType::GetCollation(right).empty()) {
 			return left;
 		}
+		return right;
 	}
+	if (type_id == LogicalTypeId::DECIMAL) {
+		// unify the width/scale so that the resulting decimal always fits
+		// "width - scale" gives us the number of digits on the left side of the decimal point
+		// "scale" gives us the number of digits allowed on the right of the decimal point
+		// using the max of these of the two types gives us the new decimal size
+		auto extra_width_left = DecimalType::GetWidth(left) - DecimalType::GetScale(left);
+		auto extra_width_right = DecimalType::GetWidth(right) - DecimalType::GetScale(right);
+		auto extra_width = MaxValue<uint8_t>(extra_width_left, extra_width_right);
+		auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
+		auto width = extra_width + scale;
+		if (width > DecimalType::MaxWidth()) {
+			// if the resulting decimal does not fit, we truncate the scale
+			width = DecimalType::MaxWidth();
+			scale = width - extra_width;
+		}
+		return LogicalType::DECIMAL(width, scale);
+	}
+	if (type_id == LogicalTypeId::LIST) {
+		// list: perform max recursively on child type
+		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
+		return LogicalType::LIST(move(new_child));
+	}
+	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP) {
+		// struct: perform recursively
+		auto &left_child_types = StructType::GetChildTypes(left);
+		auto &right_child_types = StructType::GetChildTypes(right);
+		if (left_child_types.size() != right_child_types.size()) {
+			// child types are not of equal size, we can't cast anyway
+			// just return the left child
+			return left;
+		}
+		child_list_t<LogicalType> child_types;
+		for (idx_t i = 0; i < left_child_types.size(); i++) {
+			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
+			child_types.push_back(make_pair(left_child_types[i].first, move(child_type)));
+		}
+		return type_id == LogicalTypeId::STRUCT ? LogicalType::STRUCT(move(child_types))
+		                                        : LogicalType::MAP(move(child_types));
+	}
+	// types are equal but no extra specifier: just return the type
+	return left;
 }
 
 void LogicalType::Verify() const {
