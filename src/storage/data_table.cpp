@@ -211,7 +211,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 			}
 			// TODO: Check constraint
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-				throw ConstraintException("NOT NULL constraint failed: %s.%s", "tablename", "colname");
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table, column_definitions[not_null_constraint.index].GetName());
 			}
 		}
 		current_row_group = (RowGroup *)current_row_group->next.get();
@@ -227,7 +227,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 				break;
 			}
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-				throw ConstraintException("NOT NULL constraint failed: %s.%s", "tablename", "colname");
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table, column_definitions[not_null_constraint.index].GetName());
 			}
 		}
 		transaction.storage.MoveStorage(&parent, this);
