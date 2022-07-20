@@ -63,6 +63,7 @@ struct ListFun {
 	static ListSegment *CreateSegment(uint16_t &capacity, Vector &input);
 
 	static ListSegment *GetSegment(LinkedList *linked_list, Vector &input);
+	static ListSegment *GetCharSegment(LinkedList *linked_list);
 	static void WriteDataToSegment(ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count);
 	static void AppendRow(LinkedList *linked_list, Vector &input, idx_t &entry_idx, idx_t &count);
 	static void GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &total_count);

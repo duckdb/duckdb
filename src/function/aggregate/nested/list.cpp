@@ -5,6 +5,12 @@
 
 namespace duckdb {
 
+// unique_ptr<data_t[]> ListFun::AllocatePrimitiveData(uint16_t &capacity) {
+//	//return malloc(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T)));
+//	//return unique_ptr<data_t[]>(new data_t[100]);
+//	return unique_ptr<data_t[]>(new data_t[sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))]);
+// }
+
 // allocate the header size, the size of the null_mask and the data size (capacity * T)
 /*
     #3 -> {
@@ -117,12 +123,8 @@ void ListFun::GetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 		((double *)vector_data)[row_idx] = data[segment_idx];
 		break;
 	}
-	case PhysicalType::VARCHAR:
-		// string_t
-		// TODO: store string differently
-		throw InternalException("LIST aggregate not yet implemented for strings!");
 	default:
-		// INT128, INTERVAL, STRUCT, LIST
+		// INT128, INTERVAL
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
 	}
 }
@@ -201,10 +203,6 @@ void ListFun::SetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 		data[segment->count] = ((double *)input_data)[row_idx];
 		break;
 	}
-	case PhysicalType::VARCHAR:
-		// string_t
-		// TODO: store string differently
-		throw InternalException("LIST aggregate not yet implemented for strings!");
 	default:
 		// INT128, INTERVAL, STRUCT, LIST
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
@@ -265,11 +263,10 @@ ListSegment *ListFun::CreatePrimitiveSegment(uint16_t &capacity, const LogicalTy
 	case PhysicalType::DOUBLE:
 		return TemplatedCreatePrimitiveSegment<double>(capacity);
 	case PhysicalType::VARCHAR:
-		// string_t
-		// TODO: store string differently
-		throw InternalException("LIST aggregate not yet implemented for strings!");
+		return TemplatedCreatePrimitiveSegment<char>(capacity);
 	default:
-		// INT128, INTERVAL, STRUCT, LIST
+		// INT128, INTERVAL
+		// TODO: any other data types missing?
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
 	}
 }
@@ -308,7 +305,9 @@ ListSegment *ListFun::CreateStructSegment(uint16_t &capacity, vector<unique_ptr<
 
 ListSegment *ListFun::CreateSegment(uint16_t &capacity, Vector &input) {
 
-	if (input.GetType().id() == LogicalTypeId::LIST) {
+	if (input.GetType().InternalType() == PhysicalType::VARCHAR) {
+		return CreateListSegment(capacity);
+	} else if (input.GetType().id() == LogicalTypeId::LIST) {
 		return CreateListSegment(capacity);
 	} else if (input.GetType().id() == LogicalTypeId::STRUCT) {
 		auto &children = StructVector::GetEntries(input);
@@ -345,6 +344,34 @@ ListSegment *ListFun::GetSegment(LinkedList *linked_list, Vector &input) {
 	return segment;
 }
 
+ListSegment *ListFun::GetCharSegment(LinkedList *linked_list) {
+
+	ListSegment *segment = nullptr;
+
+	// determine segment
+	if (!linked_list->last_segment) {
+		// no segments yet
+		auto capacity = GetCapacityForNewSegment(linked_list);
+		segment = CreatePrimitiveSegment(capacity, LogicalTypeId::VARCHAR);
+		linked_list->first_segment = segment;
+		linked_list->last_segment = segment;
+
+	} else if (linked_list->last_segment->capacity == linked_list->last_segment->count) {
+		// last_segment is full
+		auto capacity = GetCapacityForNewSegment(linked_list);
+		segment = CreatePrimitiveSegment(capacity, LogicalTypeId::VARCHAR);
+		linked_list->last_segment->next = segment;
+		linked_list->last_segment = segment;
+
+	} else {
+		// last_segment is not full, append to it
+		segment = linked_list->last_segment;
+	}
+
+	D_ASSERT(segment);
+	return segment;
+}
+
 void ListFun::WriteDataToSegment(ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	UnifiedVectorFormat input_data;
@@ -355,7 +382,33 @@ void ListFun::WriteDataToSegment(ListSegment *segment, Vector &input, idx_t &ent
 	null_mask[segment->count] = !input_data.validity.RowIsValid(entry_idx);
 
 	// write value
-	if (input.GetType().id() == LogicalTypeId::LIST) {
+	if (input.GetType().InternalType() == PhysicalType::VARCHAR) {
+
+		// get the string
+		auto str_t = ((string_t *)input_data.data)[entry_idx];
+		auto str = str_t.GetString();
+
+		// set the length and offset of this string
+		auto list_offset_data = GetListOffsetData(segment);
+		list_offset_data[segment->count].length = str_t.GetSize();
+		if (segment->count == 0) {
+			list_offset_data[segment->count].offset = 0;
+		} else {
+			auto offset = list_offset_data[segment->count - 1].offset + list_offset_data[segment->count - 1].length;
+			list_offset_data[segment->count].offset = offset;
+		}
+
+		// write the characters to the child segments
+		auto child_segments = GetListChildData(segment);
+		for (char &c : str) {
+			auto child_segment = GetCharSegment(child_segments);
+			auto data = TemplatedGetPrimitiveData<char>(child_segment);
+			data[child_segment->count] = c;
+			child_segments->total_capacity++;
+			child_segment->count++;
+		}
+
+	} else if (input.GetType().id() == LogicalTypeId::LIST) {
 
 		auto list_entries = (list_entry_t *)input_data.data;
 		const auto &list_entry = list_entries[entry_idx];
@@ -378,9 +431,6 @@ void ListFun::WriteDataToSegment(ListSegment *segment, Vector &input, idx_t &ent
 		}
 
 		// loop over the child entries and recurse on them
-		// TODO: this can be done more efficiently maybe by writing them all at once
-		// TODO: however, I think we maybe need the selection vector solution here, because the
-		// TODO: child entries are not necessarily after each other, no?
 		auto child_segments = GetListChildData(segment);
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
@@ -392,6 +442,7 @@ void ListFun::WriteDataToSegment(ListSegment *segment, Vector &input, idx_t &ent
 		auto &children = StructVector::GetEntries(input);
 		auto child_list = GetStructData(segment);
 
+		// write the data of each of the children of the struct
 		for (idx_t i = 0; i < children.size(); i++) {
 			WriteDataToSegment(child_list[i], *children[i], entry_idx, count);
 			child_list[i]->count++;
@@ -423,7 +474,30 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 		}
 	}
 
-	if (result.GetType().id() == LogicalTypeId::LIST) {
+	if (result.GetType().InternalType() == PhysicalType::VARCHAR) {
+		// append all the child chars to one string
+		string str = "";
+		auto linked_child_list = GetListChildData(segment);
+		while (linked_child_list->first_segment) {
+			auto child_segment = linked_child_list->first_segment;
+			auto data = TemplatedGetPrimitiveData<char>(child_segment);
+			str.append(data, child_segment->count);
+			linked_child_list->first_segment = child_segment->next;
+			delete child_segment;
+		}
+		linked_child_list->last_segment = nullptr;
+
+		// use length and offset to set values
+		auto aggr_vector_data = FlatVector::GetData(result);
+		auto list_offset_data = GetListOffsetData(segment);
+
+		for (idx_t i = 0; i < segment->count; i++) {
+			auto substr = str.substr(list_offset_data[i].offset, list_offset_data[i].length);
+			auto str_t = StringVector::AddString(result, substr);
+			((string_t *)aggr_vector_data)[total_count + i] = str_t;
+		}
+
+	} else if (result.GetType().id() == LogicalTypeId::LIST) {
 		auto list_vector_data = FlatVector::GetData<list_entry_t>(result);
 
 		// set offsets
@@ -437,6 +511,7 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 
 		auto &child_vector = ListVector::GetEntry(result);
 		auto linked_child_list = GetListChildData(segment);
+		ListVector::Reserve(result, linked_child_list->total_capacity);
 
 		// recurse into the linked list of child values
 		BuildListVector(linked_child_list, child_vector);
@@ -445,12 +520,9 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 		auto &children = StructVector::GetEntries(result);
 
 		auto struct_children = GetStructData(segment);
-		for (idx_t i = 0; i < segment->count; i++) {
-			if (aggr_vector_validity.RowIsValid(total_count + i)) {
-				for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-					GetDataFromSegment(struct_children[child_count], *children[child_count], total_count);
-				}
-			}
+		// TODO: test that this not break NULL stuff...
+		for (idx_t child_count = 0; child_count < children.size(); child_count++) {
+			GetDataFromSegment(struct_children[child_count], *children[child_count], total_count);
 		}
 
 		// we got all desired data from the child vectors
@@ -483,6 +555,7 @@ void ListFun::BuildListVector(LinkedList *linked_list, Vector &result) {
 	}
 
 	linked_list->last_segment = nullptr;
+	// delete linked_list;
 }
 
 struct ListAggState {

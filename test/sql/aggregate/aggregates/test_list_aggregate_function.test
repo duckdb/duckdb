@@ -2,7 +2,10 @@
 # description: Test the list aggregate function for all data types
 # group: [aggregates]
 
-# TODO: NULLs
+# TODO: test NULLs
+# TODO: test all kinds of data types, see list aggregates for reference
+# TODO: incorrect/not implemented
+# TODO: hugeint, or should that be supported?
 
 # INTEGER types
 
@@ -46,6 +49,21 @@ DROP TABLE test
 
 endloop
 
+# VARCHAR
+
+statement ok
+CREATE TABLE varch (g integer, str varchar)
+
+statement ok
+INSERT INTO varch VALUES (1, 'hello'), (1, 'was'), (2, 'geht')
+
+query I
+SELECT LIST(str) FROM varch GROUP BY g ORDER BY g
+----
+[hello, was]
+[geht]
+
+# LIST
 # one level nested LIST
 
 statement ok
@@ -59,9 +77,6 @@ SELECT LIST(i) FROM nested_lists GROUP BY g ORDER BY g
 ----
 [[2], [3]]
 [[4]]
-
-# TODO: incorrect/not implemented
-# TODO: hugeint, or should that be supported?
 
 # bigger lists than standard vector size
 
@@ -87,7 +102,7 @@ SELECT list_count(LIST(i)) FROM lists GROUP BY g ORDER BY g LIMIT 2;
 10
 10
 
-# structs
+# STRUCTS
 
 statement ok
 CREATE TABLE structs AS SELECT 1 AS g, {'x': 3, 'b': 2} AS s
@@ -100,3 +115,45 @@ SELECT LIST(s) FROM structs GROUP BY g ORDER BY g
 ----
 [{'x': 3, 'b': 2}, {'x': 5, 'b': 4}]
 [{'x': 50, 'b': 40}]
+
+statement ok
+CREATE TABLE structs_list_strings AS SELECT 1 AS g, {'a': ['strr', 'strrr']} AS s
+
+statement ok
+INSERT INTO structs_list_strings VALUES (1, {'a': ['str1', 'str2']}), (1, {'a': ['str3', 'str4']}), (2, {'a': ['str1', 'str2']})
+
+query I
+SELECT LIST(s) FROM structs_list_strings GROUP BY g ORDER BY g
+----
+[{'a': [strr, strrr]}, {'a': [str1, str2]}, {'a': [str3, str4]}]
+[{'a': [str1, str2]}]
+
+statement ok
+CREATE TABLE structs_ints AS SELECT 1 AS g, {'a': [1, 2]} AS s
+
+statement ok
+INSERT INTO structs_ints VALUES (1, {'a': [3, 4]}), (1, {'a': [5, 6]}), (2, {'a': [1, 2]})
+
+query I
+SELECT LIST(s) FROM structs_ints GROUP BY g ORDER BY g
+----
+[{'a': [1, 2]}, {'a': [3, 4]}, {'a': [5, 6]}]
+[{'a': [1, 2]}]
+
+statement ok
+CREATE TABLE structs_strings AS SELECT 1 AS g, {'n': 'nm1588970'} AS s
+
+statement ok
+INSERT INTO structs_strings VALUES (1, {'n': 'nm0005690'})
+
+query I
+SELECT LIST(s) FROM structs_strings GROUP BY g ORDER BY g
+----
+[{'n': nm1588970}, {'n': nm0005690}]
+
+# ISSUE 3734
+
+require parquet
+
+statement ok
+SELECT tconst, list(principals) as principals FROM parquet_scan('data/parquet-testing/bug3734.parquet') GROUP BY 1 limit 10;
