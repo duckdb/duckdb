@@ -36,7 +36,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	}
 
-	// create a ChunkCollection from the output
+	// create a ColumnDataCollection from the output
 	auto &allocator = Allocator::Get(context);
 	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	auto collection = make_unique<ColumnDataCollection>(context, plan_types);

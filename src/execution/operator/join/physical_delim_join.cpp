@@ -19,7 +19,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 	// we take its left child, this is the side that we will duplicate eliminate
 	children.push_back(move(join->children[0]));
 
-	// we replace it with a PhysicalChunkCollectionScan, that scans the ChunkCollection that we keep cached
+	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the DelimJoinGlobalState
 	auto cached_chunk_scan = make_unique<PhysicalColumnDataScan>(
 	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
