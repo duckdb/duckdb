@@ -186,7 +186,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	}
 
 	// TODO: Get not_null_idx, scan_state.column_ids
-	// scan the original table, and fill the new column with the transformed value
+	// scan the original table, check if there's any null value
 	auto &not_null_constraint = (NotNullConstraint &)*constraint;
 	auto &transaction = Transaction::GetTransaction(context);
 	vector<LogicalType> scan_types;
@@ -198,7 +198,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	TableScanState scan_state;
 	scan_state.column_ids.push_back(not_null_constraint.index);
 	scan_state.max_row = total_rows;
-	// scan the original table, and fill the new column with the transformed value
 	this->row_groups = make_shared<SegmentTree>();
 	auto current_row_group = (RowGroup *)parent.row_groups->GetRootSegment();
 
@@ -212,11 +211,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 			}
 			// TODO: Check constraint
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-				//throw ConstraintException("NOT NULL constraint failed: %s.%s", table.name, col_name);
 				throw ConstraintException("NOT NULL constraint failed: %s.%s", "tablename", "colname");
 			}
 		}
-		// Append to this new DataTable
 		current_row_group = (RowGroup *)current_row_group->next.get();
 	}
 
@@ -228,7 +225,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
 			if(scan_chunk.size() == 0){
 				break;
-				// throw NotImplementedException("FIXME: ALTER COLUMN SET CONSTRAINT with transaction local data not currently supported");
 			}
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
 				throw ConstraintException("NOT NULL constraint failed: %s.%s", "tablename", "colname");

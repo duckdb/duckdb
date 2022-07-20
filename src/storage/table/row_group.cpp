@@ -255,11 +255,6 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 	auto &column_ids = state.parent.column_ids;
 	for (auto &entry : state.parent.table_filters->filters) {
 		D_ASSERT(entry.first < column_ids.size());
-		// FIXME: Currently IsNull filter depends on has_null 
-		// stats of data segment, but the stats could be wrong.
-		if (entry.second->filter_type == TableFilterType::IS_NULL){
-			return true;
-		}
 		auto column_idx = entry.first;
 		auto base_column_idx = column_ids[column_idx];
 		bool read_segment = columns[base_column_idx]->CheckZonemap(state.column_scans[column_idx], *entry.second);
@@ -279,7 +274,6 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 				return true;
 			}
 			while (state.vector_index < target_vector_index) {
-			//if(state.vector_index < target_vector_index) {
 				NextVector(state);
 			}
 			return false;

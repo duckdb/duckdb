@@ -45,7 +45,7 @@ statement ok con1
 ALTER TABLE test ADD COLUMN k INTEGER
 
 # con2 cannot append now!
-statement ok con2
+statement error con2
 INSERT INTO test (i, j) VALUES (3, 3)
 
 # but we can delete rows!

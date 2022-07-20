@@ -1,7 +1,6 @@
 # name: test/sql/update/test_null_update.test
 # description: Test standard update behavior with NULLs
 # group: [update]
-# For reference
 
 require skip_reload
 
