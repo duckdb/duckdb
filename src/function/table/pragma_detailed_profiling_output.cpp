@@ -6,20 +6,22 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
 struct PragmaDetailedProfilingOutputOperatorData : public GlobalTableFunctionState {
-	explicit PragmaDetailedProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
+	explicit PragmaDetailedProfilingOutputOperatorData() : initialized(false) {
 	}
-	idx_t chunk_index;
+
+	ColumnDataScanState scan_state;
 	bool initialized;
 };
 
 struct PragmaDetailedProfilingOutputData : public TableFunctionData {
 	explicit PragmaDetailedProfilingOutputData(vector<LogicalType> &types) : types(types) {
 	}
-	unique_ptr<ChunkCollection> collection;
+	unique_ptr<ColumnDataCollection> collection;
 	vector<LogicalType> types;
 };
 
@@ -81,7 +83,7 @@ static void SetValue(DataChunk &output, int index, int op_id, string annotation,
 	output.SetValue(8, index, move(extra_info));
 }
 
-static void ExtractFunctions(ChunkCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
+static void ExtractFunctions(ColumnDataCollection &collection, ExpressionInfo &info, DataChunk &chunk, int op_id,
                              int &fun_id) {
 	if (info.hasfunction) {
 		D_ASSERT(info.sample_tuples_count != 0);
@@ -110,8 +112,8 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableF
 	auto &data = (PragmaDetailedProfilingOutputData &)*data_p.bind_data;
 
 	if (!state.initialized) {
-		// create a ChunkCollection
-		auto collection = make_unique<ChunkCollection>(context);
+		// create a ColumnDataCollection
+		auto collection = make_unique<ColumnDataCollection>(context, data.types);
 
 		// create a chunk
 		DataChunk chunk;
@@ -155,14 +157,11 @@ static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableF
 		}
 		collection->Append(chunk);
 		data.collection = move(collection);
+		data.collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}
 
-	if (state.chunk_index >= data.collection->ChunkCount()) {
-		output.SetCardinality(0);
-		return;
-	}
-	output.Reference(data.collection->GetChunk(state.chunk_index++));
+	data.collection->Scan(state.scan_state, output);
 }
 
 void PragmaDetailedProfilingOutput::RegisterFunction(BuiltinFunctions &set) {

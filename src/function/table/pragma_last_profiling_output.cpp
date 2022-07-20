@@ -6,20 +6,22 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
 struct PragmaLastProfilingOutputOperatorData : public GlobalTableFunctionState {
-	PragmaLastProfilingOutputOperatorData() : chunk_index(0), initialized(false) {
+	PragmaLastProfilingOutputOperatorData() : initialized(false) {
 	}
-	idx_t chunk_index;
+
+	ColumnDataScanState scan_state;
 	bool initialized;
 };
 
 struct PragmaLastProfilingOutputData : public TableFunctionData {
 	explicit PragmaLastProfilingOutputData(vector<LogicalType> &types) : types(types) {
 	}
-	unique_ptr<ChunkCollection> collection;
+	unique_ptr<ColumnDataCollection> collection;
 	vector<LogicalType> types;
 };
 
@@ -62,8 +64,8 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunct
 	auto &state = (PragmaLastProfilingOutputOperatorData &)*data_p.global_state;
 	auto &data = (PragmaLastProfilingOutputData &)*data_p.bind_data;
 	if (!state.initialized) {
-		// create a ChunkCollection
-		auto collection = make_unique<ChunkCollection>(context);
+		// create a ColumnDataCollection
+		auto collection = make_unique<ColumnDataCollection>(context, data.types);
 
 		DataChunk chunk;
 		chunk.Initialize(context, data.types);
@@ -82,14 +84,11 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, TableFunct
 		}
 		collection->Append(chunk);
 		data.collection = move(collection);
+		data.collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}
 
-	if (state.chunk_index >= data.collection->ChunkCount()) {
-		output.SetCardinality(0);
-		return;
-	}
-	output.Reference(data.collection->GetChunk(state.chunk_index++));
+	data.collection->Scan(state.scan_state, output);
 }
 
 void PragmaLastProfilingOutput::RegisterFunction(BuiltinFunctions &set) {
