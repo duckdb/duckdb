@@ -135,9 +135,7 @@ static void TaskExecuteCallback(napi_env e, void *data) {
 static void TaskCompleteCallback(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
 	holder->db->TaskComplete(e);
-	if (holder->task->callback.Value().IsFunction()) {
-		holder->task->Callback();
-	}
+	holder->task->DoCallback();
 }
 
 void Database::TaskComplete(Napi::Env env) {
