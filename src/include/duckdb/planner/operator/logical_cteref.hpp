@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-//! LogicalChunkGet represents a scan operation from a ChunkCollection
+//! LogicalColumnDataGet represents a scan operation from a ChunkCollection
 class LogicalCTERef : public LogicalOperator {
 public:
 	LogicalCTERef(idx_t table_index, idx_t cte_index, vector<LogicalType> types, vector<string> colnames)

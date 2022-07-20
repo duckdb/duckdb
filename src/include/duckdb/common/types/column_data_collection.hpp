@@ -54,7 +54,9 @@ class ColumnDataCollection {
 public:
 	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
 	ColumnDataCollection(ClientContext &context, vector<LogicalType> types);
-	//! Creates a column data collection that inherits the
+	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
+	//! between multiple column data collections. Note that after one CDC inherits blocks from another, the other
+	//! cannot be written to anymore (i.e. we take ownership of the half-written
 	ColumnDataCollection(ColumnDataCollection &parent);
 	~ColumnDataCollection();
 

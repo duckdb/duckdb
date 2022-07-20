@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/parallel/thread_context.hpp"

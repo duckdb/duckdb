@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_operator_scan
   OBJECT
-  physical_chunk_scan.cpp
   physical_column_data_scan.cpp
   physical_dummy_scan.cpp
   physical_empty_result.cpp

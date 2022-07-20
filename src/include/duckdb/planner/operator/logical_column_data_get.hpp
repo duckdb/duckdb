@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_chunk_get.hpp
+// duckdb/planner/operator/logical_column_data_get.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,10 +13,10 @@
 
 namespace duckdb {
 
-//! LogicalChunkGet represents a scan operation from a ChunkCollection
-class LogicalChunkGet : public LogicalOperator {
+//! LogicalColumnDataGet represents a scan operation from a ColumnDataCollection
+class LogicalColumnDataGet : public LogicalOperator {
 public:
-	LogicalChunkGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ChunkCollection> collection)
+	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ColumnDataCollection> collection)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index),
 	      collection(move(collection)) {
 		D_ASSERT(types.size() > 0);
@@ -28,7 +28,7 @@ public:
 	//! The types of the chunk
 	vector<LogicalType> chunk_types;
 	//! The chunk collection to scan
-	unique_ptr<ChunkCollection> collection;
+	unique_ptr<ColumnDataCollection> collection;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {
