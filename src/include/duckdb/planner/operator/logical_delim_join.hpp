@@ -21,6 +21,9 @@ public:
 
 	//! The set of columns that will be duplicate eliminated from the LHS and pushed into the RHS
 	vector<unique_ptr<Expression>> duplicate_eliminated_columns;
+
+public:
+	void Serialize(FieldWriter &writer) const override;
 };
 
 } // namespace duckdb

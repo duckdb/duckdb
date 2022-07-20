@@ -20,6 +20,9 @@
 
 namespace duckdb {
 
+class FieldWriter;
+class FieldReader;
+
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
 class LogicalOperator {
@@ -58,6 +61,13 @@ public:
 	void AddChild(unique_ptr<LogicalOperator> child);
 
 	virtual idx_t EstimateCardinality(ClientContext &context);
+
+	//! Serializes a LogicalOperator to a stand-alone binary blob
+	void Serialize(Serializer &serializer) const;
+	//! Serializes an LogicalOperator to a stand-alone binary blob
+	virtual void Serialize(FieldWriter &writer) const = 0;
+
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 protected:
 	//! Resolve types for this specific operator

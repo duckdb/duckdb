@@ -23,6 +23,9 @@ public:
 	SchemaCatalogEntry *schema;
 	unique_ptr<CreateInfo> info;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BIGINT);

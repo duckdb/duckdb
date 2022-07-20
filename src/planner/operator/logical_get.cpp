@@ -71,4 +71,8 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
+void LogicalGet::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

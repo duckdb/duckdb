@@ -3,7 +3,10 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parser.hpp"
+
+#include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
 
@@ -140,6 +143,43 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 
 void LogicalOperator::Print() {
 	Printer::Print(ToString());
+}
+
+void LogicalOperator::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteField<LogicalOperatorType>(type);
+
+	//	writer.WriteList<unique_ptr<LogicalOperator>>(children);
+	//	writer.WriteList<unique_ptr<Expression>>(expressions);
+	//	writer.WriteList<LogicalType>(types);
+	//	writer.WriteField<idx_t>(estimated_cardinality);
+
+	Serialize(writer);
+	writer.Finalize();
+}
+
+unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer) {
+	unique_ptr<LogicalOperator> result;
+
+	FieldReader reader(deserializer);
+	auto type = reader.ReadRequired<LogicalOperatorType>();
+	//	auto children = reader.ReadRequiredList<unique_ptr<LogicalOperator>>();
+	//	auto expressions =  reader.ReadRequiredList<unique_ptr<Expression>>();
+	//	auto types = reader.ReadRequiredList<LogicalType>();
+	//	auto estimated_cardinality = reader.ReadRequired<idx_t>();
+
+	switch (type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		result = LogicalProjection::Deserialize(reader);
+		break;
+	default:
+		throw SerializationException("Unsupported type for expression deserialization: " +
+		                             LogicalOperatorToString(type));
+	}
+
+	reader.Finalize();
+
+	return result;
 }
 
 } // namespace duckdb

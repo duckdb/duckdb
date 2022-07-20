@@ -28,6 +28,9 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 	bool update_is_del_and_insert;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
 		if (return_chunk) {

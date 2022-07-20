@@ -21,6 +21,9 @@ public:
 	vector<LogicalType> types_select;
 	vector<string> aliases;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	void ResolveTypes() override {
 		types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,

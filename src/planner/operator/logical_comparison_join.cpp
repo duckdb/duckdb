@@ -20,4 +20,8 @@ string LogicalComparisonJoin::ParamsToString() const {
 	return result;
 }
 
+void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

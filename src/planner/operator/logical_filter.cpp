@@ -43,4 +43,8 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 	return found_conjunction;
 }
 
+void LogicalFilter::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

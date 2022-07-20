@@ -17,4 +17,8 @@ void LogicalUnnest::ResolveTypes() {
 	}
 }
 
+void LogicalUnnest::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

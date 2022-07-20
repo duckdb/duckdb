@@ -33,4 +33,8 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperat
 	return make_unique<LogicalCrossProduct>(move(left), move(right));
 }
 
+void LogicalCrossProduct::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

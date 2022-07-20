@@ -24,6 +24,9 @@ public:
 	//! Create Table information
 	unique_ptr<BoundCreateTableInfo> info;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BIGINT);

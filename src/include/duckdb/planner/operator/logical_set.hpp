@@ -25,6 +25,9 @@ public:
 	Value value;
 	SetScope scope;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);

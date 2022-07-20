@@ -54,4 +54,8 @@ string LogicalAggregate::ParamsToString() const {
 	return result;
 }
 
+void LogicalAggregate::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

@@ -29,6 +29,7 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return 1;
 	}
+	void Serialize(FieldWriter &writer) const override;
 
 protected:
 	void ResolveTypes() override {

@@ -13,4 +13,8 @@ string LogicalDistinct::ParamsToString() const {
 	return result;
 }
 
+void LogicalDistinct::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

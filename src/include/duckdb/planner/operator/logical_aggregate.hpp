@@ -40,6 +40,7 @@ public:
 	string ParamsToString() const override;
 
 	vector<ColumnBinding> GetColumnBindings() override;
+	void Serialize(FieldWriter &writer) const override;
 
 protected:
 	void ResolveTypes() override;

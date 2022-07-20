@@ -30,6 +30,7 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}
+	void Serialize(FieldWriter &writer) const override;
 
 protected:
 	void ResolveTypes() override {

@@ -22,6 +22,7 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	void Serialize(FieldWriter &writer) const override;
 
 	bool SplitPredicates() {
 		return SplitPredicates(expressions);

@@ -58,4 +58,8 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { GetExpressionBindings(child, bindings); });
 }
 
+void LogicalJoin::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

@@ -11,4 +11,8 @@ LogicalEmptyResult::LogicalEmptyResult(unique_ptr<LogicalOperator> op)
 	this->return_types = op->types;
 }
 
+void LogicalEmptyResult::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

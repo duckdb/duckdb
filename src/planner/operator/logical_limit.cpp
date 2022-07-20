@@ -24,4 +24,8 @@ void LogicalLimit::ResolveTypes() {
 	types = children[0]->types;
 }
 
+void LogicalLimit::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

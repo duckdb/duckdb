@@ -27,6 +27,7 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return bindings;
 	}
+	void Serialize(FieldWriter &writer) const override;
 
 protected:
 	void ResolveTypes() override {

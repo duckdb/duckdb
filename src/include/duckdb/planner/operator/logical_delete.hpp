@@ -22,6 +22,9 @@ public:
 	idx_t table_index;
 	bool return_chunk;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {
 		if (return_chunk) {

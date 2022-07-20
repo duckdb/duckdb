@@ -22,6 +22,9 @@ public:
 
 	unique_ptr<ParseInfo> info;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);

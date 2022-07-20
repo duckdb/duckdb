@@ -21,6 +21,8 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(FieldReader &source);
 
 protected:
 	void ResolveTypes() override;

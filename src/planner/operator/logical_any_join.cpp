@@ -9,4 +9,8 @@ string LogicalAnyJoin::ParamsToString() const {
 	return condition->ToString();
 }
 
+void LogicalAnyJoin::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

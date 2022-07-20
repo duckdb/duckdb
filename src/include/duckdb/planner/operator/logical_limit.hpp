@@ -27,7 +27,7 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
-
+	void Serialize(FieldWriter &writer) const override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:

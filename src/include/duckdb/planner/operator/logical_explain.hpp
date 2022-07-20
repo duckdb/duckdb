@@ -25,6 +25,9 @@ public:
 	string logical_plan_unopt;
 	string logical_plan_opt;
 
+public:
+	void Serialize(FieldWriter &writer) const override;
+
 protected:
 	void ResolveTypes() override {
 		types = {LogicalType::VARCHAR, LogicalType::VARCHAR};

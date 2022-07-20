@@ -19,6 +19,7 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	void Serialize(FieldWriter &writer) const override;
 
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 

@@ -28,4 +28,8 @@ void LogicalSample::ResolveTypes() {
 	types = children[0]->types;
 }
 
+void LogicalSample::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb

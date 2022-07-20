@@ -17,4 +17,8 @@ void LogicalWindow::ResolveTypes() {
 	}
 }
 
+void LogicalWindow::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(LogicalOperatorToString(type));
+}
+
 } // namespace duckdb
