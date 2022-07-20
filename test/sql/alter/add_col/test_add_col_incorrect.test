@@ -11,3 +11,13 @@ INSERT INTO test VALUES (1, 1), (2, 2)
 statement error
 ALTER TABLE test ADD COLUMN i INTEGER
 
+statement ok
+CREATE VIEW x(x) AS (SELECT 1)
+
+# Cannot add columns to views
+statement error
+ALTER VIEW x ADD COLUMN i INTEGER
+
+# Multiple alter per statement not supported yet
+statement error
+ALTER TABLE i ADD COLUMN j INT, ADD COLUMN k INT

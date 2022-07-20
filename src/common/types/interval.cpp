@@ -438,6 +438,13 @@ bool Interval::GreaterThanEquals(interval_t left, interval_t right) {
 	return GreaterThan(left, right) || Equals(left, right);
 }
 
+interval_t Interval::Invert(interval_t interval) {
+	interval.days = -interval.days;
+	interval.micros = -interval.micros;
+	interval.months = -interval.months;
+	return interval;
+}
+
 date_t Interval::Add(date_t left, interval_t right) {
 	if (!Date::IsFinite(left)) {
 		return left;
