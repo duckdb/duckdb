@@ -64,7 +64,7 @@ ZeroCopyStreamByteSink::~ZeroCopyStreamByteSink() {
 
 void ZeroCopyStreamByteSink::Append(const char* bytes, size_t len) {
   while (true) {
-    if (len <= buffer_size_) {
+    if ((int) len <= buffer_size_) {
       memcpy(buffer_, bytes, len);
       buffer_ = static_cast<char*>(buffer_) + len;
       buffer_size_ -= len;

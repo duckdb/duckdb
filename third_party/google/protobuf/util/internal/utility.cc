@@ -333,7 +333,7 @@ void DeleteWellKnownTypes() {
 
 void InitWellKnownTypes() {
 	well_known_types_ = new std::set<std::string>;
-	for (int i = 0; i < GOOGLE_ARRAYSIZE(well_known_types_name_array_); ++i) {
+	for (int i = 0; i < (int) GOOGLE_ARRAYSIZE(well_known_types_name_array_); ++i) {
 		well_known_types_->insert(well_known_types_name_array_[i]);
 	}
 	google::protobuf::internal::OnShutdown(&DeleteWellKnownTypes);

@@ -81,7 +81,7 @@ inline void ReplaceInvalidCodePoints(StringPiece str, const std::string &replace
 		StringPiece valid_part = str.substr(0, n_valid_bytes);
 		StrAppend(dst, valid_part);
 
-		if (n_valid_bytes == str.size()) {
+		if (n_valid_bytes == (int) str.size()) {
 			break;
 		}
 
@@ -97,7 +97,7 @@ static bool ConsumeKey(StringPiece *input, StringPiece *key) {
 	if (input->empty() || !IsLetter((*input)[0]))
 		return false;
 	int len = 1;
-	for (; len < input->size(); ++len) {
+	for (; len < (int) input->size(); ++len) {
 		if (!IsAlphanumeric((*input)[len])) {
 			break;
 		}
@@ -112,7 +112,7 @@ static bool ConsumeKeyPermissive(StringPiece *input, StringPiece *key) {
 	if (input->empty() || !IsLetter((*input)[0]))
 		return false;
 	int len = 1;
-	for (; len < input->size(); ++len) {
+	for (; len < (int) input->size(); ++len) {
 		if (IsKeySeparator((*input)[len])) {
 			break;
 		}
@@ -900,13 +900,13 @@ JsonStreamParser::TokenType JsonStreamParser::GetNextTokenType() {
 	if (*data == '-' || ('0' <= *data && *data <= '9')) {
 		return BEGIN_NUMBER;
 	}
-	if (size >= kKeywordTrue.length() && HasPrefixString(data_view, kKeywordTrue)) {
+	if (size >= (int) kKeywordTrue.length() && HasPrefixString(data_view, kKeywordTrue)) {
 		return BEGIN_TRUE;
 	}
-	if (size >= kKeywordFalse.length() && HasPrefixString(data_view, kKeywordFalse)) {
+	if (size >= (int) kKeywordFalse.length() && HasPrefixString(data_view, kKeywordFalse)) {
 		return BEGIN_FALSE;
 	}
-	if (size >= kKeywordNull.length() && HasPrefixString(data_view, kKeywordNull)) {
+	if (size >= (int) kKeywordNull.length() && HasPrefixString(data_view, kKeywordNull)) {
 		return BEGIN_NULL;
 	}
 	if (*data == '{')
