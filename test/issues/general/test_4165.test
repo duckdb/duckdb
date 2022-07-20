@@ -3,13 +3,16 @@
 # group: [general]
 
 statement ok
+SELECT setseed(0.42);
+
+statement ok
 CREATE TABLE df_a AS
 SELECT
     (100000 + (899999 * RANDOM()))::BIGINT AS ID,
     (4000 * RANDOM())::BIGINT AS C,
     (4000 * RANDOM())::BIGINT AS P,
     substring('abc', 1+(RANDOM() * 2)::BIGINT, 1) AS S
-FROM range(80000)
+FROM range(20000)
 
 statement ok
 CREATE TABLE df_b AS
