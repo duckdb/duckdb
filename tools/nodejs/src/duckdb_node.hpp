@@ -41,6 +41,7 @@ class Connection;
 class Database : public Napi::ObjectWrap<Database> {
 public:
 	explicit Database(const Napi::CallbackInfo &info);
+	~Database() override;
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 	void Process(Napi::Env env);
 	void TaskComplete(Napi::Env env);
@@ -76,6 +77,8 @@ private:
 	std::mutex task_mutex;
 	bool task_inflight;
 	static Napi::FunctionReference constructor;
+	Napi::Env env;
+	int64_t bytes_allocated = 0;
 };
 
 struct JSArgs;

@@ -291,6 +291,19 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 }
 
+// FIXME Just like DECIMAL, it's important that type_info gets considered when determining whether or not to cast
+// just comparing internal type is not always enough
+static bool ValueShouldBeCast(const LogicalType &incoming, const LogicalType &target) {
+	if (incoming.InternalType() != target.InternalType()) {
+		return true;
+	}
+	if (incoming.id() == LogicalTypeId::DECIMAL && incoming.id() == target.id()) {
+		//! Compare the type_info
+		return incoming != target;
+	}
+	return false;
+}
+
 void Vector::SetValue(idx_t index, const Value &val) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
@@ -298,7 +311,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type().InternalType() != GetType().InternalType()) {
+	if (ValueShouldBeCast(val.type(), GetType())) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
