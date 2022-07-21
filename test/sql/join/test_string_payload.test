@@ -6,6 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+pragma verify_external
+
+statement ok
 CREATE TABLE test1 (i INT, s1 VARCHAR, s2 VARCHAR)
 
 statement ok

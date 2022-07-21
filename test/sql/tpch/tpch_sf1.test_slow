@@ -5,7 +5,7 @@
 require tpch
 
 statement ok
-pragma debug_force_external=true
+pragma verify_external
 
 statement ok
 CALL dbgen(sf=1);

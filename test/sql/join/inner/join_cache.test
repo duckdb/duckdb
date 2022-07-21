@@ -6,6 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+pragma verify_external
+
+statement ok
 CREATE TABLE smalltable AS SELECT 1::INTEGER a;
 
 # values 1...1024 10x

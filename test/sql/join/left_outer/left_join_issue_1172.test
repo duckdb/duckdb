@@ -6,6 +6,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+pragma verify_external
+
+statement ok
 drop table if exists t1;
 
 statement ok
