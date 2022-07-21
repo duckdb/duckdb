@@ -152,13 +152,20 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			payload.Initialize(executor.allocator, payload_types);
 			executor.Execute(input, payload);
 
-			// Update the state and finalize it one row at a time.
+			// Iterate through them using a single SV
+			payload.Flatten();
 			DataChunk row;
 			row.Initialize(allocator, payload_types);
-			for (sel_t i = 0; i < input.size(); ++i) {
-				row.Reset();
-				SelectionVector sel(&i);
-				row.Slice(payload, sel, 1);
+			sel_t s = 0;
+			SelectionVector sel(&s);
+			row.Slice(sel, 1);
+			for (size_t col_idx = 0; col_idx < payload.ColumnCount(); ++col_idx) {
+				DictionaryVector::Child(row.data[col_idx]).Reference(payload.data[col_idx]);
+			}
+
+			// Update the state and finalize it one row at a time.
+			for (idx_t i = 0; i < input.size(); ++i) {
+				sel.set_index(0, i);
 				aggregate.update(row.data.data(), aggr_input_data, row.ColumnCount(), statev, 1);
 				aggregate.finalize(statev, aggr_input_data, result, 1, i);
 			}
