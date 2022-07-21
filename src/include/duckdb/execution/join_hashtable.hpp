@@ -37,7 +37,7 @@ public:
 	//! Used for synchronization of parallel external join
 	idx_t total;
 	idx_t scan_index;
-	atomic<idx_t> scanned;
+	idx_t scanned;
 
 public:
 	void Reset() {
@@ -275,10 +275,10 @@ public:
 	//! TODO
 	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
 	//! If this is the probe-side HT, get the next indices indicating what to scan
-	idx_t GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position);
+	idx_t AssignProbeTuples(JoinHTScanState &state, idx_t &position, idx_t &block_position);
 	//! If this is the probe
-	void ConstructProbeChunk(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
-	                         idx_t block_position, idx_t count);
+	void GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
+	                       idx_t block_position, idx_t count);
 
 private:
 	//! TODO

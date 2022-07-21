@@ -793,13 +793,14 @@ idx_t JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses) {
 		auto &block = block_collection->blocks[state.block_position];
 		auto &handle = pinned_handles[state.block_position];
 		auto baseptr = handle.Ptr();
-		for (; state.position < block->count; state.position++) {
+		for (; state.position < block->count; state.position++, state.scan_index++) {
 			auto tuple_base = baseptr + state.position * entry_size;
 			auto found_match = Load<bool>(tuple_base + tuple_size);
 			if (!found_match) {
 				key_locations[found_entries++] = tuple_base;
 				if (found_entries == STANDARD_VECTOR_SIZE) {
 					state.position++;
+					state.scan_index++;
 					break;
 				}
 			}
@@ -1214,7 +1215,7 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 	probe_scan_state.total = block_collection->count;
 }
 
-idx_t JoinHashTable::GetScanIndices(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
+idx_t JoinHashTable::AssignProbeTuples(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
 	lock_guard<mutex> lock(state.lock);
 	if (state.scan_index == state.total) {
 		return 0;
@@ -1248,8 +1249,8 @@ idx_t JoinHashTable::GetScanIndices(JoinHTScanState &state, idx_t &position, idx
 	return count;
 }
 
-void JoinHashTable::ConstructProbeChunk(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
-                                        idx_t block_position, idx_t count) {
+void JoinHashTable::GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
+                                      idx_t block_position, idx_t count) {
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	vector<BufferHandle> handles;
 

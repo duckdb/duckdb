@@ -15,15 +15,15 @@
 namespace duckdb {
 
 enum class VerificationType : uint8_t {
-	ORIGINAL = 0,
-	COPIED = 1,
-	DESERIALIZED = 2,
-	PARSED = 3,
-	UNOPTIMIZED = 4,
-	PREPARED = 5,
-	EXTERNAL = 6,
+	ORIGINAL,
+	COPIED,
+	DESERIALIZED,
+	PARSED,
+	UNOPTIMIZED,
+	PREPARED,
+	EXTERNAL,
 
-	INVALID = 255
+	INVALID
 };
 
 class StatementVerifier {
