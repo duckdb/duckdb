@@ -204,10 +204,6 @@ private:
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
 
-		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
-			SignExtend<T>(dst, width);
-		}
-
 		ApplyFrameOfReference(dst, frame_of_reference);
 	}
 
