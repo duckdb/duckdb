@@ -40,46 +40,46 @@ struct ColumnDataMetaData {
 	}
 };
 
-ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
-    : buffer_manager(buffer_manager), types(move(types_p)), count(0), finished_append(false) {
+ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
+	Initialize(move(types_p));
+	allocator = make_shared<ColumnDataAllocator>(allocator_p);
+}
+
+ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
+	Initialize(move(types_p));
+	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
+}
+
+ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
+	Initialize(move(types_p));
+	this->allocator = move(allocator_p);
+}
+
+ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
+                                           ColumnDataAllocatorType type)
+    : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), move(types_p)) {
+}
+
+ColumnDataCollection::ColumnDataCollection(ColumnDataCollection &other)
+    : ColumnDataCollection(other.allocator, other.types) {
+	other.finished_append = true;
+}
+
+ColumnDataCollection::~ColumnDataCollection() {
+}
+
+void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
+	this->types = move(types_p);
+	this->count = 0;
+	this->finished_append = false;
 	copy_functions.reserve(types.size());
 	for (auto &type : types) {
 		copy_functions.push_back(GetCopyFunction(type));
 	}
 }
 
-ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
-                                           ColumnDataAllocatorType type)
-    : ColumnDataCollection(BufferManager::GetBufferManager(context), move(types_p)) {
-}
-
-ColumnDataCollection::ColumnDataCollection(ColumnDataCollection &other)
-    : ColumnDataCollection(other.buffer_manager, other.types) {
-	// take over the last segment
-	other.finished_append = true;
-	//! create a new segment, and take over the last block of the other column data collection
-	if (other.segments.empty()) {
-		return;
-	}
-	auto &last_segment = other.segments.back();
-	if (!last_segment->allocator.HasBlocks()) {
-		return;
-	}
-	CreateSegment();
-	segments.back()->allocator.Initialize(last_segment->allocator);
-}
-
-ColumnDataCollection::~ColumnDataCollection() {
-}
-
-void ColumnDataCollection::Initialize(Allocator &allocator, vector<LogicalType> types) {
-}
-
-void ColumnDataCollection::Initialize(BufferManager &manager, vector<LogicalType> types) {
-}
-
 void ColumnDataCollection::CreateSegment() {
-	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(buffer_manager, types));
+	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(allocator, types));
 }
 
 //===--------------------------------------------------------------------===//
@@ -415,7 +415,7 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 }
 
 void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
-	chunk.Initialize(buffer_manager.GetBufferAllocator(), types);
+	chunk.Initialize(allocator->GetAllocator(), types);
 }
 
 bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index,

@@ -2,6 +2,11 @@
 
 namespace duckdb {
 
+ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
+                                                         vector<LogicalType> types_p)
+    : allocator(move(allocator_p)), types(move(types_p)), count(0) {
+}
+
 VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_meta,
                                                             ChunkManagementState *chunk_state) {
 	VectorMetaData meta_data;
@@ -9,8 +14,8 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 
 	auto internal_type = type.InternalType();
 	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
-	allocator.AllocateData(type_size * STANDARD_VECTOR_SIZE + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
-	                       meta_data.offset, chunk_state);
+	allocator->AllocateData(type_size * STANDARD_VECTOR_SIZE + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
+	                        meta_data.offset, chunk_state);
 	chunk_meta.block_ids.insert(meta_data.block_id);
 
 	auto index = vector_data.size();
@@ -36,29 +41,7 @@ void ColumnDataCollectionSegment::AllocateNewChunk() {
 
 void ColumnDataCollectionSegment::InitializeChunkState(idx_t chunk_index, ChunkManagementState &state) {
 	auto &chunk = chunk_data[chunk_index];
-	// release any handles that are no longer required
-	bool found_handle;
-	do {
-		found_handle = false;
-		for (auto it = state.handles.begin(); it != state.handles.end(); it++) {
-			if (chunk.block_ids.find(it->first) != chunk.block_ids.end()) {
-				// still required: do not release
-				continue;
-			}
-			state.handles.erase(it);
-			found_handle = true;
-			break;
-		}
-	} while (found_handle);
-
-	// grab any handles that are now required
-	for (auto &block_id : chunk.block_ids) {
-		if (state.handles.find(block_id) != state.handles.end()) {
-			// already pinned: don't need to do anything
-			continue;
-		}
-		state.handles[block_id] = allocator.Pin(block_id);
-	}
+	allocator->InitializeChunkState(state, chunk);
 }
 
 VectorDataIndex ColumnDataCollectionSegment::GetChildIndex(VectorChildIndex index, idx_t child_entry) {
@@ -116,7 +99,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		}
 	}
 
-	auto base_ptr = state.handles[vdata.block_id].Ptr() + vdata.offset;
+	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
 	auto validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
 	if (!vdata.next_data.IsValid()) {
 		// no next data, we can do a zero-copy read of this vector
@@ -180,4 +163,4 @@ void ColumnDataCollectionSegment::Verify() {
 #endif
 }
 
-}
+} // namespace duckdb

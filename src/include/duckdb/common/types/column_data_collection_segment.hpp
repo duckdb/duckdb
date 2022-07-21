@@ -66,11 +66,9 @@ struct ChunkMetaData {
 
 class ColumnDataCollectionSegment {
 public:
-	ColumnDataCollectionSegment(BufferManager &buffer_manager, vector<LogicalType> types_p)
-	    : allocator(buffer_manager), types(move(types_p)), count(0) {
-	}
+	ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types_p);
 
-	ColumnDataAllocator allocator;
+	shared_ptr<ColumnDataAllocator> allocator;
 	//! The types of the chunks
 	vector<LogicalType> types;
 	//! The number of entries in the internal column data

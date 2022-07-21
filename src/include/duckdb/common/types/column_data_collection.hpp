@@ -67,6 +67,7 @@ public:
 	//! Note that after one CDC inherits blocks from another, the other
 	//! cannot be written to anymore (i.e. we take ownership of the half-written blocks).
 	ColumnDataCollection(ColumnDataCollection &parent);
+	ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types);
 	~ColumnDataCollection();
 
 public:
@@ -122,10 +123,8 @@ public:
 	DUCKDB_API void Reset();
 
 private:
-	//! Initialize an in-memory column data collection
-	void Initialize(Allocator &allocator, vector<LogicalType> types);
-	//! Initialize a buffer-managed column data collection
-	void Initialize(BufferManager &manager, vector<LogicalType> types);
+	//! Initialize the column data collection
+	void Initialize(vector<LogicalType> types);
 
 	//! Creates a new segment within the ColumnDataCollection
 	void CreateSegment();
@@ -137,7 +136,7 @@ private:
 
 private:
 	//! The Column Data Allocator
-	BufferManager &buffer_manager;
+	buffer_ptr<ColumnDataAllocator> allocator;
 	//! The types of the stored entries
 	vector<LogicalType> types;
 	//! The number of entries stored in the column data collection
@@ -146,8 +145,7 @@ private:
 	vector<unique_ptr<ColumnDataCollectionSegment>> segments;
 	//! The set of copy functions
 	vector<ColumnDataCopyFunction> copy_functions;
-	//! When the column data collection is marked as finished with appending - new tuples can no longer be appended to
-	//! it
+	//! When the column data collection is marked as finished - new tuples can no longer be appended to it
 	bool finished_append;
 };
 
