@@ -68,9 +68,7 @@ void HivePartitioning::PruneFilesList(vector<string> &files,  vector<unique_ptr<
 
 	for(idx_t i = preserve_first; i < files.size(); i++) {
 		auto& file = files[i];
-
 		bool should_prune_file = false;
-
 		auto known_values = GetKnownColumnValues(file, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner;
@@ -78,7 +76,6 @@ void HivePartitioning::PruneFilesList(vector<string> &files,  vector<unique_ptr<
 			unique_ptr<Expression> filter_copy = filter->Copy();
 			ConvertKnownColRefToConstants(filter_copy, known_values);
 			if (combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
-				std::cout << "PRUNED " << file << "\n";
 				should_prune_file = true;
 				break;
 			}
