@@ -148,11 +148,7 @@ void LogicalOperator::Print() {
 void LogicalOperator::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField<LogicalOperatorType>(type);
-
-	//	writer.WriteList<unique_ptr<LogicalOperator>>(children);
-	//	writer.WriteList<unique_ptr<Expression>>(expressions);
-	//	writer.WriteList<LogicalType>(types);
-	//	writer.WriteField<idx_t>(estimated_cardinality);
+	writer.WriteSerializableList(children);
 
 	Serialize(writer);
 	writer.Finalize();
@@ -163,21 +159,21 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 
 	FieldReader reader(deserializer);
 	auto type = reader.ReadRequired<LogicalOperatorType>();
-	//	auto children = reader.ReadRequiredList<unique_ptr<LogicalOperator>>();
-	//	auto expressions =  reader.ReadRequiredList<unique_ptr<Expression>>();
-	//	auto types = reader.ReadRequiredList<LogicalType>();
-	//	auto estimated_cardinality = reader.ReadRequired<idx_t>();
+	auto children = reader.ReadRequiredSerializableList<LogicalOperator>();
 
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::Deserialize(reader);
 		break;
+	case LogicalOperatorType::LOGICAL_GET:
+		result = LogicalGet::Deserialize(reader);
+		break;
 	default:
-		throw SerializationException("Unsupported type for expression deserialization: " +
-		                             LogicalOperatorToString(type));
+		throw SerializationException("Unsupported type for operator deserialization: " + LogicalOperatorToString(type));
 	}
 
 	reader.Finalize();
+	result->children = move(children);
 
 	return result;
 }

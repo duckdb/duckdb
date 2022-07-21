@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
@@ -90,6 +91,29 @@ hash_t Expression::Hash() const {
 	ExpressionIterator::EnumerateChildren(*this,
 	                                      [&](const Expression &child) { hash = CombineHash(child.Hash(), hash); });
 	return hash;
+}
+
+void Expression::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteField<ExpressionType>(type);
+	Serialize(writer);
+	writer.Finalize();
+}
+
+unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
+	FieldReader reader(source);
+	auto type = reader.ReadRequired<ExpressionType>();
+
+	unique_ptr<Expression> result;
+	switch (type) {
+	case ExpressionType::BOUND_REF:
+		result = BoundReferenceExpression::Deserialize(reader);
+		break;
+	default:
+		throw SerializationException("Unsupported type for expression deserialization!" + ExpressionTypeToString(type));
+	}
+	reader.Finalize();
+	return result;
 }
 
 } // namespace duckdb

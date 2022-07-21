@@ -28,6 +28,8 @@ public:
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
 };
 
 } // namespace duckdb

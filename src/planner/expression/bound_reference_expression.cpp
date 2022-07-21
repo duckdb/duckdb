@@ -3,6 +3,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,16 @@ unique_ptr<Expression> BoundReferenceExpression::Copy() {
 }
 
 void BoundReferenceExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	writer.WriteString(alias);
+	writer.WriteSerializable(return_type);
+	writer.WriteField(index);
+}
+
+unique_ptr<Expression> BoundReferenceExpression::Deserialize(FieldReader &reader) {
+	auto alias = reader.ReadRequired<string>();
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto index = reader.ReadRequired<idx_t>();
+	return make_unique<BoundReferenceExpression>(alias, return_type, index);
 }
 
 } // namespace duckdb

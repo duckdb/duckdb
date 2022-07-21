@@ -105,6 +105,9 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
+typedef void (*table_function_bind_data_serialize_t)(FieldWriter &writer, FunctionData &bind_data);
+typedef unique_ptr<TableFilterSet> (*table_function_bind_data_deserialize_t)(FieldReader &reader);
+
 class TableFunction : public SimpleNamedParameterFunction {
 public:
 	DUCKDB_API
@@ -151,6 +154,10 @@ public:
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the current batch index of the current scan operator
 	table_function_get_batch_index_t get_batch_index;
+
+	table_function_bind_data_serialize_t bind_data_serialize;
+	table_function_bind_data_deserialize_t bind_data_deserialize;
+
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.
 	bool projection_pushdown;

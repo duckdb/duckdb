@@ -13,9 +13,7 @@ using namespace std;
 TEST_CASE("Test plan serialization", "[api]") {
 	DuckDB db;
 	Connection con(db);
-	con.Query("CREATE TABLE a (i INTEGER)");
-	con.Query("INSERT INTO a VALUES (42)");
-	auto plan = con.ExtractPlan("SELECT i FROM a WHERE i >= 42");
+	auto plan = con.ExtractPlan("SELECT email, last_name FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
 
 	BufferedSerializer serializer;
 	plan->Serialize(serializer);
@@ -25,4 +23,5 @@ TEST_CASE("Test plan serialization", "[api]") {
 	auto new_plan = LogicalOperator::Deserialize(deserializer);
 
 	printf("%s\n", new_plan->ToString().c_str());
+	new_plan->Verify();
 }

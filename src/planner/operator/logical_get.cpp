@@ -3,7 +3,12 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+
+#include "duckdb.hpp" // FIXME
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -72,7 +77,41 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 }
 
 void LogicalGet::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(table_index);
+	writer.WriteRegularSerializableList(returned_types);
+	writer.WriteList<string>(names);
+	writer.WriteList<column_t>(column_ids);
+	writer.WriteSerializable(table_filters);
+
+	if (function.name.empty()) {
+		throw InvalidInputException("Can't serialize unnamed table function");
+	}
+	// TODO serialize actual function
+	writer.WriteString(function.name);
+	//	if (!function.bind_data_serialize) {
+	//		throw InvalidInputException("Can't serialize table function %s", function.name);
+	//	}
+	//	function.bind_data_serialize(writer, *bind_data);
+}
+
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(FieldReader &source) {
+	auto table_index = source.ReadRequired<idx_t>();
+	auto returned_types = source.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto returned_names = source.ReadRequiredList<string>();
+	auto column_ids = source.ReadRequiredList<column_t>();
+	auto table_filters = source.ReadRequiredSerializable<TableFilterSet>();
+
+	auto name = source.ReadRequired<string>();
+	// auto bind_data = source.ReadRequiredSerializable<FunctionData>();
+	//  TODO look up function in catalog, call deserializer
+
+	// TODO we need to look up the function pointers somehow?
+	TableFunction function;
+	function.name = name;
+	auto result = make_unique<LogicalGet>(table_index, function, nullptr, returned_types, returned_names);
+	result->column_ids = column_ids;
+	result->table_filters = move(*table_filters);
+	return result;
 }
 
 } // namespace duckdb
