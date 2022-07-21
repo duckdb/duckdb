@@ -128,7 +128,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	idx_t current_offset = 0;
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
-		base_ptr = state.handles[current_vdata.block_id].Ptr() + current_vdata.offset;
+		base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
 		validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);

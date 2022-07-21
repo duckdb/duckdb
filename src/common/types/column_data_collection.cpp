@@ -145,9 +145,8 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorD
                                     idx_t copy_count) {
 	auto &append_state = meta_data.state;
 	auto &vector_data = meta_data.GetVectorMetaData();
-	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
-	         append_state.current_chunk_state.handles.end());
-	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id].Ptr() + vector_data.offset;
+	auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state, vector_data.block_id,
+	                                                            vector_data.offset);
 	auto validity_data = (validity_t *)(base_ptr + sizeof(T) * STANDARD_VECTOR_SIZE);
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 
@@ -225,9 +224,9 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &sourc
 	// copy the NULL values for the main struct vector
 	auto &append_state = meta_data.state;
 	auto &vector_data = meta_data.GetVectorMetaData();
-	D_ASSERT(append_state.current_chunk_state.handles.find(vector_data.block_id) !=
-	         append_state.current_chunk_state.handles.end());
-	auto base_ptr = append_state.current_chunk_state.handles[vector_data.block_id].Ptr() + vector_data.offset;
+
+	auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state, vector_data.block_id,
+	                                                            vector_data.offset);
 	auto validity_data = (validity_t *)base_ptr;
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 	vector_data.count += copy_count;

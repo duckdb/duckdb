@@ -61,6 +61,8 @@ private:
 	} alloc;
 	//! The set of blocks used by the column data collection
 	vector<BlockMetaData> blocks;
+	//! The set of allocated data
+	vector<AllocatedData> allocated_data;
 };
 
 } // namespace duckdb

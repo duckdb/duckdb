@@ -33,8 +33,15 @@ typedef data_ptr_t (*reallocate_function_ptr_t)(PrivateAllocatorData *private_da
 
 class AllocatedData {
 public:
-	AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size);
-	~AllocatedData();
+	DUCKDB_API AllocatedData();
+	DUCKDB_API AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size);
+	DUCKDB_API ~AllocatedData();
+	// disable copy constructors
+	DUCKDB_API AllocatedData(const AllocatedData &other) = delete;
+	DUCKDB_API AllocatedData &operator=(const AllocatedData &) = delete;
+	//! enable move constructors
+	DUCKDB_API AllocatedData(AllocatedData &&other) noexcept;
+	DUCKDB_API AllocatedData &operator=(AllocatedData &&) noexcept;
 
 	data_ptr_t get() {
 		return pointer;
@@ -48,7 +55,7 @@ public:
 	void Reset();
 
 private:
-	Allocator &allocator;
+	Allocator *allocator;
 	data_ptr_t pointer;
 	idx_t allocated_size;
 };
@@ -66,8 +73,8 @@ public:
 	void FreeData(data_ptr_t pointer, idx_t size);
 	data_ptr_t ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t new_size);
 
-	unique_ptr<AllocatedData> Allocate(idx_t size) {
-		return make_unique<AllocatedData>(*this, AllocateData(size), size);
+	AllocatedData Allocate(idx_t size) {
+		return AllocatedData(*this, AllocateData(size), size);
 	}
 
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {

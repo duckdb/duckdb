@@ -39,7 +39,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	// create a ColumnDataCollection from the output
 	auto &allocator = Allocator::Get(context);
 	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
-	auto collection = make_unique<ColumnDataCollection>(context, plan_types);
+	auto collection =
+	    make_unique<ColumnDataCollection>(context, plan_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 
 	DataChunk chunk;
 	chunk.Initialize(allocator, op.types);

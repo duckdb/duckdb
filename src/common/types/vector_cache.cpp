@@ -43,7 +43,7 @@ public:
 		result.validity.Reset();
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			result.data = owned_data->get();
+			result.data = owned_data.get();
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
@@ -71,7 +71,7 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.data = owned_data->get();
+			result.data = owned_data.get();
 			result.auxiliary.reset();
 			break;
 		}
@@ -85,7 +85,7 @@ private:
 	//! The type of the vector cache
 	LogicalType type;
 	//! Owned data
-	unique_ptr<AllocatedData> owned_data;
+	AllocatedData owned_data;
 	//! Child caches (if any). Used for nested types.
 	vector<buffer_ptr<VectorBuffer>> child_caches;
 	//! Aux data for the vector (if any)

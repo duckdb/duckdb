@@ -28,9 +28,7 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
 }
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
-	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
-		throw InternalException("Can only pin blocks of buffer-manager allocators");
-	}
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	return alloc.buffer_manager->Pin(blocks[block_id].handle);
 }
 
@@ -45,6 +43,21 @@ void ColumnDataAllocator::AllocateBlock() {
 
 void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset,
                                        ChunkManagementState *chunk_state) {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		// in-memory allocator
+		auto allocated = alloc.allocator->Allocate(size);
+		auto pointer_value = uintptr_t(allocated.get());
+		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+			block_id = uint32_t(pointer_value);
+		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+			block_id = uint32_t(pointer_value & 0xFFFFFFFF);
+			offset = uint32_t(pointer_value >> 32);
+		} else {
+			throw InternalException("ColumnDataCollection: Architecture not supported!?");
+		}
+		allocated_data.push_back(move(allocated));
+		return;
+	}
 	if (blocks.empty() || blocks.back().Capacity() < size) {
 		AllocateBlock();
 		if (chunk_state && !blocks.empty()) {
@@ -67,6 +80,18 @@ void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
 }
 
 data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset) {
+	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+		// in-memory allocator: construct pointer from block_id and offset
+		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+			uintptr_t pointer_value = uintptr_t(block_id);
+			return (data_ptr_t)pointer_value;
+		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+			uintptr_t pointer_value = (uintptr_t(offset) << 32) | uintptr_t(block_id);
+			return (data_ptr_t)pointer_value;
+		} else {
+			throw InternalException("ColumnDataCollection: Architecture not supported!?");
+		}
+	}
 	D_ASSERT(state.handles.find(block_id) != state.handles.end());
 	return state.handles[block_id].Ptr() + offset;
 }
@@ -77,6 +102,10 @@ Allocator &ColumnDataAllocator::GetAllocator() {
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
+	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+		// nothing to pin
+		return;
+	}
 	// release any handles that are no longer required
 	bool found_handle;
 	do {

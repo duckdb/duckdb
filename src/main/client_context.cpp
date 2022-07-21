@@ -1006,16 +1006,23 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	}
 	config.enable_optimizer = optimizer_enabled;
 
-	// check explain, only if q does not already contain EXPLAIN
+	// check explain, only if the query was successful
 	if (results[0]->success) {
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
+		string error;
 		try {
-			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
+			auto result = RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
+			if (!result->success) {
+				error = result->error;
+			}
 		} catch (std::exception &ex) { // LCOV_EXCL_START
-			interrupted = false;
-			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
+			error = ex.what();
 		} // LCOV_EXCL_STOP
+		if (!error.empty()) {
+			interrupted = false;
+			return "Explain result differs from original result!\nEXPLAIN failed but query did not (" + error + ")";
+		}
 	}
 
 	if (profiling_is_enabled) {
