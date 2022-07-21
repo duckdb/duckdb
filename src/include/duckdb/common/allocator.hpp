@@ -59,7 +59,7 @@ public:
 	DUCKDB_API Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
 	                     reallocate_function_ptr_t reallocate_function_p,
 	                     unique_ptr<PrivateAllocatorData> private_data);
-	DUCKDB_API Allocator &operator=(Allocator &&allocator) noexcept = delete;
+	Allocator &operator=(Allocator &&allocator) noexcept = delete;
 	DUCKDB_API ~Allocator();
 
 	data_ptr_t AllocateData(idx_t size);

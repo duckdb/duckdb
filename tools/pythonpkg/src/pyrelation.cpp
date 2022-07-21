@@ -3,6 +3,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/vector_conversion.hpp"
 
 namespace duckdb {
 
@@ -199,7 +200,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_objec
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
-	return make_unique<DuckDBPyRelation>(rel->Project(expr));
+	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
+	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
+	return move(projected_relation);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const py::object &df, const string &expr,

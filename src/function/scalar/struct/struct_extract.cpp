@@ -57,8 +57,8 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	if (key_child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
-	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
+
+	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
