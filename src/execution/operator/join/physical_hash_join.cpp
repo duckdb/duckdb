@@ -215,8 +215,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	if (sink.external) {
 		// External join - partition HT
 		sink.perfect_join_executor.reset();
-		sink.hash_table->SetTuplesPerPartitionedProbe(sink.local_hash_tables, sink.max_ht_size);
-		sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables);
+		sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
 	} else {
@@ -398,7 +397,7 @@ public:
 	//! Vector with pointers here so we don't have to re-initialize
 	Vector addresses;
 
-	//! TODO: describe
+	//! Current number of tuples from a full/outer scan that are 'in-flight'
 	idx_t full_outer_in_progress;
 };
 

@@ -236,14 +236,16 @@ public:
 	//===--------------------------------------------------------------------===//
 	// External Join
 	//===--------------------------------------------------------------------===//
-	//! TODO
+	//! Whether we are doing an external hash join
 	bool external;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 
+	//! The number of tuples that are swizzled
 	idx_t SwizzledCount() {
 		return swizzled_block_collection->count;
 	}
+	//! The size of the data in memory
 	idx_t SizeInBytes() {
 		return block_collection->SizeInBytes() + string_heap->SizeInBytes();
 	}
@@ -257,33 +259,32 @@ public:
 	//! Unswizzle the blocks in this HT (moves from swizzled_... to block_collection and string_heap)
 	void UnswizzleBlocks();
 
-	//! TODO
-	void SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size);
 	//! Schedules one task for every HT in local_hts to partition them and add them to this HT
-	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts);
+	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts,
+	                            idx_t max_ht_size);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 
-	//! TODO
+	//! Delete blocks that belong to the current partitioned HT
 	void UnFinalize();
-	//! TODO
+	//! Build HT for the next partitioned probe round
 	void FinalizeExternal();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);
 
-	//! TODO
+	//! If this is the probe-side HT, prepare the next partitioned probe round
 	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
-	//! If this is the probe-side HT, get the next indices indicating what to scan
+	//! If this is the probe-side HT, assign the next tuples to scan
 	idx_t AssignProbeTuples(JoinHTScanState &state, idx_t &position, idx_t &block_position);
-	//! If this is the probe
+	//! If this is the probe-side HT, gather the next tuples given the assignment
 	void GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
 	                       idx_t block_position, idx_t count);
 
 private:
-	//! TODO
-	idx_t tuples_per_iteration;
-	//! TODO: rename this to something better
+	//! Number of tuples for the build-side HT per partitioned round
+	idx_t tuples_per_round;
+	//! First and last partition of the current partitioned round
 	idx_t partitions_start;
 	idx_t partitions_end;
 

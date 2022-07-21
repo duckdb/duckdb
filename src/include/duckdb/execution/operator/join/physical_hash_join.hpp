@@ -91,7 +91,7 @@ public:
 	}
 
 private:
-	//! TODO
+	//! Prepare the next partitioned probe round, which includes finalizing the HT
 	bool PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const;
 };
 

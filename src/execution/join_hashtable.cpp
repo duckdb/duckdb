@@ -304,7 +304,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t count = external ? MaxValue<idx_t>(tuples_per_iteration, Count()) : Count();
+	idx_t count = external ? MaxValue<idx_t>(tuples_per_round, Count()) : Count();
 	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
@@ -1030,7 +1030,11 @@ public:
 	}
 };
 
-void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
+void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
+                                           vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
+	external = true;
+
+	// First set the number of tuples in the HT per partitioned round
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (auto &ht : local_hts) {
@@ -1041,33 +1045,22 @@ void JoinHashTable::SetTuplesPerPartitionedProbe(vector<unique_ptr<JoinHashTable
 	}
 
 	idx_t avg_tuple_size = total_size / total_count;
-	tuples_per_iteration = max_ht_size / avg_tuple_size;
+	tuples_per_round = max_ht_size / avg_tuple_size;
 
-	if (tuples_per_iteration >= total_count) {
-		// We decided to do an external join, but the data fits
-		// This can happen when we force an external join
-		// Just do three probe iterations
-		tuples_per_iteration = (total_count + 2) / 3;
+	if (tuples_per_round >= total_count) {
+		// We doing an external join, but the data fits (probably force_external), just do three probe iterations
+		tuples_per_round = (total_count + 2) / 3;
 	}
 
-	// TODO: set number of radix bits (determine what's best?)
-	idx_t bits = 4;
-	idx_t magic_number = 1 << bits;
-
-	idx_t partition_size = max_ht_size / magic_number;
-	idx_t num_partitions = total_size / partition_size;
-	num_partitions = NextPowerOfTwo(num_partitions);
-	num_partitions = MaxValue<idx_t>(num_partitions, magic_number);
-
-	for (bits = 1; (1 << bits) < num_partitions && bits < 8; bits++) {
+	// Set the number of radix bits (minimum 4, maximum 8)
+	// TODO: tweak this experimentally
+	for (radix_bits = 4; radix_bits < 8; radix_bits++) {
+		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
+		if (total_size / num_partitions < max_ht_size) {
+			break;
+		}
 	}
 
-	radix_bits = bits;
-}
-
-void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
-                                           vector<unique_ptr<JoinHashTable>> &local_hts) {
-	external = true;
 	// Schedule events to partition local hts
 	auto new_event = make_shared<PartitionEvent>(pipeline, *this, local_hts);
 	event.InsertEvent(move(new_event));
@@ -1114,7 +1107,7 @@ void JoinHashTable::FinalizeExternal() {
 	idx_t count = partition_block_collections[partitions_start]->count;
 	for (idx_t p = partitions_start + 1; p < num_partitions; p++) {
 		auto partition_count = partition_block_collections[p]->count;
-		if (count + partition_count > tuples_per_iteration) {
+		if (count + partition_count > tuples_per_round) {
 			break;
 		}
 		next++;
