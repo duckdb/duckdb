@@ -1216,10 +1216,7 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 }
 
 idx_t JoinHashTable::AssignProbeTuples(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
-	lock_guard<mutex> lock(state.lock);
-	if (state.scan_index == state.total) {
-		return 0;
-	}
+	D_ASSERT(state.scan_index < state.total);
 
 	// Set start positions
 	position = state.position;

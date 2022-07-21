@@ -92,7 +92,7 @@ public:
 
 private:
 	//! TODO
-	bool PrepareProbeRound(HashJoinGlobalSourceState &gstate) const;
+	bool PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const;
 };
 
 } // namespace duckdb

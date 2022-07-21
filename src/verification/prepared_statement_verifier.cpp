@@ -72,6 +72,7 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 bool PreparedStatementVerifier::Run(
     ClientContext &context, const string &query,
     const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>)> &run) {
+	bool failed = false;
 	// verify that we can extract all constants from the query and run the query as a prepared statement
 	// create the PREPARE and EXECUTE statements
 	Extract();
@@ -89,12 +90,14 @@ bool PreparedStatementVerifier::Run(
 	} catch (std::exception &ex) {
 		if (!StringUtil::Contains(ex.what(), "Parameter Not Allowed Error")) {
 			materialized_result = make_unique<MaterializedQueryResult>(ex.what());
+		} else {
+			failed = true;
 		}
 	}
 	run(string(), move(dealloc_statement));
 	context.interrupted = false;
 
-	return true;
+	return failed;
 }
 
 } // namespace duckdb

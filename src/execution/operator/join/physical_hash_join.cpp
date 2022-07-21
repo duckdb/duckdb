@@ -425,7 +425,30 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 	return result;
 }
 
-bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalSourceState &gstate) const {
+//! Spinlock to ensure all thread-local probe ht's are partitioned before any thread starts probing
+void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) {
+	while (true) {
+		unique_ptr<JoinHashTable> local_ht;
+		{
+			// Grab lock to check the state
+			lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
+			if (gstate.local_hts_done == gstate.local_ht_count) {
+				break;
+			}
+			if (sink.local_hash_tables.empty()) {
+				continue;
+			}
+			local_ht = move(sink.local_hash_tables.back());
+			sink.local_hash_tables.pop_back();
+		}
+		// Partition after releasing the lock, grab lock again to update state
+		local_ht->Partition(*gstate.probe_ht);
+		lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
+		gstate.local_hts_done++;
+	}
+}
+
+bool PhysicalHashJoin::PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const {
 	auto &probe_ss = gstate.probe_scan_state;
 	D_ASSERT(probe_ss.scanned == probe_ss.total);
 
@@ -438,7 +461,7 @@ bool PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalSourceState &gstate) cons
 	}
 
 	// Prepare the probe side
-	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, gstate.probe_scan_state);
+	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, probe_ss);
 	// Reset full outer scan state (if necessary)
 	if (IsRightOuterJoin(join_type)) {
 		gstate.full_outer_scan_state.Reset();
@@ -468,6 +491,8 @@ void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gst
 	lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
 }
 
+enum class ExternalProbeTaskType : uint8_t { EXTERNAL_PROBE, GATHER_FULL_OUTER, PREPARE_NEXT_ROUND };
+
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
@@ -490,40 +515,19 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 
 	// This is an external hash join
 	D_ASSERT(gstate.probe_ht);
+
+	// Initialize global source state (if not yet done)
 	gstate.Initialize(sink);
 
-	// All thread-local probe ht's must be partitioned before any thread can start probing, spinlock to ensure this
-	do {
-		unique_ptr<JoinHashTable> local_ht;
-		{
-			// Grab lock to check the state
-			lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
-			if (gstate.local_hts_done == gstate.local_ht_count) {
-				break;
-			}
-			if (sink.local_hash_tables.empty()) {
-				continue;
-			}
-			local_ht = move(sink.local_hash_tables.back());
-			sink.local_hash_tables.pop_back();
-		}
-		// Partition after releasing the lock, grab lock again to update state
-		local_ht->Partition(*gstate.probe_ht);
-		lock_guard<mutex> local_ht_lock(sink.local_ht_lock);
-		gstate.local_hts_done++;
-	} while (true);
+	// Partition probe-side data (if not yet done)
+	PartitionProbeSide(sink, gstate);
 
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
-	// Therefore, we loop until we've produced tuples, or until the operator is actually done, in one of three ways:
-	// 1. Get remaining elements from previous probe
-	// 2. Probe
-	// 3. Scanning HT for OUTER joins
-	// Probing is done in phases: This loop also makes sure that threads wait while a thread prepares the next phase
+	// Therefore, we loop until we've produced tuples, or until the operator is actually done
+	auto &probe_ss = gstate.probe_scan_state;
 	while (chunk.size() == 0) {
-		auto &probe_ss = gstate.probe_scan_state;
-
 		if (lstate.full_outer_in_progress != 0) {
-			// This thread returned tuples from the full outer scan last in the last GetData call, mark them as done
+			// This thread returned full outer scan tuples in the previous GetData call, mark them as done
 			D_ASSERT(IsRightOuterJoin(join_type));
 			lock_guard<mutex> fo_lock(fo_ss.lock);
 			fo_ss.scanned += lstate.full_outer_in_progress;
@@ -544,56 +548,91 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			D_ASSERT(probe_ss.scanned <= probe_ss.total);
 		}
 
-		// Try and see if we can assign probe tuples to this thread
 		idx_t position;
 		idx_t block_position;
-		idx_t count = gstate.probe_ht->AssignProbeTuples(probe_ss, position, block_position);
+		idx_t count;
 
-		if (count != 0) {
-			// We've managed to assign tuples to this thread, let's probe
+		ExternalProbeTaskType task_type;
+		do { // 'do' just so we can 'break' to release any locks
+			lock_guard<mutex> probe_lock(probe_ss.lock);
+			if (probe_ss.scan_index != probe_ss.total) {
+				// There's still probe tuples left, assign them to this thread
+				count = gstate.probe_ht->AssignProbeTuples(probe_ss, position, block_position);
+				task_type = ExternalProbeTaskType::EXTERNAL_PROBE;
+				break;
+			}
+
+			// No probe tuples left to assign
+			if (!IsRightOuterJoin(join_type)) {
+				// We don't need to scan the HT, try to prepare the partitioned probe round
+				task_type = ExternalProbeTaskType::PREPARE_NEXT_ROUND;
+				break;
+			}
+
+			// We might need to scan the HT
+			lock_guard<mutex> fo_lock(fo_ss.lock);
+			if (fo_ss.scan_index == fo_ss.total) {
+				// We cannot assign any more full/outer tuples to this thread
+				task_type = ExternalProbeTaskType::PREPARE_NEXT_ROUND;
+				break;
+			}
+
+			// Scan HT to assign tuples to this thread
+			idx_t scan_index_before = fo_ss.scan_index;
+			count = sink.hash_table->ScanFullOuter(fo_ss, lstate.addresses);
+			idx_t scanned = fo_ss.scan_index - scan_index_before;
+			if (count == 0) {
+				// No tuples found, can just immediately mark the scanned tuples as done
+				fo_ss.scanned += scanned;
+				// This should only happen when the full outer scan is done
+				D_ASSERT(fo_ss.scan_index == fo_ss.total);
+				task_type = ExternalProbeTaskType::PREPARE_NEXT_ROUND;
+			} else {
+				// We found tuples, mark them as in-progress
+				lstate.full_outer_in_progress += scanned;
+				task_type = ExternalProbeTaskType::GATHER_FULL_OUTER;
+			}
+		} while (false);
+
+		switch (task_type) {
+		case ExternalProbeTaskType::EXTERNAL_PROBE:
 			ExternalProbe(sink, gstate, lstate, chunk, position, block_position, count);
-		} else {
-			// All tuples in this partitioned probe phase have been assigned
-			idx_t found_entries = 0;
-			do {
-				// Grab the full outer lock and try to assign tuples to this thread (if necessary)
-				lock_guard<mutex> fo_lock(fo_ss.lock);
-				if (IsRightOuterJoin(join_type)) {
-					idx_t scan_index_before = fo_ss.scan_index;
-					found_entries = sink.hash_table->ScanFullOuter(fo_ss, lstate.addresses);
-					if (found_entries == 0) {
-						// No entries found, can just immediately mark the scanned tuples as done
-						fo_ss.scanned += fo_ss.scan_index - scan_index_before;
-						D_ASSERT(fo_ss.scan_index == fo_ss.total);
-					} else {
-						// We found entries, mark the scanned tuples as being in progress
-						lstate.full_outer_in_progress += fo_ss.scan_index - scan_index_before;
+			break;
+		case ExternalProbeTaskType::GATHER_FULL_OUTER:
+			sink.hash_table->GatherFullOuter(chunk, lstate.addresses, count);
+			break;
+		case ExternalProbeTaskType::PREPARE_NEXT_ROUND:
+			while (true) {
+				lock_guard<mutex> probe_lock(probe_ss.lock);
+				if (probe_ss.scanned != probe_ss.total) {
+					// Spinlock until all threads finish their last probe
+					continue;
+				}
+
+				// All threads finished their last probe
+				if (!IsRightOuterJoin(join_type)) {
+					if (PreparePartitionedRound(gstate)) {
+						// We prepared the next probe round
 						break;
 					}
-				}
-				if (IsRightOuterJoin(join_type) && fo_ss.scanned != fo_ss.total) {
-					// At least one thread has not completed their last full outer scan, spinlock until it does
-					continue;
-				}
-				// We know that we're done with full outer. We already have the full outer lock, now grab the probe lock
-				lock_guard<mutex> probe_lock(probe_ss.lock);
-				if (probe_ss.scan_index != probe_ss.total) {
-					// Another thread has prepared the next partitioned probe round
-					break;
-				}
-				if (probe_ss.scanned != probe_ss.total) {
-					// At least one thread has not completed their last probe, spinlock until it does
-					continue;
-				}
-				// Probe round is done: Try to prepare the next partitioned probe
-				if (!PrepareProbeRound(gstate)) {
 					// All partitions done
 					return;
 				}
-				break;
-			} while (true);
-			// If we found entries from the full outer join, gather them
-			sink.hash_table->GatherFullOuter(chunk, lstate.addresses, found_entries);
+
+				lock_guard<mutex> fo_lock(fo_ss.lock);
+				if (fo_ss.scanned != fo_ss.total) {
+					// Spinlock until all threads finish scanning the HT
+					continue;
+				}
+
+				// All threads have finished scanning the HT
+				if (PreparePartitionedRound(gstate)) {
+					// We prepared the next probe round
+					break;
+				}
+				// All partitions done
+				return;
+			}
 		}
 	}
 }

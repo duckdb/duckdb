@@ -63,10 +63,13 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	if (!any_failed && prepared_statement_verifier) {
 		// If none failed, we execute the prepared statement verifier
-		prepared_statement_verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
+		bool failed = prepared_statement_verifier->Run(*this, query, [&](const string &q, unique_ptr<SQLStatement> s) {
 			return RunStatementInternal(lock, q, move(s), false, false);
 		});
-		statement_verifiers.push_back(move(prepared_statement_verifier));
+		if (!failed) {
+			// PreparedStatementVerifier fails if it runs into a ParameterNotAllowedException, which is OK
+			statement_verifiers.push_back(move(prepared_statement_verifier));
+		}
 	}
 
 	// Restore config setting
@@ -102,7 +105,5 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	return result;
 }
-
-// TODO: stuff in ClientContext::PendingStatementOrPreparedStatementInternal too?
 
 } // namespace duckdb
