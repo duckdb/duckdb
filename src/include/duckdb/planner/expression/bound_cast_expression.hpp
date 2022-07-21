@@ -39,5 +39,7 @@ public:
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;
+
+	void Serialize(FieldWriter &writer) const override;
 };
 } // namespace duckdb

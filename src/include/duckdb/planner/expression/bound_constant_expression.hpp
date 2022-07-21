@@ -26,5 +26,7 @@ public:
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;
+
+	void Serialize(FieldWriter &writer) const override;
 };
 } // namespace duckdb

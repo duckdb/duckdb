@@ -13,6 +13,7 @@
 
 namespace duckdb {
 class BaseStatistics;
+class FieldWriter;
 
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
@@ -49,6 +50,15 @@ public:
 	}
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
+
+	//! Serializes an Expression to a stand-alone binary blob
+	void Serialize(Serializer &serializer) const;
+	//! Serializes an Expression to a stand-alone binary blob
+	virtual void Serialize(FieldWriter &writer) const = 0;
+
+	//! Deserializes a blob back into an Expression [CAN THROW:
+	//! SerializationException]
+	static unique_ptr<Expression> Deserialize(Deserializer &source);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

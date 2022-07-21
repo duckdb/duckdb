@@ -74,4 +74,8 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	return move(copy);
 }
 
+void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

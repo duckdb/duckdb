@@ -41,4 +41,8 @@ string BoundColumnRefExpression::ToString() const {
 	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
 }
 
+void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

@@ -39,4 +39,8 @@ unique_ptr<Expression> BoundUnnestExpression::Copy() {
 	return move(copy);
 }
 
+void BoundUnnestExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

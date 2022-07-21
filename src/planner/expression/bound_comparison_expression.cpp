@@ -33,4 +33,8 @@ unique_ptr<Expression> BoundComparisonExpression::Copy() {
 	return move(copy);
 }
 
+void BoundComparisonExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

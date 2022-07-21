@@ -18,14 +18,13 @@ void LogicalProjection::ResolveTypes() {
 }
 
 void LogicalProjection::Serialize(FieldWriter &writer) const {
-	// writer.WriteSerializableList<Expression>(expressions);
+	writer.WriteSerializableList<Expression>(expressions);
 	writer.WriteField(table_index);
 }
 
 unique_ptr<LogicalOperator> LogicalProjection::Deserialize(FieldReader &source) {
-	// auto expressions =  source.ReadRequiredSerializableList<Expression>();
+	auto expressions = source.ReadRequiredSerializableList<Expression>();
 	auto table_index = source.ReadRequired<idx_t>();
-	vector<unique_ptr<Expression>> expressions;
 	return make_unique<LogicalProjection>(table_index, move(expressions));
 }
 

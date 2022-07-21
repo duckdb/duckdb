@@ -38,4 +38,8 @@ unique_ptr<Expression> BoundBetweenExpression::Copy() {
 	return move(copy);
 }
 
+void BoundBetweenExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

@@ -64,4 +64,8 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 	return move(result);
 }
 
+void BoundParameterExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

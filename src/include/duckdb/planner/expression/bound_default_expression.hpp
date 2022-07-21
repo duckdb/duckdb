@@ -33,5 +33,7 @@ public:
 	unique_ptr<Expression> Copy() override {
 		return make_unique<BoundDefaultExpression>(return_type);
 	}
+
+	void Serialize(FieldWriter &writer) const override;
 };
 } // namespace duckdb

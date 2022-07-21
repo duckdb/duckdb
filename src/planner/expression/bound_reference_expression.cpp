@@ -37,4 +37,8 @@ unique_ptr<Expression> BoundReferenceExpression::Copy() {
 	return make_unique<BoundReferenceExpression>(alias, return_type, index);
 }
 
+void BoundReferenceExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

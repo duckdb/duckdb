@@ -163,4 +163,8 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 	return move(copy);
 }
 
+void BoundCastExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

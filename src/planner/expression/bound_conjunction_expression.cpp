@@ -40,4 +40,8 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 	return move(copy);
 }
 
+void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

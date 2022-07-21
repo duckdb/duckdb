@@ -57,5 +57,7 @@ public:
 	unique_ptr<Expression> Copy() override;
 
 	bool PropagatesNullValues() const override;
+
+	void Serialize(FieldWriter &writer) const override;
 };
 } // namespace duckdb

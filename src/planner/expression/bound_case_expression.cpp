@@ -57,4 +57,8 @@ unique_ptr<Expression> BoundCaseExpression::Copy() {
 	return move(new_case);
 }
 
+void BoundCaseExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

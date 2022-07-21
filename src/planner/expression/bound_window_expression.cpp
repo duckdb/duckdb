@@ -122,4 +122,8 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	return move(new_window);
 }
 
+void BoundWindowExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb

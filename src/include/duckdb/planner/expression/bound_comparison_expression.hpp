@@ -25,6 +25,7 @@ public:
 	bool Equals(const BaseExpression *other) const override;
 
 	unique_ptr<Expression> Copy() override;
+	void Serialize(FieldWriter &writer) const override;
 
 public:
 	static LogicalType BindComparison(LogicalType left_type, LogicalType right_type);

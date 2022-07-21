@@ -33,4 +33,8 @@ unique_ptr<Expression> BoundConstantExpression::Copy() {
 	return move(copy);
 }
 
+void BoundConstantExpression::Serialize(FieldWriter &writer) const {
+	throw NotImplementedException(ExpressionTypeToString(type));
+}
+
 } // namespace duckdb
