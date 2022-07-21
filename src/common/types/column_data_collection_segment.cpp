@@ -16,7 +16,9 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
 	allocator->AllocateData(type_size * STANDARD_VECTOR_SIZE + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
 	                        meta_data.offset, chunk_state);
-	chunk_meta.block_ids.insert(meta_data.block_id);
+	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+		chunk_meta.block_ids.insert(meta_data.block_id);
+	}
 
 	auto index = vector_data.size();
 	vector_data.push_back(meta_data);

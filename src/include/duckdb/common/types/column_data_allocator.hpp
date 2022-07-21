@@ -34,7 +34,9 @@ public:
 	//! allocator in case of BUFFER_MANAGER_ALLOCATOR.
 	Allocator &GetAllocator();
 	//! Returns the allocator type
-	ColumnDataAllocatorType GetType();
+	ColumnDataAllocatorType GetType() {
+		return type;
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
