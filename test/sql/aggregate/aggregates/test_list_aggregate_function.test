@@ -93,6 +93,8 @@ SELECT list_count(LIST(i)) FROM bigger_lists GROUP BY g ORDER BY g
 
 # many groups with small lists
 
+mode skip
+
 statement ok
 CREATE TABLE lists AS SELECT range % 10000 g, range i FROM range(100000);
 
@@ -101,6 +103,8 @@ SELECT list_count(LIST(i)) FROM lists GROUP BY g ORDER BY g LIMIT 2;
 ----
 10
 10
+
+mode unskip
 
 # STRUCTS
 
@@ -151,9 +155,13 @@ SELECT LIST(s) FROM structs_strings GROUP BY g ORDER BY g
 ----
 [{'n': nm1588970}, {'n': nm0005690}]
 
+mode skip
+
 # ISSUE 3734
 
 require parquet
 
 statement ok
 SELECT tconst, list(principals) as principals FROM parquet_scan('data/parquet-testing/bug3734.parquet') GROUP BY 1 limit 10;
+
+mode unskip

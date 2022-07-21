@@ -5,12 +5,6 @@
 
 namespace duckdb {
 
-// unique_ptr<data_t[]> ListFun::AllocatePrimitiveData(uint16_t &capacity) {
-//	//return malloc(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T)));
-//	//return unique_ptr<data_t[]>(new data_t[100]);
-//	return unique_ptr<data_t[]>(new data_t[sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))]);
-// }
-
 // allocate the header size, the size of the null_mask and the data size (capacity * T)
 /*
     #3 -> {
@@ -483,7 +477,6 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 			auto data = TemplatedGetPrimitiveData<char>(child_segment);
 			str.append(data, child_segment->count);
 			linked_child_list->first_segment = child_segment->next;
-			delete child_segment;
 		}
 		linked_child_list->last_segment = nullptr;
 
@@ -525,11 +518,6 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 			GetDataFromSegment(struct_children[child_count], *children[child_count], total_count);
 		}
 
-		// we got all desired data from the child vectors
-		for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-			delete struct_children[child_count];
-		}
-
 	} else {
 		auto aggr_vector_data = FlatVector::GetData(result);
 
@@ -551,11 +539,51 @@ void ListFun::BuildListVector(LinkedList *linked_list, Vector &result) {
 
 		total_count += segment->count;
 		linked_list->first_segment = segment->next;
-		delete segment;
 	}
 
 	linked_list->last_segment = nullptr;
-	// delete linked_list;
+}
+
+void ListFun::DestroySegment(ListSegment *segment, const LogicalType &type) {
+
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+
+		auto linked_child_list = GetListChildData(segment);
+		DestroyLinkedList(linked_child_list, LogicalType::VARCHAR);
+
+	} else if (type.id() == LogicalTypeId::LIST) {
+
+		auto linked_child_list = GetListChildData(segment);
+		auto child_type = ListType::GetChildType(type);
+		DestroyLinkedList(linked_child_list, child_type);
+
+	} else if (type.id() == LogicalTypeId::STRUCT) {
+
+		auto child_types = StructType::GetChildTypes(type);
+		auto child_list = GetStructData(segment);
+
+		for (idx_t i = 0; i < StructType::GetChildCount(type); i++) {
+			auto child_segment = child_list[i];
+			DestroySegment(child_segment, child_types[i].second);
+		}
+		for (idx_t i = 0; i < StructType::GetChildCount(type); i++) {
+			auto child_segment = child_list[i];
+			delete child_segment;
+		}
+	}
+}
+
+void ListFun::DestroyLinkedList(LinkedList *linked_list, const LogicalType &type) {
+
+	while (linked_list->first_segment) {
+
+		auto segment = linked_list->first_segment;
+		DestroySegment(segment, type);
+
+		linked_list->first_segment = segment->next;
+		delete segment;
+	}
+	delete linked_list;
 }
 
 struct ListAggState {
@@ -572,10 +600,10 @@ struct ListFunction {
 
 	template <class STATE>
 	static void Destroy(STATE *state) {
+		D_ASSERT(state);
 		if (state->linked_list) {
-			// TODO: do I need to recursively free/traverse all the segments?
-			// TODO: or are they deleted during the finalize? Might be faster?
-			delete state->linked_list;
+			D_ASSERT(state->type);
+			ListFun::DestroyLinkedList(state->linked_list, *state->type);
 		}
 		if (state->type) {
 			delete state->type;

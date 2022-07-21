@@ -68,6 +68,9 @@ struct ListFun {
 	static void AppendRow(LinkedList *linked_list, Vector &input, idx_t &entry_idx, idx_t &count);
 	static void GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &total_count);
 	static void BuildListVector(LinkedList *linked_list, Vector &result);
+
+	static void DestroyLinkedList(LinkedList *linked_list, const LogicalType &type);
+	static void DestroySegment(ListSegment *segment, const LogicalType &type);
 };
 
 } // namespace duckdb
