@@ -34,3 +34,45 @@ select * from read_csv_auto('data/csv/hive-partitioning/mismatching_names/*/*/te
 # If the key names don't add up, we throw
 statement error
 select * from read_csv_auto('data/csv/hive-partitioning/mismatching_count/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1)
+
+# Now we do a bunch of filtering on the partitions, to test the file skipping mechanism
+query IIII
+select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where part='a'
+----
+1	value1	a	2012-01-01
+
+query IIII
+select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/different_order/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where part='b'
+----
+2	value2	b	2013-01-01
+
+query IIII
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where part_cast > 0 and part_cast < 5000;
+----
+1	value1	1000	2012-01-01
+
+query IIII
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where part_cast > 5000;
+----
+2	value2	9000	2013-01-01
+
+query IIII
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where date_cast > CAST('2000-01-01' as DATE) and date_cast < CAST('2012-12-12' as DATE);
+----
+1	value1	1000	2012-01-01
+
+query IIII
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where date_cast > CAST('2000-01-01' as DATE) order by date_cast;
+----
+1	value1	1000	2012-01-01
+2	value2	9000	2013-01-01
+
+query IIII
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where date_cast=CAST('2012-01-01' as DATE) OR part_cast=9000 ORDER BY date_cast;
+----
+1	value1	1000	2012-01-01
+2	value2	9000	2013-01-01
+
+query IIII
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where date_cast=CAST('2000-01-01' as DATE) OR part_cast=2000;
+----

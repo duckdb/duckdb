@@ -119,10 +119,6 @@ public:
 	                                                 const duckdb_parquet::format::FileMetaData *file_meta_data);
 	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
 
-	// This method can be used to skip a file to be scanned based on its name
-	static bool CanSkipFile(string &filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters,
-	                        const vector<column_t> &column_ids, const vector<string> &names);
-
 private:
 	void InitializeSchema(const vector<string> &names, const vector<LogicalType> &expected_types_p,
 	                      const vector<column_t> &column_ids, const string &initial_filename_p);

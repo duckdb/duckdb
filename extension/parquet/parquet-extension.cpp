@@ -70,6 +70,26 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	}
 };
 
+struct ParquetWriteBindData : public TableFunctionData {
+	vector<LogicalType> sql_types;
+	string file_name;
+	vector<string> column_names;
+	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+	idx_t row_group_size = 100000;
+};
+
+struct ParquetWriteGlobalState : public GlobalFunctionData {
+	unique_ptr<ParquetWriter> writer;
+};
+
+struct ParquetWriteLocalState : public LocalFunctionData {
+	explicit ParquetWriteLocalState(Allocator &allocator) {
+		buffer = make_unique<ChunkCollection>(allocator);
+	}
+
+	unique_ptr<ChunkCollection> buffer;
+};
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -85,6 +105,7 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
+		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
 		set.AddFunction(table_function);
 		table_function.arguments = {LogicalType::LIST(LogicalType::VARCHAR)};
 		table_function.bind = ParquetScanBindList;
@@ -336,7 +357,6 @@ public:
 
 	static bool ParquetParallelStateNext(ClientContext &context, const ParquetReadBindData &bind_data,
 	                                     ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state) {
-
 		lock_guard<mutex> parallel_lock(parallel_state.lock);
 		if (parallel_state.row_group_index < parallel_state.current_reader->NumRowGroups()) {
 			// groups remain in the current parquet file: read the next group
@@ -353,12 +373,6 @@ public:
 			while (parallel_state.file_index + 1 < bind_data.files.size()) {
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
-
-				if (ParquetReader::CanSkipFile(file, bind_data.initial_reader->parquet_options.hive_partitioning,
-				                               bind_data.initial_reader->parquet_options.filename,
-				                               scan_data.table_filters, scan_data.column_ids, bind_data.names)) {
-					continue;
-				}
 
 				parallel_state.current_reader =
 				    make_shared<ParquetReader>(context, file, bind_data.names, bind_data.types, scan_data.column_ids,
@@ -380,26 +394,11 @@ public:
 		}
 		return false;
 	}
-};
 
-struct ParquetWriteBindData : public TableFunctionData {
-	vector<LogicalType> sql_types;
-	string file_name;
-	vector<string> column_names;
-	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
-	idx_t row_group_size = 100000;
-};
-
-struct ParquetWriteGlobalState : public GlobalFunctionData {
-	unique_ptr<ParquetWriter> writer;
-};
-
-struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(Allocator &allocator) {
-		buffer = make_unique<ChunkCollection>(allocator);
+	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p, vector<unique_ptr<Expression>> &filters){
+		auto data = (ParquetReadBindData *)bind_data_p;
+		HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->parquet_options.hive_partitioning, data->initial_reader->parquet_options.filename, true);;
 	}
-
-	unique_ptr<ChunkCollection> buffer;
 };
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,

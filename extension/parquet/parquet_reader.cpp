@@ -363,7 +363,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(const duckdb_parquet::forma
 	}
 
 	if (parquet_options.hive_partitioning) {
-		auto res = ParseHivePartitions(file_name);
+		auto res = HivePartitioning::Parse(file_name);
 
 		for (auto &partition : res) {
 			Value val = Value(partition.second);
@@ -411,7 +411,7 @@ void ParquetReader::InitializeSchema(const vector<string> &expected_names, const
 
 	// Add generated constant column for filename
 	if (parquet_options.hive_partitioning) {
-		auto partitions = ParseHivePartitions(file_name);
+		auto partitions = HivePartitioning::Parse(file_name);
 		for (auto &part : partitions) {
 			return_types.emplace_back(LogicalType::VARCHAR);
 			names.emplace_back(part.first);
@@ -859,40 +859,6 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		D_ASSERT(0);
 		break;
 	}
-}
-
-bool ParquetReader::CanSkipFile(string &filename, bool hive_enabled, bool filename_enabled, TableFilterSet *filters,
-                                const vector<column_t> &column_ids, const vector<string> &names) {
-	if (!filters || (!hive_enabled && !filename_enabled)) {
-		return false;
-	}
-
-	parquet_filter_t filter_mask;
-	filter_mask.set();
-
-	auto partitions = ParseHivePartitions(filename);
-
-	for (auto &filter : filters->filters) {
-		auto filter_col_name = names[column_ids[filter.first]];
-
-		if (hive_enabled) {
-			for (auto &partition : partitions) {
-				if (filter_col_name == partition.first) {
-					// We filter by a hive partition
-					Vector v(Value(partition.second));
-					ApplyFilter(v, *filter.second, filter_mask, 1);
-				}
-			}
-		}
-		if (filename_enabled) {
-			if (filter_col_name == "filename") {
-				Vector v((Value(filename)));
-				ApplyFilter(v, *filter.second, filter_mask, 1);
-			}
-		}
-	}
-
-	return !filter_mask.test(0);
 }
 
 void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
