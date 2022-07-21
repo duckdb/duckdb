@@ -1,0 +1,115 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/column_data_collection_segment.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column_data_allocator.hpp"
+
+namespace duckdb {
+
+struct VectorChildIndex {
+	explicit VectorChildIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
+	}
+
+	idx_t index;
+
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
+struct VectorDataIndex {
+	explicit VectorDataIndex(idx_t index = DConstants::INVALID_INDEX) : index(index) {
+	}
+
+	idx_t index;
+
+	bool IsValid() {
+		return index != DConstants::INVALID_INDEX;
+	}
+};
+
+struct VectorMetaData {
+	//! Where the vector data lives
+	uint32_t block_id;
+	uint32_t offset;
+	//! The number of entries present in this vector
+	uint16_t count;
+
+	//! Child data of this vector (used only for lists and structs)
+	//! Note: child indices are stored with one layer of indirection
+	//! The child_index here refers to the `child_indices` array in the ColumnDataCollectionSegment
+	//! The entry in the child_indices array then refers to the actual `VectorMetaData` index
+	//! In case of structs, the child_index refers to the FIRST child in the `child_indices` array
+	//! Subsequent children are stored consecutively, i.e.
+	//! first child: segment.child_indices[child_index + 0]
+	//! nth child  : segment.child_indices[child_index + (n - 1)]
+	VectorChildIndex child_index;
+	//! Next vector entry (in case there is more data - used only in case of children of lists)
+	VectorDataIndex next_data;
+};
+
+struct ChunkMetaData {
+	//! The set of vectors of the chunk
+	vector<VectorDataIndex> vector_data;
+	//! The block ids referenced by the chunk
+	unordered_set<uint32_t> block_ids;
+	//! The number of entries in the chunk
+	uint16_t count;
+};
+
+class ColumnDataCollectionSegment {
+public:
+	ColumnDataCollectionSegment(BufferManager &buffer_manager, vector<LogicalType> types_p)
+	    : allocator(buffer_manager), types(move(types_p)), count(0) {
+	}
+
+	ColumnDataAllocator allocator;
+	//! The types of the chunks
+	vector<LogicalType> types;
+	//! The number of entries in the internal column data
+	idx_t count;
+	//! Set of chunk meta data
+	vector<ChunkMetaData> chunk_data;
+	//! Set of vector meta data
+	vector<VectorMetaData> vector_data;
+	//! The set of child indices
+	vector<VectorDataIndex> child_indices;
+	//! The string heap for the column data collection
+	// FIXME: we should get rid of the string heap and store strings as LIST<UINT8>
+	StringHeap heap;
+
+public:
+	void AllocateNewChunk();
+	//! Allocate space for a vector of a specific type in the segment
+	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+	                               ChunkManagementState *chunk_state = nullptr);
+	//! Allocate space for a vector during append,
+	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
+	                               ColumnDataAppendState &append_state);
+
+	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
+	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
+
+	idx_t ReadVector(ChunkManagementState &state, VectorDataIndex vector_index, Vector &result);
+
+	VectorDataIndex GetChildIndex(VectorChildIndex index, idx_t child_entry = 0);
+	VectorChildIndex AddChildIndex(VectorDataIndex index);
+	VectorChildIndex ReserveChildren(idx_t child_count);
+	void SetChildIndex(VectorChildIndex base_idx, idx_t child_number, VectorDataIndex index);
+
+	VectorMetaData &GetVectorData(VectorDataIndex index) {
+		D_ASSERT(index.index < vector_data.size());
+		return vector_data[index.index];
+	}
+
+	void Verify();
+};
+
+} // namespace duckdb

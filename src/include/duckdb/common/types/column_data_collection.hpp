@@ -19,7 +19,10 @@ class BufferManager;
 class BlockHandle;
 class ClientContext;
 struct ColumnDataCopyFunction;
+class ColumnDataAllocator;
 class ColumnDataCollectionSegment;
+
+enum class ColumnDataAllocatorType { BUFFER_MANAGER_ALLOCATOR, IN_MEMORY_ALLOCATOR };
 
 struct ChunkManagementState {
 	unordered_map<idx_t, BufferHandle> handles;
@@ -52,11 +55,17 @@ struct ColumnDataLocalScanState {
 //! It is efficient to read and scan
 class ColumnDataCollection {
 public:
+	//! Constructs an in-memory column data collection from an allocator
+	ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
+	//! Constructs a buffer-managed column data collection
 	ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
-	ColumnDataCollection(ClientContext &context, vector<LogicalType> types);
+	//! Constructs either an in-memory or a buffer-managed column data collection
+	ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	                     ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
-	//! between multiple column data collections. Note that after one CDC inherits blocks from another, the other
-	//! cannot be written to anymore (i.e. we take ownership of the half-written
+	//! between multiple column data collections and prevents wasting space.
+	//! Note that after one CDC inherits blocks from another, the other
+	//! cannot be written to anymore (i.e. we take ownership of the half-written blocks).
 	ColumnDataCollection(ColumnDataCollection &parent);
 	~ColumnDataCollection();
 
@@ -113,6 +122,11 @@ public:
 	DUCKDB_API void Reset();
 
 private:
+	//! Initialize an in-memory column data collection
+	void Initialize(Allocator &allocator, vector<LogicalType> types);
+	//! Initialize a buffer-managed column data collection
+	void Initialize(BufferManager &manager, vector<LogicalType> types);
+
 	//! Creates a new segment within the ColumnDataCollection
 	void CreateSegment();
 
@@ -122,7 +136,7 @@ private:
 	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 
 private:
-	//! BufferManager
+	//! The Column Data Allocator
 	BufferManager &buffer_manager;
 	//! The types of the stored entries
 	vector<LogicalType> types;

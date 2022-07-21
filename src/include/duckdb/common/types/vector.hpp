@@ -29,7 +29,6 @@ struct VectorData {
 class VectorCache;
 class VectorStructBuffer;
 class VectorListBuffer;
-class ChunkCollection;
 
 struct SelCache;
 

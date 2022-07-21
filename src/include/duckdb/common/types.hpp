@@ -190,7 +190,7 @@ struct string_t;
 
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;
-// we should be using single_thread_ptr here but cross-thread access to ChunkCollections currently prohibits this.
+//! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;
 

@@ -19,7 +19,6 @@ namespace duckdb {
 class BufferHandle;
 class VectorBuffer;
 class Vector;
-class ChunkCollection;
 
 enum class VectorBufferType : uint8_t {
 	STANDARD_BUFFER,     // standard buffer, holds a single array of data
