@@ -57,10 +57,10 @@ public:
 	// Assumes both src and dst to be of the correct size
 	template <class T>
 	inline static void UnPackBuffer(data_ptr_t dst, data_ptr_t src, idx_t count, bitpacking_width_t width,
-	                                bool skip_sign_extension = false) {
+	                                T frame_of_reference, bool skip_sign_extension = false) {
 
 		for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
-			UnPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, skip_sign_extension);
+			UnPackGroup<T>(dst + i * sizeof(T), src + (i * width) / 8, width, frame_of_reference, skip_sign_extension);
 		}
 	}
 
@@ -72,9 +72,9 @@ public:
 
 	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
 	template <class T>
-	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width, T frame_of_reference,
 	                               bool skip_sign_extension = false) {
-		return UnPackGroup<T>(dst, src, width, skip_sign_extension);
+		return UnPackGroup<T>(dst, src, width, frame_of_reference, skip_sign_extension);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
@@ -178,7 +178,19 @@ private:
 	}
 
 	template <class T>
-	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	static void ApplyFrameOfReference(data_ptr_t dst, T frame_of_reference) {
+		if (!frame_of_reference) {
+			return;
+		}
+		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
+			T value = Load<T>(dst + i * sizeof(T));
+			value += frame_of_reference;
+			Store<T>(value, dst + i * sizeof(T));
+		}
+	}
+
+	template <class T>
+	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width, T frame_of_reference,
 	                        bool skip_sign_extension = false) {
 		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
 			duckdb_fastpforlib::fastunpack((const uint8_t *)src, (uint8_t *)dst, (uint32_t)width);
@@ -195,6 +207,8 @@ private:
 		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
 			SignExtend<T>(dst, width);
 		}
+
+		ApplyFrameOfReference(dst, frame_of_reference);
 	}
 
 	// Prevent compression at widths that are ineffective

@@ -19,8 +19,9 @@ namespace duckdb {
 static constexpr const idx_t BITPACKING_WIDTH_GROUP_SIZE = 1024;
 
 struct EmptyBitpackingWriter {
-	template <class T>
-	static void Operation(T *values, bool *validity, bitpacking_width_t width, idx_t count, void *data_ptr) {
+	template <class T, class T_U = typename std::make_unsigned<T>::type>
+	static void Operation(T_U *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
+	                      void *data_ptr) {
 	}
 };
 
@@ -39,9 +40,19 @@ public:
 public:
 	template <class OP>
 	void Flush() {
-		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T>(compression_buffer, compression_buffer_idx);
-		OP::Operation(compression_buffer, compression_buffer_validity, width, compression_buffer_idx, data_ptr);
-		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t);
+		auto frame_of_reference =
+		    *std::min_element<T *>(compression_buffer, compression_buffer + compression_buffer_idx);
+
+		for (idx_t i = 0; i < compression_buffer_idx; i++) {
+			compression_buffer[i] -= frame_of_reference;
+		}
+
+		auto unsigned_compression_buffer = (typename std::make_unsigned<T>::type *)&compression_buffer[0];
+		bitpacking_width_t width =
+		    BitpackingPrimitives::MinimumBitWidth(unsigned_compression_buffer, compression_buffer_idx);
+		OP::Operation(unsigned_compression_buffer, compression_buffer_validity, width, frame_of_reference,
+		              compression_buffer_idx, data_ptr);
+		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
 		compression_buffer_idx = 0;
 	}
 
@@ -129,12 +140,17 @@ public:
 
 public:
 	struct BitpackingWriter {
-		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width, idx_t count,
-		                      void *data_ptr) {
+		template <class VALUE_TYPE, class UNSIGNED_VALUE_TYPE = typename std::make_unsigned<VALUE_TYPE>::type>
+		static void Operation(UNSIGNED_VALUE_TYPE *values, bool *validity, bitpacking_width_t width,
+		                      VALUE_TYPE frame_of_reference, idx_t count, void *data_ptr) {
 			auto state = (BitpackingCompressState<T> *)data_ptr;
+			auto total_bits_needed = (width * BITPACKING_WIDTH_GROUP_SIZE);
+			D_ASSERT(total_bits_needed % 8 == 0);
+			auto total_bytes_needed = total_bits_needed / 8;
+			total_bytes_needed += sizeof(bitpacking_width_t);
+			total_bytes_needed += sizeof(VALUE_TYPE);
 
-			if (state->RemainingSize() < (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
+			if (state->RemainingSize() < total_bytes_needed) {
 				// Segment is full
 				auto row_start = state->current_segment->start + state->current_segment->count;
 				state->FlushSegment();
@@ -143,11 +159,11 @@ public:
 
 			for (idx_t i = 0; i < count; i++) {
 				if (validity[i]) {
-					NumericStatistics::Update<T>(state->current_segment->stats, values[i]);
+					NumericStatistics::Update<UNSIGNED_VALUE_TYPE>(state->current_segment->stats, values[i]);
 				}
 			}
 
-			state->WriteValues(values, width, count);
+			state->WriteValues(values, width, frame_of_reference, count);
 		}
 	};
 
@@ -179,12 +195,15 @@ public:
 		}
 	}
 
-	void WriteValues(T *values, bitpacking_width_t width, idx_t count) {
+	template <class T_U = typename std::make_unsigned<T>::type>
+	void WriteValues(T_U *values, bitpacking_width_t width, T frame_of_reference, idx_t count) {
 		// TODO we can optimize this by stopping early if count < BITPACKING_WIDTH_GROUP_SIZE
-		BitpackingPrimitives::PackBuffer<T, false>(data_ptr, values, count, width);
+		BitpackingPrimitives::PackBuffer<T_U, false>(data_ptr, values, count, width);
 		data_ptr += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8;
 
 		Store<bitpacking_width_t>(width, width_ptr);
+		width_ptr -= sizeof(T);
+		Store<T>(frame_of_reference, width_ptr);
 		width_ptr -= sizeof(bitpacking_width_t);
 
 		current_segment->count += count;
@@ -256,18 +275,23 @@ public:
 
 	BufferHandle handle;
 
-	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
+	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, T, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 	idx_t position_in_group = 0;
 	data_ptr_t current_width_group_ptr;
 	data_ptr_t bitpacking_width_ptr;
 	bitpacking_width_t current_width;
+	T current_frame_of_reference;
 
 public:
+	//! Loads the current group header, and sets pointer to next header
 	void LoadCurrentBitWidth() {
 		D_ASSERT(bitpacking_width_ptr > handle.Ptr() && bitpacking_width_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
 		current_width = Load<bitpacking_width_t>(bitpacking_width_ptr);
+		bitpacking_width_ptr -= sizeof(T);
+		current_frame_of_reference = Load<T>(bitpacking_width_ptr);
+		bitpacking_width_ptr -= sizeof(bitpacking_width_t);
 		LoadDecompressFunction();
 	}
 
@@ -283,8 +307,7 @@ public:
 				position_in_group = 0;
 				current_width_group_ptr += (current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
 
-				// Update width pointer and load new width
-				bitpacking_width_ptr -= sizeof(bitpacking_width_t);
+				// Load new width
 				LoadCurrentBitWidth();
 
 				skip_count -= skipping;
@@ -321,7 +344,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 			memcpy(result_data + result_offset, scan_state.current_width_group_ptr, scan_count * sizeof(T));
 			scan_state.current_width_group_ptr += scan_count * sizeof(T);
-			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
 			scan_state.LoadCurrentBitWidth();
 			return;
 		}
@@ -337,7 +359,6 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		// Exhausted this width group, move pointers to next group and load bitwidth for next group.
 		if (scan_state.position_in_group >= BITPACKING_WIDTH_GROUP_SIZE) {
 			scan_state.position_in_group = 0;
-			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
 			scan_state.current_width_group_ptr += (scan_state.current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
 			scan_state.LoadCurrentBitWidth();
 		}
@@ -359,12 +380,13 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
 			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
-			                               scan_state.current_width, skip_sign_extend);
+			                               scan_state.current_width, scan_state.current_frame_of_reference,
+			                               skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
 			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer,
 			                               decompression_group_start_pointer, scan_state.current_width,
-			                               skip_sign_extend);
+			                               scan_state.current_frame_of_reference, skip_sign_extend);
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
@@ -403,7 +425,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
 
 	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                               scan_state.current_width, skip_sign_extend);
+	                               scan_state.current_width, scan_state.current_frame_of_reference, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 }
