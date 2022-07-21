@@ -146,13 +146,37 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	return vector_count;
 }
 
-void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk) {
+void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,
+                                            const vector<column_t> &column_ids) {
+	D_ASSERT(chunk.ColumnCount() == column_ids.size());
 	InitializeChunkState(chunk_index, state);
 	auto &chunk_meta = chunk_data[chunk_index];
-	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
-		ReadVector(state, chunk_meta.vector_data[vector_idx], chunk.data[vector_idx]);
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto vector_idx = column_ids[i];
+		D_ASSERT(vector_idx < chunk_meta.vector_data.size());
+		ReadVector(state, chunk_meta.vector_data[vector_idx], chunk.data[i]);
 	}
 	chunk.SetCardinality(chunk_meta.count);
+}
+
+idx_t ColumnDataCollectionSegment::ChunkCount() const {
+	return chunk_data.size();
+}
+
+void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result) {
+	vector<column_t> column_ids;
+	column_ids.reserve(types.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		column_ids.push_back(i);
+	}
+	FetchChunk(chunk_idx, result, column_ids);
+}
+
+void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result, vector<column_t> column_ids) {
+	D_ASSERT(chunk_idx < chunk_data.size());
+	ChunkManagementState state;
+	InitializeChunkState(chunk_idx, state);
+	ReadChunk(chunk_idx, state, result, column_ids);
 }
 
 void ColumnDataCollectionSegment::Verify() {

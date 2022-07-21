@@ -13,7 +13,7 @@ PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : Ph
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
 	}
 
 	mutex glock;
@@ -23,7 +23,7 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
 	}
 
 	BatchedDataCollection data;
@@ -48,22 +48,10 @@ void PhysicalBatchCollector::Combine(ExecutionContext &context, GlobalSinkState 
 SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   GlobalSinkState &gstate_p) const {
 	auto &gstate = (BatchCollectorGlobalState &)gstate_p;
-	auto result =
-	    make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
-	DataChunk output;
-	output.Initialize(BufferAllocator::Get(context), types);
-
-	BatchedChunkScanState state;
-	gstate.data.InitializeScan(state);
-	while (true) {
-		output.Reset();
-		gstate.data.Scan(state, output);
-		if (output.size() == 0) {
-			break;
-		}
-		result->collection.Append(output);
-	}
-
+	auto collection = gstate.data.FetchCollection();
+	D_ASSERT(collection);
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection),
+	                                                   context.shared_from_this());
 	gstate.result = move(result);
 	return SinkFinalizeType::READY;
 }

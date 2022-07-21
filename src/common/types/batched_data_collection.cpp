@@ -4,12 +4,7 @@
 
 namespace duckdb {
 
-BatchedDataCollection::BatchedDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p)
-    : buffer_manager(buffer_manager), types(move(types_p)) {
-}
-
-BatchedDataCollection::BatchedDataCollection(ClientContext &context, vector<LogicalType> types_p)
-    : BatchedDataCollection(BufferManager::GetBufferManager(context), move(types_p)) {
+BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : types(move(types_p)) {
 }
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
@@ -25,14 +20,15 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 		if (last_collection.collection) {
 			new_collection = make_unique<ColumnDataCollection>(*last_collection.collection);
 		} else {
-			new_collection = make_unique<ColumnDataCollection>(buffer_manager, types);
+			new_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 		}
 		last_collection.collection = new_collection.get();
 		last_collection.batch_index = batch_index;
+		new_collection->InitializeAppend(last_collection.append_state);
 		collection = new_collection.get();
 		data.insert(make_pair(batch_index, move(new_collection)));
 	}
-	collection->Append(input);
+	collection->Append(last_collection.append_state, input);
 }
 
 void BatchedDataCollection::Merge(BatchedDataCollection &other) {
@@ -71,6 +67,23 @@ void BatchedDataCollection::Scan(BatchedChunkScanState &state, DataChunk &output
 		}
 		state.iterator->second->InitializeScan(state.scan_state);
 	}
+}
+
+unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
+	unique_ptr<ColumnDataCollection> result;
+	for (auto &entry : data) {
+		if (entry.second) {
+			result = move(entry.second);
+		} else {
+			result->Combine(*entry.second);
+		}
+	}
+	data.clear();
+	if (!result) {
+		// empty result
+		return make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	}
+	return result;
 }
 
 string BatchedDataCollection::ToString() const {

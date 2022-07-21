@@ -45,23 +45,30 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	return wrapper->result->collection.Count();
+	if (!wrapper->result->success) {
+		return 0;
+	}
+	return wrapper->result->RowCount();
 }
 
 idx_t duckdb_arrow_column_count(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	return wrapper->result->types.size();
+	return wrapper->result->ColumnCount();
 }
 
 idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
+	if (!wrapper->result->success) {
+		return 0;
+	}
 	idx_t rows_changed = 0;
-	idx_t row_count = wrapper->result->collection.Count();
+	auto &collection = wrapper->result->Collection();
+	idx_t row_count = collection.Count();
 	if (row_count > 0 && wrapper->result->properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
-		auto row_changes = wrapper->result->GetValue(0, 0);
-		if (!row_changes.IsNull() && row_changes.TryCastAs(LogicalType::BIGINT)) {
-			rows_changed = row_changes.GetValue<int64_t>();
-		}
+		auto rows = collection.GetRows();
+		D_ASSERT(row_count == 1);
+		D_ASSERT(rows.size() == 1);
+		rows_changed = rows[0].GetValue(0).GetValue<int64_t>();
 	}
 	return rows_changed;
 }

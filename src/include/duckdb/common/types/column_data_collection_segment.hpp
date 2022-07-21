@@ -93,7 +93,8 @@ public:
 	                               ColumnDataAppendState &append_state);
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
-	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk);
+	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,
+	               const vector<column_t> &column_ids);
 
 	idx_t ReadVector(ChunkManagementState &state, VectorDataIndex vector_index, Vector &result);
 
@@ -106,6 +107,10 @@ public:
 		D_ASSERT(index.index < vector_data.size());
 		return vector_data[index.index];
 	}
+
+	idx_t ChunkCount() const;
+	void FetchChunk(idx_t chunk_idx, DataChunk &result);
+	void FetchChunk(idx_t chunk_idx, DataChunk &result, vector<column_t> column_ids);
 
 	void Verify();
 };

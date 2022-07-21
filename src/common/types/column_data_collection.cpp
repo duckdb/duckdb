@@ -3,6 +3,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -58,11 +59,13 @@ ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> alloc
 ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
     : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), move(types_p)) {
+	D_ASSERT(!types.empty());
 }
 
 ColumnDataCollection::ColumnDataCollection(ColumnDataCollection &other)
     : ColumnDataCollection(other.allocator, other.types) {
 	other.finished_append = true;
+	D_ASSERT(!types.empty());
 }
 
 ColumnDataCollection::~ColumnDataCollection() {
@@ -81,6 +84,107 @@ void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
 
 void ColumnDataCollection::CreateSegment() {
 	segments.emplace_back(make_unique<ColumnDataCollectionSegment>(allocator, types));
+}
+
+//===--------------------------------------------------------------------===//
+// ColumnDataRow
+//===--------------------------------------------------------------------===//
+ColumnDataRow::ColumnDataRow(DataChunk &chunk_p, idx_t row_index, idx_t base_index)
+    : chunk(chunk_p), row_index(row_index), base_index(base_index) {
+}
+
+Value ColumnDataRow::GetValue(idx_t column_index) const {
+	D_ASSERT(column_index < chunk.ColumnCount());
+	D_ASSERT(row_index < chunk.size());
+	return chunk.data[column_index].GetValue(row_index);
+}
+
+idx_t ColumnDataRow::RowIndex() const {
+	return base_index + row_index;
+}
+
+//===--------------------------------------------------------------------===//
+// ColumnDataRowCollection
+//===--------------------------------------------------------------------===//
+ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &collection) {
+	if (collection.Count() == 0) {
+		return;
+	}
+	// read all the chunks
+	ColumnDataScanState scan_state;
+	collection.InitializeScan(scan_state);
+	while (true) {
+		auto chunk = make_unique<DataChunk>();
+		collection.InitializeScanChunk(*chunk);
+		if (!collection.Scan(scan_state, *chunk)) {
+			break;
+		}
+		chunks.push_back(move(chunk));
+	}
+	// now create all of the column data rows
+	rows.reserve(collection.Count());
+	idx_t base_row = 0;
+	for (auto &chunk : chunks) {
+		for (idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+			rows.emplace_back(*chunk, row_idx, base_row);
+		}
+		base_row += chunk->size();
+	}
+}
+
+bool ColumnDataRowCollection::empty() const {
+	return rows.empty();
+}
+
+idx_t ColumnDataRowCollection::size() const {
+	return rows.size();
+}
+
+ColumnDataRow &ColumnDataRowCollection::operator[](idx_t i) {
+	return rows[i];
+}
+
+const ColumnDataRow &ColumnDataRowCollection::operator[](idx_t i) const {
+	return rows[i];
+}
+
+Value ColumnDataRowCollection::GetValue(idx_t column, idx_t index) const {
+	return rows[index].GetValue(column);
+}
+
+//===--------------------------------------------------------------------===//
+// ColumnDataRowIterator
+//===--------------------------------------------------------------------===//
+ColumnDataCollection::ColumnDataRowIterator::ColumnDataRowIterator(ColumnDataCollection *collection_p)
+    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
+	scan_chunk = make_shared<DataChunk>();
+	if (collection) {
+		collection->InitializeScan(scan_state);
+		collection->InitializeScanChunk(*scan_chunk);
+	}
+}
+
+void ColumnDataCollection::ColumnDataRowIterator::Next() {
+	current_row.row_index++;
+	if (current_row.row_index >= scan_chunk->size()) {
+		current_row.base_index += scan_chunk->size();
+		if (collection) {
+			collection->Scan(scan_state, *scan_chunk);
+		}
+		current_row.row_index = 0;
+	}
+}
+
+ColumnDataCollection::ColumnDataRowIterator &ColumnDataCollection::ColumnDataRowIterator::operator++() {
+	Next();
+	return *this;
+}
+bool ColumnDataCollection::ColumnDataRowIterator::operator!=(const ColumnDataRowIterator &other) const {
+	return collection == other.collection && current_row.row_index == other.current_row.row_index &&
+	       current_row.base_index == other.current_row.base_index;
+}
+const ColumnDataRow &ColumnDataCollection::ColumnDataRowIterator::operator*() const {
+	return current_row;
 }
 
 //===--------------------------------------------------------------------===//
@@ -383,15 +487,29 @@ void ColumnDataCollection::Append(DataChunk &input) {
 // Scan
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::InitializeScan(ColumnDataScanState &state) const {
+	vector<column_t> column_ids;
+	column_ids.reserve(types.size());
+	for (idx_t i = 0; i < types.size(); i++) {
+		column_ids.push_back(i);
+	}
+	InitializeScan(state, move(column_ids));
+}
+
+void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids) const {
 	state.chunk_index = 0;
 	state.segment_index = 0;
 	state.current_row_index = 0;
 	state.next_row_index = 0;
 	state.current_chunk_state.handles.clear();
+	state.column_ids = move(column_ids);
 }
 
 void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state) const {
 	InitializeScan(state.scan_state);
+}
+
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids) const {
+	InitializeScan(state.scan_state, move(column_ids));
 }
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
@@ -408,7 +526,7 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 		}
 	}
 	auto &segment = *segments[segment_index];
-	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result);
+	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
 	lstate.current_row_index = row_index;
 	result.Verify();
 	return true;
@@ -416,6 +534,18 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 
 void ColumnDataCollection::InitializeScanChunk(DataChunk &chunk) const {
 	chunk.Initialize(allocator->GetAllocator(), types);
+}
+
+void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataChunk &chunk) const {
+	D_ASSERT(!state.column_ids.empty());
+	vector<LogicalType> chunk_types;
+	chunk_types.reserve(state.column_ids.size());
+	for (idx_t i = 0; i < state.column_ids.size(); i++) {
+		auto column_idx = state.column_ids[i];
+		D_ASSERT(column_idx < types.size());
+		chunk_types.push_back(types[state.column_ids[i]]);
+	}
+	chunk.Initialize(allocator->GetAllocator(), chunk_types);
 }
 
 bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index,
@@ -454,20 +584,32 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 
 	// found a chunk to scan -> scan it
 	auto &segment = *segments[segment_index];
-	segment.ReadChunk(chunk_index, state.current_chunk_state, result);
+	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
 	result.Verify();
 	return true;
 }
 
 void ColumnDataCollection::Scan(const std::function<void(DataChunk &)> &callback) {
+	vector<column_t> column_ids;
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		column_ids.push_back(i);
+	}
+	Scan(move(column_ids), callback);
+}
+
+void ColumnDataCollection::Scan(vector<column_t> column_ids, const std::function<void(DataChunk &)> &callback) {
 	ColumnDataScanState state;
-	InitializeScan(state);
+	InitializeScan(state, move(column_ids));
 
 	DataChunk chunk;
-	InitializeScanChunk(chunk);
+	InitializeScanChunk(state, chunk);
 	while (Scan(state, chunk)) {
 		callback(chunk);
 	}
+}
+
+ColumnDataRowCollection ColumnDataCollection::GetRows() const {
+	return ColumnDataRowCollection(*this);
 }
 
 //===--------------------------------------------------------------------===//
@@ -485,6 +627,33 @@ void ColumnDataCollection::Combine(ColumnDataCollection &other) {
 	Verify();
 }
 
+//===--------------------------------------------------------------------===//
+// Fetch
+//===--------------------------------------------------------------------===//
+idx_t ColumnDataCollection::ChunkCount() const {
+	idx_t chunk_count = 0;
+	for (auto &segment : segments) {
+		chunk_count += segment->ChunkCount();
+	}
+	return chunk_count;
+}
+
+void ColumnDataCollection::FetchChunk(idx_t chunk_idx, DataChunk &result) const {
+	D_ASSERT(chunk_idx < ChunkCount());
+	for (auto &segment : segments) {
+		if (chunk_idx >= segment->ChunkCount()) {
+			chunk_idx -= segment->ChunkCount();
+		} else {
+			segment->FetchChunk(chunk_idx, result);
+			return;
+		}
+	}
+	throw InternalException("Failed to find chunk in ColumnDataCollection");
+}
+
+//===--------------------------------------------------------------------===//
+// Helpers
+//===--------------------------------------------------------------------===//
 void ColumnDataCollection::Verify() {
 #ifdef DEBUG
 	// verify counts
@@ -505,13 +674,35 @@ void ColumnDataCollection::Print() const {
 	Printer::Print(ToString());
 }
 
-idx_t ColumnDataCollection::ChunkCount() const {
-	throw InternalException("FIXME: chunk count");
-}
-
 void ColumnDataCollection::Reset() {
 	count = 0;
 	segments.clear();
+}
+
+bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
+                                        string &error_message) {
+	if (left.ColumnCount() != right.ColumnCount()) {
+		error_message = "Column count mismatch";
+		return false;
+	}
+	if (left.Count() != right.Count()) {
+		error_message = "Row count mismatch";
+		return false;
+	}
+	auto left_rows = left.GetRows();
+	auto right_rows = right.GetRows();
+	for (idx_t r = 0; r < left.Count(); r++) {
+		for (idx_t c = 0; c < left.ColumnCount(); c++) {
+			auto lvalue = left_rows.GetValue(c, r);
+			auto rvalue = left_rows.GetValue(c, r);
+			if (!Value::ValuesAreEqual(lvalue, rvalue)) {
+				error_message =
+				    StringUtil::Format("%s <> %s (row: %lld, col: %lld)\n", lvalue.ToString(), rvalue.ToString(), r, c);
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 } // namespace duckdb

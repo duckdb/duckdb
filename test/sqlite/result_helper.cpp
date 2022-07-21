@@ -49,7 +49,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		}
 		FAIL_LINE(file_name, query_line, 0);
 	}
-	idx_t row_count = result.collection.Count();
+	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
 	idx_t total_value_count = row_count * column_count;
 	bool compare_hash =
@@ -81,7 +81,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		}
 		std::cerr << std::endl;
 		PrintLineSep();
-		for (idx_t r = 0; r < result.collection.Count(); r++) {
+		for (idx_t r = 0; r < result.RowCount(); r++) {
 			for (idx_t c = 0; c < result.ColumnCount(); c++) {
 				if (c != 0) {
 					std::cerr << "\t";
@@ -168,7 +168,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		}
 		idx_t expected_rows = comparison_values.size() / expected_column_count;
 		// we first check the counts: if the values are equal to the amount of rows we expect the results to be row-wise
-		bool row_wise = expected_column_count > 1 && comparison_values.size() == result.collection.Count();
+		bool row_wise = expected_column_count > 1 && comparison_values.size() == result.RowCount();
 		if (!row_wise) {
 			// the counts do not match up for it to be row-wise
 			// however, this can also be because the query returned an incorrect # of rows
@@ -197,13 +197,13 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 			fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 			FAIL_LINE(file_name, query_line, 0);
 		}
-		if (expected_rows != result.collection.Count()) {
+		if (expected_rows != result.RowCount()) {
 			if (column_count_mismatch) {
 				ColumnCountMismatch(original_expected_columns, row_wise);
 			}
 			PrintErrorHeader("Wrong row count in query!");
 			std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
-			          << termcolor::bold << result.collection.Count() << termcolor::reset << " rows" << std::endl;
+			          << termcolor::bold << result.RowCount() << termcolor::reset << " rows" << std::endl;
 			PrintLineSep();
 			PrintSQL(sql_query);
 			PrintLineSep();
@@ -458,7 +458,7 @@ string TestResultHelper::SQLLogicTestConvertValue(Value value, LogicalType sql_t
 void TestResultHelper::DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test,
                                            vector<string> &out_result) {
 	size_t r, c;
-	idx_t row_count = result.collection.Count();
+	idx_t row_count = result.RowCount();
 	idx_t column_count = result.ColumnCount();
 
 	out_result.resize(row_count * column_count);

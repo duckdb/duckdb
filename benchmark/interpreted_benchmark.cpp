@@ -379,15 +379,15 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		                          state.result->ToString());
 	}
 	// compare row count
-	if (state.result->collection.Count() != result_values.size()) {
+	if (state.result->RowCount() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)result_values.size(), (int64_t)state.result->collection.Count(),
+		                          (int64_t)result_values.size(), (int64_t)state.result->RowCount(),
 		                          state.result->ToString());
 	}
 	// compare values
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
 		for (int64_t c = 0; c < result_column_count; c++) {
-			auto value = state.result->collection.GetValue(c, r);
+			auto value = state.result->GetValue(c, r);
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
 				continue;
 			}

@@ -21,7 +21,7 @@ PhysicalLimit::PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offse
 //===--------------------------------------------------------------------===//
 class LimitGlobalState : public GlobalSinkState {
 public:
-	explicit LimitGlobalState(ClientContext &context, const PhysicalLimit &op) : data(context, op.types) {
+	explicit LimitGlobalState(ClientContext &context, const PhysicalLimit &op) : data(op.types) {
 		limit = 0;
 		offset = 0;
 	}
@@ -34,8 +34,7 @@ public:
 
 class LimitLocalState : public LocalSinkState {
 public:
-	explicit LimitLocalState(ClientContext &context, const PhysicalLimit &op)
-	    : current_offset(0), data(context, op.types) {
+	explicit LimitLocalState(ClientContext &context, const PhysicalLimit &op) : current_offset(0), data(op.types) {
 		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
 		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
 	}

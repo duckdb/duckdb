@@ -232,8 +232,15 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		CleanupInternal(lock, result.get(), false);
 	} else {
 		// no result collector - create a materialized result by continuously fetching
+		auto result_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), pending.types);
+		D_ASSERT(!result_collection->Types().empty());
 		auto materialized_result = make_unique<MaterializedQueryResult>(
-		    pending.statement_type, pending.properties, pending.types, pending.names, shared_from_this());
+		    pending.statement_type, pending.properties, pending.names, move(result_collection), shared_from_this());
+
+		auto &collection = materialized_result->Collection();
+		D_ASSERT(!collection.Types().empty());
+		ColumnDataAppendState append_state;
+		collection.InitializeAppend(append_state);
 		while (true) {
 			auto chunk = FetchInternal(lock, GetExecutor(), *materialized_result);
 			if (!chunk || chunk->size() == 0) {
@@ -246,7 +253,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 				}
 			}
 #endif
-			materialized_result->collection.Append(*chunk);
+			collection.Append(append_state, *chunk);
 		}
 		result = move(materialized_result);
 	}
@@ -682,8 +689,9 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		StatementProperties properties;
 		vector<LogicalType> types;
 		vector<string> names;
-		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(types),
-		                                            move(names), shared_from_this());
+		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), move(types));
+		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(names),
+		                                            move(collection), shared_from_this());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1040,11 +1048,14 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 			result += "Original Result:\n" + results[0]->ToString();
 			result += name + ":\n" + results[i]->ToString();
 			return result;
-		}                                                             // LCOV_EXCL_STOP
-		if (!results[0]->collection.Equals(results[i]->collection)) { // LCOV_EXCL_START
+		} // LCOV_EXCL_STOP
+		string error;
+		if (!ColumnDataCollection::ResultEquals(results[0]->Collection(), results[i]->Collection(),
+		                                        error)) { // LCOV_EXCL_START
 			string result = name + " differs from original result!\n";
 			result += "Original Result:\n" + results[0]->ToString();
 			result += name + ":\n" + results[i]->ToString();
+			result += "\n\n---------------------------------\n" + error;
 			return result;
 		} // LCOV_EXCL_STOP
 	}

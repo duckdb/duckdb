@@ -58,14 +58,18 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context);
+	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+
+	ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
 	while (true) {
 		auto chunk = Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
-		result->collection.Append(*chunk);
+		collection->Append(append_state, *chunk);
 	}
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), context);
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}

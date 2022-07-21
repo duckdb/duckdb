@@ -97,14 +97,10 @@ public:
 	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
-	//! The current chunk used by the iterator
-	unique_ptr<DataChunk> iterator_chunk;
-
-private:
 	class QueryResultIterator;
 	class QueryResultRow {
 	public:
-		explicit QueryResultRow(QueryResultIterator &iterator) : iterator(iterator), row(0) {
+		explicit QueryResultRow(QueryResultIterator &iterator_p, idx_t row_idx) : iterator(iterator_p), row(0) {
 		}
 
 		QueryResultIterator &iterator;
@@ -112,32 +108,39 @@ private:
 
 		template <class T>
 		T GetValue(idx_t col_idx) const {
-			return iterator.result->iterator_chunk->GetValue(col_idx, iterator.row_idx).GetValue<T>();
+			return iterator.chunk->GetValue(col_idx, row).GetValue<T>();
 		}
 	};
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		explicit QueryResultIterator(QueryResult *result) : current_row(*this), result(result), row_idx(0) {
+		explicit QueryResultIterator(QueryResult *result) : current_row(*this, 0), result(result), base_row(0) {
 			if (result) {
-				result->iterator_chunk = result->Fetch();
+				chunk = shared_ptr<DataChunk>(result->Fetch().release());
 			}
 		}
 
 		QueryResultRow current_row;
+		shared_ptr<DataChunk> chunk;
 		QueryResult *result;
-		idx_t row_idx;
+		idx_t base_row;
 
 	public:
 		void Next() {
-			if (!result->iterator_chunk) {
+			if (!chunk) {
 				return;
 			}
 			current_row.row++;
-			row_idx++;
-			if (row_idx >= result->iterator_chunk->size()) {
-				result->iterator_chunk = result->Fetch();
-				row_idx = 0;
+			if (current_row.row >= chunk->size()) {
+				base_row += chunk->size();
+				chunk = result->Fetch();
+				current_row.row = 0;
+				if (chunk->size() == 0) {
+					// exhausted all rows
+					base_row = 0;
+					result = nullptr;
+					chunk.reset();
+				}
 			}
 		}
 
@@ -146,7 +149,7 @@ private:
 			return *this;
 		}
 		bool operator!=(const QueryResultIterator &other) const {
-			return result->iterator_chunk && result->iterator_chunk->ColumnCount() > 0;
+			return result != other.result || base_row != other.base_row || current_row.row != other.current_row.row;
 		}
 		const QueryResultRow &operator*() const {
 			return current_row;
