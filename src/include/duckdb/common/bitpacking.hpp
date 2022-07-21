@@ -177,15 +177,15 @@ private:
 		}
 	}
 
-	template <class T>
+	template <class T, class T_U = typename std::make_unsigned<T>::type>
 	static void ApplyFrameOfReference(data_ptr_t dst, T frame_of_reference) {
 		if (!frame_of_reference) {
 			return;
 		}
 		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
-			T value = Load<T>(dst + i * sizeof(T));
-			value += frame_of_reference;
-			Store<T>(value, dst + i * sizeof(T));
+			T_U value = Load<T_U>(dst + i * sizeof(T));
+			T adjusted_value = (T)(value + (T_U)frame_of_reference);
+			Store<T>(adjusted_value, dst + i * sizeof(T));
 		}
 	}
 
@@ -210,31 +210,12 @@ private:
 	// Prevent compression at widths that are ineffective
 	template <class T>
 	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
-		if (width > 56) {
-			return 64;
+		auto bits_of_type = sizeof(T) * 8;
+		auto type_size = sizeof(T);
+		if (width + type_size > bits_of_type) {
+			return bits_of_type;
 		}
-
-		if (width > 28 && (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value)) {
-			return 32;
-		}
-
-		else if (width > 14 && (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value)) {
-			return 16;
-		}
-
 		return width;
-	}
-
-	// Sign bit extension
-	template <class T, class T_U = typename std::make_unsigned<T>::type>
-	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		T const mask = ((T_U)1) << (width - 1);
-		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-			T value = Load<T>(dst + i * sizeof(T));
-			value = value & ((((T_U)1) << width) - ((T_U)1));
-			T result = (value ^ mask) - mask;
-			Store(result, dst + i * sizeof(T));
-		}
 	}
 
 	template <class T>
