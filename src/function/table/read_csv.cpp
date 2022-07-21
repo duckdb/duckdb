@@ -227,8 +227,8 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	auto data = (ReadCSVData *)bind_data_p;
 	string first_file = data->files[0];
 
-	HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->options.include_file_name,
-	                                 data->initial_reader->options.include_parsed_hive_partitions);
+	HivePartitioning::PruneFilesList(data->files, filters, data->options.include_file_name,
+	                                 data->options.include_parsed_hive_partitions);
 
 	if (data->files.empty() || data->files[0] != first_file) {
 		data->initial_reader.reset();
