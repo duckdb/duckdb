@@ -159,7 +159,7 @@ public:
 
 			for (idx_t i = 0; i < count; i++) {
 				if (validity[i]) {
-					NumericStatistics::Update<UNSIGNED_VALUE_TYPE>(state->current_segment->stats, values[i]);
+					NumericStatistics::Update<T>(state->current_segment->stats, values[i] + frame_of_reference);
 				}
 			}
 

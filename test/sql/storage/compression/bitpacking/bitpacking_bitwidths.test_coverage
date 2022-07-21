@@ -16,8 +16,10 @@ CREATE TABLE test_unsigned AS SELECT cast(2**(i/2048) as UINT${typesize}) i FROM
 statement ok
 CHECKPOINT;
 
-statement error
-SELECT * FROM test_unsigned OFFSET 16200 LIMIT 8;
+query I
+SELECT count(*)=${typesize} FROM (SELECT count(i) FROM test_unsigned GROUP BY i);
+----
+1
 
 query I
 SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_unsigned GROUP BY i);
