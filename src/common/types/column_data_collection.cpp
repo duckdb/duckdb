@@ -72,6 +72,7 @@ void ColumnDataCollection::Initialize(vector<LogicalType> types_p) {
 	this->types = move(types_p);
 	this->count = 0;
 	this->finished_append = false;
+	D_ASSERT(!types.empty());
 	copy_functions.reserve(types.size());
 	for (auto &type : types) {
 		copy_functions.push_back(GetCopyFunction(type));
