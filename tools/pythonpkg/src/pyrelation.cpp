@@ -3,6 +3,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/vector_conversion.hpp"
 
 namespace duckdb {
 
