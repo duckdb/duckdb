@@ -221,11 +221,14 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
-void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p, vector<unique_ptr<Expression>> &filters){;
+void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                              vector<unique_ptr<Expression>> &filters) {
+	;
 	auto data = (ReadCSVData *)bind_data_p;
 	string first_file = data->files[0];
 
-	HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->options.include_file_name, data->initial_reader->options.include_parsed_hive_partitions);
+	HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->options.include_file_name,
+	                                 data->initial_reader->options.include_parsed_hive_partitions);
 
 	if (data->files.empty() || data->files[0] != first_file) {
 		data->initial_reader.reset();

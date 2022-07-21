@@ -395,9 +395,12 @@ public:
 		return false;
 	}
 
-	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p, vector<unique_ptr<Expression>> &filters){
+	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+	                                         vector<unique_ptr<Expression>> &filters) {
 		auto data = (ParquetReadBindData *)bind_data_p;
-		HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->parquet_options.hive_partitioning, data->initial_reader->parquet_options.filename, true);;
+		HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->parquet_options.hive_partitioning,
+		                                 data->initial_reader->parquet_options.filename, true);
+		;
 	}
 };
 

@@ -13,13 +13,13 @@ namespace duckdb {
 static std::map<string, string> GetKnownColumnValues(string &filename, bool filename_col, bool hive_partition_cols) {
 	std::map<string, string> result;
 
-	if(filename_col) {
+	if (filename_col) {
 		result["filename"] = filename;
 	}
 
 	if (hive_partition_cols) {
 		auto partitions = HivePartitioning::Parse(filename);
-		for (auto& partition: partitions) {
+		for (auto &partition : partitions) {
 			result[partition.first] = partition.second;
 		}
 	}
@@ -28,16 +28,15 @@ static std::map<string, string> GetKnownColumnValues(string &filename, bool file
 }
 
 // Takes an expression and converts a list of known column_refs to constants
-static void ConvertKnownColRefToConstants(unique_ptr<Expression>& expr, map<string, string> &known_column_values) {
+static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr, map<string, string> &known_column_values) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto lookup = known_column_values.find(expr->alias);
 		if (lookup != known_column_values.end()) {
 			expr = make_unique<BoundConstantExpression>(Value(lookup->second));
 		}
 	} else {
-		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-			ConvertKnownColRefToConstants(child, known_column_values);
-		});
+		ExpressionIterator::EnumerateChildren(
+		    *expr, [&](unique_ptr<Expression> &child) { ConvertKnownColRefToConstants(child, known_column_values); });
 	}
 }
 
@@ -59,20 +58,21 @@ std::map<string, string> HivePartitioning::Parse(string &filename) {
 	return result;
 }
 
-void HivePartitioning::PruneFilesList(vector<string> &files,  vector<unique_ptr<Expression>> &filters, bool hive_enabled, bool filename_enabled, bool preserve_first) {
+void HivePartitioning::PruneFilesList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
+                                      bool filename_enabled, bool preserve_first) {
 	vector<string> pruned_files;
 
 	if (preserve_first) {
 		pruned_files.push_back(files[0]);
 	}
 
-	for(idx_t i = preserve_first; i < files.size(); i++) {
-		auto& file = files[i];
+	for (idx_t i = preserve_first; i < files.size(); i++) {
+		auto &file = files[i];
 		bool should_prune_file = false;
 		auto known_values = GetKnownColumnValues(file, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner;
-		for (auto& filter: filters) {
+		for (auto &filter : filters) {
 			unique_ptr<Expression> filter_copy = filter->Copy();
 			ConvertKnownColRefToConstants(filter_copy, known_values);
 			if (combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {

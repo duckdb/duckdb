@@ -21,9 +21,10 @@ class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	static std::map<string, string> Parse(string &filename);
-	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the pushdown_complex_filter
-	//! function to skip files with filename-based filters.
-	static void PruneFilesList(vector<string> &files,  vector<unique_ptr<Expression>> &filters, bool hive_enabled, bool filename_enabled, bool preserve_first = false);
+	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
+	//! pushdown_complex_filter function to skip files with filename-based filters.
+	static void PruneFilesList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
+	                           bool filename_enabled, bool preserve_first = false);
 };
 
 } // namespace duckdb
