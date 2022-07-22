@@ -34,3 +34,13 @@ query II
 SELECT a.* REPLACE(a.i + 3 AS i) FROM test;
 ----
 4	2
+
+statement ok
+CREATE TABLE a(i row(t int));
+
+statement ok
+CREATE TABLE b(i row(t int));
+
+# Binder Error: Ambiguous reference to column name "i" (use: "b.i" or "a.i")
+statement error
+SELECT i.* FROM a, b;
