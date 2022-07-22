@@ -1100,6 +1100,11 @@ void JoinHashTable::UnFinalize() {
 }
 
 void JoinHashTable::FinalizeExternal() {
+	if (partition_block_collections.empty()) {
+		// Empty HT!
+		return;
+	}
+
 	if (finalized) {
 		UnFinalize();
 	}
