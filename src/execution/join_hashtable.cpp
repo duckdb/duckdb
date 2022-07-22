@@ -1118,17 +1118,22 @@ void JoinHashTable::FinalizeExternal() {
 	}
 
 	// Determine how many partitions we can do next (at least one)
-	idx_t next = 1;
-	idx_t count = partition_block_collections[partitions_start]->count;
-	for (idx_t p = partitions_start + 1; p < num_partitions; p++) {
+	idx_t next = 0;
+	idx_t count = 0;
+	for (idx_t p = partitions_start; p < num_partitions; p++) {
 		auto partition_count = partition_block_collections[p]->count;
-		if (count + partition_count > tuples_per_round) {
+		if (count != 0 && count + partition_count > tuples_per_round) {
 			break;
 		}
 		next++;
 		count += partition_count;
 	}
 	partitions_end += next;
+
+	if (count == 0) {
+		// Last couple partitions were empty
+		return;
+	}
 
 	// Move specific partitions to the swizzled_... collections so they can be unswizzled
 	D_ASSERT(SwizzledCount() == 0);
