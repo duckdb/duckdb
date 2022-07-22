@@ -40,11 +40,11 @@ public:
 public:
 	template <class OP, class T_U = typename std::make_unsigned<T>::type>
 	void Flush() {
-		T_U frame_of_reference =
-		    (T_U)*std::min_element<T *>(compression_buffer, compression_buffer + compression_buffer_idx);
 		auto unsigned_compression_buffer = (T_U *)&compression_buffer[0];
+		T_U frame_of_reference =
+		    *std::min_element<T_U *>(unsigned_compression_buffer, unsigned_compression_buffer + compression_buffer_idx);
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			unsigned_compression_buffer[i] = (T_U)(unsigned_compression_buffer[i] - frame_of_reference);
+			unsigned_compression_buffer[i] -= frame_of_reference;
 		}
 		bitpacking_width_t width =
 		    BitpackingPrimitives::MinimumBitWidth(unsigned_compression_buffer, compression_buffer_idx);
