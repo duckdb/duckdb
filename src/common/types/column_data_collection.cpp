@@ -157,21 +157,27 @@ Value ColumnDataRowCollection::GetValue(idx_t column, idx_t index) const {
 //===--------------------------------------------------------------------===//
 ColumnDataCollection::ColumnDataRowIterator::ColumnDataRowIterator(ColumnDataCollection *collection_p)
     : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
-	scan_chunk = make_shared<DataChunk>();
-	if (collection) {
-		collection->InitializeScan(scan_state);
-		collection->InitializeScanChunk(*scan_chunk);
+	if (!collection) {
+		return;
 	}
+	collection->InitializeScan(scan_state);
+	collection->InitializeScanChunk(*scan_chunk);
+	collection->Scan(scan_state, *scan_chunk);
 }
 
 void ColumnDataCollection::ColumnDataRowIterator::Next() {
+	if (!collection) {
+		return;
+	}
 	current_row.row_index++;
 	if (current_row.row_index >= scan_chunk->size()) {
 		current_row.base_index += scan_chunk->size();
-		if (collection) {
-			collection->Scan(scan_state, *scan_chunk);
-		}
 		current_row.row_index = 0;
+		if (!collection->Scan(scan_state, *scan_chunk)) {
+			// exhausted collection: move iterator to nop state
+			current_row.base_index = 0;
+			collection = nullptr;
+		}
 	}
 }
 
@@ -179,10 +185,12 @@ ColumnDataCollection::ColumnDataRowIterator &ColumnDataCollection::ColumnDataRow
 	Next();
 	return *this;
 }
+
 bool ColumnDataCollection::ColumnDataRowIterator::operator!=(const ColumnDataRowIterator &other) const {
-	return collection == other.collection && current_row.row_index == other.current_row.row_index &&
-	       current_row.base_index == other.current_row.base_index;
+	return collection != other.collection || current_row.row_index != other.current_row.row_index ||
+	       current_row.base_index != other.current_row.base_index;
 }
+
 const ColumnDataRow &ColumnDataCollection::ColumnDataRowIterator::operator*() const {
 	return current_row;
 }

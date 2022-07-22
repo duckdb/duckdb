@@ -122,6 +122,9 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
+	if (chunk.size() == 0) {
+		return;
+	}
 	ColumnDataCollection collection(Allocator::Get(*context), chunk.GetTypes());
 	collection.Append(chunk);
 	Append(description, collection);

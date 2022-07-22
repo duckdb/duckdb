@@ -72,7 +72,7 @@ void BatchedDataCollection::Scan(BatchedChunkScanState &state, DataChunk &output
 unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	unique_ptr<ColumnDataCollection> result;
 	for (auto &entry : data) {
-		if (entry.second) {
+		if (!result) {
 			result = move(entry.second);
 		} else {
 			result->Combine(*entry.second);
