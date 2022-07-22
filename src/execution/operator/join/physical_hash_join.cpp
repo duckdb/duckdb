@@ -88,9 +88,8 @@ public:
 	unique_ptr<JoinHashTable> hash_table;
 };
 
-unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_unique<HashJoinGlobalSinkState>();
-	state->hash_table =
+unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
+	auto result =
 	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
@@ -103,7 +102,7 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			// we need these to correctly deal with the cases of either:
 			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
-			auto &info = state->hash_table->correlated_mark_join_info;
+			auto &info = result->correlated_mark_join_info;
 
 			vector<LogicalType> payload_types;
 			vector<BoundAggregateExpression *> correlated_aggregates;
@@ -133,6 +132,13 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			info.result_chunk.Initialize(allocator, payload_types);
 		}
 	}
+	return result;
+}
+
+unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
+	auto state = make_unique<HashJoinGlobalSinkState>();
+	state->hash_table = InitializeHashTable(context);
+
 	// for perfect hash join
 	state->perfect_join_executor =
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
@@ -153,6 +159,7 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
 	auto &allocator = Allocator::Get(context.client);
 	auto state = make_unique<HashJoinLocalSinkState>(allocator, *this);
+	state->hash_table = InitializeHashTable(context.client);
 	return move(state);
 }
 
@@ -160,9 +167,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
                                       DataChunk &input) const {
 	auto &gstate = (HashJoinGlobalSinkState &)gstate_p;
 	auto &lstate = (HashJoinLocalSinkState &)lstate_p;
-	if (!lstate.hash_table) {
-		lstate.hash_table = gstate.hash_table->CopyEmpty();
-	}
+
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
 	lstate.build_executor.Execute(input, lstate.join_keys);

@@ -93,6 +93,8 @@ public:
 	}
 
 private:
+	//! Initialize HT given the info in this operator
+	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 	//! Prepare the next partitioned probe round, which includes finalizing the HT
 	bool PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const;
 };

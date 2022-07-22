@@ -71,16 +71,20 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 JoinHashTable::~JoinHashTable() {
 }
 
-unique_ptr<JoinHashTable> JoinHashTable::CopyEmpty() const {
-	return make_unique<JoinHashTable>(buffer_manager, conditions, build_types, join_type);
-}
-
 void JoinHashTable::Merge(JoinHashTable &other) {
 	block_collection->Merge(*other.block_collection);
 	swizzled_block_collection->Merge(*other.swizzled_block_collection);
 	if (!layout.AllConstant()) {
 		string_heap->Merge(*other.string_heap);
 		swizzled_string_heap->Merge(*other.swizzled_string_heap);
+	}
+
+	// TODO: merge correlated mark join info
+	if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
+		auto &info = correlated_mark_join_info;
+		auto &other_info = other.correlated_mark_join_info;
+		lock_guard<mutex> mj_lock(info.mj_lock);
+		info.correlated_counts->Combine(*other_info.correlated_counts);
 	}
 
 	lock_guard<mutex> lock(partition_lock);
@@ -467,7 +471,7 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 	this->count = new_count;
 }
 
-void ScanStructure::InitializeSelectionVector(const SelectionVector *current_sel) {
+void ScanStructure::InitializeSelectionVector(const SelectionVector *&current_sel) {
 	idx_t non_empty_count = 0;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
 	for (idx_t i = 0; i < count; i++) {
@@ -1042,6 +1046,10 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 		//  Need to re-compute this somehow
 		total_count += ht->Count() + ht->SwizzledCount();
 		total_size += ht->SizeInBytes() + ht->SwizzledSize();
+	}
+
+	if (total_count == 0) {
+		return;
 	}
 
 	idx_t avg_tuple_size = total_size / total_count;

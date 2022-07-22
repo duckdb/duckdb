@@ -116,7 +116,7 @@ public:
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector &no_match_sel);
 
 	public:
-		void InitializeSelectionVector(const SelectionVector *current_sel);
+		void InitializeSelectionVector(const SelectionVector *&current_sel);
 		void AdvancePointers();
 		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
 		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
@@ -130,8 +130,6 @@ public:
 	              vector<LogicalType> build_types, JoinType type);
 	~JoinHashTable();
 
-	//! Initialize an empty HT for the same join
-	unique_ptr<JoinHashTable> CopyEmpty() const;
 	//! Add the given data to the HT
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
