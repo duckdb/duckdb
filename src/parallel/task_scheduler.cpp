@@ -186,7 +186,9 @@ void TaskScheduler::SetThreads(int32_t n) {
 }
 
 void TaskScheduler::Signal(idx_t n) {
+#ifndef DUCKDB_NO_THREADS
 	queue->semaphore.signal(n);
+#endif
 }
 
 void TaskScheduler::SetThreadsInternal(int32_t n) {
