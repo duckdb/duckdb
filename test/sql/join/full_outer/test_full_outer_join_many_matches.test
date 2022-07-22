@@ -17,7 +17,7 @@ CREATE TABLE integers AS SELECT a i, 1 j FROM generate_series(0, 1999, 1) t1(a);
 statement ok
 CREATE TABLE integers2 AS SELECT a k, 2 l FROM generate_series(2000, 3999, 1) t1(a);
 
- equality join
+# equality join
 query I
 SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
 ----
