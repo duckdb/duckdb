@@ -37,15 +37,20 @@ void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, Pip
 	// this scan has to be performed AFTER all the probing has happened
 	if (op.type != PhysicalOperatorType::CROSS_PRODUCT) {
 		auto &join_op = (PhysicalJoin &)op;
+		bool added = false;
+
 		if (IsRightOuterJoin(join_op.join_type)) {
 			if (state.recursive_cte) {
 				throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
 			}
 			state.AddChildPipeline(executor, current);
-		} else if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
+			added = true;
+		}
+
+		if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
 			auto &hash_join_op = (PhysicalHashJoin &)join_op;
 			hash_join_op.recursive_cte = state.recursive_cte;
-			if (!state.recursive_cte) {
+			if (!state.recursive_cte && !added) {
 				state.AddChildPipeline(executor, current);
 			}
 		}

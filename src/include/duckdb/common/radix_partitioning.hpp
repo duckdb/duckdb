@@ -15,6 +15,9 @@ namespace duckdb {
 class BufferManager;
 class RowLayout;
 class RowDataCollection;
+class Vector;
+struct UnifiedVectorFormat;
+struct SelectionVector;
 
 //! Templated radix partitioning constants, can be templated to the number of radix bits
 template <idx_t radix_bits>

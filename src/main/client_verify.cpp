@@ -1,4 +1,5 @@
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/verification/statement_verifier.hpp"
 
 namespace duckdb {
