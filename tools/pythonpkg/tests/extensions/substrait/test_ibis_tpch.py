@@ -76,83 +76,83 @@ def execute(require, query_number):
     duck_con = TPCHBackend(duck_con=connection)
     tpch_execute_ibis_to_duck_query(duck_con,query_number)
 
-# def test_query_substrait_01(require):
-#     execute(require,1)
+def test_query_substrait_01(require):
+    execute(require,1)
     
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_02(require):
-#     execute(require,2)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_02(require):
+    execute(require,2)
 
-# def test_query_substrait_03(require):
-#     execute(require,3)
+def test_query_substrait_03(require):
+    execute(require,3)
 
-# @pytest.mark.xfail(reason="Scalar Function with name any does not exist!")
-# def test_query_substrait_04(require):
-#     execute(require,4)
+@pytest.mark.xfail(reason="Scalar Function with name any does not exist!")
+def test_query_substrait_04(require):
+    execute(require,4)
 
-# def test_query_substrait_05(require):
-#     execute(require,5)
+def test_query_substrait_05(require):
+    execute(require,5)
     
-# def test_query_substrait_06(require):
-#     execute(require,6)
+def test_query_substrait_06(require):
+    execute(require,6)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_07(require):
-#     execute(require,7)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_07(require):
+    execute(require,7)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_08(require):
-#     execute(require,8)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_08(require):
+    execute(require,8)
 
-# @pytest.mark.xfail(reason="Scalar Function with name extractyear does not exist!")
-# def test_query_substrait_09(require):
-#     execute(require,9)
+@pytest.mark.xfail(reason="Scalar Function with name extractyear does not exist!")
+def test_query_substrait_09(require):
+    execute(require,9)
     
-# def test_query_substrait_10(require):
-#     execute(require,10)
+def test_query_substrait_10(require):
+    execute(require,10)
 
-# @pytest.mark.xfail(reason="Result does not match")
-# def test_query_substrait_11(require):
-#     execute(require,11)
+@pytest.mark.xfail(reason="Result does not match")
+def test_query_substrait_11(require):
+    execute(require,11)
 
-# def test_query_substrait_12(require):
-#     execute(require,12)
+def test_query_substrait_12(require):
+    execute(require,12)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_13(require):
-#     execute(require,13)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_13(require):
+    execute(require,13)
     
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_14(require):
-#     execute(require,14)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_14(require):
+    execute(require,14)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_15(require):
-#     execute(require,15)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_15(require):
+    execute(require,15)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_16(require):
-#     execute(require,16)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_16(require):
+    execute(require,16)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_17(require):
-#     execute(require,17)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_17(require):
+    execute(require,17)
     
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_18(require):
-#     execute(require,18)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_18(require):
+    execute(require,18)
 
-# def test_query_substrait_19(require):
-#     execute(require,19)
+def test_query_substrait_19(require):
+    execute(require,19)
 
-# @pytest.mark.xfail(reason="can't compile")
-# def test_query_substrait_20(require):
-#     execute(require,20)
+@pytest.mark.xfail(reason="can't compile")
+def test_query_substrait_20(require):
+    execute(require,20)
 
-# @pytest.mark.xfail(reason="Scalar Function with name any does not exist!")
-# def test_query_substrait_21(require):
-#     execute(require,21)
+@pytest.mark.xfail(reason="Scalar Function with name any does not exist!")
+def test_query_substrait_21(require):
+    execute(require,21)
 
-# @pytest.mark.xfail(reason="Scalar Function with name any does not exist!")
-# def test_query_substrait_22(require):
-#     execute(require,22)
+@pytest.mark.xfail(reason="Scalar Function with name any does not exist!")
+def test_query_substrait_22(require):
+    execute(require,22)
