@@ -11,7 +11,7 @@ out_file = None
 nruns = 10
 TPCH_NQUERIES = 22
 
-for arg in sys.argv:
+for arg in sys.argv[1:]:
     if arg == "--verbose":
         verbose = True
     elif arg.startswith("--threads="):
@@ -20,6 +20,9 @@ for arg in sys.argv:
         nruns = int(arg.replace("--nruns=", ""))
     elif arg.startswith("--out-file="):
         out_file = arg.replace("--out-file=", "")
+    else:
+        print(f"Unrecognized parameter '{arg}'")
+        exit(1)
 
 # generate data
 if verbose:
@@ -53,11 +56,17 @@ def benchmark_queries(benchmark_name, con, queries):
         print(queries)
     for nrun in range(nruns):
         t = 0.0
-        for q in queries:
+        for i, q in enumerate(queries):
             start = time.time()
-            df_result = con.execute(q).df()
+            df_result = con.execute(q).fetchall()
             end = time.time()
+            query_time = float(end - start)
+            if verbose:
+                print(f"Q{str(i).ljust(len(str(nruns)), ' ')}: {query_time}")
             t += float(end - start)
+            if verbose:
+                padding = " " * len(str(nruns))
+                print(f"T{padding}: {t}s")
 
         bench_result = f"{benchmark_name}\t{nrun}\t{t}"
 
