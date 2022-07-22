@@ -223,6 +223,8 @@ private:
 	BoundStatement Bind(ExtensionStatement &stmt);
 	BoundStatement Bind(SetStatement &stmt);
 	BoundStatement Bind(LoadStatement &stmt);
+	BoundStatement Bind(LogicalPlanStatement &stmt);
+
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry *table,
 	                             idx_t update_table_index, unique_ptr<LogicalOperator> child_operator,
 	                             BoundStatement result);

@@ -1,5 +1,6 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -55,7 +56,48 @@ string LogicalAggregate::ParamsToString() const {
 }
 
 void LogicalAggregate::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteSerializableList(expressions);
+
+	writer.WriteField(group_index);
+	writer.WriteField(aggregate_index);
+	writer.WriteField(groupings_index);
+	writer.WriteSerializableList(groups);
+	writer.WriteField<idx_t>(grouping_sets.size());
+	for (auto &entry : grouping_sets) {
+		writer.WriteList<idx_t>(entry);
+	}
+	writer.WriteField<idx_t>(grouping_functions.size());
+	for (auto &entry : grouping_functions) {
+		writer.WriteList<idx_t>(entry);
+	}
+
+	// TODO statistics
+}
+
+unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(FieldReader &source, ClientContext &context) {
+	auto expressions = source.ReadRequiredSerializableList<Expression>();
+
+	auto group_index = source.ReadRequired<idx_t>();
+	auto aggregate_index = source.ReadRequired<idx_t>();
+	auto groupings_index = source.ReadRequired<idx_t>();
+	auto groups = source.ReadRequiredSerializableList<Expression>();
+	auto grouping_sets_size = source.ReadRequired<idx_t>();
+	vector<GroupingSet> grouping_sets;
+	for (idx_t i = 0; i < grouping_sets_size; i++) {
+		grouping_sets.push_back(source.ReadRequiredSet<idx_t>());
+	}
+	vector<vector<idx_t>> grouping_functions;
+	auto grouping_functions_size = source.ReadRequired<idx_t>();
+	for (idx_t i = 0; i < grouping_functions_size; i++) {
+		grouping_functions.push_back(source.ReadRequiredList<idx_t>());
+	}
+	auto result = make_unique<LogicalAggregate>(group_index, aggregate_index, move(expressions));
+	result->groupings_index = groupings_index;
+	result->groups = move(groups);
+	result->grouping_functions = move(grouping_functions);
+	result->grouping_sets = move(grouping_sets);
+
+	return move(result);
 }
 
 } // namespace duckdb

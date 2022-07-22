@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/set.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include <type_traits>
 
@@ -175,6 +176,21 @@ public:
 		vector<T> result;
 		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(source.Read<T>());
+		}
+		return result;
+	}
+
+	template <class T>
+	set<T> ReadRequiredSet() {
+		if (field_count >= max_field_count) {
+			// field is not there, throw an exception
+			throw SerializationException("Attempting to read a required field, but field is missing");
+		}
+		AddField();
+		auto result_count = source.Read<uint32_t>();
+		set<T> result;
+		for (idx_t i = 0; i < result_count; i++) {
+			result.insert(source.Read<T>());
 		}
 		return result;
 	}

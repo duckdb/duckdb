@@ -109,6 +109,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::EXTENSION_STATEMENT:
 	case StatementType::PREPARE_STATEMENT:
 	case StatementType::EXECUTE_STATEMENT:
+	case StatementType::LOGICAL_PLAN_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:

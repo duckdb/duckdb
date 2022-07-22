@@ -165,10 +165,12 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::Deserialize(reader);
 		break;
-	case LogicalOperatorType::LOGICAL_GET: {
+	case LogicalOperatorType::LOGICAL_GET:
 		result = LogicalGet::Deserialize(reader, context);
 		break;
-	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+		result = LogicalAggregate::Deserialize(reader, context);
+		break;
 	default:
 		throw SerializationException("Unsupported type for operator deserialization: " + LogicalOperatorToString(type));
 	}

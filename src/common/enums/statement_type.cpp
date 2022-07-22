@@ -53,6 +53,8 @@ string StatementTypeToString(StatementType type) {
 		return "LOAD";
 	case StatementType::EXTENSION_STATEMENT:
 		return "EXTENSION";
+	case StatementType::LOGICAL_PLAN_STATEMENT:
+		return "LOGICAL_PLAN";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}
