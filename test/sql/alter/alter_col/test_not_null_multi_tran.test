@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-# Scenario #1, tran1 alter column, tran2 not able to insert
+# Scenario #1, tran1 set not null, tran2 not able to insert
 statement ok con1
 CREATE TABLE t(i INTEGER, j INTEGER)
 
@@ -68,7 +68,7 @@ SELECT COUNT(*) FROM  t
 ----
 0
 
-# Scenario #3, both trans succeeded
+# Scenario #3, cannot insert if one connection alter column
 statement ok con1
 DROP TABLE IF EXISTS t
 

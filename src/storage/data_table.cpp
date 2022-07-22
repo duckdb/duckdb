@@ -176,7 +176,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
 	if(constraint->type != ConstraintType::NOT_NULL){
-		throw NotImplementedException("FIXME: ALTER COLUMN with not NOT_NULL constraint not supported yet");
+		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
@@ -185,7 +185,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 		column_stats.push_back(parent.column_stats[i]);
 	}
 
-	// TODO: Get not_null_idx, scan_state.column_ids
 	// scan the original table, check if there's any null value
 	auto &not_null_constraint = (NotNullConstraint &)*constraint;
 	auto &transaction = Transaction::GetTransaction(context);
@@ -198,7 +197,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	TableScanState scan_state;
 	scan_state.column_ids.push_back(not_null_constraint.index);
 	scan_state.max_row = total_rows;
-	this->row_groups = make_shared<SegmentTree>();
 	auto current_row_group = (RowGroup *)parent.row_groups->GetRootSegment();
 
 	while (current_row_group) {
@@ -209,7 +207,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 			if(scan_chunk.size() == 0){
 				break;
 			}
-			// TODO: Check constraint
+			// Check constraint
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
 				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table, column_definitions[not_null_constraint.index].GetName());
 			}
