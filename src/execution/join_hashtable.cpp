@@ -79,12 +79,14 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		swizzled_string_heap->Merge(*other.swizzled_string_heap);
 	}
 
-	// TODO: merge correlated mark join info
-	if (join_type == JoinType::MARK && !correlated_mark_join_info.correlated_types.empty()) {
+	if (join_type == JoinType::MARK) {
 		auto &info = correlated_mark_join_info;
-		auto &other_info = other.correlated_mark_join_info;
 		lock_guard<mutex> mj_lock(info.mj_lock);
-		info.correlated_counts->Combine(*other_info.correlated_counts);
+		has_null = has_null || other.has_null;
+		if (!correlated_mark_join_info.correlated_types.empty()) {
+			auto &other_info = other.correlated_mark_join_info;
+			info.correlated_counts->Combine(*other_info.correlated_counts);
+		}
 	}
 
 	lock_guard<mutex> lock(partition_lock);
