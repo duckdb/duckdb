@@ -38,8 +38,10 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	// used in perfect hash join
+	//! Used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
+	//! Whether there's a recursive CTE in this pipeline (disables external hash join)
+	bool recursive_cte;
 
 public:
 	// Operator Interface

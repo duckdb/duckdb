@@ -137,7 +137,7 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	state->perfect_join_executor =
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
 	// for external hash join
-	state->external = ClientConfig::GetConfig(context).force_external;
+	state->external = !recursive_cte && ClientConfig::GetConfig(context).force_external;
 	// memory usage per thread scales with max mem / num threads
 	double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -186,8 +186,9 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	// swizzle if we reach memory limit
-	if (lstate.hash_table->SizeInBytes() >= gstate.max_ht_size) {
+	if (!recursive_cte && lstate.hash_table->SizeInBytes() >= gstate.max_ht_size) {
 		lstate.hash_table->SwizzleBlocks();
+		gstate.external = true;
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -213,6 +214,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &sink = (HashJoinGlobalSinkState &)gstate;
 
 	if (sink.external) {
+		D_ASSERT(!recursive_cte);
 		// External join - partition HT
 		sink.perfect_join_executor.reset();
 		sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
@@ -351,8 +353,10 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	HashJoinGlobalSourceState() : initialized(false), local_hts_done(0) {
+	explicit HashJoinGlobalSourceState(const PhysicalHashJoin &op) : op(op), initialized(false), local_hts_done(0) {
 	}
+
+	const PhysicalHashJoin &op;
 
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState full_outer_scan_state;
@@ -402,13 +406,9 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
-	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
-
-	auto result = make_unique<HashJoinGlobalSourceState>();
-	if (sink.external) {
-		result->probe_ht =
-		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, children[0]->types, join_type);
-	}
+	auto result = make_unique<HashJoinGlobalSourceState>(*this);
+	result->probe_ht =
+	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, children[0]->types, join_type);
 	result->probe_count = children[0]->estimated_cardinality;
 
 	return result;
@@ -494,6 +494,7 @@ enum class ExternalProbeTaskType : uint8_t { EXTERNAL_PROBE, GATHER_FULL_OUTER, 
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
+	D_ASSERT(!recursive_cte);
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
 	auto &lstate = (HashJoinLocalSourceState &)lstate_p;
