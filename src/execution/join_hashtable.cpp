@@ -1122,7 +1122,9 @@ void JoinHashTable::FinalizeExternal() {
 	idx_t count = 0;
 	for (idx_t p = partitions_start; p < num_partitions; p++) {
 		auto partition_count = partition_block_collections[p]->count;
-		if (count != 0 && count + partition_count > tuples_per_round) {
+		if (partition_count != 0 && count != 0 && count + partition_count > tuples_per_round) {
+			// We skip over empty partitions (partition_count != 0),
+			// and need to have at least one partition (count != 0)
 			break;
 		}
 		next++;
