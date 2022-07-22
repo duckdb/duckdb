@@ -109,6 +109,9 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
 	case ExpressionType::BOUND_REF:
 		result = BoundReferenceExpression::Deserialize(reader);
 		break;
+	case ExpressionType::BOUND_COLUMN_REF:
+		result = BoundColumnRefExpression::Deserialize(reader);
+		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization!" + ExpressionTypeToString(type));
 	}

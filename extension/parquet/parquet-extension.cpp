@@ -32,6 +32,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/field_writer.hpp"
 #endif
 
 namespace duckdb {
@@ -82,6 +83,9 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
+		table_function.bind_data_serialize = ParquetScanBindDataSerialize;
+		table_function.bind_data_deserialize = ParquetScanBindDataDeserialize;
+
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		set.AddFunction(table_function);
@@ -301,6 +305,24 @@ public:
 	                                      GlobalTableFunctionState *global_state) {
 		auto &data = (ParquetReadLocalState &)*local_state;
 		return data.batch_index;
+	}
+
+	static void ParquetScanBindDataSerialize(FieldWriter &writer, FunctionData &bind_data_p) {
+		auto &bind_data = (ParquetReadBindData &)bind_data_p;
+		writer.WriteList<string>(bind_data.files);
+		writer.WriteRegularSerializableList(bind_data.types);
+		writer.WriteList<string>(bind_data.names);
+
+		// TODO ParquetOptions
+	}
+
+	static unique_ptr<FunctionData> ParquetScanBindDataDeserialize(FieldReader &reader, ClientContext &context) {
+		auto files = reader.ReadRequiredList<string>();
+		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		auto names = reader.ReadRequiredList<string>();
+		ParquetOptions options(context);
+
+		return ParquetScanBindInternal(context, files, types, names, options);
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

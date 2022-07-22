@@ -1,11 +1,11 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parser.hpp"
-
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {
@@ -154,20 +154,21 @@ void LogicalOperator::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer, ClientContext &context) {
 	unique_ptr<LogicalOperator> result;
 
 	FieldReader reader(deserializer);
 	auto type = reader.ReadRequired<LogicalOperatorType>();
-	auto children = reader.ReadRequiredSerializableList<LogicalOperator>();
+	auto children = reader.ReadRequiredSerializableList<LogicalOperator>(context);
 
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::Deserialize(reader);
 		break;
-	case LogicalOperatorType::LOGICAL_GET:
-		result = LogicalGet::Deserialize(reader);
+	case LogicalOperatorType::LOGICAL_GET: {
+		result = LogicalGet::Deserialize(reader, context);
 		break;
+	}
 	default:
 		throw SerializationException("Unsupported type for operator deserialization: " + LogicalOperatorToString(type));
 	}

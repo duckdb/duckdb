@@ -127,6 +127,9 @@ public:
 
 	void SetRemainingData(idx_t remaining_data);
 	idx_t RemainingData();
+	Deserializer &GetRoot() {
+		return root;
+	}
 
 private:
 	Deserializer &root;
@@ -231,8 +234,8 @@ public:
 		return T::Deserialize(source, std::forward<ARGS>(args)...);
 	}
 
-	template <class T, class RETURN_TYPE = unique_ptr<T>>
-	vector<RETURN_TYPE> ReadRequiredSerializableList() {
+	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
+	vector<RETURN_TYPE> ReadRequiredSerializableList(ARGS &&...args) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
@@ -243,10 +246,11 @@ public:
 
 		vector<RETURN_TYPE> result;
 		for (idx_t i = 0; i < result_count; i++) {
-			result.push_back(T::Deserialize(source));
+			result.push_back(T::Deserialize(source, std::forward<ARGS>(args)...));
 		}
 		return result;
 	}
+
 	void ReadBlob(data_ptr_t result, idx_t read_size) {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception

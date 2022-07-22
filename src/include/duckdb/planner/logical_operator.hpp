@@ -67,7 +67,7 @@ public:
 	//! Serializes an LogicalOperator to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const = 0;
 
-	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, ClientContext &context);
 
 protected:
 	//! Resolve types for this specific operator

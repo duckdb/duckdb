@@ -106,7 +106,7 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 typedef void (*table_function_bind_data_serialize_t)(FieldWriter &writer, FunctionData &bind_data);
-typedef unique_ptr<TableFilterSet> (*table_function_bind_data_deserialize_t)(FieldReader &reader);
+typedef unique_ptr<FunctionData> (*table_function_bind_data_deserialize_t)(FieldReader &reader, ClientContext &context);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:

@@ -2,6 +2,7 @@
 
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -42,7 +43,21 @@ string BoundColumnRefExpression::ToString() const {
 }
 
 void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	writer.WriteString(alias);
+	writer.WriteSerializable(return_type);
+	writer.WriteField(binding.table_index);
+	writer.WriteField(binding.column_index);
+	writer.WriteField(depth);
+}
+
+unique_ptr<Expression> BoundColumnRefExpression::Deserialize(FieldReader &reader) {
+	auto alias = reader.ReadRequired<string>();
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto column_index = reader.ReadRequired<idx_t>();
+	auto depth = reader.ReadRequired<idx_t>();
+
+	return make_unique<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
 }
 
 } // namespace duckdb

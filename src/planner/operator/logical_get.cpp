@@ -86,15 +86,14 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	if (function.name.empty()) {
 		throw InvalidInputException("Can't serialize unnamed table function");
 	}
-	// TODO serialize actual function
 	writer.WriteString(function.name);
-	//	if (!function.bind_data_serialize) {
-	//		throw InvalidInputException("Can't serialize table function %s", function.name);
-	//	}
-	//	function.bind_data_serialize(writer, *bind_data);
+	if (!function.bind_data_serialize) {
+		throw InvalidInputException("Can't serialize table function %s", function.name);
+	}
+	function.bind_data_serialize(writer, *bind_data);
 }
 
-unique_ptr<LogicalOperator> LogicalGet::Deserialize(FieldReader &source) {
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(FieldReader &source, ClientContext &context) {
 	auto table_index = source.ReadRequired<idx_t>();
 	auto returned_types = source.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto returned_names = source.ReadRequiredList<string>();
@@ -102,13 +101,19 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(FieldReader &source) {
 	auto table_filters = source.ReadRequiredSerializable<TableFilterSet>();
 
 	auto name = source.ReadRequired<string>();
-	// auto bind_data = source.ReadRequiredSerializable<FunctionData>();
-	//  TODO look up function in catalog, call deserializer
+	auto &catalog = context.db->GetCatalog();
 
-	// TODO we need to look up the function pointers somehow?
-	TableFunction function;
-	function.name = name;
-	auto result = make_unique<LogicalGet>(table_index, function, nullptr, returned_types, returned_names);
+	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
+
+	if (!func_catalog || func_catalog->type != CatalogType::TABLE_FUNCTION_ENTRY) {
+		throw InternalException("Cant find catalog entry for function %s", name);
+	}
+
+	auto functions = (TableFunctionCatalogEntry *)func_catalog;
+	auto function = functions->functions[0];
+
+	auto bind_data = functions->functions[0].bind_data_deserialize(source, context);
+	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = column_ids;
 	result->table_filters = move(*table_filters);
 	return result;
