@@ -46,7 +46,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		CheckTreeDepth(*plan, max_tree_depth);
 	} catch (Exception &ex) {
 		if (ex.type != ExceptionType::PARAMETER_NOT_RESOLVED) {
-			throw ex;
+			throw;
 		}
 		// parameter types could not be resolved
 		this->names = {"unknown"};
