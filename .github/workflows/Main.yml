@@ -299,7 +299,6 @@ jobs:
  expanded:
     name: Expanded
     runs-on: ubuntu-20.04
-    needs: linux-debug
     env:
       CC: gcc-10
       CXX: g++-10
