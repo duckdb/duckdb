@@ -609,7 +609,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported physical type for Decimal" + TypeIdToString(type.InternalType()));
+			throw InvalidTypeException("Unsupported physical type for Decimal" + TypeIdToString(type.InternalType()));
 		}
 		break;
 	}

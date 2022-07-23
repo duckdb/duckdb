@@ -155,7 +155,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 	auto chunk = result.Fetch();
 	if (!result.success) {
-		throw std::runtime_error(result.error);
+		throw StandardException(result.error);
 	}
 	return chunk;
 }
@@ -163,7 +163,7 @@ unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
 	auto chunk = result.FetchRaw();
 	if (!result.success) {
-		throw std::runtime_error(result.error);
+		throw StandardException(result.error);
 	}
 	return chunk;
 }
@@ -172,7 +172,7 @@ py::object DuckDBPyResult::Fetchone() {
 	{
 		py::gil_scoped_release release;
 		if (!result) {
-			throw std::runtime_error("result closed");
+			throw StandardException("result closed");
 		}
 		if (!current_chunk || chunk_offset >= current_chunk->size()) {
 			current_chunk = FetchNext(*result);
@@ -247,7 +247,7 @@ void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categor
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
-		throw std::runtime_error("result closed");
+		throw StandardException("result closed");
 	}
 
 	// iterate over the result to materialize the data needed for the NumPy arrays
@@ -340,8 +340,8 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 
 py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("result closed");
-	}
+		throw StandardException("result closed");
+C	}
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
 	py::list batches;
@@ -356,7 +356,7 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 
 py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw StandardException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 
@@ -378,7 +378,7 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 
 py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
-		throw std::runtime_error("There is no query result");
+		throw StandardException("There is no query result");
 	}
 	py::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");

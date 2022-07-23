@@ -387,7 +387,7 @@ string QueryResult::GetConfigTimezone(QueryResult &query_result) {
 	case QueryResultType::MATERIALIZED_RESULT: {
 		auto actual_context = ((MaterializedQueryResult &)query_result).context.lock();
 		if (!actual_context) {
-			throw std::runtime_error("This connection is closed");
+			throw StandardException("This connection is closed");
 		}
 		return ClientConfig::ExtractTimezoneFromConfig(actual_context->config);
 	}
@@ -395,7 +395,7 @@ string QueryResult::GetConfigTimezone(QueryResult &query_result) {
 		return ClientConfig::ExtractTimezoneFromConfig(((StreamQueryResult &)query_result).context->config);
 	}
 	default:
-		throw std::runtime_error("Can't extract timezone configuration from query type ");
+		throw StandardException("Can't extract timezone configuration from query type ");
 	}
 }
 

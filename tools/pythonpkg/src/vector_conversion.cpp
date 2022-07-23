@@ -336,7 +336,7 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 		duckdb_col_type = LogicalType::INTERVAL;
 		pandas_type = PandasType::INTERVAL;
 	} else {
-		throw std::runtime_error("unsupported python type " + col_type);
+		throw TypeMismatchException("unsupported python type " + col_type);
 	}
 }
 
@@ -349,7 +349,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 	// TODO support masked arrays as well
 	// TODO support dicts of numpy arrays as well
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
-		throw std::runtime_error("Need a DataFrame with at least one column");
+		throw TypeMismatchException("Need a DataFrame with at least one column");
 	}
 	py::array column_attributes = df.attr("columns").attr("values");
 
