@@ -30,7 +30,7 @@ class TestPandasEnum(object):
 
         df = pd.DataFrame({"cat2": pd.Series(['duchess', 'toulouse', 'marie', None, "berlioz", "o_malley"], dtype="category"), "amt": [1, 2, 3, 4, 5, 6]})
         duckdb_cursor.register('df', df)
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             duckdb_cursor.execute(f"INSERT INTO tab SELECT * FROM df;")
 
         assert duckdb_cursor.execute("select * from tab").fetchall() == []

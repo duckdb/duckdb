@@ -11,15 +11,15 @@ class TestPythonResult(object):
         rel = connection.table("integers")
         res = rel.aggregate("sum(i)").execute()
         res.close()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             res.fetchone()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             res.fetchall()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             res.fetchnumpy()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             res.fetch_arrow_table()
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             res.fetch_arrow_reader()
 
     def test_result_describe_types(self, duckdb_cursor):

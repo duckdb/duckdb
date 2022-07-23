@@ -336,7 +336,7 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 		duckdb_col_type = LogicalType::INTERVAL;
 		pandas_type = PandasType::INTERVAL;
 	} else {
-		throw TypeMismatchException("unsupported python type " + col_type);
+		throw StandardException(ExceptionType::INVALID_TYPE, "unsupported python type " + col_type);
 	}
 }
 

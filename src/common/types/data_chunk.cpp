@@ -6,19 +6,13 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
 
@@ -609,7 +603,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 			break;
 		}
 		default:
-			throw InvalidTypeException("Unsupported physical type for Decimal" + TypeIdToString(type.InternalType()));
+			throw StandardException(ExceptionType::INVALID_TYPE, "Unsupported physical type for Decimal" + TypeIdToString(type.InternalType()));
 		}
 		break;
 	}
