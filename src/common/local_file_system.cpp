@@ -556,6 +556,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 	auto &whandle = (WindowsFileHandle &)handle;
+	whandle.position = location;
 	LARGE_INTEGER wlocation;
 	wlocation.QuadPart = location;
 	SetFilePointerEx(whandle.fd, wlocation, NULL, FILE_BEGIN);
