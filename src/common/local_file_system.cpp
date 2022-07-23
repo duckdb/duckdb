@@ -577,7 +577,8 @@ static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int6
 	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
 	if (!rc) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		throw IOException("Could not read file \"%s\" (error in ReadFile(location: %llu, nr_bytes: %lld)): %s", handle.path, location, nr_bytes, error);
+		throw IOException("Could not read file \"%s\" (error in ReadFile(location: %llu, nr_bytes: %lld)): %s",
+		                  handle.path, location, nr_bytes, error);
 	}
 	return bytes_read;
 }
