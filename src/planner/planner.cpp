@@ -44,7 +44,10 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
-	} catch (ParameterNotResolvedException &ex) {
+	} catch (Exception &ex) {
+		if (ex.type != ExceptionType::PARAMETER_NOT_RESOLVED) {
+			throw ex;
+		}
 		// parameter types could not be resolved
 		this->names = {"unknown"};
 		this->types = {LogicalTypeId::UNKNOWN};
