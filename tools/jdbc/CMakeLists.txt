@@ -18,17 +18,19 @@ endif()
 
 set(OUT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/target/headers)
 
-add_custom_target(
-  duckdb_jdbc
+add_custom_command(
+  OUTPUT ${OUT_DIR}/org_duckdb_DuckDBNative.h
   USES_TERMINAL
-  BYPRODUCTS ${OUR_DIR}/org_duckdb_DuckDBNative.h
   COMMAND ${MVN_COMMAND} compile
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_custom_target(duckdb_jdbc DEPENDS ${OUT_DIR}/org_duckdb_DuckDBNative.h)
 
 include_directories(${JNI_INCLUDE_DIRS} ${OUT_DIR}
                     ../../extension/parquet/include)
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
+add_dependencies(duckdb_java duckdb_jdbc)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
 target_link_libraries(duckdb_java duckdb_static parquet_extension)
 if(OS_NAME STREQUAL "linux")
@@ -49,15 +51,20 @@ add_custom_target(
   dummy_jdbc_target
   DEPENDS duckdb_java duckdb_jdbc
   USES_TERMINAL
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+    $<TARGET_FILE_DIR:duckdb_java>/$<TARGET_FILE_NAME:duckdb_java>
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/main/resources
   COMMAND ${MVN_COMMAND} package -Dmaven.test.skip=true
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_custom_command(
   TARGET dummy_jdbc_target
   POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy target/duckdb_jdbc-1.0.0-SNAPSHOT.jar
-          duckdb_jdbc.jar
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  COMMAND
+    ${CMAKE_COMMAND} -E copy
+    ${CMAKE_CURRENT_SOURCE_DIR}/target/duckdb_jdbc-1.0-SNAPSHOT.jar
+    duckdb_jdbc.jar)
 
 add_test(
   USES_TERMINAL
