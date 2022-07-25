@@ -177,15 +177,27 @@ private:
 		}
 	}
 
-	template <class T, class T_U = typename std::make_unsigned<T>::type>
+	template <class T>
 	static void ApplyFrameOfReference(data_ptr_t dst, T frame_of_reference) {
 		if (!frame_of_reference) {
 			return;
 		}
 		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
-			T_U value = Load<T_U>(dst + i * sizeof(T));
+			T value = Load<T>(dst + i * sizeof(T));
 			value += frame_of_reference;
-			Store<T>((T)value, dst + i * sizeof(T));
+			Store<T>(value, dst + i * sizeof(T));
+		}
+	}
+
+	// Sign bit extension
+	template <class T, class T_U = typename std::make_unsigned<T>::type>
+	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
+		T const mask = ((T_U)1) << (width - 1);
+		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
+			T value = Load<T>(dst + i * sizeof(T));
+			value = value & ((((T_U)1) << width) - ((T_U)1));
+			T result = (value ^ mask) - mask;
+			Store(result, dst + i * sizeof(T));
 		}
 	}
 
@@ -202,6 +214,10 @@ private:
 			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
+		}
+
+		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
+			SignExtend<T>(dst, width);
 		}
 
 		ApplyFrameOfReference(dst, frame_of_reference);

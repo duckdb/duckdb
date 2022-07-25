@@ -158,7 +158,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	auto analyze_state = DetectBestCompressionMethod(compression_idx);
 
 	if (!analyze_state) {
-		throw InternalException("No suitable compression/storage method found to store column");
+		throw FatalException("No suitable compression/storage method found to store column");
 	}
 
 	// now that we have analyzed the compression functions we can start writing to disk
