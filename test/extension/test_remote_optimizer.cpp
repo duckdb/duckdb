@@ -47,14 +47,14 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 
 		while (true) {
 			idx_t bytes;
-			read(connfd, &bytes, sizeof(idx_t));
+			REQUIRE(read(connfd, &bytes, sizeof(idx_t)) == sizeof(idx_t));
 
 			if (bytes == 0) {
 				break;
 			}
 			auto buffer = malloc(bytes);
 			REQUIRE(buffer);
-			read(connfd, buffer, bytes);
+			REQUIRE(read(connfd, buffer, bytes) == bytes);
 
 			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
 			auto plan = LogicalOperator::Deserialize(deserializer, *con2.context);
@@ -63,14 +63,14 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			auto statement = make_unique<LogicalPlanStatement>(move(plan));
 			auto result = con2.Query(move(statement));
 			idx_t num_chunks = result->collection.ChunkCount();
-			write(connfd, &num_chunks, sizeof(idx_t));
+			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
 			for (auto &chunk : result->collection.Chunks()) {
 				BufferedSerializer serializer;
 				chunk->Serialize(serializer);
 				auto data = serializer.GetData();
 				idx_t len = data.size;
-				write(connfd, &len, sizeof(idx_t));
-				write(connfd, data.data.get(), len);
+				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
+				REQUIRE(write(connfd, data.data.get(), len) == len);
 			}
 		}
 		exit(0);
@@ -85,7 +85,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		                           "/test/extension/loadable_extension_optimizer_demo.duckdb_extension'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_host='127.0.0.1'"));
 		REQUIRE_NO_FAIL(con1.Query("SET waggle_location_port=4242"));
-		usleep(1000000);
+		usleep(100000); // need to wait a bit till socket is up
 
 		auto result1 = con1.Query(
 		    "SELECT first_name FROM PARQUET_SCAN('data/parquet-testing/userdata1.parquet') GROUP BY first_name");

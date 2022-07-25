@@ -77,18 +77,18 @@ public:
 		auto data = serializer.GetData();
 
 		idx_t len = data.size;
-		write(sockfd, &len, sizeof(idx_t));
-		write(sockfd, data.data.get(), len);
+		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
+		D_ASSERT(write(sockfd, data.data.get(), len) == len);
 
 		auto chunk_collection = make_unique<ChunkCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
-		read(sockfd, &n_chunks, sizeof(n_chunks)); // TODO someone check the return value
+		D_ASSERT(read(sockfd, &n_chunks, sizeof(idx_t)) == sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
 			idx_t chunk_len;
-			read(sockfd, &chunk_len, sizeof(chunk_len));
-
+			D_ASSERT(read(sockfd, &chunk_len, sizeof(idx_t)) == sizeof(idx_t));
 			auto buffer = malloc(chunk_len);
-			read(sockfd, buffer, chunk_len);
+			D_ASSERT(buffer);
+			D_ASSERT(read(sockfd, buffer, chunk_len) == chunk_len);
 			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
 			DataChunk chunk;
 			chunk.Deserialize(deserializer);
@@ -99,7 +99,7 @@ public:
 		plan = make_unique<LogicalChunkGet>(0, types, move(chunk_collection));
 
 		len = 0;
-		write(sockfd, &len, sizeof(idx_t));
+		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 		// close the socket
 		close(sockfd);
 	}
