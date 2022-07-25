@@ -64,6 +64,8 @@ public:
 	                                                 GlobalSourceState &gstate) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+	idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                    LocalSourceState &lstate) const override;
 
 	//! Becomes a source when it is an external join
 	bool IsSource() const override {
@@ -71,6 +73,10 @@ public:
 	}
 
 	bool ParallelSource() const override {
+		return true;
+	}
+
+	bool SupportsBatchIndex() const override {
 		return true;
 	}
 

@@ -358,7 +358,8 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	explicit HashJoinGlobalSourceState(const PhysicalHashJoin &op) : op(op), initialized(false), local_hts_done(0) {
+	explicit HashJoinGlobalSourceState(const PhysicalHashJoin &op)
+	    : op(op), initialized(false), local_hts_done(0), batch_index(0) {
 	}
 
 	const PhysicalHashJoin &op;
@@ -373,6 +374,7 @@ public:
 	bool initialized;
 	idx_t local_ht_count;
 	idx_t local_hts_done;
+	atomic<idx_t> batch_index;
 
 	void Initialize(HashJoinGlobalSinkState &sink) {
 		lock_guard<mutex> lock(sink.local_ht_lock);
@@ -640,6 +642,13 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			}
 		}
 	}
+}
+
+idx_t PhysicalHashJoin::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                      LocalSourceState &lstate) const {
+	D_ASSERT(SupportsBatchIndex());
+	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
+	return gstate.batch_index++;
 }
 
 } // namespace duckdb
