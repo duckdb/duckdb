@@ -1,0 +1,25 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_fatal_forced.test_coverage
+# description: Test forced bitpacking, with value ranges that are rejected by the bitpacking compression analyze step
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test (a INT64, b INT32, c INT16, d INT8);
+
+statement ok
+INSERT INTO test SELECT i, i, i, i FROM range(-128, 128) tbl(i);
+INSERT INTO test SELECT i, i, i, NULL FROM range(-32767, 32768) tbl(i);
+INSERT INTO test SELECT i, i, NULL, NULL FROM range(-2147483648, -2147482648) tbl(i);
+INSERT INTO test SELECT i, i, NULL, NULL FROM range(2147482648, 2147483648) tbl(i);
+INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(-9223372036854775808, -9223372036854774808) tbl(i);
+INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(9223372036854774808, 9223372036854775807) tbl(i);
+
+# Values are rejected by the bitpacking compression algorithm
+# When forced, this causes a Fatal Exception to be thrown
+statement error
+checkpoint

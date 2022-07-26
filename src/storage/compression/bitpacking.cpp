@@ -124,14 +124,12 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 			return false;
 		}
 	}
-
-	return true;
+	return analyze_state.state.template Flush<EmptyBitpackingWriter>();
 }
 
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
-	bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	return bitpacking_state.state.total_size;
 }
 

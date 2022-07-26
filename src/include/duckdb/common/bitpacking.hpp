@@ -183,9 +183,9 @@ private:
 			return;
 		}
 		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
-			T value = Load<T>(dst + i * sizeof(T));
+			T value = Load<T>(dst + (i * sizeof(T)));
 			value += frame_of_reference;
-			Store<T>(value, dst + i * sizeof(T));
+			Store<T>(value, dst + (i * sizeof(T)));
 		}
 	}
 

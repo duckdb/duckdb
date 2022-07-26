@@ -28,18 +28,22 @@ DROP TABLE a
 
 endloop
 
+statement ok
+CREATE TABLE test (d INT32);
+statement ok
+INSERT INTO test VALUES (-2147483648), (2147483647);
 
 statement ok
-CREATE TABLE test (a INT64, b INT32, c INT16, d INT8);
+CREATE TABLE test (a INT64, b INT32, c INT16, d TINYINT);
 
+# Only using (SIZEOF(TYPE)*8)-1
+# (All but 1 bit)
+# Because bitpacking wont accept a value range bigger than that
 statement ok
-INSERT INTO test SELECT i, i, i, i FROM range(-128, 128) tbl(i);
-INSERT INTO test SELECT i, i, i, NULL FROM range(-32767, 32768) tbl(i);
-INSERT INTO test SELECT i, i, NULL, NULL FROM range(-2147483648, -2147482648) tbl(i);
-INSERT INTO test SELECT i, i, NULL, NULL FROM range(2147482648, 2147483648) tbl(i);
-INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(-9223372036854775808, -9223372036854774808) tbl(i);
-INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(9223372036854774808, 9223372036854775807) tbl(i);
-INSERT INTO test values (9223372036854775807, NULL, NULL, NULL);
+INSERT INTO test SELECT i, i, i, i FROM range(-64, 64) tbl(i);
+INSERT INTO test SELECT i, i, i, NULL FROM range(-16384, 16384) tbl(i);
+INSERT INTO test VALUES (-1073741824, -1073741824, NULL, NULL), (1073741823, 1073741823, NULL, NULL);
+INSERT INTO test VALUES (-4611686018427387904, NULL, NULL, NULL), (4611686018427387903, NULL, NULL, NULL);
 
 statement ok
 checkpoint
@@ -47,7 +51,7 @@ checkpoint
 query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
--0.030491	-0.016639	-0.001946	-0.500000	69791
+-0.5	-0.5	-0.5	-0.5	32900
 
 statement ok
 drop table test
