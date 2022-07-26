@@ -95,8 +95,8 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
 			if (child_idx == 0) {
 				child_count = current_count;
-			} else {
-				D_ASSERT(current_count == child_count);
+			} else if (current_count != child_count) {
+				throw InternalException("Column Data Collection: mismatch in struct child sizes");
 			}
 		}
 	}

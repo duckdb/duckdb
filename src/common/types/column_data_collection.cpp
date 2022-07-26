@@ -616,7 +616,7 @@ void ColumnDataCollection::InitializeScanChunk(ColumnDataScanState &state, DataC
 	for (idx_t i = 0; i < state.column_ids.size(); i++) {
 		auto column_idx = state.column_ids[i];
 		D_ASSERT(column_idx < types.size());
-		chunk_types.push_back(types[state.column_ids[i]]);
+		chunk_types.push_back(types[column_idx]);
 	}
 	chunk.Initialize(allocator->GetAllocator(), chunk_types);
 }
