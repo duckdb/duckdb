@@ -273,7 +273,7 @@ public:
 protected:
 	DUCKDB_API explicit FatalException(ExceptionType type, const string &msg);
 	template <typename... Args>
-	DUCKDB_API explicit FatalException(ExceptionType type, const string &msg, Args... params)
+	explicit FatalException(ExceptionType type, const string &msg, Args... params)
 	    : FatalException(type, ConstructMessage(msg, params...)) {
 	}
 };
