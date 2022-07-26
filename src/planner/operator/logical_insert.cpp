@@ -30,7 +30,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);
 
 	auto name = reader.ReadRequired<string>();
-	auto &catalog = context.db->GetCatalog();
+	auto &catalog = Catalog::GetCatalog(context);
 
 	auto table_catalog = catalog.GetEntry(context, DEFAULT_SCHEMA, name);
 
