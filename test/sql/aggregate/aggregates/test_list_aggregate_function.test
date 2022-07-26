@@ -2,11 +2,6 @@
 # description: Test the list aggregate function for all data types
 # group: [aggregates]
 
-# TODO: test NULLs
-# TODO: test all kinds of data types, see list aggregates for reference
-# TODO: incorrect/not implemented
-# TODO: hugeint, or should that be supported?
-
 # INTEGER types
 
 foreach type tinyint smallint integer bigint utinyint usmallint uinteger ubigint

@@ -90,7 +90,6 @@ void ListFun::GetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 	case PhysicalType::INT32: {
 		auto data = TemplatedGetPrimitiveData<int32_t>(segment);
 		((int32_t *)vector_data)[row_idx] = data[segment_idx];
-		D_ASSERT(data);
 		break;
 	}
 	case PhysicalType::INT64: {
@@ -274,7 +273,6 @@ ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<unique
 		return TemplatedCreatePrimitiveSegment<char>(allocator, owning_vector, capacity);
 	default:
 		// INT128, INTERVAL
-		// TODO: any other data types missing?
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
 	}
 }
@@ -534,7 +532,6 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 		auto &children = StructVector::GetEntries(result);
 
 		auto struct_children = GetStructData(segment);
-		// TODO: test that this not break NULL stuff...
 		for (idx_t child_count = 0; child_count < children.size(); child_count++) {
 			GetDataFromSegment(struct_children[child_count], *children[child_count], total_count);
 		}
@@ -636,6 +633,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 			continue;
 		}
 		D_ASSERT(state->type);
+		D_ASSERT(state->owning_vector);
 		if (!combined_ptr[i]->linked_list) {
 
 			// copy the linked list
@@ -647,18 +645,20 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 			// copy the type
 			combined_ptr[i]->type = new LogicalType(*state->type);
 
-			// copy the owning vector (and its unique pointers to the allocated data)
-			// TODO: can this be done more efficiently?
+			// new owning_vector to hold the unique pointers
 			combined_ptr[i]->owning_vector = new vector<unique_ptr<AllocatedData>>;
-			auto &owning_vector = *state->owning_vector;
-			for (idx_t j = 0; j < state->owning_vector->size(); j++) {
-				combined_ptr[i]->owning_vector->push_back(move(owning_vector[j]));
-			}
 
 		} else {
 			combined_ptr[i]->linked_list->last_segment->next = state->linked_list->first_segment;
 			combined_ptr[i]->linked_list->last_segment = state->linked_list->last_segment;
 			combined_ptr[i]->linked_list->total_capacity += state->linked_list->total_capacity;
+		}
+
+		// copy the owning vector (and its unique pointers to the allocated data)
+		// FIXME: more efficient way of copying the unique pointers?
+		auto &owning_vector = *state->owning_vector;
+		for (idx_t j = 0; j < state->owning_vector->size(); j++) {
+			combined_ptr[i]->owning_vector->push_back(move(owning_vector[j]));
 		}
 	}
 }
