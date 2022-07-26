@@ -26,6 +26,7 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<Expression> Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader);
 
 public:
 	static LogicalType BindComparison(LogicalType left_type, LogicalType right_type);

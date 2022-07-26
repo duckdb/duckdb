@@ -44,7 +44,8 @@ void BoundReferenceExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField(index);
 }
 
-unique_ptr<Expression> BoundReferenceExpression::Deserialize(FieldReader &reader) {
+unique_ptr<Expression> BoundReferenceExpression::Deserialize(ClientContext &context, ExpressionType type,
+                                                             FieldReader &reader) {
 	auto alias = reader.ReadRequired<string>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto index = reader.ReadRequired<idx_t>();

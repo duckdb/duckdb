@@ -100,17 +100,20 @@ void Expression::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<Expression> Expression::Deserialize(Deserializer &source) {
+unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<ExpressionType>();
 
 	unique_ptr<Expression> result;
 	switch (type) {
 	case ExpressionType::BOUND_REF:
-		result = BoundReferenceExpression::Deserialize(reader);
+		result = BoundReferenceExpression::Deserialize(context, type, reader);
 		break;
 	case ExpressionType::BOUND_COLUMN_REF:
-		result = BoundColumnRefExpression::Deserialize(reader);
+		result = BoundColumnRefExpression::Deserialize(context, type, reader);
+		break;
+	case ExpressionType::BOUND_AGGREGATE:
+		result = BoundAggregateExpression::Deserialize(context, type, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization!" + ExpressionTypeToString(type));

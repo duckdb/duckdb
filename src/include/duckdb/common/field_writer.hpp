@@ -195,15 +195,15 @@ public:
 		return result;
 	}
 
-	template <class T>
-	unique_ptr<T> ReadOptional(unique_ptr<T> default_value) {
+	template <class T, typename... ARGS>
+	unique_ptr<T> ReadOptional(unique_ptr<T> default_value, ARGS &&...args) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			return default_value;
 		}
 		// field is there, read the actual value
 		AddField();
-		return source.template ReadOptional<T>();
+		return source.template ReadOptional<T>(std::forward<ARGS>(args)...);
 	}
 
 	template <class T, class RETURN_TYPE = unique_ptr<T>>

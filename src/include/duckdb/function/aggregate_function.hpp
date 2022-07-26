@@ -58,33 +58,42 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
                                    const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
                                    idx_t bias);
 
+typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
+                                      const AggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(ClientContext &context, FieldReader &reader,
+                                                            AggregateFunction &function);
+
 class AggregateFunction : public BaseScalarFunction {
 public:
-	DUCKDB_API AggregateFunction(const string &name, const vector<LogicalType> &arguments,
-	                             const LogicalType &return_type, aggregate_size_t state_size,
-	                             aggregate_initialize_t initialize, aggregate_update_t update,
-	                             aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                             FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                             aggregate_simple_update_t simple_update = nullptr,
-	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	DUCKDB_API
+	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
+	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
+	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_deserialize_t deserialize = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionSideEffects::NO_SIDE_EFFECTS,
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics) {
+	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
+	      serialize(serialize), deserialize(deserialize) {
 	}
 
-	DUCKDB_API AggregateFunction(const string &name, const vector<LogicalType> &arguments,
-	                             const LogicalType &return_type, aggregate_size_t state_size,
-	                             aggregate_initialize_t initialize, aggregate_update_t update,
-	                             aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                             aggregate_simple_update_t simple_update = nullptr,
-	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	DUCKDB_API
+	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
+	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
+	                  aggregate_window_t window = nullptr, aggregate_serialize_t serialize = nullptr,
+	                  aggregate_deserialize_t deserialize = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, FunctionSideEffects::NO_SIDE_EFFECTS,
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
-	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics) {
+	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
+	      serialize(serialize), deserialize(deserialize) {
 	}
 
 	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -93,20 +102,24 @@ public:
 	                             FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                             aggregate_simple_update_t simple_update = nullptr,
 	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
+	                             aggregate_serialize_t serialize = nullptr,
+	                             aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        null_handling, simple_update, bind, destructor, statistics, window) {
+	                        null_handling, simple_update, bind, destructor, statistics, window, serialize,
+	                        deserialize) {
 	}
 
-	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
-	                             aggregate_size_t state_size, aggregate_initialize_t initialize,
-	                             aggregate_update_t update, aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                             aggregate_simple_update_t simple_update = nullptr,
-	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	DUCKDB_API
+	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
+	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
+	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
+	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
+	                  aggregate_serialize_t serialize = nullptr, aggregate_deserialize_t deserialize = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
 	                        FunctionNullHandling::DEFAULT_NULL_HANDLING, simple_update, bind, destructor, statistics,
-	                        window) {
+	                        window, serialize, deserialize) {
 	}
 	//! The hashed aggregate state sizing function
 	aggregate_size_t state_size;
@@ -130,6 +143,9 @@ public:
 
 	//! The statistics propagation function (may be null)
 	aggregate_statistics_t statistics;
+
+	aggregate_serialize_t serialize;
+	aggregate_deserialize_t deserialize;
 
 	DUCKDB_API bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&

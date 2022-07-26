@@ -83,8 +83,8 @@ public:
 		table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
-		table_function.bind_data_serialize = ParquetScanBindDataSerialize;
-		table_function.bind_data_deserialize = ParquetScanBindDataDeserialize;
+		table_function.serialize = ParquetScanSerialize;
+		table_function.deserialize = ParquetScanDeserialize;
 
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -307,7 +307,8 @@ public:
 		return data.batch_index;
 	}
 
-	static void ParquetScanBindDataSerialize(FieldWriter &writer, FunctionData &bind_data_p) {
+	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData &bind_data_p,
+	                                 const TableFunction &function) {
 		auto &bind_data = (ParquetReadBindData &)bind_data_p;
 		writer.WriteList<string>(bind_data.files);
 		writer.WriteRegularSerializableList(bind_data.types);
@@ -316,7 +317,8 @@ public:
 		// TODO ParquetOptions
 	}
 
-	static unique_ptr<FunctionData> ParquetScanBindDataDeserialize(FieldReader &reader, ClientContext &context) {
+	static unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
+	                                                       TableFunction &function) {
 		auto files = reader.ReadRequiredList<string>();
 		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		auto names = reader.ReadRequiredList<string>();

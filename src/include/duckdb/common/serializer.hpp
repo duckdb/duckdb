@@ -94,11 +94,11 @@ public:
 		}
 	}
 
-	template <class T, class RETURN_TYPE = T>
-	unique_ptr<RETURN_TYPE> ReadOptional() {
+	template <class T, class RETURN_TYPE = T, typename... ARGS>
+	unique_ptr<RETURN_TYPE> ReadOptional(ARGS &&...args) {
 		auto has_entry = Read<bool>();
 		if (has_entry) {
-			return T::Deserialize(*this);
+			return T::Deserialize(*this, std::forward<ARGS>(args)...);
 		}
 		return nullptr;
 	}

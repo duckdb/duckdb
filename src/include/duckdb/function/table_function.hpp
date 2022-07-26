@@ -105,8 +105,10 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
-typedef void (*table_function_bind_data_serialize_t)(FieldWriter &writer, FunctionData &bind_data);
-typedef unique_ptr<FunctionData> (*table_function_bind_data_deserialize_t)(FieldReader &reader, ClientContext &context);
+typedef void (*table_function_serialize_t)(FieldWriter &writer, const FunctionData &bind_data,
+                                           const TableFunction &function);
+typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(ClientContext &context, FieldReader &reader,
+                                                                 TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:
@@ -155,8 +157,8 @@ public:
 	//! (Optional) returns the current batch index of the current scan operator
 	table_function_get_batch_index_t get_batch_index;
 
-	table_function_bind_data_serialize_t bind_data_serialize;
-	table_function_bind_data_deserialize_t bind_data_deserialize;
+	table_function_serialize_t serialize;
+	table_function_deserialize_t deserialize;
 
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.

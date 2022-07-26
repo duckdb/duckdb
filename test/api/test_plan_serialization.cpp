@@ -20,7 +20,8 @@ TEST_CASE("Test plan serialization", "[api]") {
 	Connection con(db);
 
 	Parser p;
-	p.ParseQuery("SELECT email, last_name FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
+	p.ParseQuery(
+	    "SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
 
 	Planner planner(*con.context);
 	planner.CreatePlan(move(p.statements[0]));

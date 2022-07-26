@@ -24,7 +24,7 @@ void LogicalProjection::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalProjection::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                            FieldReader &reader) {
-	auto expressions = reader.ReadRequiredSerializableList<Expression>();
+	auto expressions = reader.ReadRequiredSerializableList<Expression>(context);
 	auto table_index = reader.ReadRequired<idx_t>();
 	return make_unique<LogicalProjection>(table_index, move(expressions));
 }

@@ -38,6 +38,7 @@ public:
 	unique_ptr<Expression> Copy() override;
 
 	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<Expression> Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader);
 };
 
 } // namespace duckdb
