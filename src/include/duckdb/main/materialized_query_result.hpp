@@ -31,7 +31,7 @@ public:
 
 public:
 	//! Fetches a DataChunk from the query result.
-	//! This will consume the result (i.e. the chunks are taken directly from the ChunkCollection).
+	//! This will consume the result (i.e. the result can only be scanned once with this function)
 	DUCKDB_API unique_ptr<DataChunk> Fetch() override;
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw() override;
 	//! Converts the QueryResult to a string

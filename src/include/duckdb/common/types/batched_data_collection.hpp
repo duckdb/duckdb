@@ -52,7 +52,7 @@ private:
 	};
 
 	vector<LogicalType> types;
-	//! The data of the batched chunk collection - a set of batch_index -> ChunkCollection pointers
+	//! The data of the batched chunk collection - a set of batch_index -> ColumnDataCollection pointers
 	map<idx_t, unique_ptr<ColumnDataCollection>> data;
 	//! The last batch collection that was inserted into
 	CachedCollection last_collection;
