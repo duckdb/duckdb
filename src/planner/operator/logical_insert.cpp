@@ -9,30 +9,27 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	}
 	writer.WriteList<idx_t>(column_index_map);
 	writer.WriteRegularSerializableList(expected_types);
+	table->Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 	writer.WriteSerializableList(bound_defaults);
 
-	// The base table (TableCatalogEntry) to insert into
-	writer.WriteString(table->schema->name);
-	writer.WriteString(table->name);
-	writer.WriteRegularSerializableList(table->columns);
-	writer.WriteSerializableList(table->constraints);
 }
 
-unique_ptr<LogicalOperator> LogicalInsert::Deserialize(FieldReader &source, ClientContext &context) {
-	auto insert_values_size = source.ReadRequired<idx_t>();
+unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, LogicalOperatorType type,
+                                                       FieldReader &reader) {
+	auto insert_values_size = reader.ReadRequired<idx_t>();
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	for (idx_t i = 0; i < insert_values_size; i++) {
-		insert_values.push_back(source.ReadRequiredList<unique_ptr<Expression>>());
+		insert_values.push_back(reader.ReadRequiredList<unique_ptr<Expression>>());
 	}
-	auto column_index_map = source.ReadRequired<idx_t>();
-	auto expected_types = source.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto table_index = source.ReadRequired<idx_t>();
-	auto return_chunk = source.ReadRequired<bool>();
-	auto bound_defaults = source.ReadRequiredSerializableList<Expression>();
+	auto column_index_map = reader.ReadRequired<idx_t>();
+	auto expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto return_chunk = reader.ReadRequired<bool>();
+	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);
 
-	auto name = source.ReadRequired<string>();
+	auto name = reader.ReadRequired<string>();
 	auto &catalog = context.db->GetCatalog();
 
 	auto table_catalog = catalog.GetEntry(context, DEFAULT_SCHEMA, name);
@@ -48,11 +45,6 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(FieldReader &source, Clie
 	result->table_index = table_index;
 	result->return_chunk = return_chunk;
 	return result;
-}
-
-unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
 }
 
 } // namespace duckdb
