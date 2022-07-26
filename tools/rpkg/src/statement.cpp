@@ -560,7 +560,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 		return Rf_ScalarReal(0); // no need for protection because no allocation can happen afterwards
 	}
 
-	uint64_t nrows = result->collection.Count();
+	uint64_t nrows = result->RowCount();
 
 	// Note we cannot use cpp11's data frame here as it tries to calculate the number of rows itself,
 	// but gives the wrong answer if the first column is another data frame. So we set the necessary
@@ -581,21 +581,14 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 
 	// step 3: set values from chunks
 	uint64_t dest_offset = 0;
-	idx_t chunk_idx = 0;
-	while (true) {
-		auto chunk = result->Fetch();
-		if (!chunk || chunk->size() == 0) {
-			break;
-		}
-
-		D_ASSERT(chunk->ColumnCount() == ncols);
-		D_ASSERT(chunk->ColumnCount() == (idx_t)Rf_length(data_frame));
-		for (size_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
+	for (auto &chunk : result->Collection().Chunks()) {
+		D_ASSERT(chunk.ColumnCount() == ncols);
+		D_ASSERT(chunk.ColumnCount() == (idx_t)Rf_length(data_frame));
+		for (size_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 			SEXP dest = VECTOR_ELT(data_frame, col_idx);
-			transform(chunk->data[col_idx], dest, dest_offset, chunk->size(), integer64);
+			transform(chunk.data[col_idx], dest, dest_offset, chunk.size(), integer64);
 		}
-		dest_offset += chunk->size();
-		chunk_idx++;
+		dest_offset += chunk.size();
 	}
 
 	D_ASSERT(dest_offset == nrows);

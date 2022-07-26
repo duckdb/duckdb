@@ -15,7 +15,7 @@ class ColumnDataCollection;
 
 class ColumnDataChunkIterationHelper {
 public:
-	ColumnDataChunkIterationHelper(const ColumnDataCollection &collection, vector<column_t> column_ids);
+	DUCKDB_API ColumnDataChunkIterationHelper(const ColumnDataCollection &collection, vector<column_t> column_ids);
 
 private:
 	const ColumnDataCollection &collection;
@@ -26,7 +26,8 @@ private:
 
 	class ColumnDataChunkIterator {
 	public:
-		explicit ColumnDataChunkIterator(const ColumnDataCollection *collection_p, vector<column_t> column_ids);
+		DUCKDB_API explicit ColumnDataChunkIterator(const ColumnDataCollection *collection_p,
+		                                            vector<column_t> column_ids);
 
 		const ColumnDataCollection *collection;
 		ColumnDataScanState scan_state;
@@ -34,11 +35,11 @@ private:
 		idx_t row_index;
 
 	public:
-		void Next();
+		DUCKDB_API void Next();
 
-		ColumnDataChunkIterator &operator++();
-		bool operator!=(const ColumnDataChunkIterator &other) const;
-		DataChunk &operator*() const;
+		DUCKDB_API ColumnDataChunkIterator &operator++();
+		DUCKDB_API bool operator!=(const ColumnDataChunkIterator &other) const;
+		DUCKDB_API DataChunk &operator*() const;
 	};
 
 public:
@@ -52,7 +53,7 @@ public:
 
 class ColumnDataRowIterationHelper {
 public:
-	ColumnDataRowIterationHelper(const ColumnDataCollection &collection);
+	DUCKDB_API ColumnDataRowIterationHelper(const ColumnDataCollection &collection);
 
 private:
 	const ColumnDataCollection &collection;
@@ -62,7 +63,7 @@ private:
 
 	class ColumnDataRowIterator {
 	public:
-		explicit ColumnDataRowIterator(const ColumnDataCollection *collection_p);
+		DUCKDB_API explicit ColumnDataRowIterator(const ColumnDataCollection *collection_p);
 
 		const ColumnDataCollection *collection;
 		ColumnDataScanState scan_state;
@@ -72,9 +73,9 @@ private:
 	public:
 		void Next();
 
-		ColumnDataRowIterator &operator++();
-		bool operator!=(const ColumnDataRowIterator &other) const;
-		const ColumnDataRow &operator*() const;
+		DUCKDB_API ColumnDataRowIterator &operator++();
+		DUCKDB_API bool operator!=(const ColumnDataRowIterator &other) const;
+		DUCKDB_API const ColumnDataRow &operator*() const;
 	};
 
 public:
