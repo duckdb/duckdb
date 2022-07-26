@@ -24,8 +24,8 @@ public:
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
-	static void ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
-	                           bool filename_enabled);
+	static void ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
+	                                   bool hive_enabled, bool filename_enabled);
 };
 
 } // namespace duckdb

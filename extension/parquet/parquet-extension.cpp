@@ -45,7 +45,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
-	// Indicates that the file from the initial_reader is no longer present in data->files
+	// Indicates that the file from the initial_reader is no longer present in files
 	bool should_flush_initial_reader = false;
 };
 
@@ -164,9 +164,9 @@ public:
 		if (bind_data.files.size() < 2) {
 			if (!bind_data.should_flush_initial_reader) {
 				// most common path, scanning single parquet file
-				return ParquetReader::ReadStatistics(
-				    *bind_data.initial_reader, bind_data.initial_reader->return_types[column_index], column_index,
-				    bind_data.initial_reader->metadata->metadata.get());
+				return ParquetReader::ReadStatistics(*bind_data.initial_reader,
+				                                     bind_data.initial_reader->return_types[column_index], column_index,
+				                                     bind_data.initial_reader->metadata->metadata.get());
 			} else if (!config.options.object_cache_enable) {
 				// our initial reader should be flushed and we have no object cache, so no luck
 				return nullptr;
@@ -332,9 +332,9 @@ public:
 			if (bind_data.files.empty()) {
 				result->current_reader = nullptr;
 			} else {
-				result->current_reader =
-				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types, input.column_ids,
-				                               bind_data.initial_reader->parquet_options, bind_data.files[0]);
+				result->current_reader = make_shared<ParquetReader>(
+				    context, bind_data.files[0], bind_data.names, bind_data.types, input.column_ids,
+				    bind_data.initial_reader->parquet_options, bind_data.files[0]);
 			}
 		} else {
 			result->current_reader = bind_data.initial_reader;
@@ -377,7 +377,7 @@ public:
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
 		if (data.should_flush_initial_reader && data.files.empty()) {
-			return nullptr;
+			return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
 		}
 		return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
 	}
@@ -437,7 +437,7 @@ public:
 		HivePartitioning::ApplyFiltersToFileList(data->files, filters,
 		                                         data->initial_reader->parquet_options.hive_partitioning,
 		                                         data->initial_reader->parquet_options.filename);
-		data->should_flush_initial_reader = data->files.empty() || initial_filename  != data->files[0];
+		data->should_flush_initial_reader = data->files.empty() || initial_filename != data->files[0];
 	}
 };
 

@@ -60,8 +60,8 @@ std::map<string, string> HivePartitioning::Parse(string &filename) {
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
-void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
-                                      bool filename_enabled) {
+void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
+                                              bool hive_enabled, bool filename_enabled) {
 	vector<string> pruned_files;
 	vector<unique_ptr<Expression>> pruned_filters;
 
@@ -80,10 +80,11 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
 			ConvertKnownColRefToConstants(filter_copy, known_values);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
 			Value result_value;
-			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() || !ExpressionExecutor::TryEvaluateScalar(*filter_copy, result_value)) {
+			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
+			    !ExpressionExecutor::TryEvaluateScalar(*filter_copy, result_value)) {
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
 				pruned_filters.emplace_back(filter->Copy());
-			} else if(!result_value.GetValue<bool>()) {
+			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
 			}
