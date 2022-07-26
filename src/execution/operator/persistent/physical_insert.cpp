@@ -111,7 +111,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class InsertSourceState : public GlobalSourceState {
 public:
-	InsertSourceState(const PhysicalInsert &op) : finished(false) {
+	explicit InsertSourceState(const PhysicalInsert &op) : finished(false) {
 		if (op.return_chunk) {
 			auto &g = (InsertGlobalState &)*op.sink_state;
 			g.return_collection.InitializeScan(scan_state);

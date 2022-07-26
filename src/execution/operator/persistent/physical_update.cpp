@@ -140,7 +140,7 @@ void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class UpdateSourceState : public GlobalSourceState {
 public:
-	UpdateSourceState(const PhysicalUpdate &op) : finished(false) {
+	explicit UpdateSourceState(const PhysicalUpdate &op) : finished(false) {
 		if (op.return_chunk) {
 			auto &g = (UpdateGlobalState &)*op.sink_state;
 			g.return_collection.InitializeScan(scan_state);

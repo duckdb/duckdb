@@ -132,14 +132,6 @@ ColumnDataRowCollection::ColumnDataRowCollection(const ColumnDataCollection &col
 	}
 }
 
-bool ColumnDataRowCollection::empty() const {
-	return rows.empty();
-}
-
-idx_t ColumnDataRowCollection::size() const {
-	return rows.size();
-}
-
 ColumnDataRow &ColumnDataRowCollection::operator[](idx_t i) {
 	return rows[i];
 }

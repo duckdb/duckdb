@@ -156,8 +156,12 @@ public:
 
 public:
 	// container API
-	DUCKDB_API bool empty() const;
-	DUCKDB_API idx_t size() const;
+	DUCKDB_API bool empty() const {
+		return rows.empty();
+	}
+	DUCKDB_API idx_t size() const {
+		return rows.size();
+	}
 
 	DUCKDB_API ColumnDataRow &operator[](idx_t i);
 	DUCKDB_API const ColumnDataRow &operator[](idx_t i) const;

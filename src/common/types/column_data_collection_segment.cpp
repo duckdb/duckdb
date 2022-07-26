@@ -172,7 +172,7 @@ void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result)
 	FetchChunk(chunk_idx, result, column_ids);
 }
 
-void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result, vector<column_t> column_ids) {
+void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids) {
 	D_ASSERT(chunk_idx < chunk_data.size());
 	ChunkManagementState state;
 	InitializeChunkState(chunk_idx, state);

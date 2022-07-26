@@ -115,7 +115,7 @@ OperatorResultType CrossProductExecutor::Execute(DataChunk &input, DataChunk &ou
 
 class CrossProductOperatorState : public OperatorState {
 public:
-	CrossProductOperatorState(ColumnDataCollection &rhs) : executor(rhs) {
+	explicit CrossProductOperatorState(ColumnDataCollection &rhs) : executor(rhs) {
 	}
 
 	CrossProductExecutor executor;

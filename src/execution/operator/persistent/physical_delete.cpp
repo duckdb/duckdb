@@ -70,7 +70,7 @@ unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 class DeleteSourceState : public GlobalSourceState {
 public:
-	DeleteSourceState(const PhysicalDelete &op) : finished(false) {
+	explicit DeleteSourceState(const PhysicalDelete &op) : finished(false) {
 		if (op.return_chunk) {
 			auto &g = (DeleteGlobalState &)*op.sink_state;
 			g.return_collection.InitializeScan(scan_state);
