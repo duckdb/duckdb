@@ -153,9 +153,74 @@ Value ColumnDataRowCollection::GetValue(idx_t column, idx_t index) const {
 }
 
 //===--------------------------------------------------------------------===//
+// ColumnDataChunkIterator
+//===--------------------------------------------------------------------===//
+ColumnDataChunkIterationHelper ColumnDataCollection::Chunks() const {
+	vector<column_t> column_ids;
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		column_ids.push_back(i);
+	}
+	return Chunks(column_ids);
+}
+
+ColumnDataChunkIterationHelper ColumnDataCollection::Chunks(vector<column_t> column_ids) const {
+	return ColumnDataChunkIterationHelper(*this, move(column_ids));
+}
+
+ColumnDataChunkIterationHelper::ColumnDataChunkIterationHelper(const ColumnDataCollection &collection_p,
+                                                               vector<column_t> column_ids_p)
+    : collection(collection_p), column_ids(move(column_ids_p)) {
+}
+
+ColumnDataChunkIterationHelper::ColumnDataChunkIterator::ColumnDataChunkIterator(
+    const ColumnDataCollection *collection_p, vector<column_t> column_ids_p)
+    : collection(collection_p), scan_chunk(make_shared<DataChunk>()), row_index(0) {
+	if (!collection) {
+		return;
+	}
+	collection->InitializeScan(scan_state, move(column_ids_p));
+	collection->InitializeScanChunk(scan_state, *scan_chunk);
+	collection->Scan(scan_state, *scan_chunk);
+}
+
+void ColumnDataChunkIterationHelper::ColumnDataChunkIterator::Next() {
+	if (!collection) {
+		return;
+	}
+	if (!collection->Scan(scan_state, *scan_chunk)) {
+		collection = nullptr;
+		row_index = 0;
+	} else {
+		row_index += scan_chunk->size();
+	}
+}
+
+ColumnDataChunkIterationHelper::ColumnDataChunkIterator &
+ColumnDataChunkIterationHelper::ColumnDataChunkIterator::operator++() {
+	Next();
+	return *this;
+}
+
+bool ColumnDataChunkIterationHelper::ColumnDataChunkIterator::operator!=(const ColumnDataChunkIterator &other) const {
+	return collection != other.collection || row_index != other.row_index;
+}
+
+DataChunk &ColumnDataChunkIterationHelper::ColumnDataChunkIterator::operator*() const {
+	return *scan_chunk;
+}
+
+//===--------------------------------------------------------------------===//
 // ColumnDataRowIterator
 //===--------------------------------------------------------------------===//
-ColumnDataCollection::ColumnDataRowIterator::ColumnDataRowIterator(ColumnDataCollection *collection_p)
+ColumnDataRowIterationHelper ColumnDataCollection::Rows() const {
+	return ColumnDataRowIterationHelper(*this);
+}
+
+ColumnDataRowIterationHelper::ColumnDataRowIterationHelper(const ColumnDataCollection &collection_p)
+    : collection(collection_p) {
+}
+
+ColumnDataRowIterationHelper::ColumnDataRowIterator::ColumnDataRowIterator(const ColumnDataCollection *collection_p)
     : collection(collection_p), scan_chunk(make_shared<DataChunk>()), current_row(*scan_chunk, 0, 0) {
 	if (!collection) {
 		return;
@@ -165,7 +230,7 @@ ColumnDataCollection::ColumnDataRowIterator::ColumnDataRowIterator(ColumnDataCol
 	collection->Scan(scan_state, *scan_chunk);
 }
 
-void ColumnDataCollection::ColumnDataRowIterator::Next() {
+void ColumnDataRowIterationHelper::ColumnDataRowIterator::Next() {
 	if (!collection) {
 		return;
 	}
@@ -181,17 +246,17 @@ void ColumnDataCollection::ColumnDataRowIterator::Next() {
 	}
 }
 
-ColumnDataCollection::ColumnDataRowIterator &ColumnDataCollection::ColumnDataRowIterator::operator++() {
+ColumnDataRowIterationHelper::ColumnDataRowIterator &ColumnDataRowIterationHelper::ColumnDataRowIterator::operator++() {
 	Next();
 	return *this;
 }
 
-bool ColumnDataCollection::ColumnDataRowIterator::operator!=(const ColumnDataRowIterator &other) const {
+bool ColumnDataRowIterationHelper::ColumnDataRowIterator::operator!=(const ColumnDataRowIterator &other) const {
 	return collection != other.collection || current_row.row_index != other.current_row.row_index ||
 	       current_row.base_index != other.current_row.base_index;
 }
 
-const ColumnDataRow &ColumnDataCollection::ColumnDataRowIterator::operator*() const {
+const ColumnDataRow &ColumnDataRowIterationHelper::ColumnDataRowIterator::operator*() const {
 	return current_row;
 }
 
@@ -595,25 +660,6 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
 	result.Verify();
 	return true;
-}
-
-void ColumnDataCollection::Scan(const std::function<void(DataChunk &)> &callback) {
-	vector<column_t> column_ids;
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		column_ids.push_back(i);
-	}
-	Scan(move(column_ids), callback);
-}
-
-void ColumnDataCollection::Scan(vector<column_t> column_ids, const std::function<void(DataChunk &)> &callback) {
-	ColumnDataScanState state;
-	InitializeScan(state, move(column_ids));
-
-	DataChunk chunk;
-	InitializeScanChunk(state, chunk);
-	while (Scan(state, chunk)) {
-		callback(chunk);
-	}
 }
 
 ColumnDataRowCollection ColumnDataCollection::GetRows() const {

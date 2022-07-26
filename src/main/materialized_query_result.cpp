@@ -21,7 +21,7 @@ string MaterializedQueryResult::ToString() {
 		result = HeaderToString();
 		result += "[ Rows: " + to_string(collection->Count()) + "]\n";
 		auto &coll = Collection();
-		for (auto &row : coll) {
+		for (auto &row : coll.Rows()) {
 			for (idx_t col_idx = 0; col_idx < coll.ColumnCount(); col_idx++) {
 				if (col_idx > 0) {
 					result += "\t";

@@ -263,15 +263,18 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 		const unique_ptr<ColumnWriter> &col_writer = column_writers[col_idx];
 		auto write_state = col_writer->InitializeWriteState(row_group);
 		if (col_writer->HasAnalyze()) {
-			buffer.Scan([&](DataChunk &chunk) {
+			for (auto &chunk : buffer.Chunks()) {
 				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());
-			});
+			}
 			col_writer->FinalizeAnalyze(*write_state);
 		}
-		buffer.Scan(
-		    [&](DataChunk &chunk) { col_writer->Prepare(*write_state, nullptr, chunk.data[col_idx], chunk.size()); });
+		for (auto &chunk : buffer.Chunks()) {
+			col_writer->Prepare(*write_state, nullptr, chunk.data[col_idx], chunk.size());
+		}
 		col_writer->BeginWrite(*write_state);
-		buffer.Scan([&](DataChunk &chunk) { col_writer->Write(*write_state, chunk.data[col_idx], chunk.size()); });
+		for (auto &chunk : buffer.Chunks()) {
+			col_writer->Write(*write_state, chunk.data[col_idx], chunk.size());
+		}
 		col_writer->FinalizeWrite(*write_state);
 	}
 

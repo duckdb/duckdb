@@ -108,7 +108,7 @@ template <class SRC, class DST = SRC, class OP = CStandardConverter>
 void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector<column_t> &column_ids) {
 	idx_t row = 0;
 	auto target = (DST *)column->__deprecated_data;
-	source.Scan(column_ids, [&](DataChunk &input) {
+	for (auto &input : source.Chunks(column_ids)) {
 		auto source = FlatVector::GetData<SRC>(input.data[0]);
 		auto &mask = FlatVector::Validity(input.data[0]);
 
@@ -119,7 +119,7 @@ void WriteData(duckdb_column *column, ColumnDataCollection &source, const vector
 				target[row] = OP::template Convert<SRC, DST>(source[k]);
 			}
 		}
-	});
+	}
 }
 
 duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result, duckdb_column *column, idx_t col) {
@@ -137,11 +137,11 @@ duckdb_state deprecated_duckdb_translate_column(MaterializedQueryResult &result,
 	// first convert the nullmask
 	{
 		idx_t row = 0;
-		collection.Scan(column_ids, [&](DataChunk &input) {
+		for (auto &input : collection.Chunks(column_ids)) {
 			for (idx_t k = 0; k < input.size(); k++) {
 				column->__deprecated_nullmask[row++] = FlatVector::IsNull(input.data[0], k);
 			}
-		});
+		}
 	}
 	// then write the data
 	switch (result.types[col].id()) {

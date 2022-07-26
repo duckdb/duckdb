@@ -331,7 +331,9 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
-	collection.Scan([&](DataChunk &chunk) { table.storage->Append(table, context, chunk); });
+	for (auto &chunk : collection.Chunks()) {
+		table.storage->Append(table, context, chunk);
+	}
 }
 
 void BaseAppender::Close() {

@@ -1179,7 +1179,9 @@ void ClientContext::Append(TableDescription &description, ColumnDataCollection &
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		collection.Scan([&](DataChunk &chunk) { table_entry->storage->Append(*table_entry, *this, chunk); });
+		for (auto &chunk : collection.Chunks()) {
+			table_entry->storage->Append(*table_entry, *this, chunk);
+		}
 	});
 }
 

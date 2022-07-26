@@ -8,11 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/mutex.hpp"
-#include <functional>
+#include "duckdb/common/types/column_data_collection_iterators.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -23,49 +19,6 @@ class ColumnDataAllocator;
 class ColumnDataCollection;
 class ColumnDataCollectionSegment;
 class ColumnDataRowCollection;
-
-enum class ColumnDataAllocatorType { BUFFER_MANAGER_ALLOCATOR, IN_MEMORY_ALLOCATOR };
-
-struct ChunkManagementState {
-	unordered_map<idx_t, BufferHandle> handles;
-};
-
-struct ColumnDataAppendState {
-	ChunkManagementState current_chunk_state;
-	vector<UnifiedVectorFormat> vector_data;
-};
-
-struct ColumnDataScanState {
-	ChunkManagementState current_chunk_state;
-	idx_t segment_index;
-	idx_t chunk_index;
-	idx_t current_row_index;
-	idx_t next_row_index;
-	vector<column_t> column_ids;
-};
-
-struct ColumnDataParallelScanState {
-	ColumnDataScanState scan_state;
-	mutex lock;
-};
-
-struct ColumnDataLocalScanState {
-	ChunkManagementState current_chunk_state;
-	idx_t current_row_index;
-};
-
-class ColumnDataRow {
-public:
-	ColumnDataRow(DataChunk &chunk, idx_t row_index, idx_t base_index);
-
-	DataChunk &chunk;
-	idx_t row_index;
-	idx_t base_index;
-
-public:
-	Value GetValue(idx_t column_index) const;
-	idx_t RowIndex() const;
-};
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
 //! It is efficient to read and scan
@@ -126,11 +79,6 @@ public:
 	//! Scans a DataChunk from the ColumnDataCollection
 	DUCKDB_API bool Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result) const;
 
-	//! Performs a scan of the ColumnDataCollection, invoking the callback for each chunk
-	DUCKDB_API void Scan(const std::function<void(DataChunk &)> &callback);
-	//! Performs a scan of the ColumnDataCollection, projecting the specified columns
-	DUCKDB_API void Scan(vector<column_t> column_ids, const std::function<void(DataChunk &)> &callback);
-
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
 
@@ -144,10 +92,23 @@ public:
 
 	DUCKDB_API void Reset();
 
+	//! Returns the number of data chunks present in the ColumnDataCollection
 	DUCKDB_API idx_t ChunkCount() const;
+	//! Fetch an individual chunk from the ColumnDataCollection
 	DUCKDB_API void FetchChunk(idx_t chunk_idx, DataChunk &result) const;
 
-	//! Returns a set of all of the rows in the column data collection
+	//! Constructs a class that can be iterated over to fetch individual chunks
+	//! Iterating over this is syntactic sugar over just calling Scan
+	DUCKDB_API ColumnDataChunkIterationHelper Chunks() const;
+	//! Constructs a class that can be iterated over to fetch individual chunks
+	//! Only the column indexes specified in the column_ids list are scanned
+	DUCKDB_API ColumnDataChunkIterationHelper Chunks(vector<column_t> column_ids) const;
+
+	//! Constructs a class that can be iterated over to fetch individual rows
+	//! Note that row iteration is slow, and the `.Chunks()` method should be used instead
+	DUCKDB_API ColumnDataRowIterationHelper Rows() const;
+
+	//! Returns a materialized set of all of the rows in the column data collection
 	//! Note that usage of this is slow - avoid using this unless the amount of rows is small, or if you do not care
 	//! about performance
 	DUCKDB_API ColumnDataRowCollection GetRows() const;
@@ -183,36 +144,9 @@ private:
 	vector<ColumnDataCopyFunction> copy_functions;
 	//! When the column data collection is marked as finished - new tuples can no longer be appended to it
 	bool finished_append;
-
-private:
-	class ColumnDataRowIterator;
-
-	class ColumnDataRowIterator {
-	public:
-		explicit ColumnDataRowIterator(ColumnDataCollection *collection_p);
-
-		ColumnDataCollection *collection;
-		ColumnDataScanState scan_state;
-		shared_ptr<DataChunk> scan_chunk;
-		ColumnDataRow current_row;
-
-	public:
-		void Next();
-
-		ColumnDataRowIterator &operator++();
-		bool operator!=(const ColumnDataRowIterator &other) const;
-		const ColumnDataRow &operator*() const;
-	};
-
-public:
-	DUCKDB_API ColumnDataRowIterator begin() {
-		return ColumnDataRowIterator(this);
-	}
-	DUCKDB_API ColumnDataRowIterator end() {
-		return ColumnDataRowIterator(nullptr);
-	}
 };
 
+//! The ColumnDataRowCollection represents a set of materialized rows, as obtained from the ColumnDataCollection
 class ColumnDataRowCollection {
 public:
 	DUCKDB_API ColumnDataRowCollection(const ColumnDataCollection &collection);
