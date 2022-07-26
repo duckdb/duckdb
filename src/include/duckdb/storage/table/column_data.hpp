@@ -52,6 +52,10 @@ public:
 	ColumnData *parent;
 	//! The segments holding the data of this column segment
 	SegmentTree data;
+	//! The compression id of the column after analysis
+	idx_t compression_idx;
+	//! The analysis state to be used during compression
+	unique_ptr<AnalyzeState> state;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;

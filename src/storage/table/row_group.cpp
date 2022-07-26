@@ -721,21 +721,20 @@ bool CompressionForTypeExists(PhysicalType type) {
 	}
 }
 
-CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
-                                                      CompressionType compression_type) {
+void RowGroup::DetectBestCompressionMethod(ColumnData *col_data, CompressionType compression_type, bool is_validity) {
+	idx_t compression_idx = 0;
+	vector<CompressionFunction *> compression_functions =
+	    db.config.GetCompressionFunctions(col_data->type.InternalType());
+	D_ASSERT(!compression_functions.empty());
+
 	if (compression_type != CompressionType::COMPRESSION_AUTO) {
-		return compression_type;
+		ForceCompression(compression_functions, compression_type);
 	}
 	auto &config = DBConfig::GetConfig(db);
-	if (config.force_compression != CompressionType::COMPRESSION_AUTO) {
-		return config.force_compression;
+	if (compression_type == CompressionType::COMPRESSION_AUTO &&
+	    config.force_compression != CompressionType::COMPRESSION_AUTO) {
+		ForceCompression(compression_functions, config.force_compression);
 	}
-	if (!CompressionForTypeExists(columns[col_idx]->type.InternalType())) {
-		return CompressionType::COMPRESSION_AUTO;
-	}
-	vector<CompressionFunction *> compression_functions =
-	    db.config.GetCompressionFunctions(columns[col_idx]->type.InternalType());
-	D_ASSERT(!compression_functions.empty());
 
 	// set up the analyze states for each compression method
 	vector<unique_ptr<AnalyzeState>> analyze_states;
@@ -746,9 +745,10 @@ CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, id
 			continue;
 		}
 		analyze_states.push_back(
-		    compression_functions[i]->init_analyze(*columns[col_idx], columns[col_idx]->type.InternalType()));
+		    compression_functions[i]->init_analyze(*col_data, col_data->type.InternalType()));
 	}
-	Vector intermediate(columns[col_idx]->type, true, false);
+
+	Vector intermediate(is_validity ? LogicalType::BOOLEAN : col_data->type, true, is_validity);
 	// scan over all the segments and run the analyze step
 	ScanSegments(
 	    [&](Vector &scan_vector, idx_t count) {
@@ -765,7 +765,7 @@ CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, id
 			    }
 		    }
 	    },
-	    intermediate, col_idx);
+	    intermediate, col_data->column_index);
 
 	// now that we have passed over all the data, we need to figure out the best method
 	// we do this using the final_analyze method
@@ -783,16 +783,42 @@ CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, id
 			state = move(analyze_states[i]);
 		}
 	}
-	//	return state;
-	return compression_functions[compression_idx]->type;
+
+	// Assign the type and state to the ColumnData
+	col_data->compression_idx = compression_idx;
+	col_data->state = move(state);
+}
+
+void RowGroup::ForceCompression(vector<CompressionFunction *> &compression_functions,
+                                              CompressionType compression_type) {
+	// On of the force_compression flags has been set
+	// check if this compression method is available
+	bool found = false;
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (compression_functions[i]->type == compression_type) {
+			found = true;
+			break;
+		}
+	}
+	if (found) {
+		// the force_compression method is available
+		// clear all other compression methods
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (compression_functions[i]->type != compression_type) {
+				compression_functions[i] = nullptr;
+			}
+		}
+	}
 }
 
 vector<CompressionType> RowGroup::DetectBestCompressionMethodTable(TableDataWriter &writer) {
 	vector<CompressionType> table_compression;
 	for (idx_t i = 0; i < columns.size(); i++) {
-		idx_t compression_idx = 0;
 		CompressionType compression_type = writer.GetColumnCompressionType(i);
-		table_compression.push_back(DetectBestCompressionMethod(compression_idx, i, compression_type));
+		DetectBestCompressionMethod(columns[i].get(), compression_type, false);
+		vector<CompressionFunction *> compression_functions =
+		    db.config.GetCompressionFunctions(columns[i]->type.InternalType());
+		table_compression.push_back(compression_functions[columns[i]->compression_idx]->type);
 	}
 	return table_compression;
 }
@@ -801,9 +827,9 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
                                      DataTable &data_table) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
-	if (!db.config.preserve_insertion_order && db.config.force_compression_sorting) {
+	auto table_compression = DetectBestCompressionMethodTable(writer);
+	if (db.config.force_compression_sorting) {
 		// Sorts columns to optimize RLE compression
-		auto table_compression = DetectBestCompressionMethodTable(writer);
 		RLESort rle_checkpoint_sort(*this, data_table, table_compression);
 		rle_checkpoint_sort.Sort();
 	}

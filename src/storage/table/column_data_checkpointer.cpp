@@ -155,15 +155,18 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// now we need to write our segment
 	// we will first run an analyze step that determines which compression function to use
-	idx_t compression_idx;
-	auto analyze_state = DetectBestCompressionMethod(compression_idx);
+	if (is_validity) {
+		row_group.DetectBestCompressionMethod(&col_data, checkpoint_info.compression_type, is_validity);
+	}
+
+	auto best_function = compression_functions[col_data.compression_idx];
+	auto analyze_state = move(col_data.state);
 
 	if (!analyze_state) {
 		throw InternalException("No suitable compression/storage method found to store column");
 	}
 
 	// now that we have analyzed the compression functions we can start writing to disk
-	auto best_function = compression_functions[compression_idx];
 	auto compress_state = best_function->init_compression(*this, move(analyze_state));
 	ScanSegments(
 	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });

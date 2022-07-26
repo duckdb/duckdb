@@ -118,6 +118,8 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
 
+	void DetectBestCompressionMethod(ColumnData *col_data, CompressionType compression_type, bool is_validity);
+
 	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
 	                           DataTable &data_table);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
@@ -152,8 +154,8 @@ private:
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
 
-	CompressionType DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
-	                                            CompressionType compression_type);
+	void ForceCompression(vector<CompressionFunction *> &compression_functions,
+	                                CompressionType compression_type);
 
 	vector<CompressionType> DetectBestCompressionMethodTable(TableDataWriter &writer);
 
