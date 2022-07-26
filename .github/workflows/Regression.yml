@@ -116,7 +116,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        ./clean.sh -f
+        ./clean.sh
         cd ../..
 
     - name: Build Current
