@@ -1152,6 +1152,19 @@ public:
 	}
 };
 
+struct StringHash {
+	std::size_t operator()(const string_t &k) const {
+		return Hash(k);
+	}
+};
+
+struct StringEquality {
+	bool operator()(const string_t &a, const string_t &b) const {
+		return Equals::Operation(a, b);
+	}
+};
+typedef unordered_map<string_t, uint32_t, StringHash, StringEquality> string_dictionary_t;
+
 class StringColumnWriterState : public BasicColumnWriterState {
 public:
 	StringColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
@@ -1165,7 +1178,7 @@ public:
 	idx_t estimated_plain_size = 0;
 
 	// Dictionary
-	unordered_map<string, uint32_t> dictionary;
+	string_dictionary_t dictionary;
 	// key_bit_width== 0 signifies the chunk is written in plain encoding
 	uint32_t key_bit_width;
 
@@ -1176,7 +1189,7 @@ public:
 
 class StringWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StringWriterPageState(uint32_t bit_width, const unordered_map<string, uint32_t> &values)
+	explicit StringWriterPageState(uint32_t bit_width, const string_dictionary_t &values)
 	    : bit_width(bit_width), dictionary(values), encoder(bit_width), written_value(false) {
 		D_ASSERT(IsDictionaryEncoded() || (bit_width == 0 && dictionary.empty()));
 	}
@@ -1186,7 +1199,7 @@ public:
 	}
 	// if 0, we're writing a plain page
 	uint32_t bit_width;
-	const unordered_map<string, uint32_t> &dictionary;
+	const string_dictionary_t &dictionary;
 	RleBpEncoder encoder;
 	bool written_value;
 };
@@ -1234,13 +1247,13 @@ public:
 
 			if (validity.RowIsValid(vector_index)) {
 				run_length++;
-				const auto &value = strings[vector_index].GetString();
-				auto found = state.dictionary.insert(unordered_map<string, idx_t>::value_type(value, new_value_index));
-				state.estimated_plain_size += value.size() + STRING_LENGTH_SIZE;
+				const auto &value = strings[vector_index];
+				auto found = state.dictionary.insert(string_dictionary_t ::value_type(value, new_value_index));
+				state.estimated_plain_size += value.GetSize() + STRING_LENGTH_SIZE;
 				if (found.second) {
 					// string didn't exist yet in the dictionary
 					new_value_index++;
-					state.estimated_dict_page_size += value.size() + MAX_DICTIONARY_KEY_SIZE;
+					state.estimated_dict_page_size += value.GetSize() + MAX_DICTIONARY_KEY_SIZE;
 				}
 				// if the value changed, we will encode it in the page
 				if (last_value_index != found.first->second) {
@@ -1341,9 +1354,9 @@ public:
 			return;
 		}
 		// first we need to sort the values in index order
-		auto values = vector<string>(state.dictionary.size());
+		auto values = vector<string_t>(state.dictionary.size());
 		for (const auto &entry : state.dictionary) {
-			D_ASSERT(values[entry.second].empty());
+			D_ASSERT(values[entry.second].GetSize() == 0);
 			values[entry.second] = entry.first;
 		}
 		// first write the contents of the dictionary page to a temporary buffer
@@ -1353,8 +1366,8 @@ public:
 			// update the statistics
 			stats.Update(value);
 			// write this string value to the dictionary
-			temp_writer->Write<uint32_t>(value.size());
-			temp_writer->WriteData((const_data_ptr_t)value.data(), value.size());
+			temp_writer->Write<uint32_t>(value.GetSize());
+			temp_writer->WriteData((const_data_ptr_t)(value.GetDataUnsafe()), value.GetSize());
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, move(temp_writer), values.size());
