@@ -211,7 +211,6 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	unique_ptr<QueryResult> result, result2;
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.EnableQueryVerification();
 
 	// multiple streaming result
 	result = con.SendQuery("SELECT 42;");
@@ -251,6 +250,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
 	REQUIRE(!result->ToString().empty());
+	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 
@@ -264,6 +264,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 		}
 	}
 	REQUIRE(!result->ToString().empty());
+	REQUIRE(result->type == QueryResultType::STREAM_RESULT);
 	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 }
