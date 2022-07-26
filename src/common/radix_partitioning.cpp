@@ -180,7 +180,6 @@ struct PartitionFunctor {
 		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
 
 		const auto block_capacity = block_collection.block_capacity;
-		D_ASSERT(block_capacity % CONSTANTS::TMP_BUF_SIZE == 0);
 		const auto row_width = layout.GetRowWidth();
 		const auto has_heap = !layout.AllConstant();
 
@@ -209,8 +208,8 @@ struct PartitionFunctor {
 		const auto tmp_buf = temp_buf_ptr.get();
 
 		// Initialize temporal buffer offsets
-		idx_t pos[CONSTANTS::NUM_PARTITIONS];
-		for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
+		uint32_t pos[CONSTANTS::NUM_PARTITIONS];
+		for (uint32_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
 			pos[idx] = idx * CONSTANTS::TMP_BUF_SIZE;
 		}
 
@@ -247,97 +246,67 @@ struct PartitionFunctor {
 					data_ptr += row_width;
 
 					if ((++pos[idx] & (CONSTANTS::TMP_BUF_SIZE - 1)) == 0) {
-						// Non-temporal write
-						pos[idx] -= CONSTANTS::TMP_BUF_SIZE;
-						memcpy(partition_data_ptrs[idx], tmp_buf + pos[idx] * row_width,
-						       CONSTANTS::TMP_BUF_SIZE * row_width);
-						partition_data_ptrs[idx] += CONSTANTS::TMP_BUF_SIZE * row_width;
-						block_counts[idx] += CONSTANTS::TMP_BUF_SIZE;
-
-						// Check if block is full
-						if (block_counts[idx] == block_capacity) {
-							auto &p_data_block = *partition_data_blocks[idx];
+						auto &block_count = block_counts[idx];
+						NonTemporalWrite(partition_data_ptrs[idx], row_width, block_count, tmp_buf, pos[idx],
+						                 CONSTANTS::TMP_BUF_SIZE);
+						D_ASSERT(block_count <= block_capacity);
+						if (block_count + CONSTANTS::TMP_BUF_SIZE > block_capacity) {
+							// The block can't fit the next non-temporal write
+							partition_data_blocks[idx]->count = block_count;
 							if (has_heap) {
-								// Copy data from the input heap block to the partition heaps so we can unpin it
-								auto &p_heap_block = *partition_heap_blocks[idx];
-								partition_data_blocks[idx]->count = block_counts[idx];
-								PartitionHeap(buffer_manager, layout, p_data_block, partition_data_ptrs[idx],
-								              p_heap_block, partition_heap_handles[idx]);
-
-								// Update counts and create new blocks to write to
-								p_heap_block.count = block_counts[idx];
-								partition_string_heaps[idx]->count += block_counts[idx];
-
-								if (p_heap_block.byte_offset != p_heap_block.capacity) {
-									// More data fits on the heap block, just copy (reference) the block
-									partition_string_heaps[idx]->blocks.push_back(partition_heap_blocks[idx]->Copy());
-									partition_string_heaps[idx]->blocks.back()->count = 0;
-								} else {
-									// Heap block is full, create a new one
-									partition_string_heaps[idx]->CreateBlock();
-								}
-
-								partition_heap_blocks[idx] = partition_string_heaps[idx]->blocks.back().get();
-								partition_heap_handles[idx] = buffer_manager.Pin(partition_heap_blocks[idx]->block);
+								// Write last bit of heap data
+								PartitionHeap(buffer_manager, layout, *partition_string_heaps[idx],
+								              *partition_data_blocks[idx], partition_data_ptrs[idx],
+								              *partition_heap_blocks[idx], partition_heap_handles[idx]);
 							}
-
-							// Update counts and create new blocks to write to
-							p_data_block.count = block_counts[idx];
-							partition_block_collections[idx]->count += block_counts[idx];
-							PinAndSet(buffer_manager, partition_block_collections[idx]->CreateBlock(),
-							          &partition_data_blocks[idx], partition_data_handles[idx],
-							          partition_data_ptrs[idx]);
-
-							// Reset local count
-							block_counts[idx] = 0;
+							// Now we can create new blocks for this partition
+							CreateNewBlock(buffer_manager, has_heap, partition_block_collections, partition_data_blocks,
+							               partition_data_handles, partition_data_ptrs, partition_string_heaps,
+							               partition_heap_blocks, partition_heap_handles, block_counts, idx);
 						}
 					}
 				}
 				remaining -= next;
 			}
 
-			// We are done with this input block, clean up the temporal buffer
+			// We are done with this input block
 			for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
-				auto rest = pos[idx] & (CONSTANTS::TMP_BUF_SIZE - 1);
-				if (rest == 0) {
-					continue;
+				auto count = pos[idx] & (CONSTANTS::TMP_BUF_SIZE - 1);
+				if (count != 0) {
+					// Clean up the temporal buffer
+					NonTemporalWrite(partition_data_ptrs[idx], row_width, block_counts[idx], tmp_buf, pos[idx], count);
 				}
-				pos[idx] -= rest;
-				memcpy(partition_data_ptrs[idx], tmp_buf + pos[idx] * row_width, rest * row_width);
-				partition_data_ptrs[idx] += rest * row_width;
-				block_counts[idx] += rest;
+				D_ASSERT(block_counts[idx] <= block_capacity);
+				partition_data_blocks[idx]->count = block_counts[idx];
+				if (has_heap) {
+					// Write heap data so we can safely unpin the current input heap block
+					PartitionHeap(buffer_manager, layout, *partition_string_heaps[idx], *partition_data_blocks[idx],
+					              partition_data_ptrs[idx], *partition_heap_blocks[idx], partition_heap_handles[idx]);
+				}
+				if (block_counts[idx] + CONSTANTS::TMP_BUF_SIZE > block_capacity) {
+					// The block can't fit the next non-temporal write
+					CreateNewBlock(buffer_manager, has_heap, partition_block_collections, partition_data_blocks,
+					               partition_data_handles, partition_data_ptrs, partition_string_heaps,
+					               partition_heap_blocks, partition_heap_handles, block_counts, idx);
+				}
 			}
 
-			if (has_heap) {
-				// Copy data from the input heap block to the partition heaps so we can unpin it
-				for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
-					partition_data_blocks[idx]->count = block_counts[idx];
-					PartitionHeap(buffer_manager, layout, *partition_data_blocks[idx], partition_data_ptrs[idx],
-					              *partition_heap_blocks[idx], partition_heap_handles[idx]);
-				}
-			}
-
-			// Delete references to input blocks that have been processed to free up memory
+			// Delete references to the input block we just finished processing to free up memory
 			data_blocks[block_idx] = nullptr;
 			if (has_heap) {
 				heap_blocks[block_idx] = nullptr;
 			}
 		}
 
-		// Update counts of the last block
+		// Update counts
 		for (idx_t idx = 0; idx < CONSTANTS::NUM_PARTITIONS; idx++) {
-			partition_data_blocks[idx]->count = block_counts[idx];
 			partition_block_collections[idx]->count += block_counts[idx];
 			if (has_heap) {
-				partition_heap_blocks[idx]->count = block_counts[idx];
 				partition_string_heaps[idx]->count += block_counts[idx];
 			}
 		}
 
-		partition_data_handles.clear();
-		partition_heap_handles.clear();
-
-		// Clear input data
+		// Input data collections are empty, reset them
 		block_collection.Clear();
 		string_heap.Clear();
 
@@ -358,7 +327,48 @@ struct PartitionFunctor {
 			D_ASSERT(p_count == p_block_collection.count);
 		}
 #endif
-		// TODO: maybe delete empty blocks at the end? (although they are small and unlikely)
+	}
+
+	static inline void NonTemporalWrite(data_ptr_t &data_ptr, const idx_t &row_width, uint32_t &block_count,
+	                                    const data_ptr_t &tmp_buf, uint32_t &pos, const idx_t count) {
+		pos -= count;
+		memcpy(data_ptr, tmp_buf + pos * row_width, count * row_width);
+		data_ptr += count * row_width;
+		block_count += count;
+	}
+
+	static inline void CreateNewBlock(BufferManager &buffer_manager, const bool &has_heap,
+	                                  vector<unique_ptr<RowDataCollection>> &partition_block_collections,
+	                                  RowDataBlock *partition_data_blocks[],
+	                                  vector<BufferHandle> &partition_data_handles, data_ptr_t partition_data_ptrs[],
+	                                  vector<unique_ptr<RowDataCollection>> &partition_string_heaps,
+	                                  RowDataBlock *partition_heap_blocks[],
+	                                  vector<BufferHandle> &partition_heap_handles, uint32_t block_counts[],
+	                                  const idx_t &idx) {
+		D_ASSERT(partition_data_blocks[idx]->count == block_counts[idx]);
+		partition_block_collections[idx]->count += block_counts[idx];
+		PinAndSet(buffer_manager, partition_block_collections[idx]->CreateBlock(), &partition_data_blocks[idx],
+		          partition_data_handles[idx], partition_data_ptrs[idx]);
+
+		if (has_heap) {
+			partition_string_heaps[idx]->count += block_counts[idx];
+
+			auto &p_heap_block = *partition_heap_blocks[idx];
+			// Set a new heap block
+			if (p_heap_block.byte_offset != p_heap_block.capacity) {
+				// More data fits on the heap block, just copy (reference) the block
+				partition_string_heaps[idx]->blocks.push_back(partition_heap_blocks[idx]->Copy());
+				partition_string_heaps[idx]->blocks.back()->count = 0;
+			} else {
+				// Heap block is full, create a new one
+				partition_string_heaps[idx]->CreateBlock();
+			}
+
+			partition_heap_blocks[idx] = partition_string_heaps[idx]->blocks.back().get();
+			partition_heap_handles[idx] = buffer_manager.Pin(partition_heap_blocks[idx]->block);
+		}
+
+		block_counts[idx] = 0;
 	}
 
 	static inline void PinAndSet(BufferManager &buffer_manager, RowDataBlock &block, RowDataBlock **block_ptr,
@@ -368,7 +378,8 @@ struct PartitionFunctor {
 		ptr = handle.Ptr();
 	}
 
-	static inline void PartitionHeap(BufferManager &buffer_manager, const RowLayout &layout, RowDataBlock &data_block,
+	static inline void PartitionHeap(BufferManager &buffer_manager, const RowLayout &layout,
+	                                 RowDataCollection &string_heap, RowDataBlock &data_block,
 	                                 const data_ptr_t data_ptr, RowDataBlock &heap_block, BufferHandle &heap_handle) {
 		D_ASSERT(!layout.AllConstant());
 		D_ASSERT(heap_block.block->BlockId() == heap_handle.GetBlockId());

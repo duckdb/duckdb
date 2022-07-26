@@ -59,9 +59,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 
 	// compute the per-block capacity of this HT
 	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
-	// Add some so the capacity is a multiple of TMP_BUF_SIZE
-	block_capacity +=
-	    RadixPartitioningConstants<0>::TMP_BUF_SIZE - (block_capacity % RadixPartitioningConstants<0>::TMP_BUF_SIZE);
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	swizzled_block_collection = block_collection->CopyEmpty();
