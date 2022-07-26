@@ -24,8 +24,6 @@ void LogicalUnnest::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
 	auto unnest_index = reader.ReadRequired<idx_t>();
-
-	auto result = make_unique<LogicalUnnest>(unnest_index);
-	return result;
+	return make_unique<LogicalUnnest>(unnest_index);
 }
 } // namespace duckdb

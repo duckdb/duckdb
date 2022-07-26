@@ -9,9 +9,7 @@ void LogicalDummyScan::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalDummyScan::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                           FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
-
-	auto result = make_unique<LogicalDummyScan>(table_index);
-	return result;
+	return make_unique<LogicalDummyScan>(table_index);
 }
 
 } // namespace duckdb

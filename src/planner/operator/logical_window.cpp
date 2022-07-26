@@ -24,9 +24,7 @@ void LogicalWindow::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalWindow::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
 	auto window_index = reader.ReadRequired<idx_t>();
-
-	auto result = make_unique<LogicalWindow>(window_index);
-	return result;
+	return make_unique<LogicalWindow>(window_index);
 }
 
 } // namespace duckdb
