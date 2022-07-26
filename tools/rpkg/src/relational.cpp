@@ -207,7 +207,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 
 	writable::integers row_names;
 	row_names.push_back(NA_INTEGER);
-	row_names.push_back(-mat_res->collection.Count());
+	row_names.push_back(-mat_res->RowCount());
 
 	// TODO this thing we can probably statically cache
 	writable::strings classes;
