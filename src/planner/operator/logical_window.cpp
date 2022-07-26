@@ -18,12 +18,15 @@ void LogicalWindow::ResolveTypes() {
 }
 
 void LogicalWindow::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(window_index);
 }
 
 unique_ptr<LogicalOperator> LogicalWindow::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto window_index = reader.ReadRequired<idx_t>();
+
+	auto result = make_unique<LogicalWindow>(window_index);
+	return result;
 }
 
 } // namespace duckdb
