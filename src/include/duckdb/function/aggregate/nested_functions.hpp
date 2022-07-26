@@ -24,6 +24,11 @@ struct ListSegment {
 	ListSegment *next;
 };
 struct LinkedList {
+	LinkedList() {};
+	LinkedList(idx_t total_capacity_p, ListSegment *first_segment_p, ListSegment *last_segment_p)
+	    : total_capacity(total_capacity_p), first_segment(first_segment_p), last_segment(last_segment_p) {
+	}
+
 	idx_t total_capacity = 0;
 	ListSegment *first_segment = nullptr;
 	ListSegment *last_segment = nullptr;

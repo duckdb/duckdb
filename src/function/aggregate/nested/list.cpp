@@ -74,57 +74,57 @@ void ListFun::GetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 	case PhysicalType::BIT:
 	case PhysicalType::BOOL: {
 		auto data = TemplatedGetPrimitiveData<bool>(segment);
-		((bool *)vector_data)[row_idx] = data[segment_idx];
+		((bool *)vector_data)[row_idx] = Load<bool>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::INT8: {
 		auto data = TemplatedGetPrimitiveData<int8_t>(segment);
-		((int8_t *)vector_data)[row_idx] = data[segment_idx];
+		((int8_t *)vector_data)[row_idx] = Load<int8_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::INT16: {
 		auto data = TemplatedGetPrimitiveData<int16_t>(segment);
-		((int16_t *)vector_data)[row_idx] = data[segment_idx];
+		((int16_t *)vector_data)[row_idx] = Load<int16_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::INT32: {
 		auto data = TemplatedGetPrimitiveData<int32_t>(segment);
-		((int32_t *)vector_data)[row_idx] = data[segment_idx];
+		((int32_t *)vector_data)[row_idx] = Load<int32_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::INT64: {
 		auto data = TemplatedGetPrimitiveData<int64_t>(segment);
-		((int64_t *)vector_data)[row_idx] = data[segment_idx];
+		((int64_t *)vector_data)[row_idx] = Load<int64_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::UINT8: {
 		auto data = TemplatedGetPrimitiveData<uint8_t>(segment);
-		((uint8_t *)vector_data)[row_idx] = data[segment_idx];
+		((uint8_t *)vector_data)[row_idx] = Load<uint8_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::UINT16: {
 		auto data = TemplatedGetPrimitiveData<uint16_t>(segment);
-		((uint16_t *)vector_data)[row_idx] = data[segment_idx];
+		((uint16_t *)vector_data)[row_idx] = Load<uint16_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::UINT32: {
 		auto data = TemplatedGetPrimitiveData<uint32_t>(segment);
-		((uint32_t *)vector_data)[row_idx] = data[segment_idx];
+		((uint32_t *)vector_data)[row_idx] = Load<uint32_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::UINT64: {
 		auto data = TemplatedGetPrimitiveData<uint64_t>(segment);
-		((uint64_t *)vector_data)[row_idx] = data[segment_idx];
+		((uint64_t *)vector_data)[row_idx] = Load<uint64_t>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::FLOAT: {
 		auto data = TemplatedGetPrimitiveData<float>(segment);
-		((float *)vector_data)[row_idx] = data[segment_idx];
+		((float *)vector_data)[row_idx] = Load<float>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		auto data = TemplatedGetPrimitiveData<double>(segment);
-		((double *)vector_data)[row_idx] = data[segment_idx];
+		((double *)vector_data)[row_idx] = Load<double>((data_ptr_t)(data + segment_idx));
 		break;
 	}
 	default:
@@ -154,57 +154,57 @@ void ListFun::SetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 	case PhysicalType::BIT:
 	case PhysicalType::BOOL: {
 		auto data = TemplatedGetPrimitiveData<bool>(segment);
-		data[segment->count] = ((bool *)input_data)[row_idx];
+		Store<bool>(((bool *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::INT8: {
 		auto data = TemplatedGetPrimitiveData<int8_t>(segment);
-		data[segment->count] = ((int8_t *)input_data)[row_idx];
+		Store<int8_t>(((int8_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::INT16: {
 		auto data = TemplatedGetPrimitiveData<int16_t>(segment);
-		data[segment->count] = ((int16_t *)input_data)[row_idx];
+		Store<int16_t>(((int16_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::INT32: {
 		auto data = TemplatedGetPrimitiveData<int32_t>(segment);
-		data[segment->count] = ((int32_t *)input_data)[row_idx];
+		Store<int32_t>(((int32_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::INT64: {
 		auto data = TemplatedGetPrimitiveData<int64_t>(segment);
-		data[segment->count] = ((int64_t *)input_data)[row_idx];
+		Store<int64_t>(((int64_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::UINT8: {
 		auto data = TemplatedGetPrimitiveData<uint8_t>(segment);
-		data[segment->count] = ((uint8_t *)input_data)[row_idx];
+		Store<uint8_t>(((uint8_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::UINT16: {
 		auto data = TemplatedGetPrimitiveData<uint16_t>(segment);
-		data[segment->count] = ((uint16_t *)input_data)[row_idx];
+		Store<uint16_t>(((uint16_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::UINT32: {
 		auto data = TemplatedGetPrimitiveData<uint32_t>(segment);
-		data[segment->count] = ((uint32_t *)input_data)[row_idx];
+		Store<uint32_t>(((uint32_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::UINT64: {
 		auto data = TemplatedGetPrimitiveData<uint64_t>(segment);
-		data[segment->count] = ((uint64_t *)input_data)[row_idx];
+		Store<uint64_t>(((uint64_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::FLOAT: {
 		auto data = TemplatedGetPrimitiveData<float>(segment);
-		data[segment->count] = ((float *)input_data)[row_idx];
+		Store<float>(((float *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	case PhysicalType::DOUBLE: {
 		auto data = TemplatedGetPrimitiveData<double>(segment);
-		data[segment->count] = ((double *)input_data)[row_idx];
+		Store<double>(((double *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
 	default:
@@ -286,9 +286,8 @@ ListSegment *ListFun::CreateListSegment(Allocator &allocator, vector<unique_ptr<
 	segment->next = nullptr;
 
 	auto linked_child_list = GetListChildData(segment);
-	linked_child_list->first_segment = nullptr;
-	linked_child_list->last_segment = nullptr;
-	linked_child_list->total_capacity = 0;
+	LinkedList linked_list(0, nullptr, nullptr);
+	Store<LinkedList>(linked_list, (data_ptr_t)linked_child_list);
 
 	return segment;
 }
@@ -305,7 +304,7 @@ ListSegment *ListFun::CreateStructSegment(Allocator &allocator, vector<unique_pt
 	auto child_segments = GetStructData(segment);
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto child_segment = CreateSegment(allocator, owning_vector, capacity, *children[i]);
-		child_segments[i] = child_segment;
+		Store<ListSegment *>(child_segment, (data_ptr_t)(child_segments + i));
 	}
 
 	return segment;
@@ -402,23 +401,28 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 
 		// set the length and offset of this string
 		auto list_offset_data = GetListOffsetData(segment);
-		list_offset_data[segment->count].length = str_t.GetSize();
+		list_entry_t list_entry;
+		list_entry.length = str_t.GetSize();
 		if (segment->count == 0) {
-			list_offset_data[segment->count].offset = 0;
+			list_entry.offset = 0;
 		} else {
-			auto offset = list_offset_data[segment->count - 1].offset + list_offset_data[segment->count - 1].length;
-			list_offset_data[segment->count].offset = offset;
+			auto prev_list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + segment->count - 1));
+			list_entry.offset = prev_list_entry.offset + prev_list_entry.length;
 		}
+		Store<list_entry_t>(list_entry, (data_ptr_t)(list_offset_data + segment->count));
 
 		// write the characters to the child segments
-		auto child_segments = GetListChildData(segment);
+		auto child_segments = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
 		for (char &c : str) {
-			auto child_segment = GetCharSegment(allocator, owning_vector, child_segments);
+			auto child_segment = GetCharSegment(allocator, owning_vector, &child_segments);
 			auto data = TemplatedGetPrimitiveData<char>(child_segment);
 			data[child_segment->count] = c;
-			child_segments->total_capacity++;
 			child_segment->count++;
+			child_segments.total_capacity++;
 		}
+
+		// store the updated linked list
+		Store<LinkedList>(child_segments, (data_ptr_t)GetListChildData(segment));
 
 	} else if (input.GetType().id() == LogicalTypeId::LIST) {
 
@@ -434,20 +438,24 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 		// write the list entry length and offset
 		// by getting the length and offset of the previous list
 		auto list_offset_data = GetListOffsetData(segment);
-		list_offset_data[segment->count].length = list_entry.length;
+		list_entry_t list_offset_entry;
+		list_offset_entry.length = list_entry.length;
 		if (segment->count == 0) {
-			list_offset_data[segment->count].offset = 0;
+			list_offset_entry.offset = 0;
 		} else {
-			auto offset = list_offset_data[segment->count - 1].offset + list_offset_data[segment->count - 1].length;
-			list_offset_data[segment->count].offset = offset;
+			auto prev_list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + segment->count - 1));
+			list_offset_entry.offset = prev_list_entry.offset + prev_list_entry.length;
 		}
+		Store<list_entry_t>(list_offset_entry, (data_ptr_t)(list_offset_data + segment->count));
 
 		// loop over the child entries and recurse on them
-		auto child_segments = GetListChildData(segment);
+		auto child_segments = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
-			AppendRow(allocator, owning_vector, child_segments, child_vector, source_idx, lists_size);
+			AppendRow(allocator, owning_vector, &child_segments, child_vector, source_idx, lists_size);
 		}
+		// store the updated linked list
+		Store<LinkedList>(child_segments, (data_ptr_t)GetListChildData(segment));
 
 	} else if (input.GetType().id() == LogicalTypeId::STRUCT) {
 
@@ -456,8 +464,9 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 
 		// write the data of each of the children of the struct
 		for (idx_t i = 0; i < children.size(); i++) {
-			WriteDataToSegment(allocator, owning_vector, child_list[i], *children[i], entry_idx, count);
-			child_list[i]->count++;
+			auto child_list_segment = Load<ListSegment *>((data_ptr_t)(child_list + i));
+			WriteDataToSegment(allocator, owning_vector, child_list_segment, *children[i], entry_idx, count);
+			child_list_segment->count++;
 		}
 
 	} else {
@@ -490,21 +499,22 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 	if (result.GetType().InternalType() == PhysicalType::VARCHAR) {
 		// append all the child chars to one string
 		string str = "";
-		auto linked_child_list = GetListChildData(segment);
-		while (linked_child_list->first_segment) {
-			auto child_segment = linked_child_list->first_segment;
+		auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+		while (linked_child_list.first_segment) {
+			auto child_segment = linked_child_list.first_segment;
 			auto data = TemplatedGetPrimitiveData<char>(child_segment);
 			str.append(data, child_segment->count);
-			linked_child_list->first_segment = child_segment->next;
+			linked_child_list.first_segment = child_segment->next;
 		}
-		linked_child_list->last_segment = nullptr;
+		linked_child_list.last_segment = nullptr;
 
 		// use length and offset to set values
 		auto aggr_vector_data = FlatVector::GetData(result);
 		auto list_offset_data = GetListOffsetData(segment);
 
 		for (idx_t i = 0; i < segment->count; i++) {
-			auto substr = str.substr(list_offset_data[i].offset, list_offset_data[i].length);
+			auto list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
+			auto substr = str.substr(list_entry.offset, list_entry.length);
 			auto str_t = StringVector::AddString(result, substr);
 			((string_t *)aggr_vector_data)[total_count + i] = str_t;
 		}
@@ -516,24 +526,26 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 		auto list_offset_data = GetListOffsetData(segment);
 		for (idx_t i = 0; i < segment->count; i++) {
 			if (aggr_vector_validity.RowIsValid(total_count + i)) {
-				list_vector_data[total_count + i].length = list_offset_data[i].length;
-				list_vector_data[total_count + i].offset = list_offset_data[i].offset;
+				auto list_offset_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
+				list_vector_data[total_count + i].length = list_offset_entry.length;
+				list_vector_data[total_count + i].offset = list_offset_entry.offset;
 			}
 		}
 
 		auto &child_vector = ListVector::GetEntry(result);
-		auto linked_child_list = GetListChildData(segment);
-		ListVector::Reserve(result, linked_child_list->total_capacity);
+		auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+		ListVector::Reserve(result, linked_child_list.total_capacity);
 
 		// recurse into the linked list of child values
-		BuildListVector(linked_child_list, child_vector);
+		BuildListVector(&linked_child_list, child_vector);
 
 	} else if (result.GetType().id() == LogicalTypeId::STRUCT) {
 		auto &children = StructVector::GetEntries(result);
 
 		auto struct_children = GetStructData(segment);
 		for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-			GetDataFromSegment(struct_children[child_count], *children[child_count], total_count);
+			auto struct_children_segment = Load<ListSegment *>((data_ptr_t)(struct_children + child_count));
+			GetDataFromSegment(struct_children_segment, *children[child_count], total_count);
 		}
 
 	} else {
@@ -611,7 +623,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->linked_list) {
-			state->linked_list = new LinkedList;
+			state->linked_list = new LinkedList(0, nullptr, nullptr);
 			state->type = new LogicalType(input.GetType());
 			state->owning_vector = new vector<unique_ptr<AllocatedData>>;
 		}
@@ -637,7 +649,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 		if (!combined_ptr[i]->linked_list) {
 
 			// copy the linked list
-			combined_ptr[i]->linked_list = new LinkedList;
+			combined_ptr[i]->linked_list = new LinkedList(0, nullptr, nullptr);
 			combined_ptr[i]->linked_list->first_segment = state->linked_list->first_segment;
 			combined_ptr[i]->linked_list->last_segment = state->linked_list->last_segment;
 			combined_ptr[i]->linked_list->total_capacity = state->linked_list->total_capacity;
