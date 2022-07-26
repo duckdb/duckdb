@@ -45,6 +45,8 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
+	// Indicates that the file from the initial_reader is no longer present in data->files
+	bool should_flush_initial_reader = false;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -156,27 +158,28 @@ public:
 			return nullptr;
 		}
 
-		// we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
+		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 
-		// We already parsed the metadata for the first file in a glob because we need some type info.
-		auto overall_stats = ParquetReader::ReadStatistics(
-		    *bind_data.initial_reader, bind_data.initial_reader->return_types[column_index], column_index,
-		    bind_data.initial_reader->metadata->metadata.get());
-
-		if (!overall_stats) {
-			return nullptr;
-		}
-
-		// if there is only one file in the glob (quite common case), we are done
 		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
-			return overall_stats;
+			if (!bind_data.should_flush_initial_reader) {
+				// most common path, scanning single parquet file
+				return ParquetReader::ReadStatistics(
+				    *bind_data.initial_reader, bind_data.initial_reader->return_types[column_index], column_index,
+				    bind_data.initial_reader->metadata->metadata.get());
+			} else if (!config.options.object_cache_enable) {
+				// our initial reader should be flushed and we have no object cache, so no luck
+				return nullptr;
+			}
 		} else if (config.options.object_cache_enable) {
+			// multiple files, object cache enabled: merge statistics
+			unique_ptr<BaseStatistics> overall_stats;
+
 			auto &cache = ObjectCache::GetObjectCache(context);
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
-			for (idx_t file_idx = 1; file_idx < bind_data.files.size(); file_idx++) {
+			for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
 				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
 				if (!metadata) {
@@ -197,12 +200,17 @@ public:
 				if (!file_stats) {
 					return nullptr;
 				}
-				overall_stats->Merge(*file_stats);
+				if (overall_stats) {
+					overall_stats->Merge(*file_stats);
+				} else {
+					overall_stats = std::move(file_stats);
+				}
 			}
 			// success!
 			return overall_stats;
 		}
-		// we have more than one file and no object cache so no statistics overall
+
+		// multiple files and no object cache, no luck!
 		return nullptr;
 	}
 
@@ -281,6 +289,9 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
+		if (bind_data.should_flush_initial_reader && bind_data.files.empty()) {
+			return 100.0;
+		}
 		if (bind_data.initial_reader->NumRows() == 0) {
 			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
 		}
@@ -294,6 +305,11 @@ public:
 	ParquetScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
+
+		if (gstate.current_reader == nullptr) {
+			D_ASSERT(bind_data.should_flush_initial_reader);
+			return nullptr;
+		}
 
 		auto result = make_unique<ParquetReadLocalState>();
 		result->column_ids = input.column_ids;
@@ -309,8 +325,21 @@ public:
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
+
 		auto result = make_unique<ParquetReadGlobalState>();
-		result->current_reader = bind_data.initial_reader;
+
+		if (bind_data.should_flush_initial_reader) {
+			if (bind_data.files.empty()) {
+				result->current_reader = nullptr;
+			} else {
+				result->current_reader =
+				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types, input.column_ids,
+				                               bind_data.initial_reader->parquet_options, bind_data.files[0]);
+			}
+		} else {
+			result->current_reader = bind_data.initial_reader;
+		}
+
 		result->row_group_index = 0;
 		result->file_index = 0;
 		result->batch_index = 0;
@@ -347,11 +376,17 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
+		if (data.should_flush_initial_reader && data.files.empty()) {
+			return nullptr;
+		}
 		return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
+		if (data.should_flush_initial_reader && data.files.empty()) {
+			return 1;
+		}
 		return data.initial_reader->NumRowGroups() * data.files.size();
 	}
 
@@ -398,9 +433,11 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto data = (ParquetReadBindData *)bind_data_p;
-		HivePartitioning::PruneFilesList(data->files, filters, data->initial_reader->parquet_options.hive_partitioning,
-		                                 data->initial_reader->parquet_options.filename, true);
-		;
+		auto initial_filename = data->files[0];
+		HivePartitioning::ApplyFiltersToFileList(data->files, filters,
+		                                         data->initial_reader->parquet_options.hive_partitioning,
+		                                         data->initial_reader->parquet_options.filename, false);
+		data->should_flush_initial_reader = data->files.empty() || initial_filename  != data->files[0];
 	}
 };
 

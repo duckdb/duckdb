@@ -58,15 +58,18 @@ std::map<string, string> HivePartitioning::Parse(string &filename) {
 	return result;
 }
 
-void HivePartitioning::PruneFilesList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
+// TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
+//		 currently, only expressions that cannot be evaluated during pushdown are removed.
+void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
                                       bool filename_enabled, bool preserve_first) {
 	vector<string> pruned_files;
+	vector<unique_ptr<Expression>> pruned_filters;
 
-	if (preserve_first) {
-		pruned_files.push_back(files[0]);
+	if (!filename_enabled && !hive_enabled) {
+		return;
 	}
 
-	for (idx_t i = preserve_first; i < files.size(); i++) {
+	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
 		auto known_values = GetKnownColumnValues(file, filename_enabled, hive_enabled);
@@ -75,17 +78,34 @@ void HivePartitioning::PruneFilesList(vector<string> &files, vector<unique_ptr<E
 		for (auto &filter : filters) {
 			unique_ptr<Expression> filter_copy = filter->Copy();
 			ConvertKnownColRefToConstants(filter_copy, known_values);
-			if (combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
+			Value result_value;
+			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() || !ExpressionExecutor::TryEvaluateScalar(*filter_copy, result_value)) {
+				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
+				pruned_filters.emplace_back(filter->Copy());
+			} else if(!result_value.GetValue<bool>()) {
+				// filter evaluates to false
 				should_prune_file = true;
-				break;
+
+				if (i==0 && preserve_first) {
+					// Filter evaluates to false, but this is the first file which will need to preserve, this means
+					// we cannot prune the filter
+					pruned_filters.emplace_back(filter->Copy());
+				}
+			}
+
+			// Use filter combiner to determine that this filter makes
+			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+				should_prune_file = true;
 			}
 		}
 
-		if (!should_prune_file) {
+		if (!should_prune_file || (i==0  && preserve_first)) {
 			pruned_files.push_back(file);
 		}
 	}
 
+	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);
 }
 
