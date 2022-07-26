@@ -5,7 +5,7 @@
 namespace duckdb {
 
 AlterInfo::AlterInfo(AlterType type, string schema_p, string name_p)
-    : type(type), schema(move(schema_p)), name(move(name_p)) {
+    : type(type), if_exists(false), schema(move(schema_p)), name(move(name_p)) {
 }
 
 AlterInfo::~AlterInfo() {

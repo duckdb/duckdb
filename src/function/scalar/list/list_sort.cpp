@@ -121,12 +121,12 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// get the child vector
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
-	VectorData child_data;
-	child_vector.Orrify(lists_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
-	VectorData lists_data;
-	lists.Orrify(count, lists_data);
+	UnifiedVectorFormat lists_data;
+	lists.ToUnifiedFormat(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// create the lists_indices vector, this contains an element for each list's entry,
@@ -222,7 +222,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
 		child_vector.Slice(sel_sorted, sel_sorted_idx);
-		child_vector.Normalify(sel_sorted_idx);
+		child_vector.Flatten(sel_sorted_idx);
 	}
 
 	result.Reference(lists);

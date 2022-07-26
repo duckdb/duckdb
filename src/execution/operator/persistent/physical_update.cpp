@@ -54,7 +54,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 	DataChunk &update_chunk = ustate.update_chunk;
 	DataChunk &mock_chunk = ustate.mock_chunk;
 
-	chunk.Normalify();
+	chunk.Flatten();
 	ustate.default_executor.SetChunk(chunk);
 
 	// update data in the base table

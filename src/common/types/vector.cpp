@@ -291,6 +291,19 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 }
 
+// FIXME Just like DECIMAL, it's important that type_info gets considered when determining whether or not to cast
+// just comparing internal type is not always enough
+static bool ValueShouldBeCast(const LogicalType &incoming, const LogicalType &target) {
+	if (incoming.InternalType() != target.InternalType()) {
+		return true;
+	}
+	if (incoming.id() == LogicalTypeId::DECIMAL && incoming.id() == target.id()) {
+		//! Compare the type_info
+		return incoming != target;
+	}
+	return false;
+}
+
 void Vector::SetValue(idx_t index, const Value &val) {
 	if (GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// dictionary: apply dictionary and forward to child
@@ -298,7 +311,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type().InternalType() != GetType().InternalType()) {
+	if (ValueShouldBeCast(val.type(), GetType())) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
@@ -643,7 +656,7 @@ static void TemplatedFlattenConstantVector(data_ptr_t data, data_ptr_t old_data,
 	}
 }
 
-void Vector::Normalify(idx_t count) {
+void Vector::Flatten(idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
@@ -728,13 +741,13 @@ void Vector::Normalify(idx_t count) {
 			for (auto &child : child_entries) {
 				D_ASSERT(child->GetVectorType() == VectorType::CONSTANT_VECTOR);
 				auto vector = make_unique<Vector>(*child);
-				vector->Normalify(count);
+				vector->Flatten(count);
 				new_children.push_back(move(vector));
 			}
 			auxiliary = move(normalified_buffer);
 		} break;
 		default:
-			throw InternalException("Unimplemented type for VectorOperations::Normalify");
+			throw InternalException("Unimplemented type for VectorOperations::Flatten");
 		}
 		break;
 	}
@@ -752,7 +765,7 @@ void Vector::Normalify(idx_t count) {
 	}
 }
 
-void Vector::Normalify(const SelectionVector &sel, idx_t count) {
+void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 	switch (GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
 		// already a flat vector
@@ -771,7 +784,7 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 	}
 }
 
-void Vector::Orrify(idx_t count, VectorData &data) {
+void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
@@ -783,7 +796,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		} else {
 			// dictionary with non-flat child: create a new reference to the child and normalify it
 			Vector child_vector(child);
-			child_vector.Normalify(sel, count);
+			child_vector.Flatten(sel, count);
 			auto new_aux = make_buffer<VectorChildBuffer>(move(child_vector));
 
 			data.sel = &sel;
@@ -799,7 +812,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		data.validity = ConstantVector::Validity(*this);
 		break;
 	default:
-		Normalify(count);
+		Flatten(count);
 		data.sel = FlatVector::IncrementalSelectionVector();
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
@@ -820,8 +833,8 @@ void Vector::Sequence(int64_t start, int64_t increment) {
 void Vector::Serialize(idx_t count, Serializer &serializer) {
 	auto &type = GetType();
 
-	VectorData vdata;
-	Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	ToUnifiedFormat(count, vdata);
 
 	const auto write_validity = (count > 0) && !vdata.validity.AllValid();
 	serializer.Write<bool>(write_validity);
@@ -851,7 +864,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			Normalify(count);
+			Flatten(count);
 			auto &entries = StructVector::GetEntries(*this);
 			for (auto &entry : entries) {
 				entry->Serialize(count, serializer);
@@ -1195,8 +1208,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	switch (source_type.InternalType()) {
 	case PhysicalType::LIST: {
 		// retrieve the list entry from the source vector
-		VectorData vdata;
-		source.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		auto list_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(list_index)) {
@@ -1223,8 +1236,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		break;
 	}
 	case PhysicalType::STRUCT: {
-		VectorData vdata;
-		source.Orrify(count, vdata);
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
 
 		auto struct_index = vdata.sel->get_index(position);
 		if (!vdata.validity.RowIsValid(struct_index)) {
@@ -1391,8 +1404,8 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 template <class T>
 void TemplatedSearchInMap(Vector &list, T key, vector<idx_t> &offsets, bool is_key_null, idx_t offset, idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
-	VectorData vector_data;
-	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
+	UnifiedVectorFormat vector_data;
+	list_vector.ToUnifiedFormat(ListVector::GetListSize(list), vector_data);
 	auto data = (T *)vector_data.data;
 	auto validity_mask = vector_data.validity;
 
@@ -1423,8 +1436,8 @@ void TemplatedSearchInMap(Vector &list, const Value &key, vector<idx_t> &offsets
 void SearchStringInMap(Vector &list, const string &key, vector<idx_t> &offsets, bool is_key_null, idx_t offset,
                        idx_t length) {
 	auto &list_vector = ListVector::GetEntry(list);
-	VectorData vector_data;
-	list_vector.Orrify(ListVector::GetListSize(list), vector_data);
+	UnifiedVectorFormat vector_data;
+	list_vector.ToUnifiedFormat(ListVector::GetListSize(list), vector_data);
 	auto data = (string_t *)vector_data.data;
 	auto validity_mask = vector_data.validity;
 	if (is_key_null) {

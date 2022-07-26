@@ -1,0 +1,9 @@
+# name: test/fuzzer/afl/alter_if_exists.test
+# description: Test alter table if it does not exist
+# group: [afl]
+
+statement ok
+ALTER TABLE IF EXISTS t0 ADD COLUMN c1 INT;
+
+statement error
+ALTER TABLE t0 ADD COLUMN c1 INT;

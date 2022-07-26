@@ -207,7 +207,7 @@ struct RegisterTask : public Task {
 			// here we can do only DuckDB stuff because we do not have a functioning env
 
 			// Flatten all args to simplify udfs
-			args.Normalify();
+			args.Flatten();
 
 			JSArgs jsargs;
 			jsargs.rows = args.size();
@@ -321,19 +321,25 @@ struct ExecTask : public Task {
 		auto &connection = Get<Connection>();
 
 		success = true;
-		auto statements = connection.connection->ExtractStatements(sql);
-		if (statements.empty()) {
-			return;
-		}
-
-		// thanks Mark
-		for (duckdb::idx_t i = 0; i < statements.size(); i++) {
-			auto res = connection.connection->Query(move(statements[i]));
-			if (!res->success) {
-				success = false;
-				error = res->error;
-				break;
+		try {
+			auto statements = connection.connection->ExtractStatements(sql);
+			if (statements.empty()) {
+				return;
 			}
+
+			// thanks Mark
+			for (duckdb::idx_t i = 0; i < statements.size(); i++) {
+				auto res = connection.connection->Query(move(statements[i]));
+				if (!res->success) {
+					success = false;
+					error = res->error;
+					break;
+				}
+			}
+		} catch (duckdb::ParserException &e) {
+			success = false;
+			error = e.what();
+			return;
 		}
 	}
 

@@ -48,9 +48,11 @@ public:
 	                   vector<unique_ptr<Task>> &tasks) const;
 
 	//! Source interface
+	idx_t Size(GlobalSinkState &sink_state) const;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
-	             GlobalSourceState &gstate_p) const;
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, GlobalSourceState &gstate_p,
+	             LocalSourceState &lstate_p) const;
 
 	static void SetMultiScan(GlobalSinkState &state);
 	bool ForceSingleHT(GlobalSinkState &state) const;

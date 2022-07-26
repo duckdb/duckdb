@@ -23,7 +23,7 @@ public:
 	DUCKDB_API ColumnDependencyManager();
 	DUCKDB_API ~ColumnDependencyManager();
 	DUCKDB_API ColumnDependencyManager(ColumnDependencyManager &&other) = default;
-	DUCKDB_API ColumnDependencyManager(const ColumnDependencyManager &other) = delete;
+	ColumnDependencyManager(const ColumnDependencyManager &other) = delete;
 
 public:
 	//! Get the bind order that ensures dependencies are resolved before dependents are

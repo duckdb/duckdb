@@ -83,8 +83,8 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
 //===--------------------------------------------------------------------===//
 template <class T>
 static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
-	VectorData idata;
-	input.Orrify(count, idata);
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
 
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -99,8 +99,8 @@ static void TemplatedGenerateKeys(Vector &input, idx_t count, vector<unique_ptr<
 
 template <class T>
 static void ConcatenateKeys(Vector &input, idx_t count, vector<unique_ptr<Key>> &keys) {
-	VectorData idata;
-	input.Orrify(count, idata);
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
 
 	auto input_data = (T *)idata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -225,7 +225,7 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(input, keys);
 
 	// now insert the elements into the index
-	row_ids.Normalify(input.size());
+	row_ids.Flatten(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 	idx_t failed_index = DConstants::INVALID_INDEX;
 	for (idx_t i = 0; i < input.size(); i++) {
@@ -381,7 +381,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 	GenerateKeys(expression, keys);
 
 	// now erase the elements from the database
-	row_ids.Normalify(input.size());
+	row_ids.Flatten(input.size());
 	auto row_identifiers = FlatVector::GetData<row_t>(row_ids);
 
 	for (idx_t i = 0; i < input.size(); i++) {

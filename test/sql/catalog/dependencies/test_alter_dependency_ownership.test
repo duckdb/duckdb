@@ -91,6 +91,10 @@ CREATE TABLE tablename2 (
     colname integer
 );
 
+# owned by specified more than once
+statement error
+ALTER SEQUENCE sequence1 OWNED BY tablename OWNED BY tablename2;
+
 statement ok
 ALTER SEQUENCE sequence1 OWNED BY tablename;
 
