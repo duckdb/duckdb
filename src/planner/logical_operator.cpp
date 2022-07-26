@@ -163,16 +163,158 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		result = LogicalProjection::Deserialize(reader);
+		result = LogicalProjection::Deserialize(context, type, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_GET:
-		result = LogicalGet::Deserialize(reader, context);
+	case LogicalOperatorType::LOGICAL_FILTER:
+		result = LogicalFilter::Deserialize(context, type, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		result = LogicalAggregate::Deserialize(reader, context);
+		result = LogicalAggregate::Deserialize(context, type, reader);
 		break;
-	default:
-		throw SerializationException("Unsupported type for operator deserialization: " + LogicalOperatorToString(type));
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		result = LogicalWindow::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		result = LogicalUnnest::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = LogicalLimit::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		result = LogicalOrder::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_TOP_N:
+		result = LogicalTopN::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		result = LogicalCopyToFile::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		result = LogicalDistinct::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+		result = LogicalSample::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
+		result = LogicalLimitPercent::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_GET:
+		result = LogicalGet::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
+		result = LogicalChunkGet::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+		result = LogicalDelimGet::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+		result = LogicalExpressionGet::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+		result = LogicalDummyScan::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
+		result = LogicalEmptyResult::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CTE_REF:
+		result = LogicalCTERef::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_JOIN:
+		result = LogicalJoin::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		result = LogicalDelimJoin::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		result = LogicalComparisonJoin::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		result = LogicalAnyJoin::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		result = LogicalCrossProduct::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+		result = LogicalSetOperation::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+		result = LogicalSetOperation::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		result = LogicalSetOperation::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		result = LogicalRecursiveCTE::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_INSERT:
+		result = LogicalInsert::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_DELETE:
+		result = LogicalDelete::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_UPDATE:
+		result = LogicalUpdate::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_ALTER:
+		result = LogicalSimple::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
+		result = LogicalCreateTable::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+		result = LogicalCreateIndex::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
+		result = LogicalCreate::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
+		result = LogicalCreate::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
+		result = LogicalCreate::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+		result = LogicalCreate::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_DROP:
+		result = LogicalSimple::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+		result = LogicalPragma::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+		result = LogicalSimple::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
+		result = LogicalCreate::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
+		result = LogicalExplain::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_SHOW:
+		result = LogicalShow::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_PREPARE:
+		result = LogicalPrepare::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EXECUTE:
+		result = LogicalExecute::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EXPORT:
+		result = LogicalExport::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_VACUUM:
+		result = LogicalSimple::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_SET:
+		result = LogicalSet::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_LOAD:
+		result = LogicalSimple::Deserialize(context, type, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_INVALID:
+		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
+		throw SerializationException("Invalid type for operator deserialization");
 	}
 
 	reader.Finalize();

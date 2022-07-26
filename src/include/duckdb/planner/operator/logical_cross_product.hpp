@@ -18,10 +18,13 @@ public:
 	LogicalCrossProduct(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 
 public:
-	vector<ColumnBinding> GetColumnBindings() override;
-	void Serialize(FieldWriter &writer) const override;
-
 	static unique_ptr<LogicalOperator> Create(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
+
+	vector<ColumnBinding> GetColumnBindings() override;
+
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                               FieldReader &reader);
 
 protected:
 	void ResolveTypes() override;

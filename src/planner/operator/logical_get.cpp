@@ -93,14 +93,15 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	function.bind_data_serialize(writer, *bind_data);
 }
 
-unique_ptr<LogicalOperator> LogicalGet::Deserialize(FieldReader &source, ClientContext &context) {
-	auto table_index = source.ReadRequired<idx_t>();
-	auto returned_types = source.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto returned_names = source.ReadRequiredList<string>();
-	auto column_ids = source.ReadRequiredList<column_t>();
-	auto table_filters = source.ReadRequiredSerializable<TableFilterSet>();
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, LogicalOperatorType type,
+                                                    FieldReader &reader) {
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto returned_names = reader.ReadRequiredList<string>();
+	auto column_ids = reader.ReadRequiredList<column_t>();
+	auto table_filters = reader.ReadRequiredSerializable<TableFilterSet>();
 
-	auto name = source.ReadRequired<string>();
+	auto name = reader.ReadRequired<string>();
 	auto &catalog = context.db->GetCatalog();
 
 	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
@@ -112,7 +113,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(FieldReader &source, ClientC
 	auto functions = (TableFunctionCatalogEntry *)func_catalog;
 	auto function = functions->functions[0];
 
-	auto bind_data = functions->functions[0].bind_data_deserialize(source, context);
+	auto bind_data = functions->functions[0].bind_data_deserialize(reader, context);
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = column_ids;
 	result->table_filters = move(*table_filters);

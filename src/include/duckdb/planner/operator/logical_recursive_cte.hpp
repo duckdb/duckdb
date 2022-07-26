@@ -31,6 +31,8 @@ public:
 		return GenerateColumnBindings(table_index, column_count);
 	}
 	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                               FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

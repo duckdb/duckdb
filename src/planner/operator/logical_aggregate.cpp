@@ -74,22 +74,23 @@ void LogicalAggregate::Serialize(FieldWriter &writer) const {
 	// TODO statistics
 }
 
-unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(FieldReader &source, ClientContext &context) {
-	auto expressions = source.ReadRequiredSerializableList<Expression>();
+unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(ClientContext &context, LogicalOperatorType type,
+                                                          FieldReader &reader) {
+	auto expressions = reader.ReadRequiredSerializableList<Expression>();
 
-	auto group_index = source.ReadRequired<idx_t>();
-	auto aggregate_index = source.ReadRequired<idx_t>();
-	auto groupings_index = source.ReadRequired<idx_t>();
-	auto groups = source.ReadRequiredSerializableList<Expression>();
-	auto grouping_sets_size = source.ReadRequired<idx_t>();
+	auto group_index = reader.ReadRequired<idx_t>();
+	auto aggregate_index = reader.ReadRequired<idx_t>();
+	auto groupings_index = reader.ReadRequired<idx_t>();
+	auto groups = reader.ReadRequiredSerializableList<Expression>();
+	auto grouping_sets_size = reader.ReadRequired<idx_t>();
 	vector<GroupingSet> grouping_sets;
 	for (idx_t i = 0; i < grouping_sets_size; i++) {
-		grouping_sets.push_back(source.ReadRequiredSet<idx_t>());
+		grouping_sets.push_back(reader.ReadRequiredSet<idx_t>());
 	}
 	vector<vector<idx_t>> grouping_functions;
-	auto grouping_functions_size = source.ReadRequired<idx_t>();
+	auto grouping_functions_size = reader.ReadRequired<idx_t>();
 	for (idx_t i = 0; i < grouping_functions_size; i++) {
-		grouping_functions.push_back(source.ReadRequiredList<idx_t>());
+		grouping_functions.push_back(reader.ReadRequiredList<idx_t>());
 	}
 	auto result = make_unique<LogicalAggregate>(group_index, aggregate_index, move(expressions));
 	result->groupings_index = groupings_index;

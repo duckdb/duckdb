@@ -39,6 +39,8 @@ public:
 		return children[0]->GetColumnBindings();
 	}
 	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                               FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

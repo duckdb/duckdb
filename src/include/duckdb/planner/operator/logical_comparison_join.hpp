@@ -29,6 +29,8 @@ public:
 public:
 	string ParamsToString() const override;
 	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
+	                                               FieldReader &reader);
 
 public:
 	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,

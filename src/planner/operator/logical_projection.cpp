@@ -22,9 +22,10 @@ void LogicalProjection::Serialize(FieldWriter &writer) const {
 	writer.WriteField(table_index);
 }
 
-unique_ptr<LogicalOperator> LogicalProjection::Deserialize(FieldReader &source) {
-	auto expressions = source.ReadRequiredSerializableList<Expression>();
-	auto table_index = source.ReadRequired<idx_t>();
+unique_ptr<LogicalOperator> LogicalProjection::Deserialize(ClientContext &context, LogicalOperatorType type,
+                                                           FieldReader &reader) {
+	auto expressions = reader.ReadRequiredSerializableList<Expression>();
+	auto table_index = reader.ReadRequired<idx_t>();
 	return make_unique<LogicalProjection>(table_index, move(expressions));
 }
 
