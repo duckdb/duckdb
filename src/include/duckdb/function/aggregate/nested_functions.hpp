@@ -33,9 +33,12 @@ struct ListFun {
 
 	// allocators
 	template <class T>
-	static void *AllocatePrimitiveData(uint16_t &capacity);
-	static void *AllocateListData(uint16_t &capacity);
-	static void *AllocateStructData(uint16_t &capacity, idx_t child_count);
+	static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                        uint16_t &capacity);
+	static data_ptr_t AllocateListData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                   uint16_t &capacity);
+	static data_ptr_t AllocateStructData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                     uint16_t &capacity, idx_t child_count);
 
 	// getting data pointers
 	template <class T>
@@ -56,21 +59,30 @@ struct ListFun {
 	// segment creation
 	static uint16_t GetCapacityForNewSegment(LinkedList *linked_list);
 	template <class T>
-	static ListSegment *TemplatedCreatePrimitiveSegment(uint16_t &capacity);
-	static ListSegment *CreatePrimitiveSegment(uint16_t &capacity, const LogicalType &type);
-	static ListSegment *CreateListSegment(uint16_t &capacity);
-	static ListSegment *CreateStructSegment(uint16_t &capacity, vector<unique_ptr<Vector>> &children);
-	static ListSegment *CreateSegment(uint16_t &capacity, Vector &input);
+	static ListSegment *TemplatedCreatePrimitiveSegment(Allocator &allocator,
+	                                                    vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                                    uint16_t &capacity);
+	static ListSegment *CreatePrimitiveSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                           uint16_t &capacity, const LogicalType &type);
+	static ListSegment *CreateListSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                      uint16_t &capacity);
+	static ListSegment *CreateStructSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                        uint16_t &capacity, vector<unique_ptr<Vector>> &children);
+	static ListSegment *CreateSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                  uint16_t &capacity, Vector &input);
 
-	static ListSegment *GetSegment(LinkedList *linked_list, Vector &input);
-	static ListSegment *GetCharSegment(LinkedList *linked_list);
-	static void WriteDataToSegment(ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count);
-	static void AppendRow(LinkedList *linked_list, Vector &input, idx_t &entry_idx, idx_t &count);
+	static ListSegment *GetSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                               LinkedList *linked_list, Vector &input);
+	static ListSegment *GetCharSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                                   LinkedList *linked_list);
+
+	static void WriteDataToSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                               ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count);
+	static void AppendRow(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	                      LinkedList *linked_list, Vector &input, idx_t &entry_idx, idx_t &count);
+
 	static void GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &total_count);
 	static void BuildListVector(LinkedList *linked_list, Vector &result);
-
-	static void DestroyLinkedList(LinkedList *linked_list, const LogicalType &type);
-	static void DestroySegment(ListSegment *segment, const LogicalType &type);
 };
 
 } // namespace duckdb

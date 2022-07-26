@@ -20,8 +20,10 @@ namespace duckdb {
 class BoundAggregateExpression;
 
 struct AggregateInputData {
-	AggregateInputData(FunctionData *bind_data_p) : bind_data(bind_data_p) {};
+	AggregateInputData(FunctionData *bind_data_p, Allocator &allocator_p)
+	    : bind_data(bind_data_p), allocator(allocator_p) {};
 	FunctionData *bind_data;
+	Allocator &allocator;
 };
 
 //! The type used for sizing hashed aggregate function states

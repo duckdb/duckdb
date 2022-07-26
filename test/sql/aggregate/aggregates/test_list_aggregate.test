@@ -40,8 +40,6 @@ NULL
 statement ok
 PRAGMA threads=4
 
-mode skip
-
 query I
 with t as (
   values ('a',1), ('c',3), ('b',2)
@@ -49,8 +47,6 @@ with t as (
 select list(col0 order by col1) from t
 ----
 [a, b, c]
-
-mode unskip
 
 query II
 SELECT g, LIST(i ORDER BY i ASC) FROM list_extract_test GROUP BY g;

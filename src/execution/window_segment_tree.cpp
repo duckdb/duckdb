@@ -62,7 +62,7 @@ void WindowSegmentTree::AggregateInit() {
 }
 
 void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
-	AggregateInputData aggr_input_data(bind_info);
+	AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
 	aggregate.finalize(statev, aggr_input_data, result, 1, rid);
 
 	if (aggregate.destructor) {
@@ -130,7 +130,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	Vector s(statep, 0);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
-		AggregateInputData aggr_input_data(bind_info);
+		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
 		aggregate.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
 	} else {
 		inputs.Reset();
@@ -144,7 +144,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 			pdata[i] = begin_ptr + i * state.size();
 		}
 		v.Verify(inputs.size());
-		AggregateInputData aggr_input_data(bind_info);
+		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
 		aggregate.combine(v, s, aggr_input_data, inputs.size());
 	}
 }
@@ -247,7 +247,7 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		active = FrameBounds(active_chunks.first * STANDARD_VECTOR_SIZE,
 		                     MinValue((active_chunks.second + 1) * STANDARD_VECTOR_SIZE, coll.Count()));
 
-		AggregateInputData aggr_input_data(bind_info);
+		AggregateInputData aggr_input_data(bind_info, Allocator::DefaultAllocator());
 		aggregate.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(), frame,
 		                 prev, result, rid, active.first);
 		return;
