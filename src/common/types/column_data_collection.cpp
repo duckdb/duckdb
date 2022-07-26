@@ -9,7 +9,7 @@ namespace duckdb {
 
 struct ColumnDataMetaData;
 
-typedef void (*column_data_copy_function_t)(ColumnDataMetaData &meta_data, const VectorData &source_data,
+typedef void (*column_data_copy_function_t)(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
                                             Vector &source, idx_t source_offset, idx_t copy_count);
 
 struct ColumnDataCopyFunction {
@@ -211,8 +211,8 @@ void ColumnDataCollection::InitializeAppend(ColumnDataAppendState &state) {
 	segment.InitializeChunkState(segment.chunk_data.size() - 1, state.current_chunk_state);
 }
 
-void ColumnDataCopyValidity(const VectorData &source_data, validity_t *target, idx_t source_offset, idx_t target_offset,
-                            idx_t copy_count) {
+void ColumnDataCopyValidity(const UnifiedVectorFormat &source_data, validity_t *target, idx_t source_offset,
+                            idx_t target_offset, idx_t copy_count) {
 	ValidityMask validity(target);
 	if (target_offset == 0) {
 		// first time appending to this vector
@@ -254,8 +254,8 @@ struct ListValueCopy {
 };
 
 template <class T, class OP>
-static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorData &source_data, idx_t source_offset,
-                                    idx_t copy_count) {
+static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
+                                    idx_t source_offset, idx_t copy_count) {
 	auto &append_state = meta_data.state;
 	auto &vector_data = meta_data.GetVectorMetaData();
 	auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state, vector_data.block_id,
@@ -275,19 +275,19 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const VectorD
 }
 
 template <class T>
-static void ColumnDataCopy(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+static void ColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                            idx_t source_offset, idx_t copy_count) {
 	TemplatedColumnDataCopy<T, StandardValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
 template <>
-void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                               idx_t source_offset, idx_t copy_count) {
 	TemplatedColumnDataCopy<string_t, StringValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
 template <>
-void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                                   idx_t source_offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 	// first append the child entries of the list
@@ -295,8 +295,8 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 	idx_t child_list_size = ListVector::GetListSize(source);
 	auto &child_type = child_vector.GetType();
 
-	VectorData child_vector_data;
-	child_vector.Orrify(child_list_size, child_vector_data);
+	UnifiedVectorFormat child_vector_data;
+	child_vector.ToUnifiedFormat(child_list_size, child_vector_data);
 
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
@@ -331,7 +331,7 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const VectorDat
 	TemplatedColumnDataCopy<list_entry_t, ListValueCopy>(meta_data, source_data, source_offset, copy_count);
 }
 
-void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &source_data, Vector &source,
+void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
                           idx_t source_offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
 	// copy the NULL values for the main struct vector
@@ -362,8 +362,8 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const VectorData &sourc
 		auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index, child_idx);
 		ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
-		VectorData child_data;
-		child_vectors[child_idx]->Orrify(copy_count, child_data);
+		UnifiedVectorFormat child_data;
+		child_vectors[child_idx]->ToUnifiedFormat(copy_count, child_data);
 
 		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], source_offset, copy_count);
 	}
@@ -454,9 +454,9 @@ void ColumnDataCollection::Append(ColumnDataAppendState &state, DataChunk &input
 	auto &segment = *segments.back();
 	for (idx_t vector_idx = 0; vector_idx < types.size(); vector_idx++) {
 		if (IsComplexType(input.data[vector_idx].GetType())) {
-			input.data[vector_idx].Normalify(input.size());
+			input.data[vector_idx].Flatten(input.size());
 		}
-		input.data[vector_idx].Orrify(input.size(), state.vector_data[vector_idx]);
+		input.data[vector_idx].ToUnifiedFormat(input.size(), state.vector_data[vector_idx]);
 	}
 
 	idx_t remaining = input.size();
