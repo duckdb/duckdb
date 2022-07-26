@@ -436,7 +436,7 @@ public:
 		auto initial_filename = data->files[0];
 		HivePartitioning::ApplyFiltersToFileList(data->files, filters,
 		                                         data->initial_reader->parquet_options.hive_partitioning,
-		                                         data->initial_reader->parquet_options.filename, false);
+		                                         data->initial_reader->parquet_options.filename);
 		data->should_flush_initial_reader = data->files.empty() || initial_filename  != data->files[0];
 	}
 };

@@ -61,7 +61,7 @@ std::map<string, string> HivePartitioning::Parse(string &filename) {
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters, bool hive_enabled,
-                                      bool filename_enabled, bool preserve_first) {
+                                      bool filename_enabled) {
 	vector<string> pruned_files;
 	vector<unique_ptr<Expression>> pruned_filters;
 
@@ -86,12 +86,6 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
 			} else if(!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
-
-				if (i==0 && preserve_first) {
-					// Filter evaluates to false, but this is the first file which will need to preserve, this means
-					// we cannot prune the filter
-					pruned_filters.emplace_back(filter->Copy());
-				}
 			}
 
 			// Use filter combiner to determine that this filter makes
@@ -100,7 +94,7 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
 			}
 		}
 
-		if (!should_prune_file || (i==0  && preserve_first)) {
+		if (!should_prune_file) {
 			pruned_files.push_back(file);
 		}
 	}
