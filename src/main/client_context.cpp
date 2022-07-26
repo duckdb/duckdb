@@ -104,6 +104,11 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 		// standard exceptions do not invalidate the current transaction
 		result.error = ex.what();
 		invalidate_query = false;
+	} catch (FatalException &ex) {
+		// fatal exceptions invalidate the entire database
+		result.error = ex.what();
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
 	} catch (std::exception &ex) {
 		result.error = ex.what();
 	} catch (...) { // LCOV_EXCL_START
@@ -117,6 +122,10 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 void ClientContext::BeginTransactionInternal(ClientContextLock &lock, bool requires_valid_transaction) {
 	// check if we are on AutoCommit. In this case we should start a transaction
 	D_ASSERT(!active_query);
+	auto &db = DatabaseInstance::GetDatabase(*this);
+	if (db.IsInvalidated()) {
+		throw FatalException("Failed: database has been invalidated!");
+	}
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    transaction.ActiveTransaction().IsInvalidated()) {
 		throw Exception("Failed: transaction has been invalidated!");
@@ -165,6 +174,10 @@ string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bo
 				ActiveTransaction().Invalidate();
 			}
 		}
+	} catch (FatalException &ex) {
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
+		error = ex.what();
 	} catch (std::exception &ex) {
 		error = ex.what();
 	} catch (...) { // LCOV_EXCL_START
@@ -608,7 +621,17 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
     shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
 	unique_ptr<PendingQueryResult> result;
 
-	BeginQueryInternal(lock, query);
+	try {
+		BeginQueryInternal(lock, query);
+	} catch (FatalException &ex) {
+		// fatal exceptions invalidate the entire database
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
+		result = make_unique<PendingQueryResult>(ex.what());
+		return result;
+	} catch (std::exception &ex) {
+		return make_unique<PendingQueryResult>(ex.what());
+	}
 	// start the profiler
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
@@ -632,6 +655,11 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// standard exceptions do not invalidate the current transaction
 		result = make_unique<PendingQueryResult>(ex.what());
 		invalidate_query = false;
+	} catch (FatalException &ex) {
+		// fatal exceptions invalidate the entire database
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
+		result = make_unique<PendingQueryResult>(ex.what());
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
 		result = make_unique<PendingQueryResult>(ex.what());
@@ -1108,6 +1136,10 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		if (require_new_transaction) {
 			transaction.Rollback();
 		}
+		throw;
+	} catch (FatalException &ex) {
+		auto &db = DatabaseInstance::GetDatabase(*this);
+		db.Invalidate();
 		throw;
 	} catch (std::exception &ex) {
 		if (require_new_transaction) {
