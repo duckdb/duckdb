@@ -15,7 +15,7 @@ drv_to_string <- function(drv) {
   if (!is(drv, "duckdb_driver")) {
     stop("pass a duckdb_driver object")
   }
-  sprintf("<duckdb_driver %s dbdir='%s' read_only=%s>", extptr_str(drv@database_ref), drv@dbdir, drv@read_only)
+  sprintf("<duckdb_driver %s dbdir='%s' read_only=%s bigint=%s>", extptr_str(drv@database_ref), drv@dbdir, drv@read_only, drv@bigint)
 }
 
 #' @description
@@ -25,13 +25,27 @@ drv_to_string <- function(drv) {
 #'
 #' @import methods DBI
 #' @export
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, config = list()) {
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint="numeric", config = list()) {
   check_flag(read_only)
+
+  switch(bigint,
+    numeric = {
+        # fine
+    },
+    integer64 = {
+      if (!is_installed("bit64")) {
+        stop("bit64 package is required for integer64 support")
+      }
+    },
+    stop(paste("Unsupported bigint configuration", bigint))
+  )
+
   new(
     "duckdb_driver",
     database_ref = rapi_startup(dbdir, read_only, config),
     dbdir = dbdir,
-    read_only = read_only
+    read_only = read_only,
+    bigint = bigint
   )
 }
 

@@ -1,0 +1,13 @@
+# name: test/fuzzer/afl/random_join.test
+# description: Join on random condition
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(c1 INT);
+
+query II
+SELECT * FROM (SELECT 1) JOIN t1 ON random();
+----

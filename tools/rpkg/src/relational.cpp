@@ -215,7 +215,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	classes.push_back("tbl");
 	classes.push_back("data.frame");
 
-	auto df = sexp(duckdb_execute_R_impl(mat_res));
+	auto df = sexp(duckdb_execute_R_impl(mat_res, false));
 	df.attr("class") = classes;
 	df.attr("row.names") = row_names;
 	return df;

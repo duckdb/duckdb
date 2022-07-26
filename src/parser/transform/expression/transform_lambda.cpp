@@ -11,6 +11,8 @@ unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGL
 
 	auto lhs = TransformExpression(node->lhs);
 	auto rhs = TransformExpression(node->rhs);
+	D_ASSERT(lhs);
+	D_ASSERT(rhs);
 	return make_unique<LambdaExpression>(move(lhs), move(rhs));
 }
 

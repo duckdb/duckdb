@@ -95,7 +95,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		plan = move(window);
 
 		// Remember the projection order if we changed it
-		if (!remaining.empty() || !evaluation_order.empty()) {
+		if (!streaming_windows.empty() || !blocking_windows.empty() || !evaluation_order.empty()) {
 			evaluation_order.insert(evaluation_order.end(), matching.begin(), matching.end());
 		}
 	}

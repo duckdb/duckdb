@@ -2,6 +2,8 @@
 # description: Enable Test alias for point.
 # group: [extension]
 
+require skip_reload
+
 require notmingw
 
 statement ok
