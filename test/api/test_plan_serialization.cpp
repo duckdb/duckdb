@@ -15,13 +15,12 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test plan serialization", "[api]") {
+static void test_helper(string sql) {
 	DuckDB db;
 	Connection con(db);
 
 	Parser p;
-	p.ParseQuery(
-	    "SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
+	p.ParseQuery(sql);
 
 	Planner planner(*con.context);
 	planner.CreatePlan(move(p.statements[0]));
@@ -42,4 +41,9 @@ TEST_CASE("Test plan serialization", "[api]") {
 
 	new_plan = optimizer.Optimize(move(new_plan));
 	printf("%s\n", new_plan->ToString().c_str());
+}
+
+TEST_CASE("Test plan serialization", "[api]") {
+	//test_helper("SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
+	test_helper("SELECT UNNEST([1, 2, 3]);"); // tests logical_dummy_scan, logical_unnest
 }
