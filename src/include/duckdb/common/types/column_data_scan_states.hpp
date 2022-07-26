@@ -58,5 +58,4 @@ public:
 	idx_t RowIndex() const;
 };
 
-
 } // namespace duckdb
