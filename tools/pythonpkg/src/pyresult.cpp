@@ -256,17 +256,17 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
 		auto &materialized = (MaterializedQueryResult &)*result;
-		initial_capacity = materialized.collection.Count();
+		initial_capacity = materialized.RowCount();
 	}
 
 	NumpyResultConversion conversion(result->types, initial_capacity);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
-		for (auto &chunk : materialized.collection.Chunks()) {
-			conversion.Append(*chunk);
+		for (auto &chunk : materialized.Collection().Chunks()) {
+			conversion.Append(chunk);
 		}
 		InsertCategory(materialized, categories);
-		materialized.collection.Reset();
+		materialized.Collection().Reset();
 	} else {
 		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
 		if (!stream) {
