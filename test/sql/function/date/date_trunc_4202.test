@@ -1,0 +1,28 @@
+# name: test/sql/function/date/date_trunc_4202.test
+# description: Issue #4202: Suspect behavior when comparing dates and timestamps
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t1 (date timestamp);
+
+statement ok
+insert into t1 values ('2016-12-16T00:00:00.000Z');
+
+statement ok
+insert into t1 values ('2020-02-17T23:59:59.998Z');
+
+statement ok
+insert into t1 values ('2020-02-17T23:59:59.999Z');
+
+statement ok
+insert into t1 values ('2020-02-18T00:00:00.000Z');
+
+query I
+select * from t1 WHERE (date_trunc('DAY', T1.date) < ('2020-02-17T23:59:59.999Z'::timestamp)) ORDER BY 1;
+----
+2016-12-16 00:00:00
+2020-02-17 23:59:59.998
+2020-02-17 23:59:59.999
