@@ -54,7 +54,7 @@ TEST_CASE("Test plan serialization", "[api]") {
 }
 
 TEST_CASE("Test logical_dummy_scan, logical_unnest", "[api]") {
-	test_helper("SELECT UNNEST([1, 2, 3]);");
+	test_helper("SELECT UNNEST([1, 2, 3])");
 }
 
 TEST_CASE("Test bound_constant_expression", "[api]") {
@@ -66,6 +66,6 @@ TEST_CASE("Test logical_window", "[api]") {
 }
 
 TEST_CASE("Test logical_set", "[api]") {
-	test_helper("SET memory_limit='10GB';");
+	test_helper("SET memory_limit='10GB'");
 }
 
