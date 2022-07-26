@@ -142,6 +142,7 @@ class UpdateSourceState : public GlobalSourceState {
 public:
 	explicit UpdateSourceState(const PhysicalUpdate &op) : finished(false) {
 		if (op.return_chunk) {
+			D_ASSERT(op.sink_state);
 			auto &g = (UpdateGlobalState &)*op.sink_state;
 			g.return_collection.InitializeScan(scan_state);
 		}

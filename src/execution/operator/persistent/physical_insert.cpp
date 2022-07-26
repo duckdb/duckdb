@@ -113,6 +113,7 @@ class InsertSourceState : public GlobalSourceState {
 public:
 	explicit InsertSourceState(const PhysicalInsert &op) : finished(false) {
 		if (op.return_chunk) {
+			D_ASSERT(op.sink_state);
 			auto &g = (InsertGlobalState &)*op.sink_state;
 			g.return_collection.InitializeScan(scan_state);
 		}

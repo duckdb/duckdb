@@ -72,6 +72,7 @@ class DeleteSourceState : public GlobalSourceState {
 public:
 	explicit DeleteSourceState(const PhysicalDelete &op) : finished(false) {
 		if (op.return_chunk) {
+			D_ASSERT(op.sink_state);
 			auto &g = (DeleteGlobalState &)*op.sink_state;
 			g.return_collection.InitializeScan(scan_state);
 		}
