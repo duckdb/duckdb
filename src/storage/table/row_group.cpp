@@ -698,15 +698,27 @@ void RowGroup::ScanSegments(const std::function<void(Vector &, idx_t)> &callback
 	}
 }
 bool CompressionForTypeExists(PhysicalType type) {
-	if (type == PhysicalType::BOOL || type == PhysicalType::INT8 || type == PhysicalType::INT16 ||
-	    type == PhysicalType::INT32 || type == PhysicalType::INT64 || type == PhysicalType::INT128 ||
-	    type == PhysicalType::UINT8 || type == PhysicalType::UINT16 || type == PhysicalType::UINT32 ||
-	    type == PhysicalType::UINT64 || type == PhysicalType::FLOAT || type == PhysicalType::DOUBLE ||
-	    type == PhysicalType::LIST || type == PhysicalType::INTERVAL || type == PhysicalType::BIT ||
-	    type == PhysicalType::VARCHAR) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::LIST:
+	case PhysicalType::INTERVAL:
+	case PhysicalType::BIT:
+	case PhysicalType::VARCHAR:
 		return true;
+	default:
+		return false;
 	}
-	return false;
 }
 
 CompressionType RowGroup::DetectBestCompressionMethod(idx_t &compression_idx, idx_t &col_idx,
@@ -789,7 +801,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
                                      DataTable &data_table) {
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
-	if (db.config.force_compression_sorting) {
+	if (!db.config.preserve_insertion_order && db.config.force_compression_sorting) {
 		// Sorts columns to optimize RLE compression
 		auto table_compression = DetectBestCompressionMethodTable(writer);
 		RLESort rle_checkpoint_sort(*this, data_table, table_compression);

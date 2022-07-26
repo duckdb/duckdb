@@ -55,6 +55,12 @@ private:
 	LocalSortState local_sort_state;
 	unique_ptr<RowGroupSortBindData> sort_state;
 
+	idx_t new_count = 0;
+	idx_t old_count;
+
+	static constexpr const idx_t CARDINALITY_LIMIT = 10000;
+
+private:
 	// Logical Types supported as keys
 	bool SupportedKeyType(LogicalTypeId type_id);
 
@@ -66,7 +72,7 @@ private:
 	                            RLESortOption option);
 
 	// Retrieve all columns with a cardinality < 500, sorted from lowest to highest cardinality
-	void CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities);
+	void FetchLowCardinalityColumns(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities);
 
 	// Filter out key columns which will not be sorted on
 	void FilterKeyColumns();
@@ -88,8 +94,5 @@ private:
 
 	// Returns a sorted rowgroup from the sorting algorithm
 	unique_ptr<RowGroup> CreateSortedRowGroup(GlobalSortState &global_sort_state);
-
-	idx_t new_count = 0;
-	idx_t old_count;
 };
 } // namespace duckdb

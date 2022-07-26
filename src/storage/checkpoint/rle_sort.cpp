@@ -65,22 +65,36 @@ RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionT
 }
 
 bool RLESort::SupportedKeyType(LogicalTypeId type_id) {
-	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::LIST || type_id == LogicalTypeId::MAP ||
-	    type_id == LogicalTypeId::TABLE || type_id == LogicalTypeId::ENUM ||
-	    type_id == LogicalTypeId::AGGREGATE_STATE || type_id == LogicalTypeId::VARCHAR ||
-	    type_id == LogicalTypeId::BLOB || type_id == LogicalTypeId::INTERVAL || type_id == LogicalTypeId::UUID) {
+	switch (type_id) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::TABLE:
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::UUID:
 		return false;
+	default:
+		return true;
 	}
-	return true;
 }
 
 bool RLESort::SupportedPayloadType(LogicalTypeId type_id) {
-	if (type_id == LogicalTypeId::STRUCT || type_id == LogicalTypeId::MAP || type_id == LogicalTypeId::TABLE ||
-	    type_id == LogicalTypeId::ENUM || type_id == LogicalTypeId::AGGREGATE_STATE ||
-	    type_id == LogicalTypeId::INTERVAL || type_id == LogicalTypeId::UUID) {
+	switch (type_id) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::TABLE:
+	case LogicalTypeId::ENUM:
+	case LogicalTypeId::AGGREGATE_STATE:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::UUID:
 		return false;
+	default:
+		return true;
 	}
-	return true;
 }
 
 void RLESort::InitializeScan() {
@@ -137,7 +151,7 @@ void RLESort::FilterKeyColumns() {
 	vector<std::tuple<idx_t, idx_t>> cardinalities;
 
 	ScanColumnsToHLL(logs);
-	CalculateCardinalities(logs, cardinalities, RLESortOption::CARDINALITY_BELOW_FIVE_HUNDRED);
+	CalculateCardinalities(logs, cardinalities, RLESortOption::CARDINALITY);
 
 	// Clear the old key columns
 	key_column_ids.clear();
@@ -173,20 +187,20 @@ void RLESort::ScanColumnsToHLL(vector<HyperLogLog> &logs) {
 void RLESort::CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities,
                                      RLESortOption option) {
 	switch (option) {
-	case RLESortOption::CARDINALITY_BELOW_FIVE_HUNDRED:
-		CardinalityBelowTenPercent(logs, cardinalities);
+	case RLESortOption::CARDINALITY:
+		FetchLowCardinalityColumns(logs, cardinalities);
 		break;
 	default:
 		throw InternalException("Unrecognized sorting option");
 	}
 }
 
-void RLESort::CardinalityBelowTenPercent(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
+void RLESort::FetchLowCardinalityColumns(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities) {
 	// Get the cardinality counts and sort them from low to high
 	for (idx_t i = 0; i < logs.size(); i++) {
 		auto current_count = logs[i].Count();
 		// Do not use column if above a certain cardinality
-		if (current_count < 10000) {
+		if (current_count < CARDINALITY_LIMIT) {
 			cardinalities.emplace_back(current_count, key_column_ids[i]);
 		}
 	}

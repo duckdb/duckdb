@@ -86,7 +86,7 @@ void DataChunk::Reference(DataChunk &chunk) {
 	}
 }
 
-void DataChunk::ReferencePartial(DataChunk &chunk, vector<column_t> &column_ids) {
+void DataChunk::ReferencePartial(DataChunk &chunk, const vector<column_t> &column_ids) {
 	SetCardinality(chunk);
 	SetCapacity(chunk);
 	for (idx_t i = 0; i < column_ids.size(); i++) {

@@ -127,7 +127,7 @@ public:
 	bool debug_many_free_list_blocks = false;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
-	//! Whether or not preserving insertion order should be preserved
+	//! Whether or not insertion order should be preserved
 	bool preserve_insertion_order = true;
 
 	//! Extra parameters that can be SET for loaded extensions

@@ -13,8 +13,8 @@
 namespace duckdb {
 
 enum class RLESortOption : uint8_t {
-	// Retrieve all columns with a cardinality < 500, sorted from lowest to highest cardinality
-	CARDINALITY_BELOW_FIVE_HUNDRED = 0,
+	// Retrieve all columns with a cardinality < CARDINALITY_LIMIT, sorted from lowest to highest cardinality
+	CARDINALITY = 0,
 };
 
 } // namespace duckdb
