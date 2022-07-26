@@ -29,7 +29,6 @@ void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk
 		collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}
-	chunk.Reset();
 	collection->Scan(state.scan_state, chunk);
 }
 

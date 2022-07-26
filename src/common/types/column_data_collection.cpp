@@ -662,6 +662,9 @@ ColumnDataRowCollection ColumnDataCollection::GetRows() const {
 // Combine
 //===--------------------------------------------------------------------===//
 void ColumnDataCollection::Combine(ColumnDataCollection &other) {
+	if (other.count == 0) {
+		return;
+	}
 	if (types != other.types) {
 		throw InternalException("Attempting to combine ColumnDataCollections with mismatching types");
 	}
