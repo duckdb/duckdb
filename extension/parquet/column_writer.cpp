@@ -16,12 +16,12 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/string_map_set.hpp"
 #endif
 
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
 #include "zstd.h"
-#include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
 
