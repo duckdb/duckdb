@@ -55,6 +55,86 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
+void ColumnDataCheckpointer::ForceCompression(vector<CompressionFunction *> &compression_functions,
+                                              CompressionType compression_type) {
+	// On of the force_compression flags has been set
+	// check if this compression method is available
+	bool found = false;
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (compression_functions[i]->type == compression_type) {
+			found = true;
+			break;
+		}
+	}
+	if (found) {
+		// the force_compression method is available
+		// clear all other compression methods
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (compression_functions[i]->type != compression_type) {
+				compression_functions[i] = nullptr;
+			}
+		}
+	}
+}
+
+unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
+	D_ASSERT(!compression_functions.empty());
+	auto &config = DBConfig::GetConfig(GetDatabase());
+
+	auto compression_type = checkpoint_info.compression_type;
+	if (compression_type != CompressionType::COMPRESSION_AUTO) {
+		ForceCompression(compression_functions, compression_type);
+	}
+	if (compression_type == CompressionType::COMPRESSION_AUTO &&
+	    config.force_compression != CompressionType::COMPRESSION_AUTO) {
+		ForceCompression(compression_functions, config.force_compression);
+	}
+	// set up the analyze states for each compression method
+	vector<unique_ptr<AnalyzeState>> analyze_states;
+	analyze_states.reserve(compression_functions.size());
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			analyze_states.push_back(nullptr);
+			continue;
+		}
+		analyze_states.push_back(compression_functions[i]->init_analyze(col_data, col_data.type.InternalType()));
+	}
+
+	// scan over all the segments and run the analyze step
+	ScanSegments([&](Vector &scan_vector, idx_t count) {
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (!compression_functions[i]) {
+				continue;
+			}
+			auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			if (!success) {
+				// could not use this compression function on this data set
+				// erase it
+				compression_functions[i] = nullptr;
+				analyze_states[i].reset();
+			}
+		}
+	});
+
+	// now that we have passed over all the data, we need to figure out the best method
+	// we do this using the final_analyze method
+	unique_ptr<AnalyzeState> state;
+	compression_idx = DConstants::INVALID_INDEX;
+	idx_t best_score = NumericLimits<idx_t>::Maximum();
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			continue;
+		}
+		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+		if (score < best_score) {
+			compression_idx = i;
+			best_score = score;
+			state = move(analyze_states[i]);
+		}
+	}
+	return state;
+}
+
 void ColumnDataCheckpointer::WriteToDisk() {
 	// there were changes or transient segments
 	// we need to rewrite the column segments to disk
