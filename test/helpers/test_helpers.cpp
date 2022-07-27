@@ -267,6 +267,9 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;
 		}
+		if (parsed_result.size() == 0) {
+			break;
+		}
 		csv_data_collection.Append(parsed_result);
 	}
 	string error;
