@@ -21,6 +21,7 @@
 #include "snappy.h"
 #include "miniz_wrapper.hpp"
 #include "zstd.h"
+#include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
 
@@ -1152,19 +1153,6 @@ public:
 	}
 };
 
-struct StringHash {
-	std::size_t operator()(const string_t &k) const {
-		return Hash(k);
-	}
-};
-
-struct StringEquality {
-	bool operator()(const string_t &a, const string_t &b) const {
-		return Equals::Operation(a, b);
-	}
-};
-typedef unordered_map<string_t, uint32_t, StringHash, StringEquality> string_dictionary_t;
-
 class StringColumnWriterState : public BasicColumnWriterState {
 public:
 	StringColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
@@ -1178,7 +1166,7 @@ public:
 	idx_t estimated_plain_size = 0;
 
 	// Dictionary
-	string_dictionary_t dictionary;
+	string_map_t<uint32_t> dictionary;
 	// key_bit_width== 0 signifies the chunk is written in plain encoding
 	uint32_t key_bit_width;
 
@@ -1189,7 +1177,7 @@ public:
 
 class StringWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StringWriterPageState(uint32_t bit_width, const string_dictionary_t &values)
+	explicit StringWriterPageState(uint32_t bit_width, const string_map_t<uint32_t> &values)
 	    : bit_width(bit_width), dictionary(values), encoder(bit_width), written_value(false) {
 		D_ASSERT(IsDictionaryEncoded() || (bit_width == 0 && dictionary.empty()));
 	}
@@ -1199,7 +1187,7 @@ public:
 	}
 	// if 0, we're writing a plain page
 	uint32_t bit_width;
-	const string_dictionary_t &dictionary;
+	const string_map_t<uint32_t> &dictionary;
 	RleBpEncoder encoder;
 	bool written_value;
 };
@@ -1248,7 +1236,7 @@ public:
 			if (validity.RowIsValid(vector_index)) {
 				run_length++;
 				const auto &value = strings[vector_index];
-				auto found = state.dictionary.insert(string_dictionary_t ::value_type(value, new_value_index));
+				auto found = state.dictionary.insert(string_map_t<uint32_t>::value_type(value, new_value_index));
 				state.estimated_plain_size += value.GetSize() + STRING_LENGTH_SIZE;
 				if (found.second) {
 					// string didn't exist yet in the dictionary
