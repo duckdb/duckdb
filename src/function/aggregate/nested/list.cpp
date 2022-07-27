@@ -127,8 +127,17 @@ void ListFun::GetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 		((double *)vector_data)[row_idx] = Load<double>((data_ptr_t)(data + segment_idx));
 		break;
 	}
+	case PhysicalType::INT128: {
+		auto data = TemplatedGetPrimitiveData<hugeint_t>(segment);
+		((hugeint_t *)vector_data)[row_idx] = Load<hugeint_t>((data_ptr_t)(data + segment_idx));
+		break;
+	}
+	case PhysicalType::INTERVAL: {
+		auto data = TemplatedGetPrimitiveData<interval_t>(segment);
+		((interval_t *)vector_data)[row_idx] = Load<interval_t>((data_ptr_t)(data + segment_idx));
+		break;
+	}
 	default:
-		// INT128, INTERVAL
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
 	}
 }
@@ -207,8 +216,17 @@ void ListFun::SetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 		Store<double>(((double *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
 		break;
 	}
+	case PhysicalType::INT128: {
+		auto data = TemplatedGetPrimitiveData<hugeint_t>(segment);
+		Store<hugeint_t>(((hugeint_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
+		break;
+	}
+	case PhysicalType::INTERVAL: {
+		auto data = TemplatedGetPrimitiveData<interval_t>(segment);
+		Store<interval_t>(((interval_t *)input_data)[row_idx], (data_ptr_t)(data + segment->count));
+		break;
+	}
 	default:
-		// INT128, INTERVAL, STRUCT, LIST
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
 	}
 }
@@ -271,8 +289,11 @@ ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<unique
 		return TemplatedCreatePrimitiveSegment<double>(allocator, owning_vector, capacity);
 	case PhysicalType::VARCHAR:
 		return TemplatedCreatePrimitiveSegment<char>(allocator, owning_vector, capacity);
+	case PhysicalType::INT128:
+		return TemplatedCreatePrimitiveSegment<hugeint_t>(allocator, owning_vector, capacity);
+	case PhysicalType::INTERVAL:
+		return TemplatedCreatePrimitiveSegment<interval_t>(allocator, owning_vector, capacity);
 	default:
-		// INT128, INTERVAL
 		throw InternalException("LIST aggregate not yet implemented for " + TypeIdToString(type.InternalType()));
 	}
 }
@@ -704,6 +725,9 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &, Vector &res
 		D_ASSERT(state->type);
 
 		Vector aggr_vector(*state->type, total_capacity);
+		auto &aggr_vector_validity = FlatVector::Validity(aggr_vector);
+		aggr_vector_validity.Initialize(total_capacity);
+
 		ListFun::BuildListVector(state->linked_list, aggr_vector);
 		ListVector::Append(result, aggr_vector, total_capacity);
 	}
