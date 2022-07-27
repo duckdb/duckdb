@@ -13,11 +13,9 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/table/standard_column_data.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/main/database.hpp"
 #include "duckdb/storage/checkpoint/rle_sort.hpp"
 
 namespace duckdb {
@@ -695,29 +693,6 @@ void RowGroup::ScanSegments(const std::function<void(Vector &, idx_t)> &callback
 
 			callback(scan_vector, count);
 		}
-	}
-}
-bool CompressionForTypeExists(PhysicalType type) {
-	switch (type) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-	case PhysicalType::INT16:
-	case PhysicalType::INT32:
-	case PhysicalType::INT64:
-	case PhysicalType::INT128:
-	case PhysicalType::UINT8:
-	case PhysicalType::UINT16:
-	case PhysicalType::UINT32:
-	case PhysicalType::UINT64:
-	case PhysicalType::FLOAT:
-	case PhysicalType::DOUBLE:
-	case PhysicalType::LIST:
-	case PhysicalType::INTERVAL:
-	case PhysicalType::BIT:
-	case PhysicalType::VARCHAR:
-		return true;
-	default:
-		return false;
 	}
 }
 
