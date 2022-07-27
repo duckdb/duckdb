@@ -41,3 +41,7 @@ endif()
 if(${BUILD_SQLSMITH_EXTENSION})
   add_subdirectory(sqlsmith)
 endif()
+
+if(${BUILD_SKETCH_EXTENSION})
+  add_subdirectory(sketch)
+endif()
