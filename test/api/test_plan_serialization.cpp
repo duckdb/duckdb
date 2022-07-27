@@ -2,11 +2,10 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/planner/planner.hpp"
-#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-
+#include "duckdb/planner/planner.hpp"
 #include "test_helpers.hpp"
 
 #include <map>
@@ -50,7 +49,8 @@ static void test_helper(string sql) {
 }
 
 TEST_CASE("Test plan serialization", "[api]") {
-	test_helper("SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
+	test_helper(
+	    "SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
 }
 
 TEST_CASE("Test logical_dummy_scan", "[api]") {

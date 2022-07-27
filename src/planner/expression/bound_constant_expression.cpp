@@ -37,7 +37,8 @@ void BoundConstantExpression::Serialize(FieldWriter &writer) const {
 	value.Serialize(writer.GetSerializer());
 }
 
-unique_ptr<Expression> BoundConstantExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader) {
+unique_ptr<Expression> BoundConstantExpression::Deserialize(ClientContext &context, ExpressionType type,
+                                                            FieldReader &reader) {
 	auto value = Value::Deserialize(reader.GetSource());
 	return make_unique<BoundConstantExpression>(value);
 }

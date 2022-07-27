@@ -13,7 +13,6 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
 	writer.WriteSerializableList(bound_defaults);
-
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, LogicalOperatorType type,
