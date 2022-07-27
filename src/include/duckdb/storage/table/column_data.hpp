@@ -31,6 +31,16 @@ struct DataTableInfo;
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
 	CompressionType compression_type;
+	//! The compression id of the column after analysis
+	idx_t compression_idx;
+	//! The analysis state to be used during compression
+	unique_ptr<AnalyzeState> state;
+	//! The final score of the analysis
+	idx_t score;
+
+	//! Validity mask state
+	idx_t validity_compression_idx;
+	unique_ptr<AnalyzeState> validity_state;
 };
 
 class ColumnData {
@@ -50,12 +60,6 @@ public:
 	LogicalType type;
 	//! The parent column (if any)
 	ColumnData *parent;
-	//! The segments holding the data of this column segment
-	SegmentTree data;
-	//! The compression id of the column after analysis
-	idx_t compression_idx;
-	//! The analysis state to be used during compression
-	unique_ptr<AnalyzeState> state;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
@@ -109,6 +113,8 @@ public:
 
 	virtual void CommitDropColumn();
 
+	virtual void DetectBestCompressionMethod(RowGroup &row_group, TableDataWriter &writer,
+	                                             ColumnCheckpointInfo &checkpoint_info);
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
 	                                                     ColumnCheckpointInfo &checkpoint_info);
@@ -144,6 +150,8 @@ protected:
 	idx_t ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
 protected:
+	//! The segments holding the data of this column segment
+	SegmentTree data;
 	//! The lock for the updates
 	mutex update_lock;
 	//! The updates for this column segment

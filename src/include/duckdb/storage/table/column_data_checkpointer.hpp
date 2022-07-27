@@ -26,7 +26,7 @@ public:
 	ColumnCheckpointState &GetCheckpointState();
 
 	void Checkpoint(unique_ptr<SegmentBase> segment);
-	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx);
+	void DetectBestCompressionMethod(idx_t &compression_idx, bool is_validity);
 	static void ForceCompression(vector<CompressionFunction *> &compression_functions,
 	                             CompressionType compression_type);
 

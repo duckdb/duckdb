@@ -31,6 +31,7 @@ class UpdateSegment;
 class Vector;
 struct RowGroupPointer;
 struct VersionNode;
+struct ColumnCheckpointInfo;
 
 class RowGroup : public SegmentBase {
 public:
@@ -118,8 +119,6 @@ public:
 	//! Delete the given set of rows in the version manager
 	idx_t Delete(Transaction &transaction, DataTable *table, row_t *row_ids, idx_t count);
 
-	void DetectBestCompressionMethod(ColumnData *col_data, CompressionType compression_type, bool is_validity);
-
 	RowGroupPointer Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats,
 	                           DataTable &data_table);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
@@ -147,17 +146,12 @@ public:
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
-	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback, Vector &intermediate, idx_t column_idx);
 	template <TableScanType TYPE>
 	void TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result);
 
 	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
 	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
-
-	void ForceCompression(vector<CompressionFunction *> &compression_functions,
-	                                CompressionType compression_type);
-
-	vector<CompressionType> DetectBestCompressionMethodTable(TableDataWriter &writer);
+	vector<ColumnCheckpointInfo> DetectBestCompressionMethodTable(TableDataWriter &writer);
 
 private:
 	mutex row_group_lock;

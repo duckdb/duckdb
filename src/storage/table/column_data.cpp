@@ -356,6 +356,22 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
 	}
 }
 
+void ColumnData::DetectBestCompressionMethod(RowGroup &row_group, TableDataWriter &writer,
+                                             ColumnCheckpointInfo &checkpoint_info) {
+	auto checkpoint_state = CreateCheckpointState(row_group, writer);
+	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type, StatisticsType::LOCAL_STATS);
+
+	if (!data.root_node) {
+		// empty table: flush the empty list
+		return;
+	}
+
+	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
+	idx_t compression_idx_p;
+
+	checkpointer.DetectBestCompressionMethod(compression_idx_p, false);
+}
+
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
                                                          ColumnCheckpointInfo &checkpoint_info) {
 	// scan the segments of the column data

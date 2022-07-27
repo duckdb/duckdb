@@ -10,6 +10,7 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/checkpoint/rle_sort_options.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -35,12 +36,13 @@ struct RowGroupSortBindData : public FunctionData {
 
 class RLESort {
 public:
-	RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionType> table_compression);
-	void Sort();
+	RLESort(RowGroup &row_group, DataTable &data_table, TableDataWriter &writer, vector<ColumnCheckpointInfo> &infos);
+	void Sort(vector<ColumnCheckpointInfo> &infos);
 
 private:
 	RowGroup &row_group;
 	DataTable &data_table;
+	TableDataWriter &writer;
 
 	// Key Columns (i.e., columns to sort on)
 	vector<LogicalType> key_column_types;
@@ -66,6 +68,9 @@ private:
 
 	// Logical Types supported in the payload
 	bool SupportedPayloadType(LogicalTypeId type_id);
+
+	// Check if the score of the sorted row group is better
+	bool NewScoresBetter(RowGroup &sorted_rowgroup, vector<ColumnCheckpointInfo> &infos);
 
 	// Calculate the cardinalities with a chosen option
 	void CalculateCardinalities(vector<HyperLogLog> &logs, vector<std::tuple<idx_t, idx_t>> &cardinalities,

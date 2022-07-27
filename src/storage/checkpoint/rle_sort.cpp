@@ -36,15 +36,15 @@ bool RowGroupSortBindData::Equals(const FunctionData &other) const {
 RowGroupSortBindData::~RowGroupSortBindData() {
 }
 
-RLESort::RLESort(RowGroup &row_group, DataTable &data_table, vector<CompressionType> table_compression)
-    : row_group(row_group), data_table(data_table), old_count(row_group.count) {
+RLESort::RLESort(RowGroup &row_group, DataTable &data_table, TableDataWriter &writer, vector<ColumnCheckpointInfo> &infos)
+    : row_group(row_group), data_table(data_table), writer(writer), old_count(row_group.count) {
 	// Reorder columns to optimize RLE Compression - We skip if the table has indexes or is empty
 	if (row_group.db.config.force_compression_sorting && row_group.count != 0 && row_group.table_info.indexes.Empty()) {
 		// collect logical types by iterating the columns
 		for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
 			auto &column = row_group.columns[column_idx];
 			auto type_id = column->type.id();
-			auto column_compression = table_compression[column_idx];
+			auto column_compression = infos[column_idx].compression_type;
 			// We basically only sort columns with RLE compression and that are supported by the RLE algorithm
 			if (SupportedKeyType(type_id) && (column_compression == CompressionType::COMPRESSION_RLE)) {
 				// Gather types and ids of key columns (i.e., the ones we will sort on)
@@ -95,6 +95,29 @@ bool RLESort::SupportedPayloadType(LogicalTypeId type_id) {
 	default:
 		return true;
 	}
+}
+
+bool RLESort::NewScoresBetter(RowGroup &sorted_rowgroup, vector<ColumnCheckpointInfo> &infos) {
+	// Before replacing - check if RLE compression is better
+	auto sorted_infos = sorted_rowgroup.DetectBestCompressionMethodTable(writer);
+
+	idx_t score;
+	idx_t sorted_score;
+
+	for (idx_t i = 0; i < row_group.columns.size(); i++) {
+		score += infos[i].score;
+		sorted_score += sorted_infos[i].score;
+	}
+
+	// A lower score = fewer bytes = better compression
+	if (sorted_score < score) {
+		// Replace the info to be used during checkpointing
+		for (idx_t i = 0; i < row_group.columns.size(); i++) {
+			infos[i] = move(sorted_infos[i]);
+		}
+		return true;
+	}
+	return false;
 }
 
 void RLESort::InitializeScan() {
@@ -234,7 +257,7 @@ unique_ptr<RowGroup> RLESort::CreateSortedRowGroup(GlobalSortState &global_sort_
 	return sorted_rowgroup;
 }
 
-void RLESort::Sort() {
+void RLESort::Sort(vector<ColumnCheckpointInfo> &infos) {
 	if (key_column_ids.empty()) {
 		// Nothing to sort on
 		int64_t prev_end = data_table.GetPrevEnd();
@@ -290,6 +313,12 @@ void RLESort::Sort() {
 	int64_t prev_end = data_table.GetPrevEnd();
 	prev_end += row_group.count;
 	data_table.SetPrevEnd(prev_end);
+
 	ReplaceRowGroup(*sorted_rowgroup);
+
+	// TODO: Uncomment once unified DetectBestCompressionMethod is fixed
+//	if (NewScoresBetter(*sorted_rowgroup, infos)) {
+//		ReplaceRowGroup(*sorted_rowgroup);
+//	}
 }
 } // namespace duckdb

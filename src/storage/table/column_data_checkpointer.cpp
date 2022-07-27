@@ -77,7 +77,7 @@ void ColumnDataCheckpointer::ForceCompression(vector<CompressionFunction *> &com
 	}
 }
 
-unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
+void ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx, bool is_validity) {
 	D_ASSERT(!compression_functions.empty());
 	auto &config = DBConfig::GetConfig(GetDatabase());
 
@@ -132,7 +132,19 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 			state = move(analyze_states[i]);
 		}
 	}
-	return state;
+
+	// Assign the type and state to the CheckpointInfo
+	if (is_validity) {
+		// Keep a separate state for the validity masks
+		checkpoint_info.validity_compression_idx = compression_idx;
+		checkpoint_info.validity_state = move(state);
+	}
+	else {
+		checkpoint_info.compression_idx = compression_idx;
+		checkpoint_info.state = move(state);
+		checkpoint_info.compression_type = compression_functions[compression_idx]->type;
+		checkpoint_info.score = best_score;
+	}
 }
 
 void ColumnDataCheckpointer::WriteToDisk() {
@@ -155,12 +167,26 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// now we need to write our segment
 	// we will first run an analyze step that determines which compression function to use
+	idx_t compression_idx = 0;
+	CompressionFunction *best_function;
+	unique_ptr<AnalyzeState> analyze_state;
 	if (is_validity) {
-		row_group.DetectBestCompressionMethod(&col_data, checkpoint_info.compression_type, is_validity);
+		// We have not scanned the validity masks before
+		DetectBestCompressionMethod(compression_idx, is_validity);
+		best_function = compression_functions[checkpoint_info.validity_compression_idx];
+		analyze_state = move(checkpoint_info.validity_state);
+	}
+	else {
+		best_function = compression_functions[checkpoint_info.compression_idx];
+		analyze_state = move(checkpoint_info.state);
 	}
 
-	auto best_function = compression_functions[col_data.compression_idx];
-	auto analyze_state = move(col_data.state);
+	// Back up in case scanning did not go as planned, scan again to find compression method
+	if (!analyze_state) {
+		DetectBestCompressionMethod(compression_idx, is_validity);
+		best_function = compression_functions[checkpoint_info.compression_idx];
+		analyze_state = move(checkpoint_info.state);
+	}
 
 	if (!analyze_state) {
 		throw InternalException("No suitable compression/storage method found to store column");
