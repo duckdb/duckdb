@@ -48,7 +48,8 @@ public:
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_p) : executor(executor_p), ready(false), source(nullptr), sink(nullptr) {
+Pipeline::Pipeline(Executor &executor_p)
+    : executor(executor_p), ready(false), initialized(false), source(nullptr), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -58,7 +59,7 @@ ClientContext &Pipeline::GetClientContext() {
 bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality) {
 	D_ASSERT(source);
 	source_cardinality = source->estimated_cardinality;
-	if (!source_state) {
+	if (!initialized) {
 		current_percentage = 0;
 		return true;
 	}
@@ -157,6 +158,7 @@ void Pipeline::Reset() {
 		}
 	}
 	ResetSource();
+	initialized = true;
 }
 
 void Pipeline::ResetSource() {
