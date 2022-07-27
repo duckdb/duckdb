@@ -148,19 +148,15 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 }
 
 void Pipeline::Reset() {
-	D_ASSERT(!initialized);
 	if (sink && !sink->sink_state) {
-		D_ASSERT(!sink->sink_state);
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
 
 	for (auto &op : operators) {
 		if (op && !op->op_state) {
-			D_ASSERT(!op->op_state);
 			op->op_state = op->GetGlobalOperatorState(GetClientContext());
 		}
 	}
-	D_ASSERT(!source_state);
 	ResetSource();
 	initialized = true;
 }
