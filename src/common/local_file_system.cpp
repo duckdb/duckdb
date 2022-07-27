@@ -132,6 +132,7 @@ public:
 	void Close() override {
 		if (fd != -1) {
 			close(fd);
+			fd = -1;
 		}
 	};
 };
