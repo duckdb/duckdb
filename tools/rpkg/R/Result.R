@@ -45,7 +45,9 @@ duckdb_execute <- function(res) {
 }
 
 duckdb_post_execute <- function(res, out) {
-  if (!res@arrow) {
+  if (res@arrow) {
+    res@env$query_result <- out
+  } else {
     stopifnot(is.data.frame(out))
 
     if (!res@stmt_lst$type %in% c("SELECT", "EXPLAIN")) {
@@ -66,6 +68,14 @@ fix_rownames <- function(df) {
   return(df)
 }
 
+get_query_result <- function(res) {
+  if (exists("query_result", envir = res@env)) {
+    res@env$query_result
+  } else {
+    res@query_result
+  }
+}
+
 #' @rdname duckdb_result-class
 #' @param res Query result to be converted to an Arrow Table
 #' @param chunk_size The chunk size
@@ -74,7 +84,7 @@ duckdb_fetch_arrow <- function(res, chunk_size = 1000000) {
   if (chunk_size <= 0) {
     stop("Chunk Size must be higher than 0")
   }
-  rapi_execute_arrow(res@query_result, chunk_size)
+  rapi_execute_arrow(get_query_result(res), chunk_size)
 }
 
 #' @rdname duckdb_result-class
@@ -85,7 +95,7 @@ duckdb_fetch_record_batch <- function(res, chunk_size = 1000000) {
   if (chunk_size <= 0) {
     stop("Chunk Size must be higher than 0")
   }
-  rapi_record_batch(res@query_result, chunk_size)
+  rapi_record_batch(get_query_result(res), chunk_size)
 }
 
 set_output_tz <- function(x, timezone, convert) {
