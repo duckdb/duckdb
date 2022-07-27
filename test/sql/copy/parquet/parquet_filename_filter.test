@@ -31,7 +31,7 @@ select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.p
 
 # This query should trigger the file skipping mechanism, which prevents reading metadata for files that are not scanned
 query IIII
-select id, value, date, filename from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1);
+select id, value, date, filename from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by id;
 ----
 1	value1	2012-01-01	data/parquet-testing/hive-partitioning/different_order/date=2012-01-01/part=a/test.parquet
 2	value2	2013-01-01	data/parquet-testing/hive-partitioning/different_order/part=b/date=2013-01-01/test.parquet

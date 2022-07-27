@@ -6,7 +6,7 @@ require parquet
 
 # test parsing hive partitioning scheme
 query IIII
-select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1)  order by id
+select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) order by id
 ----
 1	value1	a	2012-01-01
 2	value2	b	2013-01-01
@@ -55,7 +55,7 @@ select id, value, date from parquet_scan('data/parquet-testing/hive-partitioning
 1	value1	2012-01-01
 
 query III
-select id, value, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2012-01-01' or id <= 2;
+select id, value, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2012-01-01' or id <= 2 order by id;
 ----
 1	value1	2012-01-01
 2	value2	2013-01-01
