@@ -6,7 +6,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "iostream"
 
 #include "test_helpers.hpp"
 
@@ -22,38 +21,43 @@ static void test_helper(string sql) {
 
 	Parser p;
 	p.ParseQuery(sql);
-	std::cout << "Parsed '" << sql << std::endl;
+	printf("Parsed query");
 
 	Planner planner(*con.context);
 	planner.CreatePlan(move(p.statements[0]));
-	std::cout << "Created plan " << std::endl;
+	printf("Created plan");
 	auto plan = move(planner.plan);
 
 	Optimizer optimizer(*planner.binder, *con.context);
 
 	plan = optimizer.Optimize(move(plan));
-	std::cout << "Optimized plan " << std::endl;
+	printf("Optimized plan");
 
 	BufferedSerializer serializer;
 	plan->Serialize(serializer);
-	std::cout << "Serialized plan " << std::endl;
+	printf("Serialized plan");
 
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
-	std::cout << "Deserialized plan " << std::endl;
+	printf("Deserialized plan");
 
-	printf("%s\n", new_plan->ToString().c_str());
+	printf("Original plan:\n%s\n", plan->ToString().c_str());
+	printf("New plan:\n%s\n", new_plan->ToString().c_str());
 
-	new_plan = optimizer.Optimize(move(new_plan));
-	printf("%s\n", new_plan->ToString().c_str());
+	auto optimized_plan = optimizer.Optimize(move(new_plan));
+	printf("Optimized plan:\n%s\n", optimized_plan->ToString().c_str());
 }
 
 TEST_CASE("Test plan serialization", "[api]") {
 	test_helper("SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
 }
 
-TEST_CASE("Test logical_dummy_scan, logical_unnest", "[api]") {
+TEST_CASE("Test logical_dummy_scan", "[api]") {
+	test_helper("SELECT [1, 2, 3]");
+}
+
+TEST_CASE("Test logical_unnest", "[api]") {
 	test_helper("SELECT UNNEST([1, 2, 3])");
 }
 
@@ -69,3 +73,6 @@ TEST_CASE("Test logical_set", "[api]") {
 	test_helper("SET memory_limit='10GB'");
 }
 
+TEST_CASE("Test logical_sample", "[api]") {
+	test_helper("SELECT * FROM (SELECT 42 as i) USING SAMPLE RESERVOIR(20%);");
+}

@@ -29,11 +29,14 @@ void LogicalSample::ResolveTypes() {
 }
 
 void LogicalSample::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	sample_options->Serialize(writer.GetSerializer());
 }
 
 unique_ptr<LogicalOperator> LogicalSample::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto sample_options = SampleOptions::Deserialize(reader.GetSource());
+	// TODO(stephwang): review how to pass child LogicalOperator
+	auto result = make_unique<LogicalSample>(move(sample_options), nullptr);
+	return result;
 }
 } // namespace duckdb
