@@ -39,8 +39,7 @@ void BoundConstantExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<Expression> BoundConstantExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader) {
 	auto value = Value::Deserialize(reader.GetSource());
-	auto result = make_unique<BoundConstantExpression>(value);
-	return result;
+	return make_unique<BoundConstantExpression>(value);
 }
 
 } // namespace duckdb

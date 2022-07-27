@@ -13,8 +13,7 @@ unique_ptr<LogicalOperator> LogicalSet::Deserialize(ClientContext &context, Logi
 	auto name = reader.ReadRequired<std::string>();
 	auto value = Value::Deserialize(reader.GetSource());
 	auto scope = reader.ReadRequired<SetScope>();
-	auto result = make_unique<LogicalSet>(name, value, scope);
-	return result;
+	return make_unique<LogicalSet>(name, value, scope);;
 }
 
 } // namespace duckdb
