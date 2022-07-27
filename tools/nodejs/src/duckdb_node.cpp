@@ -12,6 +12,7 @@ Napi::Object RegisterModule(Napi::Env env, Napi::Object exports) {
 	node_duckdb::Database::Init(env, exports);
 	node_duckdb::Connection::Init(env, exports);
 	node_duckdb::Statement::Init(env, exports);
+	node_duckdb::QueryResult::Init(env, exports);
 
 	exports.DefineProperties({
 	    DEFINE_CONSTANT_INTEGER(exports, node_duckdb::Database::DUCKDB_NODEJS_ERROR, ERROR) DEFINE_CONSTANT_INTEGER(
