@@ -46,7 +46,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
-	HashJoinGlobalSinkState() : finalized(false) {
+	HashJoinGlobalSinkState() : finalized(false), max_batch_index(0) {
 	}
 
 	//! Global HT used by the join
@@ -65,6 +65,9 @@ public:
 	//! Hash tables built by each thread
 	mutex local_ht_lock;
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
+
+	//! Maximum batch index seen in local sink states
+	idx_t max_batch_index;
 };
 
 class HashJoinLocalSinkState : public LocalSinkState {
@@ -205,6 +208,7 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 	if (lstate.hash_table) {
 		lock_guard<mutex> local_ht_lock(gstate.local_ht_lock);
 		gstate.local_hash_tables.push_back(move(lstate.hash_table));
+		gstate.max_batch_index = MaxValue<idx_t>(gstate.max_batch_index, lstate.batch_index);
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -358,8 +362,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	explicit HashJoinGlobalSourceState(const PhysicalHashJoin &op)
-	    : op(op), initialized(false), local_hts_done(0), batch_index(0) {
+	explicit HashJoinGlobalSourceState(const PhysicalHashJoin &op) : op(op), initialized(false), local_hts_done(0) {
 	}
 
 	const PhysicalHashJoin &op;
@@ -384,6 +387,7 @@ public:
 		full_outer_scan_state.total = sink.hash_table->Count();
 		probe_ht->radix_bits = sink.hash_table->radix_bits;
 		local_ht_count = sink.local_hash_tables.size();
+		batch_index = ++sink.max_batch_index;
 		initialized = true;
 	}
 
