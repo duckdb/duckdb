@@ -13,8 +13,10 @@ unique_ptr<LogicalOperator> LogicalLimitPercent::Deserialize(ClientContext &cont
                                                              FieldReader &reader) {
 	auto limit_percent = reader.ReadRequired<double>();
 	auto offset_val = reader.ReadRequired<int64_t>();
-	unique_ptr<Expression> limit = reader.ReadOptional<Expression>(move(limit), context);
-	unique_ptr<Expression> offset = reader.ReadOptional<Expression>(move(offset), context);
+	unique_ptr<Expression> limit;
+	limit = reader.ReadOptional<Expression>(move(limit), context);
+	unique_ptr<Expression> offset;
+	offset = reader.ReadOptional<Expression>(move(offset), context);
 	return make_unique<LogicalLimitPercent>(limit_percent, offset_val, move(limit), move(offset));
 }
 } // namespace duckdb

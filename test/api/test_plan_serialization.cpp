@@ -20,26 +20,26 @@ static void test_helper(string sql) {
 
 	Parser p;
 	p.ParseQuery(sql);
-	printf("Parsed query");
+	printf("\nParsed query\n");
 
 	Planner planner(*con.context);
 	planner.CreatePlan(move(p.statements[0]));
-	printf("Created plan");
+	printf("Created plan\n");
 	auto plan = move(planner.plan);
 
 	Optimizer optimizer(*planner.binder, *con.context);
 
 	plan = optimizer.Optimize(move(plan));
-	printf("Optimized plan");
+	printf("Optimized plan\n");
 
 	BufferedSerializer serializer;
 	plan->Serialize(serializer);
-	printf("Serialized plan");
+	printf("Serialized plan\n");
 
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
-	printf("Deserialized plan");
+	printf("Deserialized plan\n");
 
 	printf("Original plan:\n%s\n", plan->ToString().c_str());
 	printf("New plan:\n%s\n", new_plan->ToString().c_str());
@@ -79,4 +79,8 @@ TEST_CASE("Test logical_sample", "[api]") {
 
 TEST_CASE("Test logical_limit_percent", "[api]") {
 	test_helper("SELECT 42 LIMIT 35%");
+}
+
+TEST_CASE("Test logical_limit", "[api]") {
+	test_helper("SELECT 42 LIMIT 1");
 }
