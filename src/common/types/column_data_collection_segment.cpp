@@ -15,8 +15,8 @@ validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr,
 	return (validity_t *)(base_ptr + GetDataSize(type_size));
 }
 
-VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_meta,
-                                                            ChunkManagementState *chunk_state) {
+VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const LogicalType &type, ChunkMetaData &chunk_meta,
+                                                                    ChunkManagementState *chunk_state) {
 	VectorMetaData meta_data;
 	meta_data.count = 0;
 
@@ -34,8 +34,33 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 }
 
 VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_meta,
-                                                            ColumnDataAppendState &append_state) {
-	return AllocateVector(type, chunk_meta, &append_state.current_chunk_state);
+                                                            ChunkManagementState *chunk_state,
+                                                            VectorDataIndex prev_index) {
+	auto index = AllocateVectorInternal(type, chunk_meta, chunk_state);
+	if (prev_index.IsValid()) {
+		GetVectorData(prev_index).next_data = index;
+	}
+	if (type.InternalType() == PhysicalType::STRUCT) {
+		// initialize the struct children
+		auto &child_types = StructType::GetChildTypes(type);
+		auto base_child_index = ReserveChildren(child_types.size());
+		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
+			VectorDataIndex prev_child_index;
+			if (prev_index.IsValid()) {
+				prev_child_index = GetChildIndex(GetVectorData(prev_index).child_index, child_idx);
+			}
+			auto child_index = AllocateVector(child_types[child_idx].second, chunk_meta, chunk_state, prev_child_index);
+			SetChildIndex(base_child_index, child_idx, child_index);
+		}
+		GetVectorData(index).child_index = base_child_index;
+	}
+	return index;
+}
+
+VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_meta,
+                                                            ColumnDataAppendState &append_state,
+                                                            VectorDataIndex prev_index) {
+	return AllocateVector(type, chunk_meta, &append_state.current_chunk_state, prev_index);
 }
 
 void ColumnDataCollectionSegment::AllocateNewChunk() {
@@ -81,33 +106,12 @@ void ColumnDataCollectionSegment::SetChildIndex(VectorChildIndex base_idx, idx_t
 	child_indices[base_idx.index + child_number] = index;
 }
 
-idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, VectorDataIndex vector_index,
-                                              Vector &result) {
+idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &state, VectorDataIndex vector_index,
+                                                      Vector &result) {
 	auto &vector_type = result.GetType();
 	auto internal_type = vector_type.InternalType();
 	auto type_size = GetTypeIdSize(internal_type);
 	auto &vdata = GetVectorData(vector_index);
-	if (vdata.count == 0) {
-		return 0;
-	}
-	if (internal_type == PhysicalType::LIST) {
-		// list: copy child
-		auto &child_vector = ListVector::GetEntry(result);
-		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
-		ListVector::SetListSize(result, child_count);
-	} else if (internal_type == PhysicalType::STRUCT) {
-		auto &child_vectors = StructVector::GetEntries(result);
-		idx_t child_count = 0;
-		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
-			auto current_count =
-			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
-			if (child_idx == 0) {
-				child_count = current_count;
-			} else if (current_count != child_count) {
-				throw InternalException("Column Data Collection: mismatch in struct child sizes");
-			}
-		}
-	}
 
 	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
 	auto validity_data = GetValidityPointer(base_ptr, type_size);
@@ -129,7 +133,6 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		next_index = current_vdata.next_data;
 	}
 	// resize the result vector
-
 	result.Resize(0, vector_count);
 	next_index = vector_index;
 	// now perform the copy of each of the vectors
@@ -152,6 +155,33 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		next_index = current_vdata.next_data;
 	}
 	return vector_count;
+}
+
+idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, VectorDataIndex vector_index,
+                                              Vector &result) {
+	auto &vector_type = result.GetType();
+	auto internal_type = vector_type.InternalType();
+	auto &vdata = GetVectorData(vector_index);
+	if (vdata.count == 0) {
+		return 0;
+	}
+	auto count = ReadVectorInternal(state, vector_index, result);
+	if (internal_type == PhysicalType::LIST) {
+		// list: copy child
+		auto &child_vector = ListVector::GetEntry(result);
+		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
+		ListVector::SetListSize(result, child_count);
+	} else if (internal_type == PhysicalType::STRUCT) {
+		auto &child_vectors = StructVector::GetEntries(result);
+		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
+			auto child_count =
+			    ReadVector(state, GetChildIndex(vdata.child_index, child_idx), *child_vectors[child_idx]);
+			if (child_count != count) {
+				throw InternalException("Column Data Collection: mismatch in struct child sizes");
+			}
+		}
+	}
+	return count;
 }
 
 void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,

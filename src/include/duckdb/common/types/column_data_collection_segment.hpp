@@ -87,10 +87,11 @@ public:
 	void AllocateNewChunk();
 	//! Allocate space for a vector of a specific type in the segment
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
-	                               ChunkManagementState *chunk_state = nullptr);
+	                               ChunkManagementState *chunk_state = nullptr,
+	                               VectorDataIndex prev_index = VectorDataIndex());
 	//! Allocate space for a vector during append,
 	VectorDataIndex AllocateVector(const LogicalType &type, ChunkMetaData &chunk_data,
-	                               ColumnDataAppendState &append_state);
+	                               ColumnDataAppendState &append_state, VectorDataIndex prev_index = VectorDataIndex());
 
 	void InitializeChunkState(idx_t chunk_index, ChunkManagementState &state);
 	void ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,
@@ -116,6 +117,11 @@ public:
 
 	static idx_t GetDataSize(idx_t type_size);
 	static validity_t *GetValidityPointer(data_ptr_t base_ptr, idx_t type_size);
+
+private:
+	idx_t ReadVectorInternal(ChunkManagementState &state, VectorDataIndex vector_index, Vector &result);
+	VectorDataIndex AllocateVectorInternal(const LogicalType &type, ChunkMetaData &chunk_meta,
+	                                       ChunkManagementState *chunk_state);
 };
 
 } // namespace duckdb

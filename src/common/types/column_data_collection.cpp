@@ -377,9 +377,9 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 		if (remaining > 0) {
 			// need to append more, check if we need to allocate a new vector or not
 			if (!segment.GetVectorData(child_index).next_data.IsValid()) {
-				auto next_data = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
-				segment.GetVectorData(child_index).next_data = next_data;
+				segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state, child_index);
 			}
+			D_ASSERT(segment.GetVectorData(child_index).next_data.IsValid());
 			child_index = segment.GetVectorData(child_index).next_data;
 		}
 	}
@@ -403,16 +403,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
-	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
-		// no child vectors yet, allocate them
-		auto base_index = segment.ReserveChildren(child_types.size());
-		for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
-			auto child_index =
-			    segment.AllocateVector(child_types[child_idx].second, meta_data.chunk_data, meta_data.state);
-			segment.SetChildIndex(base_index, child_idx, child_index);
-		}
-		meta_data.GetVectorMetaData().child_index = base_index;
-	}
+	D_ASSERT(meta_data.GetVectorMetaData().child_index.IsValid());
 	auto &child_vectors = StructVector::GetEntries(source);
 	for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 		auto &child_function = meta_data.copy_function.child_functions[child_idx];
