@@ -206,8 +206,9 @@ jobs:
 
  linux-aarch64:
     name: Linux (aarch64)
-    runs-on: ubuntu-latest
-    container: ubuntu:16.04
+#    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
+#    container: ubuntu:16.04
 #    needs: linux-release-64
     # TODO guarantee that its similar to AMD release somehow?
     env:
@@ -259,7 +260,7 @@ jobs:
           zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
           zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
           zip -j duckdb_rest-linux-aarch64.zip build/release/tools/rest/duckdb_rest_server
-          python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_rest-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-aarch64.zip
+          python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_rest-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
       - uses: actions/upload-artifact@v2
         with:
