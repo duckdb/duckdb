@@ -213,14 +213,14 @@ jobs:
     env:
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_ICU: 1
+      BUILD_ICU: 0
       BUILD_TPCH: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
-      BUILD_ODBC: 1
+      BUILD_ODBC: 0
       STATIC_LIBCPP: 1
       AARCH_CROSS_COMPILE: 1
       TREAT_WARNINGS_AS_ERRORS: 1
@@ -282,15 +282,40 @@ jobs:
      FORCE_WARN_UNUSED: 1
 
    steps:
+     - uses: actions/checkout@v2.1.0
      - uses: actions/download-artifact@v3
        with:
          name: duckdb-binaries-aarch64
          path: /tmp
 
-     - name: Build
-       shell: bash
-       run: make
+     - uses: uraimo/run-on-arch-action@v2
+       name: Run commands
+       id: runcmd
+       with:
+         arch: aarch64
+         distro: ubuntu16.04
 
+         # Create an artifacts directory
+         setup: |
+           mkdir -p "/tmp"
+          cd /tmp
+          unzip duckdb_unittest.zip
+          chmod +x unittest
+
+         # Mount the artifacts directory as /artifacts in the container
+         dockerRunArgs: |
+           --volume "/tmp:/tmp"
+
+         # Set an output parameter `uname` for use in subsequent steps
+         run: |
+           uname -a
+           ./tmp/unitest
+           echo ::set-output name=uname::$(uname -a)
+
+     - name: Get the output
+       # Echo the `uname` output parameter from the `runcmd` step
+       run: |
+         echo "The uname output was ${{ steps.runcmd.outputs.uname }}"
 
  old-gcc:
     name: GCC 4.8
