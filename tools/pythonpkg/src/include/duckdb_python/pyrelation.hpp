@@ -13,7 +13,7 @@
 #include "arrow_array_stream.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb_python/pandas.hpp"
+#include "duckdb_python/pandas_type.hpp"
 
 namespace duckdb {
 

@@ -16,7 +16,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb_python/python_import_cache.hpp"
 #include "duckdb_python/registered_py_object.hpp"
-#include "duckdb_python/pandas.hpp"
+#include "duckdb_python/pandas_type.hpp"
 
 namespace duckdb {
 

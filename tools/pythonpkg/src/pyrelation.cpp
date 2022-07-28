@@ -4,7 +4,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/vector_conversion.hpp"
-#include "duckdb_python/pandas.hpp"
+#include "duckdb_python/pandas_type.hpp"
 
 namespace duckdb {
 
