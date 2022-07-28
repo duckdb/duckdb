@@ -1,7 +1,7 @@
 #ifndef JEMALLOC_PREAMBLE_H
 #define JEMALLOC_PREAMBLE_H
 
-#include "jemalloc_internal_defs.h"
+#include "jemalloc/internal/jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 
 #if defined(JEMALLOC_UTRACE) || defined(JEMALLOC_UTRACE_LABEL)
