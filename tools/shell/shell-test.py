@@ -299,6 +299,10 @@ CREATE INDEX a_idx ON a(i);
 # this does not seem to output anything
 test('.sha3sum')
 
+test('''
+.mode jsonlines
+SELECT 42,43;
+''', out="{"42":42,"43":43}")
 
 test('''
 .mode csv
