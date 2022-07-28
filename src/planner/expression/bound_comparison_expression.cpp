@@ -38,6 +38,7 @@ void BoundComparisonExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(left);
 	writer.WriteOptional(right);
 }
+
 unique_ptr<Expression> BoundComparisonExpression::Deserialize(ClientContext &context, ExpressionType type,
                                                               FieldReader &reader) {
 	auto expression_type = reader.ReadRequired<ExpressionType>();
@@ -45,7 +46,7 @@ unique_ptr<Expression> BoundComparisonExpression::Deserialize(ClientContext &con
 	left = reader.ReadOptional<Expression>(move(left), context);
 	unique_ptr<Expression> right;
 	right = reader.ReadOptional<Expression>(move(right), context);
-	return make_unique<BoundComparisonExpression>(expression_type, nullptr, nullptr);
+	return make_unique<BoundComparisonExpression>(expression_type, move(left), move(right));
 }
 
 } // namespace duckdb
