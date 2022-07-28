@@ -75,6 +75,9 @@ unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 		scan_initialized = true;
 	}
 	collection->Scan(scan_state, *result);
+	if (result->size() == 0) {
+		return nullptr;
+	}
 	return result;
 }
 
