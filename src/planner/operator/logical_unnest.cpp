@@ -18,11 +18,12 @@ void LogicalUnnest::ResolveTypes() {
 }
 
 void LogicalUnnest::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(unnest_index);
 }
 
 unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto unnest_index = reader.ReadRequired<idx_t>();
+	return make_unique<LogicalUnnest>(unnest_index);
 }
 } // namespace duckdb

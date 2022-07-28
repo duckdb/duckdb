@@ -3,12 +3,13 @@
 namespace duckdb {
 
 void LogicalDummyScan::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(table_index);
 }
 
 unique_ptr<LogicalOperator> LogicalDummyScan::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                           FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto table_index = reader.ReadRequired<idx_t>();
+	return make_unique<LogicalDummyScan>(table_index);
 }
 
 } // namespace duckdb

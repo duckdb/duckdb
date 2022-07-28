@@ -115,6 +115,9 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientConte
 	case ExpressionType::BOUND_AGGREGATE:
 		result = BoundAggregateExpression::Deserialize(context, type, reader);
 		break;
+	case ExpressionType::VALUE_CONSTANT:
+		result = BoundConstantExpression::Deserialize(context, type, reader);
+		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization!" + ExpressionTypeToString(type));
 	}
