@@ -9,11 +9,14 @@
 #pragma once
 
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 class BlockHandle;
 class BufferHandle;
 class RowDataCollection;
+
+struct FlushMoveState;
 
 //! GroupedAggregateHashTable is a linear probing HT that is used for computing
 //! aggregates
@@ -56,15 +59,24 @@ enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
-	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
+	//! The hash table load factor, when a resize is triggered
+	constexpr static float LOAD_FACTOR = 1.5;
+	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
+
+public:
+	GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
-	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types,
+	GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
 	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64);
-	GroupedAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types);
+	GroupedAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
+	//! The stringheap of the AggregateHashTable
+	unique_ptr<RowDataCollection> string_heap;
+
+public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -100,13 +112,6 @@ public:
 
 	void Finalize();
 
-	//! The stringheap of the AggregateHashTable
-	unique_ptr<RowDataCollection> string_heap;
-
-	//! The hash table load factor, when a resize is triggered
-	constexpr static float LOAD_FACTOR = 1.5;
-	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
-
 private:
 	HtEntryType entry_type;
 
@@ -120,11 +125,11 @@ private:
 	//! The amount of entries stored in the HT currently
 	idx_t entries;
 	//! The data of the HT
-	vector<unique_ptr<BufferHandle>> payload_hds;
+	vector<BufferHandle> payload_hds;
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
-	unique_ptr<BufferHandle> hashes_hdl;
+	BufferHandle hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	data_ptr_t hashes_end_ptr; // of hashes
 	idx_t hash_offset;         // Offset into the layout of the hash column
@@ -156,7 +161,7 @@ private:
 
 	void Verify();
 
-	void FlushMove(Vector &source_addresses, Vector &source_hashes, idx_t count);
+	void FlushMove(FlushMoveState &state, Vector &source_addresses, Vector &source_hashes, idx_t count);
 	void NewBlock();
 
 	template <class ENTRY>

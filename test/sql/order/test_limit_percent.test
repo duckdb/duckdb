@@ -2,6 +2,9 @@
 # description: Test LIMIT keyword {% | PERCENT}
 # group: [order]
 
+require skip_reload
+
+
 statement ok
 PRAGMA enable_verification
 
@@ -45,7 +48,7 @@ SELECT a FROM test LIMIT 80.1%
 14
 
 query I
-SELECT a FROM test LIMIT 101.1 PERCENT
+SELECT a FROM test LIMIT 100 PERCENT
 ----
 11
 12

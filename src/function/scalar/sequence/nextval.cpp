@@ -5,7 +5,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -122,8 +121,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 		// evaluate the constant and perform the catalog lookup already
 		auto seqname = ExpressionExecutor::EvaluateScalar(*arguments[0]);
 		if (!seqname.IsNull()) {
-			D_ASSERT(seqname.type().id() == LogicalTypeId::VARCHAR);
-			auto qname = QualifiedName::Parse(StringValue::Get(seqname));
+			auto qname = QualifiedName::Parse(seqname.ToString());
 			sequence = Catalog::GetCatalog(context).GetEntry<SequenceCatalogEntry>(context, qname.schema, qname.name);
 		}
 	}
@@ -138,14 +136,17 @@ static void NextValDependency(BoundFunctionExpression &expr, unordered_set<Catal
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               NextValFunction<NextSequenceValueOperator>, true, NextValBind, NextValDependency));
+	ScalarFunction next_val("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                        NextValFunction<NextSequenceValueOperator>, NextValBind, NextValDependency);
+	next_val.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(next_val);
 }
 
 void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               NextValFunction<CurrentSequenceValueOperator>, true, NextValBind,
-	                               NextValDependency));
+	ScalarFunction curr_val("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                        NextValFunction<CurrentSequenceValueOperator>, NextValBind, NextValDependency);
+	curr_val.side_effects = FunctionSideEffects::HAS_SIDE_EFFECTS;
+	set.AddFunction(curr_val);
 }
 
 } // namespace duckdb

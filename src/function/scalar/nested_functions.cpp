@@ -6,6 +6,9 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<ArraySliceFun>();
 	Register<StructPackFun>();
 	Register<StructExtractFun>();
+	Register<StructInsertFun>();
+	Register<ListTransformFun>();
+	Register<ListFilterFun>();
 	Register<ListConcatFun>();
 	Register<ListContainsFun>();
 	Register<ListPositionFun>();
@@ -18,6 +21,7 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<ListRangeFun>();
 	Register<ListFlattenFun>();
 	Register<MapFun>();
+	Register<MapFromEntriesFun>();
 	Register<MapExtractFun>();
 	Register<CardinalityFun>();
 }

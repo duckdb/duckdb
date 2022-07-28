@@ -5,7 +5,7 @@
 #' @aliases duckdb_driver
 #' @keywords internal
 #' @export
-setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical"))
+setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical", bigint="character"))
 
 #' DuckDB connection class
 #'

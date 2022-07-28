@@ -87,7 +87,7 @@ int main(int argc, const char **argv) {
 	reader.InitializeScan(state, column_ids, groups, &filters);
 	DataChunk output;
 
-	output.Initialize(return_types);
+	output.Initialize(allocator, return_types);
 	do {
 		output.Reset();
 		reader.Scan(state, output);

@@ -2,6 +2,8 @@
 # description: Issue #3361: signed integer overflow in sequence
 # group: [fuzz]
 
+require skip_reload
+
 statement ok
 create sequence test INCREMENT BY -1 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800 CYCLE;
 

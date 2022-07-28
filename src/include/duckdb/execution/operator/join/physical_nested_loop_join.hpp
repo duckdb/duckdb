@@ -25,7 +25,7 @@ public:
 
 public:
 	// Operator Interface
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
@@ -66,6 +66,8 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+	static bool IsSupported(const vector<JoinCondition> &conditions);
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)

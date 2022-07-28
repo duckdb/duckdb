@@ -2,6 +2,12 @@
 # description: ART Node 4
 # group: [art]
 
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+PRAGMA enable_verification
+
 statement ok
 CREATE TABLE integers(i integer)
 
@@ -15,6 +21,9 @@ statement ok
 INSERT INTO integers VALUES (${i} + 1);
 
 endloop
+
+restart
+
 
 # verify counts
 loop i 0 4

@@ -2,6 +2,9 @@
 # description: Test correct behavior if we unexpectedly abort during a checkpoint
 # group: [storage]
 
+require skip_reload
+
+
 load __TEST_DIR__/checkpoint_abort.db
 
 statement ok

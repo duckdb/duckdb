@@ -13,7 +13,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class LimitPercentGlobalState : public GlobalSinkState {
 public:
-	explicit LimitPercentGlobalState(const PhysicalLimitPercent &op) : current_offset(0) {
+	explicit LimitPercentGlobalState(Allocator &allocator, const PhysicalLimitPercent &op)
+	    : current_offset(0), data(allocator) {
 		if (!op.limit_expression) {
 			this->limit_percent = op.limit_percent;
 			is_limit_percent_delimited = true;
@@ -39,7 +40,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimitPercent::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitPercentGlobalState>(*this);
+	return make_unique<LimitPercentGlobalState>(Allocator::Get(context), *this);
 }
 
 SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
@@ -51,7 +52,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 
 	// get the next chunk from the child
 	if (!state.is_limit_percent_delimited) {
-		Value val = PhysicalLimit::GetDelimiter(input, limit_expression.get());
+		Value val = PhysicalLimit::GetDelimiter(context, input, limit_expression.get());
 		if (!val.IsNull()) {
 			limit_percent = val.GetValue<double>();
 		}
@@ -61,7 +62,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_limit_percent_delimited = true;
 	}
 	if (!state.is_offset_delimited) {
-		Value val = PhysicalLimit::GetDelimiter(input, offset_expression.get());
+		Value val = PhysicalLimit::GetDelimiter(context, input, offset_expression.get());
 		if (!val.IsNull()) {
 			offset = val.GetValue<idx_t>();
 		}
@@ -110,7 +111,15 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		if (count > 0) {
 			count += offset;
 		}
-		limit = MinValue((idx_t)(limit_percent / 100 * count), count);
+		if (limit_percent < 0 || limit_percent > 100) {
+			throw OutOfRangeException("Limit percent out of range, should be between 0% and 100%");
+		}
+		double limit_dbl = limit_percent / 100 * count;
+		if (limit_dbl > count) {
+			limit = count;
+		} else {
+			limit = idx_t(limit_dbl);
+		}
 		if (limit == 0) {
 			return;
 		}

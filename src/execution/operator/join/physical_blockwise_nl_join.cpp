@@ -29,6 +29,9 @@ public:
 
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
+	explicit BlockwiseNLJoinGlobalState(Allocator &allocator) : right_chunks(allocator) {
+	}
+
 	mutex lock;
 	ChunkCollection right_chunks;
 	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
@@ -36,7 +39,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalBlockwiseNLJoin::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<BlockwiseNLJoinGlobalState>();
+	return make_unique<BlockwiseNLJoinGlobalState>(Allocator::Get(context));
 }
 
 unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionContext &context) const {
@@ -72,8 +75,8 @@ SinkFinalizeType PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &ev
 //===--------------------------------------------------------------------===//
 class BlockwiseNLJoinState : public OperatorState {
 public:
-	explicit BlockwiseNLJoinState(const PhysicalBlockwiseNLJoin &op)
-	    : left_position(0), right_position(0), executor(*op.condition) {
+	explicit BlockwiseNLJoinState(ExecutionContext &context, const PhysicalBlockwiseNLJoin &op)
+	    : left_position(0), right_position(0), executor(Allocator::Get(context.client), *op.condition) {
 		if (IsLeftOuterJoin(op.join_type)) {
 			left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 			memset(left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
@@ -87,8 +90,8 @@ public:
 	ExpressionExecutor executor;
 };
 
-unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ClientContext &context) const {
-	return make_unique<BlockwiseNLJoinState>(*this);
+unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
+	return make_unique<BlockwiseNLJoinState>(context, *this);
 }
 
 OperatorResultType PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

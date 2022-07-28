@@ -1,11 +1,11 @@
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/function/aggregate/nested_functions.hpp"
-#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/aggregate/nested_functions.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -79,8 +79,8 @@ struct DistinctFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 
-		VectorData sdata;
-		state_vector.Orrify(count, sdata);
+		UnifiedVectorFormat sdata;
+		state_vector.ToUnifiedFormat(count, sdata);
 		auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 
 		auto result_data = FlatVector::GetData<list_entry_t>(result);
@@ -112,8 +112,8 @@ struct UniqueFunctor {
 	template <class OP, class T, class MAP_TYPE = unordered_map<T, idx_t>>
 	static void ListExecuteFunction(Vector &result, Vector &state_vector, idx_t count) {
 
-		VectorData sdata;
-		state_vector.Orrify(count, sdata);
+		UnifiedVectorFormat sdata;
+		state_vector.ToUnifiedFormat(count, sdata);
 		auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 
 		auto result_data = FlatVector::GetData<uint64_t>(result);
@@ -152,17 +152,18 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ListAggregatesBindData &)*func_expr.bind_info;
 	auto &aggr = (BoundAggregateExpression &)*info.aggr_expr;
+	AggregateInputData aggr_input_data(aggr.bind_info.get());
 
 	D_ASSERT(aggr.function.update);
 
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
 
-	VectorData child_data;
-	child_vector.Orrify(lists_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(lists_size, child_data);
 
-	VectorData lists_data;
-	lists.Orrify(count, lists_data);
+	UnifiedVectorFormat lists_data;
+	lists.ToUnifiedFormat(count, lists_data);
 	auto list_entries = (list_entry_t *)lists_data.data;
 
 	// state_buffer holds the state for each list of this chunk
@@ -209,7 +210,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 				// update the aggregate state(s)
 				Vector slice = Vector(child_vector, sel_vector, states_idx);
-				aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 
 				// reset values
 				states_idx = 0;
@@ -225,12 +226,12 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	// update the remaining elements of the last list(s)
 	if (states_idx != 0) {
 		Vector slice = Vector(child_vector, sel_vector, states_idx);
-		aggr.function.update(&slice, aggr.bind_info.get(), 1, state_vector_update, states_idx);
+		aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
 	}
 
 	if (IS_AGGR) {
 		// finalize all the aggregate states
-		aggr.function.finalize(state_vector.state_vector, aggr.bind_info.get(), result, count, 0);
+		aggr.function.finalize(state_vector.state_vector, aggr_input_data, result, count, 0);
 
 	} else {
 		// finalize manually to use the map
@@ -361,7 +362,6 @@ static unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &contex
 template <bool IS_AGGR = false>
 static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
-
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
@@ -448,17 +448,19 @@ static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                      ListAggregateFunction, false, false, ListAggregateBind);
+	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
+	                             ListAggregateFunction, ListAggregateBind);
+	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return result;
 }
 
 ScalarFunction ListDistinctFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                      ListDistinctFunction, false, false, ListDistinctBind);
+	                      ListDistinctFunction, ListDistinctBind);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction, false, false,
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
 	                      ListUniqueBind);
 }
 

@@ -21,11 +21,14 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.sql.SQLWarning;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import javax.sql.rowset.RowSetProvider;
+import javax.sql.rowset.CachedRowSet;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
@@ -38,8 +41,11 @@ import org.duckdb.DuckDBResultSetMetaData;
 public class TestDuckDBJDBC {
 
 	private static void assertTrue(boolean val) throws Exception {
+		assertTrue(val, null);
+	}
+	private static void assertTrue(boolean val, String message) throws Exception {
 		if (!val) {
-			throw new Exception();
+			throw new Exception(message);
 		}
 	}
 
@@ -51,7 +57,7 @@ public class TestDuckDBJDBC {
 		if (a == null && b == null) {
 			return;
 		}
-		assertTrue(a.equals(b));
+		assertTrue(a.equals(b), String.format("%s should equal %s", a, b));
 	}
 
 	private static void assertNull(Object a) throws Exception {
@@ -371,6 +377,29 @@ public class TestDuckDBJDBC {
 		// Metadata tests
 		assertEquals(Types.TIME_WITH_TIMEZONE, ((DuckDBResultSetMetaData)meta).type_to_int(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE));
 		assertTrue(OffsetDateTime.class.toString().equals(meta.getColumnClassName(2)));
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_throw_wrong_datatype() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+		ResultSet rs;
+
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ, t2 TIMESTAMP)");
+		stmt.execute("INSERT INTO t (id, t1, t2) VALUES (1, '2022-01-01T12:11:10+02', '2022-01-01T12:11:10')");
+
+		rs = stmt.executeQuery("SELECT * FROM t");
+		rs.next();
+
+		try {
+			rs.getTimestamp(2);
+			fail();
+		}
+		catch (IllegalArgumentException e) {
+		}
 
 		rs.close();
 		stmt.close();
@@ -1186,7 +1215,7 @@ public class TestDuckDBJDBC {
 		ps.setLong(5, (long) 85);
 		ps.setFloat(6, (float) 8.6);
 		ps.setDouble(7, (double) 8.7);
-		ps.setString(8, "eight eight");
+		ps.setString(8, "eight eight\n\t");
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
@@ -1197,7 +1226,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getLong(5), (long) 85);
 		assertEquals(rs.getFloat(6), 8.6, 0.001);
 		assertEquals(rs.getDouble(7), 8.7, 0.001);
-		assertEquals(rs.getString(8), "eight eight");
+		assertEquals(rs.getString(8), "eight eight\n\t");
 		rs.close();
 
 		ps.setObject(1, false);
@@ -1207,7 +1236,7 @@ public class TestDuckDBJDBC {
 		ps.setObject(5, (long) 85);
 		ps.setObject(6, (float) 8.6);
 		ps.setObject(7, (double) 8.7);
-		ps.setObject(8, "eight eight");
+		ps.setObject(8, "𫝼🔥😜䭔🟢");
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
@@ -1218,7 +1247,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getLong(5), (long) 85);
 		assertEquals(rs.getFloat(6), 8.6, 0.001);
 		assertEquals(rs.getDouble(7), 8.7, 0.001);
-		assertEquals(rs.getString(8), "eight eight");
+		assertEquals(rs.getString(8), "𫝼🔥😜䭔🟢");
 
 		ps.setNull(1, 0);
 		ps.setNull(2, 0);
@@ -2159,14 +2188,63 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+
+	public static void test_get_schema() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+
+		assertEquals(conn.getSchema(), "main");
+
+		try (Statement stmt = conn.createStatement()) {
+			stmt.execute("CREATE SCHEMA alternate_schema;");
+			stmt.execute("SET search_path = \"alternate_schema\";");
+		}
+
+		assertEquals(conn.getSchema(), "alternate_schema");
+
+		conn.close();
+
+		try {
+			conn.getSchema();
+			fail();
+		} catch (SQLException e) {
+			assertEquals(e.getMessage(), "Invalid connection");
+		}
+	}
+
+	/**
+	 * @see GH3906
+	 */
+	public static void test_cached_row_set() throws Exception {
+		CachedRowSet rowSet = RowSetProvider.newFactory().createCachedRowSet();
+		rowSet.setUrl("jdbc:duckdb:");
+		rowSet.setCommand("select 1");
+		rowSet.execute();
+
+		rowSet.next();
+		assertEquals(rowSet.getInt(1), 1);
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
+		boolean anyFailed = false;
 		for (Method m : methods) {
 			if (m.getName().startsWith("test_")) {
-				m.invoke(null);
+				System.out.print(m.getName() + " ");
+
+				LocalDateTime start = LocalDateTime.now();
+				try {
+					m.invoke(null);
+					System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() + " seconds");
+				} catch (Throwable t) {
+					System.out.println("failed with " + t);
+					t.printStackTrace(System.out);
+					anyFailed = true;
+				}
 			}
 		}
 		System.out.println("OK");
+
+		System.exit(anyFailed ? 1 : 0);
 	}
 }

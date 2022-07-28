@@ -191,6 +191,7 @@ enum class ExpressionClass : uint8_t {
 	BOUND_WINDOW = 38,
 	BOUND_BETWEEN = 39,
 	BOUND_UNNEST = 40,
+	BOUND_LAMBDA = 41,
 	//===--------------------------------------------------------------------===//
 	// Miscellaneous
 	//===--------------------------------------------------------------------===//

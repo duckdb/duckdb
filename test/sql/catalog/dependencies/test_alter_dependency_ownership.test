@@ -2,6 +2,9 @@
 # description: Tests alter of ownership of sequences
 # group: [dependencies]
 
+require skip_reload
+
+
 ##TEST: If the table is dropped, then the sequence is also droppped
 statement ok
 CREATE SEQUENCE sequence1;
@@ -87,6 +90,10 @@ statement ok
 CREATE TABLE tablename2 (
     colname integer
 );
+
+# owned by specified more than once
+statement error
+ALTER SEQUENCE sequence1 OWNED BY tablename OWNED BY tablename2;
 
 statement ok
 ALTER SEQUENCE sequence1 OWNED BY tablename;

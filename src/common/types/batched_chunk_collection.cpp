@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-BatchedChunkCollection::BatchedChunkCollection() {
+BatchedChunkCollection::BatchedChunkCollection(Allocator &allocator) : allocator(allocator) {
 }
 
 void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
@@ -11,7 +11,7 @@ void BatchedChunkCollection::Append(DataChunk &input, idx_t batch_index) {
 	auto entry = data.find(batch_index);
 	ChunkCollection *collection;
 	if (entry == data.end()) {
-		auto new_collection = make_unique<ChunkCollection>();
+		auto new_collection = make_unique<ChunkCollection>(allocator);
 		collection = new_collection.get();
 		data.insert(make_pair(batch_index, move(new_collection)));
 	} else {

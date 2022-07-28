@@ -80,8 +80,8 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = (BitpackingAnalyzeState<T> &)state;
-	VectorData vdata;
-	input.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -118,7 +118,7 @@ public:
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction *function;
 	unique_ptr<ColumnSegment> current_segment;
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
@@ -165,12 +165,11 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
 
-		data_ptr = handle->Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		width_ptr =
-		    handle->Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
+		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		width_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
-	void Append(VectorData &vdata, idx_t count) {
+	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		// TODO Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
 
@@ -193,16 +192,17 @@ public:
 
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
+		auto dataptr = handle.Ptr();
 
 		// Compact the segment by moving the widths next to the data.
-		idx_t minimal_widths_offset = AlignValue(data_ptr - handle->node->buffer);
-		idx_t widths_size = handle->node->buffer + Storage::BLOCK_SIZE - width_ptr - 1;
+		idx_t minimal_widths_offset = AlignValue(data_ptr - dataptr);
+		idx_t widths_size = dataptr + Storage::BLOCK_SIZE - width_ptr - 1;
 		idx_t total_segment_size = minimal_widths_offset + widths_size;
-		memmove(handle->node->buffer + minimal_widths_offset, width_ptr + 1, widths_size);
+		memmove(dataptr + minimal_widths_offset, width_ptr + 1, widths_size);
 
 		// Store the offset of the first width (which is at the highest address).
-		Store<idx_t>(minimal_widths_offset + widths_size - 1, handle->node->buffer);
-		handle.reset();
+		Store<idx_t>(minimal_widths_offset + widths_size - 1, dataptr);
+		handle.Destroy();
 
 		state.FlushSegment(move(current_segment), total_segment_size);
 	}
@@ -223,8 +223,8 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &c
 template <class T>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (BitpackingCompressState<T> &)state_p;
-	VectorData vdata;
-	scan_vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
 }
 
@@ -243,19 +243,18 @@ public:
 	explicit BitpackingScanState(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
-
-		current_width_group_ptr =
-		    handle->node->buffer + segment.GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
+		auto dataptr = handle.Ptr();
+		current_width_group_ptr = dataptr + segment.GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 
 		// load offset to bitpacking widths pointer
-		auto bitpacking_widths_offset = Load<idx_t>(handle->node->buffer + segment.GetBlockOffset());
-		bitpacking_width_ptr = handle->node->buffer + segment.GetBlockOffset() + bitpacking_widths_offset;
+		auto bitpacking_widths_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
+		bitpacking_width_ptr = dataptr + segment.GetBlockOffset() + bitpacking_widths_offset;
 
 		// load the bitwidth of the first vector
 		LoadCurrentBitWidth();
 	}
 
-	unique_ptr<BufferHandle> handle;
+	BufferHandle handle;
 
 	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
@@ -267,8 +266,7 @@ public:
 
 public:
 	void LoadCurrentBitWidth() {
-		D_ASSERT(bitpacking_width_ptr > handle->node->buffer &&
-		         bitpacking_width_ptr < handle->node->buffer + Storage::BLOCK_SIZE);
+		D_ASSERT(bitpacking_width_ptr > handle.Ptr() && bitpacking_width_ptr < handle.Ptr() + Storage::BLOCK_SIZE);
 		current_width = Load<bitpacking_width_t>(bitpacking_width_ptr);
 		LoadDecompressFunction();
 	}

@@ -83,7 +83,8 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 
 unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_unique<DBConfig>();
-	result->checkpoint_wal_size = 0;
+	result->options.checkpoint_wal_size = 0;
+	result->options.allow_unsigned_extensions = true;
 	return result;
 }
 
@@ -290,7 +291,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 
 	// set up the intermediate result chunk
 	DataChunk parsed_result;
-	parsed_result.Initialize(sql_types);
+	parsed_result.Initialize(Allocator::DefaultAllocator(), sql_types);
 
 	DuckDB db;
 	Connection con(db);

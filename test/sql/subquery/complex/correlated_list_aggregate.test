@@ -1,0 +1,273 @@
+# name: test/sql/subquery/complex/correlated_list_aggregate.test
+# description: Test correlated aggregate subqueries
+# group: [complex]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE lists(l INTEGER[]);
+
+statement ok
+INSERT INTO lists VALUES (ARRAY[1]), (ARRAY[2]), (ARRAY[3]), (NULL), (ARRAY[NULL]::INT[]);
+
+# aggregate with correlation in final projection
+query II
+SELECT l, (SELECT MIN(l[1])+i1.l[1] FROM lists) FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	2
+[2]	3
+[3]	4
+[NULL]	NULL
+
+# aggregate with correlation inside aggregation
+query II
+SELECT l, (SELECT MIN(l[1]+2*i1.l[1]) FROM lists) FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	3
+[2]	5
+[3]	7
+[NULL]	NULL
+
+query IRR
+SELECT l, SUM(l[1]), (SELECT SUM(l[1])+SUM(i1.l[1]) FROM lists) FROM lists i1 GROUP BY l ORDER BY l;
+----
+NULL	NULL	NULL
+[1]	1.000000	7.000000
+[2]	2.000000	8.000000
+[3]	3.000000	9.000000
+[NULL]	NULL	NULL
+
+query IRR
+SELECT l, SUM(l[1]), (SELECT SUM(l[1])+COUNT(i1.l[1]) FROM lists) FROM lists i1 GROUP BY l ORDER BY l;
+----
+NULL	NULL	6.000000
+[1]	1.000000	7.000000
+[2]	2.000000	7.000000
+[3]	3.000000	7.000000
+[NULL]	NULL	6.000000
+
+# correlated COUNT(*)
+query II
+SELECT l, (SELECT COUNT(*) FROM lists i2 WHERE i2.l[1]>i1.l[1]) FROM lists i1 ORDER BY l;
+----
+NULL	0
+[1]	2
+[2]	1
+[3]	0
+[NULL]	0
+
+# aggregate with correlation inside aggregation
+query II
+SELECT l, (SELECT MIN(l[1]+2*i1.l[1]) FROM lists) FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	3
+[2]	5
+[3]	7
+[NULL]	NULL
+
+# aggregate ONLY inside subquery
+query R
+SELECT (SELECT SUM(i1.l[1])) FROM lists i1;
+----
+6.000000
+
+# aggregate ONLY inside subquery, with column reference outside of subquery
+query IR
+SELECT MIN(l[1]), (SELECT SUM(i1.l[1])) FROM lists i1;
+----
+1	6.000000
+
+# this will fail, because "l[1]" is not an aggregate but the SUM(i1.l[1]) turns this query into an aggregate
+statement error
+SELECT l, (SELECT SUM(i1.l[1])) FROM lists i1;
+
+statement error
+SELECT l[1]+1, (SELECT SUM(i1.l[1])) FROM lists i1;
+
+query IR
+SELECT MIN(l[1]), (SELECT SUM(i1.l[1])) FROM lists i1;
+----
+1	6.000000
+
+query RR
+SELECT (SELECT SUM(i1.l[1])), (SELECT SUM(i1.l[1])) FROM lists i1;
+----
+6.000000	6.000000
+
+# subquery inside aggregation
+query RR
+SELECT SUM(l[1]), SUM((SELECT l[1] FROM lists WHERE l[1]=i1.l[1])) FROM lists i1;
+----
+6.000000	6.000000
+
+query RR
+SELECT SUM(l[1]), (SELECT SUM(l[1]) FROM lists WHERE l[1]>SUM(i1.l[1])) FROM lists i1;
+----
+6.000000	NULL
+
+# subquery with aggregation inside aggregation should fail
+statement error
+SELECT SUM((SELECT SUM(l[1]))) FROM lists
+
+# aggregate with correlation in filter
+query II
+SELECT l, (SELECT MIN(l[1]) FROM lists WHERE l[1]>i1.l[1]) FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	2
+[2]	3
+[3]	NULL
+[NULL]	NULL
+
+# aggregate with correlation in both filter and projection
+query II
+SELECT l, (SELECT MIN(l[1])+i1.l[1] FROM lists WHERE l[1]>i1.l[1]) FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	3
+[2]	5
+[3]	NULL
+[NULL]	NULL
+
+# aggregate with correlation in GROUP BY
+query II
+SELECT l, (SELECT MIN(l[1]) FROM lists GROUP BY i1.l[1]) AS j FROM lists i1 ORDER BY l;
+----
+NULL	1
+[1]	1
+[2]	1
+[3]	1
+[NULL]	1
+
+# aggregate with correlation in HAVING clause
+query II
+SELECT l, (SELECT l[1] FROM lists GROUP BY l[1] HAVING l[1]=i1.l[1]) AS j FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	1
+[2]	2
+[3]	3
+[NULL]	NULL
+
+# correlated subquery in HAVING
+query IR
+SELECT i1.l, SUM(l[1]) FROM lists i1 GROUP BY i1.l HAVING SUM(l[1])=(SELECT MIN(l[1]) FROM lists WHERE l[1]<>i1.l[1]+1) ORDER BY 1;
+----
+[1]	1.000000
+
+query IR
+SELECT l[1] % 2 AS j, SUM(l[1]) FROM lists i1 GROUP BY j HAVING SUM(l[1])=(SELECT SUM(l[1]) FROM lists WHERE l[1]<>j+1) ORDER BY 1;
+----
+1	4.000000
+
+# aggregate query with non-aggregate subquery without group by
+query R
+SELECT (SELECT l[1]+SUM(i1.l[1]) FROM lists WHERE l[1]=1 LIMIT 1) FROM lists i1;
+----
+7.000000
+
+query R
+SELECT (SELECT SUM(l[1])+SUM(i1.l[1]) FROM lists) FROM lists i1 ORDER BY 1;
+----
+12.000000
+
+# aggregate query with non-aggregate subquery with group by
+query IR
+SELECT l, (SELECT l[1]+SUM(i1.l[1]) FROM lists WHERE l[1]=1) FROM lists i1 GROUP BY l ORDER BY l;
+----
+NULL	NULL
+[1]	2.000000
+[2]	3.000000
+[3]	4.000000
+[NULL]	NULL
+
+# subquery inside aggregate
+query R
+SELECT SUM((SELECT l[1]+i1.l[1] FROM lists WHERE l[1]=1)) FROM lists i1;
+----
+9.000000
+
+query IRR
+SELECT l, SUM(i1.l[1]), (SELECT SUM(i1.l[1]) FROM lists) AS k FROM lists i1 GROUP BY l ORDER BY l;
+----
+NULL	NULL	NULL
+[1]	1.000000	1.000000
+[2]	2.000000	2.000000
+[3]	3.000000	3.000000
+[NULL]	NULL	NULL
+
+# aggregation of both entries inside subquery
+# aggregate on group inside subquery
+query IR
+SELECT i1.l AS j, (SELECT SUM(j[1]+l[1]) FROM lists) AS k FROM lists i1 GROUP BY j ORDER BY j;
+----
+NULL	NULL
+[1]	9.000000
+[2]	12.000000
+[3]	15.000000
+[NULL]	NULL
+
+query R
+SELECT (SELECT SUM(i1.l[1]*l[1]) FROM lists) FROM lists i1 ORDER BY l;
+----
+NULL
+6.000000
+12.000000
+18.000000
+NULL
+
+# ORDER BY correlated subquery
+query IR
+SELECT l, SUM(i1.l[1]) FROM lists i1 GROUP BY l ORDER BY (SELECT SUM(i1.l[1]) FROM lists);
+----
+NULL	NULL
+[NULL]	NULL
+[1]	1.000000
+[2]	2.000000
+[3]	3.000000
+
+# LIMIT 0 on correlated subquery
+query IR
+SELECT l, SUM((SELECT SUM(l[1])*i1.l[1] FROM lists LIMIT 0)) AS k FROM lists i1 GROUP BY l ORDER BY l;
+----
+NULL	NULL
+[1]	NULL
+[2]	NULL
+[3]	NULL
+[NULL]	NULL
+
+# GROUP BY correlated subquery
+query IR
+SELECT (SELECT l[1]+i1.l[1] FROM lists WHERE l[1]=1) AS k, SUM(l[1]) AS j FROM lists i1 GROUP BY k ORDER BY 1;
+----
+NULL	NULL
+2	1.000000
+3	2.000000
+4	3.000000
+
+# correlated subquery in WHERE
+query R
+SELECT SUM(l[1]) FROM lists i1 WHERE l[1]>(SELECT (l[1]+i1.l[1])/2 FROM lists WHERE l[1]=1);
+----
+5.000000
+
+# correlated aggregate in WHERE
+query R
+SELECT SUM(l[1]) FROM lists i1 WHERE l[1]>(SELECT (SUM(l[1])+i1.l[1])/2 FROM lists WHERE l[1]=1);
+----
+5.000000
+
+# use scalar subquery as argument to ALL/ANY
+query IT
+SELECT l, (SELECT MIN(l[1]) FROM lists WHERE l[1]=i1.l[1]) >= ALL(SELECT l[1] FROM lists WHERE l[1] IS NOT NULL) FROM lists i1 ORDER BY l;
+----
+NULL	NULL
+[1]	0
+[2]	0
+[3]	1
+[NULL]	NULL
+

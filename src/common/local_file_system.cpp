@@ -496,7 +496,11 @@ public:
 
 public:
 	void Close() override {
+		if (!fd) {
+			return;
+		}
 		CloseHandle(fd);
+		fd = nullptr;
 	};
 };
 
@@ -701,7 +705,8 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
 	});
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
-		throw IOException("Failed to delete directory");
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to delete directory \"%s\": %s", directory, error);
 	}
 }
 
@@ -717,7 +722,10 @@ void LocalFileSystem::RemoveDirectory(const string &directory) {
 
 void LocalFileSystem::RemoveFile(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
-	DeleteFileW(unicode_path.c_str());
+	if (!DeleteFileW(unicode_path.c_str())) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to delete file \"%s\": %s", filename, error);
+	}
 }
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {

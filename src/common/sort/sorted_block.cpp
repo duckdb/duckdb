@@ -67,7 +67,7 @@ void SortedData::Unswizzle() {
 		auto &heap_block = heap_blocks[i];
 		auto data_handle_p = buffer_manager.Pin(data_block.block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block.block);
-		RowOperations::UnswizzlePointers(layout, data_handle_p->Ptr(), heap_handle_p->Ptr(), data_block.count);
+		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block.count);
 		state.heap_blocks.push_back(move(heap_block));
 		state.pinned_blocks.push_back(move(heap_handle_p));
 	}
@@ -218,7 +218,7 @@ void SBScanState::PinRadix(idx_t block_idx_to) {
 	auto &radix_sorting_data = sb->radix_sorting_data;
 	D_ASSERT(block_idx_to < radix_sorting_data.size());
 	auto &block = radix_sorting_data[block_idx_to];
-	if (!radix_handle || radix_handle->handle->BlockId() != block.block->BlockId()) {
+	if (!radix_handle.IsValid() || radix_handle.GetBlockId() != block.block->BlockId()) {
 		radix_handle = buffer_manager.Pin(block.block);
 	}
 }
@@ -229,26 +229,26 @@ void SBScanState::PinData(SortedData &sd) {
 	auto &heap_handle = sd.type == SortedDataType::BLOB ? blob_sorting_heap_handle : payload_heap_handle;
 
 	auto &data_block = sd.data_blocks[block_idx];
-	if (!data_handle || data_handle->handle->BlockId() != data_block.block->BlockId()) {
+	if (!data_handle.IsValid() || data_handle.GetBlockId() != data_block.block->BlockId()) {
 		data_handle = buffer_manager.Pin(data_block.block);
 	}
 	if (sd.layout.AllConstant() || !state.external) {
 		return;
 	}
 	auto &heap_block = sd.heap_blocks[block_idx];
-	if (!heap_handle || heap_handle->handle->BlockId() != heap_block.block->BlockId()) {
+	if (!heap_handle.IsValid() || heap_handle.GetBlockId() != heap_block.block->BlockId()) {
 		heap_handle = buffer_manager.Pin(heap_block.block);
 	}
 }
 
 data_ptr_t SBScanState::RadixPtr() const {
-	return radix_handle->Ptr() + entry_idx * sort_layout.entry_size;
+	return radix_handle.Ptr() + entry_idx * sort_layout.entry_size;
 }
 
 data_ptr_t SBScanState::DataPtr(SortedData &sd) const {
-	auto &data_handle = sd.type == SortedDataType::BLOB ? *blob_sorting_data_handle : *payload_data_handle;
+	auto &data_handle = sd.type == SortedDataType::BLOB ? blob_sorting_data_handle : payload_data_handle;
 	D_ASSERT(sd.data_blocks[block_idx].block->Readers() != 0 &&
-	         data_handle.handle->BlockId() == sd.data_blocks[block_idx].block->BlockId());
+	         data_handle.GetBlockId() == sd.data_blocks[block_idx].block->BlockId());
 	return data_handle.Ptr() + entry_idx * sd.layout.GetRowWidth();
 }
 
@@ -257,10 +257,10 @@ data_ptr_t SBScanState::HeapPtr(SortedData &sd) const {
 }
 
 data_ptr_t SBScanState::BaseHeapPtr(SortedData &sd) const {
-	auto &heap_handle = sd.type == SortedDataType::BLOB ? *blob_sorting_heap_handle : *payload_heap_handle;
+	auto &heap_handle = sd.type == SortedDataType::BLOB ? blob_sorting_heap_handle : payload_heap_handle;
 	D_ASSERT(!sd.layout.AllConstant() && state.external);
 	D_ASSERT(sd.heap_blocks[block_idx].block->Readers() != 0 &&
-	         heap_handle.handle->BlockId() == sd.heap_blocks[block_idx].block->BlockId());
+	         heap_handle.GetBlockId() == sd.heap_blocks[block_idx].block->BlockId());
 	return heap_handle.Ptr();
 }
 
@@ -318,7 +318,7 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 		read_state.PinData(sorted_data);
 		auto &data_block = sorted_data.data_blocks[read_state.block_idx];
 		idx_t next = MinValue(data_block.count - read_state.entry_idx, count - scanned);
-		const data_ptr_t data_ptr = read_state.payload_data_handle->Ptr() + read_state.entry_idx * row_width;
+		const data_ptr_t data_ptr = read_state.payload_data_handle.Ptr() + read_state.entry_idx * row_width;
 		// Set up the next pointers
 		data_ptr_t row_ptr = data_ptr;
 		for (idx_t i = 0; i < next; i++) {
@@ -327,7 +327,7 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 		}
 		// Unswizzle the offsets back to pointers (if needed)
 		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
-			RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
+			RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(), next);
 		}
 		// Update state indices
 		read_state.entry_idx += next;
@@ -347,6 +347,30 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 	chunk.SetCardinality(count);
 	chunk.Verify();
 	total_scanned += scanned;
+}
+
+int SBIterator::ComparisonValue(ExpressionType comparison) {
+	switch (comparison) {
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return -1;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return 0;
+	default:
+		throw InternalException("Unimplemented comparison type for IEJoin!");
+	}
+}
+
+SBIterator::SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p)
+    : sort_layout(gss.sort_layout), block_count(gss.sorted_blocks[0]->radix_sorting_data.size()),
+      block_capacity(gss.block_capacity), cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size),
+      all_constant(sort_layout.all_constant), external(gss.external), cmp(ComparisonValue(comparison)),
+      scan(gss.buffer_manager, gss), block_ptr(nullptr), entry_ptr(nullptr) {
+
+	scan.sb = gss.sorted_blocks[0].get();
+	scan.block_idx = block_count;
+	SetIndex(entry_idx_p);
 }
 
 } // namespace duckdb
