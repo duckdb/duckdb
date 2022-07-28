@@ -4,7 +4,7 @@ endif()
 
 add_library(duckdb_fmt STATIC format.cc)
 
-target_include_directories(duckdb_fmt PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(duckdb_fmt PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 set_target_properties(duckdb_fmt PROPERTIES EXPORT_NAME duckdb_fmt)
 
 install(TARGETS duckdb_fmt
