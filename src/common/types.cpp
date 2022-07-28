@@ -631,16 +631,38 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	return true;
 }
 
+//! Grows Decimal width/scale when appropriate
+static LogicalType DecimalSizeCheck(const LogicalType &bigger, const LogicalType &smaller) {
+	D_ASSERT(bigger.id() > smaller.id());
+	if (bigger.id() != LogicalTypeId::DECIMAL) {
+		return bigger;
+	}
+	D_ASSERT(smaller.id() != LogicalTypeId::DECIMAL);
+	auto width = DecimalType::GetWidth(bigger);
+	auto scale = DecimalType::GetScale(bigger);
+
+	uint8_t other_width;
+	uint8_t other_scale;
+	if (smaller.GetDecimalProperties(other_width, other_scale)) {
+		D_ASSERT(other_scale == 0);
+		const auto effective_width = width - scale;
+		if (other_width > effective_width) {
+			return LogicalType::DECIMAL(other_width + scale, scale);
+		}
+	}
+	return bigger;
+}
+
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
 	if (left.id() == LogicalTypeId::UNKNOWN) {
 		return right;
 	} else if (right.id() == LogicalTypeId::UNKNOWN) {
 		return left;
 	} else if (left.id() < right.id()) {
-		return right;
+		return DecimalSizeCheck(right, left);
 	}
 	if (right.id() < left.id()) {
-		return left;
+		return DecimalSizeCheck(left, right);
 	}
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
@@ -872,6 +894,7 @@ uint8_t DecimalType::MaxWidth() {
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {
+	D_ASSERT(width > scale);
 	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, move(type_info));
 }
