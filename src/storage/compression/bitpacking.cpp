@@ -27,9 +27,9 @@ struct EmptyBitpackingWriter {
 };
 
 template <class T>
-struct ValueRange {
+struct BufferMinMax {
 public:
-	ValueRange() : min_set(false), max_set(false) {
+	BufferMinMax() : min_set(false), max_set(false) {
 	}
 	bool min_set;
 	bool max_set;
@@ -37,7 +37,7 @@ public:
 	T min;
 
 public:
-	void Update(T value) {
+	bool TryUpdate(T value) {
 		if (!min_set || value < min) {
 			min_set = true;
 			min = value;
@@ -46,10 +46,8 @@ public:
 			max_set = true;
 			max = value;
 		}
-	}
-	T Maximum() {
-		D_ASSERT(max_set);
-		return max;
+		T ignore;
+		return TrySubtractOperator::Operation(max, min, ignore);
 	}
 	T Minimum() {
 		//! If all values are NULL, the minimum is not set
@@ -58,17 +56,12 @@ public:
 		}
 		return 0;
 	}
-	//! Determines if the difference between min and max will fit in the value type T
-	bool DifferenceFits() {
-		T ignore;
-		return TrySubtractOperator::Operation(max, min, ignore);
-	}
 };
 
 template <class T>
 struct BitpackingState {
 public:
-	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr), compression_buffer_value_range() {
+	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr), compression_buffer_minmax() {
 	}
 
 	T compression_buffer[BITPACKING_WIDTH_GROUP_SIZE];
@@ -77,7 +70,7 @@ public:
 	idx_t total_size;
 	void *data_ptr;
 
-	ValueRange<T> compression_buffer_value_range; //! Min and Max values in the buffer;
+	BufferMinMax<T> compression_buffer_minmax; //! Min and Max values in the buffer;
 
 public:
 	void SubtractFrameOfReference(const T &frame_of_reference) {
@@ -88,14 +81,14 @@ public:
 
 	template <class OP>
 	void Flush() {
-		T frame_of_reference = compression_buffer_value_range.Minimum();
+		T frame_of_reference = compression_buffer_minmax.Minimum();
 		SubtractFrameOfReference(frame_of_reference);
 		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth(compression_buffer, compression_buffer_idx);
 		OP::template Operation<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
 		                          compression_buffer_idx, data_ptr);
 		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
 		compression_buffer_idx = 0;
-		compression_buffer_value_range = ValueRange<T>();
+		compression_buffer_minmax = BufferMinMax<T>();
 	}
 
 	template <class OP = EmptyBitpackingWriter>
@@ -104,8 +97,7 @@ public:
 		if (validity.RowIsValid(idx)) {
 			compression_buffer_validity[compression_buffer_idx] = true;
 			compression_buffer[compression_buffer_idx++] = data[idx];
-			compression_buffer_value_range.Update(data[idx]);
-			if (!compression_buffer_value_range.DifferenceFits()) {
+			if (!compression_buffer_minmax.TryUpdate(data[idx])) {
 				return false;
 			}
 		} else {
@@ -181,8 +173,8 @@ public:
 
 	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
-	// Ptr to next free spot for storing bitwidths (growing downwards).
-	data_ptr_t width_ptr;
+	// Ptr to next free spot for storing bitwidths and frame-of-references (growing downwards).
+	data_ptr_t metadata_ptr;
 
 	BitpackingState<T> state;
 
@@ -216,9 +208,9 @@ public:
 		}
 	};
 
-	// Space remaining between the width_ptr growing down and data ptr growing up
+	// Space remaining between the metadata_ptr growing down and data ptr growing up
 	idx_t RemainingSize() {
-		return width_ptr - data_ptr;
+		return metadata_ptr - data_ptr;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -231,7 +223,8 @@ public:
 		handle = buffer_manager.Pin(current_segment->block);
 
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-		width_ptr = handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
+		metadata_ptr =
+		    handle.Ptr() + current_segment->GetBlockOffset() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
@@ -249,10 +242,10 @@ public:
 		BitpackingPrimitives::PackBuffer<T, false>(data_ptr, values, count, width);
 		data_ptr += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8;
 
-		Store<bitpacking_width_t>(width, width_ptr);
-		width_ptr -= sizeof(T);
-		Store<T>(frame_of_reference, width_ptr);
-		width_ptr -= sizeof(bitpacking_width_t);
+		Store<bitpacking_width_t>(width, metadata_ptr);
+		metadata_ptr -= sizeof(T);
+		Store<T>(frame_of_reference, metadata_ptr);
+		metadata_ptr -= sizeof(bitpacking_width_t);
 
 		current_segment->count += count;
 	}
@@ -263,9 +256,9 @@ public:
 
 		// Compact the segment by moving the widths next to the data.
 		idx_t minimal_widths_offset = AlignValue(data_ptr - dataptr);
-		idx_t widths_size = dataptr + Storage::BLOCK_SIZE - width_ptr - 1;
+		idx_t widths_size = dataptr + Storage::BLOCK_SIZE - metadata_ptr - 1;
 		idx_t total_segment_size = minimal_widths_offset + widths_size;
-		memmove(dataptr + minimal_widths_offset, width_ptr + 1, widths_size);
+		memmove(dataptr + minimal_widths_offset, metadata_ptr + 1, widths_size);
 
 		// Store the offset of the first width (which is at the highest address).
 		Store<idx_t>(minimal_widths_offset + widths_size - 1, dataptr);
