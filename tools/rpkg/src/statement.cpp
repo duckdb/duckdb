@@ -141,7 +141,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 		cpp11::stop("rapi_bind: dbBind called but query takes no parameters");
 	}
 
-	if (params.size() != stmt->stmt->n_param) {
+	if (params.size() != R_xlen_t(stmt->stmt->n_param)) {
 		cpp11::stop("rapi_bind: Bind parameters need to be a list of length %i", stmt->stmt->n_param);
 	}
 
@@ -229,6 +229,8 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = new DuckDBAltrepStringWrapper();
 		wrapper->length = nrows;
+		wrapper->string_data = std::unique_ptr<string_t[]>(new string_t[nrows]);
+		wrapper->mask_data = std::unique_ptr<bool[]>(new bool[nrows]);
 
 		cpp11::external_pointer<DuckDBAltrepStringWrapper> ptr(wrapper);
 		varvalue = r_varvalue.Protect(R_new_altrep(AltrepString::rclass, ptr, R_NilValue));
@@ -435,8 +437,14 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto wrapper = (DuckDBAltrepStringWrapper *)R_ExternalPtrAddr(R_altrep_data1(dest));
-		wrapper->vectors.emplace_back(LogicalType::VARCHAR, nullptr);
-		wrapper->vectors.back().Reference(src_vec);
+		auto src_data = FlatVector::GetData<string_t>(src_vec);
+		auto &mask = FlatVector::Validity(src_vec);
+		for (size_t row_idx = 0; row_idx < n; row_idx++) {
+			auto valid = mask.RowIsValid(row_idx);
+			auto dest_idx = dest_offset + row_idx;
+			wrapper->mask_data[dest_idx] = valid;
+			wrapper->string_data[dest_idx] = src_data[row_idx];
+		}
 		break;
 	}
 	case LogicalTypeId::LIST: {
