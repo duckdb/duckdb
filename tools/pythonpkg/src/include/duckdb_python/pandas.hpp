@@ -5,7 +5,8 @@
 namespace duckdb {
 class data_frame : public py::object {
 public:
-    data_frame(const py::object &o) : py::object(o, borrowed_t {}) {}
+	data_frame(const py::object &o) : py::object(o, borrowed_t {}) {
+	}
 	using py::object::object;
 
 	static bool check_(const py::handle &object) {
