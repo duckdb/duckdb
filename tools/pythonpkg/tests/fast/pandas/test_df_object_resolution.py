@@ -435,14 +435,14 @@ class TestResolveObjectColumns(object):
                 (1.234,               -324234234,               1324234359)
             ) tbl(a, b, c);
         """
-        # Currently this raises a ConversionException due to an unrelated bug, so we can't accurately test faulty conversions
-        # This test serves as a reminder that this functionality needs to be properly tested once this bug is fixed.
-        # See PR #3985
-        with pytest.raises(Exception, match="Conversion Error"):
-            duckdb_conn.execute(reference_query)
-        #x = pd.DataFrame({
-        #    '0': ConvertStringToDecimal(['5', '12.0', '-123.0', '-234234.0', None, '1.234']),
-        #    '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', 7453324234, None, '-324234234']),
-        #    '2': ConvertStringToDecimal([-234234234234,  '324234234.00000005', -128, 345345, 0, '1324234359'])
-        #})
-        #conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
+        duckdb_conn.execute(reference_query)
+        x = pd.DataFrame({
+            '0': ConvertStringToDecimal(['5', '12.0', '-123.0', '-234234.0', None, '1.234']),
+            '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', 7453324234, None, '-324234234']),
+            '2': ConvertStringToDecimal([-234234234234,  '324234234.00000005', -128, 345345, 0, '1324234359'])
+        })
+        reference = duckdb.query("select * from tbl", connection=duckdb_conn).fetchall()
+        conversion = duckdb.query_df(x, "x", "select * from x").fetchall()
+
+        assert(conversion == reference)
+
