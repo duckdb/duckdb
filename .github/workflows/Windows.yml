@@ -200,7 +200,7 @@ jobs:
       shell: bash
       run: |
         git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout ffcf5d90812540ea90cabd6710c4b8d74ce1bfdf && make release)
+        (cd psqlodbc && git checkout 55bf777fc99e379e4c1a137a140c5fd95b9d7d59 && make release)
 
     - name: Test psqlodbc
       shell: bash
