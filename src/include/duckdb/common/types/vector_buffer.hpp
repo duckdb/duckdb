@@ -28,11 +28,13 @@ enum class VectorBufferType : uint8_t {
 	STRUCT_BUFFER,       // struct buffer, holds a ordered mapping from name to child vector
 	LIST_BUFFER,         // list buffer, holds a single flatvector child
 	MANAGED_BUFFER,      // managed buffer, holds a buffer managed by the buffermanager
+	ALLOCATED_BUFFER,    // allocated buffer, holds a buffer allocated through an allocator
 	OPAQUE_BUFFER        // opaque buffer, can be created for example by the parquet reader
 };
 
 enum class VectorAuxiliaryDataType : uint8_t {
-	ARROW_AUXILIARY // Holds Arrow Chunks that this vector depends on
+	ARROW_AUXILIARY, // Holds Arrow Chunks that this vector depends on
+	VECTOR_BUFFER    // Holds vector buffer data
 };
 
 struct VectorAuxiliaryData {
@@ -211,6 +213,29 @@ public:
 
 private:
 	BufferHandle handle;
+};
+
+//! The AllocatedVectorBuffer holds data allocated through an allocator
+class AllocatedVectorBuffer : public VectorBuffer {
+public:
+	explicit AllocatedVectorBuffer(AllocatedData data);
+	~AllocatedVectorBuffer() override;
+
+	AllocatedData &GetAllocatedData() {
+		return data;
+	}
+
+private:
+	AllocatedData data;
+};
+
+struct VectorBufferAuxiliaryData : public VectorAuxiliaryData {
+	VectorBufferAuxiliaryData(buffer_ptr<VectorBuffer> buffer_p)
+	    : VectorAuxiliaryData(VectorAuxiliaryDataType::VECTOR_BUFFER), buffer(move(buffer_p)) {
+	}
+
+	VectorAuxiliaryDataType type;
+	buffer_ptr<VectorBuffer> buffer;
 };
 
 } // namespace duckdb

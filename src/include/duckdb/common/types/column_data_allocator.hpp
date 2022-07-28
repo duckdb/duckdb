@@ -44,6 +44,7 @@ public:
 	void Initialize(ColumnDataAllocator &other);
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
+	void AssignVectorBuffer(ChunkManagementState &state, uint32_t block_id, uint32_t offset, Vector &result);
 
 private:
 	void AllocateBlock();
@@ -63,8 +64,8 @@ private:
 	} alloc;
 	//! The set of blocks used by the column data collection
 	vector<BlockMetaData> blocks;
-	//! The set of allocated data
-	vector<AllocatedData> allocated_data;
+	//! The set of in-memory allocated data
+	vector<buffer_ptr<VectorBuffer>> allocated_data;
 };
 
 } // namespace duckdb

@@ -1042,10 +1042,6 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		vector = &child;
 		vtype = vector->GetVectorType();
 	}
-	if (TypeIsConstantSize(type.InternalType()) &&
-	    (vtype == VectorType::CONSTANT_VECTOR || vtype == VectorType::FLAT_VECTOR)) {
-		D_ASSERT(!vector->auxiliary);
-	}
 	if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::JSON) {
 		// verify that there are no '\0' bytes in string values
 		switch (vtype) {
