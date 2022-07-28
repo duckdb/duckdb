@@ -1,4 +1,11 @@
 find_package(Java 1.8)
+
+set(JAVA_AWT_LIBRARY /tmp/jdk1.8.0_331/jre/lib/aarch64/libjawt.so)
+set(JAVA_JVM_LIBRARY /tmp/jdk1.8.0_331/jre/lib/aarch64/server/libjvm.so)
+set(JAVA_INCLUDE_PATH  /tmp/jdk1.8.0_331/include)
+set(JAVA_INCLUDE_PATH2 /tmp/jdk1.8.0_331/include/linux)
+set(JAVA_AWT_INCLUDE_PATH /tmp/jdk1.8.0_331/include)
+
 find_package(JNI)
 
 cmake_minimum_required(VERSION 3.11.0)

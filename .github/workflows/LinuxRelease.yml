@@ -239,7 +239,11 @@ jobs:
 
       - name: Install
         shell: bash
-        run: apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        run: |
+          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          cd /tmp
+          wget https://javadl.oracle.com/webapps/download/GetFile/1.8.0_331-b09/165374ff4ea84ef0bbd821706e29b123/linux-i586/jdk-8u331-linux-aarch64.tar.gz
+          tar xvf jdk-8u331-linux-aarch64.tar.gz
 
       - name: Build
         shell: bash
@@ -251,6 +255,7 @@ jobs:
         shell: bash
         run: |
           python scripts/amalgamation.py
+          zip -j duckdb_unittest.zip build/release/test/unittest
           zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
           zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
           zip -j duckdb_rest-linux-aarch64.zip build/release/tools/rest/duckdb_rest_server
@@ -261,6 +266,7 @@ jobs:
         with:
           name: duckdb-binaries-aarch64
           path: |
+            duckdb_unittest-linux-aarch64.zip
             duckdb_cli-linux-aarch64.zip
             libduckdb-linux-aarch64.zip
             duckdb_rest-linux-aarch64.zip
