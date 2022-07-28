@@ -894,7 +894,7 @@ uint8_t DecimalType::MaxWidth() {
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {
-	D_ASSERT(width > scale);
+	D_ASSERT(width >= scale);
 	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, move(type_info));
 }
