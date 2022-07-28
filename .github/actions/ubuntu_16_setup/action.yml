@@ -4,6 +4,9 @@ inputs:
   openssl:
     description: 'OpenSSL'
     default: 0
+  python:
+    description: 'Python'
+    default: 1
 runs:
   using: "composite"
   steps:
@@ -31,6 +34,7 @@ runs:
         fetch-depth: 0
 
     - name: Install Python 3.7
+      if: ${{ inputs.python }} == 1
       shell: bash
       run: |
         wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
@@ -72,3 +76,4 @@ runs:
         python3.7 --version
         git --version
         git log -1 --format=%h
+
