@@ -21,12 +21,20 @@ string LogicalComparisonJoin::ParamsToString() const {
 }
 
 void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(join_type);
+	writer.WriteRegularSerializableList(conditions);
+	writer.WriteList<LogicalType>(delim_types);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                                FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto join_type = reader.ReadRequired<JoinType>();
+	auto conditions = reader.ReadRequiredList<JoinCondition>();
+	auto delim_types = reader.ReadRequiredList<LogicalType>();
+	auto result = make_unique<LogicalComparisonJoin>(join_type, type);
+	result->conditions = move(conditions);
+	result->delim_types = delim_types;
+	return result;
 }
 
 } // namespace duckdb

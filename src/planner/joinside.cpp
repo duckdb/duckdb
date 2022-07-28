@@ -28,6 +28,28 @@ unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> con
 	return result;
 }
 
+//! Serializes a JoinCondition to a stand-alone binary blob
+void JoinCondition::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	left->Serialize(serializer);
+	right->Serialize(serializer);
+	writer.WriteField<ExpressionType>(comparison);
+	writer.Finalize();
+}
+
+//! Deserializes a blob back into a JoinCondition
+unique_ptr<JoinCondition> JoinCondition::Deserialize(Deserializer &source, ClientContext &context) {
+	auto result = make_unique<JoinCondition>();
+
+	FieldReader reader(source);
+	auto left = Expression::Deserialize(source, context);
+	auto right = Expression::Deserialize(source, context);
+	result->left = move(left);
+	result->right = move(right);
+	result->comparison = reader.ReadRequired<ExpressionType>();
+	return result;
+}
+
 JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	if (left == JoinSide::NONE) {
 		return right;
