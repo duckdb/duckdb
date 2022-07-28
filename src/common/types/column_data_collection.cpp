@@ -317,7 +317,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 	auto &vector_data = meta_data.GetVectorMetaData();
 	auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state, vector_data.block_id,
 	                                                            vector_data.offset);
-	auto validity_data = (validity_t *)(base_ptr + sizeof(T) * STANDARD_VECTOR_SIZE);
+	auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(T));
 	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
 
 	auto ldata = (T *)source_data.data;

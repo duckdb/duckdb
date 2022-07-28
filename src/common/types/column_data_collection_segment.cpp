@@ -7,6 +7,14 @@ ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAl
     : allocator(move(allocator_p)), types(move(types_p)), count(0) {
 }
 
+idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
+	return AlignValue(type_size * STANDARD_VECTOR_SIZE);
+}
+
+validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr, idx_t type_size) {
+	return (validity_t *)(base_ptr + GetDataSize(type_size));
+}
+
 VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &type, ChunkMetaData &chunk_meta,
                                                             ChunkManagementState *chunk_state) {
 	VectorMetaData meta_data;
@@ -14,7 +22,7 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 
 	auto internal_type = type.InternalType();
 	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
-	allocator->AllocateData(type_size * STANDARD_VECTOR_SIZE + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
+	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
 	                        meta_data.offset, chunk_state);
 	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 		chunk_meta.block_ids.insert(meta_data.block_id);
@@ -102,7 +110,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	}
 
 	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
-	auto validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
+	auto validity_data = GetValidityPointer(base_ptr, type_size);
 	if (!vdata.next_data.IsValid()) {
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
@@ -131,7 +139,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	while (next_index.IsValid()) {
 		auto &current_vdata = GetVectorData(next_index);
 		base_ptr = allocator->GetDataPointer(state, current_vdata.block_id, current_vdata.offset);
-		validity_data = (validity_t *)(base_ptr + type_size * STANDARD_VECTOR_SIZE);
+		validity_data = GetValidityPointer(base_ptr, type_size);
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}

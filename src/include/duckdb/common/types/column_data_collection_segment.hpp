@@ -113,6 +113,9 @@ public:
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);
 
 	void Verify();
+
+	static idx_t GetDataSize(idx_t type_size);
+	static validity_t *GetValidityPointer(data_ptr_t base_ptr, idx_t type_size);
 };
 
 } // namespace duckdb
