@@ -249,7 +249,7 @@ jobs:
           tar xvf v2.18.5.tar.gz
           cd git-2.18.5
           make
-          make prefix=/usr install
+          sudo make prefix=/usr install
           git --version
 
       - uses: actions/checkout@v3
@@ -265,7 +265,7 @@ jobs:
           mkdir -p pythonbin
           ./configure --with-ensurepip=install
           make -j
-          make install
+          sudo make install
           python3.7 --version
           python3.7 -m pip install pip
           python3.7 -m pip install requests awscli
@@ -275,7 +275,7 @@ jobs:
         run: |
           wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
           chmod +x cmake-3.21.3-linux-x86_64.sh
-          ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+          sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
           cmake --version
 
       - name: Install OpenSSL 1.1.1
