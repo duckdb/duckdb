@@ -296,9 +296,9 @@ jobs:
          # Create an artifacts directory
          setup: |
            mkdir -p "/tmp"
-          cd /tmp
-          unzip duckdb_unittest.zip
-          chmod +x unittest
+           cd /tmp
+           unzip duckdb_unittest.zip
+           chmod +x unittest
 
          # Mount the artifacts directory as /artifacts in the container
          dockerRunArgs: |
