@@ -59,26 +59,30 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &
 }
 
 void LogicalJoin::Serialize(FieldWriter &writer) const {
-	writer.WriteField(join_type);
-	writer.WriteField(mark_index);
-	writer.WriteList<idx_t>(left_projection_map);
-	writer.WriteList<idx_t>(right_projection_map);
+	throw NotImplementedException(LogicalOperatorToString(type));
+
+	// writer.WriteField(join_type);
+	// writer.WriteField(mark_index);
+	// writer.WriteList<idx_t>(left_projection_map);
+	// writer.WriteList<idx_t>(right_projection_map);
 
 	// TODO statistics
 }
 
 unique_ptr<LogicalOperator> LogicalJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                      FieldReader &reader) {
-	auto join_type = reader.ReadRequired<JoinType>();
-	auto mark_index = reader.ReadRequired<idx_t>();
-	auto left_projection_map = reader.ReadRequiredList<idx_t>();
-	auto right_projection_map = reader.ReadRequiredList<idx_t>();
-	// TODO statistics
-	auto result = make_unique<LogicalJoin>(join_type, type);
-	result->mark_index = mark_index;
-	result->left_projection_map = left_projection_map;
-	result->right_projection_map = right_projection_map;
-	return result;
+	throw NotImplementedException(LogicalOperatorToString(type));
+
+	// auto join_type = reader.ReadRequired<JoinType>();
+	// auto mark_index = reader.ReadRequired<idx_t>();
+	// auto left_projection_map = reader.ReadRequiredList<idx_t>();
+	// auto right_projection_map = reader.ReadRequiredList<idx_t>();
+	// // TODO statistics
+	// auto result = make_unique<LogicalJoin>(join_type, type);
+	// result->mark_index = mark_index;
+	// result->left_projection_map = left_projection_map;
+	// result->right_projection_map = right_projection_map;
+	// return result;
 }
 
 } // namespace duckdb
