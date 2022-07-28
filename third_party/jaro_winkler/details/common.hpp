@@ -54,11 +54,15 @@ T ceildiv(T a, U divisor)
 template <typename InputIt1, typename InputIt2>
 int64_t remove_common_prefix(InputIt1& first1, InputIt1 last1, InputIt2& first2, InputIt2 last2)
 {
-	// DuckDB passes a raw pointer, but this gives compile errors for std::mismatch
-	const int64_t max_comparisons = std::max(last1 - first1, last2 - first2);
-	int64_t prefix = 0;
-	while (prefix < max_comparisons && first1[prefix] == first2[prefix]) {
-		prefix++;
+	// DuckDB passes a raw pointer, but this gives compile errors for std::
+	int64_t len1 = std::distance(first1, last1);
+	int64_t len2 = std::distance(first2, last2);
+	const int64_t max_comparisons = std::min<int64_t>(len1, len2);
+	int64_t prefix;
+	for (prefix = 0; prefix < max_comparisons; prefix++) {
+		if (first1[prefix] != first2[prefix]) {
+			break;
+		}
 	}
 
 //    int64_t prefix = static_cast<int64_t>(
