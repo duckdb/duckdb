@@ -328,6 +328,7 @@ public:
 
 void WindowLocalSinkState::Over(DataChunk &input_chunk) {
 	if (over_chunk.ColumnCount() > 0) {
+		over_chunk.Reset();
 		executor.Execute(input_chunk, over_chunk);
 		over_chunk.Verify();
 	}

@@ -61,6 +61,7 @@ public:
 			// struct does not have data
 			result.data = nullptr;
 			// reinitialize the VectorStructBuffer
+			auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through children
 			auto &children = ((VectorStructBuffer &)*result.auxiliary).GetChildren();

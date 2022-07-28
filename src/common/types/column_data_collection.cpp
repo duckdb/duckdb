@@ -343,7 +343,7 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 	auto &append_state = meta_data.state;
 
 	auto current_index = meta_data.vector_data_index;
-	idx_t remaining = count - offset;
+	idx_t remaining = count;
 	while (remaining > 0) {
 		auto &current_segment = segment.GetVectorData(current_index);
 		idx_t append_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE - current_segment.count, remaining);
