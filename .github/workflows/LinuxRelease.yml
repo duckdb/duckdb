@@ -243,7 +243,9 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make
+        run: |
+          ls /usr/bin
+          make
 
       - name: Deploy
         shell: bash
@@ -263,6 +265,26 @@ jobs:
             libduckdb-linux-aarch64.zip
             duckdb_rest-linux-aarch64.zip
             duckdb_odbc-linux-aarch64.zip
+            duckdb_jdbc-linux-aarch64.jar
+
+ linux-aarch64-test:
+   name: Linux tests (aarch64)
+   runs-on: ubuntu-latest
+   container: ubuntu:16.04
+   needs: linux-aarch64
+   env:
+     FORCE_WARN_UNUSED: 1
+
+   steps:
+     - uses: actions/download-artifact@v3
+       with:
+         name: duckdb-binaries-aarch64
+         path: /tmp
+
+     - name: Build
+       shell: bash
+       run: make
+
 
  old-gcc:
     name: GCC 4.8
