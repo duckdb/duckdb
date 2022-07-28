@@ -70,6 +70,43 @@ describe("data type support", function () {
     });
   });
 
+  it.only("recursively supports NULL values", function (done) {
+    db.run(
+      `CREATE TABLE recursive_struct AS SELECT [
+      { 'a': 42, 'b': [1, 2, 3]},
+      NULL,
+      { 'a': NULL, 'b': [4, NULL, 6]},
+      {'a': 43, 'b': NULL}
+   ] l UNION ALL SELECT NULL`
+    );
+    db.prepare("SELECT l from recursive_struct").all((err, res) => {
+      assert(err === null);
+      assert.deepEqual(res, [
+        {
+          l: [
+            {
+              a: 42,
+              b: [1, 2, 3],
+            },
+            null,
+            {
+              a: null,
+              b: [4, null, 6],
+            },
+            {
+              a: 43,
+              b: null,
+            },
+          ],
+        },
+        {
+          l: null,
+        },
+      ]);
+      done();
+    });
+  });
+
   it("supports LIST values", function (done) {
     db.prepare(`SELECT ['duck', 'duck', 'goose'] as list`).each((err, row) => {
       assert(err === null);
