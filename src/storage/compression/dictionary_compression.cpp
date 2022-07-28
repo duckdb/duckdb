@@ -515,7 +515,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		sel_t *sel_vec_ptr = scan_state.sel_vec->data();
 
 		BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)sel_vec_ptr, src, decompress_count,
-		                                          scan_state.current_width, 0);
+		                                          scan_state.current_width);
 
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
@@ -542,7 +542,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		data_ptr_t dst = (data_ptr_t)(scan_state.sel_vec->data());
 		data_ptr_t src = (data_ptr_t)&base_data[(start * scan_state.current_width) / 8];
 
-		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width, 0);
+		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width);
 
 		result.Slice(*(scan_state.dictionary), *scan_state.sel_vec, scan_count);
 	}
@@ -578,7 +578,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	sel_t decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 	data_ptr_t src = (data_ptr_t)&base_data[((row_id - start_offset) * width) / 8];
 	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)decompression_buffer, src,
-	                                          BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, width, 0);
+	                                          BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, width);
 
 	auto selection_value = decompression_buffer[start_offset];
 	auto dict_offset = index_buffer_ptr[selection_value];
