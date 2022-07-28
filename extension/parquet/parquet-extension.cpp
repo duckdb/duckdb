@@ -306,11 +306,6 @@ public:
 		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
 		auto &gstate = (ParquetReadGlobalState &)*gstate_p;
 
-		if (gstate.current_reader == nullptr) {
-			D_ASSERT(bind_data.should_flush_initial_reader);
-			return nullptr;
-		}
-
 		auto result = make_unique<ParquetReadLocalState>();
 		result->column_ids = input.column_ids;
 		result->is_parallel = true;
@@ -393,6 +388,12 @@ public:
 	static bool ParquetParallelStateNext(ClientContext &context, const ParquetReadBindData &bind_data,
 	                                     ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state) {
 		lock_guard<mutex> parallel_lock(parallel_state.lock);
+
+		if (parallel_state.current_reader == nullptr) {
+			D_ASSERT(bind_data.should_flush_initial_reader);
+			return false;
+		}
+
 		if (parallel_state.row_group_index < parallel_state.current_reader->NumRowGroups()) {
 			// groups remain in the current parquet file: read the next group
 			scan_data.reader = parallel_state.current_reader;
