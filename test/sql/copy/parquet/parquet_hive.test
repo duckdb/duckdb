@@ -88,17 +88,15 @@ EXPLAIN select id, value, part, date from parquet_scan('data/parquet-testing/hiv
 ----
 physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
 
-# In this query both filters can be pruned
 query II
 EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2012-01-01' and id < 10;
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:.*2012\-01\-01|FILTER).*
 
-# However here the id filters can not be pruned, because we only read the meta data for the first file
 query II
 EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01' and id < 10;
 ----
-physical_plan	<REGEX>:.*(PARQUET_SCAN.*Filters: id<10|FILTER).*
+physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:.*2013\-01\-01|FILTER).*
 
 # There should still not be a date filter though
 query II
