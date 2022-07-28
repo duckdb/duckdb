@@ -5,6 +5,7 @@ namespace duckdb {
 struct DuckDBAltrepStringWrapper {
 	std::unique_ptr<string_t[]> string_data;
 	std::unique_ptr<bool[]> mask_data;
+	StringHeap heap;
 	idx_t length;
 };
 

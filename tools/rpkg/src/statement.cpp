@@ -443,7 +443,10 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 			auto valid = mask.RowIsValid(row_idx);
 			auto dest_idx = dest_offset + row_idx;
 			wrapper->mask_data[dest_idx] = valid;
-			wrapper->string_data[dest_idx] = src_data[row_idx];
+			if (valid) {
+				wrapper->string_data[dest_idx] =
+				    src_data[row_idx].IsInlined() ? src_data[row_idx] : wrapper->heap.AddString(src_data[row_idx]);
+			}
 		}
 		break;
 	}
