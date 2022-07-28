@@ -85,6 +85,6 @@ TEST_CASE("Test logical_limit", "[serialization]") {
 	test_helper("SELECT 42 LIMIT 1");
 }
 
-TEST_CASE("Test logical_join", "[serialization]") {
+TEST_CASE("Test logical_comparison_join", "[serialization]") {
 	test_helper("SELECT * FROM (SELECT 42 as i), (SELECT 42 as j) WHERE i = j");
 }

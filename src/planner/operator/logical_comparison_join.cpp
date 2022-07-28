@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
@@ -30,7 +31,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &co
                                                                FieldReader &reader) {
 	auto join_type = reader.ReadRequired<JoinType>();
 	auto result = make_unique<LogicalComparisonJoin>(join_type, type);
-	result->conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition, ClientContext&>(context);
+	result->conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition, ClientContext &>(context);
 	result->delim_types = reader.ReadRequiredList<LogicalType>();
 	return result;
 }
