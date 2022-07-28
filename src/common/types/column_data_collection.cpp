@@ -10,7 +10,7 @@ namespace duckdb {
 struct ColumnDataMetaData;
 
 typedef void (*column_data_copy_function_t)(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
-                                            Vector &source, idx_t source_offset, idx_t copy_count);
+                                            Vector &source, idx_t offset, idx_t copy_count);
 
 struct ColumnDataCopyFunction {
 	column_data_copy_function_t function;
@@ -288,65 +288,116 @@ void ColumnDataCopyValidity(const UnifiedVectorFormat &source_data, validity_t *
 	}
 }
 
-struct StandardValueCopy {
-	template <class T>
+template <class T>
+struct BaseValueCopy {
+	static idx_t TypeSize() {
+		return sizeof(T);
+	}
+
+	template <class OP>
+	static void Assign(ColumnDataMetaData &meta_data, data_ptr_t target, data_ptr_t source, idx_t target_idx,
+	                   idx_t source_idx) {
+		auto result_data = (T *)target;
+		auto source_data = (T *)source;
+		result_data[target_idx] = OP::Operation(meta_data, source_data[source_idx]);
+	}
+};
+
+template <class T>
+struct StandardValueCopy : public BaseValueCopy<T> {
 	static T Operation(ColumnDataMetaData &, T input) {
 		return input;
 	}
 };
 
-struct StringValueCopy {
-	template <class T>
-	static T Operation(ColumnDataMetaData &meta_data, T input) {
+struct StringValueCopy : public BaseValueCopy<string_t> {
+	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
 		return input.IsInlined() ? input : meta_data.segment.heap.AddBlob(input);
 	}
 };
 
-struct ListValueCopy {
-	template <class T>
-	static T Operation(ColumnDataMetaData &meta_data, T input) {
+struct ListValueCopy : public BaseValueCopy<list_entry_t> {
+	using TYPE = list_entry_t;
+
+	static TYPE Operation(ColumnDataMetaData &meta_data, TYPE input) {
 		input.offset += meta_data.child_list_size;
 		return input;
 	}
 };
 
-template <class T, class OP>
-static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
-                                    idx_t source_offset, idx_t copy_count) {
-	auto &append_state = meta_data.state;
-	auto &vector_data = meta_data.GetVectorMetaData();
-	auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state, vector_data.block_id,
-	                                                            vector_data.offset);
-	auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, sizeof(T));
-	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
+struct StructValueCopy {
+	static idx_t TypeSize() {
+		return 0;
+	}
 
-	auto ldata = (T *)source_data.data;
-	auto result_data = (T *)base_ptr;
-	for (idx_t i = 0; i < copy_count; i++) {
-		auto source_idx = source_data.sel->get_index(source_offset + i);
-		if (source_data.validity.RowIsValid(source_idx)) {
-			result_data[vector_data.count + i] = OP::Operation(meta_data, ldata[source_idx]);
+	template <class OP>
+	static void Assign(ColumnDataMetaData &meta_data, data_ptr_t target, data_ptr_t source, idx_t target_idx,
+	                   idx_t source_idx) {
+	}
+};
+
+template <class OP>
+static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data,
+                                    Vector &source, idx_t offset, idx_t count) {
+	auto &segment = meta_data.segment;
+	auto &append_state = meta_data.state;
+
+	auto current_index = meta_data.vector_data_index;
+	idx_t remaining = count - offset;
+	while (remaining > 0) {
+		auto &current_segment = segment.GetVectorData(current_index);
+		idx_t append_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE - current_segment.count, remaining);
+
+		auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state,
+		                                                            current_segment.block_id, current_segment.offset);
+		auto validity_data = ColumnDataCollectionSegment::GetValidityPointer(base_ptr, OP::TypeSize());
+
+		ValidityMask result_validity(validity_data);
+		if (current_segment.count == 0) {
+			// first time appending to this vector
+			// all data here is still uninitialized
+			// initialize the validity mask to set all to valid
+			result_validity.SetAllValid(STANDARD_VECTOR_SIZE);
+		}
+		for (idx_t i = 0; i < append_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			if (source_data.validity.RowIsValid(source_idx)) {
+				OP::template Assign<OP>(meta_data, base_ptr, source_data.data, current_segment.count + i, source_idx);
+			} else {
+				result_validity.SetInvalid(current_segment.count + i);
+			}
+		}
+		current_segment.count += append_count;
+		offset += append_count;
+		remaining -= append_count;
+		if (remaining > 0) {
+			// need to append more, check if we need to allocate a new vector or not
+			if (!current_segment.next_data.IsValid()) {
+				segment.AllocateVector(source.GetType(), meta_data.chunk_data, meta_data.state, current_index);
+			}
+			D_ASSERT(segment.GetVectorData(current_index).next_data.IsValid());
+			current_index = segment.GetVectorData(current_index).next_data;
 		}
 	}
-	vector_data.count += copy_count;
 }
 
 template <class T>
 static void ColumnDataCopy(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                           idx_t source_offset, idx_t copy_count) {
-	TemplatedColumnDataCopy<T, StandardValueCopy>(meta_data, source_data, source_offset, copy_count);
+                           idx_t offset, idx_t copy_count) {
+	TemplatedColumnDataCopy<StandardValueCopy<T>>(meta_data, source_data, source, offset, copy_count);
 }
 
 template <>
 void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                              idx_t source_offset, idx_t copy_count) {
-	TemplatedColumnDataCopy<string_t, StringValueCopy>(meta_data, source_data, source_offset, copy_count);
+                              idx_t offset, idx_t copy_count) {
+	TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
 }
 
 template <>
 void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                                  idx_t source_offset, idx_t copy_count) {
+                                  idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
+
 	// first append the child entries of the list
 	auto &child_vector = ListVector::GetEntry(source);
 	idx_t child_list_size = ListVector::GetListSize(source);
@@ -361,45 +412,30 @@ void ColumnDataCopy<list_entry_t>(ColumnDataMetaData &meta_data, const UnifiedVe
 	}
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
-
-	idx_t remaining = child_list_size;
+	// figure out the current list size by traversing the set of child entries
 	idx_t current_list_size = 0;
-	while (remaining > 0) {
-		current_list_size += segment.GetVectorData(child_index).count;
-		idx_t child_append_count =
-		    MinValue<idx_t>(STANDARD_VECTOR_SIZE - segment.GetVectorData(child_index).count, remaining);
-		if (child_append_count > 0) {
-			ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-			child_function.function(child_meta_data, child_vector_data, child_vector, child_list_size - remaining,
-			                        child_append_count);
-		}
-		remaining -= child_append_count;
-		if (remaining > 0) {
-			// need to append more, check if we need to allocate a new vector or not
-			if (!segment.GetVectorData(child_index).next_data.IsValid()) {
-				segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state, child_index);
-			}
-			D_ASSERT(segment.GetVectorData(child_index).next_data.IsValid());
-			child_index = segment.GetVectorData(child_index).next_data;
-		}
+	auto current_child_index = child_index;
+	while (current_child_index.IsValid()) {
+		auto &child_vdata = segment.GetVectorData(current_child_index);
+		current_list_size += child_vdata.count;
+		current_child_index = child_vdata.next_data;
 	}
+	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
+	// FIXME: appending the entire child list here is not required
+	// We can also scan the actual list entries required per the offset/copy_count
+	child_function.function(child_meta_data, child_vector_data, child_vector, 0, child_list_size);
+
 	// now copy the list entries
 	meta_data.child_list_size = current_list_size;
-	TemplatedColumnDataCopy<list_entry_t, ListValueCopy>(meta_data, source_data, source_offset, copy_count);
+	TemplatedColumnDataCopy<ListValueCopy>(meta_data, source_data, source, offset, copy_count);
 }
 
 void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                          idx_t source_offset, idx_t copy_count) {
+                          idx_t offset, idx_t copy_count) {
 	auto &segment = meta_data.segment;
-	// copy the NULL values for the main struct vector
-	auto &append_state = meta_data.state;
-	auto &vector_data = meta_data.GetVectorMetaData();
 
-	auto base_ptr = meta_data.segment.allocator->GetDataPointer(append_state.current_chunk_state, vector_data.block_id,
-	                                                            vector_data.offset);
-	auto validity_data = (validity_t *)base_ptr;
-	ColumnDataCopyValidity(source_data, validity_data, source_offset, vector_data.count, copy_count);
-	vector_data.count += copy_count;
+	// copy the NULL values for the main struct vector
+	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
 	auto &child_types = StructType::GetChildTypes(source.GetType());
 	// now copy all the child vectors
@@ -413,7 +449,7 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 		UnifiedVectorFormat child_data;
 		child_vectors[child_idx]->ToUnifiedFormat(copy_count, child_data);
 
-		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], source_offset, copy_count);
+		child_function.function(child_meta_data, child_data, *child_vectors[child_idx], offset, copy_count);
 	}
 }
 
@@ -487,9 +523,8 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 static bool IsComplexType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::STRUCT:
-		return true;
 	case PhysicalType::LIST:
-		return IsComplexType(ListType::GetChildType(type));
+		return true;
 	default:
 		return false;
 	};

@@ -50,6 +50,7 @@ public:
 			auto &list_buffer = (VectorListBuffer &)*result.auxiliary;
 			list_buffer.capacity = STANDARD_VECTOR_SIZE;
 			list_buffer.size = 0;
+			list_buffer.SetAuxiliaryData(nullptr);
 
 			auto &list_child = list_buffer.GetChild();
 			auto &child_cache = (VectorCacheBuffer &)*child_caches[0];
