@@ -135,7 +135,7 @@ private:
 				base_row += chunk->size();
 				chunk = result->Fetch();
 				current_row.row = 0;
-				if (chunk->size() == 0) {
+				if (!chunk || chunk->size() == 0) {
 					// exhausted all rows
 					base_row = 0;
 					result = nullptr;
