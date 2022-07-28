@@ -24,15 +24,51 @@ struct EmptyBitpackingWriter {
 	static void Operation(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
 	                      void *data_ptr) {
 	}
-	static bool Dummy() {
-		return true;
+};
+
+template <class T>
+struct ValueRange {
+public:
+	ValueRange() : min_set(false), max_set(false) {
+	}
+	bool min_set;
+	bool max_set;
+	T max;
+	T min;
+
+public:
+	void Update(T value) {
+		if (!min_set || value < min) {
+			min_set = true;
+			min = value;
+		}
+		if (!max_set || value > max) {
+			max_set = true;
+			max = value;
+		}
+	}
+	T Maximum() {
+		D_ASSERT(max_set);
+		return max;
+	}
+	T Minimum() {
+		//! If all values are NULL, the minimum is not set
+		if (min_set) {
+			return min;
+		}
+		return 0;
+	}
+	//! Determines if the difference between min and max will fit in the value type T
+	bool DifferenceFits() {
+		T ignore;
+		return TrySubtractOperator::Operation(max, min, ignore);
 	}
 };
 
 template <class T>
 struct BitpackingState {
 public:
-	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
+	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr), compression_buffer_value_range() {
 	}
 
 	T compression_buffer[BITPACKING_WIDTH_GROUP_SIZE];
@@ -41,41 +77,25 @@ public:
 	idx_t total_size;
 	void *data_ptr;
 
-public:
-	bool TrySubtractFrameOfReference(const T &frame_of_reference) {
-		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			T result;
-			if (!TrySubtractOperator::Operation(compression_buffer[i], frame_of_reference, result)) {
-				return false;
-			}
-			compression_buffer[i] = result;
-		}
-		return true;
-	}
+	ValueRange<T> compression_buffer_value_range; //! Min and Max values in the buffer;
 
-	bool CalculateBitWidth(T frame_of_reference, bitpacking_width_t &width, bool dummy_operation) {
-		bool adjusted_successfully = TrySubtractFrameOfReference(frame_of_reference);
-		if (!adjusted_successfully) {
-			//! Should never try to actually run this compression method in this case
-			D_ASSERT(dummy_operation != false);
-			return false;
+public:
+	void SubtractFrameOfReference(const T &frame_of_reference) {
+		for (idx_t i = 0; i < compression_buffer_idx; i++) {
+			compression_buffer[i] -= frame_of_reference;
 		}
-		width = BitpackingPrimitives::MinimumBitWidth(compression_buffer, compression_buffer_idx);
-		return true;
 	}
 
 	template <class OP>
-	bool Flush() {
-		T frame_of_reference = *std::min_element<T *>(compression_buffer, compression_buffer + compression_buffer_idx);
-		bitpacking_width_t width;
-		if (!CalculateBitWidth(frame_of_reference, width, OP::Dummy())) {
-			return false;
-		}
+	void Flush() {
+		T frame_of_reference = compression_buffer_value_range.Minimum();
+		SubtractFrameOfReference(frame_of_reference);
+		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth(compression_buffer, compression_buffer_idx);
 		OP::template Operation<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
 		                          compression_buffer_idx, data_ptr);
 		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
 		compression_buffer_idx = 0;
-		return true;
+		compression_buffer_value_range = ValueRange<T>();
 	}
 
 	template <class OP = EmptyBitpackingWriter>
@@ -84,6 +104,10 @@ public:
 		if (validity.RowIsValid(idx)) {
 			compression_buffer_validity[compression_buffer_idx] = true;
 			compression_buffer[compression_buffer_idx++] = data[idx];
+			compression_buffer_value_range.Update(data[idx]);
+			if (!compression_buffer_value_range.DifferenceFits()) {
+				return false;
+			}
 		} else {
 			// We write zero for easy bitwidth analysis of the compression buffer later
 			compression_buffer_validity[compression_buffer_idx] = false;
@@ -92,7 +116,7 @@ public:
 
 		if (compression_buffer_idx == BITPACKING_WIDTH_GROUP_SIZE) {
 			// Calculate bitpacking width;
-			return Flush<OP>();
+			Flush<OP>();
 		}
 		return true;
 	}
@@ -124,12 +148,13 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 			return false;
 		}
 	}
-	return analyze_state.state.template Flush<EmptyBitpackingWriter>();
+	return true;
 }
 
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
+	bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	return bitpacking_state.state.total_size;
 }
 
@@ -163,9 +188,6 @@ public:
 
 public:
 	struct BitpackingWriter {
-		static bool Dummy() {
-			return false;
-		}
 
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width,
@@ -301,7 +323,7 @@ public:
 
 	BufferHandle handle;
 
-	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, T, bool skip_sign_extension);
+	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 	idx_t position_in_group = 0;
@@ -352,6 +374,16 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 	return move(result);
 }
 
+template <class T>
+static void ApplyFrameOfReference(T *dst, T frame_of_reference, idx_t size) {
+	if (!frame_of_reference) {
+		return;
+	}
+	for (idx_t i = 0; i < size; i++) {
+		dst[i] += frame_of_reference;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
@@ -365,8 +397,8 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	// Fast path for when no compression was used, we can do a single memcopy
 	if (STANDARD_VECTOR_SIZE == BITPACKING_WIDTH_GROUP_SIZE) {
-		if (scan_state.current_width == sizeof(T) * 8 && scan_count <= BITPACKING_WIDTH_GROUP_SIZE &&
-		    scan_state.position_in_group == 0) {
+		if (scan_state.current_frame_of_reference == 0 && scan_state.current_width == sizeof(T) * 8 &&
+		    scan_count <= BITPACKING_WIDTH_GROUP_SIZE && scan_state.position_in_group == 0) {
 
 			memcpy(result_data + result_offset, scan_state.current_width_group_ptr, scan_count * sizeof(T));
 			scan_state.current_width_group_ptr += scan_count * sizeof(T);
@@ -377,7 +409,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	// Determine if we can skip sign extension during compression
 	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
-	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
+	bool skip_sign_extend = true;
 
 	idx_t scanned = 0;
 
@@ -406,18 +438,17 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
 			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
-			                               scan_state.current_width, scan_state.current_frame_of_reference,
-			                               skip_sign_extend);
+			                               scan_state.current_width, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
 			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer,
 			                               decompression_group_start_pointer, scan_state.current_width,
-			                               scan_state.current_frame_of_reference, skip_sign_extend);
+			                               skip_sign_extend);
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
 		}
-
+		ApplyFrameOfReference((T *)current_result_ptr, scan_state.current_frame_of_reference, to_scan);
 		scanned += to_scan;
 		scan_state.position_in_group += to_scan;
 	}
@@ -448,12 +479,14 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	    (scan_state.position_in_group - offset_in_compression_group) * scan_state.current_width / 8;
 
 	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
-	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
+	bool skip_sign_extend = true;
 
 	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                               scan_state.current_width, scan_state.current_frame_of_reference, skip_sign_extend);
+	                               scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
+	//! Apply FOR to result
+	*current_result_ptr += scan_state.current_frame_of_reference;
 }
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {

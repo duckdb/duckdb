@@ -30,8 +30,15 @@ endloop
 
 statement ok
 CREATE TABLE test (d INT32);
-statement ok
+
+# Range too big to force bitpacking
+statement error
 INSERT INTO test VALUES (-2147483648), (2147483647);
+
+restart
+
+statement ok
+DROP TABLE IF EXISTS test;
 
 statement ok
 CREATE TABLE test (a INT64, b INT32, c INT16, d TINYINT);
@@ -40,10 +47,7 @@ CREATE TABLE test (a INT64, b INT32, c INT16, d TINYINT);
 # (All but 1 bit)
 # Because bitpacking wont accept a value range bigger than that
 statement ok
-INSERT INTO test SELECT i, i, i, i FROM range(-64, 64) tbl(i);
-INSERT INTO test SELECT i, i, i, NULL FROM range(-16384, 16384) tbl(i);
-INSERT INTO test VALUES (-1073741824, -1073741824, NULL, NULL), (1073741823, 1073741823, NULL, NULL);
-INSERT INTO test VALUES (-4611686018427387904, NULL, NULL, NULL), (4611686018427387903, NULL, NULL, NULL);
+INSERT INTO test VALUES (-4611686018427387904, -1073741824, -16384, -64), (4611686018427387903, 1073741823, 16383, 63);
 
 statement ok
 checkpoint
@@ -51,13 +55,14 @@ checkpoint
 query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
--0.5	-0.5	-0.5	-0.5	32900
+-0.5	-0.5	-0.5	-0.5	2
 
 statement ok
 drop table test
 
 statement ok
 CREATE TABLE test (a UINT64, b UINT32, c UINT16, d UINT8);
+
 
 statement ok
 INSERT INTO test SELECT i, i, i, i FROM range(0, 256) tbl(i);
@@ -71,7 +76,7 @@ checkpoint
 query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
-5665461940419088384.000000	1903811655.425532	25716.671975	127.500000	3256
+5.665461940419088e+18	1903811655.4255319	25716.671974522294	127.5	3256
 
 statement ok
 CREATE TABLE test_bool (id VARCHAR, col BOOL)

@@ -9,17 +9,10 @@ statement ok
 PRAGMA force_compression = 'bitpacking'
 
 statement ok
-CREATE TABLE test (a INT64, b INT32, c INT16, d INT8);
+CREATE TABLE test (a INT64, b INT32, c INT16, d TINYINT);
 
-statement ok
-INSERT INTO test SELECT i, i, i, i FROM range(-128, 128) tbl(i);
-INSERT INTO test SELECT i, i, i, NULL FROM range(-32767, 32768) tbl(i);
-INSERT INTO test SELECT i, i, NULL, NULL FROM range(-2147483648, -2147482648) tbl(i);
-INSERT INTO test SELECT i, i, NULL, NULL FROM range(2147482648, 2147483648) tbl(i);
-INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(-9223372036854775808, -9223372036854774808) tbl(i);
-INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(9223372036854774808, 9223372036854775807) tbl(i);
-
-# Values are rejected by the bitpacking compression algorithm
-# When forced, this causes a Fatal Exception to be thrown
+# Data too big to be compressed with bitpacking
 statement error
-checkpoint
+INSERT INTO test VALUES
+	(-9223372036854775808,	-2147483648,	-32768,	-128),
+	(9223372036854775807,	2147483647,		32767,	127);
