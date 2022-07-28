@@ -282,7 +282,8 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" "psutil>=5.9.0"'
+        # TODO: remove cython pin once pandas is updated to fix memoryview bug. See https://github.com/scipy/scipy/issues/16718
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "cython==0.29.30" "pytest>=4.3" "psutil>=5.9.0"'
         CIBW_TEST_REQUIRES: 'pytest'
         CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy "psutil>=5.9.0"'
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
