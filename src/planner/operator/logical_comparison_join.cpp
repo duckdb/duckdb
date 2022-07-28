@@ -29,11 +29,9 @@ void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                                FieldReader &reader) {
 	auto join_type = reader.ReadRequired<JoinType>();
-	auto conditions = reader.ReadRequiredList<JoinCondition>();
-	auto delim_types = reader.ReadRequiredList<LogicalType>();
 	auto result = make_unique<LogicalComparisonJoin>(join_type, type);
-	result->conditions = move(conditions);
-	result->delim_types = delim_types;
+	result->conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition, ClientContext&>(context);
+	result->delim_types = reader.ReadRequiredList<LogicalType>();
 	return result;
 }
 

@@ -26,7 +26,7 @@ public:
 	//! Serializes a JoinCondition to a stand-alone binary blob
 	void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into a JoinCondition
-	static unique_ptr<JoinCondition> Deserialize(Deserializer &source, ClientContext &context);
+	static JoinCondition Deserialize(Deserializer &source, ClientContext &context);
 
 public:
 	unique_ptr<Expression> left;
