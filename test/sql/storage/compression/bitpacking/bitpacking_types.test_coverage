@@ -32,10 +32,14 @@ statement ok
 CREATE TABLE test (d INT32);
 
 # Range too big to force bitpacking
-statement error
+statement ok
 INSERT INTO test VALUES (-2147483648), (2147483647);
 
-restart
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'INTEGER')
+----
+Uncompressed
 
 statement ok
 DROP TABLE IF EXISTS test;
@@ -51,6 +55,18 @@ INSERT INTO test VALUES (-4611686018427387904, -1073741824, -16384, -64), (46116
 
 statement ok
 checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'BIGINT' OR
+	segment_type ILIKE 'INTEGER' OR
+	segment_type ILIKE 'SMALLINT' OR
+	segment_type ILIKE 'TINYINT')
+----
+BitPacking
+BitPacking
+BitPacking
+BitPacking
 
 query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
