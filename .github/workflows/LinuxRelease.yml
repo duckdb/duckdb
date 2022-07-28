@@ -259,7 +259,6 @@ jobs:
           zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
           zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
           zip -j duckdb_rest-linux-aarch64.zip build/release/tools/rest/duckdb_rest_server
-#          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
           python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_rest-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar duckdb_odbc-linux-aarch64.zip
 
       - uses: actions/upload-artifact@v2
@@ -270,7 +269,6 @@ jobs:
             duckdb_cli-linux-aarch64.zip
             libduckdb-linux-aarch64.zip
             duckdb_rest-linux-aarch64.zip
-#            duckdb_odbc-linux-aarch64.zip
             duckdb_jdbc-linux-aarch64.jar
 
  linux-aarch64-test:
