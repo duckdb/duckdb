@@ -1,0 +1,80 @@
+name: Bug report
+description: Create a report to help us improve
+body:
+  - type: textarea
+    attributes:
+      label: What happens?
+      description: A short, clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: To Reproduce
+      description: Steps to reproduce the behavior. Bonus points if those are only SQL queries.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "# Environment (please complete the following information):"
+  - type: input
+    attributes:
+      label: "OS:"
+      placeholder: e.g. iOS
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "DuckDB Version:"
+      placeholder: e.g. 22
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "DuckDB Client:"
+      placeholder: e.g. Python
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "# Identity Disclosure:"
+  - type: input
+    attributes:
+      label: "Full Name:"
+      placeholder: e.g. John Doe
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: "Affiliation:"
+      placeholder: e.g. Oracle
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        If the above is not given and is not obvious from your GitHub profile page, we might close your issue without further review. Please refer to the [reasoning behind this rule](https://berthub.eu/articles/posts/anonymous-help/) if you have questions.
+
+        # Before Submitting
+
+  - type: checkboxes
+    attributes:
+      label: Have you tried this on the latest `master` branch?
+      description: |
+        * **Python**: `pip install duckdb --upgrade --pre`
+        * **R**: `install.packages('duckdb', repos=c('https://duckdb.r-universe.dev', 'https://cloud.r-project.org'))`
+        * **Other Platforms**: You can find links to binaries [here](https://duckdb.org/docs/installation/) or compile from source.
+
+      options:
+        - label: I agree
+          required: true
+
+  - type: checkboxes
+    attributes:
+      label: Have you tried the steps to reproduce? Do they include all relevant data and configuration? Does the issue you report still appear there?
+      options:
+        - label: I agree
+          required: true

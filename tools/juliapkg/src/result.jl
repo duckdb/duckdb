@@ -497,35 +497,41 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
     return df
 end
 
-function execute_tasks(db::DuckDBHandle)
-    duckdb_execute_tasks(db.handle, typemax(UInt64))
+function execute_tasks(state::duckdb_task_state)
+    duckdb_execute_tasks_state(state)
     return
 end
 
-function cleanup_tasks(tasks)
+function cleanup_tasks(tasks, state)
+    duckdb_finish_execution(state)
     for task in tasks
         Base.wait(task)
     end
+    duckdb_destroy_task_state(state)
+    GC.enable(true)
+    return
 end
 
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     bind_parameters(stmt, params)
 
     handle = Ref{duckdb_result}()
+    GC.enable(false)
     # if multi-threading is enabled, launch tasks
+    task_state = duckdb_create_task_state(stmt.con.db.handle)
     tasks = []
     for i in 2:Threads.nthreads()
-        task_val = @spawn execute_tasks(stmt.con.db)
+        task_val = @spawn execute_tasks(task_state)
         push!(tasks, task_val)
     end
     ret = DuckDBSuccess
     try
         ret = duckdb_execute_prepared(stmt.handle, handle)
     catch ex
-        cleanup_tasks(tasks)
+        cleanup_tasks(tasks, task_state)
         throw(ex)
     end
-    cleanup_tasks(tasks)
+    cleanup_tasks(tasks, task_state)
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
         if error_ptr == C_NULL
