@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "jemalloc/jemalloc.h"
 
 namespace duckdb {
 class Allocator;
