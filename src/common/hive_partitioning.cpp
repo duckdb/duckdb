@@ -65,7 +65,7 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
 	vector<string> pruned_files;
 	vector<unique_ptr<Expression>> pruned_filters;
 
-	if (!filename_enabled && !hive_enabled) {
+	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
 		return;
 	}
 
