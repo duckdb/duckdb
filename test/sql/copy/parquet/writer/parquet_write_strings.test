@@ -18,7 +18,7 @@ INSERT INTO strings VALUES
     ('happy'), ('happy'), ('joy'), ('joy'),
     ('happy'), ('happy'), ('joy'), ('joy'),
     ('happy'), ('happy'), ('joy'), ('joy'),
-    ('happy'), ('happy'), ('joy'), ('joy'), ('surprise')
+    ('happy'), ('happy'), ('joy'), ('joy'), ('surprise');
 
 statement ok
 COPY strings TO '__TEST_DIR__/strings.parquet' (FORMAT PARQUET);
@@ -60,6 +60,11 @@ happy
 joy
 joy
 surprise
+
+query I
+SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+----
+3
 
 # strings with null values
 statement ok
@@ -204,6 +209,11 @@ SELECT * FROM '__TEST_DIR__/strings.parquet'
 27
 28
 29
+
+query I
+SELECT stats_distinct_count FROM parquet_metadata('__TEST_DIR__/strings.parquet')
+----
+NULL
 
 # non-dictionary table with null
 statement ok

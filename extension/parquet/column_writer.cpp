@@ -372,6 +372,11 @@ protected:
 	virtual void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
 	                         Vector &vector, idx_t chunk_start, idx_t chunk_end) = 0;
 
+	virtual bool HasDictionary(BasicColumnWriterState &state_p) {
+		return false;
+	}
+	//! The number of elements in the dictionary
+	virtual idx_t DictionarySize(BasicColumnWriterState &state_p);
 	void WriteDictionary(BasicColumnWriterState &state, unique_ptr<BufferedSerializer> temp_writer, idx_t row_count);
 	virtual void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats);
 
@@ -636,11 +641,21 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 
 	// flush the last page (if any remains)
 	FlushPage(state);
+
+	auto start_offset = writer.writer->GetTotalWritten();
+	auto page_offset = start_offset;
 	// flush the dictionary
-	FlushDictionary(state, state.stats_state.get());
+	if (HasDictionary(state)) {
+		column_chunk.meta_data.statistics.distinct_count = DictionarySize(state);
+		column_chunk.meta_data.statistics.__isset.distinct_count = true;
+		column_chunk.meta_data.dictionary_page_offset = page_offset;
+		column_chunk.meta_data.__isset.dictionary_page_offset = true;
+		FlushDictionary(state, state.stats_state.get());
+		page_offset += state.write_info[0].compressed_size;
+	}
 
 	// record the start position of the pages for this column
-	column_chunk.meta_data.data_page_offset = writer.writer->GetTotalWritten();
+	column_chunk.meta_data.data_page_offset = page_offset;
 	SetParquetStatistics(state, column_chunk);
 
 	// write the individual pages to disk
@@ -649,12 +664,15 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		write_info.page_header.write(writer.protocol.get());
 		writer.writer->WriteData(write_info.compressed_data, write_info.compressed_size);
 	}
-	column_chunk.meta_data.total_compressed_size =
-	    writer.writer->GetTotalWritten() - column_chunk.meta_data.data_page_offset;
+	column_chunk.meta_data.total_compressed_size = writer.writer->GetTotalWritten() - start_offset;
 }
 
 void BasicColumnWriter::FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats) {
-	// nop: standard pages do not have a dictionary
+	throw InternalException("This page does not have a dictionary");
+}
+
+idx_t BasicColumnWriter::DictionarySize(BasicColumnWriterState &state) {
+	throw InternalException("This page does not have a dictionary");
 }
 
 void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_ptr<BufferedSerializer> temp_writer,
@@ -1335,6 +1353,17 @@ public:
 		return state.IsDictionaryEncoded() ? Encoding::RLE_DICTIONARY : Encoding::PLAIN;
 	}
 
+	bool HasDictionary(BasicColumnWriterState &state_p) override {
+		auto &state = (StringColumnWriterState &)state_p;
+		return state.IsDictionaryEncoded();
+	}
+
+	idx_t DictionarySize(BasicColumnWriterState &state_p) override {
+		auto &state = (StringColumnWriterState &)state_p;
+		D_ASSERT(state.IsDictionaryEncoded());
+		return state.dictionary.size();
+	}
+
 	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
 		auto &stats = (StringStatisticsState &)*stats_p;
 		auto &state = (StringColumnWriterState &)state_p;
@@ -1458,6 +1487,14 @@ public:
 
 	duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state) override {
 		return Encoding::RLE_DICTIONARY;
+	}
+
+	bool HasDictionary(BasicColumnWriterState &state) override {
+		return true;
+	}
+
+	idx_t DictionarySize(BasicColumnWriterState &state_p) override {
+		return EnumType::GetSize(enum_type);
 	}
 
 	void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats_p) override {
