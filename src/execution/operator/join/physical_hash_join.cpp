@@ -208,7 +208,9 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 	if (lstate.hash_table) {
 		lock_guard<mutex> local_ht_lock(gstate.local_ht_lock);
 		gstate.local_hash_tables.push_back(move(lstate.hash_table));
-		gstate.max_batch_index = MaxValue<idx_t>(gstate.max_batch_index, lstate.batch_index);
+		if (lstate.batch_index != DConstants::INVALID_INDEX) {
+			gstate.max_batch_index = MaxValue<idx_t>(gstate.max_batch_index, lstate.batch_index);
+		}
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -383,7 +385,7 @@ public:
 		if (initialized) {
 			return;
 		}
-		batch_index = sink.max_batch_index;
+		batch_index = ++sink.max_batch_index;
 		if (sink.external) {
 			lock_guard<mutex> lock(sink.local_ht_lock);
 			full_outer_scan_state.total = sink.hash_table->Count();
@@ -654,11 +656,7 @@ idx_t PhysicalHashJoin::GetBatchIndex(ExecutionContext &context, DataChunk &chun
                                       LocalSourceState &lstate) const {
 	D_ASSERT(SupportsBatchIndex());
 	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
-	if (gstate.batch_index == DConstants::INVALID_INDEX) {
-		return gstate.batch_index;
-	} else {
-		return ++gstate.batch_index;
-	}
+	return ++gstate.batch_index;
 }
 
 } // namespace duckdb
