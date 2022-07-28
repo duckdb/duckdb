@@ -10,6 +10,16 @@ SELECT * FROM parquet_metadata('data/parquet-testing/lineitem-top10000.gzip.parq
 statement ok
 SELECT * FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet');
 
+query I
+SELECT COUNT(*) > 0 FROM parquet_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet');
+----
+true
+
+query I
+SELECT COUNT(*) > 0 FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet');
+----
+true
+
 statement ok
 select * from parquet_schema('data/parquet-testing/decimal/decimal_dc.parquet');
 
@@ -22,9 +32,3 @@ select * from parquet_metadata('data/parquet-testing/glob/*.parquet');
 
 statement ok
 select * from parquet_schema('data/parquet-testing/glob/*.parquet');
-
-#statement ok
-#SELECT * FROM parquet_metadata('data/parquet-testing/*.parquet');
-
-#statement ok
-#SELECT * FROM parquet_schema('data/parquet-testing/*.parquet');

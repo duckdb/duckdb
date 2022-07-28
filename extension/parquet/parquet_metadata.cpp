@@ -396,6 +396,8 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 	}
 	current_chunk.SetCardinality(count);
 	collection.Append(current_chunk);
+
+	collection.InitializeScan(scan_state);
 }
 
 template <bool SCHEMA>
