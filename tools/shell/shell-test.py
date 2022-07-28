@@ -302,7 +302,7 @@ test('.sha3sum')
 test('''
 .mode jsonlines
 SELECT 42,43;
-''', out="{"42":42,"43":43}")
+''', out='{"42":42,"43":43}')
 
 test('''
 .mode csv
