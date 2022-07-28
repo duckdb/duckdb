@@ -239,7 +239,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: apt-get install -y -qq gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        run: apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
 
       - name: Build
         shell: bash
