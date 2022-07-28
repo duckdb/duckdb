@@ -303,7 +303,7 @@ jobs:
       - name: Install
         shell: bash
         run: |
-          apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
           cd /tmp
           wget https://javadl.oracle.com/webapps/download/GetFile/1.8.0_331-b09/165374ff4ea84ef0bbd821706e29b123/linux-i586/jdk-8u331-linux-aarch64.tar.gz
           tar xvf jdk-8u331-linux-aarch64.tar.gz
