@@ -338,7 +338,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: pip install numpy pytest pandas "cython==0.29.30" mypy psutil google-cloud-storage
+        run: pip install numpy pytest pandas mypy psutil google-cloud-storage
 
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
