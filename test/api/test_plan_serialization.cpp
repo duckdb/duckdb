@@ -104,3 +104,13 @@ TEST_CASE("Test bound_comparison_expression", "[serialization]") {
 TEST_CASE("Test logical_filter", "[serialization]") {
 	test_helper("SELECT COUNT(*) FROM (SELECT 42 as i) HAVING COUNT(*) >= 1");
 }
+
+TEST_CASE("Test logical_expression_get", "[serialization]") {
+	test_helper("SELECT * FROM (VALUES\n"
+	            "  ([1]),\n"
+	            "  ([NULL]),\n"
+	            "  ([]),\n"
+	            "  ([9,10,11]),\n"
+	            "  (NULL)\n"
+	            "  ) lv(pk);");
+}
