@@ -27,41 +27,9 @@ struct EmptyBitpackingWriter {
 };
 
 template <class T>
-struct BufferMinMax {
-public:
-	BufferMinMax() : min_set(false), max_set(false) {
-	}
-	bool min_set;
-	bool max_set;
-	T max;
-	T min;
-
-public:
-	bool TryUpdate(T value) {
-		if (!min_set || value < min) {
-			min_set = true;
-			min = value;
-		}
-		if (!max_set || value > max) {
-			max_set = true;
-			max = value;
-		}
-		T ignore;
-		return TrySubtractOperator::Operation(max, min, ignore);
-	}
-	T Minimum() {
-		//! If all values are NULL, the minimum is not set
-		if (min_set) {
-			return min;
-		}
-		return 0;
-	}
-};
-
-template <class T>
 struct BitpackingState {
 public:
-	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr), compression_buffer_minmax() {
+	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
 	}
 
 	T compression_buffer[BITPACKING_WIDTH_GROUP_SIZE];
@@ -70,7 +38,9 @@ public:
 	idx_t total_size;
 	void *data_ptr;
 
-	BufferMinMax<T> compression_buffer_minmax; //! Min and Max values in the buffer;
+	bool min_max_set = false;
+	T minimum;
+	T maximum;
 
 public:
 	void SubtractFrameOfReference(const T &frame_of_reference) {
@@ -79,16 +49,49 @@ public:
 		}
 	}
 
+	void ResetMinMax() {
+		min_max_set = false;
+		minimum = 0;
+		maximum = 0;
+	}
+
+	bool TryUpdateMinMax(T value) {
+		bool updated = false;
+		if (!min_max_set || value < minimum) {
+			minimum = value;
+			updated = true;
+		}
+		if (!min_max_set || value > maximum) {
+			maximum = value;
+			updated = true;
+		}
+		min_max_set = min_max_set || updated;
+		//! Only when either of the values are updated, do we need to test the overflow
+		if (updated) {
+			T ignore;
+			return TrySubtractOperator::Operation(maximum, minimum, ignore);
+		}
+		return true;
+	}
+
+	T GetFrameOfReference() {
+		//! If all values are NULL, minimum will not have been set
+		if (!min_max_set) {
+			return 0;
+		}
+		return minimum;
+	}
+
 	template <class OP>
 	void Flush() {
-		T frame_of_reference = compression_buffer_minmax.Minimum();
+		T frame_of_reference = GetFrameOfReference();
 		SubtractFrameOfReference(frame_of_reference);
 		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth(compression_buffer, compression_buffer_idx);
 		OP::template Operation<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
 		                          compression_buffer_idx, data_ptr);
 		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
 		compression_buffer_idx = 0;
-		compression_buffer_minmax = BufferMinMax<T>();
+		ResetMinMax();
 	}
 
 	template <class OP = EmptyBitpackingWriter>
@@ -97,7 +100,7 @@ public:
 		if (validity.RowIsValid(idx)) {
 			compression_buffer_validity[compression_buffer_idx] = true;
 			compression_buffer[compression_buffer_idx++] = data[idx];
-			if (!compression_buffer_minmax.TryUpdate(data[idx])) {
+			if (!TryUpdateMinMax(data[idx])) {
 				return false;
 			}
 		} else {
