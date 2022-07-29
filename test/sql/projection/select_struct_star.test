@@ -1,0 +1,46 @@
+# name: test/sql/projection/select_struct_star.test
+# description: SELECT struct.*;
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+# create table
+statement ok
+CREATE TABLE test(a STRUCT(i INT, j INT));
+
+# insertion: 1 affected row
+query I
+INSERT INTO test VALUES ({i: 1, j: 2});
+----
+1
+
+query II
+SELECT a.* FROM test;
+----
+1	2
+
+query I
+SELECT a.* EXCLUDE(j) FROM test;
+----
+1
+
+query I
+SELECT a.* EXCLUDE(i) FROM test;
+----
+2
+
+query II
+SELECT a.* REPLACE(a.i + 3 AS i) FROM test;
+----
+4	2
+
+statement ok
+CREATE TABLE a(i row(t int));
+
+statement ok
+CREATE TABLE b(i row(t int));
+
+# Binder Error: Ambiguous reference to column name "i" (use: "b.i" or "a.i")
+statement error
+SELECT i.* FROM a, b;
