@@ -35,10 +35,17 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 	return state;
 }
 
-void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback,
-                                          ColumnSegment *segment) {
+unique_ptr<SegmentBase> &ColumnDataCheckpointer::GetOwnedSegment() {
+	return owned_segment;
+}
+
+void ColumnDataCheckpointer::SetOwnedSegment(unique_ptr<SegmentBase> segment) {
+	this->owned_segment = move(segment);
+}
+
+void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
-	for (segment; segment; segment = (ColumnSegment *)segment->next.get()) {
+	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
 		ColumnScanState scan_state;
 		scan_state.current = segment;
 		segment->InitializeScan(scan_state);
@@ -78,8 +85,9 @@ void ColumnDataCheckpointer::ForceCompression(vector<CompressionFunction *> &com
 	}
 }
 
-void ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx, ColumnSegment *segment) {
+void ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
+	D_ASSERT(owned_segment);
 	auto &config = DBConfig::GetConfig(GetDatabase());
 
 	auto compression_type = checkpoint_info.compression_type;
@@ -102,22 +110,20 @@ void ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx,
 	}
 
 	// scan over all the segments and run the analyze step
-	ScanSegments(
-	    [&](Vector &scan_vector, idx_t count) {
-		    for (idx_t i = 0; i < compression_functions.size(); i++) {
-			    if (!compression_functions[i]) {
-				    continue;
-			    }
-			    auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
-			    if (!success) {
-				    // could not use this compression function on this data set
-				    // erase it
-				    compression_functions[i] = nullptr;
-				    analyze_states[i].reset();
-			    }
-		    }
-	    },
-	    (ColumnSegment *)segment);
+	ScanSegments([&](Vector &scan_vector, idx_t count) {
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (!compression_functions[i]) {
+				continue;
+			}
+			auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			if (!success) {
+				// could not use this compression function on this data set
+				// erase it
+				compression_functions[i] = nullptr;
+				analyze_states[i].reset();
+			}
+		}
+	});
 
 	// now that we have passed over all the data, we need to figure out the best method
 	// we do this using the final_analyze method
@@ -169,12 +175,12 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// now we need to write our segment
 	// we will first run an analyze step that determines which compression function to use
-	idx_t compression_idx = 0;
+	idx_t compression_idx;
 	CompressionFunction *best_function;
 	unique_ptr<AnalyzeState> analyze_state;
 	if (is_validity) {
 		// We have not scanned the validity masks before
-		DetectBestCompressionMethod(compression_idx, (ColumnSegment *)owned_segment.get());
+		DetectBestCompressionMethod(compression_idx);
 		best_function = compression_functions[checkpoint_info.validity_compression_idx];
 		analyze_state = move(checkpoint_info.validity_state);
 	} else {
@@ -184,7 +190,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 	// This column was not analysed yet, do that now
 	if (!analyze_state) {
-		DetectBestCompressionMethod(compression_idx, (ColumnSegment *)owned_segment.get());
+		DetectBestCompressionMethod(compression_idx);
 		best_function = compression_functions[checkpoint_info.compression_idx];
 		analyze_state = move(checkpoint_info.state);
 	}
@@ -197,8 +203,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// now that we have analyzed the compression functions we can start writing to disk
 	auto compress_state = best_function->init_compression(*this, move(analyze_state));
 	ScanSegments(
-	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); },
-	    (ColumnSegment *)owned_segment.get());
+	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
 
 	// now we actually write the data to disk

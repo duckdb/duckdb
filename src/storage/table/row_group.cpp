@@ -710,12 +710,6 @@ vector<ColumnCheckpointInfo> RowGroup::DetectBestCompressionMethodTable(TableDat
 		if (CompressionForTypeExists(columns[i]->type.InternalType())) {
 			columns[i]->DetectBestCompressionMethod(*this, writer, checkpoint_info);
 		}
-		// We will scan this type later in the ColumnDataCheckpointer
-		else {
-			checkpoint_info.compression_idx = 0;
-			checkpoint_info.compression_type = CompressionType::COMPRESSION_AUTO;
-			checkpoint_info.score = 0;
-		}
 		infos.push_back(move(checkpoint_info));
 	}
 	return infos;

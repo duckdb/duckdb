@@ -315,11 +315,9 @@ void RLESort::Sort(vector<ColumnCheckpointInfo> &infos) {
 	prev_end += row_group.count;
 	data_table.SetPrevEnd(prev_end);
 
-	ReplaceRowGroup(*sorted_rowgroup);
-
 	// TODO: Uncomment once unified DetectBestCompressionMethod is fixed
-	//	if (NewScoresBetter(*sorted_rowgroup, infos)) {
-	//		ReplaceRowGroup(*sorted_rowgroup);
-	//	}
+	if (NewScoresBetter(*sorted_rowgroup, infos)) {
+		ReplaceRowGroup(*sorted_rowgroup);
+	}
 }
 } // namespace duckdb

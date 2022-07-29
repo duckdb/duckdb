@@ -22,14 +22,8 @@ unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
 void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
-		if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
-			ValidityMask validity_vec(STANDARD_VECTOR_SIZE);
-			validity_vec.SetAllInvalid(STANDARD_VECTOR_SIZE);
-			FlatVector::SetValidity(result, validity_vec);
-		} else {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-		}
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
 	}
 }
 

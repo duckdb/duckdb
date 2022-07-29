@@ -24,14 +24,16 @@ public:
 	ColumnData &GetColumnData();
 	RowGroup &GetRowGroup();
 	ColumnCheckpointState &GetCheckpointState();
+	unique_ptr<SegmentBase> &GetOwnedSegment();
+	void SetOwnedSegment(unique_ptr<SegmentBase> segment);
 
 	void Checkpoint(unique_ptr<SegmentBase> segment);
-	void DetectBestCompressionMethod(idx_t &compression_idx, ColumnSegment *segment);
+	void DetectBestCompressionMethod(idx_t &compression_idx);
 	static void ForceCompression(vector<CompressionFunction *> &compression_functions,
 	                             CompressionType compression_type);
 
 private:
-	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback, ColumnSegment *segment);
+	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
 	void WriteToDisk();
 	bool HasChanges();
 	void WritePersistentSegments();
