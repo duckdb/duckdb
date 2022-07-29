@@ -17,10 +17,12 @@ PhysicalResultCollector::PhysicalResultCollector(PreparedStatementData &data)
 unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(ClientContext &context,
                                                                                 PreparedStatementData &data) {
 	auto &config = DBConfig::GetConfig(context);
-	bool use_materialized_collector = !config.options.preserve_insertion_order ||
-	                                  !data.plan->AllOperatorsPreserveOrder() ||
-	                                  !data.plan->AllSourcesSupportBatchIndex();
-	if (use_materialized_collector) {
+	bool use_materialized_collector =
+	    !config.options.preserve_insertion_order || !data.plan->AllSourcesSupportBatchIndex();
+	if (!data.plan->AllOperatorsPreserveOrder()) {
+		// the plan is not order preserving, so we just use the parallel materialized collector
+		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
+	} else if (use_materialized_collector) {
 		// parallel materialized collector only if we don't care about maintaining insertion order
 		return make_unique_base<PhysicalResultCollector, PhysicalMaterializedCollector>(
 		    data, !config.options.preserve_insertion_order);
