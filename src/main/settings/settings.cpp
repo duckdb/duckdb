@@ -398,15 +398,15 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Force Compression Sorting
+// Force Row Group Replacement
 //===--------------------------------------------------------------------===//
-void ForceCompressionSortingSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.force_compression_sorting = input.GetValue<bool>();
+void ForceRowGroupReplacementSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.force_row_group_replacement = input.GetValue<bool>();
 }
 
-Value ForceCompressionSortingSetting::GetSetting(ClientContext &context) {
+Value ForceRowGroupReplacementSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	return Value::BOOLEAN(config.force_compression_sorting);
+	return Value::BOOLEAN(config.force_row_group_replacement);
 }
 
 //===--------------------------------------------------------------------===//

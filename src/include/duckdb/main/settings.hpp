@@ -177,9 +177,9 @@ struct ForceCompressionSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct ForceCompressionSortingSetting {
-	static constexpr const char *Name = "force_compression_sorting";
-	static constexpr const char *Description = "DEBUG SETTING: forces sorting before compression";
+struct ForceRowGroupReplacementSetting {
+	static constexpr const char *Name = "force_row_group_replacement";
+	static constexpr const char *Description = "DEBUG SETTING: forces replacing the row group after sorting while checkpointing";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);

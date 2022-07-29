@@ -9,6 +9,12 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
+
+statement ok
 CREATE TABLE integers AS SELECT * FROM range(11) tbl(i);
 
 statement ok

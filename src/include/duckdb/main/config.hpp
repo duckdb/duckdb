@@ -121,8 +121,8 @@ public:
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
-	//! Force sorting before compression
-	bool force_compression_sorting = true;
+	//! Force row group replacement when sorting during checkpoints
+	bool force_row_group_replacement = false;
 	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
 	bool debug_many_free_list_blocks = false;
 	//! Debug setting for window aggregation mode: (window, combine, separate)

@@ -10,6 +10,12 @@ statement ok
 PRAGMA force_checkpoint;
 
 statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
+
+statement ok
 CREATE TABLE integers AS SELECT i FROM range(2) tbl(i);
 
 statement ok

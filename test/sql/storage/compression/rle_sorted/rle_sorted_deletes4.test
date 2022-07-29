@@ -9,6 +9,12 @@ statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
 statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
+
+statement ok
 CREATE TABLE test (a INTEGER);
 
 statement ok
@@ -24,6 +30,12 @@ SELECT a FROM test
 13
 
 restart
+
+statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
 
 query I
 SELECT a FROM test

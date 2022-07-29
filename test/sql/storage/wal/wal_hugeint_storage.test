@@ -27,12 +27,12 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
 query I
-SELECT * FROM hugeints
+SELECT * FROM hugeints ORDER BY ALL;
 ----
+NULL
 42
 1043178439874412422424
 47289478944894789472897441242
-NULL
 
 
 query I

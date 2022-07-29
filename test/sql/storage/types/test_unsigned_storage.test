@@ -5,6 +5,12 @@
 # load the DB from disk
 load __TEST_DIR__/unsigned_storage_test.db
 
+statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
+
 # create a table with all unsigned types
 statement ok
 CREATE TABLE unsigned (a utinyint, b usmallint, c uinteger, d ubigint);
@@ -16,6 +22,12 @@ INSERT INTO unsigned VALUES (1,1,1,1), (42,42,42,42), (NULL,NULL,NULL,NULL), (25
 loop i 0 2
 
 restart
+
+statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
 
 query IIII
 SELECT * FROM unsigned
@@ -81,6 +93,12 @@ SELECT * FROM unsigned
 NULL	NULL	NULL	NULL
 
 restart
+
+statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
 
 query IIII
 SELECT * FROM unsigned

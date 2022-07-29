@@ -710,6 +710,11 @@ vector<ColumnCheckpointInfo> RowGroup::DetectBestCompressionMethodTable(TableDat
 		if (CompressionForTypeExists(columns[i]->type.InternalType())) {
 			columns[i]->DetectBestCompressionMethod(*this, writer, checkpoint_info);
 		}
+		else {
+			// Score will be calculated later for this type
+			checkpoint_info.compression_idx = 0;
+			checkpoint_info.score = NumericLimits<idx_t>::Maximum();
+		}
 		infos.push_back(move(checkpoint_info));
 	}
 	return infos;
@@ -721,7 +726,7 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	states.reserve(columns.size());
 
 	auto infos = DetectBestCompressionMethodTable(writer);
-	if (db.config.force_compression_sorting) {
+	if (!db.config.preserve_insertion_order) {
 		// Sorts columns to optimize RLE compression
 		RLESort rle_checkpoint_sort(*this, data_table, writer, infos);
 		rle_checkpoint_sort.Sort(infos);

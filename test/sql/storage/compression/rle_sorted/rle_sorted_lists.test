@@ -9,6 +9,12 @@ statement ok
 PRAGMA force_compression = 'rle'
 
 statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
+
+statement ok
 CREATE TABLE test (id INTEGER, l INTEGER[]);
 
 statement ok

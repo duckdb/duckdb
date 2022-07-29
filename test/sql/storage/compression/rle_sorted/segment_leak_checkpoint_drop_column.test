@@ -10,7 +10,10 @@ statement ok
 PRAGMA force_checkpoint;
 
 statement ok
-PRAGMA force_compression_sorting=true;
+PRAGMA preserve_insertion_order = false;
+
+statement ok
+PRAGMA force_row_group_replacement = true;
 
 statement ok
 CREATE TABLE integers AS SELECT i, i j FROM range(1024) tbl(i);

@@ -12,7 +12,10 @@ statement ok
 PRAGMA force_compression = 'rle'
 
 statement ok
-PRAGMA force_compression_sorting=True
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
 
 statement ok
 CREATE TABLE nulls(i INTEGER)

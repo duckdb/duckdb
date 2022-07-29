@@ -5,6 +5,12 @@
 # load the DB from disk
 load __TEST_DIR__/hugeint_storage_test.db
 
+statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
+
 # create a table with hugeints
 statement ok
 CREATE TABLE hugeints (h HUGEINT);
@@ -16,6 +22,12 @@ INSERT INTO hugeints VALUES (1043178439874412422424), (42), (NULL), (47289478944
 loop i 0 2
 
 restart
+
+statement ok
+PRAGMA preserve_insertion_order = false
+
+statement ok
+PRAGMA force_row_group_replacement = true
 
 query I
 SELECT * FROM hugeints

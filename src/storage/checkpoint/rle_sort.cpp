@@ -40,7 +40,7 @@ RLESort::RLESort(RowGroup &row_group, DataTable &data_table, TableDataWriter &wr
                  vector<ColumnCheckpointInfo> &infos)
     : row_group(row_group), data_table(data_table), writer(writer), old_count(row_group.count) {
 	// Reorder columns to optimize RLE Compression - We skip if the table has indexes or is empty
-	if (row_group.db.config.force_compression_sorting && row_group.count != 0 && row_group.table_info.indexes.Empty()) {
+	if (!row_group.db.config.preserve_insertion_order && row_group.count != 0 && row_group.table_info.indexes.Empty()) {
 		// collect logical types by iterating the columns
 		for (idx_t column_idx = 0; column_idx < row_group.columns.size(); column_idx++) {
 			auto &column = row_group.columns[column_idx];
@@ -102,16 +102,17 @@ bool RLESort::NewScoresBetter(RowGroup &sorted_rowgroup, vector<ColumnCheckpoint
 	// Before replacing - check if RLE compression is better
 	auto sorted_infos = sorted_rowgroup.DetectBestCompressionMethodTable(writer);
 
-	idx_t score;
-	idx_t sorted_score;
+	idx_t score = 0;
+	idx_t sorted_score = 0;
 
+	// Calculate the total scores from the analysis
 	for (idx_t i = 0; i < row_group.columns.size(); i++) {
 		score += infos[i].score;
 		sorted_score += sorted_infos[i].score;
 	}
 
 	// A lower score = fewer bytes = better compression
-	if (sorted_score < score) {
+	if (sorted_score < score || row_group.db.config.force_row_group_replacement) {
 		// Replace the info to be used during checkpointing
 		for (idx_t i = 0; i < row_group.columns.size(); i++) {
 			infos[i] = move(sorted_infos[i]);
@@ -315,7 +316,6 @@ void RLESort::Sort(vector<ColumnCheckpointInfo> &infos) {
 	prev_end += row_group.count;
 	data_table.SetPrevEnd(prev_end);
 
-	// TODO: Uncomment once unified DetectBestCompressionMethod is fixed
 	if (NewScoresBetter(*sorted_rowgroup, infos)) {
 		ReplaceRowGroup(*sorted_rowgroup);
 	}
