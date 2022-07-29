@@ -118,3 +118,7 @@ TEST_CASE("Test logical_expression_get", "[serialization]") {
 TEST_CASE("Test logical_explain", "[serialization]") {
 	test_helper("EXPLAIN SELECT 42");
 }
+
+TEST_CASE("Test logical_empty_result", "[serialization]") {
+	test_helper("SELECT * FROM (SELECT 42) WHERE 1>2");
+}
