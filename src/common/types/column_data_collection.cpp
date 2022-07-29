@@ -678,6 +678,7 @@ bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) c
 
 	// found a chunk to scan -> scan it
 	auto &segment = *segments[segment_index];
+	state.current_chunk_state.properties = state.properties;
 	segment.ReadChunk(chunk_index, state.current_chunk_state, result, state.column_ids);
 	result.Verify();
 	return true;

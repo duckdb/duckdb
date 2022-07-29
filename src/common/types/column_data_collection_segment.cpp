@@ -215,6 +215,7 @@ void ColumnDataCollectionSegment::FetchChunk(idx_t chunk_idx, DataChunk &result,
 	D_ASSERT(chunk_idx < chunk_data.size());
 	ChunkManagementState state;
 	InitializeChunkState(chunk_idx, state);
+	state.properties = ColumnDataScanProperties::DISALLOW_ZERO_COPY;
 	ReadChunk(chunk_idx, state, result, column_ids);
 }
 
