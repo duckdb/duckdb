@@ -9,6 +9,11 @@ void BoundCreateTableInfo::Serialize(Serializer &serializer) const {
   D_ASSERT(schema);
   schema->Serialize(serializer);
   serializer.WriteOptional(base);
+
+	serializer.WriteList(constraints);
+	serializer.WriteList(bound_constraints);
+	serializer.WriteList(bound_defaults);
+
 	serializer.WriteOptional(query);
 }
 
@@ -18,6 +23,11 @@ unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer 
   auto result = make_unique<BoundCreateTableInfo>(move(create_info));
   result->schema = Catalog::GetCatalog(context).GetSchema(context, schema_name);
   result->base = source.ReadOptional<CreateInfo>();
+
+  source.ReadList<Constraint>(result->constraints);
+  source.ReadList<BoundConstraint>(result->bound_constraints);
+  source.ReadList<Expression>(result->bound_defaults, context);
+
   result->query = source.ReadOptional<LogicalOperator>(context);
   return result;
 }
