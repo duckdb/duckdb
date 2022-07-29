@@ -52,6 +52,15 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 	return ConvertCPPTypeToC(entry->second->return_type);
 }
 
+duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+		return DuckDBError;
+	}
+	wrapper->values.clear();
+	return DuckDBSuccess;
+}
+
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, Value val) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {

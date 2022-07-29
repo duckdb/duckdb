@@ -66,6 +66,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");
 		}
 	}
+	result->info->if_exists = stmt->missing_ok;
 	return result;
 }
 } // namespace duckdb

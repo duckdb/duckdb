@@ -1,4 +1,6 @@
 #include "duckdb/common/bitpacking.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -7,26 +9,8 @@
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
-
-struct StringHash {
-	std::size_t operator()(const string_t &k) const {
-		return Hash(k);
-	}
-};
-
-struct StringEquality {
-	bool operator()(const string_t &a, const string_t &b) const {
-		return Equals::Operation(a, b);
-	}
-};
-
-template <typename T>
-using string_map_t = unordered_map<string_t, T, StringHash, StringEquality>;
-
-using string_set_t = unordered_set<string_t, StringHash, StringEquality>;
 
 // Abstract class for keeping compression state either for compression or size analysis
 class DictionaryCompressionState : public CompressionState {
