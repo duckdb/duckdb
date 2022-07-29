@@ -76,7 +76,6 @@ void OuterJoinMarker::InitializeScan(OuterJoinGlobalScanState &gstate, OuterJoin
 	D_ASSERT(gstate.data);
 	lstate.match_sel.Initialize(STANDARD_VECTOR_SIZE);
 	gstate.data->InitializeScanChunk(lstate.scan_chunk);
-	gstate.data->InitializeScan(gstate.global_scan);
 }
 
 void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanState &lstate, DataChunk &result) {

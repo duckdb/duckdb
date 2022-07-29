@@ -180,7 +180,7 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSin
 		}
 	}
 
-	// append the data and the
+	// append the payload data and the conditions
 	lock_guard<mutex> nj_guard(gstate.nj_lock);
 	gstate.right_payload_data.Append(input);
 	gstate.right_condition_data.Append(nlj_state.right_condition);
