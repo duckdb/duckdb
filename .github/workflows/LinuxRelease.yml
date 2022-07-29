@@ -226,79 +226,17 @@ jobs:
       AARCH_CROSS_COMPILE: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
+      CUSTOM_CMAKE_FLAGS: -DDUCKDB_JDK_PATH=/tmp/jdk1.8.0_331
 
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      # IDENTICAL TO UBUNTU 16 SETUP MINUS THE SUDOS
-      - name: Install
-        shell: bash
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq software-properties-common
-          sudo add-apt-repository ppa:git-core/ppa
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl
-
-      - name: Install Git 2.18.5
-        shell: bash
-        run: |
-          wget https://github.com/git/git/archive/refs/tags/v2.18.5.tar.gz
-          tar xvf v2.18.5.tar.gz
-          cd git-2.18.5
-          make
-          sudo make prefix=/usr install
-          git --version
-
-      - uses: actions/checkout@v3
+      - uses: ./.github/actions/ubuntu_16_setup
         with:
-          fetch-depth: 0
-
-      - name: Install Python 3.7
-        shell: bash
-        run: |
-          wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-          tar xvf Python-3.7.12.tgz
-          cd Python-3.7.12
-          mkdir -p pythonbin
-          ./configure --with-ensurepip=install
-          make -j
-          sudo make install
-          python3.7 --version
-          python3.7 -m pip install pip
-          python3.7 -m pip install requests awscli
-
-      - name: Install CMake 3.21
-        shell: bash
-        run: |
-          wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-          chmod +x cmake-3.21.3-linux-x86_64.sh
-          sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
-          cmake --version
-
-#      - name: Install OpenSSL 1.1.1
-#        if: ${{ inputs.openssl }} == 1
-#        shell: bash
-#        run: |
-#          wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-#          tar -xf openssl-1.1.1c.tar.gz
-#          cd openssl-1.1.1c
-#          sudo ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl no-shared zlib-dynamic
-#          sudo make
-#          sudo make install
-#          sudo echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-#          sudo ldconfig -v
-
-      - name: Version Check
-        shell: bash
-        run: |
-          ldd --version ldd
-          python3.7 --version
-          git --version
-          git log -1 --format=%h
-      # END OF IDENTICAL TO UBUNTU 16 SETUP MINUS THE SUDOS
+          ubuntu_version: 18
+          openssl: 0
 
       - name: Install
         shell: bash
@@ -311,7 +249,6 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          ls /usr/bin
           make
 
       - name: Deploy
