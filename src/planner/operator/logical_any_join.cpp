@@ -10,12 +10,18 @@ string LogicalAnyJoin::ParamsToString() const {
 }
 
 void LogicalAnyJoin::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(join_type);
+	writer.WriteOptional(condition);
 }
 
 unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                         FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto join_type = reader.ReadRequired<JoinType>();
+	unique_ptr<Expression> condition;
+	condition = reader.ReadOptional<Expression>(move(condition), context);
+	auto result = make_unique<LogicalAnyJoin>(join_type);
+	result->condition = move(condition);
+	return result;
 }
 
 } // namespace duckdb
