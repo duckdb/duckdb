@@ -20,11 +20,11 @@
 #  define JEMALLOC_N(n) jet_##n
 #  include "jemalloc/internal/public_namespace.h"
 #  define JEMALLOC_NO_RENAME
-#  include "../jemalloc.h"
+#  include "jemalloc/jemalloc.h"
 #  undef JEMALLOC_NO_RENAME
 #else
 #  define JEMALLOC_N(n) je_##n
-#  include "../jemalloc.h"
+#  include "jemalloc/jemalloc.h"
 #endif
 
 #if defined(JEMALLOC_OSATOMIC)
