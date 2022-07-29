@@ -7,13 +7,13 @@ endif ()
 # Jemalloc generates include files based on OS/ARCH
 # We pre-generate them, place them in different folders, then set the include path properly
 # I stole this approach from ClickHouse :)
-set(JEMALLOC_INCLUDE_PREFIX "platform/${OS_NAME}_${OS_ARCH}")
-if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${JEMALLOC_INCLUDE_PREFIX}")
-    message(FATAL_ERROR "internal jemalloc: This OS/ARCH combination is not supported ${OS_NAME} + ${OS_ARCH}")
-endif ()
+#set(JEMALLOC_INCLUDE_PREFIX "platform/${OS_NAME}_${OS_ARCH}")
+#if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${JEMALLOC_INCLUDE_PREFIX}")
+#    message(FATAL_ERROR "internal jemalloc: This OS/ARCH combination is not supported ${OS_NAME} + ${OS_ARCH}")
+#endif ()
 
 include_directories(include)
-include_directories(${JEMALLOC_INCLUDE_PREFIX})
+#include_directories(${JEMALLOC_INCLUDE_PREFIX})
 
 add_library(
     duckdb_jemalloc
@@ -87,9 +87,7 @@ target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPA
 # Need to include this so that RTLD_NEXT is defined
 target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
 
-target_include_directories(duckdb_jemalloc PUBLIC
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/${JEMALLOC_INCLUDE_PREFIX}>)
+target_include_directories(duckdb_jemalloc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 set_target_properties(duckdb_jemalloc PROPERTIES EXPORT_NAME duckdb_jemalloc)
 
 install(TARGETS duckdb_jemalloc
