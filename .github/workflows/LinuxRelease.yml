@@ -55,8 +55,6 @@ jobs:
         fetch-depth: 0
 
     - uses: ./.github/actions/ubuntu_setup
-      with:
-        ubuntu_version: ${{ matrix.arch == 'aarch64' && '16' || '16' }}
 
     - name: Install
       shell: bash
