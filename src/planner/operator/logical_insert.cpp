@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 	auto insert_values_size = reader.ReadRequired<idx_t>();
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	for (idx_t i = 0; i < insert_values_size; i++) {
-		insert_values.push_back(reader.ReadRequiredList<unique_ptr<Expression>>());
+		insert_values.push_back(reader.ReadRequiredSerializableList<Expression>(context));
 	}
 	auto column_index_map = reader.ReadRequiredList<idx_t>();
 	auto expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
