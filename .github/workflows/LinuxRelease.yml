@@ -321,8 +321,9 @@ jobs:
           zip -j duckdb_unittest.zip build/release/test/unittest
           zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
           zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-          zip -j duckdb_rest-linux-aarch64.zip build/release/tools/rest/duckdb_rest_server
           python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_rest-linux-aarch64.zip duckdb_jdbc-linux-aarch64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+          zip -j duckdb_rest-linux-aarch64.zip build/release/tools/rest/duckdb_rest_server
+          cp build/release/tools/jdbc/duckdb_jdbc.jar duckdb_jdbc-linux-aarch64.jar
 
       - uses: actions/upload-artifact@v2
         with:
@@ -337,7 +338,7 @@ jobs:
  linux-aarch64-test:
    name: Linux tests (aarch64)
    runs-on: ubuntu-latest
-   container: ubuntu:16.04
+   container: ubuntu:18.04
    needs: linux-aarch64
    env:
      FORCE_WARN_UNUSED: 1
@@ -354,7 +355,7 @@ jobs:
        id: runcmd
        with:
          arch: aarch64
-         distro: ubuntu16.04
+         distro: ubuntu18.04
 
          # Create an artifacts directory
          setup: |
