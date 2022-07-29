@@ -34,7 +34,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/ubuntu_setup
       with:
         openssl: 1
 
