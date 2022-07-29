@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> LogicalShow::Deserialize(ClientContext &context, Log
 	auto aliases = reader.ReadRequiredList<string>();
 
 	// TODO(stephwang): review if we need to pass unique_ptr<LogicalOperator> plan
-	auto result = make_unique<LogicalShow>(nullptr);
+	auto result = unique_ptr<LogicalShow>(new LogicalShow());
 	result->types_select = types_select;
 	result->aliases = aliases;
 	return result;
