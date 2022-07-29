@@ -420,7 +420,7 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 
 		// required to set the length and offset of this string
 		auto list_offset_data = GetListOffsetData(segment);
-		list_entry_t list_entry;
+		list_entry_t list_entry(0, 0);
 
 		// get the string
 		string str = "";
@@ -430,14 +430,7 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 			str = str_t.GetString();
 		}
 
-		// even for NULL values we need to store length (0) and offset (prev offset), because
-		// we need them for successive values
-		if (segment->count == 0) {
-			list_entry.offset = 0;
-		} else {
-			auto prev_list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + segment->count - 1));
-			list_entry.offset = prev_list_entry.offset + prev_list_entry.length;
-		}
+		// we can reconstruct the offset from the length
 		Store<list_entry_t>(list_entry, (data_ptr_t)(list_offset_data + segment->count));
 
 		if (!is_null) {
@@ -486,13 +479,10 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 			list_offset_entry.length = 0;
 		}
 
-		// length and offset need to also be set for NULLs to create valid previous entries
-		if (segment->count == 0) {
-			list_offset_entry.offset = 0;
-		} else {
-			auto prev_list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + segment->count - 1));
-			list_offset_entry.offset = prev_list_entry.offset + prev_list_entry.length;
-		}
+		// length and offset need to also be set for NULLs to create valid entries
+		// offset is not significant for the result, since it will be reconstructed from the lengths of the individual
+		// lists
+		list_offset_entry.offset = 0;
 		Store<list_entry_t>(list_offset_entry, (data_ptr_t)(list_offset_data + segment->count));
 
 	} else if (input.GetType().id() == LogicalTypeId::STRUCT) {
@@ -552,34 +542,42 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 		auto aggr_vector_data = FlatVector::GetData(result);
 		auto list_offset_data = GetListOffsetData(segment);
 
+		idx_t offset = 0;
 		for (idx_t i = 0; i < segment->count; i++) {
 			if (!null_mask[i]) {
 				auto list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
-				auto substr = str.substr(list_entry.offset, list_entry.length);
-				auto str_t = StringVector::AddString(result, substr);
+				auto substr = str.substr(offset, list_entry.length);
+				auto str_t = StringVector::AddStringOrBlob(result, substr);
 				((string_t *)aggr_vector_data)[total_count + i] = str_t;
+				offset += list_entry.length;
 			}
 		}
 
 	} else if (result.GetType().id() == LogicalTypeId::LIST) {
 		auto list_vector_data = FlatVector::GetData<list_entry_t>(result);
 
-		// set offsets
+		// get the starting offset for the entries of this segment
 		auto list_offset_data = GetListOffsetData(segment);
+		idx_t offset = 0;
+		if (total_count != 0) {
+			offset = list_vector_data[total_count - 1].offset + list_vector_data[total_count - 1].length;
+		}
+		idx_t starting_offset = offset;
+
+		// set offsets
 		for (idx_t i = 0; i < segment->count; i++) {
-			if (aggr_vector_validity.RowIsValid(total_count + i)) {
-				auto list_offset_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
-				list_vector_data[total_count + i].length = list_offset_entry.length;
-				list_vector_data[total_count + i].offset = list_offset_entry.offset;
-			}
+			auto list_offset_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
+			list_vector_data[total_count + i].length = list_offset_entry.length;
+			list_vector_data[total_count + i].offset = offset;
+			offset += list_offset_entry.length;
 		}
 
 		auto &child_vector = ListVector::GetEntry(result);
 		auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
-		ListVector::Reserve(result, linked_child_list.total_capacity);
+		ListVector::Reserve(result, offset);
 
 		// recurse into the linked list of child values
-		BuildListVector(&linked_child_list, child_vector);
+		BuildListVector(&linked_child_list, child_vector, starting_offset);
 
 	} else if (result.GetType().id() == LogicalTypeId::STRUCT) {
 		auto &children = StructVector::GetEntries(result);
@@ -602,9 +600,9 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 	}
 }
 
-void ListFun::BuildListVector(LinkedList *linked_list, Vector &result) {
+void ListFun::BuildListVector(LinkedList *linked_list, Vector &result, idx_t &initial_total_count) {
 
-	idx_t total_count = 0;
+	idx_t total_count = initial_total_count;
 	while (linked_list->first_segment) {
 		auto segment = linked_list->first_segment;
 		GetDataFromSegment(segment, result, total_count);
@@ -749,7 +747,8 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &, Vector &res
 		auto &aggr_vector_validity = FlatVector::Validity(aggr_vector);
 		aggr_vector_validity.Initialize(total_capacity);
 
-		ListFun::BuildListVector(state->linked_list, aggr_vector);
+		idx_t total_count = 0;
+		ListFun::BuildListVector(state->linked_list, aggr_vector, total_count);
 		ListVector::Append(result, aggr_vector, total_capacity);
 	}
 }
