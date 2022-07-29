@@ -404,6 +404,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 	}
 
+	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
 	idx_t scanned = 0;
@@ -473,6 +474,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	    scan_state.current_metadata_group_ptr +
 	    (scan_state.position_in_group - offset_in_compression_group) * scan_state.current_width / 8;
 
+	//! Because FOR offsets all our values to be 0 or above, we can always skip sign extension here
 	bool skip_sign_extend = true;
 
 	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
