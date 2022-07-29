@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/function/cast_rules.hpp"
 
 #include <cmath>
 
@@ -633,37 +634,90 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 }
 
 //! Grows Decimal width/scale when appropriate
-static LogicalType DecimalSizeCheck(const LogicalType &bigger, const LogicalType &smaller) {
-	D_ASSERT(bigger.id() > smaller.id());
-	if (bigger.id() != LogicalTypeId::DECIMAL) {
-		return bigger;
+static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &right) {
+	D_ASSERT(left.id() == LogicalTypeId::DECIMAL || right.id() == LogicalTypeId::DECIMAL);
+	D_ASSERT(left.id() != right.id());
+
+	//! Make sure the 'right' is the DECIMAL type
+	if (left.id() == LogicalTypeId::DECIMAL) {
+		return DecimalSizeCheck(right, left);
 	}
-	D_ASSERT(smaller.id() != LogicalTypeId::DECIMAL);
-	auto width = DecimalType::GetWidth(bigger);
-	auto scale = DecimalType::GetScale(bigger);
+	auto width = DecimalType::GetWidth(right);
+	auto scale = DecimalType::GetScale(right);
 
 	uint8_t other_width;
 	uint8_t other_scale;
-	if (smaller.GetDecimalProperties(other_width, other_scale)) {
+	if (left.GetDecimalProperties(other_width, other_scale)) {
 		D_ASSERT(other_scale == 0);
 		const auto effective_width = width - scale;
 		if (other_width > effective_width) {
+			auto new_width = other_width + scale;
+			if (new_width > DecimalType::MaxWidth()) {
+				throw InvalidInputException(
+				    "Tried to create a type of DECIMAL(%d,%d) which exceeds the maximum width of %d", new_width, scale,
+				    DecimalType::MaxWidth());
+			}
 			return LogicalType::DECIMAL(other_width + scale, scale);
 		}
 	}
-	return bigger;
+	return right;
+}
+
+static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalType &right) {
+	D_ASSERT(left.id() != right.id());
+	if (left.id() > right.id()) {
+		// this method is symmetric
+		// arrange it so the left type is smaller to limit the number of options we need to check
+		return CombineNumericTypes(right, left);
+	}
+	if (CastRules::ImplicitCast(left, right) >= 0) {
+		// we can implicitly cast left to right, return right
+		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
+		if (right.id() == LogicalTypeId::DECIMAL) {
+			return DecimalSizeCheck(left, right);
+		}
+		return right;
+	}
+	if (CastRules::ImplicitCast(right, left) >= 0) {
+		// we can implicitly cast right to left, return left
+		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
+		if (left.id() == LogicalTypeId::DECIMAL) {
+			return DecimalSizeCheck(right, left);
+		}
+		return left;
+	}
+	// we can't cast implicitly either way and types are not equal
+	// this happens when left is signed and right is unsigned
+	// e.g. INTEGER and UINTEGER
+	// in this case we need to upcast to make sure the types fit
+
+	if (left.id() == LogicalTypeId::BIGINT || right.id() == LogicalTypeId::UBIGINT) {
+		return LogicalType::HUGEINT;
+	}
+	if (left.id() == LogicalTypeId::INTEGER || right.id() == LogicalTypeId::UINTEGER) {
+		return LogicalType::BIGINT;
+	}
+	if (left.id() == LogicalTypeId::SMALLINT || right.id() == LogicalTypeId::USMALLINT) {
+		return LogicalType::INTEGER;
+	}
+	if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::UTINYINT) {
+		return LogicalType::SMALLINT;
+	}
+	throw InternalException("Cannot combine these numeric types!?");
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	if (left.id() == LogicalTypeId::UNKNOWN) {
+	if (left.id() != right.id() && left.IsNumeric() && right.IsNumeric()) {
+		return CombineNumericTypes(left, right);
+	} else if (left.id() == LogicalTypeId::UNKNOWN) {
 		return right;
 	} else if (right.id() == LogicalTypeId::UNKNOWN) {
 		return left;
 	} else if (left.id() < right.id()) {
-		return DecimalSizeCheck(right, left);
+		return right;
 	}
 	if (right.id() < left.id()) {
-		return DecimalSizeCheck(left, right);
+		return left;
 	}
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
