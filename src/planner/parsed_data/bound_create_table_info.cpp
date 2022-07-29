@@ -4,17 +4,33 @@
 #include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
-// TODO[YLM]: Review if we want/need to serialize more of the fields.
 void BoundCreateTableInfo::Serialize(Serializer &serializer) const {
   D_ASSERT(schema);
   schema->Serialize(serializer);
   serializer.WriteOptional(base);
 
+  // TODO[YLM]: Review if we want/need to serialize more of the fields.
+  //! The map of column names -> column index, used during binding
+	// case_insensitive_map_t<column_t> name_map;
+
+	//! Column dependency manager of the table
+	// ColumnDependencyManager column_dependency_manager;
+
 	serializer.WriteList(constraints);
 	serializer.WriteList(bound_constraints);
 	serializer.WriteList(bound_defaults);
 
-	serializer.WriteOptional(query);
+  //! Dependents of the table (in e.g. default values)
+	// unordered_set<CatalogEntry *> dependencies;
+
+	//! The existing table data on disk (if any)
+	// unique_ptr<PersistentTableData> data;
+
+  //! CREATE TABLE from QUERY
+  serializer.WriteOptional(query);
+
+	//! Indexes created by this table <Block_ID, Offset>
+	// vector<BlockPointer> indexes;
 }
 
 unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer &source, ClientContext& context) {
