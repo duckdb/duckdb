@@ -6,18 +6,18 @@
  * public APIs to be prefixed.  This makes it possible, with some care, to use
  * multiple allocators simultaneously.
  */
-#define JEMALLOC_PREFIX "je_"
-#define JEMALLOC_CPREFIX "JE_"
+// #define JEMALLOC_PREFIX "je_"
+// #define JEMALLOC_CPREFIX "JE_"
 
 /*
  * Define overrides for non-standard allocator-related functions if they are
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE___LIBC_CALLOC */
-/* #undef JEMALLOC_OVERRIDE___LIBC_FREE */
-/* #undef JEMALLOC_OVERRIDE___LIBC_MALLOC */
+#define JEMALLOC_OVERRIDE___LIBC_FREE
+#define JEMALLOC_OVERRIDE___LIBC_MALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_MEMALIGN */
-/* #undef JEMALLOC_OVERRIDE___LIBC_REALLOC */
+#define JEMALLOC_OVERRIDE___LIBC_REALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_VALLOC */
 /* #undef JEMALLOC_OVERRIDE___POSIX_MEMALIGN */
 
@@ -48,24 +48,24 @@
 #define JEMALLOC_C11_ATOMICS 
 
 /* Defined if GCC __atomic atomics are available. */
-#define JEMALLOC_GCC_ATOMIC_ATOMICS 
+#define JEMALLOC_GCC_ATOMIC_ATOMICS
 /* and the 8-bit variant support. */
-#define JEMALLOC_GCC_U8_ATOMIC_ATOMICS 
+#define JEMALLOC_GCC_U8_ATOMIC_ATOMICS
 
 /* Defined if GCC __sync atomics are available. */
-#define JEMALLOC_GCC_SYNC_ATOMICS 
+#define JEMALLOC_GCC_SYNC_ATOMICS
 /* and the 8-bit variant support. */
-#define JEMALLOC_GCC_U8_SYNC_ATOMICS 
+#define JEMALLOC_GCC_U8_SYNC_ATOMICS
 
 /*
  * Defined if __builtin_clz() and __builtin_clzl() are available.
  */
-#define JEMALLOC_HAVE_BUILTIN_CLZ 
+// #define JEMALLOC_HAVE_BUILTIN_CLZ
 
 /*
  * Defined if os_unfair_lock_*() functions are available, as provided by Darwin.
  */
-#define JEMALLOC_OS_UNFAIR_LOCK 
+// #define JEMALLOC_OS_UNFAIR_LOCK
 
 /* Defined if syscall(2) is usable. */
 /* #undef JEMALLOC_USE_SYSCALL */
@@ -78,7 +78,7 @@
 /*
  * Defined if issetugid(2) is available.
  */
-#define JEMALLOC_HAVE_ISSETUGID 
+// #define JEMALLOC_HAVE_ISSETUGID
 
 /* Defined if pthread_atfork(3) is available. */
 #define JEMALLOC_HAVE_PTHREAD_ATFORK 
@@ -105,7 +105,7 @@
 /*
  * Defined if mach_absolute_time() is available.
  */
-#define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME 
+// #define JEMALLOC_HAVE_MACH_ABSOLUTE_TIME
 
 /*
  * Defined if clock_gettime(CLOCK_REALTIME, ...) is available.
@@ -263,7 +263,7 @@
 /*
  * Darwin (OS X) uses zones to work around Mach-O symbol override shortcomings.
  */
-#define JEMALLOC_ZONE 
+//#define JEMALLOC_ZONE
 
 /*
  * Methods for determining whether the OS overcommits.
@@ -341,7 +341,7 @@
 /*
  * Defined if malloc_size is supported
  */
-#define JEMALLOC_HAVE_MALLOC_SIZE 
+//#define JEMALLOC_HAVE_MALLOC_SIZE
 
 /* Define if operating system has alloca.h header. */
 /* #undef JEMALLOC_HAS_ALLOCA_H */
@@ -355,14 +355,21 @@
 /* sizeof(int) == 2^LG_SIZEOF_INT. */
 #define LG_SIZEOF_INT 2
 
+// Include limits, so we can try to figure out the size of a long
+#include <limits.h>
+
 /* sizeof(long) == 2^LG_SIZEOF_LONG. */
+#if ULONG_MAX > UINT_MAX
 #define LG_SIZEOF_LONG 3
+#else
+#define LG_SIZEOF_LONG 2
+#endif
 
 /* sizeof(long long) == 2^LG_SIZEOF_LONG_LONG. */
 #define LG_SIZEOF_LONG_LONG 3
 
 /* sizeof(intmax_t) == 2^LG_SIZEOF_INTMAX_T. */
-#define LG_SIZEOF_INTMAX_T 3
+#define LG_SIZEOF_INTMAX_T sizeof(intmax_t)
 
 /* glibc malloc hooks (__malloc_hook, __realloc_hook, __free_hook). */
 /* #undef JEMALLOC_GLIBC_MALLOC_HOOK */
@@ -420,7 +427,7 @@
 /* #undef JEMALLOC_UAF_DETECTION */
 
 /* Darwin VM_MAKE_TAG support */
-#define JEMALLOC_HAVE_VM_MAKE_TAG 
+//#define JEMALLOC_HAVE_VM_MAKE_TAG
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */

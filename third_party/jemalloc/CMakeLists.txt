@@ -80,8 +80,7 @@ add_library(
     src/thread_event.c
     src/ticker.c
     src/tsd.c
-    src/witness.c
-    src/zone.c)
+    src/witness.c)
 
 target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
 
