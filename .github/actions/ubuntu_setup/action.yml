@@ -21,7 +21,7 @@ runs:
 
     - name: Install aarch64 libs
       shell: bash
-      if: ${{ inputs.aarch64_libs}}
+      if: ${{ inputs.aarch64_libs }}
       run: |
         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
         cd /tmp
