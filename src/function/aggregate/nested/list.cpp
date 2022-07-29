@@ -507,6 +507,10 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 void ListFun::AppendRow(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector, LinkedList *linked_list,
                         Vector &input, idx_t &entry_idx, idx_t &count) {
 
+	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		input.Flatten(count);
+	}
+
 	auto segment = GetSegment(allocator, owning_vector, linked_list, input);
 	WriteDataToSegment(allocator, owning_vector, segment, input, entry_idx, count);
 
