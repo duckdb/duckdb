@@ -127,7 +127,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 			auto &aggregate = *wexpr.aggregate;
 			auto &statev = state.statev;
 			state.state_ptr = state.aggregate_states[expr_idx].data();
-			AggregateInputData aggr_input_data(wexpr.bind_info.get());
+			AggregateInputData aggr_input_data(wexpr.bind_info.get(), Allocator::DefaultAllocator());
 
 			// Check for COUNT(*)
 			if (wexpr.children.empty()) {
