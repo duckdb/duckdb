@@ -7,6 +7,7 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	for (auto &entry : insert_values) {
 		writer.WriteSerializableList(entry);
 	}
+
 	writer.WriteList<idx_t>(column_index_map);
 	writer.WriteRegularSerializableList(expected_types);
 	table->Serialize(writer.GetSerializer());
@@ -19,28 +20,28 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
                                                        FieldReader &reader) {
 	auto insert_values_size = reader.ReadRequired<idx_t>();
 	vector<vector<unique_ptr<Expression>>> insert_values;
-	for (idx_t i = 0; i < insert_values_size; i++) {
+	for (idx_t i = 0; i < insert_values_size; ++i) {
 		insert_values.push_back(reader.ReadRequiredSerializableList<Expression>(context));
 	}
+
 	auto column_index_map = reader.ReadRequiredList<idx_t>();
 	auto expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);
 
-	auto name = reader.ReadRequired<string>();
 	auto &catalog = Catalog::GetCatalog(context);
 
-	auto table_catalog = catalog.GetEntry(context, DEFAULT_SCHEMA, name);
+	TableCatalogEntry* table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
-	if (!table_catalog || table_catalog->type != CatalogType::TABLE_ENTRY) {
-		throw InternalException("Cant find catalog entry for table %s", name);
+	if (!table_catalog_entry) {
+		throw InternalException("Cant find catalog entry for table %s", info->table);
 	}
 
-	auto table = (TableCatalogEntry *)table_catalog;
-	auto result = make_unique<LogicalInsert>(table);
+	auto result = make_unique<LogicalInsert>(table_catalog_entry);
 	result->type = type;
-	result->table = table;
+	result->table = table_catalog_entry;
 	result->table_index = table_index;
 	result->return_chunk = return_chunk;
 	result->insert_values = move(insert_values);

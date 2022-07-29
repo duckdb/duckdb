@@ -139,3 +139,7 @@ TEST_CASE("Test logical_empty_result", "[serialization]") {
 TEST_CASE("Test create_table", "[serialization]") {
 	test_helper("CREATE TABLE tbl (foo INTEGER)");
 }
+
+TEST_CASE("Test insert_into", "[serialization]") {
+	test_helper("INSERT INTO tbl VALUES(1)", {"CREATE TABLE tbl (foo INTEGER)"});
+}
