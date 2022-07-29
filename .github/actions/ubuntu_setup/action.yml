@@ -4,20 +4,17 @@ inputs:
   openssl:
     description: 'OpenSSL'
     default: 0
-  ubuntu_version:
-    description: 'Switch between setup for ubuntu 16.04 or 18.04'
-    default: 16
 runs:
   using: "composite"
   steps:
     - name: Install
       shell: bash
       run: |
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get update -y -qq
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get install -y -qq software-properties-common
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}add-apt-repository ppa:git-core/ppa
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get update -y -qq
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev
 
 
     - name: Install Git 2.18.5
@@ -27,7 +24,7 @@ runs:
         tar xvf v2.18.5.tar.gz
         cd git-2.18.5
         make
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}make prefix=/usr install
+        make prefix=/usr install
         git --version
 
     - uses: actions/checkout@v3
@@ -43,7 +40,7 @@ runs:
         mkdir -p pythonbin
         ./configure --with-ensurepip=install
         make -j
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}make install
+        make install
         python3.7 --version
         python3.7 -m pip install pip
         python3.7 -m pip install requests awscli
@@ -53,7 +50,7 @@ runs:
       run: |
         wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
         chmod +x cmake-3.21.3-linux-x86_64.sh
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
         cmake --version
 
     - name: Install OpenSSL 1.1.1
@@ -65,8 +62,8 @@ runs:
         cd openssl-1.1.1c
         ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl no-shared zlib-dynamic
         make
-        ${{ inputs.inputs.ubuntu_version == '18' && 'sudo ' || ''}}make install
-        ${{ inputs.inputs.ubuntu_version == '18' && 'sudo ' || ''}}echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
+        make install
+        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
         ldconfig -v
 
     - name: Version Check
