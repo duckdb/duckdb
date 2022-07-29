@@ -27,6 +27,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'jemalloc', 'include')]
+    includes += [os.path.join('third_party', 'jemalloc', 'include', 'jemalloc', 'internal')]
     return includes
 
 def third_party_sources():
