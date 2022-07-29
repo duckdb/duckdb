@@ -2,6 +2,7 @@ add_subdirectory(expression)
 add_subdirectory(binder)
 add_subdirectory(expression_binder)
 add_subdirectory(filter)
+add_subdirectory(parsed_data)
 add_subdirectory(operator)
 add_subdirectory(subquery)
 

@@ -31,8 +31,32 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
+protected:
+	void SerializeChild(Serializer &serializer) const override {
+		FieldWriter writer(serializer);
+		writer.WriteString(table);
+		writer.WriteRegularSerializableList(columns);
+		writer.WriteSerializableList(constraints);
+		writer.WriteOptional(query);
+		writer.Finalize();
+	}
 
 public:
+	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer) {
+		// auto result = CreateInfo::Deserialize(deserializer);
+		auto result = make_unique<CreateTableInfo>();
+		result->DeserializeBase(deserializer);
+
+		FieldReader reader(deserializer);
+		result->table = reader.ReadRequired<string>();
+		result->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
+		result->constraints = reader.ReadRequiredSerializableList<Constraint>();
+		result->query = reader.ReadOptional<SelectStatement>(nullptr);
+		reader.Finalize();
+
+		return result;
+	}
+
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateTableInfo>(schema, table);
 		CopyProperties(*result);

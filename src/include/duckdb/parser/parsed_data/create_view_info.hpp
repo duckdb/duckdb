@@ -38,6 +38,12 @@ public:
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 		return move(result);
 	}
+
+protected:
+	void SerializeChild(Serializer &) const override {
+		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	}
+
 };
 
 } // namespace duckdb

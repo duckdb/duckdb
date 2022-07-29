@@ -122,3 +122,7 @@ TEST_CASE("Test logical_explain", "[serialization]") {
 TEST_CASE("Test logical_empty_result", "[serialization]") {
 	test_helper("SELECT * FROM (SELECT 42) WHERE 1>2");
 }
+
+TEST_CASE("Test create_table", "[serialization]") {
+	test_helper("CREATE TABLE tbl (foo INTEGER)");
+}
