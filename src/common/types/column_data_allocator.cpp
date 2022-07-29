@@ -1,7 +1,6 @@
 #include "duckdb/common/types/column_data_allocator.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/column_data_collection_segment.hpp"
-#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -47,10 +46,16 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		// in-memory allocator
 		auto allocated = alloc.allocator->Allocate(size);
-		auto buffer_ptr = make_buffer<AllocatedVectorBuffer>(move(allocated));
-		block_id = allocated_data.size();
-		offset = NumericLimits<uint32_t>::Maximum();
-		allocated_data.push_back(move(buffer_ptr));
+		auto pointer_value = uintptr_t(allocated.get());
+		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+			block_id = uint32_t(pointer_value);
+		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+			block_id = uint32_t(pointer_value & 0xFFFFFFFF);
+			offset = uint32_t(pointer_value >> 32);
+		} else {
+			throw InternalException("ColumnDataCollection: Architecture not supported!?");
+		}
+		allocated_data.push_back(move(allocated));
 		return;
 	}
 	if (blocks.empty() || blocks.back().Capacity() < size) {
@@ -77,27 +82,18 @@ void ColumnDataAllocator::Initialize(ColumnDataAllocator &other) {
 data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset) {
 	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
 		// in-memory allocator: construct pointer from block_id and offset
-		D_ASSERT(block_id < allocated_data.size());
-		auto &allocated_buffer = (AllocatedVectorBuffer &)*allocated_data[block_id];
-		return allocated_buffer.GetAllocatedData().get();
+		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+			uintptr_t pointer_value = uintptr_t(block_id);
+			return (data_ptr_t)pointer_value;
+		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+			uintptr_t pointer_value = (uintptr_t(offset) << 32) | uintptr_t(block_id);
+			return (data_ptr_t)pointer_value;
+		} else {
+			throw InternalException("ColumnDataCollection: Architecture not supported!?");
+		}
 	}
 	D_ASSERT(state.handles.find(block_id) != state.handles.end());
 	return state.handles[block_id].Ptr() + offset;
-}
-
-void ColumnDataAllocator::AssignVectorBuffer(ChunkManagementState &state, uint32_t block_id, uint32_t offset,
-                                             Vector &result) {
-	if (type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
-		D_ASSERT(block_id < allocated_data.size());
-		auto aux = result.GetAuxiliary();
-		if (aux) {
-			auto extra_aux = make_unique<VectorBufferAuxiliaryData>(allocated_data[block_id]);
-			D_ASSERT(!aux->GetAuxiliaryData());
-			aux->SetAuxiliaryData(move(extra_aux));
-		} else {
-			result.SetAuxiliary(allocated_data[block_id]);
-		}
-	}
 }
 
 Allocator &ColumnDataAllocator::GetAllocator() {

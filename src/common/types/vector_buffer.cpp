@@ -100,11 +100,4 @@ ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
 ManagedVectorBuffer::~ManagedVectorBuffer() {
 }
 
-AllocatedVectorBuffer::AllocatedVectorBuffer(AllocatedData data_p)
-    : VectorBuffer(VectorBufferType::ALLOCATED_BUFFER), data(move(data_p)) {
-}
-
-AllocatedVectorBuffer::~AllocatedVectorBuffer() {
-}
-
 } // namespace duckdb

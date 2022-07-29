@@ -119,7 +119,6 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
 		FlatVector::Validity(result).Initialize(validity_data);
-		allocator->AssignVectorBuffer(state, vdata.block_id, vdata.offset, result);
 		return vdata.count;
 	}
 
