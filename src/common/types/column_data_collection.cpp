@@ -577,21 +577,23 @@ void ColumnDataCollection::Append(DataChunk &input) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void ColumnDataCollection::InitializeScan(ColumnDataScanState &state) const {
+void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, ColumnDataScanProperties properties) const {
 	vector<column_t> column_ids;
 	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
 		column_ids.push_back(i);
 	}
-	InitializeScan(state, move(column_ids));
+	InitializeScan(state, move(column_ids), properties);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids) const {
+void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
+                                          ColumnDataScanProperties properties) const {
 	state.chunk_index = 0;
 	state.segment_index = 0;
 	state.current_row_index = 0;
 	state.next_row_index = 0;
 	state.current_chunk_state.handles.clear();
+	state.properties = properties;
 	state.column_ids = move(column_ids);
 }
 
@@ -617,6 +619,7 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 		}
 	}
 	auto &segment = *segments[segment_index];
+	lstate.current_chunk_state.properties = state.scan_state.properties;
 	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
 	lstate.current_row_index = row_index;
 	result.Verify();

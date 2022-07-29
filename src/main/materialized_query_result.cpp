@@ -71,7 +71,8 @@ unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 	auto result = make_unique<DataChunk>();
 	collection->InitializeScanChunk(*result);
 	if (!scan_initialized) {
-		collection->InitializeScan(scan_state);
+		// we disallow zero copy so the chunk is independently usable even after the result is destroyed
+		collection->InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 		scan_initialized = true;
 	}
 	collection->Scan(scan_state, *result);

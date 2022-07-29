@@ -115,7 +115,7 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 
 	auto base_ptr = allocator->GetDataPointer(state, vdata.block_id, vdata.offset);
 	auto validity_data = GetValidityPointer(base_ptr, type_size);
-	if (!vdata.next_data.IsValid()) {
+	if (!vdata.next_data.IsValid() && state.properties != ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
 		// no next data, we can do a zero-copy read of this vector
 		FlatVector::SetData(result, base_ptr);
 		FlatVector::Validity(result).Initialize(validity_data);
@@ -187,6 +187,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 void ColumnDataCollectionSegment::ReadChunk(idx_t chunk_index, ChunkManagementState &state, DataChunk &chunk,
                                             const vector<column_t> &column_ids) {
 	D_ASSERT(chunk.ColumnCount() == column_ids.size());
+	D_ASSERT(state.properties != ColumnDataScanProperties::INVALID);
 	InitializeChunkState(chunk_index, state);
 	auto &chunk_meta = chunk_data[chunk_index];
 	for (idx_t i = 0; i < column_ids.size(); i++) {

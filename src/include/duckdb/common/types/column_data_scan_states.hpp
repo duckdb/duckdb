@@ -15,10 +15,27 @@
 
 namespace duckdb {
 
-enum class ColumnDataAllocatorType { BUFFER_MANAGER_ALLOCATOR, IN_MEMORY_ALLOCATOR };
+enum class ColumnDataAllocatorType : uint8_t {
+	//! Use a buffer manager to allocate large chunks of memory that vectors then use
+	BUFFER_MANAGER_ALLOCATOR,
+	//! Use an in-memory allocator, allocating data for every chunk
+	//! This causes the column data collection to behave similar to the old chunk collection
+	IN_MEMORY_ALLOCATOR
+};
+
+enum class ColumnDataScanProperties : uint8_t {
+	INVALID,
+	//! Allow zero copy scans - this introduces a dependency on the resulting vector on the scan state of the column
+	//! data collection, which means vectors might not be valid anymore after the next chunk is scanned.
+	ALLOW_ZERO_COPY,
+	//! Disallow zero-copy scans, always copying data into the target vector
+	//! As a result, data scanned will be valid even after the column data collection is destroyed
+	DISALLOW_ZERO_COPY
+};
 
 struct ChunkManagementState {
 	unordered_map<idx_t, BufferHandle> handles;
+	ColumnDataScanProperties properties = ColumnDataScanProperties::INVALID;
 };
 
 struct ColumnDataAppendState {
@@ -32,6 +49,7 @@ struct ColumnDataScanState {
 	idx_t chunk_index;
 	idx_t current_row_index;
 	idx_t next_row_index;
+	ColumnDataScanProperties properties;
 	vector<column_t> column_ids;
 };
 
