@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-//! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that ceratin parts of
+//! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that certain parts of
 //! the tree will always return an empty result.
 class LogicalEmptyResult : public LogicalOperator {
 	LogicalEmptyResult();
