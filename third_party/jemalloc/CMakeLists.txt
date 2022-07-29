@@ -85,6 +85,9 @@ add_library(
 
 target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
 
+# Need to include this so that RTLD_NEXT is defined
+target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
+
 target_include_directories(duckdb_jemalloc PUBLIC
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/${JEMALLOC_INCLUDE_PREFIX}>)
