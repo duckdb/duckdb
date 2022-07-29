@@ -81,4 +81,12 @@ void Node256::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
+void Node256::Merge(Node *l_node, Node *r_node) {
+
+	Node256 *l_n = (Node256 *)l_node;
+	Node256 *r_n = (Node256 *)r_node;
+
+	// TODO
+}
+
 } // namespace duckdb

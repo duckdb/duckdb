@@ -98,4 +98,32 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
+void Leaf::Merge(Node *l_node, Node *r_node) {
+
+	Leaf *n = (Leaf *)l_node;
+
+	switch (r_node->type) {
+	case NodeType::NLeaf: {
+		// TODO
+		break;
+	}
+	case NodeType::N4: {
+		// TODO
+		break;
+	}
+	case NodeType::N16: {
+		// TODO
+		break;
+	}
+	case NodeType::N48: {
+		// TODO
+		break;
+	}
+	case NodeType::N256: {
+		// TODO
+		break;
+	}
+	}
+}
+
 } // namespace duckdb

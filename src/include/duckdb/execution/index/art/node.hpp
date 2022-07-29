@@ -15,7 +15,7 @@
 #include "duckdb/storage/index.hpp"
 
 namespace duckdb {
-enum class NodeType : uint8_t { N4 = 0, N16 = 1, N48 = 2, N256 = 3, NLeaf = 4 };
+enum class NodeType : uint8_t { NLeaf = 0, N4 = 1, N16 = 2, N48 = 3, N256 = 4 };
 class ART;
 class Node;
 
@@ -106,6 +106,11 @@ public:
 	static void InsertLeaf(Node *&node, uint8_t key, Node *new_node);
 	//! Erase entry from node
 	static void Erase(Node *&node, idx_t pos, ART &art);
+
+	//! Resolve the prefixes of two nodes and then merge them
+	static void ResolvePrefixesAndMerge(Node *l_node, Node *r_node);
+	//! Merge two nodes with matching prefixes
+	static void Merge(Node *l_node, Node *r_node);
 
 protected:
 	//! Copies the prefix from the source to the destination node

@@ -122,4 +122,24 @@ void Node16::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
+void Node16::Merge(Node *l_node, Node *r_node) {
+
+	Node16 *n = (Node16 *)l_node;
+
+	switch (r_node->type) {
+	case NodeType::N16: {
+		// TODO
+		break;
+	}
+	case NodeType::N48: {
+		// TODO
+		break;
+	}
+	case NodeType::N256: {
+		// TODO
+		break;
+	}
+	}
+}
+
 } // namespace duckdb

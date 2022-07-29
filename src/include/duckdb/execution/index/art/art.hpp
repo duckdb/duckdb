@@ -114,6 +114,9 @@ public:
 	//! Serialized the ART
 	BlockPointer Serialize(duckdb::MetaBlockWriter &writer) override;
 
+	//! Merge two ARTs
+	void Merge(ART &other_art);
+
 private:
 	//! Insert a row id into a leaf node
 	bool InsertToLeaf(Leaf &leaf, row_t row_id);

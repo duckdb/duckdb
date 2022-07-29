@@ -30,6 +30,9 @@ public:
 	void Insert(row_t row_id);
 	void Remove(row_t row_id);
 
+	//! Merge two leaves with matching prefixes
+	static void Merge(Node *l_node, Node *r_node);
+
 	BlockPointer SerializeLeaf(duckdb::MetaBlockWriter &writer);
 
 	static Leaf *Deserialize(duckdb::MetaBlockReader &reader, uint32_t value_length);

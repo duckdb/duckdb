@@ -289,4 +289,110 @@ BlockPointer SwizzleablePointer::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 	}
 }
 
+void Node::ResolvePrefixesAndMerge(Node *l_node, Node *r_node) {
+
+	// make sure that this node has a shorter or equal prefix length than other_node
+	if (l_node->prefix_length > r_node->prefix_length) {
+		Node::ResolvePrefixesAndMerge(r_node, l_node);
+		return;
+	}
+
+	// get first mismatch position
+	auto mismatch_pos = l_node->prefix_length;
+	for (idx_t i = 0; i < l_node->prefix_length; i++) {
+		if (l_node->prefix[i] != r_node->prefix[i]) {
+			mismatch_pos = i;
+			break;
+		}
+	}
+
+	// no prefix or same prefix
+	if (mismatch_pos == l_node->prefix_length && l_node->prefix_length == r_node->prefix_length) {
+		Node::Merge(l_node, r_node);
+
+	} else if (mismatch_pos == l_node->prefix_length) {
+		// other_node's prefix contains this node's prefix
+
+		// update the prefix of r_node to only contain the bytes after mismatch_pos
+		r_node->prefix_length -= (mismatch_pos + 1);
+		memmove(r_node->prefix.get(), r_node->prefix.get() + mismatch_pos + 1, r_node->prefix_length);
+
+		// test if the next byte in r_node (longer prefix) exists in l_node
+		auto child_pos = l_node->GetChildPos(r_node->prefix[mismatch_pos]);
+		if (child_pos == DConstants::INVALID_INDEX) {
+			// TODO: set r_node as the child of l_node
+			// TODO: for this we need to have a reference to the ART in this function (for pointer swizzling)
+		} else {
+			// TODO: merge the child of l_node at child_pos with r_node (ResolvePrefixesAndMerge)
+		}
+
+	} else {
+		// prefixes differ, create new node and insert both nodes as children
+
+		// create new node
+		Node *new_node = new Node4(mismatch_pos);
+		new_node->prefix_length = mismatch_pos;
+		memcpy(new_node->prefix.get(), l_node->prefix.get(), mismatch_pos);
+
+		// insert l_node, break up prefix of l_node
+		Node4::Insert(new_node, l_node->prefix[mismatch_pos], l_node);
+		l_node->prefix_length -= (mismatch_pos + 1);
+		memmove(l_node->prefix.get(), l_node->prefix.get() + mismatch_pos + 1, l_node->prefix_length);
+
+		// insert r_node, break up prefix of r_node
+		Node4::Insert(new_node, r_node->prefix[mismatch_pos], r_node);
+		r_node->prefix_length -= (mismatch_pos + 1);
+		memmove(r_node->prefix.get(), r_node->prefix.get() + mismatch_pos + 1, r_node->prefix_length);
+
+		l_node = new_node;
+	}
+}
+
+void Merge(Node *l_node, Node *r_node) {
+
+	// make sure that the smaller node is l_node
+	if (l_node->type > r_node->type) {
+		Merge(r_node, l_node);
+		return;
+	}
+
+	switch (l_node->type) {
+	case NodeType::NLeaf: {
+		// leaf - leaf
+		// leaf - n4
+		// leaf - n16
+		// leaf - n48
+		// leaf - n256
+		Leaf::Merge(l_node, r_node);
+		break;
+	}
+	case NodeType::N4: {
+		// n4 - n4
+		// n4 - n16
+		// n4 - n48
+		// n4 - n256
+		Node4::Merge(l_node, r_node);
+		break;
+	}
+	case NodeType::N16: {
+		// n16 - n16
+		// n16 - n48
+		// n16 - n256
+		Node16::Merge(l_node, r_node);
+		break;
+	}
+	case NodeType::N48: {
+		// n48 - n48
+		// n48 - n256
+		Node48::Merge(l_node, r_node);
+		break;
+	}
+	case NodeType::N256: {
+		// n256 - n256
+		Node256::Merge(l_node, r_node);
+		break;
+	}
+	}
+}
+
 } // namespace duckdb

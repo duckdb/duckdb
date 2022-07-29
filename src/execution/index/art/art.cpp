@@ -935,4 +935,9 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
+void ART::Merge(ART &other_art) {
+
+	Node::Merge(this->tree, other_art.tree);
+}
+
 } // namespace duckdb

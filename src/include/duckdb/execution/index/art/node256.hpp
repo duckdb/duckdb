@@ -37,5 +37,8 @@ public:
 
 	//! Shrink to node 48
 	static void Erase(Node *&node, int pos, ART &art);
+
+	//! Merge two nodes with matching prefixes
+	static void Merge(Node *l_node, Node *r_node);
 };
 } // namespace duckdb
