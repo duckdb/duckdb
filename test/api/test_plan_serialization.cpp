@@ -96,3 +96,7 @@ TEST_CASE("Test logical_any_join", "[serialization]") {
 TEST_CASE("Test logical_show", "[serialization]") {
 	test_helper("SHOW SELECT 42");
 }
+
+TEST_CASE("Test bound_comparison_expression", "[serialization]") {
+	test_helper("SELECT COUNT(*) FILTER (WHERE i = 1) FROM (SELECT 42 as i)");
+}
