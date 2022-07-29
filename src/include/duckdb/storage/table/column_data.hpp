@@ -114,7 +114,7 @@ public:
 	virtual void CommitDropColumn();
 
 	virtual void DetectBestCompressionMethod(RowGroup &row_group, TableDataWriter &writer,
-	                                             ColumnCheckpointInfo &checkpoint_info);
+	                                         ColumnCheckpointInfo &checkpoint_info);
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
 	                                                     ColumnCheckpointInfo &checkpoint_info);

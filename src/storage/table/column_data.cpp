@@ -369,7 +369,7 @@ void ColumnData::DetectBestCompressionMethod(RowGroup &row_group, TableDataWrite
 	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
 	idx_t compression_idx_p;
 
-	checkpointer.DetectBestCompressionMethod(compression_idx_p, false);
+	checkpointer.DetectBestCompressionMethod(compression_idx_p, (ColumnSegment *)data.root_node.get());
 }
 
 unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,

@@ -36,7 +36,8 @@ bool RowGroupSortBindData::Equals(const FunctionData &other) const {
 RowGroupSortBindData::~RowGroupSortBindData() {
 }
 
-RLESort::RLESort(RowGroup &row_group, DataTable &data_table, TableDataWriter &writer, vector<ColumnCheckpointInfo> &infos)
+RLESort::RLESort(RowGroup &row_group, DataTable &data_table, TableDataWriter &writer,
+                 vector<ColumnCheckpointInfo> &infos)
     : row_group(row_group), data_table(data_table), writer(writer), old_count(row_group.count) {
 	// Reorder columns to optimize RLE Compression - We skip if the table has indexes or is empty
 	if (row_group.db.config.force_compression_sorting && row_group.count != 0 && row_group.table_info.indexes.Empty()) {
@@ -317,8 +318,8 @@ void RLESort::Sort(vector<ColumnCheckpointInfo> &infos) {
 	ReplaceRowGroup(*sorted_rowgroup);
 
 	// TODO: Uncomment once unified DetectBestCompressionMethod is fixed
-//	if (NewScoresBetter(*sorted_rowgroup, infos)) {
-//		ReplaceRowGroup(*sorted_rowgroup);
-//	}
+	//	if (NewScoresBetter(*sorted_rowgroup, infos)) {
+	//		ReplaceRowGroup(*sorted_rowgroup);
+	//	}
 }
 } // namespace duckdb

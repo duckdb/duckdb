@@ -676,14 +676,46 @@ void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
 	stats[column_idx]->statistics->Merge(other);
 }
 
+bool CompressionForTypeExists(PhysicalType type) {
+	switch (type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::LIST:
+	case PhysicalType::INTERVAL:
+	case PhysicalType::BIT:
+	case PhysicalType::VARCHAR:
+		return true;
+	default:
+		return false;
+	}
+}
+
 vector<ColumnCheckpointInfo> RowGroup::DetectBestCompressionMethodTable(TableDataWriter &writer) {
 	vector<ColumnCheckpointInfo> infos;
 
 	for (idx_t i = 0; i < columns.size(); i++) {
 		// Create checkpoint info and detect the compression method of the column
-		// Add the checkpoint info to a list to be used later during compression
+		// Add the checkpoint info to a list to be used later during compression in ColumnDataCheckpointer
 		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(i)};
-		columns[i]->DetectBestCompressionMethod(*this, writer, checkpoint_info);
+		if (CompressionForTypeExists(columns[i]->type.InternalType())) {
+			columns[i]->DetectBestCompressionMethod(*this, writer, checkpoint_info);
+		}
+		// We will scan this type later in the ColumnDataCheckpointer
+		else {
+			checkpoint_info.compression_idx = 0;
+			checkpoint_info.compression_type = CompressionType::COMPRESSION_AUTO;
+			checkpoint_info.score = 0;
+		}
 		infos.push_back(move(checkpoint_info));
 	}
 	return infos;
