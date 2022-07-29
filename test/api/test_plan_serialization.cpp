@@ -100,3 +100,7 @@ TEST_CASE("Test logical_show", "[serialization]") {
 TEST_CASE("Test bound_comparison_expression", "[serialization]") {
 	test_helper("SELECT COUNT(*) FILTER (WHERE i = 1) FROM (SELECT 42 as i)");
 }
+
+TEST_CASE("Test logical_filter", "[serialization]") {
+	test_helper("SELECT COUNT(*) FROM (SELECT 42 as i) HAVING COUNT(*) >= 1");
+}
