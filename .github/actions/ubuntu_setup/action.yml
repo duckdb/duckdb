@@ -17,7 +17,8 @@ runs:
         ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get install -y -qq software-properties-common
         ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}add-apt-repository ppa:git-core/ppa
         ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get update -y -qq
-        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl
+        ${{ inputs.ubuntu_version == '18' && 'sudo ' || ''}}apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev
+
 
     - name: Install Git 2.18.5
       shell: bash
