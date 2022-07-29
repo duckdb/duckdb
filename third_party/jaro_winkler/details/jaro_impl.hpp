@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: MIT */
 /* Copyright © 2022 Max Bachmann */
 
+#pragma once
+
 #include "common.hpp"
 #include "intrinsics.hpp"
 
