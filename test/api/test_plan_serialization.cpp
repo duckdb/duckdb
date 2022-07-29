@@ -18,7 +18,7 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 	DuckDB db;
 	Connection con(db);
 
-	for (const auto& fixture : fixtures) {
+	for (const auto &fixture : fixtures) {
 		con.SendQuery(fixture);
 	}
 
@@ -27,7 +27,7 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 	printf("\nParsed query '%s'\n", sql.c_str());
 
 	int i = 0;
-	for (auto& statement: p.statements) {
+	for (auto &statement : p.statements) {
 		con.context->transaction.BeginTransaction();
 		// Should that be the default "ToString"?
 		string statement_sql(statement->query.c_str() + statement->stmt_location, statement->stmt_length);

@@ -31,6 +31,7 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
+
 protected:
 	void SerializeChild(Serializer &serializer) const override {
 		FieldWriter writer(serializer);

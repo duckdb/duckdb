@@ -38,7 +38,6 @@ protected:
 	void SerializeChild(Serializer &) const override {
 		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(CreateInfo::type));
 	}
-
 };
 
 } // namespace duckdb

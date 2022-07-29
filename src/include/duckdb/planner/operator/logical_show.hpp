@@ -14,6 +14,7 @@ namespace duckdb {
 
 class LogicalShow : public LogicalOperator {
 	LogicalShow() : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {};
+
 public:
 	explicit LogicalShow(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {
 		children.push_back(move(plan));

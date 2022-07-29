@@ -33,7 +33,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 
 	auto &catalog = Catalog::GetCatalog(context);
 
-	TableCatalogEntry* table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
+	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 
 	if (!table_catalog_entry) {
 		throw InternalException("Cant find catalog entry for table %s", info->table);

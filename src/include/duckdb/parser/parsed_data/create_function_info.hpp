@@ -27,7 +27,6 @@ protected:
 	void SerializeChild(Serializer &serializer) const override {
 		serializer.WriteString(name);
 	}
-
 };
 
 } // namespace duckdb
