@@ -26,8 +26,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 			ValidityMask validity_vec(STANDARD_VECTOR_SIZE);
 			validity_vec.SetAllInvalid(STANDARD_VECTOR_SIZE);
 			FlatVector::SetValidity(result, validity_vec);
-		}
-		else {
+		} else {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 		}

@@ -709,8 +709,7 @@ vector<ColumnCheckpointInfo> RowGroup::DetectBestCompressionMethodTable(TableDat
 		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(i)};
 		if (CompressionForTypeExists(columns[i]->type.InternalType())) {
 			columns[i]->DetectBestCompressionMethod(*this, writer, checkpoint_info);
-		}
-		else {
+		} else {
 			// Score will be calculated later for this type
 			checkpoint_info.compression_idx = 0;
 			checkpoint_info.score = NumericLimits<idx_t>::Maximum();
