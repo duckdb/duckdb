@@ -55,20 +55,13 @@ jobs:
         fetch-depth: 0
 
     - uses: ./.github/actions/ubuntu_setup
-
-    - name: Install
-      shell: bash
-      if: ${{ matrix.arch == 'aarch64' }}
-      run: |
-        apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu
-        cd /tmp
-        wget https://javadl.oracle.com/webapps/download/GetFile/1.8.0_331-b09/165374ff4ea84ef0bbd821706e29b123/linux-i586/jdk-8u331-linux-aarch64.tar.gz
-        tar xvf jdk-8u331-linux-aarch64.tar.gz
+      with:
+        aarch64_libs: ${{ matrix.arch == 'aarch64' }}
 
     - name: Build
       shell: bash
       run: |
-        make release_expanded
+        make
 
     - name: Test
       shell: bash
@@ -114,28 +107,34 @@ jobs:
           build/release/tools/jdbc/duckdb_jdbc.jar
 
  linux-extensions-64:
-    name: Linux Extensions (64 Bit)
+    name: Linux Extensions (${{matrix.arch}})
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: ${{ matrix.arch == 'aarch64' && 'ubuntu:18.04' || 'ubuntu:16.04' }}
+    strategy:
+      matrix:
+        arch: [ amd64, aarch64 ]
     needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
     - uses: ./.github/actions/ubuntu_setup
       with:
+        aarch64_libs: ${{ matrix.arch == 'aarch64' }}
         openssl: 1
 
     - uses: ./.github/actions/build_extensions
       with:
         post_install: rm build/release/src/libduckdb*
-        deploy_as: linux_amd64
+        deploy_as: linux_${{matrix.arch}}
         static_link_build: 1
         out_of_tree_ext: 1
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         substrait: 1
+        run_tests: ${{ matrix.arch == 'amd64' }}
 
  linux-release-32:
     name: Linux (32 Bit)

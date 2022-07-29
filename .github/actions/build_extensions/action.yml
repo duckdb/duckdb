@@ -69,6 +69,9 @@ inputs:
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
+  aarch64_cross_compile:
+    description: 'Cross compile extensions for Linux aarch64'
+    default: 0
 runs:
   using: "composite"
   steps:
@@ -92,6 +95,7 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+        AARCH_CROSS_COMPILE: ${{ inputs.aarch64_cross_compile }}
 
       run: |
         ls -al
