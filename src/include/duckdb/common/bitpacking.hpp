@@ -89,6 +89,13 @@ public:
 		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
 	}
 
+	// Calculates the minimum required number of bits per value that can store all values,
+	// given a predetermined minimum and maximum value of the buffer
+	template <class T>
+	inline static bitpacking_width_t MinimumBitWidth(T minimum, T maximum) {
+		return FindMinimumBitWidth<T, BYTE_ALIGNED>(minimum, maximum);
+	}
+
 	template <class T>
 	inline static idx_t GetRequiredSize(idx_t count, bitpacking_width_t width) {
 		count = RoundUpToAlgorithmGroupSize(count);

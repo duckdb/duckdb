@@ -30,6 +30,7 @@ template <class T>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
+		ResetMinMax();
 	}
 
 	T compression_buffer[BITPACKING_METADATA_GROUP_SIZE];
@@ -38,7 +39,7 @@ public:
 	idx_t total_size;
 	void *data_ptr;
 
-	bool min_max_set = false;
+	bool min_max_set;
 	T minimum;
 	T maximum;
 
@@ -51,6 +52,7 @@ public:
 
 	void ResetMinMax() {
 		min_max_set = false;
+		//! We set these to 0, in case all values are NULL, in which case the min and max will never be set.
 		minimum = 0;
 		maximum = 0;
 	}
@@ -75,18 +77,21 @@ public:
 	}
 
 	T GetFrameOfReference() {
-		//! If all values are NULL, minimum will not have been set
-		if (!min_max_set) {
-			return 0;
-		}
 		return minimum;
 	}
+	T Maximum() {
+		return maximum;
+	}
 
-	template <class OP>
+	template <class OP, class T_U = typename std::make_unsigned<T>::type>
 	void Flush() {
 		T frame_of_reference = GetFrameOfReference();
 		SubtractFrameOfReference(frame_of_reference);
-		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth(compression_buffer, compression_buffer_idx);
+
+		//! Because of FOR, we can guarantee that all values are positive
+		T_U adjusted_maximum = T_U(Maximum() - frame_of_reference);
+
+		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T_U>((T_U)0, adjusted_maximum);
 		OP::template Operation<T>(compression_buffer, compression_buffer_validity, width, frame_of_reference,
 		                          compression_buffer_idx, data_ptr);
 		total_size += (BITPACKING_METADATA_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t) + sizeof(T);
