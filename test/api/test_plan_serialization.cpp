@@ -114,3 +114,7 @@ TEST_CASE("Test logical_expression_get", "[serialization]") {
 	            "  (NULL)\n"
 	            "  ) lv(pk);");
 }
+
+TEST_CASE("Test logical_explain", "[serialization]") {
+	test_helper("EXPLAIN SELECT 42");
+}
