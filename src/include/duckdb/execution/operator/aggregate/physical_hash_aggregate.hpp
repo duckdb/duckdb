@@ -71,6 +71,10 @@ public:
 		return true;
 	}
 
+	bool IsOrderPreserving() const override {
+		return false;
+	}
+
 public:
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,

@@ -46,7 +46,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSinkState : public GlobalSinkState {
 public:
-	HashJoinGlobalSinkState() : finalized(false), max_batch_index(0) {
+	HashJoinGlobalSinkState() : finalized(false) {
 	}
 
 	//! Global HT used by the join
@@ -65,9 +65,6 @@ public:
 	//! Hash tables built by each thread
 	mutex local_ht_lock;
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
-
-	//! Maximum batch index seen in local sink states
-	idx_t max_batch_index;
 };
 
 class HashJoinLocalSinkState : public LocalSinkState {
@@ -208,9 +205,6 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 	if (lstate.hash_table) {
 		lock_guard<mutex> local_ht_lock(gstate.local_ht_lock);
 		gstate.local_hash_tables.push_back(move(lstate.hash_table));
-		if (lstate.batch_index != DConstants::INVALID_INDEX) {
-			gstate.max_batch_index = MaxValue<idx_t>(gstate.max_batch_index, lstate.batch_index);
-		}
 	}
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &lstate.build_executor, "build_executor", 1);
@@ -379,19 +373,15 @@ public:
 	bool initialized;
 	idx_t local_ht_count;
 	idx_t local_hts_done;
-	atomic<idx_t> batch_index;
 
 	void Initialize(HashJoinGlobalSinkState &sink) {
 		if (initialized) {
 			return;
 		}
-		batch_index = ++sink.max_batch_index;
-		if (sink.external) {
-			lock_guard<mutex> lock(sink.local_ht_lock);
-			full_outer_scan_state.total = sink.hash_table->Count();
-			probe_ht->radix_bits = sink.hash_table->radix_bits;
-			local_ht_count = sink.local_hash_tables.size();
-		}
+		lock_guard<mutex> lock(sink.local_ht_lock);
+		full_outer_scan_state.total = sink.hash_table->Count();
+		probe_ht->radix_bits = sink.hash_table->radix_bits;
+		local_ht_count = sink.local_hash_tables.size();
 		initialized = true;
 	}
 
@@ -514,9 +504,6 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
 	auto &lstate = (HashJoinLocalSourceState &)lstate_p;
 
-	// Initialize global source state (if not yet done)
-	gstate.Initialize(sink);
-
 	auto &fo_ss = gstate.full_outer_scan_state;
 	if (!sink.external) {
 		if (IsRightOuterJoin(join_type)) {
@@ -533,6 +520,9 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 
 	// This is an external hash join
 	D_ASSERT(gstate.probe_ht);
+
+	// Initialize global source state (if not yet done)
+	gstate.Initialize(sink);
 
 	// Partition probe-side data (if not yet done)
 	PartitionProbeSide(sink, gstate);
@@ -650,13 +640,6 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			}
 		}
 	}
-}
-
-idx_t PhysicalHashJoin::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                      LocalSourceState &lstate) const {
-	D_ASSERT(SupportsBatchIndex());
-	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
-	return ++gstate.batch_index;
 }
 
 } // namespace duckdb
