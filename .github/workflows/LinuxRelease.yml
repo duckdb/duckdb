@@ -56,7 +56,7 @@ jobs:
 
     - uses: ./.github/actions/ubuntu_setup
       with:
-        ubuntu_version: ${{ matrix.arch == 'aarch64' && '18' || '16' }}
+        ubuntu_version: ${{ matrix.arch == 'aarch64' && '16' || '16' }}
 
     - name: Install
       shell: bash
