@@ -278,18 +278,18 @@ jobs:
           sudo ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
           cmake --version
 
-      - name: Install OpenSSL 1.1.1
-        if: ${{ inputs.openssl }} == 1
-        shell: bash
-        run: |
-          wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-          tar -xf openssl-1.1.1c.tar.gz
-          cd openssl-1.1.1c
-          sudo ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl no-shared zlib-dynamic
-          sudo make
-          sudo make install
-          sudo echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-          sudo ldconfig -v
+#      - name: Install OpenSSL 1.1.1
+#        if: ${{ inputs.openssl }} == 1
+#        shell: bash
+#        run: |
+#          wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
+#          tar -xf openssl-1.1.1c.tar.gz
+#          cd openssl-1.1.1c
+#          sudo ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl no-shared zlib-dynamic
+#          sudo make
+#          sudo make install
+#          sudo echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
+#          sudo ldconfig -v
 
       - name: Version Check
         shell: bash
