@@ -10,6 +10,12 @@ Node48::Node48(size_t compression_length) : Node(NodeType::N48, compression_leng
 	}
 }
 
+Node48::Node48() : Node(NodeType::N48) {
+	for (idx_t i = 0; i < 256; i++) {
+		child_index[i] = Node::EMPTY_MARKER;
+	}
+}
+
 idx_t Node48::GetChildPos(uint8_t k) {
 	if (child_index[k] == Node::EMPTY_MARKER) {
 		return DConstants::INVALID_INDEX;

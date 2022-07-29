@@ -8,6 +8,8 @@ add_library_unity(
   node16.cpp
   node48.cpp
   node256.cpp
+  swizzleable_pointer.cpp
+  prefix.cpp
   art.cpp)
 
 set(ALL_OBJECT_FILES

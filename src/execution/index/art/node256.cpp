@@ -6,6 +6,9 @@ namespace duckdb {
 Node256::Node256(size_t compression_length) : Node(NodeType::N256, compression_length) {
 }
 
+Node256::Node256() : Node(NodeType::N256) {
+}
+
 idx_t Node256::GetChildPos(uint8_t k) {
 	if (children[k].pointer) {
 		return k;

@@ -49,14 +49,7 @@ ART::~ART() {
 
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	auto leaf = static_cast<Leaf *>(node);
-	Key &leaf_key = *leaf->value;
-	for (idx_t i = depth; i < leaf_key.len; i++) {
-		if (leaf_key[i] != key[i]) {
-			return false;
-		}
-	}
-
-	return true;
+	return leaf->EqualKey(key, depth);
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, Value value,
@@ -300,7 +293,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 	Key &key = *value;
 	if (!node) {
 		// node is currently empty, create a leaf here with the key
-		node = new Leaf(move(value), row_id);
+		node = new Leaf(*value, depth, row_id);
 		return true;
 	}
 
@@ -308,16 +301,16 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		// Replace leaf with Node4 and store both leaves in it
 		auto leaf = (Leaf *)node;
 
-		Key &existing_key = *leaf->value;
+		auto &leaf_prefix = leaf->prefix;
 		uint32_t new_prefix_length = 0;
 		// Leaf node is already there, update row_id vector
-		if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
+		if (new_prefix_length == leaf->prefix_length && depth + leaf->prefix_length == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
-		while (existing_key[depth + new_prefix_length] == key[depth + new_prefix_length]) {
+		while (leaf_prefix[new_prefix_length] == key[depth + new_prefix_length]) {
 			new_prefix_length++;
 			// Leaf node is already there, update row_id vector
-			if (depth + new_prefix_length == existing_key.len && existing_key.len == key.len) {
+			if (new_prefix_length == leaf->prefix_length && depth + leaf->prefix_length == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
@@ -325,8 +318,9 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		Node *new_node = new Node4(new_prefix_length);
 		new_node->prefix_length = new_prefix_length;
 		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
-		Node4::Insert(new_node, existing_key[depth + new_prefix_length], node);
-		Node *leaf_node = new Leaf(move(value), row_id);
+		node->ReducePrefix(new_prefix_length);
+		Node4::Insert(new_node, leaf_prefix[new_prefix_length], node);
+		Node *leaf_node = new Leaf(*value, new_prefix_length, row_id);
 		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
@@ -344,7 +338,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 			Node4::Insert(new_node, node->prefix[mismatch_pos], node);
 			node->prefix_length -= (mismatch_pos + 1);
 			memmove(node->prefix.get(), node->prefix.get() + mismatch_pos + 1, node->prefix_length);
-			Node *leaf_node = new Leaf(move(value), row_id);
+			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + node->prefix_length, row_id);
 			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
@@ -361,7 +355,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		node->ReplaceChildPointer(pos, child);
 		return insertion_result;
 	}
-	Node *new_node = new Leaf(move(value), row_id);
+	Node *new_node = new Leaf(*value, depth, row_id);
 	Node::InsertLeaf(node, key[depth], new_node);
 	return true;
 }
@@ -514,10 +508,10 @@ Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 	while (node) {
 		if (node->type == NodeType::NLeaf) {
 			auto leaf = (Leaf *)node;
-			Key &leaf_key = *leaf->value;
+			auto &leaf_prefix = leaf->prefix;
 			//! Check leaf
-			for (idx_t i = depth; i < leaf_key.len; i++) {
-				if (leaf_key[i] != key[i]) {
+			for (idx_t i = 0; i < leaf->prefix_length; i++) {
+				if (leaf_prefix[i] != key[i + depth]) {
 					return nullptr;
 				}
 			}
@@ -552,11 +546,11 @@ bool ART::IteratorScan(ARTIndexScanState *state, Iterator *it, Key *bound, idx_t
 		if (HAS_BOUND) {
 			D_ASSERT(bound);
 			if (INCLUSIVE) {
-				if (*it->node->value > *bound) {
+				if (it->node->GTKey(*bound, it->depth)) {
 					break;
 				}
 			} else {
-				if (*it->node->value >= *bound) {
+				if (it->node->GTEKey(*bound, it->depth)) {
 					break;
 				}
 			}
@@ -643,8 +637,8 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 			it.node = leaf;
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key
-			if (*leaf->value == key) {
-				// if its not inclusive check if there is a next leaf
+			if (leaf->EqualKey(key, depth)) {
+				// if it's not inclusive check if there is a next leaf
 				if (!inclusive && !IteratorNext(it)) {
 					return false;
 				} else {
@@ -652,20 +646,21 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 				}
 			}
 
-			if (*leaf->value > key) {
+			if (leaf->GTKey(key, depth)) {
 				return true;
 			}
 			// Leaf is lower than key
 			// Check if next leaf is still lower than key
 			while (IteratorNext(it)) {
-				if (*it.node->value == key) {
+
+				if (leaf->EqualKey(key, depth)) {
 					// if its not inclusive check if there is a next leaf
 					if (!inclusive && !IteratorNext(it)) {
 						return false;
 					} else {
 						return true;
 					}
-				} else if (*it.node->value > key) {
+				} else if (leaf->GTKey(key, depth)) {
 					// if its not inclusive check if there is a next leaf
 					return true;
 				}
@@ -768,7 +763,7 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 		// first find the minimum value in the ART: we start scanning from this value
 		auto &minimum = FindMinimum(state->iterator, *tree);
 		// early out min value higher than upper bound query
-		if (*minimum.value > *upper_bound) {
+		if (minimum.GTKey(*upper_bound, it->depth)) {
 			return true;
 		}
 		it->start = true;
