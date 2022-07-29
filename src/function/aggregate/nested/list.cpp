@@ -618,6 +618,22 @@ void ListFun::BuildListVector(LinkedList *linked_list, Vector &result, idx_t &in
 	linked_list->last_segment = nullptr;
 }
 
+void ListFun::InitializeValidities(Vector &vector, idx_t &capacity) {
+
+	auto &validity_mask = FlatVector::Validity(vector);
+	validity_mask.Initialize(capacity);
+
+	if (vector.GetType().id() == LogicalTypeId::LIST) {
+		auto &child_vector = ListVector::GetEntry(vector);
+		InitializeValidities(child_vector, capacity);
+	} else if (vector.GetType().id() == LogicalTypeId::STRUCT) {
+		auto &children = StructVector::GetEntries(vector);
+		for (auto &child : children) {
+			InitializeValidities(*child, capacity);
+		}
+	}
+}
+
 struct ListAggState {
 	LinkedList *linked_list;
 	LogicalType *type;
@@ -637,13 +653,16 @@ struct ListFunction {
 		D_ASSERT(state);
 		if (state->linked_list) {
 			delete state->linked_list;
+			state->linked_list = nullptr;
 		}
 		if (state->type) {
 			delete state->type;
+			state->type = nullptr;
 		}
 		if (state->owning_vector) {
 			state->owning_vector->clear();
 			delete state->owning_vector;
+			state->owning_vector = nullptr;
 		}
 	}
 	static bool IgnoreNull() {
@@ -748,12 +767,19 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &, Vector &res
 		D_ASSERT(state->type);
 
 		Vector aggr_vector(*state->type, total_capacity);
-		auto &aggr_vector_validity = FlatVector::Validity(aggr_vector);
-		aggr_vector_validity.Initialize(total_capacity);
+		// FIXME: this is a workaround because the constructor of a vector does not set the size
+		// of the validity mask, and by default it is set to STANDARD_VECTOR_SIZE
+		// ListVector::Reserve only increases the validity mask, if (to_reserve > capacity),
+		// which will not be the case if the value passed to the constructor of aggr_vector
+		// is greater than to_reserve
+		ListFun::InitializeValidities(aggr_vector, total_capacity);
 
 		idx_t total_count = 0;
 		ListFun::BuildListVector(state->linked_list, aggr_vector, total_count);
 		ListVector::Append(result, aggr_vector, total_capacity);
+
+		// now destroy the state (for parallel destruction)
+		ListFunction::Destroy<ListAggState>(state);
 	}
 }
 

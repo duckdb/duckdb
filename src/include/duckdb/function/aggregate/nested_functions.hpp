@@ -88,6 +88,8 @@ struct ListFun {
 
 	static void GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &total_count);
 	static void BuildListVector(LinkedList *linked_list, Vector &result, idx_t &initial_total_count);
+
+	static void InitializeValidities(Vector &vector, idx_t &capacity);
 };
 
 } // namespace duckdb
