@@ -26,6 +26,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
+    includes += [os.path.join('third_party', 'jemalloc', 'include')]
     return includes
 
 def third_party_sources():
@@ -38,6 +39,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'utf8proc')]
     sources += [os.path.join('third_party', 'libpg_query')]
     sources += [os.path.join('third_party', 'mbedtls')]
+    sources += [os.path.join('third_party', 'jemalloc')]
     return sources
 
 def get_libraries(binary_dir, libraries, extensions):
