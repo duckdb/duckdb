@@ -14,38 +14,51 @@
 using namespace duckdb;
 using namespace std;
 
-static void test_helper(string sql) {
+static void test_helper(string sql, vector<string> fixtures = vector<string>()) {
 	DuckDB db;
 	Connection con(db);
 
+	for (const auto& fixture : fixtures) {
+		con.SendQuery(fixture);
+	}
+
 	Parser p;
 	p.ParseQuery(sql);
-	printf("\nParsed query\n");
+	printf("\nParsed query '%s'\n", sql.c_str());
 
-	Planner planner(*con.context);
-	planner.CreatePlan(move(p.statements[0]));
-	printf("Created plan\n");
-	auto plan = move(planner.plan);
+	int i = 0;
+	for (auto& statement: p.statements) {
+		con.context->transaction.BeginTransaction();
+		// Should that be the default "ToString"?
+		string statement_sql(statement->query.c_str() + statement->stmt_location, statement->stmt_length);
+		printf("[%d] Processing statement '%s'\n", i, statement_sql.c_str());
+		Planner planner(*con.context);
+		planner.CreatePlan(move(statement));
+		printf("[%d] Created plan\n", i);
+		auto plan = move(planner.plan);
 
-	Optimizer optimizer(*planner.binder, *con.context);
+		Optimizer optimizer(*planner.binder, *con.context);
 
-	plan = optimizer.Optimize(move(plan));
-	printf("Optimized plan\n");
+		plan = optimizer.Optimize(move(plan));
+		printf("[%d] Optimized plan\n", i);
 
-	BufferedSerializer serializer;
-	plan->Serialize(serializer);
-	printf("Serialized plan\n");
+		BufferedSerializer serializer;
+		plan->Serialize(serializer);
+		printf("[%d] Serialized plan\n", i);
 
-	auto data = serializer.GetData();
-	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
-	auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
-	printf("Deserialized plan\n");
+		auto data = serializer.GetData();
+		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+		auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
+		printf("[%d] Deserialized plan\n", i);
 
-	printf("Original plan:\n%s\n", plan->ToString().c_str());
-	printf("New plan:\n%s\n", new_plan->ToString().c_str());
+		printf("[%d] Original plan:\n%s\n", i, plan->ToString().c_str());
+		printf("[%d] New plan:\n%s\n", i, new_plan->ToString().c_str());
 
-	auto optimized_plan = optimizer.Optimize(move(new_plan));
-	printf("Optimized plan:\n%s\n", optimized_plan->ToString().c_str());
+		auto optimized_plan = optimizer.Optimize(move(new_plan));
+		printf("[%d] Optimized plan:\n%s\n", i, optimized_plan->ToString().c_str());
+		con.context->transaction.Commit();
+		++i;
+	}
 }
 
 TEST_CASE("Test plan serialization", "[serialization]") {
