@@ -647,18 +647,17 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 
 	uint8_t other_width;
 	uint8_t other_scale;
-	if (left.GetDecimalProperties(other_width, other_scale)) {
-		D_ASSERT(other_scale == 0);
-		const auto effective_width = width - scale;
-		if (other_width > effective_width) {
-			auto new_width = other_width + scale;
-			if (new_width > DecimalType::MaxWidth()) {
-				throw InvalidInputException(
-				    "Tried to create a type of DECIMAL(%d,%d) which exceeds the maximum width of %d", new_width, scale,
-				    DecimalType::MaxWidth());
-			}
-			return LogicalType::DECIMAL(other_width + scale, scale);
+	bool success = left.GetDecimalProperties(other_width, other_scale);
+	D_ASSERT(success);
+	D_ASSERT(other_scale == 0);
+	const auto effective_width = width - scale;
+	if (other_width > effective_width) {
+		auto new_width = other_width + scale;
+		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
+		if (new_width > DecimalType::MaxWidth()) {
+			new_width = DecimalType::MaxWidth();
 		}
+		return LogicalType::DECIMAL(new_width, scale);
 	}
 	return right;
 }

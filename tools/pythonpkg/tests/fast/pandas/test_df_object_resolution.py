@@ -346,11 +346,13 @@ class TestResolveObjectColumns(object):
         pd.testing.assert_frame_equal(converted_col, duckdb_col)
 
     def test_ubigint_object_conversion(self, duckdb_cursor):
+		# UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
+		# So this instead becomes a DOUBLE
         data = [18446744073709551615, 0]
         x = pd.DataFrame({'0': pd.Series(data=data, dtype='object')})
         converted_col = duckdb.query_df(x, "x", "select * from x").df()
-        uint64_dtype = np.dtype('uint64')
-        assert isinstance(converted_col['0'].dtype, uint64_dtype.__class__) == True
+        float64 = np.dtype('float64')
+        assert isinstance(converted_col['0'].dtype, float64.__class__) == True
 
     def test_double_object_conversion(self, duckdb_cursor):
         data = [18446744073709551616, 0]
