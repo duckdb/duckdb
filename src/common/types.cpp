@@ -648,7 +648,9 @@ static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &
 	uint8_t other_width;
 	uint8_t other_scale;
 	bool success = left.GetDecimalProperties(other_width, other_scale);
-	D_ASSERT(success);
+	if (!success) {
+		throw InternalException("Type provided to DecimalSizeCheck was not a numeric type");
+	}
 	D_ASSERT(other_scale == 0);
 	const auto effective_width = width - scale;
 	if (other_width > effective_width) {
