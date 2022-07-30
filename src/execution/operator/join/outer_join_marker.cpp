@@ -67,7 +67,6 @@ idx_t OuterJoinMarker::MaxThreads() const {
 }
 
 void OuterJoinMarker::InitializeScan(ColumnDataCollection &data, OuterJoinGlobalScanState &gstate) {
-	gstate.scan_position = 0;
 	gstate.data = &data;
 	data.InitializeScan(gstate.global_scan);
 }
@@ -85,7 +84,7 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 		idx_t result_count = 0;
 		// figure out which tuples didn't find a match in the RHS
 		for (idx_t i = 0; i < lstate.scan_chunk.size(); i++) {
-			if (!found_match[gstate.scan_position + i]) {
+			if (!found_match[lstate.local_scan.current_row_index + i]) {
 				lstate.match_sel.set_index(result_count++, i);
 			}
 		}
