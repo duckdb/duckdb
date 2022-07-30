@@ -355,14 +355,43 @@ void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type,
 	auto list_mask = FlatVector::Validity(data);
 	idx_t offset = 0;
 	offset_ptr[0] = 0;
+	bool list_is_contiguous = true;
 	for (idx_t i = 0; i < size; i++) {
-		auto &le = list_data[i];
-
-		if (list_mask.RowIsValid(i)) {
-			offset += le.length;
+		if (!list_mask.RowIsValid(i)) {
+			continue;
 		}
+		auto &le = list_data[i];
+		if (le.offset != offset) {
+			// arrow requires lists to be contiguous
+			// if our list is not contiguous, we need to create a copy
+			list_is_contiguous = false;
+		}
+		offset += le.length;
 
 		offset_ptr[i + 1] = offset;
+	}
+	auto &current_child_vector = ListVector::GetEntry(data);
+	auto &child_type = ListType::GetChildType(type);
+	Vector *child_vector = &current_child_vector;
+	unique_ptr<Vector> new_child_vector;
+	if (!list_is_contiguous) {
+		// need to make a copy of the child list
+		auto total_child_count = offset;
+		SelectionVector sel(total_child_count);
+		idx_t current_offset = 0;
+		for (idx_t i = 0; i < size; i++) {
+			if (!list_mask.RowIsValid(i)) {
+				continue;
+			}
+			auto &le = list_data[i];
+			for(idx_t k = 0; k < le.length; k++) {
+				sel.set_index(current_offset++, le.offset + k);
+			}
+		}
+		new_child_vector = make_unique<Vector>(child_type);
+		new_child_vector->Slice(current_child_vector, sel, total_child_count);
+		new_child_vector->Flatten(total_child_count);
+		child_vector = new_child_vector.get();
 	}
 	auto list_size = ListVector::GetListSize(data);
 	child_holder.children.resize(1);
@@ -370,10 +399,8 @@ void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type,
 	child.n_children = 1;
 	child_holder.children_ptrs.push_back(&child_holder.children[0].array);
 	child.children = &child_holder.children_ptrs[0];
-	auto &child_vector = ListVector::GetEntry(data);
-	auto &child_type = ListType::GetChildType(type);
-	SetArrowChild(child_holder.children[0], child_type, child_vector, list_size);
-	SetChildValidityMask(child_vector, child_holder.children[0].array);
+	SetArrowChild(child_holder.children[0], child_type, *child_vector, list_size);
+	SetChildValidityMask(*child_vector, child_holder.children[0].array);
 }
 
 void SetStruct(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
