@@ -241,7 +241,7 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &f
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	string timezone_config = ClientConfig::ExtractTimezoneFromConfig(config);
+	string timezone_config = config.ExtractTimezone();
 	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);
 	while (it != filters_map->end()) {
 		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);
