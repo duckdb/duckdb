@@ -93,6 +93,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
+		data_chunk->Verify();
 		ArrowArray arrow_array;
 		data_chunk->ToArrowArray(&arrow_array);
 		auto batch = arrow::ImportRecordBatch(&arrow_array, result_schema.ValueUnsafe());

@@ -424,9 +424,13 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 				//! Get the offsets to check from the selection vector
 				auto list_offsets = FlatVector::GetData<list_entry_t>(*children[child_idx]);
 				for (idx_t list_idx = 0; list_idx < size; list_idx++) {
-					auto offset = list_offsets[list_data.sel->get_index(list_idx)];
+					auto idx = list_data.sel->get_index(list_idx);
+					if (!list_data.validity.RowIsValid(idx)) {
+						continue;
+					}
+					auto offset = list_offsets[idx];
 					if (!list_child_validity.CheckAllValid(offset.length + offset.offset, offset.offset)) {
-						throw std::runtime_error("Arrow doesnt accept NULL keys on Maps");
+						throw std::runtime_error("Arrow doesn't accept NULL keys on Maps");
 					}
 				}
 			}
