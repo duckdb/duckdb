@@ -66,7 +66,7 @@ public:
 			auto projection_sexp = r.Protect(StringsToSexp(project_columns.second));
 			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
 			if (filters && !filters->filters.empty()) {
-				auto timezone_config = ClientConfig::ExtractTimezoneFromConfig(factory->config);
+				auto timezone_config = factory->config.ExtractTimezone();
 				filters_sexp =
 				    r.Protect(TransformFilter(*filters, project_columns.first, factory->export_fun, timezone_config));
 			}
