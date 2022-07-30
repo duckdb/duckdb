@@ -1,14 +1,15 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
 MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
                                                  vector<string> names_p, unique_ptr<ColumnDataCollection> collection_p,
-                                                 const shared_ptr<ClientContext> &context_p)
+                                                 ClientProperties client_properties)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, properties, collection_p->Types(),
-                  move(names_p)),
-      context(context_p), collection(move(collection_p)), scan_initialized(false) {
+                  move(names_p), move(client_properties)),
+      collection(move(collection_p)), scan_initialized(false) {
 }
 
 MaterializedQueryResult::MaterializedQueryResult(string error)

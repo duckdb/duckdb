@@ -31,8 +31,9 @@ idx_t BaseQueryResult::ColumnCount() {
 }
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-                         vector<LogicalType> types_p, vector<string> names_p)
-    : BaseQueryResult(type, statement_type, properties, move(types_p), move(names_p)) {
+                         vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p)
+    : BaseQueryResult(type, statement_type, properties, move(types_p), move(names_p)),
+      client_properties(move(client_properties_p)) {
 }
 
 QueryResult::QueryResult(QueryResultType type, string error) : BaseQueryResult(type, move(error)) {
@@ -383,20 +384,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &ty
 }
 
 string QueryResult::GetConfigTimezone(QueryResult &query_result) {
-	switch (query_result.type) {
-	case QueryResultType::MATERIALIZED_RESULT: {
-		auto actual_context = ((MaterializedQueryResult &)query_result).context.lock();
-		if (!actual_context) {
-			throw std::runtime_error("This connection is closed");
-		}
-		return ClientConfig::ExtractTimezoneFromConfig(actual_context->config);
-	}
-	case QueryResultType::STREAM_RESULT: {
-		return ClientConfig::ExtractTimezoneFromConfig(((StreamQueryResult &)query_result).context->config);
-	}
-	default:
-		throw std::runtime_error("Can't extract timezone configuration from query type ");
-	}
+	return query_result.client_properties.timezone;
 }
 
 } // namespace duckdb

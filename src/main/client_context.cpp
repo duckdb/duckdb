@@ -235,7 +235,7 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		auto result_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), pending.types);
 		D_ASSERT(!result_collection->Types().empty());
 		auto materialized_result = make_unique<MaterializedQueryResult>(
-		    pending.statement_type, pending.properties, pending.names, move(result_collection), shared_from_this());
+		    pending.statement_type, pending.properties, pending.names, move(result_collection), GetClientProperties());
 
 		auto &collection = materialized_result->Collection();
 		D_ASSERT(!collection.Types().empty());
@@ -698,7 +698,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		vector<string> names;
 		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), move(types));
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(names),
-		                                            move(collection), shared_from_this());
+		                                            move(collection), GetClientProperties());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -1300,12 +1300,18 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 	return true;
 }
 
-ParserOptions ClientContext::GetParserOptions() {
+ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
 	options.max_expression_depth = ClientConfig::GetConfig(*this).max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	return options;
+}
+
+ClientProperties ClientContext::GetClientProperties() const {
+	ClientProperties properties;
+	properties.timezone = ClientConfig::GetConfig(*this).ExtractTimezone();
+	return properties;
 }
 
 } // namespace duckdb

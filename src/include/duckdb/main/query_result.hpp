@@ -18,6 +18,11 @@ namespace duckdb {
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
 
+//! A set of properties from the client context that can be used to interpret the query result
+struct ClientProperties {
+	string timezone;
+};
+
 class BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
@@ -55,11 +60,13 @@ class QueryResult : public BaseQueryResult {
 public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
-	                       vector<LogicalType> types, vector<string> names);
+	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API QueryResult(QueryResultType type, string error);
 	DUCKDB_API virtual ~QueryResult() override;
 
+	//! Properties from the client context
+	ClientProperties client_properties;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
 

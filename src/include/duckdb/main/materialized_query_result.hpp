@@ -22,12 +22,9 @@ public:
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,
 	                                   vector<string> names, unique_ptr<ColumnDataCollection> collection,
-	                                   const shared_ptr<ClientContext> &context);
+	                                   ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit MaterializedQueryResult(string error);
-
-	//! The client context this MaterializedQueryResult belongs to
-	std::weak_ptr<ClientContext> context;
 
 public:
 	//! Fetches a DataChunk from the query result.

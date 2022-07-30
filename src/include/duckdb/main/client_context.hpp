@@ -159,7 +159,7 @@ public:
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 	//! Returns the parser options for this client context
-	DUCKDB_API ParserOptions GetParserOptions();
+	DUCKDB_API ParserOptions GetParserOptions() const;
 
 	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
 
@@ -174,6 +174,8 @@ public:
 
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
+
+	DUCKDB_API ClientProperties GetClientProperties() const;
 
 private:
 	//! Parse statements and resolve pragmas from a query

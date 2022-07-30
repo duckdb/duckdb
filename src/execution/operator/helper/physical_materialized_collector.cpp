@@ -39,7 +39,7 @@ unique_ptr<GlobalSinkState> PhysicalMaterializedCollector::GetGlobalSinkState(Cl
 unique_ptr<QueryResult> PhysicalMaterializedCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = (MaterializedCollectorGlobalState &)state;
 	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, move(gstate.collection),
-	                                                   move(gstate.context));
+	                                                   gstate.context->GetClientProperties());
 	return move(result);
 }
 

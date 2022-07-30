@@ -6,9 +6,12 @@
 namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, StatementProperties properties,
-                                     shared_ptr<ClientContext> context, vector<LogicalType> types, vector<string> names)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, properties, move(types), move(names)),
-      context(move(context)) {
+                                     shared_ptr<ClientContext> context_p, vector<LogicalType> types,
+                                     vector<string> names)
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, properties, move(types), move(names),
+                  context_p->GetClientProperties()),
+      context(move(context_p)) {
+	D_ASSERT(context);
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -55,7 +58,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 }
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (!success) {
+	if (!success || !context) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
 	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
@@ -69,7 +72,8 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 		}
 		collection->Append(append_state, *chunk);
 	}
-	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), context);
+	auto result =
+	    make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), client_properties);
 	if (!success) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
