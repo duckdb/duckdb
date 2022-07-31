@@ -37,7 +37,8 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 		//! Here we check if we can apply the expression on the constant side
 		auto cast_expression = (BoundCastExpression *)column_ref_expr;
 		auto target_type = cast_expression->source_type();
-		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression->return_type)) {
+		if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression->return_type) ||
+		    !BoundCastExpression::CastIsInvertible(cast_expression->return_type, target_type)) {
 			return nullptr;
 		}
 		auto new_constant = constant_value.TryCastAs(target_type);
