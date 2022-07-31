@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 2.8.12)
 project(ICUExtension)
 
 include_directories(include)
-include_directories(third_party/sketch-core/apache-datasketches/common/include)
-include_directories(third_party/sketch-core/apache-datasketches/hll/include)
+include_directories(third_party/apache-datasketches/common/include)
+include_directories(third_party/apache-datasketches/hll/include)
 
 # add_subdirectory(third_party)
 
