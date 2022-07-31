@@ -22,61 +22,79 @@ class HllStateBase {
     bool isset;
 	void Initialize() {
 		this->isset = false;
-        std::cout << "Init" << std::endl;
-        this->sketch = new datasketches::hll_sketch(lg_sketch_rows);
-        this->union_sketch = new datasketches::hll_union(lg_sketch_rows);
+        this->value_sketch = nullptr;
+        this->union_sketch = nullptr;
+        this->serialized = nullptr;
 	}
 
 	void Combine(const HllStateBase &other) {
-       std::cout << "Combine" << std::endl;
-
 		this->isset = other.isset || this->isset;
-        if(!this->sketch->is_empty()) {
-            this->union_sketch->update(*this->sketch);
-            this->sketch->reset();
-        }
-		this->union_sketch->update(*other.sketch);
+        GetUnionSketch().update(other.GetSketch());
 	}
 
     string_t Serialize() {
-        std::cout << "Serialize" << std::endl;
-        vector<uint8_t> serialized; 
-        if (!union_sketch->is_empty()) {
-            auto merged = union_sketch->get_result();
-            serialized = merged.serialize_compact();    
-            std::cout << "Merged: " << merged.get_estimate()  << std::endl;
+        auto result = GetUnionSketch().get_result();
+        serialized = new vector<uint8_t>(result.serialize_compact());
 
-        } else {
-            serialized = this->sketch->serialize_compact();
-            std::cout << "Raw: " << this->sketch->get_estimate()  << std::endl;
-
-        }
-
-        // I'm pretty sure that if the result is too long then this is going to crash. Need to figure out
-        // how to safely allocate data.
-        return string_t((char *) serialized.data(), serialized.size());
+        // I'm pretty sure that if the result is too long then this is going to crash.
+        // Need to figure out how to safely allocate data.
+        return string_t((char *) serialized->data(), serialized->size());
     }
 
-    void Finalize() {
-        std::cout << "Finalize" << std::endl;
-        delete(sketch);
-        sketch = nullptr;
-        delete(union_sketch);
-        union_sketch = nullptr;
+    void Destroy() {
+        
+        if (this->value_sketch != nullptr) {
+            delete(this->value_sketch);
+            this->value_sketch = nullptr;
+        } 
+        if (this->union_sketch != nullptr) {
+            delete(this->union_sketch);
+            this->union_sketch = nullptr;
+        }
+        if (this->serialized != nullptr) {
+            delete(this->serialized);
+            this->serialized = nullptr;
+        }
+        
     }
 
   protected:
-    datasketches::hll_sketch* sketch;
-    datasketches::hll_union* union_sketch;
-};
+    datasketches::hll_sketch& GetSketch() const {
+        // No one should try to get the value sketch after starting to combine.
+        D_ASSERT(this->union_sketch == nullptr);
+        if (this->value_sketch == nullptr) {
+            this->value_sketch = new datasketches::hll_sketch(lg_sketch_rows);
+        }
+        return *this->value_sketch;
+    }
 
+  private:
+
+    datasketches::hll_union& GetUnionSketch() {
+        if (this->union_sketch == nullptr) {
+            this->union_sketch = new datasketches::hll_union(lg_sketch_rows);
+        
+            // Once we get the union sketch, load it with the data in the value sketch, and destroy
+            // the value sketch.
+            if (this->value_sketch != nullptr) {
+                this->union_sketch->update(*this->value_sketch);
+            }
+        }
+        return *this->union_sketch;
+    }
+    
+  private:
+    mutable datasketches::hll_sketch* value_sketch;
+    mutable datasketches::hll_union* union_sketch;
+    vector<uint8_t>* serialized;
+};
 
 template <class T>
 class HllState : public HllStateBase {
   public:
     void Update(T value) {
         this->isset = true;
-        this->sketch->update(value);
+        this->GetSketch().update(value);
     }
 };
 
@@ -84,7 +102,7 @@ template <> class HllState<hugeint_t> : public HllStateBase {
   public:
     void Update(hugeint_t value) {
         this->isset = true;
-        this->sketch->update(&value, sizeof(value));
+        this->GetSketch().update(&value, sizeof(value));
     }
 };
 
@@ -92,7 +110,7 @@ template <> class HllState<string_t> : public HllStateBase {
   public:
     void Update(string_t value) {
         this->isset = true;
-        this->sketch->update(value.GetDataUnsafe(), value.GetSize());
+        this->GetSketch().update(value.GetDataUnsafe(), value.GetSize());
     }
 };
 
@@ -114,7 +132,6 @@ struct HllOperation {
         } else {
             target[idx] = state->Serialize();
         }
-        state->Finalize();
     }
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -128,6 +145,11 @@ struct HllOperation {
         state->Update(*input);
 	}
 
+    template <class STATE>
+	static void Destroy(STATE *state) {
+		state->Destroy();
+    }
+
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -137,37 +159,37 @@ AggregateFunction GetInitAggregate(PhysicalType type) {
     switch (type) {
     case PhysicalType::INT128: {
         auto function =
-            AggregateFunction::UnaryAggregate<HllState<hugeint_t>, hugeint_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<hugeint_t>, hugeint_t, string_t, HllOperation>(
                 LogicalType::HUGEINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT64: {
         auto function =
-            AggregateFunction::UnaryAggregate<HllState<int64_t>, int64_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<int64_t>, int64_t, string_t, HllOperation>(
                 LogicalType::BIGINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT32: {
         auto function =
-            AggregateFunction::UnaryAggregate<HllState<int32_t>, int32_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<int32_t>, int32_t, string_t, HllOperation>(
                 LogicalType::INTEGER, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT16: {
         auto function =
-            AggregateFunction::UnaryAggregate<HllState<int16_t>, int16_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<int16_t>, int16_t, string_t, HllOperation>(
                 LogicalType::SMALLINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::DOUBLE: {
         auto function =
-            AggregateFunction::UnaryAggregate<HllState<double>, double, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<double>, double, string_t, HllOperation>(
                 LogicalType::DOUBLE, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::VARCHAR: {
         auto function =
-            AggregateFunction::UnaryAggregate<HllState<string_t>, string_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<string_t>, string_t, string_t, HllOperation>(
                 LogicalType::VARCHAR, LogicalType::BLOB);
         return function;
     }
@@ -199,7 +221,6 @@ struct ExtractOperator {
 
 void SketchSum::RegisterFunction(ClientContext &context) {
     AggregateFunctionSet init("hll_count_init");
-    
     init.AddFunction(GetInitAggregate(PhysicalType::INT128));
     init.AddFunction(GetInitAggregate(PhysicalType::INT64));
     init.AddFunction(GetInitAggregate(PhysicalType::INT32));
@@ -211,7 +232,6 @@ void SketchSum::RegisterFunction(ClientContext &context) {
                                       BindDecimalHllInit));
 
     ScalarFunctionSet extract("hll_count_extract");
-
     extract.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT, 
                                         ScalarFunction::UnaryFunction<string_t, int64_t, ExtractOperator>));
 
@@ -220,7 +240,6 @@ void SketchSum::RegisterFunction(ClientContext &context) {
     catalog.AddFunction(context, &init_info);
     CreateScalarFunctionInfo extract_info(move(extract));
     catalog.AddFunction(context, &extract_info);
-
 }
 
 } // namespace duckdb
