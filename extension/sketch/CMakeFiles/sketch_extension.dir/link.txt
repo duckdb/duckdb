@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libsketch_extension.a "CMakeFiles/sketch_extension.dir/sketch-extension.cpp.o" "CMakeFiles/sketch_extension.dir/sketch-foo.cpp.o" "CMakeFiles/sketch_extension.dir/sketch-hll.cpp.o" "CMakeFiles/sketch_extension.dir/sketch-sum.cpp.o"
-/Library/Developer/CommandLineTools/usr/bin/ranlib libsketch_extension.a

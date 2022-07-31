@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libimdb.a CMakeFiles/imdb.dir/imdb.cpp.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libimdb.a

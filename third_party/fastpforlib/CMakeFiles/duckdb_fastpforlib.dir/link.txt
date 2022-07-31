@@ -1,2 +1,0 @@
-/Library/Developer/CommandLineTools/usr/bin/ar qc libduckdb_fastpforlib.a CMakeFiles/duckdb_fastpforlib.dir/bitpacking.cpp.o
-/Library/Developer/CommandLineTools/usr/bin/ranlib libduckdb_fastpforlib.a
