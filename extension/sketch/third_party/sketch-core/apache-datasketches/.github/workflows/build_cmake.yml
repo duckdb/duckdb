@@ -1,0 +1,60 @@
+name: C/C++ CI
+
+on: [push, pull_request]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - {
+            name: "MacOS Latest, Clang",
+            os: macos-latest,
+            test_target: test,
+            cc: "clang", cxx: "clang++"
+          }
+        - {
+            name: "Ubuntu Latest, GCC",
+            os: ubuntu-latest,
+            test_target: test,
+            cc: "gcc", cxx: "g++"
+          }
+        - {
+            name: "Windows Latest, MSVC",
+            os: windows-latest,
+            test_target: RUN_TESTS,
+            cc: "cl", cxx: "cl",
+            environment_script: "C:/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise/VC/Auxiliary/Build/vcvars64.bat"
+          }
+        #- {
+        #    name: "Windows Latest, MinGW+gcc",
+        #    os: windows-latest,
+        #    cc: "gcc", cxx: "g++"
+        #  }
+            
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+          persist-credentials: false
+      - name: Configure
+        run: cd build && cmake ..
+      - name: Build C++ unit tests
+        run: cmake --build build --config Release
+      - name: Run C++ tests
+        run: cmake --build build --config Release --target ${{ matrix.config.test_target }}
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8' # 3.x grabs latest minor version of python3, but 3.9 not fully supported yet
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip setuptools wheel numpy tox pytest
+      - name: Build and run Python tests
+        run: python -m tox

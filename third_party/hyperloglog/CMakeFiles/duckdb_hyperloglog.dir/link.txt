@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libduckdb_hyperloglog.a CMakeFiles/duckdb_hyperloglog.dir/hyperloglog.cpp.o CMakeFiles/duckdb_hyperloglog.dir/sds.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libduckdb_hyperloglog.a

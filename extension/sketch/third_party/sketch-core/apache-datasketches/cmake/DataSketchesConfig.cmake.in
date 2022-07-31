@@ -1,0 +1,10 @@
+set(DATASKETCHES_VERSION "@PROJECT_VERSION@")
+
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/DataSketches.cmake")
+
+set_and_check(DATASKETCHES_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/DataSketches")
+set(DATASKETCHES_LIB "datasketches")
+
+check_required_components("@PROJECT_NAME@")

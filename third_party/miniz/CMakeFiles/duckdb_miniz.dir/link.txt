@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libduckdb_miniz.a CMakeFiles/duckdb_miniz.dir/miniz.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libduckdb_miniz.a

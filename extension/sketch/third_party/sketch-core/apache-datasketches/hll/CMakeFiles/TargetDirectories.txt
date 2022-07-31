@@ -1,0 +1,3 @@
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/hll/CMakeFiles/hll_test.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/hll/CMakeFiles/edit_cache.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/hll/CMakeFiles/rebuild_cache.dir

@@ -1,0 +1,2 @@
+/Users/jordan/code/duckdb/extension/CMakeFiles/edit_cache.dir
+/Users/jordan/code/duckdb/extension/CMakeFiles/rebuild_cache.dir

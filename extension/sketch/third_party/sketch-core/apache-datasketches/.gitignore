@@ -1,0 +1,42 @@
+# Eclipse project files 
+.cproject
+.project
+.settings/
+
+# Visual Studio Code
+.vscode/
+
+# OSX files
+.DS_Store
+
+# Compiler output, build specific
+*.a
+*.o
+*.so
+*.dll
+*.dylib
+bin/
+lib/
+Default/
+
+# Python files
+.eggs/
+.tox/
+dist/
+python/datasketches.egg-info/
+
+# Log file
+
+# Package Files #
+*.zip
+*.tar.gz
+
+# Other
+local/
+tmp/
+_site/
+_*
+_*/
+
+# exceptions
+!__init__.py

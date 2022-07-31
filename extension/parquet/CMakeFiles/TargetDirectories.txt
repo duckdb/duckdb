@@ -1,0 +1,7 @@
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/parquet_extension.dir
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/edit_cache.dir
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/rebuild_cache.dir
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/list_install_components.dir
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/install.dir
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/install/local.dir
+/Users/jordan/code/duckdb/extension/parquet/CMakeFiles/install/strip.dir

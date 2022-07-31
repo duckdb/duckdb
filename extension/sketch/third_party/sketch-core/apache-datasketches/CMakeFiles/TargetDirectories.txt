@@ -1,0 +1,6 @@
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/CMakeFiles/edit_cache.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/CMakeFiles/rebuild_cache.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/CMakeFiles/list_install_components.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/CMakeFiles/install.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/CMakeFiles/install/local.dir
+/Users/jordan/code/duckdb/extension/sketch/third_party/sketch-core/apache-datasketches-cpp-3.5.0-src/CMakeFiles/install/strip.dir

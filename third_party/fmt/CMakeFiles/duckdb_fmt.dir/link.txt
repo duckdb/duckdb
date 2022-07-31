@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libduckdb_fmt.a CMakeFiles/duckdb_fmt.dir/format.cc.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libduckdb_fmt.a

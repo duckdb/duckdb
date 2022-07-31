@@ -1,0 +1,2 @@
+/Library/Developer/CommandLineTools/usr/bin/ar qc libsqlite3_api_wrapper_static.a CMakeFiles/sqlite3_api_wrapper_static.dir/sqlite3_api_wrapper.cpp.o sqlite3/CMakeFiles/sqlite3_api_wrapper_sqlite3.dir/printf.c.o sqlite3/CMakeFiles/sqlite3_api_wrapper_sqlite3.dir/strglob.c.o sqlite3_udf_api/CMakeFiles/sqlite3_udf_api.dir/sqlite3_udf_wrapper.cpp.o sqlite3_udf_api/CMakeFiles/sqlite3_udf_api.dir/cast_sqlite.cpp.o
+/Library/Developer/CommandLineTools/usr/bin/ranlib libsqlite3_api_wrapper_static.a
