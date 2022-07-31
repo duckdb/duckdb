@@ -1527,45 +1527,6 @@ sketch_loadable_extension/fast:
 .PHONY : sketch_loadable_extension/fast
 
 #=============================================================================
-# Target rules for targets named duckdb_icu_common
-
-# Build rule for target.
-duckdb_icu_common: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 duckdb_icu_common
-.PHONY : duckdb_icu_common
-
-# fast build rule for target.
-duckdb_icu_common/fast:
-	$(MAKE) $(MAKESILENT) -f extension/sketch/third_party/icu/common/CMakeFiles/duckdb_icu_common.dir/build.make extension/sketch/third_party/icu/common/CMakeFiles/duckdb_icu_common.dir/build
-.PHONY : duckdb_icu_common/fast
-
-#=============================================================================
-# Target rules for targets named duckdb_icu_i18n
-
-# Build rule for target.
-duckdb_icu_i18n: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 duckdb_icu_i18n
-.PHONY : duckdb_icu_i18n
-
-# fast build rule for target.
-duckdb_icu_i18n/fast:
-	$(MAKE) $(MAKESILENT) -f extension/sketch/third_party/icu/i18n/CMakeFiles/duckdb_icu_i18n.dir/build.make extension/sketch/third_party/icu/i18n/CMakeFiles/duckdb_icu_i18n.dir/build
-.PHONY : duckdb_icu_i18n/fast
-
-#=============================================================================
-# Target rules for targets named duckdb_icu_stubdata
-
-# Build rule for target.
-duckdb_icu_stubdata: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 duckdb_icu_stubdata
-.PHONY : duckdb_icu_stubdata
-
-# fast build rule for target.
-duckdb_icu_stubdata/fast:
-	$(MAKE) $(MAKESILENT) -f extension/sketch/third_party/icu/stubdata/CMakeFiles/duckdb_icu_stubdata.dir/build.make extension/sketch/third_party/icu/stubdata/CMakeFiles/duckdb_icu_stubdata.dir/build
-.PHONY : duckdb_icu_stubdata/fast
-
-#=============================================================================
 # Target rules for targets named unittest
 
 # Build rule for target.
@@ -2353,9 +2314,6 @@ help:
 	@echo "... duckdb_func_table_version"
 	@echo "... duckdb_function"
 	@echo "... duckdb_hyperloglog"
-	@echo "... duckdb_icu_common"
-	@echo "... duckdb_icu_i18n"
-	@echo "... duckdb_icu_stubdata"
 	@echo "... duckdb_main"
 	@echo "... duckdb_main_capi"
 	@echo "... duckdb_main_extension"

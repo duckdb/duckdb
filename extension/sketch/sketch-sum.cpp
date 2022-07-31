@@ -1,4 +1,4 @@
-#include "include/sketch-sum.hpp"
+#include "include/sketch-hll.hpp"
 
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/sum_helpers.hpp"
@@ -164,7 +164,7 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
     return nullptr;
 }
 
-void SketchSum::RegisterFunction(ClientContext &context) {
+void SketchHll::RegisterFunction(ClientContext &context) {
     AggregateFunctionSet sum("sketchsum");
     // decimal
     sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
@@ -178,8 +178,8 @@ void SketchSum::RegisterFunction(ClientContext &context) {
         LogicalType::DOUBLE, LogicalType::DOUBLE));
 
     auto &catalog = Catalog::GetCatalog(context);
-	CreateAggregateFunctionInfo func_info(move(sum));
-	catalog.AddFunction(context, &func_info);
+    CreateAggregateFunctionInfo func_info(move(sum));
+    catalog.AddFunction(context, &func_info);
 }
 
 } // namespace duckdb

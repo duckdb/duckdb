@@ -3,6 +3,7 @@
 
 #include "include/sketch-extension.hpp"
 #include "include/sketch-foo.hpp"
+#include "include/sketch-hll.hpp"
 #include "include/sketch-sum.hpp"
 
 #include "duckdb/main/database.hpp"
@@ -21,6 +22,7 @@ void SketchExtension::Load(DuckDB &db) {
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	SketchSum::RegisterFunction(*con.context);
+	SketchHll::RegisterFunction(*con.context);
 	SketchFoo::RegisterFunction(*con.context);
 	con.Commit();
 }
