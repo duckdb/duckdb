@@ -87,6 +87,14 @@ template <> class HllState<hugeint_t> : public HllStateBase {
     }
 };
 
+template <> class HllState<string_t> : public HllStateBase {
+  public:
+    void Update(string_t value) {
+        this->isset = true;
+        this->sketch->update(value.GetDataUnsafe(), value.GetSize());
+    }
+};
+
 struct HllOperation {
 	template <class STATE>
     static void Initialize(STATE *state) {
@@ -150,9 +158,31 @@ AggregateFunction GetInitAggregate(PhysicalType type) {
                 LogicalType::SMALLINT, LogicalType::BLOB);
         return function;
     }
+    case PhysicalType::DOUBLE: {
+        auto function =
+            AggregateFunction::UnaryAggregate<HllState<double>, double, string_t, HllOperation>(
+                LogicalType::DOUBLE, LogicalType::BLOB);
+        return function;
+    }
+    case PhysicalType::VARCHAR: {
+        auto function =
+            AggregateFunction::UnaryAggregate<HllState<string_t>, string_t, string_t, HllOperation>(
+                LogicalType::VARCHAR, LogicalType::BLOB);
+        return function;
+    }
     default:
         throw InternalException("Unimplemented sum aggregate");
     }
+}
+
+unique_ptr<FunctionData> BindDecimalHllInit(ClientContext &context, AggregateFunction &function,
+                                        vector<unique_ptr<Expression>> &arguments) {
+    auto decimal_type = arguments[0]->return_type;
+    function = GetInitAggregate(decimal_type.InternalType());
+    function.name = "hll_count_init";
+    function.arguments[0] = decimal_type;
+    function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
+    return nullptr;
 }
 
 void SketchSum::RegisterFunction(ClientContext &context) {
@@ -162,6 +192,11 @@ void SketchSum::RegisterFunction(ClientContext &context) {
     init.AddFunction(GetInitAggregate(PhysicalType::INT64));
     init.AddFunction(GetInitAggregate(PhysicalType::INT32));
     init.AddFunction(GetInitAggregate(PhysicalType::INT16));
+    init.AddFunction(GetInitAggregate(PhysicalType::DOUBLE));
+    init.AddFunction(GetInitAggregate(PhysicalType::VARCHAR));
+    init.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+                                      nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+                                      BindDecimalHllInit));
 
     auto &catalog = Catalog::GetCatalog(context);
     CreateAggregateFunctionInfo func_info(move(init));
