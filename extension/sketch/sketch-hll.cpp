@@ -1,13 +1,14 @@
 #include "include/sketch-sum.hpp"
 
-#include "duckdb/function/aggregate/distributive_functions.hpp"
-#include "duckdb/function/aggregate/sum_helpers.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/function/aggregate/algebraic_functions.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/sum_helpers.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
 
 #include "third_party/apache-datasketches/hll/include/hll.hpp"
 
@@ -185,6 +186,17 @@ unique_ptr<FunctionData> BindDecimalHllInit(ClientContext &context, AggregateFun
     return nullptr;
 }
 
+struct ExtractOperator {
+    template <class TA, class TR>
+    static TR Operation(TA input) {	
+        auto sketch = datasketches::hll_sketch::deserialize(input.GetDataUnsafe(),
+                                                            input.GetSize());
+        // TODO: Check for error.
+        return sketch.get_estimate();
+    }
+};
+
+
 void SketchSum::RegisterFunction(ClientContext &context) {
     AggregateFunctionSet init("hll_count_init");
     
@@ -198,9 +210,17 @@ void SketchSum::RegisterFunction(ClientContext &context) {
                                       nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
                                       BindDecimalHllInit));
 
+    ScalarFunctionSet extract("hll_count_extract");
+
+    extract.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT, 
+                                        ScalarFunction::UnaryFunction<string_t, int64_t, ExtractOperator>));
+
     auto &catalog = Catalog::GetCatalog(context);
-    CreateAggregateFunctionInfo func_info(move(init));
-    catalog.AddFunction(context, &func_info);
+    CreateAggregateFunctionInfo init_info(move(init));
+    catalog.AddFunction(context, &init_info);
+    CreateScalarFunctionInfo extract_info(move(extract));
+    catalog.AddFunction(context, &extract_info);
+
 }
 
 } // namespace duckdb
