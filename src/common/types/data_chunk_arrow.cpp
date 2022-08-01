@@ -84,7 +84,6 @@ struct ArrowVarcharConversion {
 	}
 };
 
-
 struct ArrowChunkConverter {
 	void InitializeChild(DuckDBArrowArrayChildHolder &child_holder, idx_t size) {
 		auto &child = child_holder.array;
@@ -113,11 +112,11 @@ struct ArrowChunkConverter {
 	}
 
 	void ForceContiguousList(Vector &v, idx_t size) {
-		switch(v.GetType().InternalType()) {
+		switch (v.GetType().InternalType()) {
 		case PhysicalType::LIST:
 			break;
 		case PhysicalType::STRUCT: {
-			for(auto &entry : StructVector::GetEntries(v)) {
+			for (auto &entry : StructVector::GetEntries(v)) {
 				ForceContiguousList(*entry, size);
 			}
 			return;
@@ -157,7 +156,7 @@ struct ArrowChunkConverter {
 					continue;
 				}
 				auto &le = list_data[i];
-				for(idx_t k = 0; k < le.length; k++) {
+				for (idx_t k = 0; k < le.length; k++) {
 					sel.set_index(current_offset++, le.offset + k);
 				}
 			}
@@ -202,7 +201,6 @@ struct ArrowChunkConverter {
 		auto &child_type = ListType::GetChildType(type);
 		ConvertArrowChild(child_holder.children[0], child_type, child_vector, list_size);
 		ConvertChildValidityMask(child_vector, child_holder.children[0].array);
-
 	}
 
 	void ConvertStruct(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
@@ -220,13 +218,14 @@ struct ArrowChunkConverter {
 		}
 		child.children = &child_holder.children_ptrs[0];
 		for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
-			ConvertArrowChild(child_holder.children[child_idx], StructType::GetChildType(type, child_idx), *children[child_idx],
-						  size);
+			ConvertArrowChild(child_holder.children[child_idx], StructType::GetChildType(type, child_idx),
+			                  *children[child_idx], size);
 			ConvertChildValidityMask(*children[child_idx], child_holder.children[child_idx].array);
 		}
 	}
 
-	void ConvertStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
+	void ConvertStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data,
+	                      idx_t size) {
 		auto &child = child_holder.array;
 		child_holder.vector = make_unique<Vector>(data);
 
@@ -267,7 +266,7 @@ struct ArrowChunkConverter {
 				ConvertChildValidityMask(list_vector_child, child_holder.children[child_idx].array);
 			}
 			ConvertArrowChild(child_holder.children[child_idx], ListType::GetChildType(child_types[child_idx].second),
-						  list_vector_child, list_size);
+			                  list_vector_child, list_size);
 		}
 	}
 
@@ -412,7 +411,7 @@ struct ArrowChunkConverter {
 		child.dictionary = child_holder.children_ptrs[0];
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 2;
-		child.buffers[1] = (void *) FlatVector::GetData(*child_holder.vector);
+		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
 	}
 
 	void ConvertZeroCopy(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data) {
@@ -423,7 +422,8 @@ struct ArrowChunkConverter {
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
 	}
 
-	void ConvertArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
+	void ConvertArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data,
+	                       idx_t size) {
 		auto &child = child_holder.array;
 		switch (type.id()) {
 		case LogicalTypeId::BOOLEAN: {
@@ -573,4 +573,4 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	out_array->release = ReleaseDuckDBArrowArray;
 }
 
-}
+} // namespace duckdb
