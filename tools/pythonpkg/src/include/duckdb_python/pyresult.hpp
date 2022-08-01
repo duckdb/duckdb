@@ -38,11 +38,11 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	py::object FetchDF();
+	data_frame FetchDF();
 
 	py::object FetchArrowTable(idx_t chunk_size);
 
-	py::object FetchDFChunk(idx_t vectors_per_chunk);
+	data_frame FetchDFChunk(idx_t vectors_per_chunk);
 
 	py::object FetchRecordBatchReader(idx_t chunk_size);
 

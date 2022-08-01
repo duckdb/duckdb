@@ -1,0 +1,25 @@
+# name: test/sql/types/decimal/test_decimal_4106.test
+# description: Test #4106: INTEGER values mixed with DECIMAL do not grow the DECIMAL width/scale properly
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+# From values list
+statement ok
+CREATE TABLE from_values AS VALUES (1000000), (10.0000000005);
+
+query I
+SELECT * FROM from_values;
+----
+1000000.0000000000
+10.0000000005
+
+# From list
+statement ok
+CREATE TABLE from_list AS SELECT [1000000, 10.0000000005];
+
+query I
+SELECT * FROM from_list;
+----
+[1000000.0000000000, 10.0000000005]

@@ -311,12 +311,16 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-py::object DuckDBPyResult::FetchDF() {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal());
+static data_frame FrameFromNumpy(const py::handle &o) {
+	return py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 }
 
-py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal(true, num_of_vectors));
+data_frame DuckDBPyResult::FetchDF() {
+	return FrameFromNumpy(FetchNumpyInternal());
+}
+
+data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
 }
 
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk, py::list &batches) {

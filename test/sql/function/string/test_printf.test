@@ -183,3 +183,9 @@ SELECT printf('%s: %s', pstring, pstring) FROM strings WHERE idx <> 2 ORDER BY i
 ----
 hello: hello
 abcde: abcde
+
+# cast integers correctly
+query T
+SELECT printf('%d %d %d %d', 100::tinyint, 1000::smallint, 1000::int, 1000::bigint);
+----
+100 1000 1000 1000
