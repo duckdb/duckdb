@@ -32,7 +32,7 @@ struct CreateCollationInfo : public CreateInfo {
 	bool not_required_for_equality;
 
 protected:
-	void SerializeChild(Serializer &) const override {
+	void SerializeInternal(Serializer &) const override {
 		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
 	}
 

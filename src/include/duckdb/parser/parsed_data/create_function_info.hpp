@@ -24,7 +24,7 @@ struct CreateFunctionInfo : public CreateInfo {
 	string name;
 
 protected:
-	void SerializeChild(Serializer &serializer) const override {
+	void SerializeInternal(Serializer &serializer) const override {
 		serializer.WriteString(name);
 	}
 };

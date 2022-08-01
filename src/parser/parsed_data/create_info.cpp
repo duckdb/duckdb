@@ -17,7 +17,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.Write(temporary);
 	serializer.Write(internal);
 	serializer.WriteString(sql);
-	SerializeChild(serializer);
+	SerializeInternal(serializer);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {

@@ -35,7 +35,7 @@ public:
 	}
 
 protected:
-	void SerializeChild(Serializer &) const override {
+	void SerializeInternal(Serializer &) const override {
 		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(CreateInfo::type));
 	}
 };

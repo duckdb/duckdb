@@ -45,7 +45,7 @@ struct CreateInfo : public ParseInfo {
 	string sql;
 
 protected:
-	virtual void SerializeChild(Serializer &) const = 0;
+	virtual void SerializeInternal(Serializer &) const = 0;
 
 	void DeserializeBase(Deserializer &deserializer);
 

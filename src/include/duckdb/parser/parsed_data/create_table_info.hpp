@@ -33,7 +33,7 @@ struct CreateTableInfo : public CreateInfo {
 	unique_ptr<SelectStatement> query;
 
 protected:
-	void SerializeChild(Serializer &serializer) const override {
+	void SerializeInternal(Serializer &serializer) const override {
 		FieldWriter writer(serializer);
 		writer.WriteString(table);
 		writer.WriteRegularSerializableList(columns);
