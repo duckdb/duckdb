@@ -265,7 +265,11 @@ jobs:
          # Set an output parameter `uname` for use in subsequent steps
          run: |
            uname -a
-           /tmp/unittest
+           pwd
+           ls
+           cd /tmp
+           ls
+           ./unittest
            echo ::set-output name=uname::$(uname -a)
 
      - name: Get the output
