@@ -93,7 +93,7 @@ extern "C" {
 #define FSST_ESC 255
 
 /* Data structure needed for compressing strings - use duckdb_fsst_duplicate() to create thread-local copies. Use duckdb_fsst_destroy() to free. */
-typedef void* fsst_encoder_t; /* opaque type - it wraps around a rather large (~900KB) C++ object */
+typedef void* duckdb_fsst_encoder_t; /* opaque type - it wraps around a rather large (~900KB) C++ object */
 
 /* Data structure needed for decompressing strings - read-only and thus can be shared between multiple decompressing threads. */
 typedef struct {
@@ -104,7 +104,7 @@ typedef struct {
 } duckdb_fsst_decoder_t;
 
 /* Calibrate a FSST symboltable from a batch of strings (it is best to provide at least 16KB of data). */
-fsst_encoder_t*  
+duckdb_fsst_encoder_t*
 duckdb_fsst_create(
    size_t n,         /* IN: number of strings in batch to sample from. */
    size_t lenIn[],   /* IN: byte-lengths of the inputs */
@@ -113,9 +113,9 @@ duckdb_fsst_create(
 );
 
 /* Create another encoder instance, necessary to do multi-threaded encoding using the same symbol table. */ 
-fsst_encoder_t*    
+duckdb_fsst_encoder_t*
 duckdb_fsst_duplicate(
-   fsst_encoder_t *encoder  /* IN: the symbol table to duplicate. */ 
+   duckdb_fsst_encoder_t *encoder  /* IN: the symbol table to duplicate. */
 );
 
 #define FSST_MAXHEADER (8+1+8+2048+1) /* maxlen of deserialized fsst header, produced/consumed by duckdb_fsst_export() resp. duckdb_fsst_import() */
@@ -123,13 +123,13 @@ duckdb_fsst_duplicate(
 /* Space-efficient symbol table serialization (smaller than sizeof(duckdb_fsst_decoder_t) - by saving on the unused bytes in symbols of len < 8). */
 unsigned int                /* OUT: number of bytes written in buf, at most sizeof(duckdb_fsst_decoder_t) */
 duckdb_fsst_export(
-   fsst_encoder_t *encoder, /* IN: the symbol table to dump. */ 
+   duckdb_fsst_encoder_t *encoder, /* IN: the symbol table to dump. */
    unsigned char *buf       /* OUT: pointer to a byte-buffer where to serialize this symbol table. */
 ); 
 
 /* Deallocate encoder. */
 void
-duckdb_fsst_destroy(fsst_encoder_t*);
+duckdb_fsst_destroy(duckdb_fsst_encoder_t*);
 
 /* Return a decoder structure from serialized format (typically used in a block-, file- or row-group header). */
 unsigned int                /* OUT: number of bytes consumed in buf (0 on failure). */
@@ -141,14 +141,14 @@ duckdb_fsst_import(
 /* Return a decoder structure from an encoder. */
 duckdb_fsst_decoder_t
 duckdb_fsst_decoder(
-   fsst_encoder_t *encoder   
+   duckdb_fsst_encoder_t *encoder
 );
 
 /* Compress a batch of strings (on AVX512 machines best performance is obtained by compressing more than 32KB of string volume). */
 /* The output buffer must be large; at least "conservative space" (7+2*inputlength) for the first string for something to happen. */
 size_t                      /* OUT: the number of compressed strings (<=n) that fit the output buffer. */ 
 duckdb_fsst_compress(
-   fsst_encoder_t *encoder, /* IN: encoder obtained from duckdb_fsst_create(). */
+   duckdb_fsst_encoder_t *encoder, /* IN: encoder obtained from duckdb_fsst_create(). */
    size_t nstrings,         /* IN: number of strings in batch to compress. */
    size_t lenIn[],          /* IN: byte-lengths of the inputs */
    unsigned char *strIn[],  /* IN: input string start pointers. */

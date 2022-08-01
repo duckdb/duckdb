@@ -18,6 +18,7 @@ typedef struct {
 
 struct FSSTStorage {
 	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
+	static constexpr double MINIMUM_COMPRESSION_RATIO = 1.2;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
@@ -53,7 +54,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 		}
 	}
 
-	fsst_encoder_t *fsst_encoder = nullptr;
+	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	idx_t count;
 
 	std::vector<string> fsst_strings;
@@ -146,8 +147,13 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto bitpacked_offsets_size =
 	    BitpackingPrimitives::GetRequiredSize<idx_t>(string_count + state.empty_strings, minimum_width);
 
-	// TODO this forgets both the nulls and the fsst symtable size
-	return bitpacked_offsets_size + compressed_dict_size;
+	auto estimated_base_size = bitpacked_offsets_size + compressed_dict_size;
+	auto num_blocks = estimated_base_size / (Storage::BLOCK_SIZE - sizeof(duckdb_fsst_decoder_t));
+	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
+
+	auto estimated_size = estimated_base_size + symtable_size;
+
+	return estimated_size * MINIMUM_COMPRESSION_RATIO;
 }
 
 //===--------------------------------------------------------------------===//
@@ -205,7 +211,7 @@ public:
 		memcpy(dict_pos, compressed_string, compressed_string_len);
 		current_dictionary.Verify();
 
-		// add dict index TODO delta encode immediately by just doing string length here straigh away?
+		// add dict index TODO delta encode immediately by just doing string length here straight away?
 		index_buffer.push_back(current_dictionary.size);
 
 		max_compressed_string_length = MaxValue(max_compressed_string_length, compressed_string_len);
@@ -294,8 +300,8 @@ public:
 		Store<uint32_t>(symbol_table_offset, (data_ptr_t)&header_ptr->fsst_symbol_table_offset);
 		Store<uint32_t>((uint32_t)current_width, (data_ptr_t)&header_ptr->bitpacking_width);
 
-		// TODO: MOVING!  also think about code deduplication!
-		if (true || total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {
+		// TODO: code deduplication
+		if (total_size >= FSSTStorage::COMPACTION_FLUSH_LIMIT) {
 			// the block is full enough, don't bother moving around the dictionary
 			return Storage::BLOCK_SIZE;
 		}
@@ -328,7 +334,7 @@ public:
 	size_t max_compressed_string_length = 0;
 	bitpacking_width_t current_width = 0;
 
-	fsst_encoder_t *fsst_encoder = nullptr;
+	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
 	size_t fsst_serialized_symbol_table_size = sizeof(duckdb_fsst_decoder_t); // TODO calculate actual value somewhere?
 };
