@@ -7,7 +7,9 @@ skip_if_no_R4 <- function() {
 test_that("dbplyr generic scalars translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(as.character(1)), sql(r"{CAST(1.0 AS TEXT)}"))
@@ -32,7 +34,9 @@ test_that("dbplyr generic scalars translated correctly", {
 test_that("duckdb custom scalars translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   #  expect_equal(translate(as(1,"CHARACTER")), sql(r"{CAST(1.0 AS TEXT}"))        # Not implemented
@@ -69,7 +73,9 @@ test_that("duckdb custom scalars translated correctly", {
 test_that("pasting translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(paste("hi", "bye")), sql(r"{CONCAT_WS(' ', 'hi', 'bye')}"))
@@ -88,7 +94,9 @@ test_that("pasting translated correctly", {
 test_that("custom lubridate functions translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(yday(x)), sql(r"{EXTRACT(DOY FROM "x")}"))
@@ -128,7 +136,9 @@ test_that("custom lubridate functions translated correctly", {
 test_that("custom stringr functions translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(str_c(x, y)), sql(r"{CONCAT_WS('', "x", "y")}"))
@@ -152,7 +162,8 @@ test_that("custom stringr functions translated correctly", {
 test_that("datetime escaping working as in DBI", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  con <- duckdb::translate_duckdb()
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   escape <- function(...) dbplyr::escape(...)
   sql <- function(...) dbplyr::sql(...)
 
@@ -172,7 +183,9 @@ test_that("datetime escaping working as in DBI", {
 test_that("two variable aggregates are translated correctly", {
   skip_if_no_R4()
   skip_if_not_installed("dbplyr")
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
   sql <- function(...) dbplyr::sql(...)
 
   expect_equal(translate(cor(x, y), window = FALSE), sql(r"{CORR("x", "y")}"))
@@ -188,7 +201,9 @@ test_that("snapshots of dbplyr generic scalar translation", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(as.character(1))
@@ -216,7 +231,9 @@ test_that("snapshots of duckdb custom scalars translations", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     #  translate(as(1,"CHARACTER"))        # Not implemented
@@ -255,7 +272,9 @@ test_that("snapshot tests for pasting translate", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(paste("hi", "bye"))
@@ -276,7 +295,9 @@ test_that("snapshots for custom lubridate functions translated correctly", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(yday(x))
@@ -318,7 +339,9 @@ test_that("snapshots for custom stringr functions translated correctly", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(str_c(x, y))
@@ -344,7 +367,8 @@ test_that("snapshots datetime escaping working as in DBI", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  con <- duckdb::translate_duckdb()
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
   escape <- function(...) dbplyr::escape(...)
 
   expect_snapshot({
@@ -366,7 +390,9 @@ test_that("two variable aggregates are translated correctly", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot({
     translate(cor(x, y), window = FALSE)
@@ -378,7 +404,9 @@ test_that("these should give errors", {
   skip_on_cran()
   skip_if_not_installed("dbplyr")
   local_edition(3)
-  translate <- function(...) dbplyr::translate_sql(..., con = duckdb::translate_duckdb())
+  con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  translate <- function(...) dbplyr::translate_sql(..., con = con)
 
   expect_snapshot(error = TRUE, {
     translate(grepl("dummy", txt, perl = TRUE)) # Expected error

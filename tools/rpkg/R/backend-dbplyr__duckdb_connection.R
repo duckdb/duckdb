@@ -21,8 +21,7 @@ NULL
 #' Connection object for simulation of the SQL generation without actual database.
 #' dbplyr overrides database specific identifier and string quotes
 #' @param ... Any parameters to be forwarded
-#' @export
-#' @rdname backend-duckdb
+#' @noRd
 simulate_duckdb <- function(...) {
   structure(list(), ..., class = c("duckdb_connection", "TestConnection", "DBIConnection"))
 }
@@ -31,8 +30,7 @@ simulate_duckdb <- function(...) {
 #' This version keeps the database specific identifier and string quotes, i.e.
 #' allows to translate to DuckDB SQL dialect.
 #' @param ... Any parameters to be forwarded
-#' @export
-#' @rdname backend-duckdb
+#' @noRd
 translate_duckdb <- function(...) {
   structure(list(), ..., class = c("duckdb_connection", "DBIConnection"))
 }
