@@ -82,12 +82,11 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(names);
 	writer.WriteList<column_t>(column_ids);
 	writer.WriteSerializable(table_filters);
-
-	if (function.name.empty()) {
-		throw InvalidInputException("Can't serialize unnamed table function");
-	}
+	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
-	if (!function.serialize) {
+	writer.WriteField(function.function_set_key);
+	writer.WriteField(bind_data != nullptr);
+	if (bind_data && !function.serialize) {
 		throw InvalidInputException("Can't serialize table function %s", function.name);
 	}
 	function.serialize(writer, *bind_data, function);
@@ -102,6 +101,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, Logi
 	auto table_filters = reader.ReadRequiredSerializable<TableFilterSet>();
 
 	auto name = reader.ReadRequired<string>();
+	auto function_set_key = reader.ReadRequired<idx_t>();
+	auto has_bind_data = reader.ReadRequired<bool>();
+
 	auto &catalog = Catalog::GetCatalog(context);
 
 	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
@@ -111,9 +113,16 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, Logi
 	}
 
 	auto functions = (TableFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions[0];
+	auto function = functions->functions.GetFunction(function_set_key);
+	unique_ptr<FunctionData> bind_data;
 
-	auto bind_data = functions->functions[0].deserialize(context, reader, function);
+	if (has_bind_data) {
+		if (!function.deserialize) {
+			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+		}
+		bind_data = function.deserialize(context, reader, function);
+	}
+
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = column_ids;
 	result->table_filters = move(*table_filters);

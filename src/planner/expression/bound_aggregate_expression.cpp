@@ -82,20 +82,25 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
+	writer.WriteField(function.function_set_key);
 	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);
 	writer.WriteOptional(filter);
-	;
 
-	if (!function.serialize) {
-		throw InvalidInputException("Can't serialize aggregate function %s", function.name);
+	writer.WriteField(bind_info != nullptr);
+	if (bind_info) {
+		if (!function.serialize) {
+			throw SerializationException("Have bind info but no serialization function for %s", function.name);
+		}
+		D_ASSERT(function.serialize);
+		function.serialize(writer, bind_info.get(), function);
 	}
-	function.serialize(writer, bind_info.get(), function);
 }
 
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &context, ExpressionType type,
                                                              FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
+	auto function_set_key = reader.ReadRequired<idx_t>();
 	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 	auto distinct = reader.ReadRequired<bool>();
 
@@ -111,10 +116,17 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 	}
 
 	auto functions = (AggregateFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions[0];
-
+	auto function = functions->functions.GetFunction(function_set_key);
 	unique_ptr<FunctionData> bind_info;
-	bind_info = functions->functions[0].deserialize(context, reader, function);
+
+	auto has_bind_info = reader.ReadRequired<bool>();
+
+	if (has_bind_info) {
+		if (!function.deserialize) {
+			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+		}
+		bind_info = function.deserialize(context, reader, function);
+	}
 
 	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
 }

@@ -12,7 +12,7 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
                                FunctionSideEffects side_effects, FunctionNullHandling null_handling)
     : BaseScalarFunction(move(name), move(arguments), move(return_type), side_effects, move(varargs), null_handling),
       function(move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
-      statistics(statistics) {
+      statistics(statistics), serialize(nullptr), deserialize(nullptr) {
 }
 
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,

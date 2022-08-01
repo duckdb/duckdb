@@ -14,6 +14,8 @@
 
 #include "duckdb/common/mutex.hpp"
 
+#include "duckdb/common/field_writer.hpp"
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -363,6 +365,31 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
+static void TableScanSerialize(FieldWriter &writer, const FunctionData &bind_data_p, const TableFunction &function) {
+	auto &bind_data = (TableScanBindData &)bind_data_p;
+
+	D_ASSERT(bind_data.chunk_count == 0);
+	D_ASSERT(!bind_data.is_index_scan);
+	writer.WriteString(bind_data.table->schema->name);
+	writer.WriteString(bind_data.table->name);
+
+	// TODO handle index scans, too
+}
+
+static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,
+                                                     TableFunction &function) {
+	auto schema_name = reader.ReadRequired<string>();
+	auto table_name = reader.ReadRequired<string>();
+
+	auto &catalog = Catalog::GetCatalog(context);
+	auto catalog_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema_name, table_name);
+	if (!catalog_entry || catalog_entry->type != CatalogType::TABLE_ENTRY) {
+		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
+	}
+
+	return make_unique<TableScanBindData>((TableCatalogEntry *)catalog_entry);
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -376,6 +403,8 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_batch_index = TableScanGetBatchIndex;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
+	scan_function.serialize = TableScanSerialize;
+	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
 }
 

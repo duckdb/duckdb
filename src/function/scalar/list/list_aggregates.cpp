@@ -404,7 +404,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto &best_function = func->functions[best_function_idx];
+	auto best_function = func->functions.GetFunction(best_function_idx);
 
 	if (IS_AGGR) {
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, best_function);

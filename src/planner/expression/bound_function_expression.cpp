@@ -72,7 +72,20 @@ void BoundFunctionExpression::Verify() const {
 }
 
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	D_ASSERT(!function.name.empty());
+	writer.WriteString(function.name);
+	writer.WriteField(function.function_set_key);
+	writer.WriteField(is_operator);
+	writer.WriteSerializableList(children);
+
+	writer.WriteField(bind_info != nullptr);
+	if (bind_info) {
+		if (!function.serialize) {
+			throw SerializationException("Have bind info but no serialization function for %s", function.name);
+		}
+		D_ASSERT(function.serialize);
+		function.serialize(writer, bind_info.get(), function);
+	}
 }
 
 } // namespace duckdb

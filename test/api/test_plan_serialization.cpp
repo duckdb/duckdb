@@ -49,8 +49,8 @@ static void test_helper(string sql) {
 }
 
 TEST_CASE("Test plan serialization", "[api]") {
-	test_helper(
-	    "SELECT last_name,COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
+	test_helper("SELECT last_name,COUNT(*), min(first_name), max(first_name) FROM "
+	            "parquet_scan('data/parquet-testing/userdata1.parquet') GROUP BY last_name");
 }
 
 TEST_CASE("Test logical_dummy_scan", "[api]") {
@@ -82,5 +82,10 @@ TEST_CASE("Test logical_limit_percent", "[api]") {
 }
 
 TEST_CASE("Test logical_limit", "[api]") {
+	test_helper("SELECT 42 LIMIT 1");
+}
+
+TEST_CASE("serialize Q1", "[api]") {
+
 	test_helper("SELECT 42 LIMIT 1");
 }

@@ -49,6 +49,11 @@ typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &conte
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, unordered_set<CatalogEntry *> &dependencies);
 
+typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
+                                     const ScalarFunction &function);
+typedef unique_ptr<FunctionData> (*function_deserialize_t)(ClientContext &context, FieldReader &reader,
+                                                           ScalarFunction &function);
+
 class ScalarFunction : public BaseScalarFunction {
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
@@ -76,6 +81,9 @@ public:
 	dependency_function_t dependency;
 	//! The statistics propagation function (if any)
 	function_statistics_t statistics;
+
+	function_serialize_t serialize;
+	function_deserialize_t deserialize;
 
 	DUCKDB_API static unique_ptr<Expression> BindScalarFunction(ClientContext &context, const string &schema,
 	                                                            const string &name,

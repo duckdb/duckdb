@@ -20,10 +20,10 @@ class AggregateFunctionCatalogEntry : public StandardEntry {
 public:
 	AggregateFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateAggregateFunctionInfo *info)
 	    : StandardEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, schema, catalog, info->name),
-	      functions(info->functions.functions) {
+	      functions(info->functions) {
 	}
 
 	//! The aggregate functions
-	vector<AggregateFunction> functions;
+	AggregateFunctionSet functions;
 };
 } // namespace duckdb

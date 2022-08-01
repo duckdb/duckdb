@@ -20,8 +20,9 @@
 namespace duckdb {
 
 static bool IsTableInTableOutFunction(TableFunctionCatalogEntry &table_function) {
-	return table_function.functions.size() == 1 && table_function.functions[0].arguments.size() == 1 &&
-	       table_function.functions[0].arguments[0].id() == LogicalTypeId::TABLE;
+	auto fun = table_function.functions.GetFunctionByOffset(0);
+	return table_function.functions.Size() == 1 && fun.arguments.size() == 1 &&
+	       fun.arguments[0].id() == LogicalTypeId::TABLE;
 }
 
 bool Binder::BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions,
@@ -216,7 +217,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
-	auto &table_function = function->functions[best_function_idx];
+	auto table_function = function->functions.GetFunction(best_function_idx);
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

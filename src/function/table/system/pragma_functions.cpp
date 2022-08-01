@@ -84,22 +84,24 @@ static void PragmaFunctionsFunction(ClientContext &context, TableFunctionInput &
 		switch (entry->type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
 			auto &func = (ScalarFunctionCatalogEntry &)*entry;
-			if (data.offset_in_entry >= func.functions.size()) {
+			if (data.offset_in_entry >= func.functions.Size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
 				break;
 			}
-			AddFunction(func.functions[data.offset_in_entry++], count, output, false);
+			auto entry = func.functions.GetFunctionByOffset(data.offset_in_entry++);
+			AddFunction(entry, count, output, false);
 			break;
 		}
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 			auto &aggr = (AggregateFunctionCatalogEntry &)*entry;
-			if (data.offset_in_entry >= aggr.functions.size()) {
+			if (data.offset_in_entry >= aggr.functions.Size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
 				break;
 			}
-			AddFunction(aggr.functions[data.offset_in_entry++], count, output, true);
+			auto entry = aggr.functions.GetFunctionByOffset(data.offset_in_entry++);
+			AddFunction(entry, count, output, true);
 			break;
 		}
 		default:

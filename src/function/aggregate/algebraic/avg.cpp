@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -173,6 +174,18 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	}
 }
 
+static void SerializeDecimalAvg(FieldWriter &writer, const FunctionData *bind_data_p,
+                                const AggregateFunction &function) {
+	D_ASSERT(bind_data_p);
+	auto bind_data = (AverageDecimalBindData *)bind_data_p;
+	writer.WriteField(bind_data->scale);
+}
+
+static unique_ptr<FunctionData> DeserializeDecimalAvg(ClientContext &context, FieldReader &reader,
+                                                      AggregateFunction &function) {
+	return make_unique<AverageDecimalBindData>(reader.ReadRequired<double>());
+}
+
 unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -180,12 +193,15 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
 	function.name = "avg";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DOUBLE;
+	function.serialize = SerializeDecimalAvg;
+	function.deserialize = DeserializeDecimalAvg;
 	return make_unique<AverageDecimalBindData>(
 	    Hugeint::Cast<double>(Hugeint::POWERS_OF_TEN[DecimalType::GetScale(decimal_type)]));
 }
 
 void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet avg("avg");
+
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
 	                                  BindDecimalAvg));

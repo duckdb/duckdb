@@ -21,8 +21,8 @@ static void PragmaEnableProfilingStatement(ClientContext &context, const Functio
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {
-	vector<PragmaFunction> functions;
-	functions.push_back(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
+	PragmaFunctionSet functions("");
+	functions.AddFunction(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);
