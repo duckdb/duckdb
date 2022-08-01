@@ -3,12 +3,15 @@
 namespace duckdb {
 
 void LogicalDelimGet::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(table_index);
+	writer.WriteRegularSerializableList(chunk_types);
 }
 
 unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                          FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	return make_unique<LogicalDelimGet>(table_index, chunk_types);
 }
 
 } // namespace duckdb
