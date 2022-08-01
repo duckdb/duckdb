@@ -102,15 +102,15 @@ public:
 
 	//! Compare the key with the prefix of the node, return the number matching bytes
 	static uint32_t PrefixMismatch(Node *node, Key &key, uint64_t depth);
-	//! Insert leaf into inner node
-	static void InsertLeaf(Node *&node, uint8_t key, Node *new_node);
+	//! Insert a new child node at key_byte into the Node
+	static void InsertChildNode(Node *&node, uint8_t key_byte, Node *new_child);
 	//! Erase entry from node
 	static void Erase(Node *&node, idx_t pos, ART &art);
 
 	//! Resolve the prefixes of two nodes and then merge them
-	static void ResolvePrefixesAndMerge(Node *l_node, Node *r_node);
+	static void ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
 	//! Merge two nodes with matching prefixes
-	static void Merge(Node *l_node, Node *r_node);
+	static void Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth);
 
 protected:
 	//! Copies the prefix from the source to the destination node

@@ -55,10 +55,10 @@ idx_t Node48::GetMin() {
 	return DConstants::INVALID_INDEX;
 }
 
-void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
+void Node48::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 	auto n = (Node48 *)node;
 
-	// Insert leaf into inner node
+	// Insert new child node into node
 	if (node->count < 48) {
 		// Insert element
 		idx_t pos = n->count;
@@ -69,7 +69,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 				pos++;
 			}
 		}
-		n->children[pos] = child;
+		n->children[pos] = new_child;
 		n->child_index[key_byte] = pos;
 		n->count++;
 	} else {
@@ -85,7 +85,7 @@ void Node48::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		CopyPrefix(n, new_node);
 		delete node;
 		node = new_node;
-		Node256::Insert(node, key_byte, child);
+		Node256::Insert(node, key_byte, new_child);
 	}
 }
 
@@ -113,7 +113,7 @@ void Node48::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node48::Merge(Node *l_node, Node *r_node) {
+void Node48::Merge(Node *l_node, Node *r_node, idx_t depth) {
 
 	Node48 *n = (Node48 *)l_node;
 

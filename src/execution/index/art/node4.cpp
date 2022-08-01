@@ -56,7 +56,7 @@ Node *Node4::GetChild(ART &art, idx_t pos) {
 void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 	Node4 *n = (Node4 *)node;
 
-	// Insert leaf into inner node
+	// Insert new child node into node
 	if (node->count < 4) {
 		// Insert element
 		idx_t pos = 0;
@@ -82,7 +82,7 @@ void Node4::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 			new_node->children[i] = n->children[i];
 			n->children[i] = nullptr;
 		}
-		// Delete old node and replace it with new node
+		// Delete old node and replace it with new Node16
 		delete node;
 		node = new_node;
 		Node16::Insert(node, key_byte, new_child);
@@ -132,7 +132,7 @@ void Node4::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node4::Merge(Node *l_node, Node *r_node) {
+void Node4::Merge(Node *l_node, Node *r_node, idx_t depth) {
 
 	Node4 *n = (Node4 *)l_node;
 

@@ -169,19 +169,19 @@ uint32_t Node::PrefixMismatch(Node *node, Key &key, uint64_t depth) {
 	return pos;
 }
 
-void Node::InsertLeaf(Node *&node, uint8_t key, Node *new_node) {
+void Node::InsertChildNode(Node *&node, uint8_t key_byte, Node *new_child) {
 	switch (node->type) {
 	case NodeType::N4:
-		Node4::Insert(node, key, new_node);
+		Node4::Insert(node, key_byte, new_child);
 		break;
 	case NodeType::N16:
-		Node16::Insert(node, key, new_node);
+		Node16::Insert(node, key_byte, new_child);
 		break;
 	case NodeType::N48:
-		Node48::Insert(node, key, new_node);
+		Node48::Insert(node, key_byte, new_child);
 		break;
 	case NodeType::N256:
-		Node256::Insert(node, key, new_node);
+		Node256::Insert(node, key_byte, new_child);
 		break;
 	default:
 		throw InternalException("Unrecognized leaf type for insert");
@@ -289,11 +289,13 @@ BlockPointer SwizzleablePointer::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 	}
 }
 
-void Node::ResolvePrefixesAndMerge(Node *l_node, Node *r_node) {
+void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+
+	// TODO: debug if I am correctly going through the key bytes with depth (+ mismatch_pos)
 
 	// make sure that this node has a shorter or equal prefix length than other_node
 	if (l_node->prefix_length > r_node->prefix_length) {
-		Node::ResolvePrefixesAndMerge(r_node, l_node);
+		Node::ResolvePrefixesAndMerge(r_art, l_art, r_node, l_node, depth);
 		return;
 	}
 
@@ -308,7 +310,7 @@ void Node::ResolvePrefixesAndMerge(Node *l_node, Node *r_node) {
 
 	// no prefix or same prefix
 	if (mismatch_pos == l_node->prefix_length && l_node->prefix_length == r_node->prefix_length) {
-		Node::Merge(l_node, r_node);
+		Node::Merge(l_art, r_art, l_node, r_node, depth + mismatch_pos);
 
 	} else if (mismatch_pos == l_node->prefix_length) {
 		// other_node's prefix contains this node's prefix
@@ -320,19 +322,19 @@ void Node::ResolvePrefixesAndMerge(Node *l_node, Node *r_node) {
 		// test if the next byte in r_node (longer prefix) exists in l_node
 		auto child_pos = l_node->GetChildPos(r_node->prefix[mismatch_pos]);
 		if (child_pos == DConstants::INVALID_INDEX) {
-			// TODO: set r_node as the child of l_node
-			// TODO: for this we need to have a reference to the ART in this function (for pointer swizzling)
+			Node::InsertChildNode(l_node, r_node->prefix[mismatch_pos], r_node);
 		} else {
-			// TODO: merge the child of l_node at child_pos with r_node (ResolvePrefixesAndMerge)
+			auto child_node = l_node->GetChild(l_art, child_pos);
+			Node::ResolvePrefixesAndMerge(l_art, r_art, child_node, r_node, depth + mismatch_pos);
 		}
 
 	} else {
 		// prefixes differ, create new node and insert both nodes as children
 
 		// create new node
-		Node *new_node = new Node4(mismatch_pos);
-		new_node->prefix_length = mismatch_pos;
-		memcpy(new_node->prefix.get(), l_node->prefix.get(), mismatch_pos);
+		Node *new_node = new Node4(mismatch_pos - 1);
+		new_node->prefix_length = mismatch_pos - 1;
+		memcpy(new_node->prefix.get(), l_node->prefix.get(), mismatch_pos - 1);
 
 		// insert l_node, break up prefix of l_node
 		Node4::Insert(new_node, l_node->prefix[mismatch_pos], l_node);
@@ -348,11 +350,11 @@ void Node::ResolvePrefixesAndMerge(Node *l_node, Node *r_node) {
 	}
 }
 
-void Merge(Node *l_node, Node *r_node) {
+void Node::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
 
 	// make sure that the smaller node is l_node
 	if (l_node->type > r_node->type) {
-		Merge(r_node, l_node);
+		Merge(r_art, l_art, r_node, l_node, depth);
 		return;
 	}
 
@@ -363,7 +365,7 @@ void Merge(Node *l_node, Node *r_node) {
 		// leaf - n16
 		// leaf - n48
 		// leaf - n256
-		Leaf::Merge(l_node, r_node);
+		Leaf::Merge(l_node, r_node, depth);
 		break;
 	}
 	case NodeType::N4: {
@@ -371,25 +373,25 @@ void Merge(Node *l_node, Node *r_node) {
 		// n4 - n16
 		// n4 - n48
 		// n4 - n256
-		Node4::Merge(l_node, r_node);
+		Node4::Merge(l_node, r_node, depth);
 		break;
 	}
 	case NodeType::N16: {
 		// n16 - n16
 		// n16 - n48
 		// n16 - n256
-		Node16::Merge(l_node, r_node);
+		Node16::Merge(l_node, r_node, depth);
 		break;
 	}
 	case NodeType::N48: {
 		// n48 - n48
 		// n48 - n256
-		Node48::Merge(l_node, r_node);
+		Node48::Merge(l_node, r_node, depth);
 		break;
 	}
 	case NodeType::N256: {
 		// n256 - n256
-		Node256::Merge(l_node, r_node);
+		Node256::Merge(l_node, r_node, depth);
 		break;
 	}
 	}

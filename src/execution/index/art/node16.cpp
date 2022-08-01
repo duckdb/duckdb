@@ -55,9 +55,10 @@ void Node16::ReplaceChildPointer(idx_t pos, Node *node) {
 	children[pos] = node;
 }
 
-void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
+void Node16::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 	Node16 *n = (Node16 *)node;
 
+	// Insert new child node into node
 	if (n->count < 16) {
 		// Insert element
 		idx_t pos = 0;
@@ -71,7 +72,7 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 			}
 		}
 		n->key[pos] = key_byte;
-		n->children[pos] = child;
+		n->children[pos] = new_child;
 		n->count++;
 	} else {
 		// Grow to Node48
@@ -86,7 +87,7 @@ void Node16::Insert(Node *&node, uint8_t key_byte, Node *child) {
 		delete node;
 		node = new_node;
 
-		Node48::Insert(node, key_byte, child);
+		Node48::Insert(node, key_byte, new_child);
 	}
 }
 
@@ -122,7 +123,7 @@ void Node16::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node16::Merge(Node *l_node, Node *r_node) {
+void Node16::Merge(Node *l_node, Node *r_node, idx_t depth) {
 
 	Node16 *n = (Node16 *)l_node;
 

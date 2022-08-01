@@ -33,12 +33,12 @@ public:
 
 	idx_t GetMin() override;
 
-	//! Insert Leaf to the Node4
+	//! Insert a new child node at key_byte into the Node4
 	static void Insert(Node *&node, uint8_t key_byte, Node *new_child);
 	//! Remove Leaf from Node4
 	static void Erase(Node *&node, int pos, ART &art);
 
 	//! Merge two nodes with matching prefixes
-	static void Merge(Node *l_node, Node *r_node);
+	static void Merge(Node *l_node, Node *r_node, idx_t depth);
 };
 } // namespace duckdb

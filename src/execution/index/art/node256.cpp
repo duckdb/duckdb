@@ -54,11 +54,11 @@ Node *Node256::GetChild(ART &art, idx_t pos) {
 	return children[pos].Unswizzle(art);
 }
 
-void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {
+void Node256::Insert(Node *&node, uint8_t key_byte, Node *new_child) {
 	auto n = (Node256 *)(node);
 
 	n->count++;
-	n->children[key_byte] = child;
+	n->children[key_byte] = new_child;
 }
 
 void Node256::Erase(Node *&node, int pos, ART &art) {
@@ -81,7 +81,7 @@ void Node256::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node256::Merge(Node *l_node, Node *r_node) {
+void Node256::Merge(Node *l_node, Node *r_node, idx_t depth) {
 
 	Node256 *l_n = (Node256 *)l_node;
 	Node256 *r_n = (Node256 *)r_node;

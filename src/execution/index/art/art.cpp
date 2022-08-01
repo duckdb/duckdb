@@ -362,7 +362,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		return insertion_result;
 	}
 	Node *new_node = new Leaf(move(value), row_id);
-	Node::InsertLeaf(node, key[depth], new_node);
+	Node::InsertChildNode(node, key[depth], new_node);
 	return true;
 }
 
@@ -935,9 +935,8 @@ BlockPointer ART::Serialize(duckdb::MetaBlockWriter &writer) {
 	return {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
 }
 
-void ART::Merge(ART &other_art) {
-
-	Node::Merge(this->tree, other_art.tree);
+void ART::Merge(ART &l_art, ART &r_art) {
+	Node::ResolvePrefixesAndMerge(l_art, r_art, l_art.tree, r_art.tree, 0);
 }
 
 } // namespace duckdb

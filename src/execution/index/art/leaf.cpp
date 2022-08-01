@@ -1,4 +1,3 @@
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include <cstring>
@@ -98,17 +97,19 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-void Leaf::Merge(Node *l_node, Node *r_node) {
+void Leaf::Merge(Node *l_node, Node *r_node, idx_t depth) {
 
-	Leaf *n = (Leaf *)l_node;
+	Leaf *l_n = (Leaf *)l_node;
 
 	switch (r_node->type) {
 	case NodeType::NLeaf: {
-		// TODO
+		Leaf *r_n = (Leaf *)r_node;
+		Leaf::MergeNLeafNLeaf(l_n, r_n, depth);
 		break;
 	}
 	case NodeType::N4: {
-		// TODO
+		Node4 *r_n = (Node4 *)r_node;
+		Leaf::MergeNLeafNode4(l_n, r_n, depth);
 		break;
 	}
 	case NodeType::N16: {
@@ -124,6 +125,34 @@ void Leaf::Merge(Node *l_node, Node *r_node) {
 		break;
 	}
 	}
+}
+
+void Leaf::MergeNLeafNLeaf(Leaf *l_node, Leaf *r_node, idx_t depth) {
+
+	// push row_ids of l_node in a map to avoid duplicates
+	unordered_map<row_t, bool> l_node_row_ids;
+	for (idx_t i = 0; i < l_node->num_elements; i++) {
+		l_node_row_ids[l_node->GetRowId(i)] = true;
+	}
+
+	// append non-duplicate row_ids to l_node
+	for (idx_t i = 0; i < r_node->num_elements; i++) {
+		if (!l_node_row_ids[r_node->GetRowId(i)]) {
+			l_node->Insert(r_node->GetRowId(i));
+		}
+	}
+}
+
+void Leaf::MergeNLeafNode4(Leaf *l_node, Node4 *r_node, idx_t depth) {
+}
+
+void Leaf::MergeNLeafNode16(Leaf *l_node, Node16 *r_node, idx_t depth) {
+}
+
+void Leaf::MergeNLeafNode48(Leaf *l_node, Node48 *r_node, idx_t depth) {
+}
+
+void Leaf::MergeNLeafNode256(Leaf *l_node, Node256 *r_node, idx_t depth) {
 }
 
 } // namespace duckdb
