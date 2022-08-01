@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_distinct.hpp"
+
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -12,7 +13,6 @@ string LogicalDistinct::ParamsToString() const {
 
 	return result;
 }
-
 void LogicalDistinct::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(distinct_targets);
 }
