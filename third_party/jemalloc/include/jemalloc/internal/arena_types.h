@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 /* Default decay times in milliseconds. */
 #define DIRTY_DECAY_MS_DEFAULT	ZD(10 * 1000)
 #define MUZZY_DECAY_MS_DEFAULT	(0)
@@ -54,5 +56,7 @@ struct arena_config_s {
 typedef struct arena_config_s arena_config_t;
 
 extern const arena_config_t arena_config_default;
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_TYPES_H */

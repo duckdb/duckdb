@@ -4,6 +4,8 @@
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/pai.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Small extent cache.
  *
@@ -116,5 +118,7 @@ void sec_mutex_stats_read(tsdn_t *tsdn, sec_t *sec,
 void sec_prefork2(tsdn_t *tsdn, sec_t *sec);
 void sec_postfork_parent(tsdn_t *tsdn, sec_t *sec);
 void sec_postfork_child(tsdn_t *tsdn, sec_t *sec);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SEC_H */

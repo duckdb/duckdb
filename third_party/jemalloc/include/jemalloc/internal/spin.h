@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_SPIN_H
 #define JEMALLOC_INTERNAL_SPIN_H
 
+namespace duckdb_jemalloc {
+
 #define SPIN_INITIALIZER {0U}
 
 typedef struct {
@@ -36,5 +38,7 @@ spin_adaptive(spin_t *spin) {
 }
 
 #undef SPIN_INLINE
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SPIN_H */

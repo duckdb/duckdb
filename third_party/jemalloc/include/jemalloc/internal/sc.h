@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/jemalloc_internal_types.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Size class computations:
  *
@@ -353,5 +355,7 @@ void sc_data_init(sc_data_t *data);
 void sc_data_update_slab_size(sc_data_t *data, size_t begin, size_t end,
     int pgs);
 void sc_boot(sc_data_t *data);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SC_H */

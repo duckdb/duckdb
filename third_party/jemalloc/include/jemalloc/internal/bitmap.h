@@ -4,6 +4,8 @@
 #include "jemalloc/internal/bit_util.h"
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 typedef unsigned long bitmap_t;
 #define LG_SIZEOF_BITMAP	LG_SIZEOF_LONG
 
@@ -364,5 +366,7 @@ bitmap_unset(bitmap_t *bitmap, const bitmap_info_t *binfo, size_t bit) {
 	}
 #endif /* BITMAP_USE_TREE */
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BITMAP_H */

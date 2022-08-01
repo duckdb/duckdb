@@ -7,6 +7,8 @@
 #include "jemalloc/internal/tsd_types.h"
 #include "jemalloc/internal/nstime.h"
 
+namespace duckdb_jemalloc {
+
 /* TSD checks this to set thread local slow state accordingly. */
 extern bool malloc_slow;
 
@@ -71,5 +73,7 @@ void jemalloc_postfork_parent(void);
 void jemalloc_postfork_child(void);
 void je_sdallocx_noflags(void *ptr, size_t size);
 void *malloc_default(size_t size);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EXTERNS_H */

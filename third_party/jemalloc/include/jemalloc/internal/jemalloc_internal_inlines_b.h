@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/extent.h"
 
+namespace duckdb_jemalloc {
+
 static inline void
 percpu_arena_update(tsd_t *tsd, unsigned cpu) {
 	assert(have_percpu_arena);
@@ -99,5 +101,7 @@ arena_is_auto(arena_t *arena) {
 
 	return (arena_ind_get(arena) < manual_arena_base);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_INLINES_B_H */

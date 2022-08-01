@@ -7,6 +7,8 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * A bin contains a set of extents that are currently being used for slab
  * allocations.
@@ -78,5 +80,7 @@ bin_stats_merge(tsdn_t *tsdn, bin_stats_data_t *dst_bin_stats, bin_t *bin) {
 	stats->nonfull_slabs += bin->stats.nonfull_slabs;
 	malloc_mutex_unlock(tsdn, &bin->lock);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIN_H */

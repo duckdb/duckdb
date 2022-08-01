@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PAGES_EXTERNS_H
 #define JEMALLOC_INTERNAL_PAGES_EXTERNS_H
 
+namespace duckdb_jemalloc {
+
 /* Page size.  LG_PAGE is determined by the configure script. */
 #ifdef PAGE_MASK
 #  undef PAGE_MASK
@@ -115,5 +117,7 @@ bool pages_boot(void);
 void pages_set_thp_state (void *ptr, size_t size);
 void pages_mark_guards(void *head, void *tail);
 void pages_unmark_guards(void *head, void *tail);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PAGES_EXTERNS_H */

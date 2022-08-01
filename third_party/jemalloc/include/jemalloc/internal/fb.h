@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_FB_H
 #define JEMALLOC_INTERNAL_FB_H
 
+namespace duckdb_jemalloc {
+
 /*
  * The flat bitmap module.  This has a larger API relative to the bitmap module
  * (supporting things like backwards searches, and searching for both set and
@@ -369,5 +371,7 @@ fb_bit_not(fb_group_t *dst, fb_group_t *src, size_t nbits) {
 		dst[i] = ~src[i];
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_FB_H */

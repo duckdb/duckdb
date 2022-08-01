@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 #define BIN_SHARDS_MAX (1 << EDATA_BITS_BINSHARD_WIDTH)
 #define N_BIN_SHARDS_DEFAULT 1
 
@@ -13,5 +15,7 @@ typedef struct tsd_binshards_s tsd_binshards_t;
 struct tsd_binshards_s {
 	uint8_t binshard[SC_NBINS];
 };
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIN_TYPES_H */

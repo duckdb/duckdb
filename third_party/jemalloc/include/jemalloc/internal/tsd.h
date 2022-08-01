@@ -15,6 +15,8 @@
 #include "jemalloc/internal/util.h"
 #include "jemalloc/internal/witness.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Thread-Specific-Data layout
  *
@@ -514,5 +516,7 @@ tsd_post_reentrancy_raw(tsd_t *tsd) {
 		tsd_slow_update(tsd);
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TSD_H */

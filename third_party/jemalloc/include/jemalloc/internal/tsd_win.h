@@ -3,6 +3,8 @@
 #endif
 #define JEMALLOC_INTERNAL_TSD_WIN_H
 
+namespace duckdb_jemalloc {
+
 typedef struct {
 	bool initialized;
 	tsd_t val;
@@ -137,3 +139,5 @@ tsd_set(tsd_t *val) {
 	}
 	wrapper->initialized = true;
 }
+
+} // namespace duckdb_jemalloc

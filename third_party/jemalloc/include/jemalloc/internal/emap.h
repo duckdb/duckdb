@@ -4,6 +4,8 @@
 #include "jemalloc/internal/base.h"
 #include "jemalloc/internal/rtree.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Note: Ends without at semicolon, so that
  *     EMAP_DECLARE_RTREE_CTX;
@@ -353,5 +355,7 @@ emap_edata_lookup_batch(tsd_t *tsd, emap_t *emap, size_t nptrs,
 		metadata_visitor(metadata_visitor_ctx, &alloc_ctx);
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EMAP_H */

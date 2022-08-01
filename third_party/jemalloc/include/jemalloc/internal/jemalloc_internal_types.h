@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/quantum.h"
 
+namespace duckdb_jemalloc {
+
 /* Processor / core id type. */
 typedef int malloc_cpuid_t;
 
@@ -126,5 +128,7 @@ typedef enum malloc_init_e malloc_init_t;
 #else
 #  define VARIABLE_ARRAY(type, name, count) type name[(count)]
 #endif
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TYPES_H */

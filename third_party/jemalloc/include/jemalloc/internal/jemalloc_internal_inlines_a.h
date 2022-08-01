@@ -7,6 +7,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/ticker.h"
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_ALWAYS_INLINE malloc_cpuid_t
 malloc_getcpu(void) {
 	assert(have_percpu_arena);
@@ -118,5 +120,7 @@ static inline void
 post_reentrancy(tsd_t *tsd) {
 	tsd_post_reentrancy_raw(tsd);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_INLINES_A_H */

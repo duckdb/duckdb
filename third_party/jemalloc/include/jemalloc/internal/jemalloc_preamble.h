@@ -4,6 +4,8 @@
 #include "jemalloc/internal/jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 
+namespace duckdb_jemalloc {
+
 #if defined(JEMALLOC_UTRACE) || defined(JEMALLOC_UTRACE_LABEL)
 #include <sys/ktrace.h>
 #  if defined(JEMALLOC_UTRACE)
@@ -259,5 +261,7 @@ static const bool have_memcntl =
     false
 #endif
     ;
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_PREAMBLE_H */

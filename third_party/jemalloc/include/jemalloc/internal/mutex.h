@@ -6,6 +6,8 @@
 #include "jemalloc/internal/tsd.h"
 #include "jemalloc/internal/witness.h"
 
+namespace duckdb_jemalloc {
+
 extern int64_t opt_mutex_max_spin;
 
 typedef enum {
@@ -315,5 +317,7 @@ malloc_mutex_prof_max_update(tsdn_t *tsdn, mutex_prof_data_t *data,
 	}
 	/* n_wait_thds is not reported. */
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_MUTEX_H */

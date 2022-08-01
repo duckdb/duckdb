@@ -8,6 +8,8 @@
 #include "jemalloc/internal/pa.h"
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_DIAGNOSTIC_DISABLE_SPURIOUS
 
 typedef struct arena_stats_large_s arena_stats_large_t;
@@ -110,5 +112,7 @@ arena_stats_large_flush_nrequests_add(tsdn_t *tsdn, arena_stats_t *arena_stats,
 	    &lstats->nflushes, 1);
 	LOCKEDINT_MTX_UNLOCK(tsdn, arena_stats->mtx);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_STATS_H */

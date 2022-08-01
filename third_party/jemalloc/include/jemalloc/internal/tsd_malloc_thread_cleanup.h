@@ -3,6 +3,8 @@
 #endif
 #define JEMALLOC_INTERNAL_TSD_MALLOC_THREAD_CLEANUP_H
 
+namespace duckdb_jemalloc {
+
 #define JEMALLOC_TSD_TYPE_ATTR(type) __thread type JEMALLOC_TLS_MODEL
 
 extern JEMALLOC_TSD_TYPE_ATTR(tsd_t) tsd_tls;
@@ -59,3 +61,5 @@ tsd_set(tsd_t *val) {
 	}
 	tsd_initialized = true;
 }
+
+} // namespace duckdb_jemalloc

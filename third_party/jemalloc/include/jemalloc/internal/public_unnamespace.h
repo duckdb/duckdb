@@ -1,3 +1,5 @@
+namespace duckdb_jemalloc {
+
 #undef je_aligned_alloc
 #undef je_calloc
 #undef je_dallocx
@@ -22,3 +24,5 @@
 #undef je_xallocx
 #undef je_valloc
 #undef je_malloc_size
+
+} // namespace duckdb_jemalloc

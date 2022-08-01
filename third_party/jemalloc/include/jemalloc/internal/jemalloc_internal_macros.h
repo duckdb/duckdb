@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_MACROS_H
 #define JEMALLOC_INTERNAL_MACROS_H
 
+namespace duckdb_jemalloc {
+
 #ifdef JEMALLOC_DEBUG
 #  define JEMALLOC_ALWAYS_INLINE static inline
 #else
@@ -107,5 +109,7 @@
  * included by users directly, it does not affect their diagnostic settings.
  */
 JEMALLOC_DIAGNOSTIC_DISABLE_SPURIOUS
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_MACROS_H */

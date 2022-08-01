@@ -8,6 +8,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/stats.h"
 
+namespace duckdb_jemalloc {
+
 /* Maximum ctl tree depth. */
 #define CTL_MAX_DEPTH	7
 
@@ -155,5 +157,7 @@ void ctl_mtx_assert_held(tsdn_t *tsdn);
 		abort();						\
 	}								\
 } while (0)
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_CTL_H */

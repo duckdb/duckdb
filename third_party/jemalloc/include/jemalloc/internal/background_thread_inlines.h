@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_BACKGROUND_THREAD_INLINES_H
 #define JEMALLOC_INTERNAL_BACKGROUND_THREAD_INLINES_H
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_ALWAYS_INLINE bool
 background_thread_enabled(void) {
 	return atomic_load_b(&background_thread_enabled_state, ATOMIC_RELAXED);
@@ -44,5 +46,7 @@ JEMALLOC_ALWAYS_INLINE bool
 background_thread_indefinite_sleep(background_thread_info_t *info) {
 	return atomic_load_b(&info->indefinite_sleep, ATOMIC_ACQUIRE);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BACKGROUND_THREAD_INLINES_H */

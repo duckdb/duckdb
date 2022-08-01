@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_NSTIME_H
 #define JEMALLOC_INTERNAL_NSTIME_H
 
+namespace duckdb_jemalloc {
+
 /* Maximum supported number of seconds (~584 years). */
 #define NSTIME_SEC_MAX KQU(18446744072)
 
@@ -69,5 +71,7 @@ nstime_equals_zero(nstime_t *time) {
 	assert(diff >= 0);
 	return diff == 0;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_NSTIME_H */

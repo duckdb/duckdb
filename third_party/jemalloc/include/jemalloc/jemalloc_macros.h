@@ -1,8 +1,12 @@
+#pragma once
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <limits.h>
 #include <strings.h>
+
+namespace duckdb_jemalloc {
 
 #define JEMALLOC_VERSION "5.3.0-0-g54eaed1d8b56b1aa528be3bdd1877e59c56fa90c"
 #define JEMALLOC_VERSION_MAJOR 5
@@ -147,3 +151,5 @@
 #else
 #  define JEMALLOC_SYS_NOTHROW JEMALLOC_NOTHROW
 #endif
+
+} // namespace duckdb_jemalloc

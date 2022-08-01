@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_ATOMIC_H
 #define JEMALLOC_INTERNAL_ATOMIC_H
 
+namespace duckdb_jemalloc {
+
 #define ATOMIC_INLINE JEMALLOC_ALWAYS_INLINE
 
 #define JEMALLOC_U8_ATOMICS
@@ -103,5 +105,7 @@ JEMALLOC_GENERATE_EXPANDED_INT_ATOMICS(uint64_t, u64, 3)
 #endif
 
 #undef ATOMIC_INLINE
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_H */

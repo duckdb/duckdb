@@ -5,6 +5,8 @@
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 enum metadata_thp_mode_e {
 	metadata_thp_disabled   = 0,
 	/*
@@ -106,5 +108,7 @@ void base_prefork(tsdn_t *tsdn, base_t *base);
 void base_postfork_parent(tsdn_t *tsdn, base_t *base);
 void base_postfork_child(tsdn_t *tsdn, base_t *base);
 bool base_boot(tsdn_t *tsdn);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BASE_H */

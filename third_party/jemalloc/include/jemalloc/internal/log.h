@@ -5,6 +5,8 @@
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 #ifdef JEMALLOC_LOG
 #  define JEMALLOC_LOG_VAR_BUFSIZE 1000
 #else
@@ -111,5 +113,7 @@ do {									\
 		log_impl_varargs((log_var).name, __VA_ARGS__);		\
 	log_do_end(log_var)						\
 } while (0)
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_LOG_H */

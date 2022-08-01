@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 extern malloc_mutex_t bt2gctx_mtx;
 extern malloc_mutex_t tdatas_mtx;
 extern malloc_mutex_t prof_dump_mtx;
@@ -33,5 +35,7 @@ void prof_tctx_try_destroy(tsd_t *tsd, prof_tctx_t *tctx);
 size_t prof_tdata_count(void);
 size_t prof_bt_count(void);
 void prof_cnt_all(prof_cnt_t *cnt_all);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_DATA_H */

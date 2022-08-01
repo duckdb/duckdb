@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_SEC_OPTS_H
 #define JEMALLOC_INTERNAL_SEC_OPTS_H
 
+namespace duckdb_jemalloc {
+
 /*
  * The configuration settings used by an sec_t.  Morally, this is part of the
  * SEC interface, but we put it here for header-ordering reasons.
@@ -55,5 +57,6 @@ struct sec_opts_s {
 	0								\
 }
 
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SEC_OPTS_H */

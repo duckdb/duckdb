@@ -3,6 +3,8 @@
 
 /* An interface for page allocation. */
 
+namespace duckdb_jemalloc {
+
 typedef struct pai_s pai_t;
 struct pai_s {
 	/* Returns NULL on failure. */
@@ -91,5 +93,7 @@ size_t pai_alloc_batch_default(tsdn_t *tsdn, pai_t *self, size_t size,
 /* Ditto, for dalloc. */
 void pai_dalloc_batch_default(tsdn_t *tsdn, pai_t *self,
     edata_list_active_t *list, bool *deferred_work_generated);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PAI_H */

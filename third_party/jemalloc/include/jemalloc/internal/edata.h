@@ -13,6 +13,8 @@
 #include "jemalloc/internal/sz.h"
 #include "jemalloc/internal/typed_list.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * sizeof(edata_t) is 128 bytes on 64-bit architectures.  Ensure the alignment
  * to free up the low bits in the rtree leaf.
@@ -694,5 +696,7 @@ edata_esnead_comp(const edata_t *a, const edata_t *b) {
 
 ph_proto(, edata_avail, edata_t)
 ph_proto(, edata_heap, edata_t)
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EDATA_H */

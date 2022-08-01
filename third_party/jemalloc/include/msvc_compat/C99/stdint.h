@@ -42,6 +42,8 @@
 
 #include <limits.h>
 
+namespace duckdb_jemalloc {
+
 // For Visual Studio 6 in C++ mode and for many Visual Studio versions when
 // compiling for ARM we should wrap <wchar.h> include with 'extern "C++" {}'
 // or compiler give many errors like this:
@@ -243,5 +245,6 @@ typedef uint64_t  uintmax_t;
 
 #endif // __STDC_CONSTANT_MACROS ]
 
+} // namespace duckdb_jemalloc
 
 #endif // _MSC_STDINT_H_ ]

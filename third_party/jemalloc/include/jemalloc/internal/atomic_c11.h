@@ -3,6 +3,8 @@
 
 #include <stdatomic.h>
 
+namespace duckdb_jemalloc {
+
 #define ATOMIC_INIT(...) ATOMIC_VAR_INIT(__VA_ARGS__)
 
 #define atomic_memory_order_t memory_order
@@ -93,5 +95,7 @@ atomic_fetch_xor_##short_type(atomic_##short_type##_t *a,		\
     type val, atomic_memory_order_t mo) {				\
 	return atomic_fetch_xor_explicit(a, val, mo);			\
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_C11_H */

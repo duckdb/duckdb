@@ -7,6 +7,8 @@
 #include "jemalloc/internal/ticker.h"
 #include "jemalloc/internal/tsd_types.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * The tcache state is split into the slow and hot path data.  Each has a
  * pointer to the other, and the data always comes in pairs.  The layout of each
@@ -64,5 +66,7 @@ struct tcaches_s {
 		tcaches_t	*next;
 	};
 };
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TCACHE_STRUCTS_H */

@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_QUANTUM_H
 #define JEMALLOC_INTERNAL_QUANTUM_H
 
+namespace duckdb_jemalloc {
+
 /*
  * Minimum allocation alignment is 2^LG_QUANTUM bytes (ignoring tiny size
  * classes).
@@ -83,5 +85,7 @@
 /* Return the smallest quantum multiple that is >= a. */
 #define QUANTUM_CEILING(a)						\
 	(((a) + QUANTUM_MASK) & ~QUANTUM_MASK)
+
+     } // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_QUANTUM_H */

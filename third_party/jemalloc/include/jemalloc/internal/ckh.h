@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/tsd.h"
 
+namespace duckdb_jemalloc {
+
 /* Cuckoo hashing implementation.  Skip to the end for the interface. */
 
 /******************************************************************************/
@@ -97,5 +99,7 @@ void ckh_string_hash(const void *key, size_t r_hash[2]);
 bool ckh_string_keycomp(const void *k1, const void *k2);
 void ckh_pointer_hash(const void *key, size_t r_hash[2]);
 bool ckh_pointer_keycomp(const void *k1, const void *k2);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_CKH_H */

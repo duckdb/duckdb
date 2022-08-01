@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/assert.h"
 
+namespace duckdb_jemalloc {
+
 #define ATOMIC_INIT(...) {__VA_ARGS__}
 
 typedef enum {
@@ -125,5 +127,7 @@ atomic_fetch_xor_##short_type(atomic_##short_type##_t *a, type val,	\
 	return __atomic_fetch_xor(&a->repr, val,			\
 	    atomic_enum_to_builtin(mo));				\
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_GCC_ATOMIC_H */

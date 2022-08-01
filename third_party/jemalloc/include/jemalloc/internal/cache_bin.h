@@ -4,6 +4,8 @@
 #include "jemalloc/internal/ql.h"
 #include "jemalloc/internal/sz.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * The cache_bins are the mechanism that the tcache and the arena use to
  * communicate.  The tcache fills from and flushes to the arena by passing a
@@ -666,5 +668,7 @@ void cache_bin_init(cache_bin_t *bin, cache_bin_info_t *info, void *alloc,
  * not cache_bin_init was called on it.
  */
 bool cache_bin_still_zero_initialized(cache_bin_t *bin);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_CACHE_BIN_H */

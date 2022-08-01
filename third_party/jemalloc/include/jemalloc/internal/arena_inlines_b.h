@@ -11,6 +11,8 @@
 #include "jemalloc/internal/sz.h"
 #include "jemalloc/internal/ticker.h"
 
+namespace duckdb_jemalloc {
+
 static inline arena_t *
 arena_get_from_edata(edata_t *edata) {
 	return (arena_t *)atomic_load_p(&arenas[edata_arena_ind_get(edata)],
@@ -546,5 +548,7 @@ arena_get_bin(arena_t *arena, szind_t binind, unsigned binshard) {
 	bin_t *shard0 = (bin_t *)((uintptr_t)arena + arena_bin_offsets[binind]);
 	return shard0 + binshard;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_INLINES_B_H */

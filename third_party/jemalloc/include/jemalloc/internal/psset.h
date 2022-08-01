@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/hpdata.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * A page-slab set.  What the eset is to PAC, the psset is to HPA.  It maintains
  * a collection of page-slabs (the intent being that they are backed by
@@ -127,5 +129,7 @@ static inline size_t
 psset_ndirty(psset_t *psset) {
 	return psset->merged_stats.ndirty;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PSSET_H */

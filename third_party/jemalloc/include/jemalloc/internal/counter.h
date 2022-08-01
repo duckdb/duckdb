@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 typedef struct counter_accum_s {
 	LOCKEDINT_MTX_DECLARE(mtx)
 	locked_u64_t accumbytes;
@@ -30,5 +32,7 @@ bool counter_accum_init(counter_accum_t *counter, uint64_t interval);
 void counter_prefork(tsdn_t *tsdn, counter_accum_t *counter);
 void counter_postfork_parent(tsdn_t *tsdn, counter_accum_t *counter);
 void counter_postfork_child(tsdn_t *tsdn, counter_accum_t *counter);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_COUNTER_H */

@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_EXTENT_DSS_H
 #define JEMALLOC_INTERNAL_EXTENT_DSS_H
 
+namespace duckdb_jemalloc {
+
 typedef enum {
 	dss_prec_disabled  = 0,
 	dss_prec_primary   = 1,
@@ -22,5 +24,7 @@ void *extent_alloc_dss(tsdn_t *tsdn, arena_t *arena, void *new_addr,
 bool extent_in_dss(void *addr);
 bool extent_dss_mergeable(void *addr_a, void *addr_b);
 void extent_dss_boot(void);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EXTENT_DSS_H */

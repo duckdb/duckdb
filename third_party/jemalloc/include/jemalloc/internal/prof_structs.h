@@ -7,6 +7,8 @@
 #include "jemalloc/internal/prng.h"
 #include "jemalloc/internal/rb.h"
 
+namespace duckdb_jemalloc {
+
 struct prof_bt_s {
 	/* Backtrace, stored as len program counters. */
 	void		**vec;
@@ -217,5 +219,7 @@ struct prof_recent_s {
 	prof_tctx_t *alloc_tctx;
 	prof_tctx_t *dalloc_tctx;
 };
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_STRUCTS_H */

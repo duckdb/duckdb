@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PH_H
 #define JEMALLOC_INTERNAL_PH_H
 
+namespace duckdb_jemalloc {
+
 /*
  * A Pairing Heap implementation.
  *
@@ -516,5 +518,7 @@ a_prefix##_remove_any(a_prefix##_t *ph) {				\
 	}								\
 	return ret;							\
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PH_H */

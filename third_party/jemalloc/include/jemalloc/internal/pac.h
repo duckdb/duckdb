@@ -5,6 +5,7 @@
 #include "jemalloc/internal/pai.h"
 #include "san_bump.h"
 
+namespace duckdb_jemalloc {
 
 /*
  * Page allocator classic; an implementation of the PAI interface that:
@@ -175,5 +176,7 @@ ssize_t pac_decay_ms_get(pac_t *pac, extent_state_t state);
 
 void pac_reset(tsdn_t *tsdn, pac_t *pac);
 void pac_destroy(tsdn_t *tsdn, pac_t *pac);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PAC_H */

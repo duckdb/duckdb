@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "jemalloc/jemalloc.h"
+#include "jemalloc_wrapper.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -72,14 +72,14 @@ public:
 	}
 
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-		return (data_ptr_t)malloc(size);
+		return (data_ptr_t)JEMallocWrapper::Allocate(size);
 	}
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-		free(pointer);
+		JEMallocWrapper::Free(pointer);
 	}
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                    idx_t size) {
-		return (data_ptr_t)realloc(pointer, size);
+		return (data_ptr_t)JEMallocWrapper::ReAllocate(pointer, size);
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);

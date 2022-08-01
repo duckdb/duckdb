@@ -1,3 +1,5 @@
+namespace duckdb_jemalloc {
+
 /*
  * Name mangling for public symbols is controlled by --with-mangling and
  * --with-jemalloc-prefix.  With default settings the je_ prefix is stripped by
@@ -29,3 +31,5 @@
 #  define je_valloc je_valloc
 #  define je_malloc_size je_malloc_size
 #endif
+
+} // namespace duckdb_jemalloc

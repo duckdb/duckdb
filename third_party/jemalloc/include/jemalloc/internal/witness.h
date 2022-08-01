@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/ql.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* LOCK RANKS */
 /******************************************************************************/
@@ -374,5 +376,7 @@ witness_unlock(witness_tsdn_t *witness_tsdn, witness_t *witness) {
 		witness_assert_owner(witness_tsdn, witness);
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_WITNESS_H */

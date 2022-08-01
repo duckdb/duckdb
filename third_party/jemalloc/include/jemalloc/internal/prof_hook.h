@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PROF_HOOK_H
 #define JEMALLOC_INTERNAL_PROF_HOOK_H
 
+namespace duckdb_jemalloc {
+
 /*
  * The hooks types of which are declared in this file are experimental and
  * undocumented, thus the typedefs are located in an 'internal' header.
@@ -17,5 +19,7 @@ typedef void (*prof_backtrace_hook_t)(void **, unsigned *, unsigned);
  * A callback hook that notifies about recently dumped heap profile.
  */
 typedef void (*prof_dump_hook_t)(const char *filename);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_HOOK_H */

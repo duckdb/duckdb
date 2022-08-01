@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PEAK_H
 #define JEMALLOC_INTERNAL_PEAK_H
 
+namespace duckdb_jemalloc {
+
 typedef struct peak_s peak_t;
 struct peak_s {
 	/* The highest recorded peak value, after adjustment (see below). */
@@ -33,5 +35,7 @@ peak_set_zero(peak_t *peak, uint64_t alloc, uint64_t dalloc) {
 	peak->cur_max = 0;
 	peak->adjustment = alloc - dalloc;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PEAK_H */

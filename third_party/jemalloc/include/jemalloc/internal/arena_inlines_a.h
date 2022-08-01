@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_ARENA_INLINES_A_H
 #define JEMALLOC_INTERNAL_ARENA_INLINES_A_H
 
+namespace duckdb_jemalloc {
+
 static inline unsigned
 arena_ind_get(const arena_t *arena) {
 	return arena->ind;
@@ -20,5 +22,7 @@ static inline size_t
 arena_internal_get(arena_t *arena) {
 	return atomic_load_zu(&arena->stats.internal, ATOMIC_RELAXED);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_INLINES_A_H */

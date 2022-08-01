@@ -7,6 +7,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/tsd.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This radix tree implementation is tailored to the singular purpose of
  * associating metadata with extents that are currently owned by jemalloc.
@@ -550,5 +552,7 @@ rtree_clear_range(tsdn_t *tsdn, rtree_t *rtree, rtree_ctx_t *rtree_ctx,
 	rtree_write_range_impl(tsdn, rtree, rtree_ctx, base, end, contents,
 	    /* clearing */ true);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_RTREE_H */

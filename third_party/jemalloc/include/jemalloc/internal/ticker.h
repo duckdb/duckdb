@@ -4,6 +4,8 @@
 #include "jemalloc/internal/prng.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 /**
  * A ticker makes it easy to count-down events until some limit.  You
  * ticker_init the ticker to trigger every nticks events.  You then notify it
@@ -171,5 +173,7 @@ static inline bool
 ticker_geom_tick(ticker_geom_t *ticker, uint64_t *prng_state) {
 	return ticker_geom_ticks(ticker, prng_state, 1);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TICKER_H */

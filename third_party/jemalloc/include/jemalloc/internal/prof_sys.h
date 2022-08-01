@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PROF_SYS_H
 #define JEMALLOC_INTERNAL_PROF_SYS_H
 
+namespace duckdb_jemalloc {
+
 extern malloc_mutex_t prof_dump_filename_mtx;
 extern base_t *prof_base;
 
@@ -26,5 +28,7 @@ typedef ssize_t (prof_dump_write_file_t)(int, const void *, size_t);
 extern prof_dump_write_file_t *JET_MUTABLE prof_dump_write_file;
 typedef int (prof_dump_open_maps_t)();
 extern prof_dump_open_maps_t *JET_MUTABLE prof_dump_open_maps;
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_SYS_H */

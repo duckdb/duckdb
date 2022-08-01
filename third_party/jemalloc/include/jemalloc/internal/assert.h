@@ -1,5 +1,9 @@
+#pragma once
+
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/util.h"
+
+namespace duckdb_jemalloc {
 
 /*
  * Define a custom assert() in order to reduce the chances of deadlock during
@@ -54,3 +58,5 @@
 	}								\
 } while (0)
 #endif
+
+} // namespace duckdb_jemalloc

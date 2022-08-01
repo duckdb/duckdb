@@ -5,6 +5,8 @@
 #include "jemalloc/internal/exp_grow.h"
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 #define SBA_RETAINED_ALLOC_SIZE ((size_t)4 << 20)
 
 extern bool opt_retain;
@@ -48,5 +50,7 @@ san_bump_alloc_init(san_bump_alloc_t* sba) {
 edata_t *
 san_bump_alloc(tsdn_t *tsdn, san_bump_alloc_t* sba, pac_t *pac, ehooks_t *ehooks,
     size_t size, bool zero);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SAN_BUMP_H */

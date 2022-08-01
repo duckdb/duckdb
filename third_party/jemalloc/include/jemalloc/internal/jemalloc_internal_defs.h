@@ -1,6 +1,9 @@
 /* include/jemalloc/internal/jemalloc_internal_defs.h.  Generated from jemalloc_internal_defs.h.in by configure.  */
 #ifndef JEMALLOC_INTERNAL_DEFS_H_
 #define JEMALLOC_INTERNAL_DEFS_H_
+
+namespace duckdb_jemalloc {
+
 /*
  * If JEMALLOC_PREFIX is defined via --with-jemalloc-prefix, it will cause all
  * public APIs to be prefixed.  This makes it possible, with some care, to use
@@ -14,10 +17,10 @@
  * present on the system.
  */
 /* #undef JEMALLOC_OVERRIDE___LIBC_CALLOC */
-#define JEMALLOC_OVERRIDE___LIBC_FREE
-#define JEMALLOC_OVERRIDE___LIBC_MALLOC
+//#define JEMALLOC_OVERRIDE___LIBC_FREE
+//#define JEMALLOC_OVERRIDE___LIBC_MALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_MEMALIGN */
-#define JEMALLOC_OVERRIDE___LIBC_REALLOC
+//#define JEMALLOC_OVERRIDE___LIBC_REALLOC
 /* #undef JEMALLOC_OVERRIDE___LIBC_VALLOC */
 /* #undef JEMALLOC_OVERRIDE___POSIX_MEMALIGN */
 
@@ -232,15 +235,15 @@
  * ffs*() functions to use for bitmapping.  Don't use these directly; instead,
  * use ffs_*() from util.h.
  */
-#define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
-#define JEMALLOC_INTERNAL_FFSL __builtin_ffsl
-#define JEMALLOC_INTERNAL_FFS __builtin_ffs
+//#define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
+//#define JEMALLOC_INTERNAL_FFSL __builtin_ffsl
+//#define JEMALLOC_INTERNAL_FFS __builtin_ffs
 
 /*
  * popcount*() functions to use for bitmapping.
  */
-#define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
-#define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
+//#define JEMALLOC_INTERNAL_POPCOUNTL __builtin_popcountl
+//#define JEMALLOC_INTERNAL_POPCOUNT __builtin_popcount
 
 /*
  * If defined, explicitly attempt to more uniformly distribute large allocation
@@ -347,7 +350,7 @@
 /* #undef JEMALLOC_HAS_ALLOCA_H */
 
 /* C99 restrict keyword supported. */
-#define JEMALLOC_HAS_RESTRICT 
+//#define JEMALLOC_HAS_RESTRICT
 
 /* For use by hash code. */
 /* #undef JEMALLOC_BIG_ENDIAN */
@@ -431,5 +434,7 @@
 
 /* If defined, realloc(ptr, 0) defaults to "free" instead of "alloc". */
 /* #undef JEMALLOC_ZERO_REALLOC_DEFAULT_FREE */
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_DEFS_H_ */

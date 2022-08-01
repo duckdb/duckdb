@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/assert.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * The following hash function is based on MurmurHash3, placed into the public
  * domain by Austin Appleby.  See https://github.com/aappleby/smhasher for
@@ -316,5 +318,7 @@ hash(const void *key, size_t len, const uint32_t seed, size_t r_hash[2]) {
 	}
 #endif
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HASH_H */

@@ -4,6 +4,8 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/prof_hook.h"
 
+namespace duckdb_jemalloc {
+
 extern bool opt_prof;
 extern bool opt_prof_active;
 extern bool opt_prof_thread_active_init;
@@ -91,5 +93,7 @@ void prof_postfork_child(tsdn_t *tsdn);
 uint64_t prof_sample_new_event_wait(tsd_t *tsd);
 uint64_t prof_sample_postponed_event_wait(tsd_t *tsd);
 void prof_sample_event_handler(tsd_t *tsd, uint64_t elapsed);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_EXTERNS_H */

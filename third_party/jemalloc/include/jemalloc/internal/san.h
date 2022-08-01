@@ -4,6 +4,8 @@
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/emap.h"
 
+namespace duckdb_jemalloc {
+
 #define SAN_PAGE_GUARD PAGE
 #define SAN_PAGE_GUARDS_SIZE (SAN_PAGE_GUARD * 2)
 
@@ -187,5 +189,7 @@ san_uaf_detection_enabled(void) {
 
 	return ret;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_GUARD_H */

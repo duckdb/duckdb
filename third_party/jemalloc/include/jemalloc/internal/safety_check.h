@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_SAFETY_CHECK_H
 #define JEMALLOC_INTERNAL_SAFETY_CHECK_H
 
+namespace duckdb_jemalloc {
+
 void safety_check_fail_sized_dealloc(bool current_dealloc, const void *ptr,
     size_t true_size, size_t input_size);
 void safety_check_fail(const char *format, ...);
@@ -27,5 +29,7 @@ safety_check_verify_redzone(const void *ptr, size_t usize, size_t bumped_usize)
 		}
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /*JEMALLOC_INTERNAL_SAFETY_CHECK_H */

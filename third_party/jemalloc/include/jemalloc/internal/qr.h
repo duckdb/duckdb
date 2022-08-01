@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_QR_H
 #define JEMALLOC_INTERNAL_QR_H
 
+namespace duckdb_jemalloc {
+
 /*
  * A ring implementation based on an embedded circular doubly-linked list.
  *
@@ -136,5 +138,7 @@ struct {								\
 	    (var) != NULL;						\
 	    (var) = (((var) != (a_qr))					\
 	    ? (var)->a_field.qre_prev : NULL))
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_QR_H */

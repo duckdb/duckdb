@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_FXP_H
 #define JEMALLOC_INTERNAL_FXP_H
 
+namespace duckdb_jemalloc {
+
 /*
  * A simple fixed-point math implementation, supporting only unsigned values
  * (with overflow being an error).
@@ -122,5 +124,7 @@ fxp_mul_frac(size_t x_orig, fxp_t frac) {
  */
 bool fxp_parse(fxp_t *a, const char *ptr, char **end);
 void fxp_print(fxp_t a, char buf[FXP_BUF_SIZE]);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_FXP_H */

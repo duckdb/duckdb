@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/smoothstep.h"
 
+namespace duckdb_jemalloc {
+
 #define DECAY_UNBOUNDED_TIME_TO_PURGE ((uint64_t)-1)
 
 /*
@@ -182,5 +184,7 @@ bool decay_maybe_advance_epoch(decay_t *decay, nstime_t *new_time,
  */
 uint64_t decay_ns_until_purge(decay_t *decay, size_t npages_current,
     uint64_t npages_threshold);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_DECAY_H */

@@ -8,6 +8,8 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/witness.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Translating the names of the 'i' functions:
  *   Abbreviations used in the first part of the function name (before
@@ -336,5 +338,7 @@ imalloc_fastpath(size_t size, void *(fallback_alloc)(size_t)) {
 
 	return fallback_alloc(size);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_INLINES_C_H */

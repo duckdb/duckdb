@@ -1,3 +1,4 @@
+namespace duckdb_jemalloc {
 /*
  * The jet_ prefix on the following public symbol declarations is an artifact
  * of namespace management, and should be omitted in application code unless
@@ -69,3 +70,5 @@ JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN
     void JEMALLOC_SYS_NOTHROW	*jet_valloc(size_t size) JEMALLOC_CXX_THROW
     JEMALLOC_ATTR(malloc);
 #endif
+
+} // namespace duckdb_jemalloc

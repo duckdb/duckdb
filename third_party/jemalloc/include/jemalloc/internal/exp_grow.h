@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_EXP_GROW_H
 #define JEMALLOC_INTERNAL_EXP_GROW_H
 
+namespace duckdb_jemalloc {
+
 typedef struct exp_grow_s exp_grow_t;
 struct exp_grow_s {
 	/*
@@ -46,5 +48,7 @@ exp_grow_size_commit(exp_grow_t *exp_grow, pszind_t skip) {
 }
 
 void exp_grow_init(exp_grow_t *exp_grow);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EXP_GROW_H */

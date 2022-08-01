@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_RTREE_CTX_H
 #define JEMALLOC_INTERNAL_RTREE_CTX_H
 
+namespace duckdb_jemalloc {
+
 /*
  * Number of leafkey/leaf pairs to cache in L1 and L2 level respectively.  Each
  * entry supports an entire leaf, so the cache hit rate is typically high even
@@ -58,5 +60,7 @@ struct rtree_ctx_s {
 };
 
 void rtree_ctx_data_init(rtree_ctx_t *ctx);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_RTREE_CTX_H */

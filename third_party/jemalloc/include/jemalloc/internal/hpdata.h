@@ -6,6 +6,8 @@
 #include "jemalloc/internal/ql.h"
 #include "jemalloc/internal/typed_list.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * The metadata representation we use for extents in hugepages.  While the PAC
  * uses the edata_t to represent both active and inactive extents, the HP only
@@ -409,5 +411,7 @@ void hpdata_purge_end(hpdata_t *hpdata, hpdata_purge_state_t *purge_state);
 
 void hpdata_hugify(hpdata_t *hpdata);
 void hpdata_dehugify(hpdata_t *hpdata);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HPDATA_H */

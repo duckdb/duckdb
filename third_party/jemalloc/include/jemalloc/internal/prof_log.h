@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 extern malloc_mutex_t log_mtx;
 
 void prof_try_log(tsd_t *tsd, size_t usize, prof_info_t *prof_info);
@@ -18,5 +20,7 @@ void prof_log_dummy_set(bool new_value);
 
 bool prof_log_start(tsdn_t *tsdn, const char *filename);
 bool prof_log_stop(tsdn_t *tsdn);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_LOG_H */

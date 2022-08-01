@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/tsd.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This API is *extremely* experimental, and may get ripped out, changed in API-
  * and ABI-incompatible ways, be insufficiently or incorrectly documented, etc.
@@ -159,5 +161,7 @@ void hook_invoke_dalloc(hook_dalloc_t type, void *address,
 
 void hook_invoke_expand(hook_expand_t type, void *address, size_t old_usize,
     size_t new_usize, uintptr_t result_raw, uintptr_t args_raw[4]);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HOOK_H */

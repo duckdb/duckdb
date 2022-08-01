@@ -5,6 +5,8 @@
 #include "jemalloc/internal/sz.h"
 #include "jemalloc/internal/thread_event.h"
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_ALWAYS_INLINE void
 prof_active_assert() {
 	cassert(config_prof);
@@ -257,5 +259,7 @@ prof_free(tsd_t *tsd, const void *ptr, size_t usize,
 		prof_free_sampled_object(tsd, usize, &prof_info);
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_INLINES_H */

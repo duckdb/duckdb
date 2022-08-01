@@ -8,6 +8,8 @@
 #include "jemalloc/internal/sz.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 static inline bool
 tcache_enabled_get(tsd_t *tsd) {
 	return tsd_tcache_enabled_get(tsd);
@@ -189,5 +191,7 @@ tcaches_get(tsd_t *tsd, unsigned ind) {
 	}
 	return elm->tcache;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TCACHE_INLINES_H */

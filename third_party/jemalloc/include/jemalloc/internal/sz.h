@@ -6,6 +6,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * sz module: Size computations.
  *
@@ -367,5 +369,7 @@ sz_sa2u(size_t size, size_t alignment) {
 
 size_t sz_psz_quantize_floor(size_t size);
 size_t sz_psz_quantize_ceil(size_t size);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_SIZE_H */

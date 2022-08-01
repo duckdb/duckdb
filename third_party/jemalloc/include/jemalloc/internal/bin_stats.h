@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/mutex_prof.h"
 
+namespace duckdb_jemalloc {
+
 typedef struct bin_stats_s bin_stats_t;
 struct bin_stats_s {
 	/*
@@ -54,4 +56,7 @@ struct bin_stats_data_s {
 	bin_stats_t stats_data;
 	mutex_prof_data_t mutex_data;
 };
+
+} // namespace duckdb_jemalloc
+
 #endif /* JEMALLOC_INTERNAL_BIN_STATS_H */

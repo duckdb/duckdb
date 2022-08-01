@@ -1,6 +1,8 @@
 #ifndef strings_h
 #define strings_h
 
+namespace duckdb_jemalloc {
+
 /* MSVC doesn't define ffs/ffsl. This dummy strings.h header is provided
  * for both */
 #ifdef _MSC_VER
@@ -54,5 +56,7 @@ static __forceinline int ffsll(unsigned __int64 x) {
 #  define ffsl(x) __builtin_ffsl(x)
 #  define ffs(x) __builtin_ffs(x)
 #endif
+
+} // namespace duckdb_jemalloc
 
 #endif /* strings_h */

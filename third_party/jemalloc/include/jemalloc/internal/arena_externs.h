@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_ARENA_EXTERNS_H
 #define JEMALLOC_INTERNAL_ARENA_EXTERNS_H
 
+namespace duckdb_jemalloc {
+
 #include "jemalloc/internal/bin.h"
 #include "jemalloc/internal/div.h"
 #include "jemalloc/internal/extent_dss.h"
@@ -117,5 +119,7 @@ void arena_prefork7(tsdn_t *tsdn, arena_t *arena);
 void arena_prefork8(tsdn_t *tsdn, arena_t *arena);
 void arena_postfork_parent(tsdn_t *tsdn, arena_t *arena);
 void arena_postfork_child(tsdn_t *tsdn, arena_t *arena);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_EXTERNS_H */

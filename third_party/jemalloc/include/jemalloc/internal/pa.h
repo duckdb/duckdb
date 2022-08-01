@@ -12,6 +12,8 @@
 #include "jemalloc/internal/pai.h"
 #include "jemalloc/internal/sec.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * The page allocator; responsible for acquiring pages of memory for
  * allocations.  It picks the implementation of the page allocator interface
@@ -239,5 +241,7 @@ void pa_shard_stats_merge(tsdn_t *tsdn, pa_shard_t *shard,
  */
 void pa_shard_mtx_stats_read(tsdn_t *tsdn, pa_shard_t *shard,
     mutex_prof_data_t mutex_prof_data[mutex_prof_num_arena_mutexes]);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PA_H */

@@ -3,6 +3,8 @@
 #endif
 #define JEMALLOC_INTERNAL_TSD_TLS_H
 
+namespace duckdb_jemalloc {
+
 #define JEMALLOC_TSD_TYPE_ATTR(type) __thread type JEMALLOC_TLS_MODEL
 
 extern JEMALLOC_TSD_TYPE_ATTR(tsd_t) tsd_tls;
@@ -58,3 +60,5 @@ tsd_set(tsd_t *val) {
 		}
 	}
 }
+
+} // namespace duckdb_jemalloc

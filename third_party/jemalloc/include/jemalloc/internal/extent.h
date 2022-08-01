@@ -6,6 +6,8 @@
 #include "jemalloc/internal/ph.h"
 #include "jemalloc/internal/rtree.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This module contains the page-level allocator.  It chooses the addresses that
  * allocations requested by other modules will inhabit, and updates the global
@@ -133,5 +135,7 @@ extent_can_acquire_neighbor(edata_t *edata, rtree_contents_t contents,
 
 	return true;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EXTENT_H */

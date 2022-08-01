@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_ACTIVITY_CALLBACK_H
 #define JEMALLOC_INTERNAL_ACTIVITY_CALLBACK_H
 
+namespace duckdb_jemalloc {
+
 /*
  * The callback to be executed "periodically", in response to some amount of
  * allocator activity.
@@ -19,5 +21,7 @@ struct activity_callback_thunk_s {
 	activity_callback_t callback;
 	void *uctx;
 };
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ACTIVITY_CALLBACK_H */

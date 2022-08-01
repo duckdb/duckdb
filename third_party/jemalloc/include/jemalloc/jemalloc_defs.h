@@ -1,4 +1,8 @@
 /* include/jemalloc/jemalloc_defs.h.  Generated from jemalloc_defs.h.in by configure.  */
+#pragma once
+
+namespace duckdb_jemalloc {
+
 /* Defined if __attribute__((...)) syntax is supported. */
 #define JEMALLOC_HAVE_ATTR 
 
@@ -53,3 +57,5 @@
 
 /* sizeof(void *) == 2^LG_SIZEOF_PTR. */
 #define LG_SIZEOF_PTR 3
+
+} // namespace duckdb_jemalloc

@@ -1,3 +1,5 @@
+namespace duckdb_jemalloc {
+
 #define je_aligned_alloc JEMALLOC_N(aligned_alloc)
 #define je_calloc JEMALLOC_N(calloc)
 #define je_dallocx JEMALLOC_N(dallocx)
@@ -22,3 +24,5 @@
 #define je_xallocx JEMALLOC_N(xallocx)
 #define je_valloc JEMALLOC_N(valloc)
 #define je_malloc_size JEMALLOC_N(malloc_size)
+
+} // namespace duckdb_jemalloc

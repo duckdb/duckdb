@@ -17,6 +17,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/ticker.h"
 
+namespace duckdb_jemalloc {
+
 struct arena_s {
 	/*
 	 * Number of threads currently assigned to this arena.  Each thread has
@@ -97,5 +99,7 @@ struct arena_s {
 	 */
 	bin_t			bins[0];
 };
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ARENA_STRUCTS_H */

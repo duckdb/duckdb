@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_TCACHE_EXTERNS_H
 #define JEMALLOC_INTERNAL_TCACHE_EXTERNS_H
 
+namespace duckdb_jemalloc {
+
 extern bool opt_tcache;
 extern size_t opt_tcache_max;
 extern ssize_t	opt_lg_tcache_nslots_mul;
@@ -71,5 +73,7 @@ void tcache_gc_event_handler(tsd_t *tsd, uint64_t elapsed);
 uint64_t tcache_gc_dalloc_new_event_wait(tsd_t *tsd);
 uint64_t tcache_gc_dalloc_postponed_event_wait(tsd_t *tsd);
 void tcache_gc_dalloc_event_handler(tsd_t *tsd, uint64_t elapsed);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TCACHE_EXTERNS_H */

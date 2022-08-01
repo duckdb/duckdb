@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_STATS_H
 #define JEMALLOC_INTERNAL_STATS_H
 
+namespace duckdb_jemalloc {
+
 /*  OPTION(opt,		var_name,	default,	set_value_to) */
 #define STATS_PRINT_OPTIONS						\
     OPTION('J',		json,		false,		true)		\
@@ -50,5 +52,7 @@ bool stats_boot(void);
 void stats_prefork(tsdn_t *tsdn);
 void stats_postfork_parent(tsdn_t *tsdn);
 void stats_postfork_child(tsdn_t *tsdn);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_STATS_H */

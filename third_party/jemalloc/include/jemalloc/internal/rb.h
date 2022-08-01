@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_RB_H
 #define JEMALLOC_INTERNAL_RB_H
 
+namespace duckdb_jemalloc {
+
 /*-
  *******************************************************************************
  *
@@ -1852,5 +1854,7 @@ a_prefix##reverse_iter_filtered(a_rbt_type *rbtree, a_type *start,	\
     return ret;								\
 }									\
 ) /* end rb_summarized_only */
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_RB_H */

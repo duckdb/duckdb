@@ -5,6 +5,9 @@
  * name mangling that matches the API prefixing that happened as a result of
  * --with-mangling and/or --with-jemalloc-prefix configuration settings.
  */
+
+namespace duckdb_jemalloc {
+
 #ifdef JEMALLOC_MANGLE
 #  ifndef JEMALLOC_NO_DEMANGLE
 #    define JEMALLOC_NO_DEMANGLE
@@ -68,3 +71,5 @@
 #  undef jet_valloc
 #  undef jet_malloc_size
 #endif
+
+} // namespace duckdb_jemalloc

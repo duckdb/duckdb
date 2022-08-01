@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/assert.h"
 
+namespace duckdb_jemalloc {
+
 /* Sanity check. */
 #if !defined(JEMALLOC_INTERNAL_FFSLL) || !defined(JEMALLOC_INTERNAL_FFSL) \
     || !defined(JEMALLOC_INTERNAL_FFS)
@@ -418,5 +420,7 @@ lg_ceil(size_t x) {
 #endif
 
 #define LG_CEIL(x) (LG_FLOOR(x) + (((x) & ((x) - 1)) == 0 ? 0 : 1))
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BIT_UTIL_H */

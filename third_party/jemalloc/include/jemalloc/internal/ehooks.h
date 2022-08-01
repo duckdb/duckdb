@@ -4,6 +4,8 @@
 #include "jemalloc/internal/atomic.h"
 #include "jemalloc/internal/extent_mmap.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This module is the internal interface to the extent hooks (both
  * user-specified and external).  Eventually, this will give us the flexibility
@@ -408,5 +410,7 @@ ehooks_unguard(tsdn_t *tsdn, ehooks_t *ehooks, void *guard1, void *guard2) {
 
 	return err;
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EHOOKS_H */

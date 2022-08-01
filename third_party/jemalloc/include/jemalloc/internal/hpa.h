@@ -7,6 +7,8 @@
 #include "jemalloc/internal/pai.h"
 #include "jemalloc/internal/psset.h"
 
+namespace duckdb_jemalloc {
+
 typedef struct hpa_central_s hpa_central_t;
 struct hpa_central_s {
 	/*
@@ -178,5 +180,7 @@ void hpa_shard_prefork3(tsdn_t *tsdn, hpa_shard_t *shard);
 void hpa_shard_prefork4(tsdn_t *tsdn, hpa_shard_t *shard);
 void hpa_shard_postfork_parent(tsdn_t *tsdn, hpa_shard_t *shard);
 void hpa_shard_postfork_child(tsdn_t *tsdn, hpa_shard_t *shard);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_HPA_H */

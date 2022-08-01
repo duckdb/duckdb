@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_LOCKEDINT_H
 #define JEMALLOC_INTERNAL_LOCKEDINT_H
 
+namespace duckdb_jemalloc {
+
 /*
  * In those architectures that support 64-bit atomics, we use atomic updates for
  * our 64-bit values.  Otherwise, we use a plain uint64_t and synchronize
@@ -200,5 +202,7 @@ static inline size_t
 locked_read_atomic_zu(locked_zu_t *p) {
 	return atomic_load_zu(&p->val, ATOMIC_RELAXED);
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_LOCKEDINT_H */

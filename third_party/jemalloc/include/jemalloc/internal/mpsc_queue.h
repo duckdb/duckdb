@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/atomic.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * A concurrent implementation of a multi-producer, single-consumer queue.  It
  * supports three concurrent operations:
@@ -130,5 +132,7 @@ a_prefix##pop_batch(a_queue_type *queue, a_list_type *dst) {		\
 	}								\
 	ql_concat(dst, &reversed, a_link);				\
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_MPSC_QUEUE_H */

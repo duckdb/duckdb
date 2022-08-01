@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_BUF_WRITER_H
 #define JEMALLOC_INTERNAL_BUF_WRITER_H
 
+namespace duckdb_jemalloc {
+
 /*
  * Note: when using the buffered writer, cbopaque is passed to write_cb only
  * when the buffer is flushed.  It would make a difference if cbopaque points
@@ -28,5 +30,7 @@ void buf_writer_terminate(tsdn_t *tsdn, buf_writer_t *buf_writer);
 typedef ssize_t (read_cb_t)(void *read_cbopaque, void *buf, size_t limit);
 void buf_writer_pipe(buf_writer_t *buf_writer, read_cb_t *read_cb,
     void *read_cbopaque);
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_BUF_WRITER_H */

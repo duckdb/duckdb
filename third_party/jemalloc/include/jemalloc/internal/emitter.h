@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/ql.h"
 
+namespace duckdb_jemalloc {
+
 typedef enum emitter_output_e emitter_output_t;
 enum emitter_output_e {
 	emitter_output_json,
@@ -506,5 +508,7 @@ emitter_end(emitter_t *emitter) {
 		    emitter_output_json_compact ? "}" : "\n}\n");
 	}
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_EMITTER_H */

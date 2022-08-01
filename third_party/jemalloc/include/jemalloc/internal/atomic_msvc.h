@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_ATOMIC_MSVC_H
 #define JEMALLOC_INTERNAL_ATOMIC_MSVC_H
 
+namespace duckdb_jemalloc {
+
 #define ATOMIC_INIT(...) {__VA_ARGS__}
 
 typedef enum {
@@ -154,5 +156,7 @@ atomic_fetch_xor_##short_type(atomic_##short_type##_t *a,		\
 	return (type)ATOMIC_INTERLOCKED_NAME(_InterlockedXor, lg_size)(	\
 	    &a->repr, (ATOMIC_INTERLOCKED_REPR(lg_size))val);		\
 }
+
+} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_ATOMIC_MSVC_H */
