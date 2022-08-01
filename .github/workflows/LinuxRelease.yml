@@ -255,6 +255,8 @@ jobs:
            cd /tmp
            unzip duckdb_unittest-linux-aarch64.zip
            chmod +x unittest
+           ls /
+           ls /tmp
 
          # Mount the artifacts directory as /artifacts in the container
          dockerRunArgs: |
@@ -263,7 +265,7 @@ jobs:
          # Set an output parameter `uname` for use in subsequent steps
          run: |
            uname -a
-           ./tmp/unittest
+           /tmp/unittest
            echo ::set-output name=uname::$(uname -a)
 
      - name: Get the output
