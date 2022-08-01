@@ -21,7 +21,8 @@ setClass("duckdb_connection",
     driver = "duckdb_driver",
     debug = "logical",
     timezone_out = "character",
-    tz_out_convert = "character"
+    tz_out_convert = "character",
+    reserved_words = "character"
   )
 )
 
