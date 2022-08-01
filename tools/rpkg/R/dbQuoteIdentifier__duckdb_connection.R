@@ -37,9 +37,6 @@ reserved_words <- function(con) {
     return(get_reserved_words(con))
   }
 
-  if (length(con@reserved_words) == 0) {
-    con@reserved_words <- get_reserved_words(con)
-  }
   con@reserved_words
 }
 

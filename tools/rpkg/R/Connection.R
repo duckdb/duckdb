@@ -27,7 +27,7 @@ setClass("duckdb_connection",
 )
 
 duckdb_connection <- function(duckdb_driver, debug) {
-  new(
+  out <- new(
     "duckdb_connection",
     conn_ref = rapi_connect(duckdb_driver@database_ref),
     driver = duckdb_driver,
@@ -35,6 +35,8 @@ duckdb_connection <- function(duckdb_driver, debug) {
     timezone_out = "UTC",
     tz_out_convert = "with"
   )
+  out@reserved_words <- get_reserved_words(out)
+  out
 }
 
 duckdb_random_string <- function(x) {
