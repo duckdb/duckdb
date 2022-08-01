@@ -3,8 +3,6 @@
 #include "duckdb/function/aggregate/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
-// TODO: LIST segments only require the lenghts of the lists, offsets can/must be reconstructed
-
 namespace duckdb {
 
 template <class T>
@@ -18,8 +16,8 @@ data_ptr_t ListFun::AllocatePrimitiveData(Allocator &allocator, vector<unique_pt
 data_ptr_t ListFun::AllocateListData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
                                      uint16_t &capacity) {
 
-	owning_vector.emplace_back(allocator.Allocate(
-	    sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(list_entry_t)) + sizeof(LinkedList)));
+	owning_vector.emplace_back(
+	    allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList)));
 	return owning_vector.back()->get();
 }
 
@@ -36,13 +34,13 @@ T *ListFun::TemplatedGetPrimitiveData(ListSegment *segment) {
 	return (T *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-list_entry_t *ListFun::GetListOffsetData(ListSegment *segment) {
-	return (list_entry_t *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+uint64_t *ListFun::GetListLengthData(ListSegment *segment) {
+	return (uint64_t *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
 LinkedList *ListFun::GetListChildData(ListSegment *segment) {
 	return (LinkedList *)(((char *)segment) + sizeof(ListSegment) +
-	                      segment->capacity * (sizeof(bool) + sizeof(list_entry_t)));
+	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
 ListSegment **ListFun::GetStructData(ListSegment *segment) {
@@ -393,20 +391,20 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 	// write value
 	if (input.GetType().InternalType() == PhysicalType::VARCHAR) {
 
-		// required to set the length and offset of this string
-		auto list_offset_data = GetListOffsetData(segment);
-		list_entry_t list_entry(0, 0);
+		// set the length of this string
+		auto str_length_data = GetListLengthData(segment);
+		uint64_t str_length = 0;
 
 		// get the string
 		string str = "";
 		if (!is_null) {
 			auto str_t = ((string_t *)input_data.data)[source_idx];
-			list_entry.length = str_t.GetSize();
+			str_length = str_t.GetSize();
 			str = str_t.GetString();
 		}
 
 		// we can reconstruct the offset from the length
-		Store<list_entry_t>(list_entry, (data_ptr_t)(list_offset_data + segment->count));
+		Store<uint64_t>(str_length, (data_ptr_t)(str_length_data + segment->count));
 
 		if (!is_null) {
 			// write the characters to the linked list of child segments
@@ -425,15 +423,15 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 
 	} else if (input.GetType().id() == LogicalTypeId::LIST) {
 
-		// used to write the list entry length and offset
-		auto list_offset_data = GetListOffsetData(segment);
-		list_entry_t list_offset_entry;
+		// set the length of this list
+		auto list_length_data = GetListLengthData(segment);
+		uint64_t list_length = 0;
 
 		if (!is_null) {
 			// get list entry information
 			auto list_entries = (list_entry_t *)input_data.data;
 			const auto &list_entry = list_entries[source_idx];
-			list_offset_entry.length = list_entry.length;
+			list_length = list_entry.length;
 
 			// get the child vector and its data
 			auto lists_size = ListVector::GetListSize(input);
@@ -449,16 +447,9 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 			}
 			// store the updated linked list
 			Store<LinkedList>(child_segments, (data_ptr_t)GetListChildData(segment));
-
-		} else {
-			list_offset_entry.length = 0;
 		}
 
-		// length and offset need to also be set for NULLs to create valid entries
-		// offset is not significant for the result, since it will be reconstructed from the lengths of the individual
-		// lists
-		list_offset_entry.offset = 0;
-		Store<list_entry_t>(list_offset_entry, (data_ptr_t)(list_offset_data + segment->count));
+		Store<uint64_t>(list_length, (data_ptr_t)(list_length_data + segment->count));
 
 	} else if (input.GetType().id() == LogicalTypeId::STRUCT) {
 
@@ -519,39 +510,40 @@ void ListFun::GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &to
 		}
 		linked_child_list.last_segment = nullptr;
 
-		// use length and offset to get the correct substrings
+		// use length and (reconstructed) offset to get the correct substrings
 		auto aggr_vector_data = FlatVector::GetData(result);
-		auto list_offset_data = GetListOffsetData(segment);
+		auto str_length_data = GetListLengthData(segment);
 
 		// get the substrings and write them to the result vector
 		idx_t offset = 0;
 		for (idx_t i = 0; i < segment->count; i++) {
 			if (!null_mask[i]) {
-				auto list_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
-				auto substr = str.substr(offset, list_entry.length);
+				auto str_length = Load<uint64_t>((data_ptr_t)(str_length_data + i));
+				auto substr = str.substr(offset, str_length);
 				auto str_t = StringVector::AddStringOrBlob(result, substr);
 				((string_t *)aggr_vector_data)[total_count + i] = str_t;
-				offset += list_entry.length;
+				offset += str_length;
 			}
 		}
 
 	} else if (result.GetType().id() == LogicalTypeId::LIST) {
+
 		auto list_vector_data = FlatVector::GetData<list_entry_t>(result);
 
-		// get the starting offset for the entries of this segment
-		auto list_offset_data = GetListOffsetData(segment);
+		// get the starting offset
 		idx_t offset = 0;
 		if (total_count != 0) {
 			offset = list_vector_data[total_count - 1].offset + list_vector_data[total_count - 1].length;
 		}
 		idx_t starting_offset = offset;
 
-		// set offsets
+		// set length and offsets
+		auto list_length_data = GetListLengthData(segment);
 		for (idx_t i = 0; i < segment->count; i++) {
-			auto list_offset_entry = Load<list_entry_t>((data_ptr_t)(list_offset_data + i));
-			list_vector_data[total_count + i].length = list_offset_entry.length;
+			auto list_length = Load<uint64_t>((data_ptr_t)(list_length_data + i));
+			list_vector_data[total_count + i].length = list_length;
 			list_vector_data[total_count + i].offset = offset;
-			offset += list_offset_entry.length;
+			offset += list_length;
 		}
 
 		auto &child_vector = ListVector::GetEntry(result);

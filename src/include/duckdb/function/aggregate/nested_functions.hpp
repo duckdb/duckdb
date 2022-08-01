@@ -54,8 +54,8 @@ struct ListFun {
 	//! Get a pointer to the first position of the primitive data of a ListSegment for primitve types.
 	template <class T>
 	static T *TemplatedGetPrimitiveData(ListSegment *segment);
-	//! Get a pointer to the list offset data of a ListSegment of type LIST.
-	static list_entry_t *GetListOffsetData(ListSegment *segment);
+	//! Get a pointer to the list length data of a ListSegment of type LIST.
+	static uint64_t *GetListLengthData(ListSegment *segment);
 	//! Get a pointer to the child list of a ListSegment of type LIST.
 	static LinkedList *GetListChildData(ListSegment *segment);
 	//! Get a pointer to the child pointers of a ListSegment of type STRUCT.
