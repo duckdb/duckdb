@@ -269,7 +269,7 @@ jobs:
            ls
            cd /tmp
            ls
-           ./unittest
+           /tmp/unittest
            echo ::set-output name=uname::$(uname -a)
 
      - name: Get the output
