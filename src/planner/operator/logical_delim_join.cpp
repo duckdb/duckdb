@@ -3,12 +3,17 @@
 namespace duckdb {
 
 void LogicalDelimJoin::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(join_type);
+	writer.WriteSerializableList(duplicate_eliminated_columns);
 }
 
 unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                           FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto join_type = reader.ReadRequired<JoinType>();
+	auto duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(context);
+	auto result = make_unique<LogicalDelimJoin>(join_type);
+	result->duplicate_eliminated_columns = move(duplicate_eliminated_columns);
+	return result;
 }
 
 } // namespace duckdb
