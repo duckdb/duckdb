@@ -1184,7 +1184,7 @@ static PGNode *makeIntervalNode(char *str, int location, PGList *typmods);
 static PGNode *makeIntervalNode(int val, int location, PGList *typmods);
 static PGNode *makeIntervalNode(PGNode *arg, int location, PGList *typmods);
 static PGNode *makeSampleSize(PGValue *sample_size, bool is_percentage);
-static PGNode *makeSampleOptions(PGNode *sample_size, char *method, int seed, int location);
+static PGNode *makeSampleOptions(PGNode *sample_size, char *method, int *seed, int location);
 static PGNode *makeIntConst(int val, int location);
 static PGNode *makeFloatConst(char *str, int location);
 static PGNode *makeBitStringConst(char *str, int location);
@@ -20409,28 +20409,30 @@ yyreduce:
   case 533:
 #line 532 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.node) = makeSampleOptions((yyvsp[(3) - (5)].node), (yyvsp[(1) - (5)].str), (yyvsp[(5) - (5)].ival), (yylsp[(1) - (5)]));
+					int seed = (yyvsp[(5) - (5)].ival);
+					(yyval.node) = makeSampleOptions((yyvsp[(3) - (5)].node), (yyvsp[(1) - (5)].str), &seed, (yylsp[(1) - (5)]));
 				;}
     break;
 
   case 534:
 #line 536 "third_party/libpg_query/grammar/statements/select.y"
     {
-			(yyval.node) = makeSampleOptions((yyvsp[(1) - (1)].node), NULL, -1, (yylsp[(1) - (1)]));
+			(yyval.node) = makeSampleOptions((yyvsp[(1) - (1)].node), NULL, NULL, (yylsp[(1) - (1)]));
 		;}
     break;
 
   case 535:
 #line 540 "third_party/libpg_query/grammar/statements/select.y"
     {
-			(yyval.node) = makeSampleOptions((yyvsp[(1) - (4)].node), (yyvsp[(3) - (4)].str), -1, (yylsp[(1) - (4)]));
+			(yyval.node) = makeSampleOptions((yyvsp[(1) - (4)].node), (yyvsp[(3) - (4)].str), NULL, (yylsp[(1) - (4)]));
 		;}
     break;
 
   case 536:
 #line 544 "third_party/libpg_query/grammar/statements/select.y"
     {
-			(yyval.node) = makeSampleOptions((yyvsp[(1) - (6)].node), (yyvsp[(3) - (6)].str), (yyvsp[(5) - (6)].ival), (yylsp[(1) - (6)]));
+			int seed = (yyvsp[(5) - (6)].ival);
+			(yyval.node) = makeSampleOptions((yyvsp[(1) - (6)].node), (yyvsp[(3) - (6)].str), &seed, (yylsp[(1) - (6)]));
 		;}
     break;
 
@@ -26216,12 +26218,15 @@ makeSampleSize(PGValue *sample_size, bool is_percentage) {
 }
 
 static PGNode *
-makeSampleOptions(PGNode *sample_size, char *method, int seed, int location) {
+makeSampleOptions(PGNode *sample_size, char *method, int *seed, int location) {
 	PGSampleOptions *n = makeNode(PGSampleOptions);
 
 	n->sample_size = sample_size;
 	n->method = method;
-	n->seed = seed;
+	if (seed) {
+		n->has_seed = true;
+		n->seed = *seed;
+	}
 	n->location = location;
 
 	return (PGNode *)n;

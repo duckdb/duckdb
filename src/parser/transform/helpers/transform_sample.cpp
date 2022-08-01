@@ -47,7 +47,9 @@ unique_ptr<SampleOptions> Transformer::TransformSampleOptions(duckdb_libpgquery:
 	if (sample_options.method) {
 		result->method = GetSampleMethod(sample_options.method);
 	}
-	result->seed = sample_options.seed == 0 ? -1 : sample_options.seed;
+	if (sample_options.has_seed) {
+		result->seed = sample_options.seed;
+	}
 	return result;
 }
 
