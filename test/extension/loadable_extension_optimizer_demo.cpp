@@ -95,10 +95,12 @@ public:
 			chunk_collection->Append(chunk);
 			free(buffer);
 		}
+
 		auto types = chunk_collection->Types();
 		plan = make_unique<LogicalChunkGet>(0, types, move(chunk_collection));
 
 		len = 0;
+		(void)len;
 		D_ASSERT(write(sockfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 		// close the socket
 		close(sockfd);
