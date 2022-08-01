@@ -1,0 +1,173 @@
+# name: test/sql/join/full_outer/test_full_outer_join_issue_4252.test
+# description: Test Issue: 4252
+# group: [full_outer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (x INT, y INT);
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2), (3, 3);
+
+query II
+SELECT * FROM (SELECT a2.x FROM (SELECT x FROM test WHERE x > 3) AS a1 FULL OUTER JOIN (SELECT x FROM test WHERE x = 1) AS a2 ON a1.x = a2.x) AS a3 FULL OUTER JOIN (SELECT 1 AS x) AS a4 ON a3.x = a4.x;
+----
+1	1
+
+statement ok
+CREATE TABLE df1(day DATE, value INTEGER, organization VARCHAR);
+INSERT INTO df1 VALUES 
+    ('2022-01-01', 10, 'org1'),
+    ('2022-01-05', 20, 'org2'),
+    ('2022-01-10', 30, 'org3');
+
+statement ok
+CREATE TABLE df2(day DATE, value INTEGER, organization VARCHAR);
+INSERT INTO df2 VALUES 
+    ('2022-01-01', 100, 'org1'),
+    ('2022-09-01', 200, 'org2'),
+    ('2022-03-01', 300, 'org3');
+
+statement ok
+CREATE TABLE df3(day DATE, value INTEGER, organization VARCHAR);
+INSERT INTO df3 VALUES
+    ('2022-01-02',  1000, 'org1'),
+    ('2022-02-03',  2000, 'org2'),
+    ('2022-04-01',  3000, 'org3');
+
+query II
+SELECT 
+    coalesce(anon_1.month, anon_2.month) AS month, 
+    coalesce(coalesce(CAST(anon_1.value AS REAL), 0.0) + coalesce(CAST(anon_2.value AS REAL), 0.0), 0.0) AS value
+FROM (
+    SELECT coalesce(anon_3.month, anon_4.month) AS month, 
+    coalesce(coalesce(CAST(anon_3.value AS REAL), 0.0) + coalesce(CAST(anon_4.value AS REAL), 0.0), 0.0) AS value
+    FROM (
+        SELECT month AS month, sum(anon_5.value) AS value
+        FROM (
+            SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+            FROM df1
+            WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+            AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+            AND (organization ILIKE 'org4') 
+            GROUP BY date_trunc('month', day)
+        ) AS anon_5 
+        GROUP BY GROUPING SETS((month))
+    ) AS anon_3 
+    FULL OUTER JOIN (
+        SELECT month AS month, sum(anon_6.value) AS value
+        FROM (
+            SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+            FROM df2
+            WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+            AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+            GROUP BY date_trunc('month', day)
+        ) AS anon_6 
+        GROUP BY GROUPING SETS((month))
+    ) AS anon_4 ON anon_3.month = anon_4.month
+) AS anon_1 
+FULL OUTER JOIN (
+    SELECT month AS month, sum(anon_7.value) AS value
+    FROM (
+        SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+        FROM df3
+        WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+        AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+        GROUP BY date_trunc('month', day)
+    ) AS anon_7 
+    GROUP BY GROUPING SETS((month))
+) AS anon_2 ON anon_1.month = anon_2.month
+----
+2022-01-01	1100.0
+
+query II
+SELECT 
+    coalesce(anon_1.month, anon_2.month) AS month, 
+    coalesce(coalesce(CAST(anon_1.value AS REAL), 0.0) + coalesce(CAST(anon_2.value AS REAL), 0.0), 0.0) AS value
+FROM (
+    SELECT coalesce(anon_3.month, anon_4.month) AS month, 
+    coalesce(coalesce(CAST(anon_3.value AS REAL), 0.0) + coalesce(CAST(anon_4.value AS REAL), 0.0), 0.0) AS value
+    FROM (
+        SELECT month AS month, sum(anon_5.value) AS value
+        FROM (
+            SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+            FROM df1
+            WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+            AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+            AND (organization ILIKE 'org1') 
+            GROUP BY date_trunc('month', day)
+        ) AS anon_5 
+        GROUP BY GROUPING SETS((month))
+    ) AS anon_3 
+    FULL OUTER JOIN (
+        SELECT month AS month, sum(anon_6.value) AS value
+        FROM (
+            SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+            FROM df2
+            WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+            AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+            GROUP BY date_trunc('month', day)
+        ) AS anon_6 
+        GROUP BY GROUPING SETS((month))
+    ) AS anon_4 ON anon_3.month = anon_4.month
+) AS anon_1 
+FULL OUTER JOIN (
+    SELECT month AS month, sum(anon_7.value) AS value
+    FROM (
+        SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+        FROM df3
+        WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+        AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+        GROUP BY date_trunc('month', day)
+    ) AS anon_7 
+    GROUP BY GROUPING SETS((month))
+) AS anon_2 ON anon_1.month = anon_2.month
+----
+2022-01-01	1110.0
+
+query II
+SELECT 
+    coalesce(anon_1.month, anon_2.month) AS month, 
+    coalesce(coalesce(CAST(anon_1.value AS REAL), 0.0) + coalesce(CAST(anon_2.value AS REAL), 0.0), 0.0) AS value
+FROM (
+    SELECT coalesce(anon_3.month, anon_4.month) AS month, 
+    coalesce(coalesce(CAST(anon_3.value AS REAL), 0.0) + coalesce(CAST(anon_4.value AS REAL), 0.0), 0.0) AS value
+    FROM (
+        SELECT month AS month, sum(anon_6.value) AS value
+        FROM (
+            SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+            FROM df2
+            WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+            AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+            GROUP BY date_trunc('month', day)
+        ) AS anon_6 
+        GROUP BY GROUPING SETS((month))
+    ) AS anon_3 
+    FULL OUTER JOIN (
+        SELECT month AS month, sum(anon_5.value) AS value
+        FROM (
+            SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+            FROM df1
+            WHERE day >= CAST('2022-01-01 00:00:00' AS DATE) 
+            AND day <= CAST('2022-01-31 00:00:00' AS DATE)
+            AND (organization ILIKE 'org4') 
+            GROUP BY date_trunc('month', day)
+        ) AS anon_5 
+        GROUP BY GROUPING SETS((month))
+    ) AS anon_4 ON anon_3.month = anon_4.month
+) AS anon_1 
+FULL OUTER JOIN (
+    SELECT month AS month, sum(anon_7.value) AS value
+    FROM (
+        SELECT date_trunc('month', day) AS month, coalesce(sum(value), 0.0) AS value
+        FROM df3
+        WHERE day >= CAST('2022-01-01 00:00:00' AS DATE)
+        AND day <= CAST('2022-01-31 00:00:00' AS DATE) 
+        GROUP BY date_trunc('month', day)
+    ) AS anon_7 
+    GROUP BY GROUPING SETS((month))
+) AS anon_2 ON anon_1.month = anon_2.month
+----
+2022-01-01	1100.0
