@@ -14,12 +14,13 @@ string LogicalDistinct::ParamsToString() const {
 }
 
 void LogicalDistinct::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteSerializableList(distinct_targets);
 }
 
 unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                          FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto distinct_targets = reader.ReadRequiredSerializableList<Expression>(context);
+	return make_unique<LogicalDistinct>(move(distinct_targets));
 }
 
 } // namespace duckdb
