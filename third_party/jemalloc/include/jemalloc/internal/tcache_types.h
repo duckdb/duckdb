@@ -9,6 +9,8 @@ typedef struct tcache_slow_s tcache_slow_t;
 typedef struct tcache_s tcache_t;
 typedef struct tcaches_s tcaches_t;
 
+} // namespace duckdb_jemalloc
+
 /*
  * tcache pointers close to NULL are used to encode state information that is
  * used for two purposes: preventing thread caching on a per thread basis and
@@ -33,7 +35,5 @@ typedef struct tcaches_s tcaches_t;
 #define TCACHE_MAXCLASS_LIMIT ((size_t)1 << TCACHE_LG_MAXCLASS_LIMIT)
 #define TCACHE_NBINS_MAX (SC_NBINS + SC_NGROUP *			\
     (TCACHE_LG_MAXCLASS_LIMIT - SC_LG_LARGE_MINCLASS) + 1)
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_TCACHE_TYPES_H */

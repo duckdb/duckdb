@@ -12,6 +12,8 @@
 #include "jemalloc/internal/prof_log.h"
 #include "jemalloc/internal/prof_sys.h"
 
+namespace duckdb_jemalloc {
+
 bool opt_prof_log = false;
 typedef enum prof_logging_state_e prof_logging_state_t;
 enum prof_logging_state_e {
@@ -715,3 +717,5 @@ prof_log_init(tsd_t *tsd) {
 }
 
 /******************************************************************************/
+
+} // namespace duckdb_jemalloc

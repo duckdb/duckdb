@@ -4,8 +4,6 @@
 #include "jemalloc/internal/jemalloc_internal_defs.h"
 #include "jemalloc/internal/jemalloc_internal_decls.h"
 
-namespace duckdb_jemalloc {
-
 #if defined(JEMALLOC_UTRACE) || defined(JEMALLOC_UTRACE_LABEL)
 #include <sys/ktrace.h>
 #  if defined(JEMALLOC_UTRACE)
@@ -58,6 +56,8 @@ namespace duckdb_jemalloc {
 #ifdef JEMALLOC_DEFINE_MADVISE_FREE
 #  define JEMALLOC_MADV_FREE 8
 #endif
+
+namespace duckdb_jemalloc {
 
 static const bool config_debug =
 #ifdef JEMALLOC_DEBUG

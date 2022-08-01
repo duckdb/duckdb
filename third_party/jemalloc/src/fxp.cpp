@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/fxp.h"
 
+namespace duckdb_jemalloc {
+
 static bool
 fxp_isdigit(char c) {
 	return '0' <= c && c <= '9';
@@ -113,12 +115,14 @@ fxp_print(fxp_t a, char buf[FXP_BUF_SIZE]) {
 		fraction_digits /= 10;
 	}
 
-	size_t printed = malloc_snprintf(buf, FXP_BUF_SIZE, "%"FMTu32".",
+	size_t printed = malloc_snprintf(buf, FXP_BUF_SIZE, "%" FMTu32".",
 	    integer_part);
 	for (int i = 0; i < leading_fraction_zeros; i++) {
 		buf[printed] = '0';
 		printed++;
 	}
-	malloc_snprintf(&buf[printed], FXP_BUF_SIZE - printed, "%"FMTu64,
+	malloc_snprintf(&buf[printed], FXP_BUF_SIZE - printed, "%" FMTu64,
 	    fraction_digits);
 }
+
+} // namespace duckdb_jemalloc

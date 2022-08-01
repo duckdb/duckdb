@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/assert.h"
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_DIAGNOSTIC_DISABLE_SPURIOUS
 
 /******************************************************************************/
@@ -706,9 +708,13 @@ background_thread_stats_read(tsdn_t *tsdn, background_thread_stats_t *stats) {
 #undef BILLION
 #undef BACKGROUND_THREAD_MIN_INTERVAL_NS
 
+} // namespace duckdb_jemalloc
+
 #ifdef JEMALLOC_HAVE_DLSYM
 #include <dlfcn.h>
 #endif
+
+namespace duckdb_jemalloc {
 
 static bool
 pthread_create_fptr_init(void) {
@@ -818,3 +824,5 @@ background_thread_boot1(tsdn_t *tsdn, base_t *base) {
 
 	return false;
 }
+
+} // namespace duckdb_jemalloc

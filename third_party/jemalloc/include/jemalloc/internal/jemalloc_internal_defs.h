@@ -235,9 +235,9 @@ namespace duckdb_jemalloc {
  * ffs*() functions to use for bitmapping.  Don't use these directly; instead,
  * use ffs_*() from util.h.
  */
-//#define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
-//#define JEMALLOC_INTERNAL_FFSL __builtin_ffsl
-//#define JEMALLOC_INTERNAL_FFS __builtin_ffs
+#define JEMALLOC_INTERNAL_FFSLL __builtin_ffsll
+#define JEMALLOC_INTERNAL_FFSL __builtin_ffsl
+#define JEMALLOC_INTERNAL_FFS __builtin_ffs
 
 /*
  * popcount*() functions to use for bitmapping.

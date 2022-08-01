@@ -4,6 +4,8 @@
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 #ifdef assert
 #  undef assert
 #endif
@@ -695,3 +697,5 @@ malloc_printf(const char *format, ...) {
 #undef not_implemented
 #undef assert_not_implemented
 #include "jemalloc/internal/assert.h"
+
+} // namespace duckdb_jemalloc

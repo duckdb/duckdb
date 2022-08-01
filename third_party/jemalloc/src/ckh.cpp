@@ -46,6 +46,8 @@
 #include "jemalloc/internal/prng.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Function prototypes for non-inline static functions. */
 
@@ -567,3 +569,5 @@ bool
 ckh_pointer_keycomp(const void *k1, const void *k2) {
 	return (k1 == k2);
 }
+
+} // namespace duckdb_jemalloc

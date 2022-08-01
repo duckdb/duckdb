@@ -3,13 +3,13 @@
 
 #include "jemalloc/internal/assert.h"
 
-namespace duckdb_jemalloc {
-
 /* Sanity check. */
 #if !defined(JEMALLOC_INTERNAL_FFSLL) || !defined(JEMALLOC_INTERNAL_FFSL) \
     || !defined(JEMALLOC_INTERNAL_FFS)
 #  error JEMALLOC_INTERNAL_FFS{,L,LL} should have been defined by configure
 #endif
+
+namespace duckdb_jemalloc {
 
 /*
  * Unlike the builtins and posix ffs functions, our ffs requires a non-zero

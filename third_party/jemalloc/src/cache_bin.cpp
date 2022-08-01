@@ -5,6 +5,8 @@
 #include "jemalloc/internal/cache_bin.h"
 #include "jemalloc/internal/safety_check.h"
 
+namespace duckdb_jemalloc {
+
 void
 cache_bin_info_init(cache_bin_info_t *info,
     cache_bin_sz_t ncached_max) {
@@ -97,3 +99,5 @@ bool
 cache_bin_still_zero_initialized(cache_bin_t *bin) {
 	return bin->stack_head == NULL;
 }
+
+} // namespace duckdb_jemalloc

@@ -1,6 +1,8 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * To avoid using floating point math down core paths (still necessary because
  * versions of the glibc dynamic loader that did not preserve xmm registers are
@@ -30,3 +32,5 @@ const uint8_t ticker_geom_table[1 << TICKER_GEOM_NBITS] = {
 	16, 15, 14, 13, 12, 10, 9, 8,
 	7, 6, 5, 4, 3, 2, 1, 0
 };
+
+} // namespace duckdb_jemalloc

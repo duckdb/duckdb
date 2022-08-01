@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_DECLS_H
 #define JEMALLOC_INTERNAL_DECLS_H
 
-namespace duckdb_jemalloc {
-
 #include <math.h>
 #ifdef _WIN32
 #  include <windows.h>
@@ -106,7 +104,5 @@ isblank(int c) {
 #ifdef small
 #  undef small
 #endif
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_H */

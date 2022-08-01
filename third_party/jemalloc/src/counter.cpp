@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/counter.h"
 
+namespace duckdb_jemalloc {
+
 bool
 counter_accum_init(counter_accum_t *counter, uint64_t interval) {
 	if (LOCKEDINT_MTX_INIT(counter->mtx, "counter_accum",
@@ -28,3 +30,5 @@ void
 counter_postfork_child(tsdn_t *tsdn, counter_accum_t *counter) {
 	LOCKEDINT_MTX_POSTFORK_CHILD(tsdn, counter->mtx);
 }
+
+} // namespace duckdb_jemalloc

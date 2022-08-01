@@ -4,6 +4,8 @@
 #include "jemalloc/internal/buf_writer.h"
 #include "jemalloc/internal/malloc_io.h"
 
+namespace duckdb_jemalloc {
+
 static void *
 buf_writer_allocate_internal_buf(tsdn_t *tsdn, size_t buf_len) {
 #ifdef JEMALLOC_JET
@@ -52,7 +54,7 @@ buf_writer_init(tsdn_t *tsdn, buf_writer_t *buf_writer, write_cb_t *write_cb,
 		buf_writer->buf = buf;
 		buf_writer->internal_buf = false;
 	} else {
-		buf_writer->buf = buf_writer_allocate_internal_buf(tsdn,
+		buf_writer->buf = (char *)buf_writer_allocate_internal_buf(tsdn,
 		    buf_len);
 		buf_writer->internal_buf = true;
 	}
@@ -142,3 +144,5 @@ buf_writer_pipe(buf_writer_t *buf_writer, read_cb_t *read_cb,
 	} while (nread > 0);
 	buf_writer_flush(buf_writer);
 }
+
+} // namespace duckdb_jemalloc

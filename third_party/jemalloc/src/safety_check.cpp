@@ -1,6 +1,8 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
+namespace duckdb_jemalloc {
+
 static safety_check_abort_hook_t safety_check_abort;
 
 void safety_check_fail_sized_dealloc(bool current_dealloc, const void *ptr,
@@ -34,3 +36,5 @@ void safety_check_fail(const char *format, ...) {
 		safety_check_abort(buf);
 	}
 }
+
+} // namespace duckdb_jemalloc

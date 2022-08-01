@@ -1,6 +1,8 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This file is logically part of the PA module.  While pa.c contains the core
  * allocator functionality, this file contains boring integration functionality;
@@ -189,3 +191,5 @@ pa_shard_mtx_stats_read(tsdn_t *tsdn, pa_shard_t *shard,
 		    &mutex_prof_data[arena_prof_mutex_hpa_sec]);
 	}
 }
+
+} // namespace duckdb_jemalloc

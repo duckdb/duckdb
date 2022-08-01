@@ -1,7 +1,10 @@
+
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
 #include "jemalloc/internal/bin_info.h"
+
+namespace duckdb_jemalloc {
 
 bin_info_t bin_infos[SC_NBINS];
 
@@ -28,3 +31,5 @@ bin_info_boot(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS]) {
 	assert(sc_data->initialized);
 	bin_infos_init(sc_data, bin_shard_sizes, bin_infos);
 }
+
+} // namespace duckdb_jemalloc

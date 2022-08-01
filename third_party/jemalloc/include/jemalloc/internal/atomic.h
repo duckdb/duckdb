@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_ATOMIC_H
 #define JEMALLOC_INTERNAL_ATOMIC_H
 
-namespace duckdb_jemalloc {
-
 #define ATOMIC_INLINE JEMALLOC_ALWAYS_INLINE
 
 #define JEMALLOC_U8_ATOMICS
@@ -52,6 +50,8 @@ namespace duckdb_jemalloc {
 #define ATOMIC_RELEASE atomic_memory_order_release
 #define ATOMIC_ACQ_REL atomic_memory_order_acq_rel
 #define ATOMIC_SEQ_CST atomic_memory_order_seq_cst
+
+namespace duckdb_jemalloc {
 
 /*
  * Another convenience -- simple atomic helper functions.

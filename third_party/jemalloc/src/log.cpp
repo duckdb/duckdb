@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/log.h"
 
+namespace duckdb_jemalloc {
+
 char log_var_names[JEMALLOC_LOG_VAR_BUFSIZE];
 atomic_b_t log_init_done = ATOMIC_INIT(false);
 
@@ -76,3 +78,5 @@ log_var_update_state(log_var_t *log_var) {
 		segment_begin = segment_end + 1;
 	}
 }
+
+} // namespace duckdb_jemalloc

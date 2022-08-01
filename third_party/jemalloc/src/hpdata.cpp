@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/hpdata.h"
 
+namespace duckdb_jemalloc {
+
 static int
 hpdata_age_comp(const hpdata_t *a, const hpdata_t *b) {
 	uint64_t a_age = hpdata_age_get(a);
@@ -323,3 +325,5 @@ hpdata_dehugify(hpdata_t *hpdata) {
 	hpdata->h_huge = false;
 	hpdata_assert_consistent(hpdata);
 }
+
+} // namespace duckdb_jemalloc

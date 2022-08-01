@@ -4,6 +4,8 @@
 
 #include "jemalloc/internal/assert.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Suppose we have n = q * d, all integers. We know n and d, and want q = n / d.
  *
@@ -53,3 +55,5 @@ div_init(div_info_t *div_info, size_t d) {
 	div_info->d = d;
 #endif
 }
+
+} // namespace duckdb_jemalloc

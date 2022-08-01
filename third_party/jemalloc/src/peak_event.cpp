@@ -6,6 +6,8 @@
 #include "jemalloc/internal/activity_callback.h"
 #include "jemalloc/internal/peak.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Update every 64K by default.  We're not exposing this as a configuration
  * option for now; we don't want to bind ourselves too tightly to any particular
@@ -80,3 +82,5 @@ peak_dalloc_event_handler(tsd_t *tsd, uint64_t elapsed) {
 	peak_event_update(tsd);
 	peak_event_activity_callback(tsd);
 }
+
+} // namespace duckdb_jemalloc

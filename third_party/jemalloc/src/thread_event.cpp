@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/thread_event.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Signatures for event specific functions.  These functions should be defined
  * by the modules owning each event.  The signatures here verify that the

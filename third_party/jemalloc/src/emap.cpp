@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/emap.h"
 
+namespace duckdb_jemalloc {
+
 enum emap_lock_result_e {
 	emap_lock_result_success,
 	emap_lock_result_failure,
@@ -147,7 +149,7 @@ emap_rtree_write_acquired(tsdn_t *tsdn, emap_t *emap, rtree_leaf_elm_t *elm_a,
 	contents.metadata.slab = slab;
 	contents.metadata.is_head = (edata == NULL) ? false :
 	    edata_is_head_get(edata);
-	contents.metadata.state = (edata == NULL) ? 0 : edata_state_get(edata);
+	contents.metadata.state = (extent_state_t)((edata == NULL) ? 0 : edata_state_get(edata));
 	rtree_leaf_elm_write(tsdn, &emap->rtree, elm_a, contents);
 	if (elm_b != NULL) {
 		rtree_leaf_elm_write(tsdn, &emap->rtree, elm_b, contents);
@@ -384,3 +386,5 @@ emap_do_assert_not_mapped(tsdn_t *tsdn, emap_t *emap, edata_t *edata) {
 	    &context2);
 	assert(context2.edata == NULL);
 }
+
+} // namespace duckdb_jemalloc

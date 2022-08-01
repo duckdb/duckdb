@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/eset.h"
 
+namespace duckdb_jemalloc {
+
 #define ESET_NPSIZES (SC_NPSIZES + 1)
 
 static void
@@ -280,3 +282,5 @@ eset_fit(eset_t *eset, size_t esize, size_t alignment, bool exact_only,
 
 	return edata;
 }
+
+} // namespace duckdb_jemalloc

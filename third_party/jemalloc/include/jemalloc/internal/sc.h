@@ -3,8 +3,6 @@
 
 #include "jemalloc/internal/jemalloc_internal_types.h"
 
-namespace duckdb_jemalloc {
-
 /*
  * Size class computations:
  *
@@ -288,6 +286,8 @@ namespace duckdb_jemalloc {
 #endif
 
 #define SC_SLAB_MAXREGS (1U << SC_LG_SLAB_MAXREGS)
+
+namespace duckdb_jemalloc {
 
 typedef struct sc_s sc_t;
 struct sc_s {

@@ -8,6 +8,8 @@
 #include "jemalloc/internal/prof_recent.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 
 void *
@@ -320,3 +322,5 @@ large_prof_info_set(edata_t *edata, prof_tctx_t *tctx, size_t size) {
 	edata_prof_recent_alloc_init(edata);
 	large_prof_tctx_set(edata, tctx);
 }
+
+} // namespace duckdb_jemalloc

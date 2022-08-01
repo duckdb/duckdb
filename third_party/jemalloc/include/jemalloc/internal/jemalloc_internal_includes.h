@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_INCLUDES_H
 #define JEMALLOC_INTERNAL_INCLUDES_H
 
-namespace duckdb_jemalloc {
-
 /*
  * jemalloc can conceptually be broken into components (arena, tcache, etc.),
  * but there are circular dependencies that cannot be broken without
@@ -82,7 +80,5 @@ namespace duckdb_jemalloc {
 #include "jemalloc/internal/jemalloc_internal_inlines_c.h"
 #include "jemalloc/internal/prof_inlines.h"
 #include "jemalloc/internal/background_thread_inlines.h"
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_INCLUDES_H */

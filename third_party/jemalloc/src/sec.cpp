@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/sec.h"
 
+namespace duckdb_jemalloc {
+
 static edata_t *sec_alloc(tsdn_t *tsdn, pai_t *self, size_t size,
     size_t alignment, bool zero, bool guarded, bool frequent_reuse,
     bool *deferred_work_generated);
@@ -420,3 +422,5 @@ sec_postfork_child(tsdn_t *tsdn, sec_t *sec) {
 		malloc_mutex_postfork_child(tsdn, &sec->shards[i].mtx);
 	}
 }
+
+} // namespace duckdb_jemalloc

@@ -18,6 +18,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -2333,9 +2335,10 @@ thread_peak_read_ctl(tsd_t *tsd, const size_t *mib,
 	if (!config_stats) {
 		return ENOENT;
 	}
+	uint64_t result;
 	READONLY();
 	peak_event_update(tsd);
-	uint64_t result = peak_event_max(tsd);
+	result = peak_event_max(tsd);
 	READ(result, uint64_t);
 	ret = 0;
 label_return:
@@ -2741,7 +2744,7 @@ arena_i_dss_ctl(tsd_t *tsd, const size_t *mib, size_t miblen, void *oldp,
 
 		for (i = 0; i < dss_prec_limit; i++) {
 			if (strcmp(dss_prec_names[i], dss) == 0) {
-				dss_prec = i;
+				dss_prec = (dss_prec_t)i;
 				match = true;
 				break;
 			}
@@ -2790,9 +2793,10 @@ arena_i_oversize_threshold_ctl(tsd_t *tsd, const size_t *mib, size_t miblen,
 	int ret;
 
 	unsigned arena_ind;
+	arena_t *arena;
 	MIB_UNSIGNED(arena_ind, 1);
 
-	arena_t *arena = arena_get(tsd_tsdn(tsd), arena_ind, false);
+	arena = arena_get(tsd_tsdn(tsd), arena_ind, false);
 	if (arena == NULL) {
 		ret = EFAULT;
 		goto label_return;
@@ -2823,13 +2827,14 @@ arena_i_decay_ms_ctl_impl(tsd_t *tsd, const size_t *mib, size_t miblen,
 	unsigned arena_ind;
 	arena_t *arena;
 
+	extent_state_t state;
 	MIB_UNSIGNED(arena_ind, 1);
 	arena = arena_get(tsd_tsdn(tsd), arena_ind, false);
 	if (arena == NULL) {
 		ret = EFAULT;
 		goto label_return;
 	}
-	extent_state_t state = dirty ? extent_state_dirty : extent_state_muzzy;
+	state = dirty ? extent_state_dirty : extent_state_muzzy;
 
 	if (oldp != NULL && oldlenp != NULL) {
 		size_t oldval = arena_decay_ms_get(arena, state);
@@ -3098,8 +3103,9 @@ arenas_create_ctl(tsd_t *tsd, const size_t *mib, size_t miblen,
 
 	malloc_mutex_lock(tsd_tsdn(tsd), &ctl_mtx);
 
+	arena_config_t config;
 	VERIFY_READ(unsigned);
-	arena_config_t config = arena_config_default;
+	config = arena_config_default;
 	WRITE(config.extent_hooks, extent_hooks_t *);
 	if ((arena_ind = ctl_arena_init(tsd, &config)) == UINT_MAX) {
 		ret = EAGAIN;
@@ -3862,8 +3868,9 @@ experimental_hooks_install_ctl(tsd_t *tsd, const size_t *mib, size_t miblen,
 	 * this API, which can change at a moment's notice.
 	 */
 	hooks_t hooks;
+	void *handle;
 	WRITE(hooks, hooks_t);
-	void *handle = hook_install(tsd_tsdn(tsd), &hooks);
+	handle = hook_install(tsd_tsdn(tsd), &hooks);
 	if (handle == NULL) {
 		ret = EAGAIN;
 		goto label_return;
@@ -3879,8 +3886,9 @@ static int
 experimental_hooks_remove_ctl(tsd_t *tsd, const size_t *mib, size_t miblen,
     void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
 	int ret;
+	void *handle;
 	WRITEONLY();
-	void *handle = NULL;
+	handle = NULL;
 	WRITE(handle, void *);
 	if (handle == NULL) {
 		ret = EINVAL;
@@ -3993,6 +4001,7 @@ experimental_utilization_query_ctl(tsd_t *tsd, const size_t *mib,
 	assert(sizeof(inspect_extent_util_stats_verbose_t)
 	    == sizeof(void *) + sizeof(size_t) * 5);
 
+	void *ptr = NULL;
 	if (oldp == NULL || oldlenp == NULL
 	    || *oldlenp != sizeof(inspect_extent_util_stats_verbose_t)
 	    || newp == NULL) {
@@ -4000,9 +4009,9 @@ experimental_utilization_query_ctl(tsd_t *tsd, const size_t *mib,
 		goto label_return;
 	}
 
-	void *ptr = NULL;
+	inspect_extent_util_stats_verbose_t *util_stats;
 	WRITE(ptr, void *);
-	inspect_extent_util_stats_verbose_t *util_stats
+	util_stats
 	    = (inspect_extent_util_stats_verbose_t *)oldp;
 	inspect_extent_util_stats_verbose_get(tsd_tsdn(tsd), ptr,
 	    &util_stats->nfree, &util_stats->nregs, &util_stats->size,
@@ -4117,6 +4126,10 @@ experimental_utilization_batch_query_ctl(tsd_t *tsd, const size_t *mib,
 
 	assert(sizeof(inspect_extent_util_stats_t) == sizeof(size_t) * 3);
 
+
+	void **ptrs = (void **)newp;
+	inspect_extent_util_stats_t *util_stats;
+
 	const size_t len = newlen / sizeof(const void *);
 	if (oldp == NULL || oldlenp == NULL || newp == NULL || newlen == 0
 	    || newlen != len * sizeof(const void *)
@@ -4125,8 +4138,7 @@ experimental_utilization_batch_query_ctl(tsd_t *tsd, const size_t *mib,
 		goto label_return;
 	}
 
-	void **ptrs = (void **)newp;
-	inspect_extent_util_stats_t *util_stats =
+	util_stats =
 	    (inspect_extent_util_stats_t *)oldp;
 	size_t i;
 	for (i = 0; i < len; ++i) {
@@ -4270,11 +4282,12 @@ experimental_batch_alloc_ctl(tsd_t *tsd, const size_t *mib,
     size_t miblen, void *oldp, size_t *oldlenp, void *newp, size_t newlen) {
 	int ret;
 
+	size_t filled;
 	VERIFY_READ(size_t);
 
 	batch_alloc_packet_t batch_alloc_packet;
 	ASSURED_WRITE(batch_alloc_packet, batch_alloc_packet_t);
-	size_t filled = batch_alloc(batch_alloc_packet.ptrs,
+	filled = batch_alloc(batch_alloc_packet.ptrs,
 	    batch_alloc_packet.num, batch_alloc_packet.size,
 	    batch_alloc_packet.flags);
 	READ(filled, size_t);
@@ -4412,3 +4425,5 @@ prof_stats_lextents_i_index(tsdn_t *tsdn, const size_t *mib, size_t miblen,
 	}
 	return super_prof_stats_lextents_i_node;
 }
+
+} // namespace duckdb_jemalloc

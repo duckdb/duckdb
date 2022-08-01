@@ -7,6 +7,8 @@
 #include "jemalloc/internal/prof_data.h"
 #include "jemalloc/internal/prof_sys.h"
 
+namespace duckdb_jemalloc {
+
 #ifdef JEMALLOC_PROF_LIBUNWIND
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -667,3 +669,5 @@ prof_gdump_impl(tsd_t *tsd) {
 	malloc_mutex_unlock(tsdn, &prof_dump_filename_mtx);
 	prof_dump(tsd, false, filename, false);
 }
+
+} // namespace duckdb_jemalloc

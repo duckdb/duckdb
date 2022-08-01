@@ -4,6 +4,8 @@
 #include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/extent_mmap.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -39,3 +41,5 @@ extent_dalloc_mmap(void *addr, size_t size) {
 	}
 	return opt_retain;
 }
+
+} // namespace duckdb_jemalloc

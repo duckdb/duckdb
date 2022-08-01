@@ -6,6 +6,8 @@
 #include "jemalloc/internal/san.h"
 #include "jemalloc/internal/tsd.h"
 
+namespace duckdb_jemalloc {
+
 /* The sanitizer options. */
 size_t opt_san_guard_large = SAN_GUARD_LARGE_EVERY_N_EXTENTS_DEFAULT;
 size_t opt_san_guard_small = SAN_GUARD_SMALL_EVERY_N_EXTENTS_DEFAULT;
@@ -206,3 +208,5 @@ san_init(ssize_t lg_san_uaf_align) {
 
 	san_cache_bin_nonfast_mask = ((uintptr_t)1 << lg_san_uaf_align) - 1;
 }
+
+} // namespace duckdb_jemalloc

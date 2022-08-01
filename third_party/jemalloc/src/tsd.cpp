@@ -6,6 +6,8 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/rtree.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -547,3 +549,5 @@ tsd_postfork_child(tsd_t *tsd) {
 		tsd_add_nominal(tsd);
 	}
 }
+
+} // namespace duckdb_jemalloc

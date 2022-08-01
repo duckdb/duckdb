@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/san.h"
 
+namespace duckdb_jemalloc {
+
 bool
 ecache_init(tsdn_t *tsdn, ecache_t *ecache, extent_state_t state, unsigned ind,
     bool delay_coalesce) {
@@ -33,3 +35,5 @@ void
 ecache_postfork_child(tsdn_t *tsdn, ecache_t *ecache) {
 	malloc_mutex_postfork_child(tsdn, &ecache->mtx);
 }
+
+} // namespace duckdb_jemalloc

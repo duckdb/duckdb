@@ -6,6 +6,8 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/seq.h"
 
+namespace duckdb_jemalloc {
+
 typedef struct hooks_internal_s hooks_internal_t;
 struct hooks_internal_s {
 	hooks_t hooks;
@@ -193,3 +195,5 @@ hook_invoke_expand(hook_expand_t type, void *address, size_t old_usize,
 	FOR_EACH_HOOK_END
 	HOOK_EPILOGUE
 }
+
+} // namespace duckdb_jemalloc

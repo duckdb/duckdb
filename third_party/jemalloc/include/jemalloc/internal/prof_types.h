@@ -11,6 +11,8 @@ typedef struct prof_gctx_s prof_gctx_t;
 typedef struct prof_tdata_s prof_tdata_t;
 typedef struct prof_recent_s prof_recent_t;
 
+} // namespace duckdb_jemalloc
+
 /* Option defaults. */
 #ifdef JEMALLOC_PROF
 #  define PROF_PREFIX_DEFAULT		"jeprof"
@@ -73,7 +75,5 @@ typedef struct prof_recent_s prof_recent_t;
 
 /* Default number of recent allocations to record. */
 #define PROF_RECENT_ALLOC_MAX_DEFAULT 0
-
-} // namespace duckdb_jemalloc
 
 #endif /* JEMALLOC_INTERNAL_PROF_TYPES_H */

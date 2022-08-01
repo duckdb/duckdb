@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/hpa_hooks.h"
 
+namespace duckdb_jemalloc {
+
 static void *hpa_hooks_map(size_t size);
 static void hpa_hooks_unmap(void *ptr, size_t size);
 static void hpa_hooks_purge(void *ptr, size_t size);
@@ -61,3 +63,5 @@ static uint64_t
 hpa_hooks_ms_since(nstime_t *past_nstime) {
 	return nstime_ns_since(past_nstime) / 1000 / 1000;
 }
+
+} // namespace duckdb_jemalloc

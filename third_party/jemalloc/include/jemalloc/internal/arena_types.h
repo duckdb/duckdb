@@ -3,13 +3,13 @@
 
 #include "jemalloc/internal/sc.h"
 
-namespace duckdb_jemalloc {
-
 /* Default decay times in milliseconds. */
 #define DIRTY_DECAY_MS_DEFAULT	ZD(10 * 1000)
 #define MUZZY_DECAY_MS_DEFAULT	(0)
 /* Number of event ticks between time checks. */
 #define ARENA_DECAY_NTICKS_PER_UPDATE	1000
+
+namespace duckdb_jemalloc {
 
 typedef struct arena_decay_s arena_decay_t;
 typedef struct arena_s arena_t;

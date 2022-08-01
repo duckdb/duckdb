@@ -302,6 +302,9 @@ tsdn_tsd(tsdn_t *tsdn) {
  * header files to avoid cluttering this file.  They define tsd_boot0,
  * tsd_boot1, tsd_boot, tsd_booted_get, tsd_get_allocates, tsd_get, and tsd_set.
  */
+
+} // namespace duckdb_jemalloc
+
 #ifdef JEMALLOC_MALLOC_THREAD_CLEANUP
 #include "jemalloc/internal/tsd_malloc_thread_cleanup.h"
 #elif (defined(JEMALLOC_TLS))
@@ -311,6 +314,8 @@ tsdn_tsd(tsdn_t *tsdn) {
 #else
 #include "jemalloc/internal/tsd_generic.h"
 #endif
+
+namespace duckdb_jemalloc {
 
 /*
  * tsd_foop_get_unsafe(tsd) returns a pointer to the thread-local instance of

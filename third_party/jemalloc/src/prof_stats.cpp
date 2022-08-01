@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/prof_stats.h"
 
+namespace duckdb_jemalloc {
+
 bool opt_prof_stats = false;
 malloc_mutex_t prof_stats_mtx;
 static prof_stats_t prof_stats_live[PROF_SC_NSIZES];
@@ -55,3 +57,5 @@ prof_stats_get_accum(tsd_t *tsd, szind_t ind, prof_stats_t *stats) {
 	memcpy(stats, &prof_stats_accum[ind], sizeof(prof_stats_t));
 	prof_stats_leave(tsd);
 }
+
+} // namespace duckdb_jemalloc

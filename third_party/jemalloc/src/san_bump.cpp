@@ -7,6 +7,8 @@
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/edata_cache.h"
 
+namespace duckdb_jemalloc {
+
 static bool
 san_bump_grow_locked(tsdn_t *tsdn, san_bump_alloc_t *sba, pac_t *pac,
     ehooks_t *ehooks, size_t size);
@@ -102,3 +104,5 @@ san_bump_grow_locked(tsdn_t *tsdn, san_bump_alloc_t *sba, pac_t *pac,
 	}
 	return false;
 }
+
+} // namespace duckdb_jemalloc

@@ -4,6 +4,8 @@
 #include "jemalloc/internal/san.h"
 #include "jemalloc/internal/hpa.h"
 
+namespace duckdb_jemalloc {
+
 static void
 pa_nactive_add(pa_shard_t *shard, size_t add_pages) {
 	atomic_fetch_add_zu(&shard->nactive, add_pages, ATOMIC_RELAXED);
@@ -275,3 +277,5 @@ pa_shard_time_until_deferred_work(tsdn_t *tsdn, pa_shard_t *shard) {
 	}
 	return time;
 }
+
+} // namespace duckdb_jemalloc

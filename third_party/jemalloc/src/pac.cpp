@@ -4,6 +4,8 @@
 #include "jemalloc/internal/pac.h"
 #include "jemalloc/internal/san.h"
 
+namespace duckdb_jemalloc {
+
 static edata_t *pac_alloc_impl(tsdn_t *tsdn, pai_t *self, size_t size,
     size_t alignment, bool zero, bool guarded, bool frequent_reuse,
     bool *deferred_work_generated);
@@ -585,3 +587,5 @@ pac_destroy(tsdn_t *tsdn, pac_t *pac) {
 		extent_destroy_wrapper(tsdn, pac, ehooks, edata);
 	}
 }
+
+} // namespace duckdb_jemalloc

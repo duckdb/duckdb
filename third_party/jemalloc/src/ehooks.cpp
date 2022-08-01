@@ -4,6 +4,8 @@
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/extent_mmap.h"
 
+namespace duckdb_jemalloc {
+
 void
 ehooks_init(ehooks_t *ehooks, extent_hooks_t *extent_hooks, unsigned ind) {
 	/* All other hooks are optional; this one is not. */
@@ -273,3 +275,5 @@ const extent_hooks_t ehooks_default_extent_hooks = {
 	ehooks_default_split,
 	ehooks_default_merge
 };
+
+} // namespace duckdb_jemalloc

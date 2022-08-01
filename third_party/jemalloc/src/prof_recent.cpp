@@ -7,6 +7,8 @@
 #include "jemalloc/internal/prof_data.h"
 #include "jemalloc/internal/prof_recent.h"
 
+namespace duckdb_jemalloc {
+
 ssize_t opt_prof_recent_alloc_max = PROF_RECENT_ALLOC_MAX_DEFAULT;
 malloc_mutex_t prof_recent_alloc_mtx; /* Protects the fields below */
 static atomic_zd_t prof_recent_alloc_max;
@@ -598,3 +600,5 @@ prof_recent_init() {
 
 	return false;
 }
+
+} // namespace duckdb_jemalloc

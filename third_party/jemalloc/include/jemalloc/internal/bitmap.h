@@ -112,7 +112,7 @@ typedef unsigned long bitmap_t;
 	/* nbits. */							\
 	nbits,								\
 	/* nlevels. */							\
-	(BITMAP_GROUPS_L0(nbits) > BITMAP_GROUPS_L1(nbits)) +		\
+	(uint32_t)(BITMAP_GROUPS_L0(nbits) > BITMAP_GROUPS_L1(nbits)) +		\
 	    (BITMAP_GROUPS_L1(nbits) > BITMAP_GROUPS_L2(nbits)) +	\
 	    (BITMAP_GROUPS_L2(nbits) > BITMAP_GROUPS_L3(nbits)) +	\
 	    (BITMAP_GROUPS_L3(nbits) > BITMAP_GROUPS_L4(nbits)) + 1,	\

@@ -1,14 +1,14 @@
 #ifndef JEMALLOC_INTERNAL_ARENA_EXTERNS_H
 #define JEMALLOC_INTERNAL_ARENA_EXTERNS_H
 
-namespace duckdb_jemalloc {
-
 #include "jemalloc/internal/bin.h"
 #include "jemalloc/internal/div.h"
 #include "jemalloc/internal/extent_dss.h"
 #include "jemalloc/internal/hook.h"
 #include "jemalloc/internal/pages.h"
 #include "jemalloc/internal/stats.h"
+
+namespace duckdb_jemalloc {
 
 /*
  * When the amount of pages to be purged exceeds this amount, deferred purge

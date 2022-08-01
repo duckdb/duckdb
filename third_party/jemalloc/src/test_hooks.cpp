@@ -1,5 +1,7 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * The hooks are a little bit screwy -- they're not genuinely exported in the
  * sense that we want them available to end-users, but we do want them visible
@@ -10,3 +12,5 @@ void (*test_hooks_arena_new_hook)() = NULL;
 
 JEMALLOC_EXPORT
 void (*test_hooks_libc_hook)() = NULL;
+
+} // namespace duckdb_jemalloc

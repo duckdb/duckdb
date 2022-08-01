@@ -5,6 +5,8 @@
 #include "jemalloc/internal/extent_dss.h"
 #include "jemalloc/internal/spin.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -140,7 +142,7 @@ extent_alloc_dss(tsdn_t *tsdn, arena_t *arena, void *new_addr, size_t size,
 				goto label_oom;
 			}
 
-			bool head_state = opt_retain ? EXTENT_IS_HEAD :
+			auto head_state = opt_retain ? EXTENT_IS_HEAD :
 			    EXTENT_NOT_HEAD;
 			/*
 			 * Compute how much page-aligned gap space (if any) is
@@ -275,3 +277,5 @@ extent_dss_boot(void) {
 }
 
 /******************************************************************************/
+
+} // namespace duckdb_jemalloc

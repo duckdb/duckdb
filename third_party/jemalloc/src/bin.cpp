@@ -6,6 +6,8 @@
 #include "jemalloc/internal/sc.h"
 #include "jemalloc/internal/witness.h"
 
+namespace duckdb_jemalloc {
+
 bool
 bin_update_shard_size(unsigned bin_shard_sizes[SC_NBINS], size_t start_size,
     size_t end_size, size_t nshards) {
@@ -67,3 +69,5 @@ void
 bin_postfork_child(tsdn_t *tsdn, bin_t *bin) {
 	malloc_mutex_postfork_child(tsdn, &bin->lock);
 }
+
+} // namespace duckdb_jemalloc

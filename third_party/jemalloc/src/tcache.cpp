@@ -7,6 +7,8 @@
 #include "jemalloc/internal/san.h"
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -1099,3 +1101,5 @@ tcache_postfork_child(tsdn_t *tsdn) {
 void tcache_assert_initialized(tcache_t *tcache) {
 	assert(!cache_bin_still_zero_initialized(&tcache->bins[0]));
 }
+
+} // namespace duckdb_jemalloc

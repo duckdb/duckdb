@@ -1,6 +1,8 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
+namespace duckdb_jemalloc {
+
 void
 inspect_extent_util_stats_get(tsdn_t *tsdn, const void *ptr, size_t *nfree,
     size_t *nregs, size_t *size) {
@@ -75,3 +77,5 @@ inspect_extent_util_stats_verbose_get(tsdn_t *tsdn, const void *ptr,
 	*slabcur_addr = slab != NULL ? edata_addr_get(slab) : NULL;
 	malloc_mutex_unlock(tsdn, &bin->lock);
 }
+
+} // namespace duckdb_jemalloc

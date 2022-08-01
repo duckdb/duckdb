@@ -6,6 +6,8 @@
 #include "jemalloc/internal/pages.h"
 #include "jemalloc/internal/sc.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This module computes the size classes used to satisfy allocations.  The logic
  * here was ported more or less line-by-line from a shell script, and because of
@@ -304,3 +306,5 @@ void
 sc_boot(sc_data_t *data) {
 	sc_data_init(data);
 }
+
+} // namespace duckdb_jemalloc

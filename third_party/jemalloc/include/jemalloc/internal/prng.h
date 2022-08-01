@@ -3,8 +3,6 @@
 
 #include "jemalloc/internal/bit_util.h"
 
-namespace duckdb_jemalloc {
-
 /*
  * Simple linear congruential pseudo-random number generator:
  *
@@ -32,6 +30,8 @@ namespace duckdb_jemalloc {
 
 #define PRNG_A_64	UINT64_C(6364136223846793005)
 #define PRNG_C_64	UINT64_C(1442695040888963407)
+
+namespace duckdb_jemalloc {
 
 JEMALLOC_ALWAYS_INLINE uint32_t
 prng_state_next_u32(uint32_t state) {

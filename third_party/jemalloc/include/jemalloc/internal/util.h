@@ -1,11 +1,11 @@
 #ifndef JEMALLOC_INTERNAL_UTIL_H
 #define JEMALLOC_INTERNAL_UTIL_H
 
-namespace duckdb_jemalloc {
-
 #define UTIL_INLINE static inline
 
 #include "jemalloc_internal_macros.h"
+
+namespace duckdb_jemalloc {
 
 /* Junk fill patterns. */
 #ifndef JEMALLOC_ALLOC_JUNK

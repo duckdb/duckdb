@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/decay.h"
 
+namespace duckdb_jemalloc {
+
 static const uint64_t h_steps[SMOOTHSTEP_NSTEPS] = {
 #define STEP(step, h, x, y)			\
 		h,
@@ -293,3 +295,5 @@ uint64_t decay_ns_until_purge(decay_t *decay, size_t npages_current,
 	}
 	return decay_interval_ns * (ub + lb) / 2;
 }
+
+} // namespace duckdb_jemalloc

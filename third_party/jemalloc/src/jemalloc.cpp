@@ -26,6 +26,8 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -4474,3 +4476,5 @@ jemalloc_postfork_child(void) {
 }
 
 /******************************************************************************/
+
+} // namespace duckdb_jemalloc

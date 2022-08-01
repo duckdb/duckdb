@@ -12,6 +12,8 @@
 #include "jemalloc/internal/safety_check.h"
 #include "jemalloc/internal/util.h"
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_DIAGNOSTIC_DISABLE_SPURIOUS
 
 /******************************************************************************/
@@ -1889,3 +1891,5 @@ arena_postfork_child(tsdn_t *tsdn, arena_t *arena) {
 		malloc_mutex_postfork_child(tsdn, &arena->tcache_ql_mtx);
 	}
 }
+
+} // namespace duckdb_jemalloc

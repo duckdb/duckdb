@@ -4,6 +4,8 @@
 #include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * Only the most significant bits of keys passed to rtree_{read,write}() are
  * used.
@@ -259,3 +261,5 @@ rtree_ctx_data_init(rtree_ctx_t *ctx) {
 		cache->leaf = NULL;
 	}
 }
+
+} // namespace duckdb_jemalloc

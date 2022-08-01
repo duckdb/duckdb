@@ -5,6 +5,8 @@
 
 #include "jemalloc/internal/fb.h"
 
+namespace duckdb_jemalloc {
+
 void
 psset_init(psset_t *psset) {
 	for (unsigned i = 0; i < PSSET_NPSIZES; i++) {
@@ -383,3 +385,5 @@ psset_remove(psset_t *psset, hpdata_t *ps) {
 		hpdata_hugify_list_remove(&psset->to_hugify, ps);
 	}
 }
+
+} // namespace duckdb_jemalloc

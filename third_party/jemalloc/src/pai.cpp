@@ -1,6 +1,8 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
+namespace duckdb_jemalloc {
+
 size_t
 pai_alloc_batch_default(tsdn_t *tsdn, pai_t *self, size_t size, size_t nallocs,
     edata_list_active_t *results, bool *deferred_work_generated) {
@@ -29,3 +31,5 @@ pai_dalloc_batch_default(tsdn_t *tsdn, pai_t *self,
 		*deferred_work_generated |= deferred_by_dalloc;
 	}
 }
+
+} // namespace duckdb_jemalloc

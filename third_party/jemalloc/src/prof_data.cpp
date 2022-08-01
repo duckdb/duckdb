@@ -7,6 +7,8 @@
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/prof_data.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This file defines and manages the core profiling data structures.
  *
@@ -1445,3 +1447,5 @@ prof_tctx_try_destroy(tsd_t *tsd, prof_tctx_t *tctx) {
 }
 
 /******************************************************************************/
+
+} // namespace duckdb_jemalloc

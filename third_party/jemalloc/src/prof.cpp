@@ -13,6 +13,8 @@
 #include "jemalloc/internal/prof_hook.h"
 #include "jemalloc/internal/thread_event.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * This file implements the profiling "APIs" needed by other parts of jemalloc,
  * and also manages the relevant "operational" data, mainly options and mutexes;
@@ -787,3 +789,5 @@ prof_postfork_child(tsdn_t *tsdn) {
 }
 
 /******************************************************************************/
+
+} // namespace duckdb_jemalloc

@@ -5,6 +5,8 @@
 #include "jemalloc/internal/malloc_io.h"
 #include "jemalloc/internal/spin.h"
 
+namespace duckdb_jemalloc {
+
 #ifndef _CRT_SPINCOUNT
 #define _CRT_SPINCOUNT 4000
 #endif
@@ -226,3 +228,5 @@ malloc_mutex_boot(void) {
 #endif
 	return false;
 }
+
+} // namespace duckdb_jemalloc

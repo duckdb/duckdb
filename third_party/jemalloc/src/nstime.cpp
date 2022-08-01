@@ -5,6 +5,8 @@
 
 #include "jemalloc/internal/assert.h"
 
+namespace duckdb_jemalloc {
+
 #define BILLION	UINT64_C(1000000000)
 #define MILLION	UINT64_C(1000000)
 
@@ -286,4 +288,4 @@ nstime_prof_init_update(nstime_t *time) {
 	nstime_prof_update(time);
 }
 
-
+} // namespace duckdb_jemalloc

@@ -2,6 +2,8 @@
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 #include "jemalloc/internal/sz.h"
 
+namespace duckdb_jemalloc {
+
 JEMALLOC_ALIGNED(CACHELINE)
 size_t sz_pind2sz_tab[SC_NPSIZES+1];
 size_t sz_large_pad;
@@ -112,3 +114,5 @@ sz_boot(const sc_data_t *sc_data, bool cache_oblivious) {
 	sz_boot_index2size_tab(sc_data);
 	sz_boot_size2index_tab(sc_data);
 }
+
+} // namespace duckdb_jemalloc

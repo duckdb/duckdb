@@ -1,9 +1,9 @@
 #ifndef JEMALLOC_INTERNAL_COUNTER_H
 #define JEMALLOC_INTERNAL_COUNTER_H
 
-#include "jemalloc/internal/mutex.h"
-
 namespace duckdb_jemalloc {
+
+#include "jemalloc/internal/mutex.h"
 
 typedef struct counter_accum_s {
 	LOCKEDINT_MTX_DECLARE(mtx)

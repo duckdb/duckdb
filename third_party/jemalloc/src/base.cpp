@@ -6,6 +6,8 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/sz.h"
 
+namespace duckdb_jemalloc {
+
 /*
  * In auto mode, arenas switch to huge pages for the base allocator on the
  * second base block.  a0 switches to thp on the 5th block (after 20 megabytes
@@ -482,7 +484,7 @@ base_alloc(tsdn_t *tsdn, base_t *base, size_t size, size_t alignment) {
 edata_t *
 base_alloc_edata(tsdn_t *tsdn, base_t *base) {
 	size_t esn;
-	edata_t *edata = base_alloc_impl(tsdn, base, sizeof(edata_t),
+	edata_t *edata = (edata_t *)base_alloc_impl(tsdn, base, sizeof(edata_t),
 	    EDATA_ALIGNMENT, &esn);
 	if (edata == NULL) {
 		return NULL;
@@ -527,3 +529,5 @@ base_boot(tsdn_t *tsdn) {
 	    /* metadata_use_hooks */ true);
 	return (b0 == NULL);
 }
+
+} // namespace duckdb_jemalloc

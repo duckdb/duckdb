@@ -1,6 +1,8 @@
 #include <mutex>
 #include <new>
 
+namespace duckdb_jemalloc {
+
 #define JEMALLOC_CPP_CPP_
 #ifdef __cplusplus
 extern "C" {
@@ -252,3 +254,5 @@ operator delete[](void* ptr, std::size_t size, std::align_val_t alignment) noexc
 }
 
 #endif  // __cpp_aligned_new
+
+} // namespace duckdb_jemalloc

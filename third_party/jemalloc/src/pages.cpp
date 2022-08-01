@@ -7,6 +7,8 @@
 #include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/malloc_io.h"
 
+namespace duckdb_jemalloc {
+
 #ifdef JEMALLOC_SYSCTL_VM_OVERCOMMIT
 #include <sys/sysctl.h>
 #ifdef __FreeBSD__
@@ -822,3 +824,5 @@ pages_boot(void) {
 
 	return false;
 }
+
+} // namespace duckdb_jemalloc

@@ -9,6 +9,8 @@
 #include "jemalloc/internal/mutex_prof.h"
 #include "jemalloc/internal/prof_stats.h"
 
+namespace duckdb_jemalloc {
+
 const char *global_mutex_names[mutex_prof_num_global_mutexes] = {
 #define OP(mtx) #mtx,
 	MUTEX_PROF_GLOBAL_MUTEXES
@@ -1971,3 +1973,5 @@ void
 stats_postfork_child(tsdn_t *tsdn) {
 	counter_postfork_child(tsdn, &stats_interval_accumulated);
 }
+
+} // namespace duckdb_jemalloc

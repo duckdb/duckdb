@@ -8,6 +8,8 @@
 #include "jemalloc/internal/ph.h"
 #include "jemalloc/internal/mutex.h"
 
+namespace duckdb_jemalloc {
+
 /******************************************************************************/
 /* Data. */
 
@@ -1324,3 +1326,5 @@ extent_boot(void) {
 
 	return false;
 }
+
+} // namespace duckdb_jemalloc

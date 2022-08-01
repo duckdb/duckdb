@@ -1,8 +1,6 @@
 #ifndef JEMALLOC_INTERNAL_PH_H
 #define JEMALLOC_INTERNAL_PH_H
 
-namespace duckdb_jemalloc {
-
 /*
  * A Pairing Heap implementation.
  *
@@ -50,6 +48,8 @@ namespace duckdb_jemalloc {
  * perform worse than this in practice, even with various fancy tricks; they
  * all took amortized complexity of an insert from O(1) to O(log(n)).
  */
+
+namespace duckdb_jemalloc {
 
 typedef int (*ph_cmp_t)(void *, void *);
 

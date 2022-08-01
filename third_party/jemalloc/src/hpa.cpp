@@ -6,6 +6,8 @@
 #include "jemalloc/internal/fb.h"
 #include "jemalloc/internal/witness.h"
 
+namespace duckdb_jemalloc {
+
 #define HPA_EDEN_SIZE (128 * HUGEPAGE)
 
 static edata_t *hpa_alloc(tsdn_t *tsdn, pai_t *self, size_t size,
@@ -1042,3 +1044,5 @@ hpa_shard_postfork_child(tsdn_t *tsdn, hpa_shard_t *shard) {
 	malloc_mutex_postfork_child(tsdn, &shard->grow_mtx);
 	malloc_mutex_postfork_child(tsdn, &shard->mtx);
 }
+
+} // namespace duckdb_jemalloc

@@ -3,9 +3,9 @@
 
 #include "jemalloc/internal/assert.h"
 
-namespace duckdb_jemalloc {
-
 #define ATOMIC_INIT(...) {__VA_ARGS__}
+
+namespace duckdb_jemalloc {
 
 typedef enum {
 	atomic_memory_order_relaxed,

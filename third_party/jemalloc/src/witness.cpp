@@ -4,6 +4,8 @@
 #include "jemalloc/internal/assert.h"
 #include "jemalloc/internal/malloc_io.h"
 
+namespace duckdb_jemalloc {
+
 void
 witness_init(witness_t *witness, const char *name, witness_rank_t rank,
     witness_comp_t *comp, void *opaque) {
@@ -120,3 +122,5 @@ witness_postfork_child(witness_tsd_t *witness_tsd) {
 #endif
 	witness_tsd->forking = false;
 }
+
+} // namespace duckdb_jemalloc

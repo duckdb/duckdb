@@ -124,7 +124,7 @@ typedef enum malloc_init_e malloc_init_t;
 #    endif
 #  endif
 #  define VARIABLE_ARRAY(type, name, count) \
-	type *name = alloca(sizeof(type) * (count))
+	type *name = (type *)alloca(sizeof(type) * (count))
 #else
 #  define VARIABLE_ARRAY(type, name, count) type name[(count)]
 #endif
