@@ -1,13 +1,39 @@
+/**
+ * @module duckdb
+ */
+
 var duckdb = require('./duckdb-binding.js');
 module.exports = exports = duckdb;
 
 
 // some wrappers for compatibilities sake
+/**
+ * Main database interface
+ */
 var Database = duckdb.Database;
+/**
+ * @class
+ */
 var Connection = duckdb.Connection;
+/**
+ * @class
+ */
 var Statement = duckdb.Statement;
+/**
+ * @class
+ */
 var QueryResult = duckdb.QueryResult;
 
+/**
+ * @method
+ */
+QueryResult.prototype.nextChunk;
+
+/**
+ * @method duckdb.QueryResult#asyncIterator
+ * @async
+ * @yields hello
+ */
 QueryResult.prototype[Symbol.asyncIterator] = async function*() {
     let prefetch = this.nextChunk();
     while (true) {
@@ -25,21 +51,41 @@ QueryResult.prototype[Symbol.asyncIterator] = async function*() {
 }
 
 
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param cb
+ */
 Connection.prototype.run = function(sql) {
     var statement = new Statement(this, sql);
     return statement.run.apply(statement, arguments);
 }
 
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param cb
+ */
 Connection.prototype.all = function(sql) {
     var statement = new Statement(this,sql);
     return statement.all.apply(statement, arguments);
 }
 
+/**
+ * @arg sql
+ * @param {...*} params
+ * @param cb
+ */
 Connection.prototype.each = function(sql) {
     var statement = new Statement(this, sql);
     return statement.each.apply(statement, arguments);
 }
 
+/**
+ * @arg sql
+ * @param {...*} params
+ * @yields {hello}
+ */
 Connection.prototype.stream = async function*(sql) {
     const statement = new Statement(this, sql);
     const queryResult = await statement.stream.apply(statement, arguments);
@@ -48,7 +94,13 @@ Connection.prototype.stream = async function*(sql) {
     }
 }
 
-// this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
+/**
+ * @method
+ * @arg name
+ * @arg return_type
+ * @arg fun
+ * @note this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
+ */
 Connection.prototype.register = function(name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
     return this.register_bulk(name, return_type, function(desc) {
@@ -162,6 +214,23 @@ Connection.prototype.register = function(name, return_type, fun) {
     })
 }
 
+/**
+ * @method
+ */
+Connection.prototype.prepare;
+/**
+ * @method
+ */
+Connection.prototype.exec;
+/**
+ * @method
+ */
+Connection.prototype.register_bulk;
+/**
+ * @method
+ */
+Connection.prototype.unregister;
+
 default_connection = function(o) {
     if (o.default_connection == undefined) {
         o.default_connection = new duckdb.Connection(o);
@@ -169,44 +238,113 @@ default_connection = function(o) {
     return(o.default_connection);
 }
 
+
+/**
+ * @method
+ */
+Database.prototype.close;
+/**
+ * @method
+ */
+Database.prototype.wait;
+/**
+ * @method
+ */
+Database.prototype.serialize;
+/**
+ * @method
+ */
+Database.prototype.parallelize;
+/**
+ * @method
+ * @arg path the database to connect to, either a file path, or `:memory:`
+ */
+Database.prototype.connect;
+/**
+ * @method
+ */
+Database.prototype.interrupt;
+
+/**
+ * @arg sql
+ */
 Database.prototype.prepare = function() {
     return default_connection(this).prepare.apply(this.default_connection, arguments);
 }
 
+/**
+ */
 Database.prototype.run = function() {
     default_connection(this).run.apply(this.default_connection, arguments);
     return this;
 }
 
+/**
+ */
 Database.prototype.each = function() {
     default_connection(this).each.apply(this.default_connection, arguments);
     return this;
 }
 
+/**
+ */
 Database.prototype.all = function() {
     default_connection(this).all.apply(this.default_connection, arguments);
     return this;
 }
 
+/**
+ */
 Database.prototype.exec = function() {
     default_connection(this).exec.apply(this.default_connection, arguments);
     return this;
 }
 
+/**
+ */
 Database.prototype.register = function() {
     default_connection(this).register.apply(this.default_connection, arguments);
     return this;
 }
 
+/**
+ */
 Database.prototype.unregister = function() {
     default_connection(this).unregister.apply(this.default_connection, arguments);
     return this;
 }
 
+/**
+ * Not implemented
+ */
 Database.prototype.get = function() {
     throw "get() is not implemented because it's evil";
 }
 
+/**
+ * Not implemented
+ */
 Statement.prototype.get = function() {
     throw "get() is not implemented because it's evil";
 }
+
+/**
+ * @method
+ */
+ Statement.prototype.run;
+/**
+ * @method
+ */
+ Statement.prototype.all;
+/**
+ * @method
+ */
+ Statement.prototype.each;
+/**
+ * @method
+ */
+ Statement.prototype.finalize
+/**
+ * @method
+ */
+Statement.prototype.stream;
