@@ -92,6 +92,7 @@ jobs:
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-${{ matrix.arch }}.zip build/release/duckdb
+        zip -j duckdb_unittest-linux-${{ matrix.arch }}.zip build/release/test/unittest
         zip -j libduckdb-linux-${{ matrix.arch }}.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_rest-linux-${{ matrix.arch }}.zip build/release/tools/rest/duckdb_rest_server
@@ -105,6 +106,7 @@ jobs:
           libduckdb-linux-${{ matrix.arch }}.zip
           duckdb_cli-linux-${{ matrix.arch }}.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
+          duckdb_unittest-linux-${{ matrix.arch }}.zip
 
  linux-extensions-64:
     name: Linux Extensions (${{matrix.arch}})
@@ -250,7 +252,7 @@ jobs:
          setup: |
            mkdir -p "/tmp"
            cd /tmp
-           unzip duckdb_unittest.zip
+           unzip duckdb_unittest-linux-aarch64.zip
            chmod +x unittest
 
          # Mount the artifacts directory as /artifacts in the container
