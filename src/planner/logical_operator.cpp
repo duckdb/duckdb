@@ -7,16 +7,6 @@
 
 namespace duckdb {
 
-LogicalOperator::LogicalOperator(LogicalOperatorType type) : type(type) {
-}
-
-LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : type(type), expressions(move(expressions)) {
-}
-
-LogicalOperator::~LogicalOperator() {
-}
-
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }
@@ -131,6 +121,9 @@ void LogicalOperator::AddChild(unique_ptr<LogicalOperator> child) {
 
 idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 	// simple estimator, just take the max of the children
+	if (has_estimated_cardinality) {
+		return estimated_cardinality;
+	}
 	idx_t max_cardinality = 0;
 	for (auto &child : children) {
 		max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);

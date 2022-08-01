@@ -9,8 +9,10 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/optimizer/join_node.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding.hpp"
@@ -24,9 +26,14 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	explicit LogicalOperator(LogicalOperatorType type);
-	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
-	virtual ~LogicalOperator();
+	explicit LogicalOperator(LogicalOperatorType type)
+	    : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
+	}
+	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
+	    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+	}
+	virtual ~LogicalOperator() {
+	}
 
 	//! The type of the logical operator
 	LogicalOperatorType type;
@@ -37,7 +44,10 @@ public:
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
 	vector<LogicalType> types;
 	//! Estimated Cardinality
-	idx_t estimated_cardinality = 0;
+	idx_t estimated_cardinality;
+	bool has_estimated_cardinality;
+
+	unique_ptr<EstimatedProperties> estimated_props;
 
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
@@ -54,9 +64,7 @@ public:
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();
-
 	void AddChild(unique_ptr<LogicalOperator> child);
-
 	virtual idx_t EstimateCardinality(ClientContext &context);
 
 protected:

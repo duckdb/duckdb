@@ -39,6 +39,7 @@ autoconf/aclocal.m4
 autoconf/autom4te.cache
 /compile_commands.json
 /.wasm
+benchmark/imdb/job.duckdb
 
 #==============================================================================#
 # Directories to ignore (do not add trailing '/'s, they skip symlinks).

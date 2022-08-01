@@ -131,7 +131,7 @@ template class std::unique_ptr<LogicalFilter>;
 template class std::unique_ptr<LogicalJoin>;
 template class std::unique_ptr<LogicalComparisonJoin>;
 template class std::unique_ptr<FilterInfo>;
-template class std::unique_ptr<JoinOrderOptimizer::JoinNode>;
+template class std::unique_ptr<JoinNode>;
 template class std::unique_ptr<SingleJoinRelation>;
 template class std::shared_ptr<Relation>;
 template class std::unique_ptr<CatalogSet>;
@@ -160,7 +160,7 @@ INSTANTIATE_VECTOR(std::vector<std::unique_ptr<SQLStatement>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<PhysicalOperator>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<LogicalOperator>>)
 INSTANTIATE_VECTOR(std::vector<std::unique_ptr<Transaction>>)
-INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinOrderOptimizer::JoinNode>>)
+INSTANTIATE_VECTOR(std::vector<std::unique_ptr<JoinNode>>)
 template class std::vector<PhysicalType>;
 template class std::vector<Value>;
 template class std::vector<int>;
