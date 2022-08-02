@@ -11,6 +11,10 @@ require vector_size 512
 statement ok
 PRAGMA force_compression='fsst'
 
+# Uncompressed size per value: 10 chars + 4 bytes for dict offset = 14
+# Compressed size per values: 2 bytes for 2 symbols (BEEPBOOP) and (-{num}) + 0.25 byte = 2.25 bytes per value
+# Ignoring overhead for symbol table and bitwidth storage, we would expect a ratio of maximally 14/2.25 = 6.22
+
 statement ok
 CREATE TABLE test_dictionary AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
 
@@ -38,7 +42,7 @@ select (uncompressed::FLOAT / dictionary::FLOAT) as compression_ratio  FROM (
 # This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
 # influence compression ratio.
 query II
-select (uncompressed::FLOAT / dictionary::FLOAT) > 3, (uncompressed::FLOAT / dictionary::FLOAT) < 4  FROM (
+select (uncompressed::FLOAT / dictionary::FLOAT) > 5, (uncompressed::FLOAT / dictionary::FLOAT) < 6.5  FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
