@@ -1,5 +1,5 @@
-#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 
 namespace duckdb {
 

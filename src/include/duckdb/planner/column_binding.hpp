@@ -26,4 +26,5 @@ struct ColumnBinding {
 		return table_index == rhs.table_index && column_index == rhs.column_index;
 	}
 };
+
 } // namespace duckdb
