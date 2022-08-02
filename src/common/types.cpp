@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/function/cast_rules.hpp"
 
 #include <cmath>
 
@@ -93,7 +94,8 @@ PhysicalType LogicalType::GetInternalType() {
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
 		} else {
-			throw InternalException("Widths bigger than %d are not supported", DecimalType::MaxWidth());
+			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
+			                        width, DecimalType::MaxWidth());
 		}
 	}
 	case LogicalTypeId::VARCHAR:
@@ -631,8 +633,84 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	return true;
 }
 
+//! Grows Decimal width/scale when appropriate
+static LogicalType DecimalSizeCheck(const LogicalType &left, const LogicalType &right) {
+	D_ASSERT(left.id() == LogicalTypeId::DECIMAL || right.id() == LogicalTypeId::DECIMAL);
+	D_ASSERT(left.id() != right.id());
+
+	//! Make sure the 'right' is the DECIMAL type
+	if (left.id() == LogicalTypeId::DECIMAL) {
+		return DecimalSizeCheck(right, left);
+	}
+	auto width = DecimalType::GetWidth(right);
+	auto scale = DecimalType::GetScale(right);
+
+	uint8_t other_width;
+	uint8_t other_scale;
+	bool success = left.GetDecimalProperties(other_width, other_scale);
+	if (!success) {
+		throw InternalException("Type provided to DecimalSizeCheck was not a numeric type");
+	}
+	D_ASSERT(other_scale == 0);
+	const auto effective_width = width - scale;
+	if (other_width > effective_width) {
+		auto new_width = other_width + scale;
+		//! Cap the width at max, if an actual value exceeds this, an exception will be thrown later
+		if (new_width > DecimalType::MaxWidth()) {
+			new_width = DecimalType::MaxWidth();
+		}
+		return LogicalType::DECIMAL(new_width, scale);
+	}
+	return right;
+}
+
+static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalType &right) {
+	D_ASSERT(left.id() != right.id());
+	if (left.id() > right.id()) {
+		// this method is symmetric
+		// arrange it so the left type is smaller to limit the number of options we need to check
+		return CombineNumericTypes(right, left);
+	}
+	if (CastRules::ImplicitCast(left, right) >= 0) {
+		// we can implicitly cast left to right, return right
+		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
+		if (right.id() == LogicalTypeId::DECIMAL) {
+			return DecimalSizeCheck(left, right);
+		}
+		return right;
+	}
+	if (CastRules::ImplicitCast(right, left) >= 0) {
+		// we can implicitly cast right to left, return left
+		//! Depending on the type, we might need to grow the `width` of the DECIMAL type
+		if (left.id() == LogicalTypeId::DECIMAL) {
+			return DecimalSizeCheck(right, left);
+		}
+		return left;
+	}
+	// we can't cast implicitly either way and types are not equal
+	// this happens when left is signed and right is unsigned
+	// e.g. INTEGER and UINTEGER
+	// in this case we need to upcast to make sure the types fit
+
+	if (left.id() == LogicalTypeId::BIGINT || right.id() == LogicalTypeId::UBIGINT) {
+		return LogicalType::HUGEINT;
+	}
+	if (left.id() == LogicalTypeId::INTEGER || right.id() == LogicalTypeId::UINTEGER) {
+		return LogicalType::BIGINT;
+	}
+	if (left.id() == LogicalTypeId::SMALLINT || right.id() == LogicalTypeId::USMALLINT) {
+		return LogicalType::INTEGER;
+	}
+	if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::UTINYINT) {
+		return LogicalType::SMALLINT;
+	}
+	throw InternalException("Cannot combine these numeric types!?");
+}
+
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
-	if (left.id() == LogicalTypeId::UNKNOWN) {
+	if (left.id() != right.id() && left.IsNumeric() && right.IsNumeric()) {
+		return CombineNumericTypes(left, right);
+	} else if (left.id() == LogicalTypeId::UNKNOWN) {
 		return right;
 	} else if (right.id() == LogicalTypeId::UNKNOWN) {
 		return left;
@@ -829,6 +907,7 @@ TypeCatalogEntry *LogicalType::GetCatalog(const LogicalType &type) {
 struct DecimalTypeInfo : public ExtraTypeInfo {
 	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
+		D_ASSERT(width_p >= scale_p);
 	}
 
 	uint8_t width;
@@ -872,6 +951,7 @@ uint8_t DecimalType::MaxWidth() {
 }
 
 LogicalType LogicalType::DECIMAL(int width, int scale) {
+	D_ASSERT(width >= scale);
 	auto type_info = make_shared<DecimalTypeInfo>(width, scale);
 	return LogicalType(LogicalTypeId::DECIMAL, move(type_info));
 }

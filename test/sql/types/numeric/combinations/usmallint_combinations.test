@@ -1,0 +1,36 @@
+# name: test/sql/types/numeric/combinations/usmallint_combinations.test
+# description: Testing resulting types of different types combined with USMALLINT
+# group: [combinations]
+
+statement ok
+PRAGMA enable_verification
+
+#SMALLINT -> SMALLINT
+query I
+select typeof([100::USMALLINT, 10000::SMALLINT]);
+----
+INTEGER[]
+
+#TINYINT -> SMALLINT
+query I
+select typeof([100::USMALLINT, 127::TINYINT]);
+----
+INTEGER[]
+
+#USMALLINT -> USMALLINT
+query I
+select typeof([100::USMALLINT, 127::USMALLINT]);
+----
+USMALLINT[]
+
+#USMALLINT -> USMALLINT
+query I
+select typeof([100::USMALLINT, 127::USMALLINT]);
+----
+USMALLINT[]
+
+#DECIMAL -> DECIMAL
+query I
+select typeof([100::USMALLINT, 10.5::DECIMAL]);
+----
+DECIMAL(18,3)[]
