@@ -95,6 +95,9 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	auto *appender_instance = (AppenderWrapper *)appender;
 	try {
 		appender_instance->appender->Append<T>(value);
+	} catch (std::exception &ex) {
+		appender_instance->error = ex.what();
+		return DuckDBError;
 	} catch (...) {
 		return DuckDBError;
 	}

@@ -670,7 +670,7 @@ function(link_threads LIBRARY)
   endif()
 endfunction()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNINGS)
   #  skip building extensions on mingw because its weird
   if(WIN32 AND NOT MSVC)
     return()
@@ -687,7 +687,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   add_library(${TARGET_NAME} SHARED ${FILES})
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
-
+  if(IGNORE_WARNINGS)
+    disable_target_warnings(${TARGET_NAME})
+  endif()
   # loadable extension binaries can be built two ways:
   # 1. EXTENSION_STATIC_BUILD=1
   #    DuckDB is statically linked into each extension binary. This increases portability because in several situations
@@ -752,12 +754,12 @@ endif()
 
 endfunction()
 
-function(build_loadable_extension NAME)
+function(build_loadable_extension NAME IGNORE_WARNINGS)
   # all parameters after name
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
 
-  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES})
+  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES} ${IGNORE_WARNINGS})
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})
