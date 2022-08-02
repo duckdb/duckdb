@@ -152,9 +152,22 @@ bool TryTransformPythonIntegerToDouble(Value &res, py::handle ele) {
 	return true;
 }
 
-// TODO: add support for HUGEINT, UTINYINT, USMALLINT, UINTEGER maybe
-bool TryTransformPythonInteger(Value &res, py::handle ele) {
+void TransformPythonUnsigned(uint64_t value, Value &res) {
+	if (value > (uint64_t)std::numeric_limits<uint32_t>::max()) {
+		res = Value::UBIGINT(value);
+	} else if (value > (int64_t)std::numeric_limits<uint16_t>::max()) {
+		res = Value::UINTEGER(value);
+	} else if (value > (int64_t)std::numeric_limits<uint16_t>::max()) {
+		res = Value::USMALLINT(value);
+	} else {
+		res = Value::UTINYINT(value);
+	}
+}
+
+// TODO: add support for HUGEINT
+bool TryTransformPythonNumeric(Value &res, py::handle ele) {
 	auto ptr = ele.ptr();
+
 	int overflow;
 	int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
 	if (overflow == -1) {
@@ -166,13 +179,14 @@ bool TryTransformPythonInteger(Value &res, py::handle ele) {
 			PyErr_Clear();
 			return TryTransformPythonIntegerToDouble(res, ele);
 		} else {
-			res = Value::UBIGINT(unsigned_value);
+			TransformPythonUnsigned(unsigned_value, res);
 		}
 		PyErr_Clear();
 		return true;
 	} else if (value == -1 && PyErr_Occurred()) {
 		return false;
 	}
+
 	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
 		res = Value::BIGINT(value);
 	} else if (value < (int32_t)std::numeric_limits<int16_t>::min() ||
@@ -196,7 +210,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type) {
 		return Value::BOOLEAN(ele.cast<bool>());
 	} else if (py::isinstance<py::int_>(ele)) {
 		Value integer;
-		if (!TryTransformPythonInteger(integer, ele)) {
+		if (!TryTransformPythonNumeric(integer, ele)) {
 			throw InvalidInputException("An error occurred attempting to convert a python integer");
 		}
 		return integer;

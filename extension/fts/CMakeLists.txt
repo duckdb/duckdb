@@ -41,8 +41,8 @@ set(FTS_SOURCES
     ../../third_party/snowball/src_c/stem_UTF_8_turkish.cpp)
 
 add_library(fts_extension STATIC ${FTS_SOURCES})
-
-build_loadable_extension(fts ${FTS_SOURCES})
+set(INGORE_WARNINGS OFF)
+build_loadable_extension(fts ${FTS_SOURCES} ${IGNORE_WARNINGS})
 
 install(
   TARGETS fts_extension
