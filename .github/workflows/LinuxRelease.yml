@@ -268,11 +268,9 @@ jobs:
          # Set an output parameter `uname` for use in subsequent steps
          run: |
            uname -a
-           pwd
            ls
-           ls /
-           ls /test_folder
-           /test_folder/unittest
+           ls test_folder
+           test_folder/unittest
            echo ::set-output name=uname::$(uname -a)
 
      - name: Get the output
