@@ -9,7 +9,7 @@
 #    include <intrin.h>
 #endif
 
-namespace jaro_winkler {
+namespace duckdb_jaro_winkler {
 namespace intrinsics {
 
 template <typename T>
@@ -107,4 +107,4 @@ static inline int tzcnt(uint64_t x)
 #endif
 
 } // namespace intrinsics
-} // namespace jaro_winkler
+} // namespace duckdb_jaro_winkler

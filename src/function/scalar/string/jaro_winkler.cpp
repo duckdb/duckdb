@@ -7,13 +7,14 @@ namespace duckdb {
 static inline double JaroScalarFunction(const string_t &s1, const string_t &s2) {
 	auto s1_begin = s1.GetDataUnsafe();
 	auto s2_begin = s2.GetDataUnsafe();
-	return jaro_winkler::jaro_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize());
+	return duckdb_jaro_winkler::jaro_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize());
 }
 
 static inline double JaroWinklerScalarFunction(const string_t &s1, const string_t &s2) {
 	auto s1_begin = s1.GetDataUnsafe();
 	auto s2_begin = s2.GetDataUnsafe();
-	return jaro_winkler::jaro_winkler_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize());
+	return duckdb_jaro_winkler::jaro_winkler_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin,
+	                                                    s2_begin + s2.GetSize());
 }
 
 template <class CACHED_SIMILARITY>
@@ -51,12 +52,12 @@ static void TemplatedJaroWinklerFunction(DataChunk &args, Vector &result, SIMILA
 }
 
 static void JaroFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	TemplatedJaroWinklerFunction<jaro_winkler::CachedJaroSimilarity<char>>(args, result, JaroScalarFunction);
+	TemplatedJaroWinklerFunction<duckdb_jaro_winkler::CachedJaroSimilarity<char>>(args, result, JaroScalarFunction);
 }
 
 static void JaroWinklerFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	TemplatedJaroWinklerFunction<jaro_winkler::CachedJaroWinklerSimilarity<char>>(args, result,
-	                                                                              JaroWinklerScalarFunction);
+	TemplatedJaroWinklerFunction<duckdb_jaro_winkler::CachedJaroWinklerSimilarity<char>>(args, result,
+	                                                                                     JaroWinklerScalarFunction);
 }
 
 void JaroWinklerFun::RegisterFunction(BuiltinFunctions &set) {

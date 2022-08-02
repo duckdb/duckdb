@@ -12,7 +12,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace jaro_winkler {
+namespace duckdb_jaro_winkler {
 
 namespace common {
 
@@ -267,4 +267,4 @@ private:
 /**@}*/
 
 } // namespace common
-} // namespace jaro_winkler
+} // namespace duckdb_jaro_winkler

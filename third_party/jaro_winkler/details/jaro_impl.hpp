@@ -6,7 +6,7 @@
 #include "common.hpp"
 #include "intrinsics.hpp"
 
-namespace jaro_winkler {
+namespace duckdb_jaro_winkler {
 namespace detail {
 
 struct FlaggedCharsWord {
@@ -506,4 +506,4 @@ double jaro_winkler_similarity(const common::BlockPatternMatchVector& PM, InputI
 }
 
 } // namespace detail
-} // namespace jaro_winkler
+} // namespace duckdb_jaro_winkler

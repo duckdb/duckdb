@@ -7,7 +7,7 @@
 
 #include <stdexcept>
 
-namespace jaro_winkler {
+namespace duckdb_jaro_winkler {
 
 /**
  * @defgroup jaro_winkler jaro_winkler
@@ -183,4 +183,4 @@ private:
 
 /**@}*/
 
-} // namespace jaro_winkler
+} // namespace duckdb_jaro_winkler
