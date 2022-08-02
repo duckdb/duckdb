@@ -13,9 +13,9 @@
 namespace duckdb {
 
 class SketchExtension : public Extension {
-public:
-	void Load(DuckDB &db) override;
-	std::string Name() override;
+  public:
+    void Load(DuckDB &db) override;
+    std::string Name() override;
 };
 
 } // namespace duckdb

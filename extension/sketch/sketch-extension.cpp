@@ -14,17 +14,17 @@
 namespace duckdb {
 
 void SketchExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
+    Connection con(db);
+    con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
+    auto &catalog = Catalog::GetCatalog(*con.context);
 
-	SketchHll::RegisterFunction(*con.context);
-	con.Commit();
+    SketchHll::RegisterFunction(*con.context);
+    con.Commit();
 }
 
 std::string SketchExtension::Name() {
-	return "sketch";
+    return "sketch";
 }
 
 } // namespace duckdb
@@ -32,12 +32,12 @@ std::string SketchExtension::Name() {
 extern "C" {
 
 DUCKDB_EXTENSION_API void sketch_init(duckdb::DatabaseInstance &db) { // NOLINT
-	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::SketchExtension>();
+    duckdb::DuckDB db_wrapper(db);
+    db_wrapper.LoadExtension<duckdb::SketchExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *sketch_version() { // NOLINT
-	return duckdb::DuckDB::LibraryVersion();
+    return duckdb::DuckDB::LibraryVersion();
 }
 }
 

@@ -65,12 +65,12 @@ class HllStateBase {
     static const vector<uint8_t> empty_sketch_buffer;        
   public:       
     bool isset;
-	void Initialize() {
-		this->isset = false;
+    void Initialize() {
+        this->isset = false;
         this->value_sketch = nullptr;
         this->union_sketch = nullptr;
         this->serialized = nullptr;
-	}
+    }
 
     void Merge(string_t input) {
         auto other = datasketches::hll_sketch::deserialize(
@@ -82,12 +82,12 @@ class HllStateBase {
         }
     }
 
-	void Merge(const HllStateBase &other) {
-		this->isset |= other.isset;
+    void Merge(const HllStateBase &other) {
+        this->isset |= other.isset;
         if (other.isset && !other.GetSketch().is_empty()) {
             GetUnionSketch().update(other.GetSketch());
         }
-	}
+    }
 
     string_t Serialize() {
         if (!isset) {
@@ -189,15 +189,15 @@ template <> class HllState<string_t> : public HllStateBase {
 
 
 struct HllInitOperation {
-	template <class STATE>
+    template <class STATE>
     static void Initialize(STATE *state) {
- 		state->Initialize();
-	}
+        state->Initialize();
+    }
 
     template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, 
+    static void Combine(const STATE &source, STATE *target, 
                         AggregateInputData &) {
-		target->Merge(source);
+        target->Merge(source);
     }
 
     template <class T, class STATE>
@@ -207,42 +207,42 @@ struct HllInitOperation {
         target[idx] = state->Serialize();
     }
 
-	template <class INPUT_TYPE, class STATE, class OP>
+    template <class INPUT_TYPE, class STATE, class OP>
     static inline void Operation(STATE *state, AggregateInputData &, 
                                  INPUT_TYPE *input, ValidityMask &, idx_t idx) {
         // TODO: This can almost certainly be made faster by operating over 
         // a chunk at a time.                            
-		state->Update(input[idx]);
-	}
-
-    template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input,
-                                  ValidityMask &, idx_t count) {
-        state->Update(*input);
-	}
-
-    template <class STATE>
-	static void Destroy(STATE *state) {
-        // This is an anarchast's dream; to not just destroy the state
-        // but to cause the state to destroy itself.
-		state->Destroy();
+        state->Update(input[idx]);
     }
 
-	static bool IgnoreNull() {
-		return false;
-	}
+    template <class INPUT_TYPE, class STATE, class OP>
+    static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input,
+                                  ValidityMask &, idx_t count) {
+        state->Update(*input);
+    }
+
+    template <class STATE>
+    static void Destroy(STATE *state) {
+        // This is an anarchast's dream; to not just destroy the state
+        // but to cause the state to destroy itself.
+        state->Destroy();
+    }
+
+    static bool IgnoreNull() {
+        return false;
+    }
 };
 
 struct HllMergeOperation {
-	template <class STATE>
+    template <class STATE>
     static void Initialize(STATE *state) {
- 		state->Initialize();
-	}
+        state->Initialize();
+    }
 
     template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, 
+    static void Combine(const STATE &source, STATE *target, 
                         AggregateInputData &aggr_input_data) {
-		target->Merge(source);
+        target->Merge(source);
     }
 
     template <class T, class STATE>
@@ -251,26 +251,26 @@ struct HllMergeOperation {
         target[idx] = state->Serialize();
     }
 
-	template <class INPUT_TYPE, class STATE, class OP>
+    template <class INPUT_TYPE, class STATE, class OP>
     static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, 
                           ValidityMask &mask, idx_t idx) {
-		state->Merge(input[idx]);
-	}
-
-    template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, 
-                                  ValidityMask &mask, idx_t count) {
-        state->Merge(*input);
-	}
-
-    template <class STATE>
-	static void Destroy(STATE *state) {
-		state->Destroy();
+        state->Merge(input[idx]);
     }
 
-	static bool IgnoreNull() {
-		return false;
-	}
+    template <class INPUT_TYPE, class STATE, class OP>
+    static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, 
+                                  ValidityMask &mask, idx_t count) {
+        state->Merge(*input);
+    }
+
+    template <class STATE>
+    static void Destroy(STATE *state) {
+        state->Destroy();
+    }
+
+    static bool IgnoreNull() {
+        return false;
+    }
 };
 
 AggregateFunction GetInitAggregate(PhysicalType type) {
@@ -336,7 +336,7 @@ unique_ptr<FunctionData> BindDecimalHllInit(ClientContext &context,
 
 struct ExtractOperator {
     template <class TA, class TR>
-    static TR Operation(TA input) {	
+    static TR Operation(TA input) { 
         auto sketch = datasketches::hll_sketch::deserialize(input.GetDataUnsafe(),
                                                             input.GetSize());
         return sketch.get_estimate();
