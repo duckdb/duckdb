@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   json_array_length.cpp
   json_extract.cpp
+  json_merge_patch.cpp
   json_structure.cpp
   json_transform.cpp
   json_create.cpp
