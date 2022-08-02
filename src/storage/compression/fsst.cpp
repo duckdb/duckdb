@@ -84,8 +84,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 			}
 
 			if (string_size > 0) {
-				// TODO this copies the string, can we do better? i.e. we could make the compression api store strings
-				// for
+				// TODO: should we take a sample of all strings instead?
 				state.fsst_strings.emplace_back(data[idx].GetString());
 				state.fsst_string_total_size += string_size;
 			} else {
@@ -104,9 +103,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	auto string_count = state.fsst_strings.size();
 	if (string_count) {
-		size_t output_buffer_size = state.fsst_string_total_size * 10; // TODO whats the correct size here?
+		size_t output_buffer_size = 7+2*state.fsst_string_total_size; // Size as specified in fsst.h
 
-		// TODO improve on this primitive thing.
 		std::vector<size_t> fsst_string_sizes;
 		std::vector<unsigned char *> fsst_string_ptrs;
 		for (auto &str : state.fsst_strings) {
@@ -116,7 +114,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 		state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
 
-		// TODO: don't encode here!
+		// TODO: do we really need to encode to get a size estimate?
 		auto compressed_ptrs = std::vector<unsigned char *>(string_count, 0);
 		auto compressed_sizes = std::vector<size_t>(string_count, 0);
 		auto compressed_buffer = std::vector<unsigned char>(output_buffer_size, 0);
@@ -127,11 +125,6 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		if (string_count != res) {
 			throw std::runtime_error("FSST output buffer is too small unexpectedly");
 		}
-		//	std::cout << "\n";
-		//	std::cout << "Dictionary contains " << n << " strings (total " << state.fsst_string_total_size << "
-		// bytes)\n"; 	std::cout << "Compressed size is " << (compressed_ptrs[res-1] - compressed_ptrs[0]) +
-		// compressed_sizes[res-1] << "\n"; 	std::cout << "Symbol table size is " << serialized_symbol_table_size <<
-		// "\n";
 
 		// Sum and and Max compressed lengths
 		for (auto &size : compressed_sizes) {
@@ -141,8 +134,6 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		D_ASSERT(compressed_dict_size == (compressed_ptrs[res - 1] - compressed_ptrs[0]) + compressed_sizes[res - 1]);
 	}
 
-	// TODO this returns 0 for all empty strings
-	// Note that the minimum width is equal to max string length due to delta encoding
 	auto minimum_width = BitpackingPrimitives::MinimumBitWidth(max_compressed_string_length);
 	auto bitpacked_offsets_size =
 	    BitpackingPrimitives::GetRequiredSize<idx_t>(string_count + state.empty_strings, minimum_width);
@@ -185,8 +176,6 @@ public:
 
 		// Reset the buffers and string map
 		index_buffer.clear();
-
-		// TODO start at 0 or 1?
 		current_width = 0;
 
 		// Reset the pointers into the current segment
@@ -211,8 +200,8 @@ public:
 		memcpy(dict_pos, compressed_string, compressed_string_len);
 		current_dictionary.Verify();
 
-		// add dict index TODO delta encode immediately by just doing string length here straight away?
-		index_buffer.push_back(current_dictionary.size);
+		// We just push the string length to effectively delta encode the strings
+		index_buffer.push_back(compressed_string_len);
 
 		max_compressed_string_length = MaxValue(max_compressed_string_length, compressed_string_len);
 
@@ -222,7 +211,7 @@ public:
 
 	// Nulls and empty values are both treated the same:
 	void AddNullOrEmpty() {
-		index_buffer.push_back(!index_buffer.empty() ? index_buffer.back() : 0);
+		index_buffer.push_back(0);
 		current_segment->count++;
 	}
 
@@ -241,7 +230,7 @@ public:
 		size_t dict_offsets_size =
 		    BitpackingPrimitives::GetRequiredSize<idx_t>(current_string_count + 1, required_minimum_width);
 
-		// TODO switch to a symbol table per RowGroup
+		// TODO switch to a symbol table per RowGroup, saves a bit of space
 		idx_t required_space = sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
 		                       fsst_serialized_symbol_table_size;
 
@@ -276,14 +265,6 @@ public:
 		auto header_ptr = (fsst_compression_header_t *)base_ptr;
 		auto compressed_index_buffer_offset = sizeof(fsst_compression_header_t);
 		auto symbol_table_offset = compressed_index_buffer_offset + compressed_index_buffer_size;
-
-		// Delta encode + bitpack index_buffer
-		uint32_t prev = index_buffer[0];
-		for (idx_t i = 1; i < index_buffer.size(); i++) {
-			uint32_t current_delta = index_buffer[i] - prev;
-			prev = index_buffer[i];
-			index_buffer[i] = current_delta;
-		}
 
 		D_ASSERT(current_segment->count == index_buffer.size());
 		BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_index_buffer_offset,
@@ -573,7 +554,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		result_data = FSSTVector::GetCompressedData<string_t>(*output_vector);
 	}
 
-	// TODO what if the segment changes? It may go wrong?
+	// TODO: shouldn't this fail across segments?
 	if (start == 0 || scan_state.last_known_row >= (int64_t)start) {
 		scan_state.ResetStoredDelta();
 	}
