@@ -9,8 +9,6 @@
  *   hll_count_extract: Scalar function that returns cardinality estimation from a sketch.
  *   hll_count_merge:  Aggregation that merges multiple sketches into
  *                    a single one.
- *   hll_count_merge_partial: (NOT_YET_IMPLEMENTED): Merges multiple sketches into a single
- *                    one and returns the sketch.
  * 
  * Why is this useful?
  *   Imagine you are computing unique user visits to your website. You don't want to store
@@ -41,11 +39,12 @@
 
 namespace duckdb {
 
-#define DESTROY_FIELD(_x_)      \
-  if (this->_x_ != nullptr) {   \
-      delete(this->_x_);        \
-      this->_x_ = nullptr;      \
-  }
+// Macro to delete a field if present and set it to nullptr.
+#define DESTROY_FIELD(_x_)    \
+if (this->_x_ != nullptr) {   \
+    delete(this->_x_);        \
+    this->_x_ = nullptr;      \
+}
 
 /**
  * State of an HLL computation. Either in one of two modes:
@@ -57,9 +56,12 @@ namespace duckdb {
  * copied.
  */
 class HllStateBase {
+    // Detemines the size of the sketch that we create. Consider doing this
+    // dymanically based on the type or cardinality estimates of underlying
+    // tables.
     static const uint8_t lg_sketch_rows=12;
-    // Optimization to prevent us from having to create the same empty sketch
-    // and over again.
+    // Keep a static empty sketch so we don't have to recreate it over and
+    // over again.
     static const vector<uint8_t> empty_sketch_buffer;        
   public:       
     bool isset;
@@ -119,7 +121,7 @@ class HllStateBase {
             delete(this->union_sketch);
             this->union_sketch = nullptr;
         } else if (this->value_sketch == nullptr) {
-            this->value_sketch = new datasketches::hll_sketch(lg_sketch_rows, datasketches::HLL_8);
+            this->value_sketch = new datasketches::hll_sketch(lg_sketch_rows);
         }
         return *this->value_sketch;
     }
@@ -156,10 +158,14 @@ class HllStateBase {
 const vector<uint8_t> HllStateBase::empty_sketch_buffer = 
     datasketches::hll_sketch(lg_sketch_rows).serialize_compact();
 
+/**
+ * Specializations of HllState for various types. Anything that 
+ * isn't dependent on type should go in the base
+ */
 template <class T>
 class HllState : public HllStateBase {
   public:
-    void Update(T value) {
+    inline void Update(T value) {
         this->isset = true;
         this->GetSketch().update(value);
     }
@@ -167,7 +173,7 @@ class HllState : public HllStateBase {
 
 template <> class HllState<hugeint_t> : public HllStateBase {
   public:
-    void Update(hugeint_t value) {
+    inline void Update(hugeint_t value) {
         this->isset = true;
         this->GetSketch().update(&value, sizeof(value));
     }
@@ -175,7 +181,7 @@ template <> class HllState<hugeint_t> : public HllStateBase {
 
 template <> class HllState<string_t> : public HllStateBase {
   public:
-    void Update(string_t value) {
+    inline void Update(string_t value) {
         this->isset = true;
         this->GetSketch().update(value.GetDataUnsafe(), value.GetSize());
     }
@@ -189,29 +195,36 @@ struct HllInitOperation {
 	}
 
     template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+	static void Combine(const STATE &source, STATE *target, 
+                        AggregateInputData &) {
 		target->Merge(source);
     }
 
     template <class T, class STATE>
-    static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+    static void Finalize(Vector &, AggregateInputData &, STATE *state, 
+                         T *target, ValidityMask &mask, idx_t idx) {
         // Want to return a sketch even if all of the values are null.
         target[idx] = state->Serialize();
     }
 
 	template <class INPUT_TYPE, class STATE, class OP>
-    static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+    static inline void Operation(STATE *state, AggregateInputData &, 
+                                 INPUT_TYPE *input, ValidityMask &, idx_t idx) {
+        // TODO: This can almost certainly be made faster by operating over 
+        // a chunk at a time.                            
 		state->Update(input[idx]);
 	}
 
     template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input,
+                                  ValidityMask &, idx_t count) {
         state->Update(*input);
 	}
 
     template <class STATE>
 	static void Destroy(STATE *state) {
+        // This is an anarchast's dream; to not just destroy the state
+        // but to cause the state to destroy itself.
 		state->Destroy();
     }
 
@@ -227,23 +240,26 @@ struct HllMergeOperation {
 	}
 
     template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+	static void Combine(const STATE &source, STATE *target, 
+                        AggregateInputData &aggr_input_data) {
 		target->Merge(source);
     }
 
     template <class T, class STATE>
-    static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+    static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, 
+                         ValidityMask &mask, idx_t idx) {
         target[idx] = state->Serialize();
     }
 
 	template <class INPUT_TYPE, class STATE, class OP>
-    static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+    static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, 
+                          ValidityMask &mask, idx_t idx) {
 		state->Merge(input[idx]);
 	}
 
     template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, 
+                                  ValidityMask &mask, idx_t count) {
         state->Merge(*input);
 	}
 
@@ -261,52 +277,60 @@ AggregateFunction GetInitAggregate(PhysicalType type) {
     switch (type) {
     case PhysicalType::INT128: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<hugeint_t>, hugeint_t, string_t, HllInitOperation>(
-                LogicalType::HUGEINT, LogicalType::BLOB);
+            AggregateFunction::UnaryAggregateDestructor<
+                HllState<hugeint_t>, hugeint_t, string_t, HllInitOperation>(
+                    LogicalType::HUGEINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT64: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<int64_t>, int64_t, string_t, HllInitOperation>(
-                LogicalType::BIGINT, LogicalType::BLOB);
+            AggregateFunction::UnaryAggregateDestructor<
+                HllState<int64_t>, int64_t, string_t, HllInitOperation>(
+                    LogicalType::BIGINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT32: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<int32_t>, int32_t, string_t, HllInitOperation>(
-                LogicalType::INTEGER, LogicalType::BLOB);
+            AggregateFunction::UnaryAggregateDestructor<
+                HllState<int32_t>, int32_t, string_t, HllInitOperation>(
+                    LogicalType::INTEGER, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT16: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<int16_t>, int16_t, string_t, HllInitOperation>(
-                LogicalType::SMALLINT, LogicalType::BLOB);
+            AggregateFunction::UnaryAggregateDestructor<
+                HllState<int16_t>, int16_t, string_t, HllInitOperation>(
+                    LogicalType::SMALLINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::DOUBLE: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<double>, double, string_t, HllInitOperation>(
-                LogicalType::DOUBLE, LogicalType::BLOB);
+            AggregateFunction::UnaryAggregateDestructor<
+                HllState<double>, double, string_t, HllInitOperation>(
+                    LogicalType::DOUBLE, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::VARCHAR: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<string_t>, string_t, string_t, HllInitOperation>(
-                LogicalType::VARCHAR, LogicalType::BLOB);
+            AggregateFunction::UnaryAggregateDestructor<
+                HllState<string_t>, string_t, string_t, HllInitOperation>(
+                    LogicalType::VARCHAR, LogicalType::BLOB);
         return function;
     }
     default:
-        throw InternalException("Unimplemented sum aggregate");
+        throw InternalException("Unimplemented HLL init aggregate");
     }
 }
 
-unique_ptr<FunctionData> BindDecimalHllInit(ClientContext &context, AggregateFunction &function,
-                                        vector<unique_ptr<Expression>> &arguments) {
+unique_ptr<FunctionData> BindDecimalHllInit(ClientContext &context, 
+                                            AggregateFunction &function,
+                                            vector<unique_ptr<Expression>> &arguments) {
     auto decimal_type = arguments[0]->return_type;
     function = GetInitAggregate(decimal_type.InternalType());
     function.name = "hll_count_init";
     function.arguments[0] = decimal_type;
-    function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
+    function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, 
+        DecimalType::GetScale(decimal_type));
     return nullptr;
 }
 
@@ -315,11 +339,9 @@ struct ExtractOperator {
     static TR Operation(TA input) {	
         auto sketch = datasketches::hll_sketch::deserialize(input.GetDataUnsafe(),
                                                             input.GetSize());
-        // TODO: Check for error.
         return sketch.get_estimate();
     }
 };
-
 
 void SketchHll::RegisterFunction(ClientContext &context) {
     AggregateFunctionSet init("hll_count_init");
@@ -329,9 +351,10 @@ void SketchHll::RegisterFunction(ClientContext &context) {
     init.AddFunction(GetInitAggregate(PhysicalType::INT16));
     init.AddFunction(GetInitAggregate(PhysicalType::DOUBLE));
     init.AddFunction(GetInitAggregate(PhysicalType::VARCHAR));
-    init.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-                                      nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-                                      BindDecimalHllInit));
+    init.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, 
+                                       nullptr, nullptr, nullptr, nullptr, nullptr, 
+                                       FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
+                                       BindDecimalHllInit));
 
     ScalarFunctionSet extract("hll_count_extract");
     extract.AddFunction(
