@@ -53,13 +53,13 @@ SELECT * FROM integers WHERE i>4978321 LIMIT 5
 4978326
 
 # IN-clause (semi join)
-query I
+query I sort
 SELECT * FROM integers WHERE i IN (SELECT * FROM other_table)
 ----
-337
-948247
 1779793
+337
 4779793
+948247
 
 # UNION
 query I
