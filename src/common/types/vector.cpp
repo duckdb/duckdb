@@ -492,7 +492,8 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 		case PhysicalType::INT128:
 			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
-			throw InternalException("Widths bigger than 38 are not supported");
+			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
+			                        TypeIdToString(type.InternalType()));
 		}
 	}
 	case LogicalTypeId::ENUM: {

@@ -405,6 +405,7 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
+	// successful append
 	status = duckdb_appender_begin_row(appender);
 	REQUIRE(status == DuckDBSuccess);
 
@@ -414,6 +415,17 @@ TEST_CASE("Test append timestamp in C API", "[capi]") {
 
 	status = duckdb_appender_end_row(appender);
 	REQUIRE(status == DuckDBSuccess);
+
+	// append failure
+	status = duckdb_appender_begin_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_varchar(appender, "XXXXX");
+	REQUIRE(status == DuckDBError);
+	REQUIRE(duckdb_appender_error(appender) != nullptr);
+
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBError);
 
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBSuccess);
