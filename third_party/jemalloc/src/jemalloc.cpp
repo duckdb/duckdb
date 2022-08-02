@@ -3892,7 +3892,7 @@ je_dallocx(void *ptr, int flags) {
 		tsd_assert_fast(tsd);
 		ifree(tsd, ptr, tcache, false);
 	} else {
-		uintptr_t args_raw[3] = {(uintptr_t)ptr, flags};
+		uintptr_t args_raw[3] = {(uintptr_t)ptr, (uintptr_t)flags};
 		hook_invoke_dalloc(hook_dalloc_dallocx, ptr, args_raw);
 		ifree(tsd, ptr, tcache, true);
 	}

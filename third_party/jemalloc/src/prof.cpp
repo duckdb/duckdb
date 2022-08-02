@@ -530,7 +530,7 @@ prof_gdump_set(tsdn_t *tsdn, bool gdump) {
 
 void
 prof_backtrace_hook_set(prof_backtrace_hook_t hook) {
-	atomic_store_p(&prof_backtrace_hook, hook, ATOMIC_RELEASE);
+	atomic_store_p(&prof_backtrace_hook, &hook, ATOMIC_RELEASE);
 }
 
 prof_backtrace_hook_t
@@ -541,7 +541,7 @@ prof_backtrace_hook_get() {
 
 void
 prof_dump_hook_set(prof_dump_hook_t hook) {
-	atomic_store_p(&prof_dump_hook, hook, ATOMIC_RELEASE);
+	atomic_store_p(&prof_dump_hook, &hook, ATOMIC_RELEASE);
 }
 
 prof_dump_hook_t

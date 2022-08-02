@@ -71,7 +71,7 @@ size_t batch_alloc(void **ptrs, size_t num, size_t size, int flags);
 void jemalloc_prefork(void);
 void jemalloc_postfork_parent(void);
 void jemalloc_postfork_child(void);
-void je_sdallocx_noflags(void *ptr, size_t size);
+void JEMALLOC_NOTHROW je_sdallocx_noflags(void *ptr, size_t size);
 void *malloc_default(size_t size);
 
 } // namespace duckdb_jemalloc
