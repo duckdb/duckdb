@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

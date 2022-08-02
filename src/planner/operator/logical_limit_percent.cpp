@@ -1,3 +1,4 @@
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
 
 namespace duckdb {

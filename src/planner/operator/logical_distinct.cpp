@@ -1,6 +1,6 @@
-#include "duckdb/planner/operator/logical_distinct.hpp"
-
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/operator/logical_distinct.hpp"
 
 namespace duckdb {
 

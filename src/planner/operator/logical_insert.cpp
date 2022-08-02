@@ -1,4 +1,7 @@
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
