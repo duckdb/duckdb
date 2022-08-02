@@ -38,6 +38,9 @@ public:
 		AddFunction(move(function), new_key);
 	}
 	T GetFunction(idx_t key) {
+		if (key == DConstants::INVALID_INDEX) {
+			throw InternalException("Invalid function key for %s", name);
+		}
 		if (functions.find(key) == functions.end()) {
 			throw InternalException("Function key %llu not in use for %s", key, name);
 		}

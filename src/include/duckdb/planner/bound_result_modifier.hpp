@@ -39,6 +39,9 @@ public:
 public:
 	BoundOrderByNode Copy() const;
 	string ToString() const;
+
+	void Serialize(Serializer &serializer) const;
+	static BoundOrderByNode Deserialize(Deserializer &source, ClientContext &context);
 };
 
 class BoundLimitModifier : public BoundResultModifier {

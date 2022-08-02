@@ -100,6 +100,7 @@ string BaseScalarFunction::ToString() {
 
 // add your initializer for new functions here
 void BuiltinFunctions::Initialize() {
+	RegisterTableScanFunctions();
 	RegisterSQLiteFunctions();
 	RegisterReadFunctions();
 	RegisterTableFunctions();

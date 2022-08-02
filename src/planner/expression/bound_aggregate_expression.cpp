@@ -82,6 +82,7 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
+	D_ASSERT(function.function_set_key != DConstants::INVALID_INDEX);
 	writer.WriteField(function.function_set_key);
 	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);
@@ -101,6 +102,7 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
                                                              FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
 	auto function_set_key = reader.ReadRequired<idx_t>();
+	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
 	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 	auto distinct = reader.ReadRequired<bool>();
 

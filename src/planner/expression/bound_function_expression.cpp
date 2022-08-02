@@ -74,8 +74,11 @@ void BoundFunctionExpression::Verify() const {
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
+	D_ASSERT(function.function_set_key != DConstants::INVALID_INDEX);
+	// TODO need to serialize function arguments too cause e.g. sum changes those
 	writer.WriteField(function.function_set_key);
 	writer.WriteField(is_operator);
+	writer.WriteSerializable(return_type);
 	writer.WriteSerializableList(children);
 
 	writer.WriteField(bind_info != nullptr);
@@ -83,9 +86,42 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 		if (!function.serialize) {
 			throw SerializationException("Have bind info but no serialization function for %s", function.name);
 		}
-		D_ASSERT(function.serialize);
 		function.serialize(writer, bind_info.get(), function);
 	}
 }
 
+unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
+                                                            FieldReader &reader) {
+	auto name = reader.ReadRequired<string>();
+	auto function_set_key = reader.ReadRequired<idx_t>();
+	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
+
+	auto is_operator = reader.ReadRequired<bool>();
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto arguments = reader.ReadRequiredSerializableList<Expression>(context);
+
+	// TODO this is duplicated in logical_get and bound_aggregate_expression more or less, make it a template or so
+
+	auto &catalog = Catalog::GetCatalog(context);
+	auto func_catalog = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
+
+	if (!func_catalog || func_catalog->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		throw InternalException("Cant find catalog entry for function %s", name);
+	}
+
+	auto functions = (ScalarFunctionCatalogEntry *)func_catalog;
+	auto function = functions->functions.GetFunction(function_set_key);
+	unique_ptr<FunctionData> bind_info;
+
+	auto has_bind_info = reader.ReadRequired<bool>();
+
+	if (has_bind_info) {
+		if (!function.deserialize) {
+			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+		}
+		bind_info = function.deserialize(context, reader, function);
+	}
+
+	return make_unique<BoundFunctionExpression>(return_type, function, move(arguments), move(bind_info), is_operator);
+}
 } // namespace duckdb
