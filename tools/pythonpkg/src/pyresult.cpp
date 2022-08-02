@@ -311,15 +311,33 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-static data_frame FrameFromNumpy(const py::handle &o) {
-	return py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+void DuckDBPyResult::ChangeToTZType(data_frame &df) {
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
+			// first localize to UTC
+			auto utc_local = df.attr("__getitem__")(result->names[i]).attr("dt").attr("tz_localize")("UTC");
+			auto tz_converted = utc_local.attr("dt").attr("tz_convert")(timezone);
+			df.attr("__setitem__")(result->names[i], tz_converted);
+		}
+	}
+}
+
+data_frame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+	auto df = py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
+	ChangeToTZType(df);
+	return df;
 }
 
 data_frame DuckDBPyResult::FetchDF() {
+	timezone = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(FetchNumpyInternal());
 }
 
 data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+	if (timezone.empty()) {
+		timezone = QueryResult::GetConfigTimezone(*result);
+	}
 	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
 }
 

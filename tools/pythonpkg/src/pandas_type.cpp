@@ -6,64 +6,69 @@
 
 namespace duckdb {
 
-PandasType ConvertPandasType(const string &col_type) {
-	if (col_type == "bool") {
+PandasType ConvertPandasType(const py::object &col_type) {
+	auto col_type_str = string(py::str(col_type));
+
+	if (col_type_str == "bool") {
 		return PandasType::BOOL;
-	} else if (col_type == "boolean") {
+	} else if (col_type_str == "boolean") {
 		return PandasType::PANDA_BOOL;
-	} else if (col_type == "uint8") {
+	} else if (col_type_str == "uint8") {
 		return PandasType::UINT_8;
-	} else if (col_type == "Uint8") {
+	} else if (col_type_str == "Uint8") {
 		return PandasType::PANDA_UINT8;
-	} else if (col_type == "uint16") {
+	} else if (col_type_str == "uint16") {
 		return PandasType::UINT_16;
-	} else if (col_type == "Uint16") {
+	} else if (col_type_str == "Uint16") {
 		return PandasType::PANDA_UINT16;
-	} else if (col_type == "uint32") {
+	} else if (col_type_str == "uint32") {
 		return PandasType::UINT_32;
-	} else if (col_type == "Uint32") {
+	} else if (col_type_str == "Uint32") {
 		return PandasType::PANDA_UINT32;
-	} else if (col_type == "uint64") {
+	} else if (col_type_str == "uint64") {
 		return PandasType::UINT_64;
-	} else if (col_type == "Uint64") {
+	} else if (col_type_str == "Uint64") {
 		return PandasType::PANDA_UINT64;
-	} else if (col_type == "int8") {
+	} else if (col_type_str == "int8") {
 		return PandasType::INT_8;
-	} else if (col_type == "Int8") {
+	} else if (col_type_str == "Int8") {
 		return PandasType::PANDA_INT8;
-	} else if (col_type == "int16") {
+	} else if (col_type_str == "int16") {
 		return PandasType::INT_16;
-	} else if (col_type == "Int16") {
+	} else if (col_type_str == "Int16") {
 		return PandasType::PANDA_INT16;
-	} else if (col_type == "int32") {
+	} else if (col_type_str == "int32") {
 		return PandasType::INT_32;
-	} else if (col_type == "Int32") {
+	} else if (col_type_str == "Int32") {
 		return PandasType::PANDA_INT32;
-	} else if (col_type == "int64") {
+	} else if (col_type_str == "int64") {
 		return PandasType::INT_64;
-	} else if (col_type == "Int64") {
+	} else if (col_type_str == "Int64") {
 		return PandasType::PANDA_INT64;
-	} else if (col_type == "float32") {
+	} else if (col_type_str == "float32") {
 		return PandasType::FLOAT_32;
-	} else if (col_type == "float64") {
+	} else if (col_type_str == "float64") {
 		return PandasType::FLOAT_64;
-	} else if (col_type == "Float32") {
+	} else if (col_type_str == "Float32") {
 		return PandasType::PANDA_FLOAT32;
-	} else if (col_type == "Float64") {
+	} else if (col_type_str == "Float64") {
 		return PandasType::PANDA_FLOAT64;
-	} else if (col_type == "object") {
+	} else if (col_type_str == "object") {
 		//! this better be castable to strings
 		return PandasType::OBJECT;
-	} else if (col_type == "string") {
+	} else if (col_type_str == "string") {
 		return PandasType::PANDA_STRING;
-	} else if (col_type == "timedelta64[ns]") {
+	} else if (col_type_str == "timedelta64[ns]") {
 		return PandasType::PANDA_INTERVAL;
-	} else if (StringUtil::StartsWith(col_type, "datetime64[ns") || col_type == "<M8[ns]") {
+	} else if (StringUtil::StartsWith(col_type_str, "datetime64[ns") || col_type_str == "<M8[ns]") {
+		if (hasattr(col_type, "tz")) {
+			return PandasType::PANDA_DATETIME_TZ;
+		}
 		return PandasType::PANDA_DATETIME;
-	} else if (col_type == "category") {
+	} else if (col_type_str == "category") {
 		return PandasType::PANDA_CATEGORY;
 	} else {
-		throw NotImplementedException("Data type '%s' not recognized", col_type);
+		throw NotImplementedException("Data type '%s' not recognized", col_type_str);
 	}
 }
 
@@ -128,6 +133,8 @@ LogicalType PandasToLogicalType(const PandasType &col_type) {
 	case PandasType::DATETIME: {
 		return LogicalType::TIMESTAMP;
 	}
+	case PandasType::PANDA_DATETIME_TZ:
+		return LogicalType::TIMESTAMP_TZ;
 	default: {
 		throw InternalException("No known conversion for PandasType '%d' to LogicalType");
 	}

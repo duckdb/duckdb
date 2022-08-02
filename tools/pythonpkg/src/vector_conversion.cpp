@@ -249,7 +249,8 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		ScanPandasFpColumn<double>((double *)numpy_col.data(), count, offset, out);
 		break;
 	case PandasType::PANDA_DATETIME:
-	case PandasType::DATETIME: {
+	case PandasType::DATETIME:
+	case PandasType::PANDA_DATETIME_TZ: {
 		auto src_ptr = (int64_t *)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
@@ -429,10 +430,8 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 		PandasColumnBindData bind_data;
 
 		names.emplace_back(py::str(df_columns[col_idx]));
-		auto col_type = string(py::str(df_types[col_idx]));
-		bind_data.pandas_type = ConvertPandasType(col_type);
+		bind_data.pandas_type = ConvertPandasType(df_types[col_idx]);
 		bool masked = ColumnIsMasked(df_columns[col_idx], bind_data.pandas_type);
-		// auto col_type = string(py::str(df_types[col_idx]));
 
 		bind_data.mask = nullptr;
 		if (masked) {
@@ -447,8 +446,7 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 			D_ASSERT(py::hasattr(column, "cat"));
 			D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
 			auto categories = py::array(column.attr("cat").attr("categories"));
-			auto categories_str = string(py::str(categories.attr("dtype")));
-			auto categories_pd_type = ConvertPandasType(categories_str);
+			auto categories_pd_type = ConvertPandasType(categories.attr("dtype"));
 			if (categories_pd_type == PandasType::OBJECT) {
 				// Let's hope the object type is a string.
 				bind_data.pandas_type = PandasType::PANDA_CATEGORY;
@@ -469,13 +467,13 @@ void VectorConversion::BindPandas(const DBConfig &config, py::handle df, vector<
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
 				auto numpy_type = bind_data.numpy_col.attr("dtype");
 				// for category types (non-strings), we use the converted numpy type
-				categories_str = string(py::str(numpy_type));
-				bind_data.pandas_type = ConvertPandasType(categories_str);
+				bind_data.pandas_type = ConvertPandasType(numpy_type);
 				duckdb_col_type = PandasToLogicalType(bind_data.pandas_type);
 			}
 		} else {
 			if (masked || bind_data.pandas_type == PandasType::DATETIME ||
-			    bind_data.pandas_type == PandasType::PANDA_DATETIME) {
+			    bind_data.pandas_type == PandasType::PANDA_DATETIME ||
+			    bind_data.pandas_type == PandasType::PANDA_DATETIME_TZ) {
 				bind_data.numpy_col = get_fun(df_columns[col_idx]).attr("array").attr("_data");
 			} else {
 				bind_data.numpy_col = py::array(column.attr("to_numpy")());
