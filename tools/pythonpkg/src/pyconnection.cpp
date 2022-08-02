@@ -4,6 +4,7 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
+#include "duckdb_python/exceptions.hpp"
 
 #include "duckdb/common/arrow.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
@@ -148,13 +149,13 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (!res->success) {
-				throw std::runtime_error(res->error);
+				ThrowHydratedError(res->error);
 			}
 		}
 
 		prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
-			throw std::runtime_error(prep->error);
+			ThrowHydratedError(prep->error);
 		}
 	}
 
@@ -181,7 +182,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			res->result = CompletePendingQuery(*pending_query);
 
 			if (!res->result->success) {
-				throw std::runtime_error(res->result->error);
+				ThrowHydratedError(res->result->error);
 			}
 		}
 

@@ -16,6 +16,18 @@ class InternalError : public std::exception {};
 class ProgrammingError : public std::exception {};
 class NotSupportedError : public std::exception {};
 
+void ThrowHydratedError(const std::string &s) {
+	auto location = s.find(":");
+	auto prefix = s.substr(0, location);
+	auto message = s.substr(location + 1); // +1 to skip space
+
+	if ("Binder Error" == prefix) {
+		throw BinderException(message);
+	} else {
+		throw std::runtime_error("Unknown error in python binding " + str);
+	}
+}
+
 /**
  * @see https://peps.python.org/pep-0249/#exceptions
  */
