@@ -44,7 +44,6 @@ protected:
 
 public:
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer) {
-		// auto result = CreateInfo::Deserialize(deserializer);
 		auto result = make_unique<CreateTableInfo>();
 		result->DeserializeBase(deserializer);
 
