@@ -67,8 +67,6 @@ try:
 except:
     can_run = False
 
-can_run = False
-
 def execute(require, query_number):
     if not can_run:
         return
