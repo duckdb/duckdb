@@ -9,9 +9,9 @@ include_directories(include ../.. ../../third_party/httplib
 
 add_library(httpfs_extension STATIC s3fs.cpp httpfs.cpp crypto.cpp
                                     httpfs-extension.cpp)
-
+set(INGORE_WARNINGS OFF)
 build_loadable_extension(httpfs s3fs.cpp httpfs.cpp crypto.cpp
-                         httpfs-extension.cpp)
+                         httpfs-extension.cpp ${IGNORE_WARNINGS})
 
 find_package(OpenSSL REQUIRED)
 target_link_libraries(httpfs_loadable_extension ${OPENSSL_LIBRARIES})

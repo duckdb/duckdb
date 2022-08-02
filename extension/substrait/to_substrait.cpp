@@ -13,12 +13,22 @@
 
 #include "substrait/plan.pb.h"
 #include "substrait/algebra.pb.h"
+#include "google/protobuf/util/json_util.h"
 
 namespace duckdb {
 
 string DuckDBToSubstrait::SerializeToString() {
 	string serialized;
 	if (!plan.SerializeToString(&serialized)) {
+		throw InternalException("It was not possible to serialize the substrait plan");
+	}
+	return serialized;
+}
+
+string DuckDBToSubstrait::SerializeToJson() {
+	string serialized;
+	auto success = google::protobuf::util::MessageToJsonString(plan, &serialized);
+	if (!success.ok()) {
 		throw InternalException("It was not possible to serialize the substrait plan");
 	}
 	return serialized;
@@ -39,6 +49,13 @@ string DuckDBToSubstrait::GetDecimalInternalString(Value &value) {
 	default:
 		throw InternalException("Not accepted internal type for decimal");
 	}
+}
+
+void DuckDBToSubstrait::AllocateFunctionArgument(substrait::Expression_ScalarFunction *scalar_fun,
+                                                 substrait::Expression *value) {
+	auto function_argument = new substrait::FunctionArgument();
+	function_argument->set_allocated_value(value);
+	scalar_fun->mutable_arguments()->AddAllocated(function_argument);
 }
 
 void DuckDBToSubstrait::TransformDecimal(Value &dval, substrait::Expression &sexpr) {
@@ -221,8 +238,8 @@ void DuckDBToSubstrait::TransformFunctionExpression(Expression &dexpr, substrait
 	sfun->set_function_reference(RegisterFunction(dfun.function.name));
 
 	for (auto &darg : dfun.children) {
-		auto sarg = sfun->add_args();
-		TransformExpr(*darg, *sarg, col_offset);
+		auto sarg = sfun->add_arguments();
+		TransformExpr(*darg, *sarg->mutable_value(), col_offset);
 	}
 }
 
@@ -260,8 +277,10 @@ void DuckDBToSubstrait::TransformComparisonExpression(Expression &dexpr, substra
 
 	auto scalar_fun = sexpr.mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction(fname));
-	TransformExpr(*dcomp.left, *scalar_fun->add_args(), 0);
-	TransformExpr(*dcomp.right, *scalar_fun->add_args(), 0);
+	auto sarg = scalar_fun->add_arguments();
+	TransformExpr(*dcomp.left, *sarg->mutable_value(), 0);
+	sarg = scalar_fun->add_arguments();
+	TransformExpr(*dcomp.right, *sarg->mutable_value(), 0);
 }
 
 void DuckDBToSubstrait::TransformConjunctionExpression(Expression &dexpr, substrait::Expression &sexpr,
@@ -282,7 +301,8 @@ void DuckDBToSubstrait::TransformConjunctionExpression(Expression &dexpr, substr
 	auto scalar_fun = sexpr.mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction(fname));
 	for (auto &child : dconj.children) {
-		TransformExpr(*child, *scalar_fun->add_args(), col_offset);
+		auto s_arg = scalar_fun->add_arguments();
+		TransformExpr(*child, *s_arg->mutable_value(), col_offset);
 	}
 }
 
@@ -291,7 +311,8 @@ void DuckDBToSubstrait::TransformNotNullExpression(Expression &dexpr, substrait:
 	auto &dop = (BoundOperatorExpression &)dexpr;
 	auto scalar_fun = sexpr.mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
-	TransformExpr(*dop.children[0], *scalar_fun->add_args(), col_offset);
+	auto s_arg = scalar_fun->add_arguments();
+	TransformExpr(*dop.children[0], *s_arg->mutable_value(), col_offset);
 }
 
 void DuckDBToSubstrait::TransformCaseExpression(Expression &dexpr, substrait::Expression &sexpr) {
@@ -383,7 +404,8 @@ substrait::Expression *DuckDBToSubstrait::TransformIsNotNullFilter(uint64_t col_
 	auto s_expr = new substrait::Expression();
 	auto scalar_fun = s_expr->mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
-	CreateFieldRef(scalar_fun->add_args(), col_idx);
+	auto s_arg = scalar_fun->add_arguments();
+	CreateFieldRef(s_arg->mutable_value(), col_idx);
 	return s_expr;
 }
 
@@ -397,8 +419,10 @@ substrait::Expression *DuckDBToSubstrait::TransformConstantComparisonFilter(uint
 	auto s_expr = new substrait::Expression();
 	auto s_scalar = s_expr->mutable_scalar_function();
 	auto &constant_filter = (ConstantFilter &)dfilter;
-	CreateFieldRef(s_scalar->add_args(), col_idx);
-	TransformConstant(constant_filter.constant, *s_scalar->add_args());
+	auto s_arg = s_scalar->add_arguments();
+	CreateFieldRef(s_arg->mutable_value(), col_idx);
+	s_arg = s_scalar->add_arguments();
+	TransformConstant(constant_filter.constant, *s_arg->mutable_value());
 	uint64_t function_id;
 	switch (constant_filter.comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
@@ -460,8 +484,10 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 	}
 	auto scalar_fun = expr->mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction(join_comparision));
-	TransformExpr(*dcond.left, *scalar_fun->add_args());
-	TransformExpr(*dcond.right, *scalar_fun->add_args(), left_ncol);
+	auto s_arg = scalar_fun->add_arguments();
+	TransformExpr(*dcond.left, *s_arg->mutable_value());
+	s_arg = scalar_fun->add_arguments();
+	TransformExpr(*dcond.right, *s_arg->mutable_value(), left_ncol);
 	return expr;
 }
 
@@ -670,7 +696,8 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(LogicalOperator &dop)
 		smeas->set_function_reference(RegisterFunction(daexpr.function.name));
 
 		for (auto &darg : daexpr.children) {
-			TransformExpr(*darg, *smeas->add_args());
+			auto s_arg = smeas->add_arguments();
+			TransformExpr(*darg, *s_arg->mutable_value());
 		}
 	}
 	return res;

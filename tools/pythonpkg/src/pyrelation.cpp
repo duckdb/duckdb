@@ -184,6 +184,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstrait(const string &query,
 	return conn->GetSubstrait(query);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetSubstraitJSON(const string &query, DuckDBPyConnection *conn) {
+	return conn->GetSubstraitJSON(query);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn) {
 	return conn->FromSubstrait(proto);
 }
