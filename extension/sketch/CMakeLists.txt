@@ -10,9 +10,7 @@ include_directories(third_party/apache-datasketches/hll/include)
 
 set(SKETCH_EXTENSION_FILES
     sketch-extension.cpp
-    sketch-foo.cpp
-    sketch-hll.cpp
-    sketch-sum.cpp)
+    sketch-hll.cpp)
     
 
 add_library(sketch_extension STATIC ${SKETCH_EXTENSION_FILES})
