@@ -7,6 +7,8 @@ load __TEST_DIR__/test_dictionary.db
 
 require vector_size 512
 
+require tpch
+
 # First test: detailed compression ratio
 statement ok
 PRAGMA force_compression='fsst'
@@ -16,7 +18,7 @@ PRAGMA force_compression='fsst'
 # Ignoring overhead for symbol table and bitwidth storage, we would expect a ratio of maximally 14/2.25 = 6.22
 
 statement ok
-CREATE TABLE test_dictionary AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+CREATE TABLE test_compressed AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
 
 statement ok
 checkpoint
@@ -33,19 +35,48 @@ checkpoint
 #mode output_result
 
 statement ok
-select (uncompressed::FLOAT / dictionary::FLOAT) as compression_ratio  FROM (
+select (uncompressed::FLOAT / compressed::FLOAT) as compression_ratio  FROM (
     select
-        (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
+        (select count(distinct block_id) from pragma_storage_info('test_compressed') where segment_type in('VARCHAR')) as compressed,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
 )
 
 # This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
 # influence compression ratio.
 query II
-select (uncompressed::FLOAT / dictionary::FLOAT) > 5, (uncompressed::FLOAT / dictionary::FLOAT) < 6.5  FROM (
+select (uncompressed::FLOAT / compressed::FLOAT) > 5, (uncompressed::FLOAT / compressed::FLOAT) < 6.5  FROM (
     select
-        (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
+        (select count(distinct block_id) from pragma_storage_info('test_compressed') where segment_type in('VARCHAR')) as compressed,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
 )
 ----
 True	True
+
+statement ok
+CALL dbgen(sf=0.1)
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE l_comment_uncompressed AS SELECT l_comment FROM lineitem;
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='fsst'
+
+statement ok
+CREATE TABLE l_comment_compressed AS SELECT l_comment FROM lineitem;
+
+statement ok
+checkpoint
+
+# We compress l_comment with roughly ~3x compression ratio with fsst
+statement ok
+select (uncompressed::FLOAT / compressed::FLOAT) > 2.5, (uncompressed::FLOAT / compressed::FLOAT) < 3.5 as compression_ratio  FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('l_comment_compressed') where segment_type in('VARCHAR')) as compressed,
+        (select count(distinct block_id) from pragma_storage_info('l_comment_uncompressed') where segment_type in('VARCHAR')) as uncompressed
+)
