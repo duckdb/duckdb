@@ -137,6 +137,21 @@ struct DerivationExpression_ExpressionMapDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT DerivationExpression_ExpressionMapDefaultTypeInternal _DerivationExpression_ExpressionMap_default_instance_;
+constexpr DerivationExpression_ExpressionUserDefined::DerivationExpression_ExpressionUserDefined(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : type_pointer_(0u)
+  , variation_pointer_(0u)
+  , nullability_(0)
+{}
+struct DerivationExpression_ExpressionUserDefinedDefaultTypeInternal {
+  constexpr DerivationExpression_ExpressionUserDefinedDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~DerivationExpression_ExpressionUserDefinedDefaultTypeInternal() {}
+  union {
+    DerivationExpression_ExpressionUserDefined _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT DerivationExpression_ExpressionUserDefinedDefaultTypeInternal _DerivationExpression_ExpressionUserDefined_default_instance_;
 constexpr DerivationExpression_IfElse::DerivationExpression_IfElse(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : if_condition_(nullptr)
@@ -219,7 +234,7 @@ struct DerivationExpressionDefaultTypeInternal {
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT DerivationExpressionDefaultTypeInternal _DerivationExpression_default_instance_;
 }  // namespace substrait
-static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2ftype_5fexpressions_2eproto[14];
+static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2ftype_5fexpressions_2eproto[15];
 static const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* file_level_enum_descriptors_substrait_2ftype_5fexpressions_2eproto[2];
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_substrait_2ftype_5fexpressions_2eproto = nullptr;
 
@@ -297,6 +312,15 @@ const uint32_t TableStruct_substrait_2ftype_5fexpressions_2eproto::offsets[] PRO
   PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionMap, value_),
   PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionMap, variation_pointer_),
   PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionMap, nullability_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionUserDefined, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionUserDefined, type_pointer_),
+  PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionUserDefined, variation_pointer_),
+  PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_ExpressionUserDefined, nullability_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression_IfElse, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -376,6 +400,7 @@ const uint32_t TableStruct_substrait_2ftype_5fexpressions_2eproto::offsets[] PRO
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   PROTOBUF_FIELD_OFFSET(::substrait::DerivationExpression, kind_),
 };
 static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
@@ -387,12 +412,13 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOB
   { 46, -1, -1, sizeof(::substrait::DerivationExpression_ExpressionNamedStruct)},
   { 54, -1, -1, sizeof(::substrait::DerivationExpression_ExpressionList)},
   { 63, -1, -1, sizeof(::substrait::DerivationExpression_ExpressionMap)},
-  { 73, -1, -1, sizeof(::substrait::DerivationExpression_IfElse)},
-  { 82, -1, -1, sizeof(::substrait::DerivationExpression_UnaryOp)},
-  { 90, -1, -1, sizeof(::substrait::DerivationExpression_BinaryOp)},
-  { 99, -1, -1, sizeof(::substrait::DerivationExpression_ReturnProgram_Assignment)},
-  { 107, -1, -1, sizeof(::substrait::DerivationExpression_ReturnProgram)},
-  { 115, -1, -1, sizeof(::substrait::DerivationExpression)},
+  { 73, -1, -1, sizeof(::substrait::DerivationExpression_ExpressionUserDefined)},
+  { 82, -1, -1, sizeof(::substrait::DerivationExpression_IfElse)},
+  { 91, -1, -1, sizeof(::substrait::DerivationExpression_UnaryOp)},
+  { 99, -1, -1, sizeof(::substrait::DerivationExpression_BinaryOp)},
+  { 108, -1, -1, sizeof(::substrait::DerivationExpression_ReturnProgram_Assignment)},
+  { 116, -1, -1, sizeof(::substrait::DerivationExpression_ReturnProgram)},
+  { 124, -1, -1, sizeof(::substrait::DerivationExpression)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -404,6 +430,7 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_ExpressionNamedStruct_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_ExpressionList_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_ExpressionMap_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_ExpressionUserDefined_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_IfElse_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_UnaryOp_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_DerivationExpression_BinaryOp_default_instance_),
@@ -414,7 +441,7 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 
 const char descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n substrait/type_expressions.proto\022\tsubs"
-  "trait\032\024substrait/type.proto\"\366\036\n\024Derivati"
+  "trait\032\024substrait/type.proto\"\305 \n\024Derivati"
   "onExpression\022\'\n\004bool\030\001 \001(\0132\027.substrait.T"
   "ype.BooleanH\000\022 \n\002i8\030\002 \001(\0132\022.substrait.Ty"
   "pe.I8H\000\022\"\n\003i16\030\003 \001(\0132\023.substrait.Type.I1"
@@ -444,87 +471,92 @@ const char descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto[] PR
   "\022>\n\004list\030\033 \001(\0132..substrait.DerivationExp"
   "ression.ExpressionListH\000\022<\n\003map\030\034 \001(\0132-."
   "substrait.DerivationExpression.Expressio"
-  "nMapH\000\022\036\n\024user_defined_pointer\030\037 \001(\rH\000\022\035"
-  "\n\023type_parameter_name\030! \001(\tH\000\022 \n\026integer"
-  "_parameter_name\030\" \001(\tH\000\022\031\n\017integer_liter"
-  "al\030# \001(\005H\000\022;\n\010unary_op\030$ \001(\0132\'.substrait"
-  ".DerivationExpression.UnaryOpH\000\022=\n\tbinar"
-  "y_op\030% \001(\0132(.substrait.DerivationExpress"
-  "ion.BinaryOpH\000\0229\n\007if_else\030& \001(\0132&.substr"
-  "ait.DerivationExpression.IfElseH\000\022G\n\016ret"
-  "urn_program\030\' \001(\0132-.substrait.Derivation"
-  "Expression.ReturnProgramH\000\032\223\001\n\023Expressio"
-  "nFixedChar\022/\n\006length\030\001 \001(\0132\037.substrait.D"
-  "erivationExpression\022\031\n\021variation_pointer"
-  "\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.substrait."
-  "Type.Nullability\032\221\001\n\021ExpressionVarChar\022/"
-  "\n\006length\030\001 \001(\0132\037.substrait.DerivationExp"
-  "ression\022\031\n\021variation_pointer\030\002 \001(\r\0220\n\013nu"
-  "llability\030\003 \001(\0162\033.substrait.Type.Nullabi"
-  "lity\032\225\001\n\025ExpressionFixedBinary\022/\n\006length"
-  "\030\001 \001(\0132\037.substrait.DerivationExpression\022"
-  "\031\n\021variation_pointer\030\002 \001(\r\0220\n\013nullabilit"
-  "y\030\003 \001(\0162\033.substrait.Type.Nullability\032\304\001\n"
-  "\021ExpressionDecimal\022.\n\005scale\030\001 \001(\0132\037.subs"
-  "trait.DerivationExpression\0222\n\tprecision\030"
-  "\002 \001(\0132\037.substrait.DerivationExpression\022\031"
-  "\n\021variation_pointer\030\003 \001(\r\0220\n\013nullability"
-  "\030\004 \001(\0162\033.substrait.Type.Nullability\032\217\001\n\020"
-  "ExpressionStruct\022.\n\005types\030\001 \003(\0132\037.substr"
-  "ait.DerivationExpression\022\031\n\021variation_po"
-  "inter\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.subst"
-  "rait.Type.Nullability\032h\n\025ExpressionNamed"
-  "Struct\022\r\n\005names\030\001 \003(\t\022@\n\006struct\030\002 \001(\01320."
-  "substrait.DerivationExpression.Expressio"
-  "nStruct\032\214\001\n\016ExpressionList\022-\n\004type\030\001 \001(\013"
-  "2\037.substrait.DerivationExpression\022\031\n\021var"
-  "iation_pointer\030\002 \001(\r\0220\n\013nullability\030\003 \001("
-  "\0162\033.substrait.Type.Nullability\032\272\001\n\rExpre"
-  "ssionMap\022,\n\003key\030\001 \001(\0132\037.substrait.Deriva"
-  "tionExpression\022.\n\005value\030\002 \001(\0132\037.substrai"
+  "nMapH\000\022M\n\014user_defined\030\036 \001(\01325.substrait"
+  ".DerivationExpression.ExpressionUserDefi"
+  "nedH\000\022\"\n\024user_defined_pointer\030\037 \001(\rB\002\030\001H"
+  "\000\022\035\n\023type_parameter_name\030! \001(\tH\000\022 \n\026inte"
+  "ger_parameter_name\030\" \001(\tH\000\022\031\n\017integer_li"
+  "teral\030# \001(\005H\000\022;\n\010unary_op\030$ \001(\0132\'.substr"
+  "ait.DerivationExpression.UnaryOpH\000\022=\n\tbi"
+  "nary_op\030% \001(\0132(.substrait.DerivationExpr"
+  "ession.BinaryOpH\000\0229\n\007if_else\030& \001(\0132&.sub"
+  "strait.DerivationExpression.IfElseH\000\022G\n\016"
+  "return_program\030\' \001(\0132-.substrait.Derivat"
+  "ionExpression.ReturnProgramH\000\032\223\001\n\023Expres"
+  "sionFixedChar\022/\n\006length\030\001 \001(\0132\037.substrai"
   "t.DerivationExpression\022\031\n\021variation_poin"
-  "ter\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162\033.substra"
-  "it.Type.Nullability\032\251\001\n\006IfElse\0225\n\014if_con"
-  "dition\030\001 \001(\0132\037.substrait.DerivationExpre"
-  "ssion\0222\n\tif_return\030\002 \001(\0132\037.substrait.Der"
-  "ivationExpression\0224\n\013else_return\030\003 \001(\0132\037"
-  ".substrait.DerivationExpression\032\312\001\n\007Unar"
-  "yOp\022D\n\007op_type\030\001 \001(\01623.substrait.Derivat"
-  "ionExpression.UnaryOp.UnaryOpType\022,\n\003arg"
-  "\030\002 \001(\0132\037.substrait.DerivationExpression\""
-  "K\n\013UnaryOpType\022\035\n\031UNARY_OP_TYPE_UNSPECIF"
-  "IED\020\000\022\035\n\031UNARY_OP_TYPE_BOOLEAN_NOT\020\001\032\240\004\n"
-  "\010BinaryOp\022F\n\007op_type\030\001 \001(\01625.substrait.D"
-  "erivationExpression.BinaryOp.BinaryOpTyp"
-  "e\022-\n\004arg1\030\002 \001(\0132\037.substrait.DerivationEx"
-  "pression\022-\n\004arg2\030\003 \001(\0132\037.substrait.Deriv"
-  "ationExpression\"\355\002\n\014BinaryOpType\022\036\n\032BINA"
-  "RY_OP_TYPE_UNSPECIFIED\020\000\022\027\n\023BINARY_OP_TY"
-  "PE_PLUS\020\001\022\030\n\024BINARY_OP_TYPE_MINUS\020\002\022\033\n\027B"
-  "INARY_OP_TYPE_MULTIPLY\020\003\022\031\n\025BINARY_OP_TY"
-  "PE_DIVIDE\020\004\022\026\n\022BINARY_OP_TYPE_MIN\020\005\022\026\n\022B"
-  "INARY_OP_TYPE_MAX\020\006\022\037\n\033BINARY_OP_TYPE_GR"
-  "EATER_THAN\020\007\022\034\n\030BINARY_OP_TYPE_LESS_THAN"
-  "\020\010\022\026\n\022BINARY_OP_TYPE_AND\020\t\022\025\n\021BINARY_OP_"
-  "TYPE_OR\020\n\022\031\n\025BINARY_OP_TYPE_EQUALS\020\013\022\031\n\025"
-  "BINARY_OP_TYPE_COVERS\020\014\032\352\001\n\rReturnProgra"
-  "m\022M\n\013assignments\030\001 \003(\01328.substrait.Deriv"
-  "ationExpression.ReturnProgram.Assignment"
-  "\0229\n\020final_expression\030\002 \001(\0132\037.substrait.D"
-  "erivationExpression\032O\n\nAssignment\022\014\n\004nam"
-  "e\030\001 \001(\t\0223\n\nexpression\030\002 \001(\0132\037.substrait."
-  "DerivationExpressionB\006\n\004kindBW\n\022io.subst"
-  "rait.protoP\001Z*github.com/substrait-io/su"
-  "bstrait-go/proto\252\002\022Substrait.Protobufb\006p"
-  "roto3"
+  "ter\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.substra"
+  "it.Type.Nullability\032\221\001\n\021ExpressionVarCha"
+  "r\022/\n\006length\030\001 \001(\0132\037.substrait.Derivation"
+  "Expression\022\031\n\021variation_pointer\030\002 \001(\r\0220\n"
+  "\013nullability\030\003 \001(\0162\033.substrait.Type.Null"
+  "ability\032\225\001\n\025ExpressionFixedBinary\022/\n\006len"
+  "gth\030\001 \001(\0132\037.substrait.DerivationExpressi"
+  "on\022\031\n\021variation_pointer\030\002 \001(\r\0220\n\013nullabi"
+  "lity\030\003 \001(\0162\033.substrait.Type.Nullability\032"
+  "\304\001\n\021ExpressionDecimal\022.\n\005scale\030\001 \001(\0132\037.s"
+  "ubstrait.DerivationExpression\0222\n\tprecisi"
+  "on\030\002 \001(\0132\037.substrait.DerivationExpressio"
+  "n\022\031\n\021variation_pointer\030\003 \001(\r\0220\n\013nullabil"
+  "ity\030\004 \001(\0162\033.substrait.Type.Nullability\032\217"
+  "\001\n\020ExpressionStruct\022.\n\005types\030\001 \003(\0132\037.sub"
+  "strait.DerivationExpression\022\031\n\021variation"
+  "_pointer\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.su"
+  "bstrait.Type.Nullability\032h\n\025ExpressionNa"
+  "medStruct\022\r\n\005names\030\001 \003(\t\022@\n\006struct\030\002 \001(\013"
+  "20.substrait.DerivationExpression.Expres"
+  "sionStruct\032\214\001\n\016ExpressionList\022-\n\004type\030\001 "
+  "\001(\0132\037.substrait.DerivationExpression\022\031\n\021"
+  "variation_pointer\030\002 \001(\r\0220\n\013nullability\030\003"
+  " \001(\0162\033.substrait.Type.Nullability\032\272\001\n\rEx"
+  "pressionMap\022,\n\003key\030\001 \001(\0132\037.substrait.Der"
+  "ivationExpression\022.\n\005value\030\002 \001(\0132\037.subst"
+  "rait.DerivationExpression\022\031\n\021variation_p"
+  "ointer\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162\033.subs"
+  "trait.Type.Nullability\032z\n\025ExpressionUser"
+  "Defined\022\024\n\014type_pointer\030\001 \001(\r\022\031\n\021variati"
+  "on_pointer\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033."
+  "substrait.Type.Nullability\032\251\001\n\006IfElse\0225\n"
+  "\014if_condition\030\001 \001(\0132\037.substrait.Derivati"
+  "onExpression\0222\n\tif_return\030\002 \001(\0132\037.substr"
+  "ait.DerivationExpression\0224\n\013else_return\030"
+  "\003 \001(\0132\037.substrait.DerivationExpression\032\312"
+  "\001\n\007UnaryOp\022D\n\007op_type\030\001 \001(\01623.substrait."
+  "DerivationExpression.UnaryOp.UnaryOpType"
+  "\022,\n\003arg\030\002 \001(\0132\037.substrait.DerivationExpr"
+  "ession\"K\n\013UnaryOpType\022\035\n\031UNARY_OP_TYPE_U"
+  "NSPECIFIED\020\000\022\035\n\031UNARY_OP_TYPE_BOOLEAN_NO"
+  "T\020\001\032\240\004\n\010BinaryOp\022F\n\007op_type\030\001 \001(\01625.subs"
+  "trait.DerivationExpression.BinaryOp.Bina"
+  "ryOpType\022-\n\004arg1\030\002 \001(\0132\037.substrait.Deriv"
+  "ationExpression\022-\n\004arg2\030\003 \001(\0132\037.substrai"
+  "t.DerivationExpression\"\355\002\n\014BinaryOpType\022"
+  "\036\n\032BINARY_OP_TYPE_UNSPECIFIED\020\000\022\027\n\023BINAR"
+  "Y_OP_TYPE_PLUS\020\001\022\030\n\024BINARY_OP_TYPE_MINUS"
+  "\020\002\022\033\n\027BINARY_OP_TYPE_MULTIPLY\020\003\022\031\n\025BINAR"
+  "Y_OP_TYPE_DIVIDE\020\004\022\026\n\022BINARY_OP_TYPE_MIN"
+  "\020\005\022\026\n\022BINARY_OP_TYPE_MAX\020\006\022\037\n\033BINARY_OP_"
+  "TYPE_GREATER_THAN\020\007\022\034\n\030BINARY_OP_TYPE_LE"
+  "SS_THAN\020\010\022\026\n\022BINARY_OP_TYPE_AND\020\t\022\025\n\021BIN"
+  "ARY_OP_TYPE_OR\020\n\022\031\n\025BINARY_OP_TYPE_EQUAL"
+  "S\020\013\022\031\n\025BINARY_OP_TYPE_COVERS\020\014\032\352\001\n\rRetur"
+  "nProgram\022M\n\013assignments\030\001 \003(\01328.substrai"
+  "t.DerivationExpression.ReturnProgram.Ass"
+  "ignment\0229\n\020final_expression\030\002 \001(\0132\037.subs"
+  "trait.DerivationExpression\032O\n\nAssignment"
+  "\022\014\n\004name\030\001 \001(\t\0223\n\nexpression\030\002 \001(\0132\037.sub"
+  "strait.DerivationExpressionB\006\n\004kindBW\n\022i"
+  "o.substrait.protoP\001Z*github.com/substrai"
+  "t-io/substrait-go/proto\252\002\022Substrait.Prot"
+  "obufb\006proto3"
   ;
 static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2ftype_5fexpressions_2eproto_deps[1] = {
   &::descriptor_table_substrait_2ftype_2eproto,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2ftype_5fexpressions_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2ftype_5fexpressions_2eproto = {
-  false, false, 4125, descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto, "substrait/type_expressions.proto", 
-  &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once, descriptor_table_substrait_2ftype_5fexpressions_2eproto_deps, 1, 14,
+  false, false, 4332, descriptor_table_protodef_substrait_2ftype_5fexpressions_2eproto, "substrait/type_expressions.proto", 
+  &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once, descriptor_table_substrait_2ftype_5fexpressions_2eproto_deps, 1, 15,
   schemas, file_default_instances, TableStruct_substrait_2ftype_5fexpressions_2eproto::offsets,
   file_level_metadata_substrait_2ftype_5fexpressions_2eproto, file_level_enum_descriptors_substrait_2ftype_5fexpressions_2eproto, file_level_service_descriptors_substrait_2ftype_5fexpressions_2eproto,
 };
@@ -2701,6 +2733,243 @@ void DerivationExpression_ExpressionMap::InternalSwap(DerivationExpression_Expre
 
 // ===================================================================
 
+class DerivationExpression_ExpressionUserDefined::_Internal {
+ public:
+};
+
+DerivationExpression_ExpressionUserDefined::DerivationExpression_ExpressionUserDefined(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.DerivationExpression.ExpressionUserDefined)
+}
+DerivationExpression_ExpressionUserDefined::DerivationExpression_ExpressionUserDefined(const DerivationExpression_ExpressionUserDefined& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::memcpy(&type_pointer_, &from.type_pointer_,
+    static_cast<size_t>(reinterpret_cast<char*>(&nullability_) -
+    reinterpret_cast<char*>(&type_pointer_)) + sizeof(nullability_));
+  // @@protoc_insertion_point(copy_constructor:substrait.DerivationExpression.ExpressionUserDefined)
+}
+
+inline void DerivationExpression_ExpressionUserDefined::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&type_pointer_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&nullability_) -
+    reinterpret_cast<char*>(&type_pointer_)) + sizeof(nullability_));
+}
+
+DerivationExpression_ExpressionUserDefined::~DerivationExpression_ExpressionUserDefined() {
+  // @@protoc_insertion_point(destructor:substrait.DerivationExpression.ExpressionUserDefined)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void DerivationExpression_ExpressionUserDefined::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void DerivationExpression_ExpressionUserDefined::ArenaDtor(void* object) {
+  DerivationExpression_ExpressionUserDefined* _this = reinterpret_cast< DerivationExpression_ExpressionUserDefined* >(object);
+  (void)_this;
+}
+void DerivationExpression_ExpressionUserDefined::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void DerivationExpression_ExpressionUserDefined::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void DerivationExpression_ExpressionUserDefined::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.DerivationExpression.ExpressionUserDefined)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  ::memset(&type_pointer_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&nullability_) -
+      reinterpret_cast<char*>(&type_pointer_)) + sizeof(nullability_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* DerivationExpression_ExpressionUserDefined::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 type_pointer = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          type_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 variation_pointer = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          variation_pointer_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Type.Nullability nullability = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_nullability(static_cast<::substrait::Type_Nullability>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* DerivationExpression_ExpressionUserDefined::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.DerivationExpression.ExpressionUserDefined)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 type_pointer = 1;
+  if (this->_internal_type_pointer() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_type_pointer(), target);
+  }
+
+  // uint32 variation_pointer = 2;
+  if (this->_internal_variation_pointer() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_variation_pointer(), target);
+  }
+
+  // .substrait.Type.Nullability nullability = 3;
+  if (this->_internal_nullability() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_nullability(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.DerivationExpression.ExpressionUserDefined)
+  return target;
+}
+
+size_t DerivationExpression_ExpressionUserDefined::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.DerivationExpression.ExpressionUserDefined)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // uint32 type_pointer = 1;
+  if (this->_internal_type_pointer() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_type_pointer());
+  }
+
+  // uint32 variation_pointer = 2;
+  if (this->_internal_variation_pointer() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_variation_pointer());
+  }
+
+  // .substrait.Type.Nullability nullability = 3;
+  if (this->_internal_nullability() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData DerivationExpression_ExpressionUserDefined::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    DerivationExpression_ExpressionUserDefined::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*DerivationExpression_ExpressionUserDefined::GetClassData() const { return &_class_data_; }
+
+void DerivationExpression_ExpressionUserDefined::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<DerivationExpression_ExpressionUserDefined *>(to)->MergeFrom(
+      static_cast<const DerivationExpression_ExpressionUserDefined &>(from));
+}
+
+
+void DerivationExpression_ExpressionUserDefined::MergeFrom(const DerivationExpression_ExpressionUserDefined& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.DerivationExpression.ExpressionUserDefined)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (from._internal_type_pointer() != 0) {
+    _internal_set_type_pointer(from._internal_type_pointer());
+  }
+  if (from._internal_variation_pointer() != 0) {
+    _internal_set_variation_pointer(from._internal_variation_pointer());
+  }
+  if (from._internal_nullability() != 0) {
+    _internal_set_nullability(from._internal_nullability());
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void DerivationExpression_ExpressionUserDefined::CopyFrom(const DerivationExpression_ExpressionUserDefined& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.DerivationExpression.ExpressionUserDefined)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool DerivationExpression_ExpressionUserDefined::IsInitialized() const {
+  return true;
+}
+
+void DerivationExpression_ExpressionUserDefined::InternalSwap(DerivationExpression_ExpressionUserDefined* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DerivationExpression_ExpressionUserDefined, nullability_)
+      + sizeof(DerivationExpression_ExpressionUserDefined::nullability_)
+      - PROTOBUF_FIELD_OFFSET(DerivationExpression_ExpressionUserDefined, type_pointer_)>(
+          reinterpret_cast<char*>(&type_pointer_),
+          reinterpret_cast<char*>(&other->type_pointer_));
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression_ExpressionUserDefined::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[8]);
+}
+
+// ===================================================================
+
 class DerivationExpression_IfElse::_Internal {
  public:
   static const ::substrait::DerivationExpression& if_condition(const DerivationExpression_IfElse* msg);
@@ -2981,7 +3250,7 @@ void DerivationExpression_IfElse::InternalSwap(DerivationExpression_IfElse* othe
 ::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression_IfElse::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
-      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[8]);
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[9]);
 }
 
 // ===================================================================
@@ -3211,7 +3480,7 @@ void DerivationExpression_UnaryOp::InternalSwap(DerivationExpression_UnaryOp* ot
 ::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression_UnaryOp::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
-      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[9]);
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[10]);
 }
 
 // ===================================================================
@@ -3482,7 +3751,7 @@ void DerivationExpression_BinaryOp::InternalSwap(DerivationExpression_BinaryOp* 
 ::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression_BinaryOp::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
-      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[10]);
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[11]);
 }
 
 // ===================================================================
@@ -3728,7 +3997,7 @@ void DerivationExpression_ReturnProgram_Assignment::InternalSwap(DerivationExpre
 ::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression_ReturnProgram_Assignment::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
-      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[11]);
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[12]);
 }
 
 // ===================================================================
@@ -3956,7 +4225,7 @@ void DerivationExpression_ReturnProgram::InternalSwap(DerivationExpression_Retur
 ::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression_ReturnProgram::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
-      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[12]);
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[13]);
 }
 
 // ===================================================================
@@ -3986,6 +4255,7 @@ class DerivationExpression::_Internal {
   static const ::substrait::DerivationExpression_ExpressionStruct& struct_(const DerivationExpression* msg);
   static const ::substrait::DerivationExpression_ExpressionList& list(const DerivationExpression* msg);
   static const ::substrait::DerivationExpression_ExpressionMap& map(const DerivationExpression* msg);
+  static const ::substrait::DerivationExpression_ExpressionUserDefined& user_defined(const DerivationExpression* msg);
   static const ::substrait::DerivationExpression_UnaryOp& unary_op(const DerivationExpression* msg);
   static const ::substrait::DerivationExpression_BinaryOp& binary_op(const DerivationExpression* msg);
   static const ::substrait::DerivationExpression_IfElse& if_else(const DerivationExpression* msg);
@@ -4083,6 +4353,10 @@ DerivationExpression::_Internal::list(const DerivationExpression* msg) {
 const ::substrait::DerivationExpression_ExpressionMap&
 DerivationExpression::_Internal::map(const DerivationExpression* msg) {
   return *msg->kind_.map_;
+}
+const ::substrait::DerivationExpression_ExpressionUserDefined&
+DerivationExpression::_Internal::user_defined(const DerivationExpression* msg) {
+  return *msg->kind_.user_defined_;
 }
 const ::substrait::DerivationExpression_UnaryOp&
 DerivationExpression::_Internal::unary_op(const DerivationExpression* msg) {
@@ -4605,6 +4879,21 @@ void DerivationExpression::set_allocated_map(::substrait::DerivationExpression_E
   }
   // @@protoc_insertion_point(field_set_allocated:substrait.DerivationExpression.map)
 }
+void DerivationExpression::set_allocated_user_defined(::substrait::DerivationExpression_ExpressionUserDefined* user_defined) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_kind();
+  if (user_defined) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::DerivationExpression_ExpressionUserDefined>::GetOwningArena(user_defined);
+    if (message_arena != submessage_arena) {
+      user_defined = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, user_defined, submessage_arena);
+    }
+    set_has_user_defined();
+    kind_.user_defined_ = user_defined;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.DerivationExpression.user_defined)
+}
 void DerivationExpression::set_allocated_unary_op(::substrait::DerivationExpression_UnaryOp* unary_op) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
   clear_kind();
@@ -4769,6 +5058,10 @@ DerivationExpression::DerivationExpression(const DerivationExpression& from)
     }
     case kMap: {
       _internal_mutable_map()->::substrait::DerivationExpression_ExpressionMap::MergeFrom(from._internal_map());
+      break;
+    }
+    case kUserDefined: {
+      _internal_mutable_user_defined()->::substrait::DerivationExpression_ExpressionUserDefined::MergeFrom(from._internal_user_defined());
       break;
     }
     case kUserDefinedPointer: {
@@ -4976,6 +5269,12 @@ void DerivationExpression::clear_kind() {
     case kMap: {
       if (GetArenaForAllocation() == nullptr) {
         delete kind_.map_;
+      }
+      break;
+    }
+    case kUserDefined: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete kind_.user_defined_;
       }
       break;
     }
@@ -5219,7 +5518,15 @@ const char* DerivationExpression::_InternalParse(const char* ptr, ::PROTOBUF_NAM
         } else
           goto handle_unusual;
         continue;
-      // uint32 user_defined_pointer = 31;
+      // .substrait.DerivationExpression.ExpressionUserDefined user_defined = 30;
+      case 30:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 242)) {
+          ptr = ctx->ParseMessage(_internal_mutable_user_defined(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 user_defined_pointer = 31 [deprecated = true];
       case 31:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 248)) {
           _internal_set_user_defined_pointer(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -5500,7 +5807,15 @@ uint8_t* DerivationExpression::_InternalSerialize(
         29, _Internal::timestamp_tz(this), target, stream);
   }
 
-  // uint32 user_defined_pointer = 31;
+  // .substrait.DerivationExpression.ExpressionUserDefined user_defined = 30;
+  if (_internal_has_user_defined()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        30, _Internal::user_defined(this), target, stream);
+  }
+
+  // uint32 user_defined_pointer = 31 [deprecated = true];
   if (_internal_has_user_defined_pointer()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(31, this->_internal_user_defined_pointer(), target);
@@ -5750,7 +6065,14 @@ size_t DerivationExpression::ByteSizeLong() const {
           *kind_.map_);
       break;
     }
-    // uint32 user_defined_pointer = 31;
+    // .substrait.DerivationExpression.ExpressionUserDefined user_defined = 30;
+    case kUserDefined: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *kind_.user_defined_);
+      break;
+    }
+    // uint32 user_defined_pointer = 31 [deprecated = true];
     case kUserDefinedPointer: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
@@ -5925,6 +6247,10 @@ void DerivationExpression::MergeFrom(const DerivationExpression& from) {
       _internal_mutable_map()->::substrait::DerivationExpression_ExpressionMap::MergeFrom(from._internal_map());
       break;
     }
+    case kUserDefined: {
+      _internal_mutable_user_defined()->::substrait::DerivationExpression_ExpressionUserDefined::MergeFrom(from._internal_user_defined());
+      break;
+    }
     case kUserDefinedPointer: {
       _internal_set_user_defined_pointer(from._internal_user_defined_pointer());
       break;
@@ -5985,7 +6311,7 @@ void DerivationExpression::InternalSwap(DerivationExpression* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata DerivationExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_5fexpressions_2eproto_getter, &descriptor_table_substrait_2ftype_5fexpressions_2eproto_once,
-      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[13]);
+      file_level_metadata_substrait_2ftype_5fexpressions_2eproto[14]);
 }
 
 // @@protoc_insertion_point(namespace_scope)
@@ -6014,6 +6340,9 @@ template<> PROTOBUF_NOINLINE ::substrait::DerivationExpression_ExpressionList* A
 }
 template<> PROTOBUF_NOINLINE ::substrait::DerivationExpression_ExpressionMap* Arena::CreateMaybeMessage< ::substrait::DerivationExpression_ExpressionMap >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::DerivationExpression_ExpressionMap >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::DerivationExpression_ExpressionUserDefined* Arena::CreateMaybeMessage< ::substrait::DerivationExpression_ExpressionUserDefined >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::DerivationExpression_ExpressionUserDefined >(arena);
 }
 template<> PROTOBUF_NOINLINE ::substrait::DerivationExpression_IfElse* Arena::CreateMaybeMessage< ::substrait::DerivationExpression_IfElse >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::DerivationExpression_IfElse >(arena);

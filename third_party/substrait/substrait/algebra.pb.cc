@@ -132,11 +132,42 @@ struct ReadRel_ExtensionTableDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ReadRel_ExtensionTableDefaultTypeInternal _ReadRel_ExtensionTable_default_instance_;
+constexpr ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized){}
+struct ReadRel_LocalFiles_FileOrFiles_ParquetReadOptionsDefaultTypeInternal {
+  constexpr ReadRel_LocalFiles_FileOrFiles_ParquetReadOptionsDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ReadRel_LocalFiles_FileOrFiles_ParquetReadOptionsDefaultTypeInternal() {}
+  union {
+    ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ReadRel_LocalFiles_FileOrFiles_ParquetReadOptionsDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions_default_instance_;
+constexpr ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized){}
+struct ReadRel_LocalFiles_FileOrFiles_ArrowReadOptionsDefaultTypeInternal {
+  constexpr ReadRel_LocalFiles_FileOrFiles_ArrowReadOptionsDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ReadRel_LocalFiles_FileOrFiles_ArrowReadOptionsDefaultTypeInternal() {}
+  union {
+    ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ReadRel_LocalFiles_FileOrFiles_ArrowReadOptionsDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions_default_instance_;
+constexpr ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized){}
+struct ReadRel_LocalFiles_FileOrFiles_OrcReadOptionsDefaultTypeInternal {
+  constexpr ReadRel_LocalFiles_FileOrFiles_OrcReadOptionsDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~ReadRel_LocalFiles_FileOrFiles_OrcReadOptionsDefaultTypeInternal() {}
+  union {
+    ReadRel_LocalFiles_FileOrFiles_OrcReadOptions _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT ReadRel_LocalFiles_FileOrFiles_OrcReadOptionsDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_OrcReadOptions_default_instance_;
 constexpr ReadRel_LocalFiles_FileOrFiles::ReadRel_LocalFiles_FileOrFiles(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
-  : format_(0)
-
-  , partition_index_(uint64_t{0u})
+  : partition_index_(uint64_t{0u})
   , start_(uint64_t{0u})
   , length_(uint64_t{0u})
   , _oneof_case_{}{}
@@ -488,6 +519,30 @@ struct RelDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT RelDefaultTypeInternal _Rel_default_instance_;
+constexpr FunctionArgument_Enum::FunctionArgument_Enum(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : _oneof_case_{}{}
+struct FunctionArgument_EnumDefaultTypeInternal {
+  constexpr FunctionArgument_EnumDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~FunctionArgument_EnumDefaultTypeInternal() {}
+  union {
+    FunctionArgument_Enum _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT FunctionArgument_EnumDefaultTypeInternal _FunctionArgument_Enum_default_instance_;
+constexpr FunctionArgument::FunctionArgument(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : _oneof_case_{}{}
+struct FunctionArgumentDefaultTypeInternal {
+  constexpr FunctionArgumentDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~FunctionArgumentDefaultTypeInternal() {}
+  union {
+    FunctionArgument _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT FunctionArgumentDefaultTypeInternal _FunctionArgument_default_instance_;
 constexpr Expression_Enum_Empty::Expression_Enum_Empty(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized){}
 struct Expression_Enum_EmptyDefaultTypeInternal {
@@ -579,7 +634,8 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Expression_Literal_IntervalYear
 constexpr Expression_Literal_IntervalDayToSecond::Expression_Literal_IntervalDayToSecond(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : days_(0)
-  , seconds_(0){}
+  , seconds_(0)
+  , microseconds_(0){}
 struct Expression_Literal_IntervalDayToSecondDefaultTypeInternal {
   constexpr Expression_Literal_IntervalDayToSecondDefaultTypeInternal()
     : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
@@ -613,9 +669,24 @@ struct Expression_Literal_ListDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Expression_Literal_ListDefaultTypeInternal _Expression_Literal_List_default_instance_;
+constexpr Expression_Literal_UserDefined::Expression_Literal_UserDefined(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : type_parameters_()
+  , value_(nullptr)
+  , type_reference_(0u){}
+struct Expression_Literal_UserDefinedDefaultTypeInternal {
+  constexpr Expression_Literal_UserDefinedDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~Expression_Literal_UserDefinedDefaultTypeInternal() {}
+  union {
+    Expression_Literal_UserDefined _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Expression_Literal_UserDefinedDefaultTypeInternal _Expression_Literal_UserDefined_default_instance_;
 constexpr Expression_Literal::Expression_Literal(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : nullable_(false)
+  , type_variation_reference_(0u)
   , _oneof_case_{}{}
 struct Expression_LiteralDefaultTypeInternal {
   constexpr Expression_LiteralDefaultTypeInternal()
@@ -629,6 +700,7 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Expression_LiteralDefaultTypeIn
 constexpr Expression_ScalarFunction::Expression_ScalarFunction(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : args_()
+  , arguments_()
   , output_type_(nullptr)
   , function_reference_(0u){}
 struct Expression_ScalarFunctionDefaultTypeInternal {
@@ -703,6 +775,7 @@ constexpr Expression_WindowFunction::Expression_WindowFunction(
   : partitions_()
   , sorts_()
   , args_()
+  , arguments_()
   , upper_bound_(nullptr)
   , lower_bound_(nullptr)
   , output_type_(nullptr)
@@ -747,7 +820,9 @@ PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Expression_IfThenDefaultTypeInt
 constexpr Expression_Cast::Expression_Cast(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : type_(nullptr)
-  , input_(nullptr){}
+  , input_(nullptr)
+  , failure_behavior_(0)
+{}
 struct Expression_CastDefaultTypeInternal {
   constexpr Expression_CastDefaultTypeInternal()
     : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
@@ -1182,9 +1257,12 @@ constexpr AggregateFunction::AggregateFunction(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : args_()
   , sorts_()
+  , arguments_()
   , output_type_(nullptr)
   , function_reference_(0u)
   , phase_(0)
+
+  , invocation_(0)
 {}
 struct AggregateFunctionDefaultTypeInternal {
   constexpr AggregateFunctionDefaultTypeInternal()
@@ -1196,8 +1274,8 @@ struct AggregateFunctionDefaultTypeInternal {
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT AggregateFunctionDefaultTypeInternal _AggregateFunction_default_instance_;
 }  // namespace substrait
-static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2falgebra_2eproto[89];
-static const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* file_level_enum_descriptors_substrait_2falgebra_2eproto[8];
+static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2falgebra_2eproto[95];
+static const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* file_level_enum_descriptors_substrait_2falgebra_2eproto[9];
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_substrait_2falgebra_2eproto = nullptr;
 
 const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
@@ -1273,6 +1351,24 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_ExtensionTable, detail_),
   ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, _internal_metadata_),
   ~0u,  // no _extensions_
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, _oneof_case_[0]),
@@ -1282,11 +1378,15 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
-  PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, format_),
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, partition_index_),
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, start_),
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, length_),
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, path_type_),
+  PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles_FileOrFiles, file_format_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::ReadRel_LocalFiles, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -1527,6 +1627,25 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   PROTOBUF_FIELD_OFFSET(::substrait::Rel, rel_type_),
   ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::FunctionArgument_Enum, _internal_metadata_),
+  ~0u,  // no _extensions_
+  PROTOBUF_FIELD_OFFSET(::substrait::FunctionArgument_Enum, _oneof_case_[0]),
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  PROTOBUF_FIELD_OFFSET(::substrait::FunctionArgument_Enum, enum_kind_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::FunctionArgument, _internal_metadata_),
+  ~0u,  // no _extensions_
+  PROTOBUF_FIELD_OFFSET(::substrait::FunctionArgument, _oneof_case_[0]),
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  PROTOBUF_FIELD_OFFSET(::substrait::FunctionArgument, arg_type_),
+  ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Enum_Empty, _internal_metadata_),
   ~0u,  // no _extensions_
   ~0u,  // no _oneof_case_
@@ -1589,6 +1708,7 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_IntervalDayToSecond, days_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_IntervalDayToSecond, seconds_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_IntervalDayToSecond, microseconds_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_Struct, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -1603,6 +1723,15 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_List, values_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_UserDefined, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_UserDefined, type_reference_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_UserDefined, type_parameters_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal_UserDefined, value_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -1635,7 +1764,9 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal, nullable_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal, type_variation_reference_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Literal, literal_type_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_ScalarFunction, _internal_metadata_),
@@ -1644,8 +1775,9 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_ScalarFunction, function_reference_),
-  PROTOBUF_FIELD_OFFSET(::substrait::Expression_ScalarFunction, args_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_ScalarFunction, arguments_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_ScalarFunction, output_type_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_ScalarFunction, args_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_WindowFunction_Bound_Preceding, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -1696,6 +1828,7 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_WindowFunction, lower_bound_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_WindowFunction, phase_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_WindowFunction, output_type_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_WindowFunction, arguments_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_WindowFunction, args_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_IfThen_IfClause, _internal_metadata_),
@@ -1721,6 +1854,7 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Cast, type_),
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_Cast, input_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Expression_Cast, failure_behavior_),
   ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Expression_SwitchExpression_IfValue, _internal_metadata_),
   ~0u,  // no _extensions_
@@ -2016,10 +2150,12 @@ const uint32_t TableStruct_substrait_2falgebra_2eproto::offsets[] PROTOBUF_SECTI
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
   PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, function_reference_),
-  PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, args_),
+  PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, arguments_),
   PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, sorts_),
   PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, phase_),
   PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, output_type_),
+  PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, invocation_),
+  PROTOBUF_FIELD_OFFSET(::substrait::AggregateFunction, args_),
 };
 static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
   { 0, -1, -1, sizeof(::substrait::RelCommon_Direct)},
@@ -2031,86 +2167,92 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOB
   { 49, -1, -1, sizeof(::substrait::ReadRel_NamedTable)},
   { 57, -1, -1, sizeof(::substrait::ReadRel_VirtualTable)},
   { 64, -1, -1, sizeof(::substrait::ReadRel_ExtensionTable)},
-  { 71, -1, -1, sizeof(::substrait::ReadRel_LocalFiles_FileOrFiles)},
-  { 86, -1, -1, sizeof(::substrait::ReadRel_LocalFiles)},
-  { 94, -1, -1, sizeof(::substrait::ReadRel)},
-  { 110, -1, -1, sizeof(::substrait::ProjectRel)},
-  { 120, -1, -1, sizeof(::substrait::JoinRel)},
-  { 133, -1, -1, sizeof(::substrait::CrossRel)},
-  { 143, -1, -1, sizeof(::substrait::FetchRel)},
-  { 154, -1, -1, sizeof(::substrait::AggregateRel_Grouping)},
-  { 161, -1, -1, sizeof(::substrait::AggregateRel_Measure)},
-  { 169, -1, -1, sizeof(::substrait::AggregateRel)},
-  { 180, -1, -1, sizeof(::substrait::SortRel)},
-  { 190, -1, -1, sizeof(::substrait::FilterRel)},
-  { 200, -1, -1, sizeof(::substrait::SetRel)},
-  { 210, -1, -1, sizeof(::substrait::ExtensionSingleRel)},
-  { 219, -1, -1, sizeof(::substrait::ExtensionLeafRel)},
-  { 227, -1, -1, sizeof(::substrait::ExtensionMultiRel)},
-  { 236, -1, -1, sizeof(::substrait::ExchangeRel_ScatterFields)},
-  { 243, -1, -1, sizeof(::substrait::ExchangeRel_SingleBucketExpression)},
-  { 250, -1, -1, sizeof(::substrait::ExchangeRel_MultiBucketExpression)},
-  { 258, -1, -1, sizeof(::substrait::ExchangeRel_Broadcast)},
-  { 264, -1, -1, sizeof(::substrait::ExchangeRel_RoundRobin)},
-  { 271, -1, -1, sizeof(::substrait::ExchangeRel_ExchangeTarget)},
-  { 281, -1, -1, sizeof(::substrait::ExchangeRel)},
-  { 298, -1, -1, sizeof(::substrait::RelRoot)},
-  { 306, -1, -1, sizeof(::substrait::Rel)},
-  { 325, -1, -1, sizeof(::substrait::Expression_Enum_Empty)},
-  { 331, -1, -1, sizeof(::substrait::Expression_Enum)},
-  { 340, -1, -1, sizeof(::substrait::Expression_Literal_VarChar)},
-  { 348, -1, -1, sizeof(::substrait::Expression_Literal_Decimal)},
-  { 357, -1, -1, sizeof(::substrait::Expression_Literal_Map_KeyValue)},
-  { 365, -1, -1, sizeof(::substrait::Expression_Literal_Map)},
-  { 372, -1, -1, sizeof(::substrait::Expression_Literal_IntervalYearToMonth)},
-  { 380, -1, -1, sizeof(::substrait::Expression_Literal_IntervalDayToSecond)},
-  { 388, -1, -1, sizeof(::substrait::Expression_Literal_Struct)},
-  { 395, -1, -1, sizeof(::substrait::Expression_Literal_List)},
-  { 402, -1, -1, sizeof(::substrait::Expression_Literal)},
-  { 436, -1, -1, sizeof(::substrait::Expression_ScalarFunction)},
-  { 445, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Preceding)},
-  { 452, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Following)},
-  { 459, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_CurrentRow)},
-  { 465, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Unbounded)},
-  { 471, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound)},
-  { 482, -1, -1, sizeof(::substrait::Expression_WindowFunction)},
-  { 496, -1, -1, sizeof(::substrait::Expression_IfThen_IfClause)},
-  { 504, -1, -1, sizeof(::substrait::Expression_IfThen)},
-  { 512, -1, -1, sizeof(::substrait::Expression_Cast)},
-  { 520, -1, -1, sizeof(::substrait::Expression_SwitchExpression_IfValue)},
-  { 528, -1, -1, sizeof(::substrait::Expression_SwitchExpression)},
-  { 537, -1, -1, sizeof(::substrait::Expression_SingularOrList)},
-  { 545, -1, -1, sizeof(::substrait::Expression_MultiOrList_Record)},
-  { 552, -1, -1, sizeof(::substrait::Expression_MultiOrList)},
-  { 560, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_PythonPickleFunction)},
-  { 568, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_WebAssemblyFunction)},
-  { 576, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction)},
-  { 587, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_MapKey)},
-  { 595, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_StructField)},
-  { 603, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_ListElement)},
-  { 611, -1, -1, sizeof(::substrait::Expression_ReferenceSegment)},
-  { 621, -1, -1, sizeof(::substrait::Expression_MaskExpression_Select)},
-  { 631, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructSelect)},
-  { 638, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructItem)},
-  { 646, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListElement)},
-  { 653, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice)},
-  { 661, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem)},
-  { 670, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect)},
-  { 678, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKey)},
-  { 685, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKeyExpression)},
-  { 692, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect)},
-  { 702, -1, -1, sizeof(::substrait::Expression_MaskExpression)},
-  { 710, -1, -1, sizeof(::substrait::Expression_FieldReference_RootReference)},
-  { 716, -1, -1, sizeof(::substrait::Expression_FieldReference_OuterReference)},
-  { 723, -1, -1, sizeof(::substrait::Expression_FieldReference)},
-  { 736, -1, -1, sizeof(::substrait::Expression_Subquery_Scalar)},
-  { 743, -1, -1, sizeof(::substrait::Expression_Subquery_InPredicate)},
-  { 751, -1, -1, sizeof(::substrait::Expression_Subquery_SetPredicate)},
-  { 759, -1, -1, sizeof(::substrait::Expression_Subquery_SetComparison)},
-  { 769, -1, -1, sizeof(::substrait::Expression_Subquery)},
-  { 780, -1, -1, sizeof(::substrait::Expression)},
-  { 798, -1, -1, sizeof(::substrait::SortField)},
-  { 808, -1, -1, sizeof(::substrait::AggregateFunction)},
+  { 71, -1, -1, sizeof(::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions)},
+  { 77, -1, -1, sizeof(::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions)},
+  { 83, -1, -1, sizeof(::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions)},
+  { 89, -1, -1, sizeof(::substrait::ReadRel_LocalFiles_FileOrFiles)},
+  { 108, -1, -1, sizeof(::substrait::ReadRel_LocalFiles)},
+  { 116, -1, -1, sizeof(::substrait::ReadRel)},
+  { 132, -1, -1, sizeof(::substrait::ProjectRel)},
+  { 142, -1, -1, sizeof(::substrait::JoinRel)},
+  { 155, -1, -1, sizeof(::substrait::CrossRel)},
+  { 165, -1, -1, sizeof(::substrait::FetchRel)},
+  { 176, -1, -1, sizeof(::substrait::AggregateRel_Grouping)},
+  { 183, -1, -1, sizeof(::substrait::AggregateRel_Measure)},
+  { 191, -1, -1, sizeof(::substrait::AggregateRel)},
+  { 202, -1, -1, sizeof(::substrait::SortRel)},
+  { 212, -1, -1, sizeof(::substrait::FilterRel)},
+  { 222, -1, -1, sizeof(::substrait::SetRel)},
+  { 232, -1, -1, sizeof(::substrait::ExtensionSingleRel)},
+  { 241, -1, -1, sizeof(::substrait::ExtensionLeafRel)},
+  { 249, -1, -1, sizeof(::substrait::ExtensionMultiRel)},
+  { 258, -1, -1, sizeof(::substrait::ExchangeRel_ScatterFields)},
+  { 265, -1, -1, sizeof(::substrait::ExchangeRel_SingleBucketExpression)},
+  { 272, -1, -1, sizeof(::substrait::ExchangeRel_MultiBucketExpression)},
+  { 280, -1, -1, sizeof(::substrait::ExchangeRel_Broadcast)},
+  { 286, -1, -1, sizeof(::substrait::ExchangeRel_RoundRobin)},
+  { 293, -1, -1, sizeof(::substrait::ExchangeRel_ExchangeTarget)},
+  { 303, -1, -1, sizeof(::substrait::ExchangeRel)},
+  { 320, -1, -1, sizeof(::substrait::RelRoot)},
+  { 328, -1, -1, sizeof(::substrait::Rel)},
+  { 347, -1, -1, sizeof(::substrait::FunctionArgument_Enum)},
+  { 356, -1, -1, sizeof(::substrait::FunctionArgument)},
+  { 366, -1, -1, sizeof(::substrait::Expression_Enum_Empty)},
+  { 372, -1, -1, sizeof(::substrait::Expression_Enum)},
+  { 381, -1, -1, sizeof(::substrait::Expression_Literal_VarChar)},
+  { 389, -1, -1, sizeof(::substrait::Expression_Literal_Decimal)},
+  { 398, -1, -1, sizeof(::substrait::Expression_Literal_Map_KeyValue)},
+  { 406, -1, -1, sizeof(::substrait::Expression_Literal_Map)},
+  { 413, -1, -1, sizeof(::substrait::Expression_Literal_IntervalYearToMonth)},
+  { 421, -1, -1, sizeof(::substrait::Expression_Literal_IntervalDayToSecond)},
+  { 430, -1, -1, sizeof(::substrait::Expression_Literal_Struct)},
+  { 437, -1, -1, sizeof(::substrait::Expression_Literal_List)},
+  { 444, -1, -1, sizeof(::substrait::Expression_Literal_UserDefined)},
+  { 453, -1, -1, sizeof(::substrait::Expression_Literal)},
+  { 489, -1, -1, sizeof(::substrait::Expression_ScalarFunction)},
+  { 499, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Preceding)},
+  { 506, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Following)},
+  { 513, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_CurrentRow)},
+  { 519, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound_Unbounded)},
+  { 525, -1, -1, sizeof(::substrait::Expression_WindowFunction_Bound)},
+  { 536, -1, -1, sizeof(::substrait::Expression_WindowFunction)},
+  { 551, -1, -1, sizeof(::substrait::Expression_IfThen_IfClause)},
+  { 559, -1, -1, sizeof(::substrait::Expression_IfThen)},
+  { 567, -1, -1, sizeof(::substrait::Expression_Cast)},
+  { 576, -1, -1, sizeof(::substrait::Expression_SwitchExpression_IfValue)},
+  { 584, -1, -1, sizeof(::substrait::Expression_SwitchExpression)},
+  { 593, -1, -1, sizeof(::substrait::Expression_SingularOrList)},
+  { 601, -1, -1, sizeof(::substrait::Expression_MultiOrList_Record)},
+  { 608, -1, -1, sizeof(::substrait::Expression_MultiOrList)},
+  { 616, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_PythonPickleFunction)},
+  { 624, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction_WebAssemblyFunction)},
+  { 632, -1, -1, sizeof(::substrait::Expression_EmbeddedFunction)},
+  { 643, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_MapKey)},
+  { 651, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_StructField)},
+  { 659, -1, -1, sizeof(::substrait::Expression_ReferenceSegment_ListElement)},
+  { 667, -1, -1, sizeof(::substrait::Expression_ReferenceSegment)},
+  { 677, -1, -1, sizeof(::substrait::Expression_MaskExpression_Select)},
+  { 687, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructSelect)},
+  { 694, -1, -1, sizeof(::substrait::Expression_MaskExpression_StructItem)},
+  { 702, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListElement)},
+  { 709, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice)},
+  { 717, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect_ListSelectItem)},
+  { 726, -1, -1, sizeof(::substrait::Expression_MaskExpression_ListSelect)},
+  { 734, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKey)},
+  { 741, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect_MapKeyExpression)},
+  { 748, -1, -1, sizeof(::substrait::Expression_MaskExpression_MapSelect)},
+  { 758, -1, -1, sizeof(::substrait::Expression_MaskExpression)},
+  { 766, -1, -1, sizeof(::substrait::Expression_FieldReference_RootReference)},
+  { 772, -1, -1, sizeof(::substrait::Expression_FieldReference_OuterReference)},
+  { 779, -1, -1, sizeof(::substrait::Expression_FieldReference)},
+  { 792, -1, -1, sizeof(::substrait::Expression_Subquery_Scalar)},
+  { 799, -1, -1, sizeof(::substrait::Expression_Subquery_InPredicate)},
+  { 807, -1, -1, sizeof(::substrait::Expression_Subquery_SetPredicate)},
+  { 815, -1, -1, sizeof(::substrait::Expression_Subquery_SetComparison)},
+  { 825, -1, -1, sizeof(::substrait::Expression_Subquery)},
+  { 836, -1, -1, sizeof(::substrait::Expression)},
+  { 854, -1, -1, sizeof(::substrait::SortField)},
+  { 864, -1, -1, sizeof(::substrait::AggregateFunction)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -2123,6 +2265,9 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_NamedTable_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_VirtualTable_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_ExtensionTable_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_LocalFiles_FileOrFiles_OrcReadOptions_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_LocalFiles_FileOrFiles_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_LocalFiles_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ReadRel_default_instance_),
@@ -2148,6 +2293,8 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_ExchangeRel_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_RelRoot_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Rel_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_FunctionArgument_Enum_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_FunctionArgument_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Enum_Empty_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Enum_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Literal_VarChar_default_instance_),
@@ -2158,6 +2305,7 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Literal_IntervalDayToSecond_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Literal_Struct_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Literal_List_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Literal_UserDefined_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_Literal_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_ScalarFunction_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Expression_WindowFunction_Bound_Preceding_default_instance_),
@@ -2207,384 +2355,418 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
 
 const char descriptor_table_protodef_substrait_2falgebra_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
   "\n\027substrait/algebra.proto\022\tsubstrait\032\031go"
-  "ogle/protobuf/any.proto\032%substrait/exten"
-  "sions/extensions.proto\032\024substrait/type.p"
-  "roto\"\231\005\n\tRelCommon\022-\n\006direct\030\001 \001(\0132\033.sub"
-  "strait.RelCommon.DirectH\000\022)\n\004emit\030\002 \001(\0132"
-  "\031.substrait.RelCommon.EmitH\000\022\'\n\004hint\030\003 \001"
-  "(\0132\031.substrait.RelCommon.Hint\022C\n\022advance"
-  "d_extension\030\004 \001(\0132\'.substrait.extensions"
-  ".AdvancedExtension\032\010\n\006Direct\032\036\n\004Emit\022\026\n\016"
-  "output_mapping\030\001 \003(\005\032\214\003\n\004Hint\022.\n\005stats\030\001"
-  " \001(\0132\037.substrait.RelCommon.Hint.Stats\022\?\n"
-  "\nconstraint\030\002 \001(\0132+.substrait.RelCommon."
-  "Hint.RuntimeConstraint\022C\n\022advanced_exten"
-  "sion\030\n \001(\0132\'.substrait.extensions.Advanc"
-  "edExtension\032t\n\005Stats\022\021\n\trow_count\030\001 \001(\001\022"
-  "\023\n\013record_size\030\002 \001(\001\022C\n\022advanced_extensi"
-  "on\030\n \001(\0132\'.substrait.extensions.Advanced"
-  "Extension\032X\n\021RuntimeConstraint\022C\n\022advanc"
-  "ed_extension\030\n \001(\0132\'.substrait.extension"
-  "s.AdvancedExtensionB\013\n\temit_kind\"\227\t\n\007Rea"
-  "dRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelComm"
-  "on\022+\n\013base_schema\030\002 \001(\0132\026.substrait.Name"
-  "dStruct\022%\n\006filter\030\003 \001(\0132\025.substrait.Expr"
-  "ession\0228\n\nprojection\030\004 \001(\0132$.substrait.E"
-  "xpression.MaskExpression\022C\n\022advanced_ext"
-  "ension\030\n \001(\0132\'.substrait.extensions.Adva"
-  "ncedExtension\0228\n\rvirtual_table\030\005 \001(\0132\037.s"
-  "ubstrait.ReadRel.VirtualTableH\000\0224\n\013local"
-  "_files\030\006 \001(\0132\035.substrait.ReadRel.LocalFi"
-  "lesH\000\0224\n\013named_table\030\007 \001(\0132\035.substrait.R"
-  "eadRel.NamedTableH\000\022<\n\017extension_table\030\010"
-  " \001(\0132!.substrait.ReadRel.ExtensionTableH"
-  "\000\032`\n\nNamedTable\022\r\n\005names\030\001 \003(\t\022C\n\022advanc"
-  "ed_extension\030\n \001(\0132\'.substrait.extension"
-  "s.AdvancedExtension\032D\n\014VirtualTable\0224\n\006v"
-  "alues\030\001 \003(\0132$.substrait.Expression.Liter"
-  "al.Struct\0326\n\016ExtensionTable\022$\n\006detail\030\001 "
-  "\001(\0132\024.google.protobuf.Any\032\301\003\n\nLocalFiles"
-  "\0228\n\005items\030\001 \003(\0132).substrait.ReadRel.Loca"
-  "lFiles.FileOrFiles\022C\n\022advanced_extension"
-  "\030\n \001(\0132\'.substrait.extensions.AdvancedEx"
-  "tension\032\263\002\n\013FileOrFiles\022\022\n\010uri_path\030\001 \001("
-  "\tH\000\022\027\n\ruri_path_glob\030\002 \001(\tH\000\022\022\n\010uri_file"
-  "\030\003 \001(\tH\000\022\024\n\nuri_folder\030\004 \001(\tH\000\022D\n\006format"
-  "\030\005 \001(\01624.substrait.ReadRel.LocalFiles.Fi"
-  "leOrFiles.FileFormat\022\027\n\017partition_index\030"
-  "\006 \001(\004\022\r\n\005start\030\007 \001(\004\022\016\n\006length\030\010 \001(\004\"B\n\n"
-  "FileFormat\022\033\n\027FILE_FORMAT_UNSPECIFIED\020\000\022"
-  "\027\n\023FILE_FORMAT_PARQUET\020\001B\013\n\tpath_typeB\013\n"
-  "\tread_type\"\302\001\n\nProjectRel\022$\n\006common\030\001 \001("
-  "\0132\024.substrait.RelCommon\022\035\n\005input\030\002 \001(\0132\016"
-  ".substrait.Rel\022*\n\013expressions\030\003 \003(\0132\025.su"
-  "bstrait.Expression\022C\n\022advanced_extension"
-  "\030\n \001(\0132\'.substrait.extensions.AdvancedEx"
-  "tension\"\361\003\n\007JoinRel\022$\n\006common\030\001 \001(\0132\024.su"
-  "bstrait.RelCommon\022\034\n\004left\030\002 \001(\0132\016.substr"
-  "ait.Rel\022\035\n\005right\030\003 \001(\0132\016.substrait.Rel\022)"
-  "\n\nexpression\030\004 \001(\0132\025.substrait.Expressio"
-  "n\022/\n\020post_join_filter\030\005 \001(\0132\025.substrait."
-  "Expression\022)\n\004type\030\006 \001(\0162\033.substrait.Joi"
-  "nRel.JoinType\022C\n\022advanced_extension\030\n \001("
-  "\0132\'.substrait.extensions.AdvancedExtensi"
-  "on\"\266\001\n\010JoinType\022\031\n\025JOIN_TYPE_UNSPECIFIED"
-  "\020\000\022\023\n\017JOIN_TYPE_INNER\020\001\022\023\n\017JOIN_TYPE_OUT"
-  "ER\020\002\022\022\n\016JOIN_TYPE_LEFT\020\003\022\023\n\017JOIN_TYPE_RI"
-  "GHT\020\004\022\022\n\016JOIN_TYPE_SEMI\020\005\022\022\n\016JOIN_TYPE_A"
-  "NTI\020\006\022\024\n\020JOIN_TYPE_SINGLE\020\007\"\262\001\n\010CrossRel"
-  "\022$\n\006common\030\001 \001(\0132\024.substrait.RelCommon\022\034"
-  "\n\004left\030\002 \001(\0132\016.substrait.Rel\022\035\n\005right\030\003 "
-  "\001(\0132\016.substrait.Rel\022C\n\022advanced_extensio"
+  "ogle/protobuf/any.proto\032\033google/protobuf"
+  "/empty.proto\032%substrait/extensions/exten"
+  "sions.proto\032\024substrait/type.proto\"\231\005\n\tRe"
+  "lCommon\022-\n\006direct\030\001 \001(\0132\033.substrait.RelC"
+  "ommon.DirectH\000\022)\n\004emit\030\002 \001(\0132\031.substrait"
+  ".RelCommon.EmitH\000\022\'\n\004hint\030\003 \001(\0132\031.substr"
+  "ait.RelCommon.Hint\022C\n\022advanced_extension"
+  "\030\004 \001(\0132\'.substrait.extensions.AdvancedEx"
+  "tension\032\010\n\006Direct\032\036\n\004Emit\022\026\n\016output_mapp"
+  "ing\030\001 \003(\005\032\214\003\n\004Hint\022.\n\005stats\030\001 \001(\0132\037.subs"
+  "trait.RelCommon.Hint.Stats\022\?\n\nconstraint"
+  "\030\002 \001(\0132+.substrait.RelCommon.Hint.Runtim"
+  "eConstraint\022C\n\022advanced_extension\030\n \001(\0132"
+  "\'.substrait.extensions.AdvancedExtension"
+  "\032t\n\005Stats\022\021\n\trow_count\030\001 \001(\001\022\023\n\013record_s"
+  "ize\030\002 \001(\001\022C\n\022advanced_extension\030\n \001(\0132\'."
+  "substrait.extensions.AdvancedExtension\032X"
+  "\n\021RuntimeConstraint\022C\n\022advanced_extensio"
   "n\030\n \001(\0132\'.substrait.extensions.AdvancedE"
-  "xtension\"\263\001\n\010FetchRel\022$\n\006common\030\001 \001(\0132\024."
+  "xtensionB\013\n\temit_kind\"\370\n\n\007ReadRel\022$\n\006com"
+  "mon\030\001 \001(\0132\024.substrait.RelCommon\022+\n\013base_"
+  "schema\030\002 \001(\0132\026.substrait.NamedStruct\022%\n\006"
+  "filter\030\003 \001(\0132\025.substrait.Expression\0228\n\np"
+  "rojection\030\004 \001(\0132$.substrait.Expression.M"
+  "askExpression\022C\n\022advanced_extension\030\n \001("
+  "\0132\'.substrait.extensions.AdvancedExtensi"
+  "on\0228\n\rvirtual_table\030\005 \001(\0132\037.substrait.Re"
+  "adRel.VirtualTableH\000\0224\n\013local_files\030\006 \001("
+  "\0132\035.substrait.ReadRel.LocalFilesH\000\0224\n\013na"
+  "med_table\030\007 \001(\0132\035.substrait.ReadRel.Name"
+  "dTableH\000\022<\n\017extension_table\030\010 \001(\0132!.subs"
+  "trait.ReadRel.ExtensionTableH\000\032`\n\nNamedT"
+  "able\022\r\n\005names\030\001 \003(\t\022C\n\022advanced_extensio"
+  "n\030\n \001(\0132\'.substrait.extensions.AdvancedE"
+  "xtension\032D\n\014VirtualTable\0224\n\006values\030\001 \003(\013"
+  "2$.substrait.Expression.Literal.Struct\0326"
+  "\n\016ExtensionTable\022$\n\006detail\030\001 \001(\0132\024.googl"
+  "e.protobuf.Any\032\242\005\n\nLocalFiles\0228\n\005items\030\001"
+  " \003(\0132).substrait.ReadRel.LocalFiles.File"
+  "OrFiles\022C\n\022advanced_extension\030\n \001(\0132\'.su"
+  "bstrait.extensions.AdvancedExtension\032\224\004\n"
+  "\013FileOrFiles\022\022\n\010uri_path\030\001 \001(\tH\000\022\027\n\ruri_"
+  "path_glob\030\002 \001(\tH\000\022\022\n\010uri_file\030\003 \001(\tH\000\022\024\n"
+  "\nuri_folder\030\004 \001(\tH\000\022\027\n\017partition_index\030\006"
+  " \001(\004\022\r\n\005start\030\007 \001(\004\022\016\n\006length\030\010 \001(\004\022O\n\007p"
+  "arquet\030\t \001(\0132<.substrait.ReadRel.LocalFi"
+  "les.FileOrFiles.ParquetReadOptionsH\001\022K\n\005"
+  "arrow\030\n \001(\0132:.substrait.ReadRel.LocalFil"
+  "es.FileOrFiles.ArrowReadOptionsH\001\022G\n\003orc"
+  "\030\013 \001(\01328.substrait.ReadRel.LocalFiles.Fi"
+  "leOrFiles.OrcReadOptionsH\001\022)\n\textension\030"
+  "\014 \001(\0132\024.google.protobuf.AnyH\001\032\024\n\022Parquet"
+  "ReadOptions\032\022\n\020ArrowReadOptions\032\020\n\016OrcRe"
+  "adOptionsB\013\n\tpath_typeB\r\n\013file_formatJ\004\010"
+  "\005\020\006R\006formatB\013\n\tread_type\"\302\001\n\nProjectRel\022"
+  "$\n\006common\030\001 \001(\0132\024.substrait.RelCommon\022\035\n"
+  "\005input\030\002 \001(\0132\016.substrait.Rel\022*\n\013expressi"
+  "ons\030\003 \003(\0132\025.substrait.Expression\022C\n\022adva"
+  "nced_extension\030\n \001(\0132\'.substrait.extensi"
+  "ons.AdvancedExtension\"\361\003\n\007JoinRel\022$\n\006com"
+  "mon\030\001 \001(\0132\024.substrait.RelCommon\022\034\n\004left\030"
+  "\002 \001(\0132\016.substrait.Rel\022\035\n\005right\030\003 \001(\0132\016.s"
+  "ubstrait.Rel\022)\n\nexpression\030\004 \001(\0132\025.subst"
+  "rait.Expression\022/\n\020post_join_filter\030\005 \001("
+  "\0132\025.substrait.Expression\022)\n\004type\030\006 \001(\0162\033"
+  ".substrait.JoinRel.JoinType\022C\n\022advanced_"
+  "extension\030\n \001(\0132\'.substrait.extensions.A"
+  "dvancedExtension\"\266\001\n\010JoinType\022\031\n\025JOIN_TY"
+  "PE_UNSPECIFIED\020\000\022\023\n\017JOIN_TYPE_INNER\020\001\022\023\n"
+  "\017JOIN_TYPE_OUTER\020\002\022\022\n\016JOIN_TYPE_LEFT\020\003\022\023"
+  "\n\017JOIN_TYPE_RIGHT\020\004\022\022\n\016JOIN_TYPE_SEMI\020\005\022"
+  "\022\n\016JOIN_TYPE_ANTI\020\006\022\024\n\020JOIN_TYPE_SINGLE\020"
+  "\007\"\262\001\n\010CrossRel\022$\n\006common\030\001 \001(\0132\024.substra"
+  "it.RelCommon\022\034\n\004left\030\002 \001(\0132\016.substrait.R"
+  "el\022\035\n\005right\030\003 \001(\0132\016.substrait.Rel\022C\n\022adv"
+  "anced_extension\030\n \001(\0132\'.substrait.extens"
+  "ions.AdvancedExtension\"\263\001\n\010FetchRel\022$\n\006c"
+  "ommon\030\001 \001(\0132\024.substrait.RelCommon\022\035\n\005inp"
+  "ut\030\002 \001(\0132\016.substrait.Rel\022\016\n\006offset\030\003 \001(\003"
+  "\022\r\n\005count\030\004 \001(\003\022C\n\022advanced_extension\030\n "
+  "\001(\0132\'.substrait.extensions.AdvancedExten"
+  "sion\"\242\003\n\014AggregateRel\022$\n\006common\030\001 \001(\0132\024."
   "substrait.RelCommon\022\035\n\005input\030\002 \001(\0132\016.sub"
-  "strait.Rel\022\016\n\006offset\030\003 \001(\003\022\r\n\005count\030\004 \001("
-  "\003\022C\n\022advanced_extension\030\n \001(\0132\'.substrai"
-  "t.extensions.AdvancedExtension\"\242\003\n\014Aggre"
-  "gateRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelC"
-  "ommon\022\035\n\005input\030\002 \001(\0132\016.substrait.Rel\0223\n\t"
-  "groupings\030\003 \003(\0132 .substrait.AggregateRel"
-  ".Grouping\0221\n\010measures\030\004 \003(\0132\037.substrait."
-  "AggregateRel.Measure\022C\n\022advanced_extensi"
-  "on\030\n \001(\0132\'.substrait.extensions.Advanced"
-  "Extension\032\?\n\010Grouping\0223\n\024grouping_expres"
-  "sions\030\001 \003(\0132\025.substrait.Expression\032_\n\007Me"
-  "asure\022-\n\007measure\030\001 \001(\0132\034.substrait.Aggre"
-  "gateFunction\022%\n\006filter\030\002 \001(\0132\025.substrait"
-  ".Expression\"\270\001\n\007SortRel\022$\n\006common\030\001 \001(\0132"
-  "\024.substrait.RelCommon\022\035\n\005input\030\002 \001(\0132\016.s"
-  "ubstrait.Rel\022#\n\005sorts\030\003 \003(\0132\024.substrait."
-  "SortField\022C\n\022advanced_extension\030\n \001(\0132\'."
-  "substrait.extensions.AdvancedExtension\"\277"
-  "\001\n\tFilterRel\022$\n\006common\030\001 \001(\0132\024.substrait"
-  ".RelCommon\022\035\n\005input\030\002 \001(\0132\016.substrait.Re"
-  "l\022(\n\tcondition\030\003 \001(\0132\025.substrait.Express"
-  "ion\022C\n\022advanced_extension\030\n \001(\0132\'.substr"
-  "ait.extensions.AdvancedExtension\"\203\003\n\006Set"
-  "Rel\022$\n\006common\030\001 \001(\0132\024.substrait.RelCommo"
-  "n\022\036\n\006inputs\030\002 \003(\0132\016.substrait.Rel\022#\n\002op\030"
-  "\003 \001(\0162\027.substrait.SetRel.SetOp\022C\n\022advanc"
-  "ed_extension\030\n \001(\0132\'.substrait.extension"
-  "s.AdvancedExtension\"\310\001\n\005SetOp\022\026\n\022SET_OP_"
-  "UNSPECIFIED\020\000\022\030\n\024SET_OP_MINUS_PRIMARY\020\001\022"
-  "\031\n\025SET_OP_MINUS_MULTISET\020\002\022\037\n\033SET_OP_INT"
-  "ERSECTION_PRIMARY\020\003\022 \n\034SET_OP_INTERSECTI"
-  "ON_MULTISET\020\004\022\031\n\025SET_OP_UNION_DISTINCT\020\005"
-  "\022\024\n\020SET_OP_UNION_ALL\020\006\"\177\n\022ExtensionSingl"
-  "eRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelComm"
-  "on\022\035\n\005input\030\002 \001(\0132\016.substrait.Rel\022$\n\006det"
-  "ail\030\003 \001(\0132\024.google.protobuf.Any\"^\n\020Exten"
-  "sionLeafRel\022$\n\006common\030\001 \001(\0132\024.substrait."
-  "RelCommon\022$\n\006detail\030\002 \001(\0132\024.google.proto"
-  "buf.Any\"\177\n\021ExtensionMultiRel\022$\n\006common\030\001"
-  " \001(\0132\024.substrait.RelCommon\022\036\n\006inputs\030\002 \003"
-  "(\0132\016.substrait.Rel\022$\n\006detail\030\003 \001(\0132\024.goo"
-  "gle.protobuf.Any\"\303\007\n\013ExchangeRel\022$\n\006comm"
-  "on\030\001 \001(\0132\024.substrait.RelCommon\022\035\n\005input\030"
-  "\002 \001(\0132\016.substrait.Rel\022\027\n\017partition_count"
-  "\030\003 \001(\005\0226\n\007targets\030\004 \003(\0132%.substrait.Exch"
-  "angeRel.ExchangeTarget\022A\n\021scatter_by_fie"
-  "lds\030\005 \001(\0132$.substrait.ExchangeRel.Scatte"
-  "rFieldsH\000\022F\n\rsingle_target\030\006 \001(\0132-.subst"
-  "rait.ExchangeRel.SingleBucketExpressionH"
-  "\000\022D\n\014multi_target\030\007 \001(\0132,.substrait.Exch"
-  "angeRel.MultiBucketExpressionH\000\0228\n\013round"
-  "_robin\030\010 \001(\0132!.substrait.ExchangeRel.Rou"
-  "ndRobinH\000\0225\n\tbroadcast\030\t \001(\0132 .substrait"
-  ".ExchangeRel.BroadcastH\000\022C\n\022advanced_ext"
-  "ension\030\n \001(\0132\'.substrait.extensions.Adva"
-  "ncedExtension\032E\n\rScatterFields\0224\n\006fields"
-  "\030\001 \003(\0132$.substrait.Expression.FieldRefer"
-  "ence\032C\n\026SingleBucketExpression\022)\n\nexpres"
-  "sion\030\001 \001(\0132\025.substrait.Expression\032`\n\025Mul"
-  "tiBucketExpression\022)\n\nexpression\030\001 \001(\0132\025"
-  ".substrait.Expression\022\034\n\024constrained_to_"
-  "count\030\002 \001(\010\032\013\n\tBroadcast\032\033\n\nRoundRobin\022\r"
-  "\n\005exact\030\001 \001(\010\032n\n\016ExchangeTarget\022\024\n\014parti"
-  "tion_id\030\001 \003(\005\022\r\n\003uri\030\002 \001(\tH\000\022(\n\010extended"
-  "\030\003 \001(\0132\024.google.protobuf.AnyH\000B\r\n\013target"
-  "_typeB\017\n\rexchange_kind\"7\n\007RelRoot\022\035\n\005inp"
-  "ut\030\001 \001(\0132\016.substrait.Rel\022\r\n\005names\030\002 \003(\t\""
-  "\226\004\n\003Rel\022\"\n\004read\030\001 \001(\0132\022.substrait.ReadRe"
-  "lH\000\022&\n\006filter\030\002 \001(\0132\024.substrait.FilterRe"
-  "lH\000\022$\n\005fetch\030\003 \001(\0132\023.substrait.FetchRelH"
-  "\000\022,\n\taggregate\030\004 \001(\0132\027.substrait.Aggrega"
-  "teRelH\000\022\"\n\004sort\030\005 \001(\0132\022.substrait.SortRe"
-  "lH\000\022\"\n\004join\030\006 \001(\0132\022.substrait.JoinRelH\000\022"
-  "(\n\007project\030\007 \001(\0132\025.substrait.ProjectRelH"
-  "\000\022 \n\003set\030\010 \001(\0132\021.substrait.SetRelH\000\0229\n\020e"
-  "xtension_single\030\t \001(\0132\035.substrait.Extens"
-  "ionSingleRelH\000\0227\n\017extension_multi\030\n \001(\0132"
-  "\034.substrait.ExtensionMultiRelH\000\0225\n\016exten"
-  "sion_leaf\030\013 \001(\0132\033.substrait.ExtensionLea"
-  "fRelH\000\022$\n\005cross\030\014 \001(\0132\023.substrait.CrossR"
-  "elH\000B\n\n\010rel_type\"\346;\n\nExpression\0220\n\007liter"
-  "al\030\001 \001(\0132\035.substrait.Expression.LiteralH"
-  "\000\0229\n\tselection\030\002 \001(\0132$.substrait.Express"
-  "ion.FieldReferenceH\000\022\?\n\017scalar_function\030"
-  "\003 \001(\0132$.substrait.Expression.ScalarFunct"
-  "ionH\000\022\?\n\017window_function\030\005 \001(\0132$.substra"
-  "it.Expression.WindowFunctionH\000\022/\n\007if_the"
-  "n\030\006 \001(\0132\034.substrait.Expression.IfThenH\000\022"
-  "C\n\021switch_expression\030\007 \001(\0132&.substrait.E"
-  "xpression.SwitchExpressionH\000\022@\n\020singular"
-  "_or_list\030\010 \001(\0132$.substrait.Expression.Si"
-  "ngularOrListH\000\022:\n\rmulti_or_list\030\t \001(\0132!."
-  "substrait.Expression.MultiOrListH\000\022*\n\004en"
-  "um\030\n \001(\0132\032.substrait.Expression.EnumH\000\022*"
-  "\n\004cast\030\013 \001(\0132\032.substrait.Expression.Cast"
-  "H\000\0222\n\010subquery\030\014 \001(\0132\036.substrait.Express"
-  "ion.SubqueryH\000\032j\n\004Enum\022\023\n\tspecified\030\001 \001("
-  "\tH\000\0227\n\013unspecified\030\002 \001(\0132 .substrait.Exp"
-  "ression.Enum.EmptyH\000\032\007\n\005EmptyB\013\n\tenum_ki"
-  "nd\032\354\n\n\007Literal\022\021\n\007boolean\030\001 \001(\010H\000\022\014\n\002i8\030"
-  "\002 \001(\005H\000\022\r\n\003i16\030\003 \001(\005H\000\022\r\n\003i32\030\005 \001(\005H\000\022\r\n"
-  "\003i64\030\007 \001(\003H\000\022\016\n\004fp32\030\n \001(\002H\000\022\016\n\004fp64\030\013 \001"
-  "(\001H\000\022\020\n\006string\030\014 \001(\tH\000\022\020\n\006binary\030\r \001(\014H\000"
-  "\022\023\n\ttimestamp\030\016 \001(\003H\000\022\016\n\004date\030\020 \001(\005H\000\022\016\n"
-  "\004time\030\021 \001(\003H\000\022S\n\026interval_year_to_month\030"
-  "\023 \001(\01321.substrait.Expression.Literal.Int"
-  "ervalYearToMonthH\000\022S\n\026interval_day_to_se"
-  "cond\030\024 \001(\01321.substrait.Expression.Litera"
-  "l.IntervalDayToSecondH\000\022\024\n\nfixed_char\030\025 "
-  "\001(\tH\000\0229\n\010var_char\030\026 \001(\0132%.substrait.Expr"
-  "ession.Literal.VarCharH\000\022\026\n\014fixed_binary"
-  "\030\027 \001(\014H\000\0228\n\007decimal\030\030 \001(\0132%.substrait.Ex"
-  "pression.Literal.DecimalH\000\0226\n\006struct\030\031 \001"
-  "(\0132$.substrait.Expression.Literal.Struct"
-  "H\000\0220\n\003map\030\032 \001(\0132!.substrait.Expression.L"
-  "iteral.MapH\000\022\026\n\014timestamp_tz\030\033 \001(\003H\000\022\016\n\004"
-  "uuid\030\034 \001(\014H\000\022\037\n\004null\030\035 \001(\0132\017.substrait.T"
-  "ypeH\000\0222\n\004list\030\036 \001(\0132\".substrait.Expressi"
-  "on.Literal.ListH\000\022*\n\nempty_list\030\037 \001(\0132\024."
-  "substrait.Type.ListH\000\022(\n\tempty_map\030  \001(\013"
-  "2\023.substrait.Type.MapH\000\022\020\n\010nullable\0302 \001("
-  "\010\032(\n\007VarChar\022\r\n\005value\030\001 \001(\t\022\016\n\006length\030\002 "
-  "\001(\r\032:\n\007Decimal\022\r\n\005value\030\001 \001(\014\022\021\n\tprecisi"
-  "on\030\002 \001(\005\022\r\n\005scale\030\003 \001(\005\032\253\001\n\003Map\022>\n\nkey_v"
-  "alues\030\001 \003(\0132*.substrait.Expression.Liter"
-  "al.Map.KeyValue\032d\n\010KeyValue\022*\n\003key\030\001 \001(\013"
-  "2\035.substrait.Expression.Literal\022,\n\005value"
-  "\030\002 \001(\0132\035.substrait.Expression.Literal\0324\n"
-  "\023IntervalYearToMonth\022\r\n\005years\030\001 \001(\005\022\016\n\006m"
-  "onths\030\002 \001(\005\0324\n\023IntervalDayToSecond\022\014\n\004da"
-  "ys\030\001 \001(\005\022\017\n\007seconds\030\002 \001(\005\0327\n\006Struct\022-\n\006f"
-  "ields\030\001 \003(\0132\035.substrait.Expression.Liter"
-  "al\0325\n\004List\022-\n\006values\030\001 \003(\0132\035.substrait.E"
-  "xpression.LiteralB\016\n\014literal_type\032w\n\016Sca"
-  "larFunction\022\032\n\022function_reference\030\001 \001(\r\022"
-  "#\n\004args\030\002 \003(\0132\025.substrait.Expression\022$\n\013"
-  "output_type\030\003 \001(\0132\017.substrait.Type\032\213\006\n\016W"
-  "indowFunction\022\032\n\022function_reference\030\001 \001("
-  "\r\022)\n\npartitions\030\002 \003(\0132\025.substrait.Expres"
-  "sion\022#\n\005sorts\030\003 \003(\0132\024.substrait.SortFiel"
-  "d\022\?\n\013upper_bound\030\004 \001(\0132*.substrait.Expre"
-  "ssion.WindowFunction.Bound\022\?\n\013lower_boun"
-  "d\030\005 \001(\0132*.substrait.Expression.WindowFun"
-  "ction.Bound\022*\n\005phase\030\006 \001(\0162\033.substrait.A"
-  "ggregationPhase\022$\n\013output_type\030\007 \001(\0132\017.s"
-  "ubstrait.Type\022#\n\004args\030\010 \003(\0132\025.substrait."
-  "Expression\032\223\003\n\005Bound\022I\n\tpreceding\030\001 \001(\0132"
-  "4.substrait.Expression.WindowFunction.Bo"
-  "und.PrecedingH\000\022I\n\tfollowing\030\002 \001(\01324.sub"
-  "strait.Expression.WindowFunction.Bound.F"
-  "ollowingH\000\022L\n\013current_row\030\003 \001(\01325.substr"
-  "ait.Expression.WindowFunction.Bound.Curr"
-  "entRowH\000\022I\n\tunbounded\030\004 \001(\01324.substrait."
-  "Expression.WindowFunction.Bound.Unbounde"
-  "dH\000\032\033\n\tPreceding\022\016\n\006offset\030\001 \001(\003\032\033\n\tFoll"
-  "owing\022\016\n\006offset\030\001 \001(\003\032\014\n\nCurrentRow\032\013\n\tU"
-  "nboundedB\006\n\004kind\032\265\001\n\006IfThen\0222\n\003ifs\030\001 \003(\013"
-  "2%.substrait.Expression.IfThen.IfClause\022"
-  "#\n\004else\030\002 \001(\0132\025.substrait.Expression\032R\n\010"
-  "IfClause\022!\n\002if\030\001 \001(\0132\025.substrait.Express"
-  "ion\022#\n\004then\030\002 \001(\0132\025.substrait.Expression"
-  "\032K\n\004Cast\022\035\n\004type\030\001 \001(\0132\017.substrait.Type\022"
-  "$\n\005input\030\002 \001(\0132\025.substrait.Expression\032\365\001"
-  "\n\020SwitchExpression\022$\n\005match\030\003 \001(\0132\025.subs"
-  "trait.Expression\022;\n\003ifs\030\001 \003(\0132..substrai"
-  "t.Expression.SwitchExpression.IfValue\022#\n"
-  "\004else\030\002 \001(\0132\025.substrait.Expression\032Y\n\007If"
-  "Value\022)\n\002if\030\001 \001(\0132\035.substrait.Expression"
-  ".Literal\022#\n\004then\030\002 \001(\0132\025.substrait.Expre"
-  "ssion\032^\n\016SingularOrList\022$\n\005value\030\001 \001(\0132\025"
-  ".substrait.Expression\022&\n\007options\030\002 \003(\0132\025"
-  ".substrait.Expression\032\237\001\n\013MultiOrList\022$\n"
-  "\005value\030\001 \003(\0132\025.substrait.Expression\0229\n\007o"
-  "ptions\030\002 \003(\0132(.substrait.Expression.Mult"
-  "iOrList.Record\032/\n\006Record\022%\n\006fields\030\001 \003(\013"
-  "2\025.substrait.Expression\032\243\003\n\020EmbeddedFunc"
-  "tion\022(\n\targuments\030\001 \003(\0132\025.substrait.Expr"
-  "ession\022$\n\013output_type\030\002 \001(\0132\017.substrait."
-  "Type\022]\n\026python_pickle_function\030\003 \001(\0132;.s"
-  "ubstrait.Expression.EmbeddedFunction.Pyt"
-  "honPickleFunctionH\000\022[\n\025web_assembly_func"
-  "tion\030\004 \001(\0132:.substrait.Expression.Embedd"
-  "edFunction.WebAssemblyFunctionH\000\032>\n\024Pyth"
-  "onPickleFunction\022\020\n\010function\030\001 \001(\014\022\024\n\014pr"
-  "erequisite\030\002 \003(\t\032;\n\023WebAssemblyFunction\022"
-  "\016\n\006script\030\001 \001(\014\022\024\n\014prerequisite\030\002 \003(\tB\006\n"
-  "\004kind\032\232\004\n\020ReferenceSegment\022@\n\007map_key\030\001 "
-  "\001(\0132-.substrait.Expression.ReferenceSegm"
-  "ent.MapKeyH\000\022J\n\014struct_field\030\002 \001(\01322.sub"
-  "strait.Expression.ReferenceSegment.Struc"
-  "tFieldH\000\022J\n\014list_element\030\003 \001(\01322.substra"
-  "it.Expression.ReferenceSegment.ListEleme"
-  "ntH\000\032o\n\006MapKey\022.\n\007map_key\030\001 \001(\0132\035.substr"
-  "ait.Expression.Literal\0225\n\005child\030\002 \001(\0132&."
-  "substrait.Expression.ReferenceSegment\032S\n"
-  "\013StructField\022\r\n\005field\030\001 \001(\005\0225\n\005child\030\002 \001"
-  "(\0132&.substrait.Expression.ReferenceSegme"
-  "nt\032T\n\013ListElement\022\016\n\006offset\030\001 \001(\005\0225\n\005chi"
-  "ld\030\002 \001(\0132&.substrait.Expression.Referenc"
-  "eSegmentB\020\n\016reference_type\032\360\t\n\016MaskExpre"
-  "ssion\022A\n\006select\030\001 \001(\01321.substrait.Expres"
-  "sion.MaskExpression.StructSelect\022 \n\030main"
-  "tain_singular_struct\030\002 \001(\010\032\325\001\n\006Select\022C\n"
-  "\006struct\030\001 \001(\01321.substrait.Expression.Mas"
-  "kExpression.StructSelectH\000\022\?\n\004list\030\002 \001(\013"
-  "2/.substrait.Expression.MaskExpression.L"
-  "istSelectH\000\022=\n\003map\030\003 \001(\0132..substrait.Exp"
-  "ression.MaskExpression.MapSelectH\000B\006\n\004ty"
-  "pe\032U\n\014StructSelect\022E\n\014struct_items\030\001 \003(\013"
-  "2/.substrait.Expression.MaskExpression.S"
-  "tructItem\032W\n\nStructItem\022\r\n\005field\030\001 \001(\005\022:"
-  "\n\005child\030\002 \001(\0132+.substrait.Expression.Mas"
-  "kExpression.Select\032\264\003\n\nListSelect\022Q\n\tsel"
-  "ection\030\001 \003(\0132>.substrait.Expression.Mask"
-  "Expression.ListSelect.ListSelectItem\022:\n\005"
-  "child\030\002 \001(\0132+.substrait.Expression.MaskE"
-  "xpression.Select\032\226\002\n\016ListSelectItem\022Z\n\004i"
-  "tem\030\001 \001(\0132J.substrait.Expression.MaskExp"
-  "ression.ListSelect.ListSelectItem.ListEl"
-  "ementH\000\022Y\n\005slice\030\002 \001(\0132H.substrait.Expre"
-  "ssion.MaskExpression.ListSelect.ListSele"
-  "ctItem.ListSliceH\000\032\034\n\013ListElement\022\r\n\005fie"
-  "ld\030\001 \001(\005\032\'\n\tListSlice\022\r\n\005start\030\001 \001(\005\022\013\n\003"
-  "end\030\002 \001(\005B\006\n\004type\032\271\002\n\tMapSelect\022D\n\003key\030\001"
-  " \001(\01325.substrait.Expression.MaskExpressi"
-  "on.MapSelect.MapKeyH\000\022U\n\nexpression\030\002 \001("
-  "\0132\?.substrait.Expression.MaskExpression."
-  "MapSelect.MapKeyExpressionH\000\022:\n\005child\030\003 "
-  "\001(\0132+.substrait.Expression.MaskExpressio"
-  "n.Select\032\031\n\006MapKey\022\017\n\007map_key\030\001 \001(\t\032.\n\020M"
-  "apKeyExpression\022\032\n\022map_key_expression\030\001 "
-  "\001(\tB\010\n\006select\032\266\003\n\016FieldReference\022B\n\020dire"
-  "ct_reference\030\001 \001(\0132&.substrait.Expressio"
-  "n.ReferenceSegmentH\000\022@\n\020masked_reference"
-  "\030\002 \001(\0132$.substrait.Expression.MaskExpres"
-  "sionH\000\022+\n\nexpression\030\003 \001(\0132\025.substrait.E"
-  "xpressionH\001\022L\n\016root_reference\030\004 \001(\01322.su"
-  "bstrait.Expression.FieldReference.RootRe"
-  "ferenceH\001\022N\n\017outer_reference\030\005 \001(\01323.sub"
-  "strait.Expression.FieldReference.OuterRe"
-  "ferenceH\001\032\017\n\rRootReference\032#\n\016OuterRefer"
-  "ence\022\021\n\tsteps_out\030\001 \001(\rB\020\n\016reference_typ"
-  "eB\013\n\troot_type\032\214\t\n\010Subquery\0227\n\006scalar\030\001 "
-  "\001(\0132%.substrait.Expression.Subquery.Scal"
-  "arH\000\022B\n\014in_predicate\030\002 \001(\0132*.substrait.E"
-  "xpression.Subquery.InPredicateH\000\022D\n\rset_"
-  "predicate\030\003 \001(\0132+.substrait.Expression.S"
-  "ubquery.SetPredicateH\000\022F\n\016set_comparison"
-  "\030\004 \001(\0132,.substrait.Expression.Subquery.S"
-  "etComparisonH\000\032\'\n\006Scalar\022\035\n\005input\030\001 \001(\0132"
-  "\016.substrait.Rel\032W\n\013InPredicate\022&\n\007needle"
-  "s\030\001 \003(\0132\025.substrait.Expression\022 \n\010haysta"
-  "ck\030\002 \001(\0132\016.substrait.Rel\032\334\001\n\014SetPredicat"
-  "e\022M\n\014predicate_op\030\001 \001(\01627.substrait.Expr"
-  "ession.Subquery.SetPredicate.PredicateOp"
-  "\022\036\n\006tuples\030\002 \001(\0132\016.substrait.Rel\"]\n\013Pred"
-  "icateOp\022\034\n\030PREDICATE_OP_UNSPECIFIED\020\000\022\027\n"
-  "\023PREDICATE_OP_EXISTS\020\001\022\027\n\023PREDICATE_OP_U"
-  "NIQUE\020\002\032\202\004\n\rSetComparison\022N\n\014reduction_o"
-  "p\030\001 \001(\01628.substrait.Expression.Subquery."
-  "SetComparison.ReductionOp\022P\n\rcomparison_"
-  "op\030\002 \001(\01629.substrait.Expression.Subquery"
-  ".SetComparison.ComparisonOp\022#\n\004left\030\003 \001("
-  "\0132\025.substrait.Expression\022\035\n\005right\030\004 \001(\0132"
-  "\016.substrait.Rel\"\261\001\n\014ComparisonOp\022\035\n\031COMP"
-  "ARISON_OP_UNSPECIFIED\020\000\022\024\n\020COMPARISON_OP"
-  "_EQ\020\001\022\024\n\020COMPARISON_OP_NE\020\002\022\024\n\020COMPARISO"
-  "N_OP_LT\020\003\022\024\n\020COMPARISON_OP_GT\020\004\022\024\n\020COMPA"
-  "RISON_OP_LE\020\005\022\024\n\020COMPARISON_OP_GE\020\006\"W\n\013R"
-  "eductionOp\022\034\n\030REDUCTION_OP_UNSPECIFIED\020\000"
-  "\022\024\n\020REDUCTION_OP_ANY\020\001\022\024\n\020REDUCTION_OP_A"
-  "LL\020\002B\017\n\rsubquery_typeB\n\n\010rex_type\"\377\002\n\tSo"
-  "rtField\022#\n\004expr\030\001 \001(\0132\025.substrait.Expres"
-  "sion\0227\n\tdirection\030\002 \001(\0162\".substrait.Sort"
-  "Field.SortDirectionH\000\022\'\n\035comparison_func"
-  "tion_reference\030\003 \001(\rH\000\"\335\001\n\rSortDirection"
-  "\022\036\n\032SORT_DIRECTION_UNSPECIFIED\020\000\022\"\n\036SORT"
-  "_DIRECTION_ASC_NULLS_FIRST\020\001\022!\n\035SORT_DIR"
-  "ECTION_ASC_NULLS_LAST\020\002\022#\n\037SORT_DIRECTIO"
-  "N_DESC_NULLS_FIRST\020\003\022\"\n\036SORT_DIRECTION_D"
-  "ESC_NULLS_LAST\020\004\022\034\n\030SORT_DIRECTION_CLUST"
-  "ERED\020\005B\013\n\tsort_kind\"\313\001\n\021AggregateFunctio"
-  "n\022\032\n\022function_reference\030\001 \001(\r\022#\n\004args\030\002 "
-  "\003(\0132\025.substrait.Expression\022#\n\005sorts\030\003 \003("
-  "\0132\024.substrait.SortField\022*\n\005phase\030\004 \001(\0162\033"
-  ".substrait.AggregationPhase\022$\n\013output_ty"
-  "pe\030\005 \001(\0132\017.substrait.Type*\357\001\n\020Aggregatio"
-  "nPhase\022!\n\035AGGREGATION_PHASE_UNSPECIFIED\020"
-  "\000\022-\n)AGGREGATION_PHASE_INITIAL_TO_INTERM"
-  "EDIATE\020\001\0222\n.AGGREGATION_PHASE_INTERMEDIA"
-  "TE_TO_INTERMEDIATE\020\002\022\'\n#AGGREGATION_PHAS"
-  "E_INITIAL_TO_RESULT\020\003\022,\n(AGGREGATION_PHA"
-  "SE_INTERMEDIATE_TO_RESULT\020\004BW\n\022io.substr"
-  "ait.protoP\001Z*github.com/substrait-io/sub"
-  "strait-go/proto\252\002\022Substrait.Protobufb\006pr"
-  "oto3"
+  "strait.Rel\0223\n\tgroupings\030\003 \003(\0132 .substrai"
+  "t.AggregateRel.Grouping\0221\n\010measures\030\004 \003("
+  "\0132\037.substrait.AggregateRel.Measure\022C\n\022ad"
+  "vanced_extension\030\n \001(\0132\'.substrait.exten"
+  "sions.AdvancedExtension\032\?\n\010Grouping\0223\n\024g"
+  "rouping_expressions\030\001 \003(\0132\025.substrait.Ex"
+  "pression\032_\n\007Measure\022-\n\007measure\030\001 \001(\0132\034.s"
+  "ubstrait.AggregateFunction\022%\n\006filter\030\002 \001"
+  "(\0132\025.substrait.Expression\"\270\001\n\007SortRel\022$\n"
+  "\006common\030\001 \001(\0132\024.substrait.RelCommon\022\035\n\005i"
+  "nput\030\002 \001(\0132\016.substrait.Rel\022#\n\005sorts\030\003 \003("
+  "\0132\024.substrait.SortField\022C\n\022advanced_exte"
+  "nsion\030\n \001(\0132\'.substrait.extensions.Advan"
+  "cedExtension\"\277\001\n\tFilterRel\022$\n\006common\030\001 \001"
+  "(\0132\024.substrait.RelCommon\022\035\n\005input\030\002 \001(\0132"
+  "\016.substrait.Rel\022(\n\tcondition\030\003 \001(\0132\025.sub"
+  "strait.Expression\022C\n\022advanced_extension\030"
+  "\n \001(\0132\'.substrait.extensions.AdvancedExt"
+  "ension\"\203\003\n\006SetRel\022$\n\006common\030\001 \001(\0132\024.subs"
+  "trait.RelCommon\022\036\n\006inputs\030\002 \003(\0132\016.substr"
+  "ait.Rel\022#\n\002op\030\003 \001(\0162\027.substrait.SetRel.S"
+  "etOp\022C\n\022advanced_extension\030\n \001(\0132\'.subst"
+  "rait.extensions.AdvancedExtension\"\310\001\n\005Se"
+  "tOp\022\026\n\022SET_OP_UNSPECIFIED\020\000\022\030\n\024SET_OP_MI"
+  "NUS_PRIMARY\020\001\022\031\n\025SET_OP_MINUS_MULTISET\020\002"
+  "\022\037\n\033SET_OP_INTERSECTION_PRIMARY\020\003\022 \n\034SET"
+  "_OP_INTERSECTION_MULTISET\020\004\022\031\n\025SET_OP_UN"
+  "ION_DISTINCT\020\005\022\024\n\020SET_OP_UNION_ALL\020\006\"\177\n\022"
+  "ExtensionSingleRel\022$\n\006common\030\001 \001(\0132\024.sub"
+  "strait.RelCommon\022\035\n\005input\030\002 \001(\0132\016.substr"
+  "ait.Rel\022$\n\006detail\030\003 \001(\0132\024.google.protobu"
+  "f.Any\"^\n\020ExtensionLeafRel\022$\n\006common\030\001 \001("
+  "\0132\024.substrait.RelCommon\022$\n\006detail\030\002 \001(\0132"
+  "\024.google.protobuf.Any\"\177\n\021ExtensionMultiR"
+  "el\022$\n\006common\030\001 \001(\0132\024.substrait.RelCommon"
+  "\022\036\n\006inputs\030\002 \003(\0132\016.substrait.Rel\022$\n\006deta"
+  "il\030\003 \001(\0132\024.google.protobuf.Any\"\303\007\n\013Excha"
+  "ngeRel\022$\n\006common\030\001 \001(\0132\024.substrait.RelCo"
+  "mmon\022\035\n\005input\030\002 \001(\0132\016.substrait.Rel\022\027\n\017p"
+  "artition_count\030\003 \001(\005\0226\n\007targets\030\004 \003(\0132%."
+  "substrait.ExchangeRel.ExchangeTarget\022A\n\021"
+  "scatter_by_fields\030\005 \001(\0132$.substrait.Exch"
+  "angeRel.ScatterFieldsH\000\022F\n\rsingle_target"
+  "\030\006 \001(\0132-.substrait.ExchangeRel.SingleBuc"
+  "ketExpressionH\000\022D\n\014multi_target\030\007 \001(\0132,."
+  "substrait.ExchangeRel.MultiBucketExpress"
+  "ionH\000\0228\n\013round_robin\030\010 \001(\0132!.substrait.E"
+  "xchangeRel.RoundRobinH\000\0225\n\tbroadcast\030\t \001"
+  "(\0132 .substrait.ExchangeRel.BroadcastH\000\022C"
+  "\n\022advanced_extension\030\n \001(\0132\'.substrait.e"
+  "xtensions.AdvancedExtension\032E\n\rScatterFi"
+  "elds\0224\n\006fields\030\001 \003(\0132$.substrait.Express"
+  "ion.FieldReference\032C\n\026SingleBucketExpres"
+  "sion\022)\n\nexpression\030\001 \001(\0132\025.substrait.Exp"
+  "ression\032`\n\025MultiBucketExpression\022)\n\nexpr"
+  "ession\030\001 \001(\0132\025.substrait.Expression\022\034\n\024c"
+  "onstrained_to_count\030\002 \001(\010\032\013\n\tBroadcast\032\033"
+  "\n\nRoundRobin\022\r\n\005exact\030\001 \001(\010\032n\n\016ExchangeT"
+  "arget\022\024\n\014partition_id\030\001 \003(\005\022\r\n\003uri\030\002 \001(\t"
+  "H\000\022(\n\010extended\030\003 \001(\0132\024.google.protobuf.A"
+  "nyH\000B\r\n\013target_typeB\017\n\rexchange_kind\"7\n\007"
+  "RelRoot\022\035\n\005input\030\001 \001(\0132\016.substrait.Rel\022\r"
+  "\n\005names\030\002 \003(\t\"\226\004\n\003Rel\022\"\n\004read\030\001 \001(\0132\022.su"
+  "bstrait.ReadRelH\000\022&\n\006filter\030\002 \001(\0132\024.subs"
+  "trait.FilterRelH\000\022$\n\005fetch\030\003 \001(\0132\023.subst"
+  "rait.FetchRelH\000\022,\n\taggregate\030\004 \001(\0132\027.sub"
+  "strait.AggregateRelH\000\022\"\n\004sort\030\005 \001(\0132\022.su"
+  "bstrait.SortRelH\000\022\"\n\004join\030\006 \001(\0132\022.substr"
+  "ait.JoinRelH\000\022(\n\007project\030\007 \001(\0132\025.substra"
+  "it.ProjectRelH\000\022 \n\003set\030\010 \001(\0132\021.substrait"
+  ".SetRelH\000\0229\n\020extension_single\030\t \001(\0132\035.su"
+  "bstrait.ExtensionSingleRelH\000\0227\n\017extensio"
+  "n_multi\030\n \001(\0132\034.substrait.ExtensionMulti"
+  "RelH\000\0225\n\016extension_leaf\030\013 \001(\0132\033.substrai"
+  "t.ExtensionLeafRelH\000\022$\n\005cross\030\014 \001(\0132\023.su"
+  "bstrait.CrossRelH\000B\n\n\010rel_type\"\362\001\n\020Funct"
+  "ionArgument\0220\n\004enum\030\001 \001(\0132 .substrait.Fu"
+  "nctionArgument.EnumH\000\022\037\n\004type\030\002 \001(\0132\017.su"
+  "bstrait.TypeH\000\022&\n\005value\030\003 \001(\0132\025.substrai"
+  "t.ExpressionH\000\032W\n\004Enum\022\023\n\tspecified\030\001 \001("
+  "\tH\000\022-\n\013unspecified\030\002 \001(\0132\026.google.protob"
+  "uf.EmptyH\000B\013\n\tenum_kindB\n\n\010arg_type\"\232@\n\n"
+  "Expression\0220\n\007literal\030\001 \001(\0132\035.substrait."
+  "Expression.LiteralH\000\0229\n\tselection\030\002 \001(\0132"
+  "$.substrait.Expression.FieldReferenceH\000\022"
+  "\?\n\017scalar_function\030\003 \001(\0132$.substrait.Exp"
+  "ression.ScalarFunctionH\000\022\?\n\017window_funct"
+  "ion\030\005 \001(\0132$.substrait.Expression.WindowF"
+  "unctionH\000\022/\n\007if_then\030\006 \001(\0132\034.substrait.E"
+  "xpression.IfThenH\000\022C\n\021switch_expression\030"
+  "\007 \001(\0132&.substrait.Expression.SwitchExpre"
+  "ssionH\000\022@\n\020singular_or_list\030\010 \001(\0132$.subs"
+  "trait.Expression.SingularOrListH\000\022:\n\rmul"
+  "ti_or_list\030\t \001(\0132!.substrait.Expression."
+  "MultiOrListH\000\022*\n\004cast\030\013 \001(\0132\032.substrait."
+  "Expression.CastH\000\0222\n\010subquery\030\014 \001(\0132\036.su"
+  "bstrait.Expression.SubqueryH\000\022.\n\004enum\030\n "
+  "\001(\0132\032.substrait.Expression.EnumB\002\030\001H\000\032r\n"
+  "\004Enum\022\023\n\tspecified\030\001 \001(\tH\000\0227\n\013unspecifie"
+  "d\030\002 \001(\0132 .substrait.Expression.Enum.Empt"
+  "yH\000\032\013\n\005Empty:\002\030\001:\002\030\001B\013\n\tenum_kind\032\347\014\n\007Li"
+  "teral\022\021\n\007boolean\030\001 \001(\010H\000\022\014\n\002i8\030\002 \001(\005H\000\022\r"
+  "\n\003i16\030\003 \001(\005H\000\022\r\n\003i32\030\005 \001(\005H\000\022\r\n\003i64\030\007 \001("
+  "\003H\000\022\016\n\004fp32\030\n \001(\002H\000\022\016\n\004fp64\030\013 \001(\001H\000\022\020\n\006s"
+  "tring\030\014 \001(\tH\000\022\020\n\006binary\030\r \001(\014H\000\022\023\n\ttimes"
+  "tamp\030\016 \001(\003H\000\022\016\n\004date\030\020 \001(\005H\000\022\016\n\004time\030\021 \001"
+  "(\003H\000\022S\n\026interval_year_to_month\030\023 \001(\01321.s"
+  "ubstrait.Expression.Literal.IntervalYear"
+  "ToMonthH\000\022S\n\026interval_day_to_second\030\024 \001("
+  "\01321.substrait.Expression.Literal.Interva"
+  "lDayToSecondH\000\022\024\n\nfixed_char\030\025 \001(\tH\000\0229\n\010"
+  "var_char\030\026 \001(\0132%.substrait.Expression.Li"
+  "teral.VarCharH\000\022\026\n\014fixed_binary\030\027 \001(\014H\000\022"
+  "8\n\007decimal\030\030 \001(\0132%.substrait.Expression."
+  "Literal.DecimalH\000\0226\n\006struct\030\031 \001(\0132$.subs"
+  "trait.Expression.Literal.StructH\000\0220\n\003map"
+  "\030\032 \001(\0132!.substrait.Expression.Literal.Ma"
+  "pH\000\022\026\n\014timestamp_tz\030\033 \001(\003H\000\022\016\n\004uuid\030\034 \001("
+  "\014H\000\022\037\n\004null\030\035 \001(\0132\017.substrait.TypeH\000\0222\n\004"
+  "list\030\036 \001(\0132\".substrait.Expression.Litera"
+  "l.ListH\000\022*\n\nempty_list\030\037 \001(\0132\024.substrait"
+  ".Type.ListH\000\022(\n\tempty_map\030  \001(\0132\023.substr"
+  "ait.Type.MapH\000\022A\n\014user_defined\030! \001(\0132).s"
+  "ubstrait.Expression.Literal.UserDefinedH"
+  "\000\022\020\n\010nullable\0302 \001(\010\022 \n\030type_variation_re"
+  "ference\0303 \001(\r\032(\n\007VarChar\022\r\n\005value\030\001 \001(\t\022"
+  "\016\n\006length\030\002 \001(\r\032:\n\007Decimal\022\r\n\005value\030\001 \001("
+  "\014\022\021\n\tprecision\030\002 \001(\005\022\r\n\005scale\030\003 \001(\005\032\253\001\n\003"
+  "Map\022>\n\nkey_values\030\001 \003(\0132*.substrait.Expr"
+  "ession.Literal.Map.KeyValue\032d\n\010KeyValue\022"
+  "*\n\003key\030\001 \001(\0132\035.substrait.Expression.Lite"
+  "ral\022,\n\005value\030\002 \001(\0132\035.substrait.Expressio"
+  "n.Literal\0324\n\023IntervalYearToMonth\022\r\n\005year"
+  "s\030\001 \001(\005\022\016\n\006months\030\002 \001(\005\032J\n\023IntervalDayTo"
+  "Second\022\014\n\004days\030\001 \001(\005\022\017\n\007seconds\030\002 \001(\005\022\024\n"
+  "\014microseconds\030\003 \001(\005\0327\n\006Struct\022-\n\006fields\030"
+  "\001 \003(\0132\035.substrait.Expression.Literal\0325\n\004"
+  "List\022-\n\006values\030\001 \003(\0132\035.substrait.Express"
+  "ion.Literal\032~\n\013UserDefined\022\026\n\016type_refer"
+  "ence\030\001 \001(\r\0222\n\017type_parameters\030\003 \003(\0132\031.su"
+  "bstrait.Type.Parameter\022#\n\005value\030\002 \001(\0132\024."
+  "google.protobuf.AnyB\016\n\014literal_type\032\253\001\n\016"
+  "ScalarFunction\022\032\n\022function_reference\030\001 \001"
+  "(\r\022.\n\targuments\030\004 \003(\0132\033.substrait.Functi"
+  "onArgument\022$\n\013output_type\030\003 \001(\0132\017.substr"
+  "ait.Type\022\'\n\004args\030\002 \003(\0132\025.substrait.Expre"
+  "ssionB\002\030\001\032\277\006\n\016WindowFunction\022\032\n\022function"
+  "_reference\030\001 \001(\r\022)\n\npartitions\030\002 \003(\0132\025.s"
+  "ubstrait.Expression\022#\n\005sorts\030\003 \003(\0132\024.sub"
+  "strait.SortField\022\?\n\013upper_bound\030\004 \001(\0132*."
+  "substrait.Expression.WindowFunction.Boun"
+  "d\022\?\n\013lower_bound\030\005 \001(\0132*.substrait.Expre"
+  "ssion.WindowFunction.Bound\022*\n\005phase\030\006 \001("
+  "\0162\033.substrait.AggregationPhase\022$\n\013output"
+  "_type\030\007 \001(\0132\017.substrait.Type\022.\n\targument"
+  "s\030\t \003(\0132\033.substrait.FunctionArgument\022\'\n\004"
+  "args\030\010 \003(\0132\025.substrait.ExpressionB\002\030\001\032\223\003"
+  "\n\005Bound\022I\n\tpreceding\030\001 \001(\01324.substrait.E"
+  "xpression.WindowFunction.Bound.Preceding"
+  "H\000\022I\n\tfollowing\030\002 \001(\01324.substrait.Expres"
+  "sion.WindowFunction.Bound.FollowingH\000\022L\n"
+  "\013current_row\030\003 \001(\01325.substrait.Expressio"
+  "n.WindowFunction.Bound.CurrentRowH\000\022I\n\tu"
+  "nbounded\030\004 \001(\01324.substrait.Expression.Wi"
+  "ndowFunction.Bound.UnboundedH\000\032\033\n\tPreced"
+  "ing\022\016\n\006offset\030\001 \001(\003\032\033\n\tFollowing\022\016\n\006offs"
+  "et\030\001 \001(\003\032\014\n\nCurrentRow\032\013\n\tUnboundedB\006\n\004k"
+  "ind\032\265\001\n\006IfThen\0222\n\003ifs\030\001 \003(\0132%.substrait."
+  "Expression.IfThen.IfClause\022#\n\004else\030\002 \001(\013"
+  "2\025.substrait.Expression\032R\n\010IfClause\022!\n\002i"
+  "f\030\001 \001(\0132\025.substrait.Expression\022#\n\004then\030\002"
+  " \001(\0132\025.substrait.Expression\032\216\002\n\004Cast\022\035\n\004"
+  "type\030\001 \001(\0132\017.substrait.Type\022$\n\005input\030\002 \001"
+  "(\0132\025.substrait.Expression\022D\n\020failure_beh"
+  "avior\030\003 \001(\0162*.substrait.Expression.Cast."
+  "FailureBehavior\"{\n\017FailureBehavior\022 \n\034FA"
+  "ILURE_BEHAVIOR_UNSPECIFIED\020\000\022 \n\034FAILURE_"
+  "BEHAVIOR_RETURN_NULL\020\001\022$\n FAILURE_BEHAVI"
+  "OR_THROW_EXCEPTION\020\002\032\365\001\n\020SwitchExpressio"
+  "n\022$\n\005match\030\003 \001(\0132\025.substrait.Expression\022"
+  ";\n\003ifs\030\001 \003(\0132..substrait.Expression.Swit"
+  "chExpression.IfValue\022#\n\004else\030\002 \001(\0132\025.sub"
+  "strait.Expression\032Y\n\007IfValue\022)\n\002if\030\001 \001(\013"
+  "2\035.substrait.Expression.Literal\022#\n\004then\030"
+  "\002 \001(\0132\025.substrait.Expression\032^\n\016Singular"
+  "OrList\022$\n\005value\030\001 \001(\0132\025.substrait.Expres"
+  "sion\022&\n\007options\030\002 \003(\0132\025.substrait.Expres"
+  "sion\032\237\001\n\013MultiOrList\022$\n\005value\030\001 \003(\0132\025.su"
+  "bstrait.Expression\0229\n\007options\030\002 \003(\0132(.su"
+  "bstrait.Expression.MultiOrList.Record\032/\n"
+  "\006Record\022%\n\006fields\030\001 \003(\0132\025.substrait.Expr"
+  "ession\032\243\003\n\020EmbeddedFunction\022(\n\targuments"
+  "\030\001 \003(\0132\025.substrait.Expression\022$\n\013output_"
+  "type\030\002 \001(\0132\017.substrait.Type\022]\n\026python_pi"
+  "ckle_function\030\003 \001(\0132;.substrait.Expressi"
+  "on.EmbeddedFunction.PythonPickleFunction"
+  "H\000\022[\n\025web_assembly_function\030\004 \001(\0132:.subs"
+  "trait.Expression.EmbeddedFunction.WebAss"
+  "emblyFunctionH\000\032>\n\024PythonPickleFunction\022"
+  "\020\n\010function\030\001 \001(\014\022\024\n\014prerequisite\030\002 \003(\t\032"
+  ";\n\023WebAssemblyFunction\022\016\n\006script\030\001 \001(\014\022\024"
+  "\n\014prerequisite\030\002 \003(\tB\006\n\004kind\032\232\004\n\020Referen"
+  "ceSegment\022@\n\007map_key\030\001 \001(\0132-.substrait.E"
+  "xpression.ReferenceSegment.MapKeyH\000\022J\n\014s"
+  "truct_field\030\002 \001(\01322.substrait.Expression"
+  ".ReferenceSegment.StructFieldH\000\022J\n\014list_"
+  "element\030\003 \001(\01322.substrait.Expression.Ref"
+  "erenceSegment.ListElementH\000\032o\n\006MapKey\022.\n"
+  "\007map_key\030\001 \001(\0132\035.substrait.Expression.Li"
+  "teral\0225\n\005child\030\002 \001(\0132&.substrait.Express"
+  "ion.ReferenceSegment\032S\n\013StructField\022\r\n\005f"
+  "ield\030\001 \001(\005\0225\n\005child\030\002 \001(\0132&.substrait.Ex"
+  "pression.ReferenceSegment\032T\n\013ListElement"
+  "\022\016\n\006offset\030\001 \001(\005\0225\n\005child\030\002 \001(\0132&.substr"
+  "ait.Expression.ReferenceSegmentB\020\n\016refer"
+  "ence_type\032\360\t\n\016MaskExpression\022A\n\006select\030\001"
+  " \001(\01321.substrait.Expression.MaskExpressi"
+  "on.StructSelect\022 \n\030maintain_singular_str"
+  "uct\030\002 \001(\010\032\325\001\n\006Select\022C\n\006struct\030\001 \001(\01321.s"
+  "ubstrait.Expression.MaskExpression.Struc"
+  "tSelectH\000\022\?\n\004list\030\002 \001(\0132/.substrait.Expr"
+  "ession.MaskExpression.ListSelectH\000\022=\n\003ma"
+  "p\030\003 \001(\0132..substrait.Expression.MaskExpre"
+  "ssion.MapSelectH\000B\006\n\004type\032U\n\014StructSelec"
+  "t\022E\n\014struct_items\030\001 \003(\0132/.substrait.Expr"
+  "ession.MaskExpression.StructItem\032W\n\nStru"
+  "ctItem\022\r\n\005field\030\001 \001(\005\022:\n\005child\030\002 \001(\0132+.s"
+  "ubstrait.Expression.MaskExpression.Selec"
+  "t\032\264\003\n\nListSelect\022Q\n\tselection\030\001 \003(\0132>.su"
+  "bstrait.Expression.MaskExpression.ListSe"
+  "lect.ListSelectItem\022:\n\005child\030\002 \001(\0132+.sub"
+  "strait.Expression.MaskExpression.Select\032"
+  "\226\002\n\016ListSelectItem\022Z\n\004item\030\001 \001(\0132J.subst"
+  "rait.Expression.MaskExpression.ListSelec"
+  "t.ListSelectItem.ListElementH\000\022Y\n\005slice\030"
+  "\002 \001(\0132H.substrait.Expression.MaskExpress"
+  "ion.ListSelect.ListSelectItem.ListSliceH"
+  "\000\032\034\n\013ListElement\022\r\n\005field\030\001 \001(\005\032\'\n\tListS"
+  "lice\022\r\n\005start\030\001 \001(\005\022\013\n\003end\030\002 \001(\005B\006\n\004type"
+  "\032\271\002\n\tMapSelect\022D\n\003key\030\001 \001(\01325.substrait."
+  "Expression.MaskExpression.MapSelect.MapK"
+  "eyH\000\022U\n\nexpression\030\002 \001(\0132\?.substrait.Exp"
+  "ression.MaskExpression.MapSelect.MapKeyE"
+  "xpressionH\000\022:\n\005child\030\003 \001(\0132+.substrait.E"
+  "xpression.MaskExpression.Select\032\031\n\006MapKe"
+  "y\022\017\n\007map_key\030\001 \001(\t\032.\n\020MapKeyExpression\022\032"
+  "\n\022map_key_expression\030\001 \001(\tB\010\n\006select\032\266\003\n"
+  "\016FieldReference\022B\n\020direct_reference\030\001 \001("
+  "\0132&.substrait.Expression.ReferenceSegmen"
+  "tH\000\022@\n\020masked_reference\030\002 \001(\0132$.substrai"
+  "t.Expression.MaskExpressionH\000\022+\n\nexpress"
+  "ion\030\003 \001(\0132\025.substrait.ExpressionH\001\022L\n\016ro"
+  "ot_reference\030\004 \001(\01322.substrait.Expressio"
+  "n.FieldReference.RootReferenceH\001\022N\n\017oute"
+  "r_reference\030\005 \001(\01323.substrait.Expression"
+  ".FieldReference.OuterReferenceH\001\032\017\n\rRoot"
+  "Reference\032#\n\016OuterReference\022\021\n\tsteps_out"
+  "\030\001 \001(\rB\020\n\016reference_typeB\013\n\troot_type\032\214\t"
+  "\n\010Subquery\0227\n\006scalar\030\001 \001(\0132%.substrait.E"
+  "xpression.Subquery.ScalarH\000\022B\n\014in_predic"
+  "ate\030\002 \001(\0132*.substrait.Expression.Subquer"
+  "y.InPredicateH\000\022D\n\rset_predicate\030\003 \001(\0132+"
+  ".substrait.Expression.Subquery.SetPredic"
+  "ateH\000\022F\n\016set_comparison\030\004 \001(\0132,.substrai"
+  "t.Expression.Subquery.SetComparisonH\000\032\'\n"
+  "\006Scalar\022\035\n\005input\030\001 \001(\0132\016.substrait.Rel\032W"
+  "\n\013InPredicate\022&\n\007needles\030\001 \003(\0132\025.substra"
+  "it.Expression\022 \n\010haystack\030\002 \001(\0132\016.substr"
+  "ait.Rel\032\334\001\n\014SetPredicate\022M\n\014predicate_op"
+  "\030\001 \001(\01627.substrait.Expression.Subquery.S"
+  "etPredicate.PredicateOp\022\036\n\006tuples\030\002 \001(\0132"
+  "\016.substrait.Rel\"]\n\013PredicateOp\022\034\n\030PREDIC"
+  "ATE_OP_UNSPECIFIED\020\000\022\027\n\023PREDICATE_OP_EXI"
+  "STS\020\001\022\027\n\023PREDICATE_OP_UNIQUE\020\002\032\202\004\n\rSetCo"
+  "mparison\022N\n\014reduction_op\030\001 \001(\01628.substra"
+  "it.Expression.Subquery.SetComparison.Red"
+  "uctionOp\022P\n\rcomparison_op\030\002 \001(\01629.substr"
+  "ait.Expression.Subquery.SetComparison.Co"
+  "mparisonOp\022#\n\004left\030\003 \001(\0132\025.substrait.Exp"
+  "ression\022\035\n\005right\030\004 \001(\0132\016.substrait.Rel\"\261"
+  "\001\n\014ComparisonOp\022\035\n\031COMPARISON_OP_UNSPECI"
+  "FIED\020\000\022\024\n\020COMPARISON_OP_EQ\020\001\022\024\n\020COMPARIS"
+  "ON_OP_NE\020\002\022\024\n\020COMPARISON_OP_LT\020\003\022\024\n\020COMP"
+  "ARISON_OP_GT\020\004\022\024\n\020COMPARISON_OP_LE\020\005\022\024\n\020"
+  "COMPARISON_OP_GE\020\006\"W\n\013ReductionOp\022\034\n\030RED"
+  "UCTION_OP_UNSPECIFIED\020\000\022\024\n\020REDUCTION_OP_"
+  "ANY\020\001\022\024\n\020REDUCTION_OP_ALL\020\002B\017\n\rsubquery_"
+  "typeB\n\n\010rex_type\"\377\002\n\tSortField\022#\n\004expr\030\001"
+  " \001(\0132\025.substrait.Expression\0227\n\tdirection"
+  "\030\002 \001(\0162\".substrait.SortField.SortDirecti"
+  "onH\000\022\'\n\035comparison_function_reference\030\003 "
+  "\001(\rH\000\"\335\001\n\rSortDirection\022\036\n\032SORT_DIRECTIO"
+  "N_UNSPECIFIED\020\000\022\"\n\036SORT_DIRECTION_ASC_NU"
+  "LLS_FIRST\020\001\022!\n\035SORT_DIRECTION_ASC_NULLS_"
+  "LAST\020\002\022#\n\037SORT_DIRECTION_DESC_NULLS_FIRS"
+  "T\020\003\022\"\n\036SORT_DIRECTION_DESC_NULLS_LAST\020\004\022"
+  "\034\n\030SORT_DIRECTION_CLUSTERED\020\005B\013\n\tsort_ki"
+  "nd\"\316\003\n\021AggregateFunction\022\032\n\022function_ref"
+  "erence\030\001 \001(\r\022.\n\targuments\030\007 \003(\0132\033.substr"
+  "ait.FunctionArgument\022#\n\005sorts\030\003 \003(\0132\024.su"
+  "bstrait.SortField\022*\n\005phase\030\004 \001(\0162\033.subst"
+  "rait.AggregationPhase\022$\n\013output_type\030\005 \001"
+  "(\0132\017.substrait.Type\022F\n\ninvocation\030\006 \001(\0162"
+  "2.substrait.AggregateFunction.Aggregatio"
+  "nInvocation\022\'\n\004args\030\002 \003(\0132\025.substrait.Ex"
+  "pressionB\002\030\001\"\204\001\n\025AggregationInvocation\022&"
+  "\n\"AGGREGATION_INVOCATION_UNSPECIFIED\020\000\022\036"
+  "\n\032AGGREGATION_INVOCATION_ALL\020\001\022#\n\037AGGREG"
+  "ATION_INVOCATION_DISTINCT\020\002*\357\001\n\020Aggregat"
+  "ionPhase\022!\n\035AGGREGATION_PHASE_UNSPECIFIE"
+  "D\020\000\022-\n)AGGREGATION_PHASE_INITIAL_TO_INTE"
+  "RMEDIATE\020\001\0222\n.AGGREGATION_PHASE_INTERMED"
+  "IATE_TO_INTERMEDIATE\020\002\022\'\n#AGGREGATION_PH"
+  "ASE_INITIAL_TO_RESULT\020\003\022,\n(AGGREGATION_P"
+  "HASE_INTERMEDIATE_TO_RESULT\020\004BW\n\022io.subs"
+  "trait.protoP\001Z*github.com/substrait-io/s"
+  "ubstrait-go/proto\252\002\022Substrait.Protobufb\006"
+  "proto3"
   ;
-static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2falgebra_2eproto_deps[3] = {
+static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2falgebra_2eproto_deps[4] = {
   &::descriptor_table_google_2fprotobuf_2fany_2eproto,
+  &::descriptor_table_google_2fprotobuf_2fempty_2eproto,
   &::descriptor_table_substrait_2fextensions_2fextensions_2eproto,
   &::descriptor_table_substrait_2ftype_2eproto,
 };
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2falgebra_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2falgebra_2eproto = {
-  false, false, 14724, descriptor_table_protodef_substrait_2falgebra_2eproto, "substrait/algebra.proto", 
-  &descriptor_table_substrait_2falgebra_2eproto_once, descriptor_table_substrait_2falgebra_2eproto_deps, 3, 89,
+  false, false, 16046, descriptor_table_protodef_substrait_2falgebra_2eproto, "substrait/algebra.proto", 
+  &descriptor_table_substrait_2falgebra_2eproto_once, descriptor_table_substrait_2falgebra_2eproto_deps, 4, 95,
   schemas, file_default_instances, TableStruct_substrait_2falgebra_2eproto::offsets,
   file_level_metadata_substrait_2falgebra_2eproto, file_level_enum_descriptors_substrait_2falgebra_2eproto, file_level_service_descriptors_substrait_2falgebra_2eproto,
 };
@@ -2595,30 +2777,9 @@ PROTOBUF_ATTRIBUTE_WEAK const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable
 // Force running AddDescriptors() at dynamic initialization time.
 PROTOBUF_ATTRIBUTE_INIT_PRIORITY static ::PROTOBUF_NAMESPACE_ID::internal::AddDescriptorsRunner dynamic_init_dummy_substrait_2falgebra_2eproto(&descriptor_table_substrait_2falgebra_2eproto);
 namespace substrait {
-const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* ReadRel_LocalFiles_FileOrFiles_FileFormat_descriptor() {
-  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
-  return file_level_enum_descriptors_substrait_2falgebra_2eproto[0];
-}
-bool ReadRel_LocalFiles_FileOrFiles_FileFormat_IsValid(int value) {
-  switch (value) {
-    case 0:
-    case 1:
-      return true;
-    default:
-      return false;
-  }
-}
-
-#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
-constexpr ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles::FILE_FORMAT_UNSPECIFIED;
-constexpr ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles::FILE_FORMAT_PARQUET;
-constexpr ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles::FileFormat_MIN;
-constexpr ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles::FileFormat_MAX;
-constexpr int ReadRel_LocalFiles_FileOrFiles::FileFormat_ARRAYSIZE;
-#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
 const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* JoinRel_JoinType_descriptor() {
   ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
-  return file_level_enum_descriptors_substrait_2falgebra_2eproto[1];
+  return file_level_enum_descriptors_substrait_2falgebra_2eproto[0];
 }
 bool JoinRel_JoinType_IsValid(int value) {
   switch (value) {
@@ -2651,7 +2812,7 @@ constexpr int JoinRel::JoinType_ARRAYSIZE;
 #endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
 const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* SetRel_SetOp_descriptor() {
   ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
-  return file_level_enum_descriptors_substrait_2falgebra_2eproto[2];
+  return file_level_enum_descriptors_substrait_2falgebra_2eproto[1];
 }
 bool SetRel_SetOp_IsValid(int value) {
   switch (value) {
@@ -2679,6 +2840,29 @@ constexpr SetRel_SetOp SetRel::SET_OP_UNION_ALL;
 constexpr SetRel_SetOp SetRel::SetOp_MIN;
 constexpr SetRel_SetOp SetRel::SetOp_MAX;
 constexpr int SetRel::SetOp_ARRAYSIZE;
+#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* Expression_Cast_FailureBehavior_descriptor() {
+  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
+  return file_level_enum_descriptors_substrait_2falgebra_2eproto[2];
+}
+bool Expression_Cast_FailureBehavior_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+      return true;
+    default:
+      return false;
+  }
+}
+
+#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+constexpr Expression_Cast_FailureBehavior Expression_Cast::FAILURE_BEHAVIOR_UNSPECIFIED;
+constexpr Expression_Cast_FailureBehavior Expression_Cast::FAILURE_BEHAVIOR_RETURN_NULL;
+constexpr Expression_Cast_FailureBehavior Expression_Cast::FAILURE_BEHAVIOR_THROW_EXCEPTION;
+constexpr Expression_Cast_FailureBehavior Expression_Cast::FailureBehavior_MIN;
+constexpr Expression_Cast_FailureBehavior Expression_Cast::FailureBehavior_MAX;
+constexpr int Expression_Cast::FailureBehavior_ARRAYSIZE;
 #endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
 const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* Expression_Subquery_SetPredicate_PredicateOp_descriptor() {
   ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
@@ -2786,9 +2970,32 @@ constexpr SortField_SortDirection SortField::SortDirection_MIN;
 constexpr SortField_SortDirection SortField::SortDirection_MAX;
 constexpr int SortField::SortDirection_ARRAYSIZE;
 #endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
-const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* AggregationPhase_descriptor() {
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* AggregateFunction_AggregationInvocation_descriptor() {
   ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
   return file_level_enum_descriptors_substrait_2falgebra_2eproto[7];
+}
+bool AggregateFunction_AggregationInvocation_IsValid(int value) {
+  switch (value) {
+    case 0:
+    case 1:
+    case 2:
+      return true;
+    default:
+      return false;
+  }
+}
+
+#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+constexpr AggregateFunction_AggregationInvocation AggregateFunction::AGGREGATION_INVOCATION_UNSPECIFIED;
+constexpr AggregateFunction_AggregationInvocation AggregateFunction::AGGREGATION_INVOCATION_ALL;
+constexpr AggregateFunction_AggregationInvocation AggregateFunction::AGGREGATION_INVOCATION_DISTINCT;
+constexpr AggregateFunction_AggregationInvocation AggregateFunction::AggregationInvocation_MIN;
+constexpr AggregateFunction_AggregationInvocation AggregateFunction::AggregationInvocation_MAX;
+constexpr int AggregateFunction::AggregationInvocation_ARRAYSIZE;
+#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* AggregationPhase_descriptor() {
+  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_substrait_2falgebra_2eproto);
+  return file_level_enum_descriptors_substrait_2falgebra_2eproto[8];
 }
 bool AggregationPhase_IsValid(int value) {
   switch (value) {
@@ -4835,10 +5042,217 @@ void ReadRel_ExtensionTable::InternalSwap(ReadRel_ExtensionTable* other) {
 
 // ===================================================================
 
-class ReadRel_LocalFiles_FileOrFiles::_Internal {
+class ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::_Internal {
  public:
 };
 
+ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase(arena, is_message_owned) {
+  // @@protoc_insertion_point(arena_constructor:substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions)
+}
+ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& from)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions)
+}
+
+
+
+
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl,
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl,
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::GetClassData() const { return &_class_data_; }
+
+
+
+
+
+
+
+::PROTOBUF_NAMESPACE_ID::Metadata ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[9]);
+}
+
+// ===================================================================
+
+class ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::_Internal {
+ public:
+};
+
+ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase(arena, is_message_owned) {
+  // @@protoc_insertion_point(arena_constructor:substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions)
+}
+ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& from)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions)
+}
+
+
+
+
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl,
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl,
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::GetClassData() const { return &_class_data_; }
+
+
+
+
+
+
+
+::PROTOBUF_NAMESPACE_ID::Metadata ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[10]);
+}
+
+// ===================================================================
+
+class ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::_Internal {
+ public:
+};
+
+ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase(arena, is_message_owned) {
+  // @@protoc_insertion_point(arena_constructor:substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions)
+}
+ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& from)
+  : ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  // @@protoc_insertion_point(copy_constructor:substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions)
+}
+
+
+
+
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl,
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl,
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::GetClassData() const { return &_class_data_; }
+
+
+
+
+
+
+
+::PROTOBUF_NAMESPACE_ID::Metadata ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[11]);
+}
+
+// ===================================================================
+
+class ReadRel_LocalFiles_FileOrFiles::_Internal {
+ public:
+  static const ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& parquet(const ReadRel_LocalFiles_FileOrFiles* msg);
+  static const ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& arrow(const ReadRel_LocalFiles_FileOrFiles* msg);
+  static const ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& orc(const ReadRel_LocalFiles_FileOrFiles* msg);
+  static const ::PROTOBUF_NAMESPACE_ID::Any& extension(const ReadRel_LocalFiles_FileOrFiles* msg);
+};
+
+const ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions&
+ReadRel_LocalFiles_FileOrFiles::_Internal::parquet(const ReadRel_LocalFiles_FileOrFiles* msg) {
+  return *msg->file_format_.parquet_;
+}
+const ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions&
+ReadRel_LocalFiles_FileOrFiles::_Internal::arrow(const ReadRel_LocalFiles_FileOrFiles* msg) {
+  return *msg->file_format_.arrow_;
+}
+const ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions&
+ReadRel_LocalFiles_FileOrFiles::_Internal::orc(const ReadRel_LocalFiles_FileOrFiles* msg) {
+  return *msg->file_format_.orc_;
+}
+const ::PROTOBUF_NAMESPACE_ID::Any&
+ReadRel_LocalFiles_FileOrFiles::_Internal::extension(const ReadRel_LocalFiles_FileOrFiles* msg) {
+  return *msg->file_format_.extension_;
+}
+void ReadRel_LocalFiles_FileOrFiles::set_allocated_parquet(::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* parquet) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_file_format();
+  if (parquet) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions>::GetOwningArena(parquet);
+    if (message_arena != submessage_arena) {
+      parquet = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, parquet, submessage_arena);
+    }
+    set_has_parquet();
+    file_format_.parquet_ = parquet;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.parquet)
+}
+void ReadRel_LocalFiles_FileOrFiles::set_allocated_arrow(::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* arrow) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_file_format();
+  if (arrow) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions>::GetOwningArena(arrow);
+    if (message_arena != submessage_arena) {
+      arrow = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, arrow, submessage_arena);
+    }
+    set_has_arrow();
+    file_format_.arrow_ = arrow;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.arrow)
+}
+void ReadRel_LocalFiles_FileOrFiles::set_allocated_orc(::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* orc) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_file_format();
+  if (orc) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions>::GetOwningArena(orc);
+    if (message_arena != submessage_arena) {
+      orc = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, orc, submessage_arena);
+    }
+    set_has_orc();
+    file_format_.orc_ = orc;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.orc)
+}
+void ReadRel_LocalFiles_FileOrFiles::set_allocated_extension(::PROTOBUF_NAMESPACE_ID::Any* extension) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_file_format();
+  if (extension) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<
+            ::PROTOBUF_NAMESPACE_ID::MessageLite>::GetOwningArena(
+                reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(extension));
+    if (message_arena != submessage_arena) {
+      extension = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, extension, submessage_arena);
+    }
+    set_has_extension();
+    file_format_.extension_ = extension;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.extension)
+}
+void ReadRel_LocalFiles_FileOrFiles::clear_extension() {
+  if (_internal_has_extension()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete file_format_.extension_;
+    }
+    clear_has_file_format();
+  }
+}
 ReadRel_LocalFiles_FileOrFiles::ReadRel_LocalFiles_FileOrFiles(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
@@ -4851,9 +5265,9 @@ ReadRel_LocalFiles_FileOrFiles::ReadRel_LocalFiles_FileOrFiles(::PROTOBUF_NAMESP
 ReadRel_LocalFiles_FileOrFiles::ReadRel_LocalFiles_FileOrFiles(const ReadRel_LocalFiles_FileOrFiles& from)
   : ::PROTOBUF_NAMESPACE_ID::Message() {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
-  ::memcpy(&format_, &from.format_,
+  ::memcpy(&partition_index_, &from.partition_index_,
     static_cast<size_t>(reinterpret_cast<char*>(&length_) -
-    reinterpret_cast<char*>(&format_)) + sizeof(length_));
+    reinterpret_cast<char*>(&partition_index_)) + sizeof(length_));
   clear_has_path_type();
   switch (from.path_type_case()) {
     case kUriPath: {
@@ -4876,15 +5290,38 @@ ReadRel_LocalFiles_FileOrFiles::ReadRel_LocalFiles_FileOrFiles(const ReadRel_Loc
       break;
     }
   }
+  clear_has_file_format();
+  switch (from.file_format_case()) {
+    case kParquet: {
+      _internal_mutable_parquet()->::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::MergeFrom(from._internal_parquet());
+      break;
+    }
+    case kArrow: {
+      _internal_mutable_arrow()->::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::MergeFrom(from._internal_arrow());
+      break;
+    }
+    case kOrc: {
+      _internal_mutable_orc()->::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::MergeFrom(from._internal_orc());
+      break;
+    }
+    case kExtension: {
+      _internal_mutable_extension()->::PROTOBUF_NAMESPACE_ID::Any::MergeFrom(from._internal_extension());
+      break;
+    }
+    case FILE_FORMAT_NOT_SET: {
+      break;
+    }
+  }
   // @@protoc_insertion_point(copy_constructor:substrait.ReadRel.LocalFiles.FileOrFiles)
 }
 
 inline void ReadRel_LocalFiles_FileOrFiles::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
-    reinterpret_cast<char*>(&format_) - reinterpret_cast<char*>(this)),
+    reinterpret_cast<char*>(&partition_index_) - reinterpret_cast<char*>(this)),
     0, static_cast<size_t>(reinterpret_cast<char*>(&length_) -
-    reinterpret_cast<char*>(&format_)) + sizeof(length_));
+    reinterpret_cast<char*>(&partition_index_)) + sizeof(length_));
 clear_has_path_type();
+clear_has_file_format();
 }
 
 ReadRel_LocalFiles_FileOrFiles::~ReadRel_LocalFiles_FileOrFiles() {
@@ -4898,6 +5335,9 @@ inline void ReadRel_LocalFiles_FileOrFiles::SharedDtor() {
   GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
   if (has_path_type()) {
     clear_path_type();
+  }
+  if (has_file_format()) {
+    clear_file_format();
   }
 }
 
@@ -4937,6 +5377,40 @@ void ReadRel_LocalFiles_FileOrFiles::clear_path_type() {
   _oneof_case_[0] = PATH_TYPE_NOT_SET;
 }
 
+void ReadRel_LocalFiles_FileOrFiles::clear_file_format() {
+// @@protoc_insertion_point(one_of_clear_start:substrait.ReadRel.LocalFiles.FileOrFiles)
+  switch (file_format_case()) {
+    case kParquet: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete file_format_.parquet_;
+      }
+      break;
+    }
+    case kArrow: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete file_format_.arrow_;
+      }
+      break;
+    }
+    case kOrc: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete file_format_.orc_;
+      }
+      break;
+    }
+    case kExtension: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete file_format_.extension_;
+      }
+      break;
+    }
+    case FILE_FORMAT_NOT_SET: {
+      break;
+    }
+  }
+  _oneof_case_[1] = FILE_FORMAT_NOT_SET;
+}
+
 
 void ReadRel_LocalFiles_FileOrFiles::Clear() {
 // @@protoc_insertion_point(message_clear_start:substrait.ReadRel.LocalFiles.FileOrFiles)
@@ -4944,10 +5418,11 @@ void ReadRel_LocalFiles_FileOrFiles::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  ::memset(&format_, 0, static_cast<size_t>(
+  ::memset(&partition_index_, 0, static_cast<size_t>(
       reinterpret_cast<char*>(&length_) -
-      reinterpret_cast<char*>(&format_)) + sizeof(length_));
+      reinterpret_cast<char*>(&partition_index_)) + sizeof(length_));
   clear_path_type();
+  clear_file_format();
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -4997,15 +5472,6 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
         } else
           goto handle_unusual;
         continue;
-      // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
-      case 5:
-        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
-          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
-          CHK_(ptr);
-          _internal_set_format(static_cast<::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat>(val));
-        } else
-          goto handle_unusual;
-        continue;
       // uint64 partition_index = 6;
       case 6:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
@@ -5026,6 +5492,38 @@ const char* ReadRel_LocalFiles_FileOrFiles::_InternalParse(const char* ptr, ::PR
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 64)) {
           length_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions parquet = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          ptr = ctx->ParseMessage(_internal_mutable_parquet(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions arrow = 10;
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
+          ptr = ctx->ParseMessage(_internal_mutable_arrow(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions orc = 11;
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 90)) {
+          ptr = ctx->ParseMessage(_internal_mutable_orc(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .google.protobuf.Any extension = 12;
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 98)) {
+          ptr = ctx->ParseMessage(_internal_mutable_extension(), ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -5099,13 +5597,6 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
         4, this->_internal_uri_folder(), target);
   }
 
-  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
-  if (this->_internal_format() != 0) {
-    target = stream->EnsureSpace(target);
-    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
-      5, this->_internal_format(), target);
-  }
-
   // uint64 partition_index = 6;
   if (this->_internal_partition_index() != 0) {
     target = stream->EnsureSpace(target);
@@ -5124,6 +5615,38 @@ uint8_t* ReadRel_LocalFiles_FileOrFiles::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt64ToArray(8, this->_internal_length(), target);
   }
 
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions parquet = 9;
+  if (_internal_has_parquet()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        9, _Internal::parquet(this), target, stream);
+  }
+
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions arrow = 10;
+  if (_internal_has_arrow()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        10, _Internal::arrow(this), target, stream);
+  }
+
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions orc = 11;
+  if (_internal_has_orc()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        11, _Internal::orc(this), target, stream);
+  }
+
+  // .google.protobuf.Any extension = 12;
+  if (_internal_has_extension()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        12, _Internal::extension(this), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
@@ -5139,12 +5662,6 @@ size_t ReadRel_LocalFiles_FileOrFiles::ByteSizeLong() const {
   uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
-
-  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
-  if (this->_internal_format() != 0) {
-    total_size += 1 +
-      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_format());
-  }
 
   // uint64 partition_index = 6;
   if (this->_internal_partition_index() != 0) {
@@ -5194,6 +5711,39 @@ size_t ReadRel_LocalFiles_FileOrFiles::ByteSizeLong() const {
       break;
     }
   }
+  switch (file_format_case()) {
+    // .substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions parquet = 9;
+    case kParquet: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *file_format_.parquet_);
+      break;
+    }
+    // .substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions arrow = 10;
+    case kArrow: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *file_format_.arrow_);
+      break;
+    }
+    // .substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions orc = 11;
+    case kOrc: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *file_format_.orc_);
+      break;
+    }
+    // .google.protobuf.Any extension = 12;
+    case kExtension: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *file_format_.extension_);
+      break;
+    }
+    case FILE_FORMAT_NOT_SET: {
+      break;
+    }
+  }
   return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
 }
 
@@ -5216,9 +5766,6 @@ void ReadRel_LocalFiles_FileOrFiles::MergeFrom(const ReadRel_LocalFiles_FileOrFi
   uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from._internal_format() != 0) {
-    _internal_set_format(from._internal_format());
-  }
   if (from._internal_partition_index() != 0) {
     _internal_set_partition_index(from._internal_partition_index());
   }
@@ -5249,6 +5796,27 @@ void ReadRel_LocalFiles_FileOrFiles::MergeFrom(const ReadRel_LocalFiles_FileOrFi
       break;
     }
   }
+  switch (from.file_format_case()) {
+    case kParquet: {
+      _internal_mutable_parquet()->::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions::MergeFrom(from._internal_parquet());
+      break;
+    }
+    case kArrow: {
+      _internal_mutable_arrow()->::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions::MergeFrom(from._internal_arrow());
+      break;
+    }
+    case kOrc: {
+      _internal_mutable_orc()->::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions::MergeFrom(from._internal_orc());
+      break;
+    }
+    case kExtension: {
+      _internal_mutable_extension()->::PROTOBUF_NAMESPACE_ID::Any::MergeFrom(from._internal_extension());
+      break;
+    }
+    case FILE_FORMAT_NOT_SET: {
+      break;
+    }
+  }
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -5269,17 +5837,19 @@ void ReadRel_LocalFiles_FileOrFiles::InternalSwap(ReadRel_LocalFiles_FileOrFiles
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(ReadRel_LocalFiles_FileOrFiles, length_)
       + sizeof(ReadRel_LocalFiles_FileOrFiles::length_)
-      - PROTOBUF_FIELD_OFFSET(ReadRel_LocalFiles_FileOrFiles, format_)>(
-          reinterpret_cast<char*>(&format_),
-          reinterpret_cast<char*>(&other->format_));
+      - PROTOBUF_FIELD_OFFSET(ReadRel_LocalFiles_FileOrFiles, partition_index_)>(
+          reinterpret_cast<char*>(&partition_index_),
+          reinterpret_cast<char*>(&other->partition_index_));
   swap(path_type_, other->path_type_);
+  swap(file_format_, other->file_format_);
   swap(_oneof_case_[0], other->_oneof_case_[0]);
+  swap(_oneof_case_[1], other->_oneof_case_[1]);
 }
 
 ::PROTOBUF_NAMESPACE_ID::Metadata ReadRel_LocalFiles_FileOrFiles::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[9]);
+      file_level_metadata_substrait_2falgebra_2eproto[12]);
 }
 
 // ===================================================================
@@ -5513,7 +6083,7 @@ void ReadRel_LocalFiles::InternalSwap(ReadRel_LocalFiles* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ReadRel_LocalFiles::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[10]);
+      file_level_metadata_substrait_2falgebra_2eproto[13]);
 }
 
 // ===================================================================
@@ -6154,7 +6724,7 @@ void ReadRel::InternalSwap(ReadRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ReadRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[11]);
+      file_level_metadata_substrait_2falgebra_2eproto[14]);
 }
 
 // ===================================================================
@@ -6478,7 +7048,7 @@ void ProjectRel::InternalSwap(ProjectRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ProjectRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[12]);
+      file_level_metadata_substrait_2falgebra_2eproto[15]);
 }
 
 // ===================================================================
@@ -6919,7 +7489,7 @@ void JoinRel::InternalSwap(JoinRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata JoinRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[13]);
+      file_level_metadata_substrait_2falgebra_2eproto[16]);
 }
 
 // ===================================================================
@@ -7251,7 +7821,7 @@ void CrossRel::InternalSwap(CrossRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata CrossRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[14]);
+      file_level_metadata_substrait_2falgebra_2eproto[17]);
 }
 
 // ===================================================================
@@ -7592,7 +8162,7 @@ void FetchRel::InternalSwap(FetchRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata FetchRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[15]);
+      file_level_metadata_substrait_2falgebra_2eproto[18]);
 }
 
 // ===================================================================
@@ -7777,7 +8347,7 @@ void AggregateRel_Grouping::InternalSwap(AggregateRel_Grouping* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata AggregateRel_Grouping::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[16]);
+      file_level_metadata_substrait_2falgebra_2eproto[19]);
 }
 
 // ===================================================================
@@ -8021,7 +8591,7 @@ void AggregateRel_Measure::InternalSwap(AggregateRel_Measure* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata AggregateRel_Measure::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[17]);
+      file_level_metadata_substrait_2falgebra_2eproto[20]);
 }
 
 // ===================================================================
@@ -8378,7 +8948,7 @@ void AggregateRel::InternalSwap(AggregateRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata AggregateRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[18]);
+      file_level_metadata_substrait_2falgebra_2eproto[21]);
 }
 
 // ===================================================================
@@ -8702,7 +9272,7 @@ void SortRel::InternalSwap(SortRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata SortRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[19]);
+      file_level_metadata_substrait_2falgebra_2eproto[22]);
 }
 
 // ===================================================================
@@ -9034,7 +9604,7 @@ void FilterRel::InternalSwap(FilterRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata FilterRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[20]);
+      file_level_metadata_substrait_2falgebra_2eproto[23]);
 }
 
 // ===================================================================
@@ -9344,7 +9914,7 @@ void SetRel::InternalSwap(SetRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata SetRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[21]);
+      file_level_metadata_substrait_2falgebra_2eproto[24]);
 }
 
 // ===================================================================
@@ -9635,7 +10205,7 @@ void ExtensionSingleRel::InternalSwap(ExtensionSingleRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ExtensionSingleRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[22]);
+      file_level_metadata_substrait_2falgebra_2eproto[25]);
 }
 
 // ===================================================================
@@ -9885,7 +10455,7 @@ void ExtensionLeafRel::InternalSwap(ExtensionLeafRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ExtensionLeafRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[23]);
+      file_level_metadata_substrait_2falgebra_2eproto[26]);
 }
 
 // ===================================================================
@@ -10168,7 +10738,7 @@ void ExtensionMultiRel::InternalSwap(ExtensionMultiRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ExtensionMultiRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[24]);
+      file_level_metadata_substrait_2falgebra_2eproto[27]);
 }
 
 // ===================================================================
@@ -10353,7 +10923,7 @@ void ExchangeRel_ScatterFields::InternalSwap(ExchangeRel_ScatterFields* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_ScatterFields::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[25]);
+      file_level_metadata_substrait_2falgebra_2eproto[28]);
 }
 
 // ===================================================================
@@ -10548,7 +11118,7 @@ void ExchangeRel_SingleBucketExpression::InternalSwap(ExchangeRel_SingleBucketEx
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_SingleBucketExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[26]);
+      file_level_metadata_substrait_2falgebra_2eproto[29]);
 }
 
 // ===================================================================
@@ -10775,7 +11345,7 @@ void ExchangeRel_MultiBucketExpression::InternalSwap(ExchangeRel_MultiBucketExpr
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_MultiBucketExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[27]);
+      file_level_metadata_substrait_2falgebra_2eproto[30]);
 }
 
 // ===================================================================
@@ -10814,7 +11384,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ExchangeRel_Broadcast::GetClas
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_Broadcast::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[28]);
+      file_level_metadata_substrait_2falgebra_2eproto[31]);
 }
 
 // ===================================================================
@@ -10992,7 +11562,7 @@ void ExchangeRel_RoundRobin::InternalSwap(ExchangeRel_RoundRobin* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_RoundRobin::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[29]);
+      file_level_metadata_substrait_2falgebra_2eproto[32]);
 }
 
 // ===================================================================
@@ -11324,7 +11894,7 @@ void ExchangeRel_ExchangeTarget::InternalSwap(ExchangeRel_ExchangeTarget* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel_ExchangeTarget::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[30]);
+      file_level_metadata_substrait_2falgebra_2eproto[33]);
 }
 
 // ===================================================================
@@ -11991,7 +12561,7 @@ void ExchangeRel::InternalSwap(ExchangeRel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata ExchangeRel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[31]);
+      file_level_metadata_substrait_2falgebra_2eproto[34]);
 }
 
 // ===================================================================
@@ -12224,7 +12794,7 @@ void RelRoot::InternalSwap(RelRoot* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata RelRoot::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[32]);
+      file_level_metadata_substrait_2falgebra_2eproto[35]);
 }
 
 // ===================================================================
@@ -13094,7 +13664,666 @@ void Rel::InternalSwap(Rel* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Rel::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[33]);
+      file_level_metadata_substrait_2falgebra_2eproto[36]);
+}
+
+// ===================================================================
+
+class FunctionArgument_Enum::_Internal {
+ public:
+  static const ::PROTOBUF_NAMESPACE_ID::Empty& unspecified(const FunctionArgument_Enum* msg);
+};
+
+const ::PROTOBUF_NAMESPACE_ID::Empty&
+FunctionArgument_Enum::_Internal::unspecified(const FunctionArgument_Enum* msg) {
+  return *msg->enum_kind_.unspecified_;
+}
+void FunctionArgument_Enum::set_allocated_unspecified(::PROTOBUF_NAMESPACE_ID::Empty* unspecified) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_enum_kind();
+  if (unspecified) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<
+            ::PROTOBUF_NAMESPACE_ID::MessageLite>::GetOwningArena(
+                reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(unspecified));
+    if (message_arena != submessage_arena) {
+      unspecified = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, unspecified, submessage_arena);
+    }
+    set_has_unspecified();
+    enum_kind_.unspecified_ = unspecified;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.FunctionArgument.Enum.unspecified)
+}
+void FunctionArgument_Enum::clear_unspecified() {
+  if (_internal_has_unspecified()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete enum_kind_.unspecified_;
+    }
+    clear_has_enum_kind();
+  }
+}
+FunctionArgument_Enum::FunctionArgument_Enum(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.FunctionArgument.Enum)
+}
+FunctionArgument_Enum::FunctionArgument_Enum(const FunctionArgument_Enum& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  clear_has_enum_kind();
+  switch (from.enum_kind_case()) {
+    case kSpecified: {
+      _internal_set_specified(from._internal_specified());
+      break;
+    }
+    case kUnspecified: {
+      _internal_mutable_unspecified()->::PROTOBUF_NAMESPACE_ID::Empty::MergeFrom(from._internal_unspecified());
+      break;
+    }
+    case ENUM_KIND_NOT_SET: {
+      break;
+    }
+  }
+  // @@protoc_insertion_point(copy_constructor:substrait.FunctionArgument.Enum)
+}
+
+inline void FunctionArgument_Enum::SharedCtor() {
+clear_has_enum_kind();
+}
+
+FunctionArgument_Enum::~FunctionArgument_Enum() {
+  // @@protoc_insertion_point(destructor:substrait.FunctionArgument.Enum)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void FunctionArgument_Enum::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (has_enum_kind()) {
+    clear_enum_kind();
+  }
+}
+
+void FunctionArgument_Enum::ArenaDtor(void* object) {
+  FunctionArgument_Enum* _this = reinterpret_cast< FunctionArgument_Enum* >(object);
+  (void)_this;
+}
+void FunctionArgument_Enum::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void FunctionArgument_Enum::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void FunctionArgument_Enum::clear_enum_kind() {
+// @@protoc_insertion_point(one_of_clear_start:substrait.FunctionArgument.Enum)
+  switch (enum_kind_case()) {
+    case kSpecified: {
+      enum_kind_.specified_.Destroy(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+      break;
+    }
+    case kUnspecified: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete enum_kind_.unspecified_;
+      }
+      break;
+    }
+    case ENUM_KIND_NOT_SET: {
+      break;
+    }
+  }
+  _oneof_case_[0] = ENUM_KIND_NOT_SET;
+}
+
+
+void FunctionArgument_Enum::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.FunctionArgument.Enum)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  clear_enum_kind();
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* FunctionArgument_Enum::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // string specified = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          auto str = _internal_mutable_specified();
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "substrait.FunctionArgument.Enum.specified"));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .google.protobuf.Empty unspecified = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_unspecified(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* FunctionArgument_Enum::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.FunctionArgument.Enum)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // string specified = 1;
+  if (_internal_has_specified()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_specified().data(), static_cast<int>(this->_internal_specified().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "substrait.FunctionArgument.Enum.specified");
+    target = stream->WriteStringMaybeAliased(
+        1, this->_internal_specified(), target);
+  }
+
+  // .google.protobuf.Empty unspecified = 2;
+  if (_internal_has_unspecified()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        2, _Internal::unspecified(this), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.FunctionArgument.Enum)
+  return target;
+}
+
+size_t FunctionArgument_Enum::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.FunctionArgument.Enum)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  switch (enum_kind_case()) {
+    // string specified = 1;
+    case kSpecified: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+          this->_internal_specified());
+      break;
+    }
+    // .google.protobuf.Empty unspecified = 2;
+    case kUnspecified: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *enum_kind_.unspecified_);
+      break;
+    }
+    case ENUM_KIND_NOT_SET: {
+      break;
+    }
+  }
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData FunctionArgument_Enum::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    FunctionArgument_Enum::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*FunctionArgument_Enum::GetClassData() const { return &_class_data_; }
+
+void FunctionArgument_Enum::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<FunctionArgument_Enum *>(to)->MergeFrom(
+      static_cast<const FunctionArgument_Enum &>(from));
+}
+
+
+void FunctionArgument_Enum::MergeFrom(const FunctionArgument_Enum& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.FunctionArgument.Enum)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  switch (from.enum_kind_case()) {
+    case kSpecified: {
+      _internal_set_specified(from._internal_specified());
+      break;
+    }
+    case kUnspecified: {
+      _internal_mutable_unspecified()->::PROTOBUF_NAMESPACE_ID::Empty::MergeFrom(from._internal_unspecified());
+      break;
+    }
+    case ENUM_KIND_NOT_SET: {
+      break;
+    }
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void FunctionArgument_Enum::CopyFrom(const FunctionArgument_Enum& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.FunctionArgument.Enum)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool FunctionArgument_Enum::IsInitialized() const {
+  return true;
+}
+
+void FunctionArgument_Enum::InternalSwap(FunctionArgument_Enum* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(enum_kind_, other->enum_kind_);
+  swap(_oneof_case_[0], other->_oneof_case_[0]);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata FunctionArgument_Enum::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[37]);
+}
+
+// ===================================================================
+
+class FunctionArgument::_Internal {
+ public:
+  static const ::substrait::FunctionArgument_Enum& enum_(const FunctionArgument* msg);
+  static const ::substrait::Type& type(const FunctionArgument* msg);
+  static const ::substrait::Expression& value(const FunctionArgument* msg);
+};
+
+const ::substrait::FunctionArgument_Enum&
+FunctionArgument::_Internal::enum_(const FunctionArgument* msg) {
+  return *msg->arg_type_.enum__;
+}
+const ::substrait::Type&
+FunctionArgument::_Internal::type(const FunctionArgument* msg) {
+  return *msg->arg_type_.type_;
+}
+const ::substrait::Expression&
+FunctionArgument::_Internal::value(const FunctionArgument* msg) {
+  return *msg->arg_type_.value_;
+}
+void FunctionArgument::set_allocated_enum_(::substrait::FunctionArgument_Enum* enum_) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_arg_type();
+  if (enum_) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::FunctionArgument_Enum>::GetOwningArena(enum_);
+    if (message_arena != submessage_arena) {
+      enum_ = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, enum_, submessage_arena);
+    }
+    set_has_enum_();
+    arg_type_.enum__ = enum_;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.FunctionArgument.enum)
+}
+void FunctionArgument::set_allocated_type(::substrait::Type* type) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_arg_type();
+  if (type) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<
+            ::PROTOBUF_NAMESPACE_ID::MessageLite>::GetOwningArena(
+                reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(type));
+    if (message_arena != submessage_arena) {
+      type = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, type, submessage_arena);
+    }
+    set_has_type();
+    arg_type_.type_ = type;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.FunctionArgument.type)
+}
+void FunctionArgument::clear_type() {
+  if (_internal_has_type()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete arg_type_.type_;
+    }
+    clear_has_arg_type();
+  }
+}
+void FunctionArgument::set_allocated_value(::substrait::Expression* value) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_arg_type();
+  if (value) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Expression>::GetOwningArena(value);
+    if (message_arena != submessage_arena) {
+      value = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, value, submessage_arena);
+    }
+    set_has_value();
+    arg_type_.value_ = value;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.FunctionArgument.value)
+}
+FunctionArgument::FunctionArgument(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.FunctionArgument)
+}
+FunctionArgument::FunctionArgument(const FunctionArgument& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  clear_has_arg_type();
+  switch (from.arg_type_case()) {
+    case kEnum: {
+      _internal_mutable_enum_()->::substrait::FunctionArgument_Enum::MergeFrom(from._internal_enum_());
+      break;
+    }
+    case kType: {
+      _internal_mutable_type()->::substrait::Type::MergeFrom(from._internal_type());
+      break;
+    }
+    case kValue: {
+      _internal_mutable_value()->::substrait::Expression::MergeFrom(from._internal_value());
+      break;
+    }
+    case ARG_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  // @@protoc_insertion_point(copy_constructor:substrait.FunctionArgument)
+}
+
+inline void FunctionArgument::SharedCtor() {
+clear_has_arg_type();
+}
+
+FunctionArgument::~FunctionArgument() {
+  // @@protoc_insertion_point(destructor:substrait.FunctionArgument)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void FunctionArgument::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (has_arg_type()) {
+    clear_arg_type();
+  }
+}
+
+void FunctionArgument::ArenaDtor(void* object) {
+  FunctionArgument* _this = reinterpret_cast< FunctionArgument* >(object);
+  (void)_this;
+}
+void FunctionArgument::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void FunctionArgument::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void FunctionArgument::clear_arg_type() {
+// @@protoc_insertion_point(one_of_clear_start:substrait.FunctionArgument)
+  switch (arg_type_case()) {
+    case kEnum: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete arg_type_.enum__;
+      }
+      break;
+    }
+    case kType: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete arg_type_.type_;
+      }
+      break;
+    }
+    case kValue: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete arg_type_.value_;
+      }
+      break;
+    }
+    case ARG_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  _oneof_case_[0] = ARG_TYPE_NOT_SET;
+}
+
+
+void FunctionArgument::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.FunctionArgument)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  clear_arg_type();
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* FunctionArgument::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .substrait.FunctionArgument.Enum enum = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_enum_(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Type type = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_type(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Expression value = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* FunctionArgument::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.FunctionArgument)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .substrait.FunctionArgument.Enum enum = 1;
+  if (_internal_has_enum_()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        1, _Internal::enum_(this), target, stream);
+  }
+
+  // .substrait.Type type = 2;
+  if (_internal_has_type()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        2, _Internal::type(this), target, stream);
+  }
+
+  // .substrait.Expression value = 3;
+  if (_internal_has_value()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        3, _Internal::value(this), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.FunctionArgument)
+  return target;
+}
+
+size_t FunctionArgument::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.FunctionArgument)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  switch (arg_type_case()) {
+    // .substrait.FunctionArgument.Enum enum = 1;
+    case kEnum: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *arg_type_.enum__);
+      break;
+    }
+    // .substrait.Type type = 2;
+    case kType: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *arg_type_.type_);
+      break;
+    }
+    // .substrait.Expression value = 3;
+    case kValue: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *arg_type_.value_);
+      break;
+    }
+    case ARG_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData FunctionArgument::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    FunctionArgument::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*FunctionArgument::GetClassData() const { return &_class_data_; }
+
+void FunctionArgument::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<FunctionArgument *>(to)->MergeFrom(
+      static_cast<const FunctionArgument &>(from));
+}
+
+
+void FunctionArgument::MergeFrom(const FunctionArgument& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.FunctionArgument)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  switch (from.arg_type_case()) {
+    case kEnum: {
+      _internal_mutable_enum_()->::substrait::FunctionArgument_Enum::MergeFrom(from._internal_enum_());
+      break;
+    }
+    case kType: {
+      _internal_mutable_type()->::substrait::Type::MergeFrom(from._internal_type());
+      break;
+    }
+    case kValue: {
+      _internal_mutable_value()->::substrait::Expression::MergeFrom(from._internal_value());
+      break;
+    }
+    case ARG_TYPE_NOT_SET: {
+      break;
+    }
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void FunctionArgument::CopyFrom(const FunctionArgument& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.FunctionArgument)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool FunctionArgument::IsInitialized() const {
+  return true;
+}
+
+void FunctionArgument::InternalSwap(FunctionArgument* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(arg_type_, other->arg_type_);
+  swap(_oneof_case_[0], other->_oneof_case_[0]);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata FunctionArgument::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[38]);
 }
 
 // ===================================================================
@@ -13133,7 +14362,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_Enum_Empty::GetClas
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Enum_Empty::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[34]);
+      file_level_metadata_substrait_2falgebra_2eproto[39]);
 }
 
 // ===================================================================
@@ -13415,7 +14644,7 @@ void Expression_Enum::InternalSwap(Expression_Enum* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Enum::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[35]);
+      file_level_metadata_substrait_2falgebra_2eproto[40]);
 }
 
 // ===================================================================
@@ -13644,7 +14873,7 @@ void Expression_Literal_VarChar::InternalSwap(Expression_Literal_VarChar* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_VarChar::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[36]);
+      file_level_metadata_substrait_2falgebra_2eproto[41]);
 }
 
 // ===================================================================
@@ -13902,7 +15131,7 @@ void Expression_Literal_Decimal::InternalSwap(Expression_Literal_Decimal* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Decimal::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[37]);
+      file_level_metadata_substrait_2falgebra_2eproto[42]);
 }
 
 // ===================================================================
@@ -14146,7 +15375,7 @@ void Expression_Literal_Map_KeyValue::InternalSwap(Expression_Literal_Map_KeyVal
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Map_KeyValue::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[38]);
+      file_level_metadata_substrait_2falgebra_2eproto[43]);
 }
 
 // ===================================================================
@@ -14331,7 +15560,7 @@ void Expression_Literal_Map::InternalSwap(Expression_Literal_Map* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Map::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[39]);
+      file_level_metadata_substrait_2falgebra_2eproto[44]);
 }
 
 // ===================================================================
@@ -14543,7 +15772,7 @@ void Expression_Literal_IntervalYearToMonth::InternalSwap(Expression_Literal_Int
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_IntervalYearToMonth::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[40]);
+      file_level_metadata_substrait_2falgebra_2eproto[45]);
 }
 
 // ===================================================================
@@ -14565,16 +15794,16 @@ Expression_Literal_IntervalDayToSecond::Expression_Literal_IntervalDayToSecond(c
   : ::PROTOBUF_NAMESPACE_ID::Message() {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   ::memcpy(&days_, &from.days_,
-    static_cast<size_t>(reinterpret_cast<char*>(&seconds_) -
-    reinterpret_cast<char*>(&days_)) + sizeof(seconds_));
+    static_cast<size_t>(reinterpret_cast<char*>(&microseconds_) -
+    reinterpret_cast<char*>(&days_)) + sizeof(microseconds_));
   // @@protoc_insertion_point(copy_constructor:substrait.Expression.Literal.IntervalDayToSecond)
 }
 
 inline void Expression_Literal_IntervalDayToSecond::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&days_) - reinterpret_cast<char*>(this)),
-    0, static_cast<size_t>(reinterpret_cast<char*>(&seconds_) -
-    reinterpret_cast<char*>(&days_)) + sizeof(seconds_));
+    0, static_cast<size_t>(reinterpret_cast<char*>(&microseconds_) -
+    reinterpret_cast<char*>(&days_)) + sizeof(microseconds_));
 }
 
 Expression_Literal_IntervalDayToSecond::~Expression_Literal_IntervalDayToSecond() {
@@ -14605,8 +15834,8 @@ void Expression_Literal_IntervalDayToSecond::Clear() {
   (void) cached_has_bits;
 
   ::memset(&days_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&seconds_) -
-      reinterpret_cast<char*>(&days_)) + sizeof(seconds_));
+      reinterpret_cast<char*>(&microseconds_) -
+      reinterpret_cast<char*>(&days_)) + sizeof(microseconds_));
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -14628,6 +15857,14 @@ const char* Expression_Literal_IntervalDayToSecond::_InternalParse(const char* p
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
           seconds_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // int32 microseconds = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          microseconds_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -14673,6 +15910,12 @@ uint8_t* Expression_Literal_IntervalDayToSecond::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(2, this->_internal_seconds(), target);
   }
 
+  // int32 microseconds = 3;
+  if (this->_internal_microseconds() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt32ToArray(3, this->_internal_microseconds(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
@@ -14697,6 +15940,11 @@ size_t Expression_Literal_IntervalDayToSecond::ByteSizeLong() const {
   // int32 seconds = 2;
   if (this->_internal_seconds() != 0) {
     total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_seconds());
+  }
+
+  // int32 microseconds = 3;
+  if (this->_internal_microseconds() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int32SizePlusOne(this->_internal_microseconds());
   }
 
   return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
@@ -14727,6 +15975,9 @@ void Expression_Literal_IntervalDayToSecond::MergeFrom(const Expression_Literal_
   if (from._internal_seconds() != 0) {
     _internal_set_seconds(from._internal_seconds());
   }
+  if (from._internal_microseconds() != 0) {
+    _internal_set_microseconds(from._internal_microseconds());
+  }
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -14745,8 +15996,8 @@ void Expression_Literal_IntervalDayToSecond::InternalSwap(Expression_Literal_Int
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(Expression_Literal_IntervalDayToSecond, seconds_)
-      + sizeof(Expression_Literal_IntervalDayToSecond::seconds_)
+      PROTOBUF_FIELD_OFFSET(Expression_Literal_IntervalDayToSecond, microseconds_)
+      + sizeof(Expression_Literal_IntervalDayToSecond::microseconds_)
       - PROTOBUF_FIELD_OFFSET(Expression_Literal_IntervalDayToSecond, days_)>(
           reinterpret_cast<char*>(&days_),
           reinterpret_cast<char*>(&other->days_));
@@ -14755,7 +16006,7 @@ void Expression_Literal_IntervalDayToSecond::InternalSwap(Expression_Literal_Int
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_IntervalDayToSecond::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[41]);
+      file_level_metadata_substrait_2falgebra_2eproto[46]);
 }
 
 // ===================================================================
@@ -14940,7 +16191,7 @@ void Expression_Literal_Struct::InternalSwap(Expression_Literal_Struct* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_Struct::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[42]);
+      file_level_metadata_substrait_2falgebra_2eproto[47]);
 }
 
 // ===================================================================
@@ -15125,7 +16376,276 @@ void Expression_Literal_List::InternalSwap(Expression_Literal_List* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_List::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[43]);
+      file_level_metadata_substrait_2falgebra_2eproto[48]);
+}
+
+// ===================================================================
+
+class Expression_Literal_UserDefined::_Internal {
+ public:
+  static const ::PROTOBUF_NAMESPACE_ID::Any& value(const Expression_Literal_UserDefined* msg);
+};
+
+const ::PROTOBUF_NAMESPACE_ID::Any&
+Expression_Literal_UserDefined::_Internal::value(const Expression_Literal_UserDefined* msg) {
+  return *msg->value_;
+}
+void Expression_Literal_UserDefined::clear_type_parameters() {
+  type_parameters_.Clear();
+}
+void Expression_Literal_UserDefined::clear_value() {
+  if (GetArenaForAllocation() == nullptr && value_ != nullptr) {
+    delete value_;
+  }
+  value_ = nullptr;
+}
+Expression_Literal_UserDefined::Expression_Literal_UserDefined(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  type_parameters_(arena) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.Expression.Literal.UserDefined)
+}
+Expression_Literal_UserDefined::Expression_Literal_UserDefined(const Expression_Literal_UserDefined& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message(),
+      type_parameters_(from.type_parameters_) {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  if (from._internal_has_value()) {
+    value_ = new ::PROTOBUF_NAMESPACE_ID::Any(*from.value_);
+  } else {
+    value_ = nullptr;
+  }
+  type_reference_ = from.type_reference_;
+  // @@protoc_insertion_point(copy_constructor:substrait.Expression.Literal.UserDefined)
+}
+
+inline void Expression_Literal_UserDefined::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&value_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&type_reference_) -
+    reinterpret_cast<char*>(&value_)) + sizeof(type_reference_));
+}
+
+Expression_Literal_UserDefined::~Expression_Literal_UserDefined() {
+  // @@protoc_insertion_point(destructor:substrait.Expression.Literal.UserDefined)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void Expression_Literal_UserDefined::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (this != internal_default_instance()) delete value_;
+}
+
+void Expression_Literal_UserDefined::ArenaDtor(void* object) {
+  Expression_Literal_UserDefined* _this = reinterpret_cast< Expression_Literal_UserDefined* >(object);
+  (void)_this;
+}
+void Expression_Literal_UserDefined::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void Expression_Literal_UserDefined::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void Expression_Literal_UserDefined::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.Expression.Literal.UserDefined)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  type_parameters_.Clear();
+  if (GetArenaForAllocation() == nullptr && value_ != nullptr) {
+    delete value_;
+  }
+  value_ = nullptr;
+  type_reference_ = 0u;
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* Expression_Literal_UserDefined::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 type_reference = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          type_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .google.protobuf.Any value = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_value(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .substrait.Type.Parameter type_parameters = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_type_parameters(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<26>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* Expression_Literal_UserDefined::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.Expression.Literal.UserDefined)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 type_reference = 1;
+  if (this->_internal_type_reference() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_type_reference(), target);
+  }
+
+  // .google.protobuf.Any value = 2;
+  if (this->_internal_has_value()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        2, _Internal::value(this), target, stream);
+  }
+
+  // repeated .substrait.Type.Parameter type_parameters = 3;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_type_parameters_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(3, this->_internal_type_parameters(i), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.Expression.Literal.UserDefined)
+  return target;
+}
+
+size_t Expression_Literal_UserDefined::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.Expression.Literal.UserDefined)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .substrait.Type.Parameter type_parameters = 3;
+  total_size += 1UL * this->_internal_type_parameters_size();
+  for (const auto& msg : this->type_parameters_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // .google.protobuf.Any value = 2;
+  if (this->_internal_has_value()) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *value_);
+  }
+
+  // uint32 type_reference = 1;
+  if (this->_internal_type_reference() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_type_reference());
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData Expression_Literal_UserDefined::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    Expression_Literal_UserDefined::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_Literal_UserDefined::GetClassData() const { return &_class_data_; }
+
+void Expression_Literal_UserDefined::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<Expression_Literal_UserDefined *>(to)->MergeFrom(
+      static_cast<const Expression_Literal_UserDefined &>(from));
+}
+
+
+void Expression_Literal_UserDefined::MergeFrom(const Expression_Literal_UserDefined& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.Expression.Literal.UserDefined)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  type_parameters_.MergeFrom(from.type_parameters_);
+  if (from._internal_has_value()) {
+    _internal_mutable_value()->::PROTOBUF_NAMESPACE_ID::Any::MergeFrom(from._internal_value());
+  }
+  if (from._internal_type_reference() != 0) {
+    _internal_set_type_reference(from._internal_type_reference());
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void Expression_Literal_UserDefined::CopyFrom(const Expression_Literal_UserDefined& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.Expression.Literal.UserDefined)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool Expression_Literal_UserDefined::IsInitialized() const {
+  return true;
+}
+
+void Expression_Literal_UserDefined::InternalSwap(Expression_Literal_UserDefined* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  type_parameters_.InternalSwap(&other->type_parameters_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(Expression_Literal_UserDefined, type_reference_)
+      + sizeof(Expression_Literal_UserDefined::type_reference_)
+      - PROTOBUF_FIELD_OFFSET(Expression_Literal_UserDefined, value_)>(
+          reinterpret_cast<char*>(&value_),
+          reinterpret_cast<char*>(&other->value_));
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal_UserDefined::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
+      file_level_metadata_substrait_2falgebra_2eproto[49]);
 }
 
 // ===================================================================
@@ -15142,6 +16662,7 @@ class Expression_Literal::_Internal {
   static const ::substrait::Expression_Literal_List& list(const Expression_Literal* msg);
   static const ::substrait::Type_List& empty_list(const Expression_Literal* msg);
   static const ::substrait::Type_Map& empty_map(const Expression_Literal* msg);
+  static const ::substrait::Expression_Literal_UserDefined& user_defined(const Expression_Literal* msg);
 };
 
 const ::substrait::Expression_Literal_IntervalYearToMonth&
@@ -15183,6 +16704,10 @@ Expression_Literal::_Internal::empty_list(const Expression_Literal* msg) {
 const ::substrait::Type_Map&
 Expression_Literal::_Internal::empty_map(const Expression_Literal* msg) {
   return *msg->literal_type_.empty_map_;
+}
+const ::substrait::Expression_Literal_UserDefined&
+Expression_Literal::_Internal::user_defined(const Expression_Literal* msg) {
+  return *msg->literal_type_.user_defined_;
 }
 void Expression_Literal::set_allocated_interval_year_to_month(::substrait::Expression_Literal_IntervalYearToMonth* interval_year_to_month) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -15364,6 +16889,21 @@ void Expression_Literal::clear_empty_map() {
     clear_has_literal_type();
   }
 }
+void Expression_Literal::set_allocated_user_defined(::substrait::Expression_Literal_UserDefined* user_defined) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_literal_type();
+  if (user_defined) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Expression_Literal_UserDefined>::GetOwningArena(user_defined);
+    if (message_arena != submessage_arena) {
+      user_defined = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, user_defined, submessage_arena);
+    }
+    set_has_user_defined();
+    literal_type_.user_defined_ = user_defined;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.Expression.Literal.user_defined)
+}
 Expression_Literal::Expression_Literal(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
@@ -15376,7 +16916,9 @@ Expression_Literal::Expression_Literal(::PROTOBUF_NAMESPACE_ID::Arena* arena,
 Expression_Literal::Expression_Literal(const Expression_Literal& from)
   : ::PROTOBUF_NAMESPACE_ID::Message() {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
-  nullable_ = from.nullable_;
+  ::memcpy(&nullable_, &from.nullable_,
+    static_cast<size_t>(reinterpret_cast<char*>(&type_variation_reference_) -
+    reinterpret_cast<char*>(&nullable_)) + sizeof(type_variation_reference_));
   clear_has_literal_type();
   switch (from.literal_type_case()) {
     case kBoolean: {
@@ -15483,6 +17025,10 @@ Expression_Literal::Expression_Literal(const Expression_Literal& from)
       _internal_mutable_empty_map()->::substrait::Type_Map::MergeFrom(from._internal_empty_map());
       break;
     }
+    case kUserDefined: {
+      _internal_mutable_user_defined()->::substrait::Expression_Literal_UserDefined::MergeFrom(from._internal_user_defined());
+      break;
+    }
     case LITERAL_TYPE_NOT_SET: {
       break;
     }
@@ -15491,7 +17037,10 @@ Expression_Literal::Expression_Literal(const Expression_Literal& from)
 }
 
 inline void Expression_Literal::SharedCtor() {
-nullable_ = false;
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&nullable_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&type_variation_reference_) -
+    reinterpret_cast<char*>(&nullable_)) + sizeof(type_variation_reference_));
 clear_has_literal_type();
 }
 
@@ -15646,6 +17195,12 @@ void Expression_Literal::clear_literal_type() {
       }
       break;
     }
+    case kUserDefined: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete literal_type_.user_defined_;
+      }
+      break;
+    }
     case LITERAL_TYPE_NOT_SET: {
       break;
     }
@@ -15660,7 +17215,9 @@ void Expression_Literal::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  nullable_ = false;
+  ::memset(&nullable_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&type_variation_reference_) -
+      reinterpret_cast<char*>(&nullable_)) + sizeof(type_variation_reference_));
   clear_literal_type();
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
@@ -15886,10 +17443,26 @@ const char* Expression_Literal::_InternalParse(const char* ptr, ::PROTOBUF_NAMES
         } else
           goto handle_unusual;
         continue;
+      // .substrait.Expression.Literal.UserDefined user_defined = 33;
+      case 33:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_user_defined(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
       // bool nullable = 50;
       case 50:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 144)) {
           nullable_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 type_variation_reference = 51;
+      case 51:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 152)) {
+          type_variation_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
           CHK_(ptr);
         } else
           goto handle_unusual;
@@ -16107,10 +17680,24 @@ uint8_t* Expression_Literal::_InternalSerialize(
         32, _Internal::empty_map(this), target, stream);
   }
 
+  // .substrait.Expression.Literal.UserDefined user_defined = 33;
+  if (_internal_has_user_defined()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        33, _Internal::user_defined(this), target, stream);
+  }
+
   // bool nullable = 50;
   if (this->_internal_nullable() != 0) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(50, this->_internal_nullable(), target);
+  }
+
+  // uint32 type_variation_reference = 51;
+  if (this->_internal_type_variation_reference() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(51, this->_internal_type_variation_reference(), target);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -16132,6 +17719,13 @@ size_t Expression_Literal::ByteSizeLong() const {
   // bool nullable = 50;
   if (this->_internal_nullable() != 0) {
     total_size += 2 + 1;
+  }
+
+  // uint32 type_variation_reference = 51;
+  if (this->_internal_type_variation_reference() != 0) {
+    total_size += 2 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
+        this->_internal_type_variation_reference());
   }
 
   switch (literal_type_case()) {
@@ -16301,6 +17895,13 @@ size_t Expression_Literal::ByteSizeLong() const {
           *literal_type_.empty_map_);
       break;
     }
+    // .substrait.Expression.Literal.UserDefined user_defined = 33;
+    case kUserDefined: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *literal_type_.user_defined_);
+      break;
+    }
     case LITERAL_TYPE_NOT_SET: {
       break;
     }
@@ -16329,6 +17930,9 @@ void Expression_Literal::MergeFrom(const Expression_Literal& from) {
 
   if (from._internal_nullable() != 0) {
     _internal_set_nullable(from._internal_nullable());
+  }
+  if (from._internal_type_variation_reference() != 0) {
+    _internal_set_type_variation_reference(from._internal_type_variation_reference());
   }
   switch (from.literal_type_case()) {
     case kBoolean: {
@@ -16435,6 +18039,10 @@ void Expression_Literal::MergeFrom(const Expression_Literal& from) {
       _internal_mutable_empty_map()->::substrait::Type_Map::MergeFrom(from._internal_empty_map());
       break;
     }
+    case kUserDefined: {
+      _internal_mutable_user_defined()->::substrait::Expression_Literal_UserDefined::MergeFrom(from._internal_user_defined());
+      break;
+    }
     case LITERAL_TYPE_NOT_SET: {
       break;
     }
@@ -16456,7 +18064,12 @@ bool Expression_Literal::IsInitialized() const {
 void Expression_Literal::InternalSwap(Expression_Literal* other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
-  swap(nullable_, other->nullable_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(Expression_Literal, type_variation_reference_)
+      + sizeof(Expression_Literal::type_variation_reference_)
+      - PROTOBUF_FIELD_OFFSET(Expression_Literal, nullable_)>(
+          reinterpret_cast<char*>(&nullable_),
+          reinterpret_cast<char*>(&other->nullable_));
   swap(literal_type_, other->literal_type_);
   swap(_oneof_case_[0], other->_oneof_case_[0]);
 }
@@ -16464,7 +18077,7 @@ void Expression_Literal::InternalSwap(Expression_Literal* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Literal::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[44]);
+      file_level_metadata_substrait_2falgebra_2eproto[50]);
 }
 
 // ===================================================================
@@ -16487,7 +18100,8 @@ void Expression_ScalarFunction::clear_output_type() {
 Expression_ScalarFunction::Expression_ScalarFunction(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
-  args_(arena) {
+  args_(arena),
+  arguments_(arena) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -16496,7 +18110,8 @@ Expression_ScalarFunction::Expression_ScalarFunction(::PROTOBUF_NAMESPACE_ID::Ar
 }
 Expression_ScalarFunction::Expression_ScalarFunction(const Expression_ScalarFunction& from)
   : ::PROTOBUF_NAMESPACE_ID::Message(),
-      args_(from.args_) {
+      args_(from.args_),
+      arguments_(from.arguments_) {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   if (from._internal_has_output_type()) {
     output_type_ = new ::substrait::Type(*from.output_type_);
@@ -16543,6 +18158,7 @@ void Expression_ScalarFunction::Clear() {
   (void) cached_has_bits;
 
   args_.Clear();
+  arguments_.Clear();
   if (GetArenaForAllocation() == nullptr && output_type_ != nullptr) {
     delete output_type_;
   }
@@ -16565,7 +18181,7 @@ const char* Expression_ScalarFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression args = 2;
+      // repeated .substrait.Expression args = 2 [deprecated = true];
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -16583,6 +18199,19 @@ const char* Expression_ScalarFunction::_InternalParse(const char* ptr, ::PROTOBU
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
           ptr = ctx->ParseMessage(_internal_mutable_output_type(), ptr);
           CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .substrait.FunctionArgument arguments = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_arguments(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<34>(ptr));
         } else
           goto handle_unusual;
         continue;
@@ -16621,7 +18250,7 @@ uint8_t* Expression_ScalarFunction::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_function_reference(), target);
   }
 
-  // repeated .substrait.Expression args = 2;
+  // repeated .substrait.Expression args = 2 [deprecated = true];
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_args_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -16635,6 +18264,14 @@ uint8_t* Expression_ScalarFunction::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(
         3, _Internal::output_type(this), target, stream);
+  }
+
+  // repeated .substrait.FunctionArgument arguments = 4;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(4, this->_internal_arguments(i), target, stream);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -16653,9 +18290,16 @@ size_t Expression_ScalarFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression args = 2;
+  // repeated .substrait.Expression args = 2 [deprecated = true];
   total_size += 1UL * this->_internal_args_size();
   for (const auto& msg : this->args_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // repeated .substrait.FunctionArgument arguments = 4;
+  total_size += 1UL * this->_internal_arguments_size();
+  for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
@@ -16695,6 +18339,7 @@ void Expression_ScalarFunction::MergeFrom(const Expression_ScalarFunction& from)
   (void) cached_has_bits;
 
   args_.MergeFrom(from.args_);
+  arguments_.MergeFrom(from.arguments_);
   if (from._internal_has_output_type()) {
     _internal_mutable_output_type()->::substrait::Type::MergeFrom(from._internal_output_type());
   }
@@ -16719,6 +18364,7 @@ void Expression_ScalarFunction::InternalSwap(Expression_ScalarFunction* other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   args_.InternalSwap(&other->args_);
+  arguments_.InternalSwap(&other->arguments_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(Expression_ScalarFunction, function_reference_)
       + sizeof(Expression_ScalarFunction::function_reference_)
@@ -16730,7 +18376,7 @@ void Expression_ScalarFunction::InternalSwap(Expression_ScalarFunction* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ScalarFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[45]);
+      file_level_metadata_substrait_2falgebra_2eproto[51]);
 }
 
 // ===================================================================
@@ -16908,7 +18554,7 @@ void Expression_WindowFunction_Bound_Preceding::InternalSwap(Expression_WindowFu
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_Preceding::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[46]);
+      file_level_metadata_substrait_2falgebra_2eproto[52]);
 }
 
 // ===================================================================
@@ -17086,7 +18732,7 @@ void Expression_WindowFunction_Bound_Following::InternalSwap(Expression_WindowFu
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_Following::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[47]);
+      file_level_metadata_substrait_2falgebra_2eproto[53]);
 }
 
 // ===================================================================
@@ -17125,7 +18771,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_WindowFunction_Boun
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_CurrentRow::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[48]);
+      file_level_metadata_substrait_2falgebra_2eproto[54]);
 }
 
 // ===================================================================
@@ -17164,7 +18810,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_WindowFunction_Boun
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound_Unbounded::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[49]);
+      file_level_metadata_substrait_2falgebra_2eproto[55]);
 }
 
 // ===================================================================
@@ -17578,7 +19224,7 @@ void Expression_WindowFunction_Bound::InternalSwap(Expression_WindowFunction_Bou
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction_Bound::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[50]);
+      file_level_metadata_substrait_2falgebra_2eproto[56]);
 }
 
 // ===================================================================
@@ -17613,7 +19259,8 @@ Expression_WindowFunction::Expression_WindowFunction(::PROTOBUF_NAMESPACE_ID::Ar
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
   partitions_(arena),
   sorts_(arena),
-  args_(arena) {
+  args_(arena),
+  arguments_(arena) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -17624,7 +19271,8 @@ Expression_WindowFunction::Expression_WindowFunction(const Expression_WindowFunc
   : ::PROTOBUF_NAMESPACE_ID::Message(),
       partitions_(from.partitions_),
       sorts_(from.sorts_),
-      args_(from.args_) {
+      args_(from.args_),
+      arguments_(from.arguments_) {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   if (from._internal_has_upper_bound()) {
     upper_bound_ = new ::substrait::Expression_WindowFunction_Bound(*from.upper_bound_);
@@ -17687,6 +19335,7 @@ void Expression_WindowFunction::Clear() {
   partitions_.Clear();
   sorts_.Clear();
   args_.Clear();
+  arguments_.Clear();
   if (GetArenaForAllocation() == nullptr && upper_bound_ != nullptr) {
     delete upper_bound_;
   }
@@ -17778,7 +19427,7 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression args = 8;
+      // repeated .substrait.Expression args = 8 [deprecated = true];
       case 8:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
           ptr -= 1;
@@ -17788,6 +19437,19 @@ const char* Expression_WindowFunction::_InternalParse(const char* ptr, ::PROTOBU
             CHK_(ptr);
             if (!ctx->DataAvailable(ptr)) break;
           } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<66>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .substrait.FunctionArgument arguments = 9;
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 74)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_arguments(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<74>(ptr));
         } else
           goto handle_unusual;
         continue;
@@ -17873,12 +19535,20 @@ uint8_t* Expression_WindowFunction::_InternalSerialize(
         7, _Internal::output_type(this), target, stream);
   }
 
-  // repeated .substrait.Expression args = 8;
+  // repeated .substrait.Expression args = 8 [deprecated = true];
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_args_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
       InternalWriteMessage(8, this->_internal_args(i), target, stream);
+  }
+
+  // repeated .substrait.FunctionArgument arguments = 9;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(9, this->_internal_arguments(i), target, stream);
   }
 
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
@@ -17911,9 +19581,16 @@ size_t Expression_WindowFunction::ByteSizeLong() const {
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
-  // repeated .substrait.Expression args = 8;
+  // repeated .substrait.Expression args = 8 [deprecated = true];
   total_size += 1UL * this->_internal_args_size();
   for (const auto& msg : this->args_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // repeated .substrait.FunctionArgument arguments = 9;
+  total_size += 1UL * this->_internal_arguments_size();
+  for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
@@ -17975,6 +19652,7 @@ void Expression_WindowFunction::MergeFrom(const Expression_WindowFunction& from)
   partitions_.MergeFrom(from.partitions_);
   sorts_.MergeFrom(from.sorts_);
   args_.MergeFrom(from.args_);
+  arguments_.MergeFrom(from.arguments_);
   if (from._internal_has_upper_bound()) {
     _internal_mutable_upper_bound()->::substrait::Expression_WindowFunction_Bound::MergeFrom(from._internal_upper_bound());
   }
@@ -18010,6 +19688,7 @@ void Expression_WindowFunction::InternalSwap(Expression_WindowFunction* other) {
   partitions_.InternalSwap(&other->partitions_);
   sorts_.InternalSwap(&other->sorts_);
   args_.InternalSwap(&other->args_);
+  arguments_.InternalSwap(&other->arguments_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
       PROTOBUF_FIELD_OFFSET(Expression_WindowFunction, phase_)
       + sizeof(Expression_WindowFunction::phase_)
@@ -18021,7 +19700,7 @@ void Expression_WindowFunction::InternalSwap(Expression_WindowFunction* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_WindowFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[51]);
+      file_level_metadata_substrait_2falgebra_2eproto[57]);
 }
 
 // ===================================================================
@@ -18265,7 +19944,7 @@ void Expression_IfThen_IfClause::InternalSwap(Expression_IfThen_IfClause* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_IfThen_IfClause::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[52]);
+      file_level_metadata_substrait_2falgebra_2eproto[58]);
 }
 
 // ===================================================================
@@ -18493,7 +20172,7 @@ void Expression_IfThen::InternalSwap(Expression_IfThen* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_IfThen::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[53]);
+      file_level_metadata_substrait_2falgebra_2eproto[59]);
 }
 
 // ===================================================================
@@ -18540,14 +20219,15 @@ Expression_Cast::Expression_Cast(const Expression_Cast& from)
   } else {
     input_ = nullptr;
   }
+  failure_behavior_ = from.failure_behavior_;
   // @@protoc_insertion_point(copy_constructor:substrait.Expression.Cast)
 }
 
 inline void Expression_Cast::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&type_) - reinterpret_cast<char*>(this)),
-    0, static_cast<size_t>(reinterpret_cast<char*>(&input_) -
-    reinterpret_cast<char*>(&type_)) + sizeof(input_));
+    0, static_cast<size_t>(reinterpret_cast<char*>(&failure_behavior_) -
+    reinterpret_cast<char*>(&type_)) + sizeof(failure_behavior_));
 }
 
 Expression_Cast::~Expression_Cast() {
@@ -18587,6 +20267,7 @@ void Expression_Cast::Clear() {
     delete input_;
   }
   input_ = nullptr;
+  failure_behavior_ = 0;
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -18609,6 +20290,15 @@ const char* Expression_Cast::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPAC
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr = ctx->ParseMessage(_internal_mutable_input(), ptr);
           CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Expression.Cast.FailureBehavior failure_behavior = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_failure_behavior(static_cast<::substrait::Expression_Cast_FailureBehavior>(val));
         } else
           goto handle_unusual;
         continue;
@@ -18657,6 +20347,13 @@ uint8_t* Expression_Cast::_InternalSerialize(
         2, _Internal::input(this), target, stream);
   }
 
+  // .substrait.Expression.Cast.FailureBehavior failure_behavior = 3;
+  if (this->_internal_failure_behavior() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_failure_behavior(), target);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
@@ -18687,6 +20384,12 @@ size_t Expression_Cast::ByteSizeLong() const {
         *input_);
   }
 
+  // .substrait.Expression.Cast.FailureBehavior failure_behavior = 3;
+  if (this->_internal_failure_behavior() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_failure_behavior());
+  }
+
   return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
 }
 
@@ -18715,6 +20418,9 @@ void Expression_Cast::MergeFrom(const Expression_Cast& from) {
   if (from._internal_has_input()) {
     _internal_mutable_input()->::substrait::Expression::MergeFrom(from._internal_input());
   }
+  if (from._internal_failure_behavior() != 0) {
+    _internal_set_failure_behavior(from._internal_failure_behavior());
+  }
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
@@ -18733,8 +20439,8 @@ void Expression_Cast::InternalSwap(Expression_Cast* other) {
   using std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(Expression_Cast, input_)
-      + sizeof(Expression_Cast::input_)
+      PROTOBUF_FIELD_OFFSET(Expression_Cast, failure_behavior_)
+      + sizeof(Expression_Cast::failure_behavior_)
       - PROTOBUF_FIELD_OFFSET(Expression_Cast, type_)>(
           reinterpret_cast<char*>(&type_),
           reinterpret_cast<char*>(&other->type_));
@@ -18743,7 +20449,7 @@ void Expression_Cast::InternalSwap(Expression_Cast* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Cast::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[54]);
+      file_level_metadata_substrait_2falgebra_2eproto[60]);
 }
 
 // ===================================================================
@@ -18987,7 +20693,7 @@ void Expression_SwitchExpression_IfValue::InternalSwap(Expression_SwitchExpressi
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_SwitchExpression_IfValue::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[55]);
+      file_level_metadata_substrait_2falgebra_2eproto[61]);
 }
 
 // ===================================================================
@@ -19264,7 +20970,7 @@ void Expression_SwitchExpression::InternalSwap(Expression_SwitchExpression* othe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_SwitchExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[56]);
+      file_level_metadata_substrait_2falgebra_2eproto[62]);
 }
 
 // ===================================================================
@@ -19492,7 +21198,7 @@ void Expression_SingularOrList::InternalSwap(Expression_SingularOrList* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_SingularOrList::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[57]);
+      file_level_metadata_substrait_2falgebra_2eproto[63]);
 }
 
 // ===================================================================
@@ -19677,7 +21383,7 @@ void Expression_MultiOrList_Record::InternalSwap(Expression_MultiOrList_Record* 
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MultiOrList_Record::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[58]);
+      file_level_metadata_substrait_2falgebra_2eproto[64]);
 }
 
 // ===================================================================
@@ -19895,7 +21601,7 @@ void Expression_MultiOrList::InternalSwap(Expression_MultiOrList* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MultiOrList::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[59]);
+      file_level_metadata_substrait_2falgebra_2eproto[65]);
 }
 
 // ===================================================================
@@ -20131,7 +21837,7 @@ void Expression_EmbeddedFunction_PythonPickleFunction::InternalSwap(Expression_E
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_EmbeddedFunction_PythonPickleFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[60]);
+      file_level_metadata_substrait_2falgebra_2eproto[66]);
 }
 
 // ===================================================================
@@ -20367,7 +22073,7 @@ void Expression_EmbeddedFunction_WebAssemblyFunction::InternalSwap(Expression_Em
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_EmbeddedFunction_WebAssemblyFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[61]);
+      file_level_metadata_substrait_2falgebra_2eproto[67]);
 }
 
 // ===================================================================
@@ -20749,7 +22455,7 @@ void Expression_EmbeddedFunction::InternalSwap(Expression_EmbeddedFunction* othe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_EmbeddedFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[62]);
+      file_level_metadata_substrait_2falgebra_2eproto[68]);
 }
 
 // ===================================================================
@@ -20993,7 +22699,7 @@ void Expression_ReferenceSegment_MapKey::InternalSwap(Expression_ReferenceSegmen
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment_MapKey::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[63]);
+      file_level_metadata_substrait_2falgebra_2eproto[69]);
 }
 
 // ===================================================================
@@ -21220,7 +22926,7 @@ void Expression_ReferenceSegment_StructField::InternalSwap(Expression_ReferenceS
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment_StructField::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[64]);
+      file_level_metadata_substrait_2falgebra_2eproto[70]);
 }
 
 // ===================================================================
@@ -21447,7 +23153,7 @@ void Expression_ReferenceSegment_ListElement::InternalSwap(Expression_ReferenceS
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment_ListElement::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[65]);
+      file_level_metadata_substrait_2falgebra_2eproto[71]);
 }
 
 // ===================================================================
@@ -21804,7 +23510,7 @@ void Expression_ReferenceSegment::InternalSwap(Expression_ReferenceSegment* othe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_ReferenceSegment::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[66]);
+      file_level_metadata_substrait_2falgebra_2eproto[72]);
 }
 
 // ===================================================================
@@ -22161,7 +23867,7 @@ void Expression_MaskExpression_Select::InternalSwap(Expression_MaskExpression_Se
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_Select::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[67]);
+      file_level_metadata_substrait_2falgebra_2eproto[73]);
 }
 
 // ===================================================================
@@ -22346,7 +24052,7 @@ void Expression_MaskExpression_StructSelect::InternalSwap(Expression_MaskExpress
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_StructSelect::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[68]);
+      file_level_metadata_substrait_2falgebra_2eproto[74]);
 }
 
 // ===================================================================
@@ -22573,7 +24279,7 @@ void Expression_MaskExpression_StructItem::InternalSwap(Expression_MaskExpressio
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_StructItem::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[69]);
+      file_level_metadata_substrait_2falgebra_2eproto[75]);
 }
 
 // ===================================================================
@@ -22751,7 +24457,7 @@ void Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::InternalSw
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect_ListSelectItem_ListElement::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[70]);
+      file_level_metadata_substrait_2falgebra_2eproto[76]);
 }
 
 // ===================================================================
@@ -22963,7 +24669,7 @@ void Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::InternalSwap
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[71]);
+      file_level_metadata_substrait_2falgebra_2eproto[77]);
 }
 
 // ===================================================================
@@ -23263,7 +24969,7 @@ void Expression_MaskExpression_ListSelect_ListSelectItem::InternalSwap(Expressio
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect_ListSelectItem::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[72]);
+      file_level_metadata_substrait_2falgebra_2eproto[78]);
 }
 
 // ===================================================================
@@ -23491,7 +25197,7 @@ void Expression_MaskExpression_ListSelect::InternalSwap(Expression_MaskExpressio
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_ListSelect::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[73]);
+      file_level_metadata_substrait_2falgebra_2eproto[79]);
 }
 
 // ===================================================================
@@ -23694,7 +25400,7 @@ void Expression_MaskExpression_MapSelect_MapKey::InternalSwap(Expression_MaskExp
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_MapSelect_MapKey::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[74]);
+      file_level_metadata_substrait_2falgebra_2eproto[80]);
 }
 
 // ===================================================================
@@ -23897,7 +25603,7 @@ void Expression_MaskExpression_MapSelect_MapKeyExpression::InternalSwap(Expressi
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_MapSelect_MapKeyExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[75]);
+      file_level_metadata_substrait_2falgebra_2eproto[81]);
 }
 
 // ===================================================================
@@ -24240,7 +25946,7 @@ void Expression_MaskExpression_MapSelect::InternalSwap(Expression_MaskExpression
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression_MapSelect::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[76]);
+      file_level_metadata_substrait_2falgebra_2eproto[82]);
 }
 
 // ===================================================================
@@ -24467,7 +26173,7 @@ void Expression_MaskExpression::InternalSwap(Expression_MaskExpression* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_MaskExpression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[77]);
+      file_level_metadata_substrait_2falgebra_2eproto[83]);
 }
 
 // ===================================================================
@@ -24506,7 +26212,7 @@ const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Expression_FieldReference_Root
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_FieldReference_RootReference::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[78]);
+      file_level_metadata_substrait_2falgebra_2eproto[84]);
 }
 
 // ===================================================================
@@ -24684,7 +26390,7 @@ void Expression_FieldReference_OuterReference::InternalSwap(Expression_FieldRefe
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_FieldReference_OuterReference::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[79]);
+      file_level_metadata_substrait_2falgebra_2eproto[85]);
 }
 
 // ===================================================================
@@ -25188,7 +26894,7 @@ void Expression_FieldReference::InternalSwap(Expression_FieldReference* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_FieldReference::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[80]);
+      file_level_metadata_substrait_2falgebra_2eproto[86]);
 }
 
 // ===================================================================
@@ -25383,7 +27089,7 @@ void Expression_Subquery_Scalar::InternalSwap(Expression_Subquery_Scalar* other)
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_Scalar::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[81]);
+      file_level_metadata_substrait_2falgebra_2eproto[87]);
 }
 
 // ===================================================================
@@ -25611,7 +27317,7 @@ void Expression_Subquery_InPredicate::InternalSwap(Expression_Subquery_InPredica
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_InPredicate::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[82]);
+      file_level_metadata_substrait_2falgebra_2eproto[88]);
 }
 
 // ===================================================================
@@ -25841,7 +27547,7 @@ void Expression_Subquery_SetPredicate::InternalSwap(Expression_Subquery_SetPredi
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_SetPredicate::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[83]);
+      file_level_metadata_substrait_2falgebra_2eproto[89]);
 }
 
 // ===================================================================
@@ -26141,7 +27847,7 @@ void Expression_Subquery_SetComparison::InternalSwap(Expression_Subquery_SetComp
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery_SetComparison::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[84]);
+      file_level_metadata_substrait_2falgebra_2eproto[90]);
 }
 
 // ===================================================================
@@ -26555,7 +28261,7 @@ void Expression_Subquery::InternalSwap(Expression_Subquery* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression_Subquery::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[85]);
+      file_level_metadata_substrait_2falgebra_2eproto[91]);
 }
 
 // ===================================================================
@@ -26570,9 +28276,9 @@ class Expression::_Internal {
   static const ::substrait::Expression_SwitchExpression& switch_expression(const Expression* msg);
   static const ::substrait::Expression_SingularOrList& singular_or_list(const Expression* msg);
   static const ::substrait::Expression_MultiOrList& multi_or_list(const Expression* msg);
-  static const ::substrait::Expression_Enum& enum_(const Expression* msg);
   static const ::substrait::Expression_Cast& cast(const Expression* msg);
   static const ::substrait::Expression_Subquery& subquery(const Expression* msg);
+  static const ::substrait::Expression_Enum& enum_(const Expression* msg);
 };
 
 const ::substrait::Expression_Literal&
@@ -26607,10 +28313,6 @@ const ::substrait::Expression_MultiOrList&
 Expression::_Internal::multi_or_list(const Expression* msg) {
   return *msg->rex_type_.multi_or_list_;
 }
-const ::substrait::Expression_Enum&
-Expression::_Internal::enum_(const Expression* msg) {
-  return *msg->rex_type_.enum__;
-}
 const ::substrait::Expression_Cast&
 Expression::_Internal::cast(const Expression* msg) {
   return *msg->rex_type_.cast_;
@@ -26618,6 +28320,10 @@ Expression::_Internal::cast(const Expression* msg) {
 const ::substrait::Expression_Subquery&
 Expression::_Internal::subquery(const Expression* msg) {
   return *msg->rex_type_.subquery_;
+}
+const ::substrait::Expression_Enum&
+Expression::_Internal::enum_(const Expression* msg) {
+  return *msg->rex_type_.enum__;
 }
 void Expression::set_allocated_literal(::substrait::Expression_Literal* literal) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -26739,21 +28445,6 @@ void Expression::set_allocated_multi_or_list(::substrait::Expression_MultiOrList
   }
   // @@protoc_insertion_point(field_set_allocated:substrait.Expression.multi_or_list)
 }
-void Expression::set_allocated_enum_(::substrait::Expression_Enum* enum_) {
-  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
-  clear_rex_type();
-  if (enum_) {
-    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
-      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Expression_Enum>::GetOwningArena(enum_);
-    if (message_arena != submessage_arena) {
-      enum_ = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
-          message_arena, enum_, submessage_arena);
-    }
-    set_has_enum_();
-    rex_type_.enum__ = enum_;
-  }
-  // @@protoc_insertion_point(field_set_allocated:substrait.Expression.enum)
-}
 void Expression::set_allocated_cast(::substrait::Expression_Cast* cast) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
   clear_rex_type();
@@ -26783,6 +28474,21 @@ void Expression::set_allocated_subquery(::substrait::Expression_Subquery* subque
     rex_type_.subquery_ = subquery;
   }
   // @@protoc_insertion_point(field_set_allocated:substrait.Expression.subquery)
+}
+void Expression::set_allocated_enum_(::substrait::Expression_Enum* enum_) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_rex_type();
+  if (enum_) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Expression_Enum>::GetOwningArena(enum_);
+    if (message_arena != submessage_arena) {
+      enum_ = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, enum_, submessage_arena);
+    }
+    set_has_enum_();
+    rex_type_.enum__ = enum_;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.Expression.enum)
 }
 Expression::Expression(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
@@ -26830,16 +28536,16 @@ Expression::Expression(const Expression& from)
       _internal_mutable_multi_or_list()->::substrait::Expression_MultiOrList::MergeFrom(from._internal_multi_or_list());
       break;
     }
-    case kEnum: {
-      _internal_mutable_enum_()->::substrait::Expression_Enum::MergeFrom(from._internal_enum_());
-      break;
-    }
     case kCast: {
       _internal_mutable_cast()->::substrait::Expression_Cast::MergeFrom(from._internal_cast());
       break;
     }
     case kSubquery: {
       _internal_mutable_subquery()->::substrait::Expression_Subquery::MergeFrom(from._internal_subquery());
+      break;
+    }
+    case kEnum: {
+      _internal_mutable_enum_()->::substrait::Expression_Enum::MergeFrom(from._internal_enum_());
       break;
     }
     case REX_TYPE_NOT_SET: {
@@ -26928,12 +28634,6 @@ void Expression::clear_rex_type() {
       }
       break;
     }
-    case kEnum: {
-      if (GetArenaForAllocation() == nullptr) {
-        delete rex_type_.enum__;
-      }
-      break;
-    }
     case kCast: {
       if (GetArenaForAllocation() == nullptr) {
         delete rex_type_.cast_;
@@ -26943,6 +28643,12 @@ void Expression::clear_rex_type() {
     case kSubquery: {
       if (GetArenaForAllocation() == nullptr) {
         delete rex_type_.subquery_;
+      }
+      break;
+    }
+    case kEnum: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete rex_type_.enum__;
       }
       break;
     }
@@ -27034,7 +28740,7 @@ const char* Expression::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID:
         } else
           goto handle_unusual;
         continue;
-      // .substrait.Expression.Enum enum = 10;
+      // .substrait.Expression.Enum enum = 10 [deprecated = true];
       case 10:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 82)) {
           ptr = ctx->ParseMessage(_internal_mutable_enum_(), ptr);
@@ -27151,7 +28857,7 @@ uint8_t* Expression::_InternalSerialize(
         9, _Internal::multi_or_list(this), target, stream);
   }
 
-  // .substrait.Expression.Enum enum = 10;
+  // .substrait.Expression.Enum enum = 10 [deprecated = true];
   if (_internal_has_enum_()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
@@ -27248,13 +28954,6 @@ size_t Expression::ByteSizeLong() const {
           *rex_type_.multi_or_list_);
       break;
     }
-    // .substrait.Expression.Enum enum = 10;
-    case kEnum: {
-      total_size += 1 +
-        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
-          *rex_type_.enum__);
-      break;
-    }
     // .substrait.Expression.Cast cast = 11;
     case kCast: {
       total_size += 1 +
@@ -27267,6 +28966,13 @@ size_t Expression::ByteSizeLong() const {
       total_size += 1 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
           *rex_type_.subquery_);
+      break;
+    }
+    // .substrait.Expression.Enum enum = 10 [deprecated = true];
+    case kEnum: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *rex_type_.enum__);
       break;
     }
     case REX_TYPE_NOT_SET: {
@@ -27328,16 +29034,16 @@ void Expression::MergeFrom(const Expression& from) {
       _internal_mutable_multi_or_list()->::substrait::Expression_MultiOrList::MergeFrom(from._internal_multi_or_list());
       break;
     }
-    case kEnum: {
-      _internal_mutable_enum_()->::substrait::Expression_Enum::MergeFrom(from._internal_enum_());
-      break;
-    }
     case kCast: {
       _internal_mutable_cast()->::substrait::Expression_Cast::MergeFrom(from._internal_cast());
       break;
     }
     case kSubquery: {
       _internal_mutable_subquery()->::substrait::Expression_Subquery::MergeFrom(from._internal_subquery());
+      break;
+    }
+    case kEnum: {
+      _internal_mutable_enum_()->::substrait::Expression_Enum::MergeFrom(from._internal_enum_());
       break;
     }
     case REX_TYPE_NOT_SET: {
@@ -27368,7 +29074,7 @@ void Expression::InternalSwap(Expression* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Expression::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[86]);
+      file_level_metadata_substrait_2falgebra_2eproto[92]);
 }
 
 // ===================================================================
@@ -27662,7 +29368,7 @@ void SortField::InternalSwap(SortField* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata SortField::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[87]);
+      file_level_metadata_substrait_2falgebra_2eproto[93]);
 }
 
 // ===================================================================
@@ -27686,7 +29392,8 @@ AggregateFunction::AggregateFunction(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
   args_(arena),
-  sorts_(arena) {
+  sorts_(arena),
+  arguments_(arena) {
   SharedCtor();
   if (!is_message_owned) {
     RegisterArenaDtor(arena);
@@ -27696,7 +29403,8 @@ AggregateFunction::AggregateFunction(::PROTOBUF_NAMESPACE_ID::Arena* arena,
 AggregateFunction::AggregateFunction(const AggregateFunction& from)
   : ::PROTOBUF_NAMESPACE_ID::Message(),
       args_(from.args_),
-      sorts_(from.sorts_) {
+      sorts_(from.sorts_),
+      arguments_(from.arguments_) {
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
   if (from._internal_has_output_type()) {
     output_type_ = new ::substrait::Type(*from.output_type_);
@@ -27704,16 +29412,16 @@ AggregateFunction::AggregateFunction(const AggregateFunction& from)
     output_type_ = nullptr;
   }
   ::memcpy(&function_reference_, &from.function_reference_,
-    static_cast<size_t>(reinterpret_cast<char*>(&phase_) -
-    reinterpret_cast<char*>(&function_reference_)) + sizeof(phase_));
+    static_cast<size_t>(reinterpret_cast<char*>(&invocation_) -
+    reinterpret_cast<char*>(&function_reference_)) + sizeof(invocation_));
   // @@protoc_insertion_point(copy_constructor:substrait.AggregateFunction)
 }
 
 inline void AggregateFunction::SharedCtor() {
 ::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
     reinterpret_cast<char*>(&output_type_) - reinterpret_cast<char*>(this)),
-    0, static_cast<size_t>(reinterpret_cast<char*>(&phase_) -
-    reinterpret_cast<char*>(&output_type_)) + sizeof(phase_));
+    0, static_cast<size_t>(reinterpret_cast<char*>(&invocation_) -
+    reinterpret_cast<char*>(&output_type_)) + sizeof(invocation_));
 }
 
 AggregateFunction::~AggregateFunction() {
@@ -27746,13 +29454,14 @@ void AggregateFunction::Clear() {
 
   args_.Clear();
   sorts_.Clear();
+  arguments_.Clear();
   if (GetArenaForAllocation() == nullptr && output_type_ != nullptr) {
     delete output_type_;
   }
   output_type_ = nullptr;
   ::memset(&function_reference_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&phase_) -
-      reinterpret_cast<char*>(&function_reference_)) + sizeof(phase_));
+      reinterpret_cast<char*>(&invocation_) -
+      reinterpret_cast<char*>(&function_reference_)) + sizeof(invocation_));
   _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
@@ -27770,7 +29479,7 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
-      // repeated .substrait.Expression args = 2;
+      // repeated .substrait.Expression args = 2 [deprecated = true];
       case 2:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
           ptr -= 1;
@@ -27813,6 +29522,28 @@ const char* AggregateFunction::_InternalParse(const char* ptr, ::PROTOBUF_NAMESP
         } else
           goto handle_unusual;
         continue;
+      // .substrait.AggregateFunction.AggregationInvocation invocation = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_invocation(static_cast<::substrait::AggregateFunction_AggregationInvocation>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .substrait.FunctionArgument arguments = 7;
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_arguments(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<58>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
       default:
         goto handle_unusual;
     }  // switch
@@ -27848,7 +29579,7 @@ uint8_t* AggregateFunction::_InternalSerialize(
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_function_reference(), target);
   }
 
-  // repeated .substrait.Expression args = 2;
+  // repeated .substrait.Expression args = 2 [deprecated = true];
   for (unsigned int i = 0,
       n = static_cast<unsigned int>(this->_internal_args_size()); i < n; i++) {
     target = stream->EnsureSpace(target);
@@ -27879,6 +29610,21 @@ uint8_t* AggregateFunction::_InternalSerialize(
         5, _Internal::output_type(this), target, stream);
   }
 
+  // .substrait.AggregateFunction.AggregationInvocation invocation = 6;
+  if (this->_internal_invocation() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
+      6, this->_internal_invocation(), target);
+  }
+
+  // repeated .substrait.FunctionArgument arguments = 7;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_arguments_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(7, this->_internal_arguments(i), target, stream);
+  }
+
   if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
         _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
@@ -27895,7 +29641,7 @@ size_t AggregateFunction::ByteSizeLong() const {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  // repeated .substrait.Expression args = 2;
+  // repeated .substrait.Expression args = 2 [deprecated = true];
   total_size += 1UL * this->_internal_args_size();
   for (const auto& msg : this->args_) {
     total_size +=
@@ -27905,6 +29651,13 @@ size_t AggregateFunction::ByteSizeLong() const {
   // repeated .substrait.SortField sorts = 3;
   total_size += 1UL * this->_internal_sorts_size();
   for (const auto& msg : this->sorts_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // repeated .substrait.FunctionArgument arguments = 7;
+  total_size += 1UL * this->_internal_arguments_size();
+  for (const auto& msg : this->arguments_) {
     total_size +=
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
@@ -27925,6 +29678,12 @@ size_t AggregateFunction::ByteSizeLong() const {
   if (this->_internal_phase() != 0) {
     total_size += 1 +
       ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_phase());
+  }
+
+  // .substrait.AggregateFunction.AggregationInvocation invocation = 6;
+  if (this->_internal_invocation() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_invocation());
   }
 
   return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
@@ -27951,6 +29710,7 @@ void AggregateFunction::MergeFrom(const AggregateFunction& from) {
 
   args_.MergeFrom(from.args_);
   sorts_.MergeFrom(from.sorts_);
+  arguments_.MergeFrom(from.arguments_);
   if (from._internal_has_output_type()) {
     _internal_mutable_output_type()->::substrait::Type::MergeFrom(from._internal_output_type());
   }
@@ -27959,6 +29719,9 @@ void AggregateFunction::MergeFrom(const AggregateFunction& from) {
   }
   if (from._internal_phase() != 0) {
     _internal_set_phase(from._internal_phase());
+  }
+  if (from._internal_invocation() != 0) {
+    _internal_set_invocation(from._internal_invocation());
   }
   _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
@@ -27979,9 +29742,10 @@ void AggregateFunction::InternalSwap(AggregateFunction* other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   args_.InternalSwap(&other->args_);
   sorts_.InternalSwap(&other->sorts_);
+  arguments_.InternalSwap(&other->arguments_);
   ::PROTOBUF_NAMESPACE_ID::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AggregateFunction, phase_)
-      + sizeof(AggregateFunction::phase_)
+      PROTOBUF_FIELD_OFFSET(AggregateFunction, invocation_)
+      + sizeof(AggregateFunction::invocation_)
       - PROTOBUF_FIELD_OFFSET(AggregateFunction, output_type_)>(
           reinterpret_cast<char*>(&output_type_),
           reinterpret_cast<char*>(&other->output_type_));
@@ -27990,7 +29754,7 @@ void AggregateFunction::InternalSwap(AggregateFunction* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata AggregateFunction::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2falgebra_2eproto_getter, &descriptor_table_substrait_2falgebra_2eproto_once,
-      file_level_metadata_substrait_2falgebra_2eproto[88]);
+      file_level_metadata_substrait_2falgebra_2eproto[94]);
 }
 
 // @@protoc_insertion_point(namespace_scope)
@@ -28022,6 +29786,15 @@ template<> PROTOBUF_NOINLINE ::substrait::ReadRel_VirtualTable* Arena::CreateMay
 }
 template<> PROTOBUF_NOINLINE ::substrait::ReadRel_ExtensionTable* Arena::CreateMaybeMessage< ::substrait::ReadRel_ExtensionTable >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::ReadRel_ExtensionTable >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* Arena::CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* Arena::CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* Arena::CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions >(arena);
 }
 template<> PROTOBUF_NOINLINE ::substrait::ReadRel_LocalFiles_FileOrFiles* Arena::CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::ReadRel_LocalFiles_FileOrFiles >(arena);
@@ -28098,6 +29871,12 @@ template<> PROTOBUF_NOINLINE ::substrait::RelRoot* Arena::CreateMaybeMessage< ::
 template<> PROTOBUF_NOINLINE ::substrait::Rel* Arena::CreateMaybeMessage< ::substrait::Rel >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::Rel >(arena);
 }
+template<> PROTOBUF_NOINLINE ::substrait::FunctionArgument_Enum* Arena::CreateMaybeMessage< ::substrait::FunctionArgument_Enum >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::FunctionArgument_Enum >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::FunctionArgument* Arena::CreateMaybeMessage< ::substrait::FunctionArgument >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::FunctionArgument >(arena);
+}
 template<> PROTOBUF_NOINLINE ::substrait::Expression_Enum_Empty* Arena::CreateMaybeMessage< ::substrait::Expression_Enum_Empty >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::Expression_Enum_Empty >(arena);
 }
@@ -28127,6 +29906,9 @@ template<> PROTOBUF_NOINLINE ::substrait::Expression_Literal_Struct* Arena::Crea
 }
 template<> PROTOBUF_NOINLINE ::substrait::Expression_Literal_List* Arena::CreateMaybeMessage< ::substrait::Expression_Literal_List >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::Expression_Literal_List >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::Expression_Literal_UserDefined* Arena::CreateMaybeMessage< ::substrait::Expression_Literal_UserDefined >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::Expression_Literal_UserDefined >(arena);
 }
 template<> PROTOBUF_NOINLINE ::substrait::Expression_Literal* Arena::CreateMaybeMessage< ::substrait::Expression_Literal >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::Expression_Literal >(arena);
