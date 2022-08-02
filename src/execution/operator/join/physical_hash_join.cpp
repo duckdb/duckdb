@@ -538,6 +538,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		if (lstate.full_outer_in_progress != 0) {
 			// This thread returned full outer scan tuples in the previous GetData call, mark them as done
 			D_ASSERT(IsRightOuterJoin(join_type));
+			lock_guard<mutex> probe_lock(probe_ss.lock);
 			lock_guard<mutex> fo_lock(fo_ss.lock);
 			fo_ss.scanned += lstate.full_outer_in_progress;
 			lstate.full_outer_in_progress = 0;
@@ -580,6 +581,10 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 
 			// We might need to scan the HT
 			lock_guard<mutex> fo_lock(fo_ss.lock);
+			if (probe_ss.scanned != probe_ss.total) {
+				// Other threads are still probing so can't scan full outer yet, spinlock instead
+				continue;
+			}
 			if (fo_ss.scan_index == fo_ss.total) {
 				// We cannot assign any more full/outer tuples to this thread
 				task_type = ExternalProbeTaskType::PREPARE_NEXT_ROUND;
@@ -601,7 +606,8 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 				lstate.full_outer_in_progress += scanned;
 				task_type = ExternalProbeTaskType::GATHER_FULL_OUTER;
 			}
-		} while (false);
+			break;
+		} while (true);
 
 		switch (task_type) {
 		case ExternalProbeTaskType::EXTERNAL_PROBE:
@@ -613,6 +619,10 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		case ExternalProbeTaskType::PREPARE_NEXT_ROUND:
 			while (true) {
 				lock_guard<mutex> probe_lock(probe_ss.lock);
+				if (probe_ss.scan_index != probe_ss.total) {
+					// Another thread prepared the next probe round
+					break;
+				}
 				if (probe_ss.scanned != probe_ss.total) {
 					// Spinlock until all threads finish their last probe
 					continue;
