@@ -6,16 +6,14 @@ include_directories(jemalloc/include)
 include_directories(include)
 add_subdirectory(jemalloc)
 
-set(JEMALLOC_EXTENSION_FILES
-    jemalloc-extension.cpp
-    ${JEMALLOC_OBJECT_FILES})
+set(JEMALLOC_EXTENSION_FILES jemalloc-extension.cpp ${JEMALLOC_OBJECT_FILES})
 
 add_library(jemalloc_extension STATIC ${JEMALLOC_EXTENSION_FILES})
 
 build_loadable_extension(jemalloc ${JEMALLOC_EXTENSION_FILES})
 
 install(
-        TARGETS jemalloc_extension
-        EXPORT "${DUCKDB_EXPORT_SET}"
-        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+  TARGETS jemalloc_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
