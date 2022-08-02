@@ -295,7 +295,7 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	}
 
 	auto cost = CardinalityEstimator::ComputeCost(left, right, cardinality_estimator.lowest_card);
-	D_ASSERT(cost >= 0);
+	D_ASSERT(cost >= cardinality_estimator.lowest_card);
 	auto result = make_unique<JoinNode>(set, best_connection, left, right, cardinality_estimator.lowest_card, cost);
 	return result;
 }

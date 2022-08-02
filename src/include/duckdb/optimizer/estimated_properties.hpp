@@ -26,6 +26,7 @@ public:
 
 	double GetCardinality();
 	double GetCost();
+	void SetCost(double new_cost);
 	void SetCardinality(double cardinality);
 
 private:

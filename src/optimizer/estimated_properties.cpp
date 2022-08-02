@@ -14,4 +14,8 @@ void EstimatedProperties::SetCardinality(double new_card) {
 	cardinality = new_card;
 }
 
+void EstimatedProperties::SetCost(double new_cost) {
+	cost = new_cost;
+}
+
 } // namespace duckdb

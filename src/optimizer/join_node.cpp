@@ -18,6 +18,10 @@ double JoinNode::GetCost() {
 	return estimated_props->GetCost();
 }
 
+void JoinNode::SetCost(double cost) {
+	estimated_props->SetCost(cost);
+}
+
 double JoinNode::GetBaseTableCardinality() {
 	if (set->count > 1) {
 		throw InvalidInputException("Cannot call get base table cardinality on intermediate join node");

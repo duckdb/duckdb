@@ -29,8 +29,8 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 		// Both set
 		return false;
 	}
-	//! Filter on one relation, (i.e string or range filter on a column).
-	//! Grab the first relation and add it to the the equivalence_relations
+	// Filter on one relation, (i.e string or range filter on a column).
+	// Grab the first relation and add it to the the equivalence_relations
 	D_ASSERT(filter_info->set->count >= 1);
 	for (const column_binding_set_t &i_set : equivalent_relations) {
 		if (i_set.count(filter_info->left_binding) > 0) {
@@ -48,7 +48,7 @@ bool CardinalityEstimator::SingleColumnFilter(FilterInfo *filter_info) {
 vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *filter_info) {
 	vector<idx_t> matching_equivalent_sets;
 	auto equivalent_relation_index = 0;
-	//! eri = equivalent relation index
+	// eri = equivalent relation index
 	bool added_to_eri;
 
 	for (const column_binding_set_t &i_set : equivalent_relations) {
@@ -57,8 +57,8 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 			matching_equivalent_sets.push_back(equivalent_relation_index);
 			added_to_eri = true;
 		}
-		//! don't add both left and right to the matching_equivalent_sets
-		//! since both left and right get added to that index anyway.
+		// don't add both left and right to the matching_equivalent_sets
+		// since both left and right get added to that index anyway.
 		if (i_set.count(filter_info->right_binding) > 0 && !added_to_eri) {
 			matching_equivalent_sets.push_back(equivalent_relation_index);
 		}
@@ -150,6 +150,7 @@ void CardinalityEstimator::InitTotalDomains() {
 }
 
 double CardinalityEstimator::ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality) {
+
 	double cost = expected_cardinality + left->GetCost() + right->GetCost();
 	return cost;
 }
@@ -234,7 +235,7 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
-		if (join->join_type == JoinType::MARK) {
+		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
 			auto child = join->children.at(0).get();
 			get = GetLogicalGet(child);
 		}
@@ -270,6 +271,18 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<struct NodeOp> *
 		auto join_node = (*node_ops)[i].node.get();
 		auto op = (*node_ops)[i].op;
 		join_node->SetBaseTableCardinality(op->EstimateCardinality(context));
+		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			auto &join = (LogicalComparisonJoin &)*op;
+			if (join.join_type == JoinType::LEFT) {
+				// TODO: inspect child operators to get a more accurate cost
+				// and cardinality estimation. If an base op is a Logical Comparison join
+				// it is probably a left join, so cost of the larger table is a fine
+				// estimate
+				// No need to update a mark join cost because I say so.
+				join_node->SetCost(join_node->GetBaseTableCardinality());
+			}
+		}
+		// update cardinality with filters
 		EstimateBaseTableCardinality(join_node, op);
 		UpdateTotalDomains(join_node, op);
 	}
