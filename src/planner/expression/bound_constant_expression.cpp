@@ -1,5 +1,5 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 

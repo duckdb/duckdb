@@ -223,7 +223,7 @@ CatalogEntry *SchemaCatalogEntry::AddFunction(ClientContext &context, CreateFunc
 		auto scalar_info = (CreateScalarFunctionInfo *)info;
 		auto &scalars = *(ScalarFunctionCatalogEntry *)entry;
 		for (const auto &scalar : scalars.functions.functions) {
-			scalar_info->functions.AddFunction(move(scalar.second));
+			scalar_info->functions.AddFunction(scalar.second);
 		}
 		break;
 	}

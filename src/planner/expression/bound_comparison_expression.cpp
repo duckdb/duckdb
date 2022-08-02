@@ -1,5 +1,5 @@
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-
 #include "duckdb/parser/expression/comparison_expression.hpp"
 
 namespace duckdb {
