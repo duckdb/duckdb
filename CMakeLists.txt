@@ -245,6 +245,7 @@ option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
 option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
+option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." FALSE)
 option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
@@ -404,8 +405,6 @@ include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
 include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
-include_directories(third_party/jemalloc)
-include_directories(third_party/jemalloc/include)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -540,6 +539,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_JSON_EXTENSION=${BUILD_JSON_EXTENSION})
   endif()
 
+  if(${BUILD_JEMALLOC_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/jemalloc/include)
+    add_definitions(-DBUILD_JEMALLOC_EXTENSION=${BUILD_JEMALLOC_EXTENSION})
+  endif()
+
   if(${BUILD_EXCEL_EXTENSION})
     include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
     add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
@@ -586,6 +590,10 @@ function(add_extension_dependencies LIBRARY)
 
   if(${BUILD_JSON_EXTENSION})
     add_dependencies(${LIBRARY} json_extension)
+  endif()
+
+  if(${BUILD_JEMALLOC_EXTENSION})
+    add_dependencies(${LIBRARY} jemalloc_extension)
   endif()
 
   if(${BUILD_EXCEL_EXTENSION})
@@ -638,6 +646,10 @@ function(link_extension_libraries LIBRARY)
 
   if(${BUILD_JSON_EXTENSION})
     target_link_libraries(${LIBRARY} json_extension)
+  endif()
+
+  if(${BUILD_JEMALLOC_EXTENSION})
+    target_link_libraries(${LIBRARY} jemalloc_extension)
   endif()
 
   if(${BUILD_EXCEL_EXTENSION})

@@ -1,14 +1,17 @@
-cmake_minimum_required(VERSION 2.8.12)
+#target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
+#target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_RENAME)
+#
+#if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+#    target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_DEBUG)
+#endif ()
 
-if (POLICY CMP0063)
-    cmake_policy(SET CMP0063 NEW)
-endif ()
+# Need to include this so that RTLD_NEXT is defined
+#target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
+# TODO: not sure if needed anymore, seems to have something to do with JEMALLOC_BACKGROUND_THREAD
 
 include_directories(include)
 
-add_library(
-        duckdb_jemalloc
-        STATIC
+add_library(jemalloc OBJECT
         src/arena.cpp
         src/background_thread.cpp
         src/base.cpp
@@ -72,23 +75,8 @@ add_library(
         src/tsd.cpp
         src/witness.cpp)
 
-target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_PRIVATE_NAMESPACE)
-target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_NO_RENAME)
+set(JEMALLOC_OBJECT_FILES
+        ${JEMALLOC_OBJECT_FILES} $<TARGET_OBJECTS:jemalloc>
+        PARENT_SCOPE)
 
-if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_DEBUG)
-endif ()
-
-# Need to include this so that RTLD_NEXT is defined
-#target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
-# TODO: not sure if needed anymore, seems to have something to do with JEMALLOC_BACKGROUND_THREAD
-
-target_include_directories(duckdb_jemalloc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-set_target_properties(duckdb_jemalloc PROPERTIES EXPORT_NAME duckdb_jemalloc)
-
-install(TARGETS duckdb_jemalloc
-        EXPORT "${DUCKDB_EXPORT_SET}"
-        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
-
-disable_target_warnings(duckdb_jemalloc)
+disable_target_warnings(jemalloc)

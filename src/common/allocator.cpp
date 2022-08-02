@@ -120,6 +120,10 @@ Allocator &Allocator::DefaultAllocator() {
 	return DEFAULT_ALLOCATOR;
 }
 
+void Allocator::TransferPrivateData(duckdb::Allocator &other) {
+	other.private_data = move(private_data);
+}
+
 //===--------------------------------------------------------------------===//
 // Debug Info (extended)
 //===--------------------------------------------------------------------===//

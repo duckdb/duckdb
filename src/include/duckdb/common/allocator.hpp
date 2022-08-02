@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "jemalloc_wrapper.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -72,14 +71,14 @@ public:
 	}
 
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-		return (data_ptr_t)JEMallocWrapper::Allocate(size);
+		return (data_ptr_t)malloc(size);
 	}
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-		JEMallocWrapper::Free(pointer);
+		free(pointer);
 	}
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                    idx_t size) {
-		return (data_ptr_t)JEMallocWrapper::ReAllocate(pointer, size);
+		return (data_ptr_t)realloc(pointer, size);
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
@@ -87,6 +86,10 @@ public:
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
 	}
+
+	//! Transfer private data from this allocator to the other allocator
+	//! This should only be used when this allocator is overriden with another allocator
+	void TransferPrivateData(Allocator &other);
 
 	static Allocator &DefaultAllocator();
 
