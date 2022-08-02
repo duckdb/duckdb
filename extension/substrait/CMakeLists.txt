@@ -15,6 +15,7 @@ set(PROTOBUF_SOURCES
     ../../third_party/google/protobuf/descriptor.pb.cc
     ../../third_party/google/protobuf/descriptor_database.cc
     ../../third_party/google/protobuf/dynamic_message.cc
+    ../../third_party/google/protobuf/empty.pb.cc
     ../../third_party/google/protobuf/extension_set.cc
     ../../third_party/google/protobuf/extension_set_heavy.cc
     ../../third_party/google/protobuf/generated_enum_util.cc
@@ -53,7 +54,30 @@ set(PROTOBUF_SOURCES
     ../../third_party/google/protobuf/stubs/stringprintf.cc
     ../../third_party/google/protobuf/stubs/structurally_valid.cc
     ../../third_party/google/protobuf/stubs/strutil.cc
-    ../../third_party/google/protobuf/stubs/substitute.cc)
+    ../../third_party/google/protobuf/stubs/substitute.cc
+    ../../third_party/google/protobuf/stubs/bytestream.cc
+    ../../third_party/google/protobuf/util/json_util.cc
+    ../../third_party/google/protobuf/util/internal/datapiece.cc
+    ../../third_party/google/protobuf/util/internal/default_value_objectwriter.cc
+    ../../third_party/google/protobuf/util/internal/error_listener.cc
+    ../../third_party/google/protobuf/util/internal/json_escaping.cc
+    ../../third_party/google/protobuf/util/internal/json_objectwriter.cc
+    ../../third_party/google/protobuf/util/internal/json_stream_parser.cc
+    ../../third_party/google/protobuf/util/json_util.cc
+    ../../third_party/google/protobuf/util/internal/object_writer.cc
+    ../../third_party/google/protobuf/util/internal/proto_writer.cc
+    ../../third_party/google/protobuf/util/internal/protostream_objectsource.cc
+    ../../third_party/google/protobuf/util/internal/protostream_objectwriter.cc
+    ../../third_party/google/protobuf/source_context.pb.cc
+    ../../third_party/google/protobuf/stubs/statusor.cc
+    ../../third_party/google/protobuf/stubs/time.cc
+    ../../third_party/google/protobuf/type.pb.cc
+    ../../third_party/google/protobuf/wrappers.pb.cc
+    ../../third_party/google/protobuf/struct.pb.cc
+    ../../third_party/google/protobuf/util/internal/type_info.cc
+    ../../third_party/google/protobuf/util/internal/field_mask_utility.cc
+    ../../third_party/google/protobuf/util/type_resolver_util.cc
+    ../../third_party/google/protobuf/util/internal/utility.cc)
 
 set(SUBSTRAIT_SOURCES
     ../../third_party/substrait/substrait/algebra.pb.cc
@@ -70,7 +94,9 @@ set(ALL_SOURCES to_substrait.cpp from_substrait.cpp substrait-extension.cpp
 
 add_library(substrait_extension STATIC ${ALL_SOURCES})
 
-build_loadable_extension(substrait ${ALL_SOURCES})
+disable_target_warnings(substrait_extension)
+set(INGORE_WARNINGS ON)
+build_loadable_extension(substrait ${ALL_SOURCES} ${IGNORE_WARNINGS})
 
 install(
   TARGETS substrait_extension

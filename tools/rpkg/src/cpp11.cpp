@@ -224,6 +224,13 @@ extern "C" SEXP _duckdb_rapi_get_substrait(SEXP conn, SEXP query) {
   END_CPP11
 }
 // statement.cpp
+SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query);
+extern "C" SEXP _duckdb_rapi_get_substrait_json(SEXP conn, SEXP query) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_get_substrait_json(cpp11::as_cpp<cpp11::decay_t<duckdb::conn_eptr_t>>(conn), cpp11::as_cpp<cpp11::decay_t<std::string>>(query)));
+  END_CPP11
+}
+// statement.cpp
 cpp11::list rapi_prepare_substrait(duckdb::conn_eptr_t conn, cpp11::sexp query);
 extern "C" SEXP _duckdb_rapi_prepare_substrait(SEXP conn, SEXP query) {
   BEGIN_CPP11
@@ -286,6 +293,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_expr_set_alias",    (DL_FUNC) &_duckdb_rapi_expr_set_alias,    2},
     {"_duckdb_rapi_expr_tostring",     (DL_FUNC) &_duckdb_rapi_expr_tostring,     1},
     {"_duckdb_rapi_get_substrait",     (DL_FUNC) &_duckdb_rapi_get_substrait,     2},
+   	{"_duckdb_rapi_get_substrait_json", (DL_FUNC) &_duckdb_rapi_get_substrait_json, 2},
     {"_duckdb_rapi_prepare",           (DL_FUNC) &_duckdb_rapi_prepare,           2},
     {"_duckdb_rapi_prepare_substrait", (DL_FUNC) &_duckdb_rapi_prepare_substrait, 2},
     {"_duckdb_rapi_ptr_to_str",        (DL_FUNC) &_duckdb_rapi_ptr_to_str,        1},
