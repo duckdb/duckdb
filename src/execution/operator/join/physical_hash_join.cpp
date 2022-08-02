@@ -370,7 +370,7 @@ public:
 	unique_ptr<JoinHashTable> probe_ht;
 	JoinHTScanState probe_scan_state;
 
-	bool initialized;
+	atomic<bool> initialized;
 	idx_t local_ht_count;
 	idx_t local_hts_done;
 
@@ -379,6 +379,10 @@ public:
 			return;
 		}
 		lock_guard<mutex> lock(sink.local_ht_lock);
+		if (initialized) {
+			// Have to check if anything changed
+			return;
+		}
 		full_outer_scan_state.total = sink.hash_table->Count();
 		probe_ht->radix_bits = sink.hash_table->radix_bits;
 		local_ht_count = sink.local_hash_tables.size();
