@@ -568,12 +568,12 @@ prof_dump_filename(tsd_t *tsd, char *filename, char v, uint64_t vseq) {
 	if (vseq != VSEQ_INVALID) {
 	        /* "<prefix>.<pid>.<seq>.v<vseq>.heap" */
 		malloc_snprintf(filename, DUMP_FILENAME_BUFSIZE,
-		    "%s.%d.%"FMTu64".%c%"FMTu64".heap", prefix, prof_getpid(),
+		    "%s.%d.%" FMTu64".%c%" FMTu64".heap", prefix, prof_getpid(),
 		    prof_dump_seq, v, vseq);
 	} else {
 	        /* "<prefix>.<pid>.<seq>.<v>.heap" */
 		malloc_snprintf(filename, DUMP_FILENAME_BUFSIZE,
-		    "%s.%d.%"FMTu64".%c.heap", prefix, prof_getpid(),
+		    "%s.%d.%" FMTu64".%c.heap", prefix, prof_getpid(),
 		    prof_dump_seq, v);
 	}
 	prof_dump_seq++;
@@ -583,7 +583,7 @@ void
 prof_get_default_filename(tsdn_t *tsdn, char *filename, uint64_t ind) {
 	malloc_mutex_lock(tsdn, &prof_dump_filename_mtx);
 	malloc_snprintf(filename, PROF_DUMP_FILENAME_LEN,
-	    "%s.%d.%"FMTu64".json", prof_prefix_get(tsdn), prof_getpid(), ind);
+	    "%s.%d.%" FMTu64".json", prof_prefix_get(tsdn), prof_getpid(), ind);
 	malloc_mutex_unlock(tsdn, &prof_dump_filename_mtx);
 }
 
@@ -606,7 +606,7 @@ prof_prefix_set(tsdn_t *tsdn, const char *prefix) {
 	if (prof_prefix == NULL) {
 		malloc_mutex_unlock(tsdn, &prof_dump_filename_mtx);
 		/* Everything is still guarded by ctl_mtx. */
-		char *buffer = base_alloc(tsdn, prof_base,
+		char *buffer = (char *)base_alloc(tsdn, prof_base,
 		    PROF_DUMP_FILENAME_LEN, QUANTUM);
 		if (buffer == NULL) {
 			return true;

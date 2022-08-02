@@ -647,6 +647,15 @@ extent_grow_retained(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
     size_t size, size_t alignment, bool zero, bool *commit) {
 	malloc_mutex_assert_owner(tsdn, &pac->grow_mtx);
 
+	extent_split_interior_result_t result;
+	edata_t *edata;
+	bool err;
+	bool zeroed;
+	bool committed;
+	void *ptr;
+	edata_t *to_leak;
+	edata_t *to_salvage;
+
 	size_t alloc_size_min = size + PAGE_CEILING(alignment) - PAGE;
 	/* Beware size_t wrap-around. */
 	if (alloc_size_min < size) {
@@ -658,20 +667,20 @@ extent_grow_retained(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
 	 */
 	size_t alloc_size;
 	pszind_t exp_grow_skip;
-	bool err = exp_grow_size_prepare(&pac->exp_grow, alloc_size_min,
+	err = exp_grow_size_prepare(&pac->exp_grow, alloc_size_min,
 	    &alloc_size, &exp_grow_skip);
 	if (err) {
 		goto label_err;
 	}
 
-	edata_t *edata = edata_cache_get(tsdn, pac->edata_cache);
+	edata = edata_cache_get(tsdn, pac->edata_cache);
 	if (edata == NULL) {
 		goto label_err;
 	}
-	bool zeroed = false;
-	bool committed = false;
+	zeroed = false;
+	committed = false;
 
-	void *ptr = ehooks_alloc(tsdn, ehooks, NULL, alloc_size, PAGE, &zeroed,
+	ptr = ehooks_alloc(tsdn, ehooks, NULL, alloc_size, PAGE, &zeroed,
 	    &committed);
 
 	if (ptr == NULL) {
@@ -695,10 +704,10 @@ extent_grow_retained(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
 
 	edata_t *lead;
 	edata_t *trail;
-	edata_t *to_leak JEMALLOC_CC_SILENCE_INIT(NULL);
-	edata_t *to_salvage JEMALLOC_CC_SILENCE_INIT(NULL);
+	to_leak JEMALLOC_CC_SILENCE_INIT(NULL);
+	to_salvage JEMALLOC_CC_SILENCE_INIT(NULL);
 
-	extent_split_interior_result_t result = extent_split_interior(tsdn,
+	result = extent_split_interior(tsdn,
 	    pac, ehooks, &edata, &lead, &trail, &to_leak, &to_salvage, NULL,
 	    size, alignment);
 
@@ -1189,6 +1198,8 @@ extent_split_impl(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
 		return NULL;
 	}
 
+	bool err;
+
 	edata_t *trail = edata_cache_get(tsdn, pac->edata_cache);
 	if (trail == NULL) {
 		goto label_error_a;
@@ -1200,7 +1211,7 @@ extent_split_impl(tsdn_t *tsdn, pac_t *pac, ehooks_t *ehooks,
 	    edata_state_get(edata), edata_zeroed_get(edata),
 	    edata_committed_get(edata), EXTENT_PAI_PAC, EXTENT_NOT_HEAD);
 	emap_prepare_t prepare;
-	bool err = emap_split_prepare(tsdn, pac->emap, &prepare, edata,
+	err = emap_split_prepare(tsdn, pac->emap, &prepare, edata,
 	    size_a, trail, size_b);
 	if (err) {
 		goto label_error_b;

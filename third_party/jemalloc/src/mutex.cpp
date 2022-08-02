@@ -55,11 +55,12 @@ malloc_mutex_lock_slow(malloc_mutex_t *mutex) {
 	mutex_prof_data_t *data = &mutex->prof_data;
 	nstime_t before;
 
+	int cnt;
 	if (ncpus == 1) {
 		goto label_spin_done;
 	}
 
-	int cnt = 0;
+	cnt = 0;
 	do {
 		spin_cpu_spinwait();
 		if (!atomic_load_b(&mutex->locked, ATOMIC_RELAXED)

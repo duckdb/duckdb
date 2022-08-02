@@ -1229,7 +1229,7 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 				for (m = 0; m < metadata_thp_mode_limit; m++) {
 					if (strncmp(metadata_thp_mode_names[m],
 					    v, vlen) == 0) {
-						opt_metadata_thp = m;
+						opt_metadata_thp = (metadata_thp_mode_t)m;
 						match = true;
 						break;
 					}
@@ -1247,7 +1247,7 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 				for (m = 0; m < dss_prec_limit; m++) {
 					if (strncmp(dss_prec_names[m], v, vlen)
 					    == 0) {
-						if (extent_dss_prec_set(m)) {
+						if (extent_dss_prec_set((dss_prec_t)m)) {
 							CONF_ERROR(
 							    "Error setting dss",
 							    k, klen, v, vlen);
@@ -1449,7 +1449,7 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 							    "No getcpu support",
 							    k, klen, v, vlen);
 						}
-						opt_percpu_arena = m;
+						opt_percpu_arena = (percpu_arena_mode_t)m;
 						match = true;
 						break;
 					}
@@ -1644,7 +1644,7 @@ malloc_conf_init_helper(sc_data_t *sc_data, unsigned bin_shard_sizes[SC_NBINS],
 							    "No THP support",
 							    k, klen, v, vlen);
 						}
-						opt_thp = m;
+						opt_thp = (thp_mode_t)m;
 						match = true;
 						break;
 					}
@@ -1999,7 +1999,9 @@ percpu_arena_as_initialized(percpu_arena_mode_t mode) {
 	assert(mode <= percpu_arena_disabled);
 
 	if (mode != percpu_arena_disabled) {
-		mode += percpu_arena_mode_enabled_base;
+		// DuckDB: have to change to this to silence cpp compiler errors
+//		mode += percpu_arena_mode_enabled_base;
+		mode = (percpu_arena_mode_t)((int)mode + (int)percpu_arena_mode_enabled_base);
 	}
 
 	return mode;
@@ -3425,7 +3427,7 @@ je_mallocx(size_t size, int flags) {
 
 	imalloc(&sopts, &dopts);
 	if (sopts.slow) {
-		uintptr_t args[3] = {size, flags};
+		uintptr_t args[3] = {size, (uintptr_t)flags};
 		hook_invoke_alloc(hook_alloc_mallocx, ret, (uintptr_t)ret,
 		    args);
 	}
@@ -3509,12 +3511,14 @@ do_rallocx(void *ptr, size_t size, int flags, bool is_realloc) {
 	bool zero = zero_get(MALLOCX_ZERO_GET(flags), /* slow */ true);
 
 	unsigned arena_ind = mallocx_arena_get(flags);
+	unsigned tcache_ind;
+	tcache_t *tcache;
 	if (arena_get_from_ind(tsd, arena_ind, &arena)) {
 		goto label_oom;
 	}
 
-	unsigned tcache_ind = mallocx_tcache_get(flags);
-	tcache_t *tcache = tcache_get_from_ind(tsd, tcache_ind,
+	tcache_ind = mallocx_tcache_get(flags);
+	tcache = tcache_get_from_ind(tsd, tcache_ind,
 	    /* slow */ true, /* is_alloc */ true);
 
 	emap_alloc_ctx_t alloc_ctx;
@@ -3523,12 +3527,13 @@ do_rallocx(void *ptr, size_t size, int flags, bool is_realloc) {
 	assert(alloc_ctx.szind != SC_NSIZES);
 	old_usize = sz_index2size(alloc_ctx.szind);
 	assert(old_usize == isalloc(tsd_tsdn(tsd), ptr));
+	hook_ralloc_args_t hook_args;
 	if (aligned_usize_get(size, alignment, &usize, NULL, false)) {
 		goto label_oom;
 	}
 
-	hook_ralloc_args_t hook_args = {is_realloc, {(uintptr_t)ptr, size,
-		flags, 0}};
+	hook_args = {is_realloc, {(uintptr_t)ptr, size,
+		(uintptr_t)flags, 0}};
 	if (config_prof && opt_prof) {
 		p = irallocx_prof(tsd, ptr, old_usize, size, alignment, usize,
 		    zero, tcache, arena, &alloc_ctx, &hook_args);
@@ -3828,7 +3833,7 @@ je_xallocx(void *ptr, size_t size, size_t extra, int flags) {
 	}
 label_not_resized:
 	if (unlikely(!tsd_fast(tsd))) {
-		uintptr_t args[4] = {(uintptr_t)ptr, size, extra, flags};
+		uintptr_t args[4] = {(uintptr_t)ptr, size, extra, (uintptr_t)flags};
 		hook_invoke_expand(hook_expand_xallocx, ptr, old_usize,
 		    usize, (uintptr_t)usize, args);
 	}
@@ -3925,7 +3930,7 @@ sdallocx_default(void *ptr, size_t size, int flags) {
 		tsd_assert_fast(tsd);
 		isfree(tsd, ptr, usize, tcache, false);
 	} else {
-		uintptr_t args_raw[3] = {(uintptr_t)ptr, size, flags};
+		uintptr_t args_raw[3] = {(uintptr_t)ptr, size, (uintptr_t)flags};
 		hook_invoke_dalloc(hook_dalloc_sdallocx, ptr, args_raw);
 		isfree(tsd, ptr, usize, tcache, true);
 	}
@@ -4140,26 +4145,30 @@ batch_alloc(void **ptrs, size_t num, size_t size, int flags) {
 
 	size_t filled = 0;
 
+	size_t nregs = 0;
+	cache_bin_t *bin = NULL;
+	arena_t *arena = NULL;
+
+	bool zero;
+	szind_t ind;
+	size_t alignment;
+
 	if (unlikely(tsd == NULL || tsd_reentrancy_level_get(tsd) > 0)) {
 		goto label_done;
 	}
 
-	size_t alignment = MALLOCX_ALIGN_GET(flags);
+	alignment = MALLOCX_ALIGN_GET(flags);
 	size_t usize;
 	if (aligned_usize_get(size, alignment, &usize, NULL, false)) {
 		goto label_done;
 	}
-	szind_t ind = sz_size2index(usize);
-	bool zero = zero_get(MALLOCX_ZERO_GET(flags), /* slow */ true);
+	ind = sz_size2index(usize);
+	zero = zero_get(MALLOCX_ZERO_GET(flags), /* slow */ true);
 
 	/*
 	 * The cache bin and arena will be lazily initialized; it's hard to
 	 * know in advance whether each of them needs to be initialized.
 	 */
-	cache_bin_t *bin = NULL;
-	arena_t *arena = NULL;
-
-	size_t nregs = 0;
 	if (likely(ind < SC_NBINS)) {
 		nregs = bin_infos[ind].nregs;
 		assert(nregs > 0);

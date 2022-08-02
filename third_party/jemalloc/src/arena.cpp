@@ -1402,13 +1402,16 @@ arena_ralloc_no_move(tsdn_t *tsdn, void *ptr, size_t oldsize, size_t size,
 	assert(extra == 0 || size + extra <= SC_LARGE_MAXCLASS);
 
 	edata_t *edata = emap_edata_lookup(tsdn, &arena_emap_global, ptr);
+	size_t usize_min;
+	size_t usize_max;
+
 	if (unlikely(size > SC_LARGE_MAXCLASS)) {
 		ret = true;
 		goto done;
 	}
 
-	size_t usize_min = sz_s2u(size);
-	size_t usize_max = sz_s2u(size + extra);
+	usize_min = sz_s2u(size);
+	usize_max = sz_s2u(size + extra);
 	if (likely(oldsize <= SC_SMALL_MAXCLASS && usize_min
 	    <= SC_SMALL_MAXCLASS)) {
 		/*

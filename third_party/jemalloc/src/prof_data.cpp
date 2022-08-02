@@ -457,7 +457,7 @@ prof_thread_name_alloc(tsd_t *tsd, const char *thread_name) {
 		return "";
 	}
 
-	ret = iallocztm(tsd_tsdn(tsd), size, sz_size2index(size), false, NULL,
+	ret = (char *)iallocztm(tsd_tsdn(tsd), size, sz_size2index(size), false, NULL,
 	    true, arena_get(TSDN_NULL, 0, true), true);
 	if (ret == NULL) {
 		return NULL;
@@ -664,7 +664,7 @@ prof_dump_print_cnts(write_cb_t *prof_dump_write, void *cbopaque,
 		accumbytes = cnts->accumbytes;
 	}
 	prof_dump_printf(prof_dump_write, cbopaque,
-	    "%"FMTu64": %"FMTu64" [%"FMTu64": %"FMTu64"]",
+	    "%" FMTu64": %" FMTu64" [%" FMTu64": %" FMTu64"]",
 	    curobjs, curbytes, accumobjs, accumbytes);
 }
 
@@ -767,7 +767,7 @@ prof_tctx_dump_iter(prof_tctx_tree_t *tctxs, prof_tctx_t *tctx, void *opaque) {
 	case prof_tctx_state_dumping:
 	case prof_tctx_state_purgatory:
 		prof_dump_printf(arg->prof_dump_write, arg->cbopaque,
-		    "  t%"FMTu64": ", tctx->thr_uid);
+		    "  t%" FMTu64": ", tctx->thr_uid);
 		prof_dump_print_cnts(arg->prof_dump_write, arg->cbopaque,
 		    &tctx->dump_cnts);
 		arg->prof_dump_write(arg->cbopaque, "\n");
@@ -948,7 +948,7 @@ prof_tdata_dump_iter(prof_tdata_tree_t *tdatas_ptr, prof_tdata_t *tdata,
 	}
 
 	prof_dump_iter_arg_t *arg = (prof_dump_iter_arg_t *)opaque;
-	prof_dump_printf(arg->prof_dump_write, arg->cbopaque, "  t%"FMTu64": ",
+	prof_dump_printf(arg->prof_dump_write, arg->cbopaque, "  t%" FMTu64": ",
 	    tdata->thr_uid);
 	prof_dump_print_cnts(arg->prof_dump_write, arg->cbopaque,
 	    &tdata->cnt_summed);
@@ -963,7 +963,7 @@ prof_tdata_dump_iter(prof_tdata_tree_t *tdatas_ptr, prof_tdata_t *tdata,
 static void
 prof_dump_header(prof_dump_iter_arg_t *arg, const prof_cnt_t *cnt_all) {
 	prof_dump_printf(arg->prof_dump_write, arg->cbopaque,
-	    "heap_v2/%"FMTu64"\n  t*: ", ((uint64_t)1U << lg_prof_sample));
+	    "heap_v2/%" FMTu64"\n  t*: ", ((uint64_t)1U << lg_prof_sample));
 	prof_dump_print_cnts(arg->prof_dump_write, arg->cbopaque, cnt_all);
 	arg->prof_dump_write(arg->cbopaque, "\n");
 
@@ -999,7 +999,7 @@ prof_dump_gctx(prof_dump_iter_arg_t *arg, prof_gctx_t *gctx,
 	arg->prof_dump_write(arg->cbopaque, "@");
 	for (unsigned i = 0; i < bt->len; i++) {
 		prof_dump_printf(arg->prof_dump_write, arg->cbopaque,
-		    " %#"FMTxPTR, (uintptr_t)bt->vec[i]);
+		    " %#" FMTxPTR, (uintptr_t)bt->vec[i]);
 	}
 
 	arg->prof_dump_write(arg->cbopaque, "\n  t*: ");

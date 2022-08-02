@@ -39,7 +39,6 @@ add_library(
         src/hpdata.cpp
         src/inspect.cpp
         src/jemalloc.cpp
-        src/jemalloc_cpp.cpp
         src/large.cpp
         src/log.cpp
         src/malloc_io.cpp

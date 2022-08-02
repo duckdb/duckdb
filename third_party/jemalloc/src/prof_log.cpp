@@ -15,12 +15,12 @@
 namespace duckdb_jemalloc {
 
 bool opt_prof_log = false;
-typedef enum prof_logging_state_e prof_logging_state_t;
 enum prof_logging_state_e {
 	prof_logging_state_stopped,
 	prof_logging_state_started,
 	prof_logging_state_dumping
 };
+typedef enum prof_logging_state_e prof_logging_state_t;
 
 /*
  * - stopped: log_start never called, or previous log_stop has completed.
@@ -221,6 +221,18 @@ prof_try_log(tsd_t *tsd, size_t usize, prof_info_t *prof_info) {
 
 	malloc_mutex_lock(tsd_tsdn(tsd), &log_mtx);
 
+	nstime_t alloc_time;
+	nstime_t free_time;
+
+	size_t sz;
+	prof_alloc_node_t *new_node;
+
+	const char *prod_thr_name;
+	const char *cons_thr_name;
+
+	prof_bt_t *cons_bt;
+	prof_bt_t *prod_bt;
+
 	if (prof_logging_state != prof_logging_state_started) {
 		goto label_done;
 	}
@@ -236,27 +248,26 @@ prof_try_log(tsd_t *tsd, size_t usize, prof_info_t *prof_info) {
 		log_tables_initialized = true;
 	}
 
-	nstime_t alloc_time = prof_info->alloc_time;
-	nstime_t free_time;
+	alloc_time = prof_info->alloc_time;
 	nstime_prof_init_update(&free_time);
 
-	size_t sz = sizeof(prof_alloc_node_t);
-	prof_alloc_node_t *new_node = (prof_alloc_node_t *)
+	sz = sizeof(prof_alloc_node_t);
+	new_node = (prof_alloc_node_t *)
 	    iallocztm(tsd_tsdn(tsd), sz, sz_size2index(sz), false, NULL, true,
 	    arena_get(TSDN_NULL, 0, true), true);
 
-	const char *prod_thr_name = (tctx->tdata->thread_name == NULL)?
+	prod_thr_name = (tctx->tdata->thread_name == NULL)?
 				        "" : tctx->tdata->thread_name;
-	const char *cons_thr_name = prof_thread_name_get(tsd);
+	cons_thr_name = prof_thread_name_get(tsd);
 
 	prof_bt_t bt;
 	/* Initialize the backtrace, using the buffer in tdata to store it. */
 	bt_init(&bt, cons_tdata->vec);
 	prof_backtrace(tsd, &bt);
-	prof_bt_t *cons_bt = &bt;
+	cons_bt = &bt;
 
 	/* We haven't destroyed tctx yet, so gctx should be good to read. */
-	prof_bt_t *prod_bt = &tctx->gctx->bt;
+	prod_bt = &tctx->gctx->bt;
 
 	new_node->next = NULL;
 	new_node->alloc_thr_ind = prof_log_thr_index(tsd, tctx->tdata->thr_uid,
