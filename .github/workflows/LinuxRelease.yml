@@ -251,25 +251,28 @@ jobs:
 
          # Create an artifacts directory
          setup: |
-           mkdir -p "/tmp"
-           cd /tmp
+           pwd
+           ls
+           mkdir -p "${PWD}/test_folder"
+           mv /tmp/duckdb_unittest-linux-aarch64.zip test_folder
+           cd test_folder
            unzip duckdb_unittest-linux-aarch64.zip
            chmod +x unittest
-           ls /
-           ls /tmp
+           pwd
+           ls
 
          # Mount the artifacts directory as /artifacts in the container
          dockerRunArgs: |
-           --volume "/tmp:/tmp"
+           --volume "${PWD}/test_folder:/test_folder"
 
          # Set an output parameter `uname` for use in subsequent steps
          run: |
            uname -a
            pwd
            ls
-           cd /tmp
-           ls
-           /tmp/unittest
+           ls /
+           ls /test_folder
+           /test_folder/unittest
            echo ::set-output name=uname::$(uname -a)
 
      - name: Get the output
