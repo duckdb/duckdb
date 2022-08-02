@@ -19,12 +19,14 @@ class NotSupportedError : public std::exception {};
 void ThrowHydratedError(const std::string &s) {
 	auto location = s.find(":");
 	auto prefix = s.substr(0, location);
-	auto message = s.substr(location + 1); // +1 to skip space
+	auto message = s.substr(location + 2); // +2 to skip colon and space
 
 	if ("Binder Error" == prefix) {
 		throw BinderException(message);
+	} else if ("Conversion Error" == prefix) {
+		throw ConversionException(message);
 	} else {
-		throw std::runtime_error("Unknown error in python binding " + str);
+		throw std::runtime_error("Unknown error in python binding " + s);
 	}
 }
 
@@ -47,6 +49,9 @@ void RegisterExceptions(const py::module &m) {
 	// The base class is mapped to Error in python to somewhat match the DBAPI 2.0 specifications
 	auto warning_class = py::register_exception<Warning>(m, "Warning").ptr();
 	auto error = py::register_exception<Exception>(m, "Error").ptr();
+
+	// order of declaration matters, and this needs to be checked last
+	py::register_exception<StandardException>(m, "StandardException", error);
 
 	// DataError
 	auto data_error = py::register_exception<DataError>(m, "DataError", error).ptr();
@@ -94,6 +99,5 @@ void RegisterExceptions(const py::module &m) {
 	py::register_exception<InterruptException>(m, "InterruptException", error);
 	py::register_exception<PermissionException>(m, "PermissionException", error);
 	py::register_exception<SequenceException>(m, "SequenceException", error);
-	py::register_exception<StandardException>(m, "StandardException", error);
 }
 } // namespace duckdb

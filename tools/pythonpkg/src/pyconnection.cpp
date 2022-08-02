@@ -122,7 +122,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		throw std::runtime_error(pending_query.error);
+		ThrowHydratedError(pending_query.error);
 	}
 	return pending_query.Execute();
 }

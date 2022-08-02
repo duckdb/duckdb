@@ -1,6 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/exceptions.hpp"
 
 #include "datetime.h" // from Python
 #include "duckdb/common/arrow.hpp"
@@ -156,7 +157,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 	auto chunk = result.Fetch();
 	if (!result.success) {
-		throw std::runtime_error(result.error);
+		ThrowHydratedError(result.error);
 	}
 	return chunk;
 }
@@ -164,7 +165,7 @@ unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
 	auto chunk = result.FetchRaw();
 	if (!result.success) {
-		throw std::runtime_error(result.error);
+		ThrowHydratedError(result.error);
 	}
 	return chunk;
 }
