@@ -63,7 +63,7 @@ public:
 
 	void AddFunction(T function, idx_t key) {
 		if (functions.find(key) != functions.end()) {
-			throw InternalException("Function index %llu already in use in %s", index, name);
+			throw InternalException("Function index %llu already in use in %s", key, name);
 		}
 		function.name = name;
 		function.function_set_key = key;

@@ -46,12 +46,13 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 		Connection con2(db2);
 
 		while (true) {
-			idx_t bytes;
+			ssize_t bytes;
 			REQUIRE(read(connfd, &bytes, sizeof(idx_t)) == sizeof(idx_t));
 
 			if (bytes == 0) {
 				break;
 			}
+
 			auto buffer = malloc(bytes);
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == bytes);
@@ -68,7 +69,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 				BufferedSerializer serializer;
 				chunk->Serialize(serializer);
 				auto data = serializer.GetData();
-				idx_t len = data.size;
+				ssize_t len = data.size;
 				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
 				REQUIRE(write(connfd, data.data.get(), len) == len);
 			}

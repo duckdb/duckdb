@@ -120,6 +120,7 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientConte
 		break;
 	case ExpressionType::BOUND_FUNCTION:
 		result = BoundFunctionExpression::Deserialize(context, type, reader);
+		break;
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_LESSTHAN:
