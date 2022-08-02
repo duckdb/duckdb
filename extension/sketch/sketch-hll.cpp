@@ -1,4 +1,28 @@
-#include "include/sketch-sum.hpp"
+/*
+ * Implements HLL sketch operations for cardinality estimation and merging. Uses the apache 
+ * datasketches library (see https://datasketches.apache.org/ for more info).
+ * SQL functions implemented are roughly based on the BigQuery HLL sketch functinos
+ *   (https://cloud.google.com/bigquery/docs/reference/standard-sql/hll_functions)
+ * 
+ *   hll_count_init: Aggregation that returns a sketch (BLOB) containing summary information 
+ *                   for distinct values.
+ *   hll_count_extract: Scalar function that returns cardinality estimation from a sketch.
+ *   hll_count_merge:  Aggregation that merges multiple sketches into
+ *                    a single one.
+ *   hll_count_merge_partial: (NOT_YET_IMPLEMENTED): Merges multiple sketches into a single
+ *                    one and returns the sketch.
+ * 
+ * Why is this useful?
+ *   Imagine you are computing unique user visits to your website. You don't want to store
+ *   each individual visit, you want to summarize by day. However, if you have 200k unique
+ *   users on thursday, and 250k on friday, how do you combine those to figure out how
+ *   many you have in the week? (Distinct values don't add). You can create a sketch
+ *   for each day, which lets you summarize fairly concisely, and then merge the sketches
+ *   the final sketch will allow you to figure out how many unique users you had for the
+ *   week.
+*/
+
+#include "include/sketch-hll.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -14,10 +38,29 @@
 
 #include <iostream>
 
+
 namespace duckdb {
 
+#define DESTROY_FIELD(_x_)      \
+  if (this->_x_ != nullptr) {   \
+      delete(this->_x_);        \
+      this->_x_ = nullptr;      \
+  }
+
+/**
+ * State of an HLL computation. Either in one of two modes:
+ * union mode: combining multiple sketches into a single one
+ * update mode: adding values to a sketch.
+ * Only one sketch should be active at a time, either a value sketch
+ * (when in update mode) or a union sketch (when in combine mode).
+ * When switching from one mode to the other, the existing sketch is
+ * copied.
+ */
 class HllStateBase {
     static const uint8_t lg_sketch_rows=12;
+    // Optimization to prevent us from having to create the same empty sketch
+    // and over again.
+    static const vector<uint8_t> empty_sketch_buffer;        
   public:       
     bool isset;
 	void Initialize() {
@@ -27,58 +70,78 @@ class HllStateBase {
         this->serialized = nullptr;
 	}
 
-	void Combine(const HllStateBase &other) {
-		this->isset = other.isset || this->isset;
-        GetUnionSketch().update(other.GetSketch());
+    void Merge(string_t input) {
+        auto other = datasketches::hll_sketch::deserialize(
+            input.GetDataUnsafe(), input.GetSize());
+
+        if (!other.is_empty()) {
+            this->isset = true;
+            GetUnionSketch().update(other);
+        }
+    }
+
+	void Merge(const HllStateBase &other) {
+		this->isset |= other.isset;
+        if (other.isset && !other.GetSketch().is_empty()) {
+            GetUnionSketch().update(other.GetSketch());
+        }
 	}
 
     string_t Serialize() {
-        auto result = GetUnionSketch().get_result();
-        serialized = new vector<uint8_t>(result.serialize_compact());
-
-        // I'm pretty sure that if the result is too long then this is going to crash.
-        // Need to figure out how to safely allocate data.
-        return string_t((char *) serialized->data(), serialized->size());
+        if (!isset) {
+            return GetEmptySketch();
+        } else if (serialized != nullptr) {
+            return string_t((char *) this->serialized->data(), this->serialized->size());
+        } else {
+            auto result = GetSketch();
+            // Keep the serialized result around because we'll need to hold on to the memory until
+            // state can be properly destroyed.
+            this->serialized = new vector<uint8_t>(result.serialize_compact());
+            return string_t((char *) this->serialized->data(), this->serialized->size());
+        }
     }
 
     void Destroy() {
-        
-        if (this->value_sketch != nullptr) {
-            delete(this->value_sketch);
-            this->value_sketch = nullptr;
-        } 
-        if (this->union_sketch != nullptr) {
-            delete(this->union_sketch);
-            this->union_sketch = nullptr;
-        }
-        if (this->serialized != nullptr) {
-            delete(this->serialized);
-            this->serialized = nullptr;
-        }
-        
+        DESTROY_FIELD(value_sketch);
+        DESTROY_FIELD(union_sketch);
+        DESTROY_FIELD(serialized);
     }
 
   protected:
     datasketches::hll_sketch& GetSketch() const {
-        // No one should try to get the value sketch after starting to combine.
-        D_ASSERT(this->union_sketch == nullptr);
-        if (this->value_sketch == nullptr) {
-            this->value_sketch = new datasketches::hll_sketch(lg_sketch_rows);
+        // We shouldn't be doing any sketch operations after serialization, since the 
+        // serialized buffer is memoized.
+        D_ASSERT(serialized == nullptr);
+
+        if (this->union_sketch != nullptr) {
+            // Switch from unioning sketches to adding values.
+            this->value_sketch = new datasketches::hll_sketch(this->union_sketch->get_result());
+            delete(this->union_sketch);
+            this->union_sketch = nullptr;
+        } else if (this->value_sketch == nullptr) {
+            this->value_sketch = new datasketches::hll_sketch(lg_sketch_rows, datasketches::HLL_8);
         }
         return *this->value_sketch;
     }
 
   private:
+    static string_t GetEmptySketch() {
+        return string_t((char *) empty_sketch_buffer.data(), empty_sketch_buffer.size());
+    }
 
-    datasketches::hll_union& GetUnionSketch() {
+    datasketches::hll_union& GetUnionSketch() const {
+        // We shouldn't be doing any sketch operations after serialization, since the 
+        // serialized buffer is memoized.
+        D_ASSERT(serialized == nullptr);
+
         if (this->union_sketch == nullptr) {
             this->union_sketch = new datasketches::hll_union(lg_sketch_rows);
-        
-            // Once we get the union sketch, load it with the data in the value sketch, and destroy
-            // the value sketch.
-            if (this->value_sketch != nullptr) {
-                this->union_sketch->update(*this->value_sketch);
-            }
+        }
+        if (this->value_sketch != nullptr) {
+            // Switch from adding values to unioning sketches mode.
+            this->union_sketch->update(*this->value_sketch);
+            delete(this->value_sketch);
+            this->value_sketch = nullptr;
         }
         return *this->union_sketch;
     }
@@ -88,6 +151,10 @@ class HllStateBase {
     mutable datasketches::hll_union* union_sketch;
     vector<uint8_t>* serialized;
 };
+
+// Save the empty sketch so we don't have to recreate it.
+const vector<uint8_t> HllStateBase::empty_sketch_buffer = 
+    datasketches::hll_sketch(lg_sketch_rows).serialize_compact();
 
 template <class T>
 class HllState : public HllStateBase {
@@ -114,7 +181,8 @@ template <> class HllState<string_t> : public HllStateBase {
     }
 };
 
-struct HllOperation {
+
+struct HllInitOperation {
 	template <class STATE>
     static void Initialize(STATE *state) {
  		state->Initialize();
@@ -122,16 +190,13 @@ struct HllOperation {
 
     template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
-		target->Combine(source);
+		target->Merge(source);
     }
 
     template <class T, class STATE>
     static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-        if (!state->isset) {
-            mask.SetInvalid(idx);
-        } else {
-            target[idx] = state->Serialize();
-        }
+        // Want to return a sketch even if all of the values are null.
+        target[idx] = state->Serialize();
     }
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -151,7 +216,44 @@ struct HllOperation {
     }
 
 	static bool IgnoreNull() {
-		return true;
+		return false;
+	}
+};
+
+struct HllMergeOperation {
+	template <class STATE>
+    static void Initialize(STATE *state) {
+ 		state->Initialize();
+	}
+
+    template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+		target->Merge(source);
+    }
+
+    template <class T, class STATE>
+    static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+        target[idx] = state->Serialize();
+    }
+
+	template <class INPUT_TYPE, class STATE, class OP>
+    static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+		state->Merge(input[idx]);
+	}
+
+    template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
+	                              idx_t count) {
+        state->Merge(*input);
+	}
+
+    template <class STATE>
+	static void Destroy(STATE *state) {
+		state->Destroy();
+    }
+
+	static bool IgnoreNull() {
+		return false;
 	}
 };
 
@@ -159,37 +261,37 @@ AggregateFunction GetInitAggregate(PhysicalType type) {
     switch (type) {
     case PhysicalType::INT128: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<hugeint_t>, hugeint_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<hugeint_t>, hugeint_t, string_t, HllInitOperation>(
                 LogicalType::HUGEINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT64: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<int64_t>, int64_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<int64_t>, int64_t, string_t, HllInitOperation>(
                 LogicalType::BIGINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT32: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<int32_t>, int32_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<int32_t>, int32_t, string_t, HllInitOperation>(
                 LogicalType::INTEGER, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::INT16: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<int16_t>, int16_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<int16_t>, int16_t, string_t, HllInitOperation>(
                 LogicalType::SMALLINT, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::DOUBLE: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<double>, double, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<double>, double, string_t, HllInitOperation>(
                 LogicalType::DOUBLE, LogicalType::BLOB);
         return function;
     }
     case PhysicalType::VARCHAR: {
         auto function =
-            AggregateFunction::UnaryAggregateDestructor<HllState<string_t>, string_t, string_t, HllOperation>(
+            AggregateFunction::UnaryAggregateDestructor<HllState<string_t>, string_t, string_t, HllInitOperation>(
                 LogicalType::VARCHAR, LogicalType::BLOB);
         return function;
     }
@@ -219,7 +321,7 @@ struct ExtractOperator {
 };
 
 
-void SketchSum::RegisterFunction(ClientContext &context) {
+void SketchHll::RegisterFunction(ClientContext &context) {
     AggregateFunctionSet init("hll_count_init");
     init.AddFunction(GetInitAggregate(PhysicalType::INT128));
     init.AddFunction(GetInitAggregate(PhysicalType::INT64));
@@ -232,14 +334,23 @@ void SketchSum::RegisterFunction(ClientContext &context) {
                                       BindDecimalHllInit));
 
     ScalarFunctionSet extract("hll_count_extract");
-    extract.AddFunction(ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT, 
-                                        ScalarFunction::UnaryFunction<string_t, int64_t, ExtractOperator>));
+    extract.AddFunction(
+        ScalarFunction({LogicalType::BLOB}, LogicalType::BIGINT, 
+            ScalarFunction::UnaryFunction<string_t, int64_t, ExtractOperator>));
+
+    AggregateFunctionSet merge("hll_count_merge");
+    merge.AddFunction(
+        AggregateFunction::UnaryAggregateDestructor<
+            HllState<string_t>, string_t, string_t, HllMergeOperation>(
+                LogicalType::BLOB, LogicalType::BLOB));
 
     auto &catalog = Catalog::GetCatalog(context);
     CreateAggregateFunctionInfo init_info(move(init));
     catalog.AddFunction(context, &init_info);
     CreateScalarFunctionInfo extract_info(move(extract));
     catalog.AddFunction(context, &extract_info);
+    CreateAggregateFunctionInfo merge_info(move(merge));
+    catalog.AddFunction(context, &merge_info);
 }
 
 } // namespace duckdb

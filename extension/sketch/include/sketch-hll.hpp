@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "duckdb.hpp"
+// #include "duckdb.hpp"
 
 namespace duckdb {
+
+  class ClientContext; 
 
   class SketchHll {
       public:
