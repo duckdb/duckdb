@@ -1528,7 +1528,7 @@ public:
 		CreateMergeTasks(pipeline, *this, gstate, hash_group);
 	}
 
-	static bool CreateMergeTasks(Pipeline &pipeline, Event &event, WindowGlobalSinkState &state,
+	static void CreateMergeTasks(Pipeline &pipeline, Event &event, WindowGlobalSinkState &state,
 	                             WindowGlobalHashGroup &hash_group) {
 
 		// Multiple blocks remaining in the group: Schedule the next round
@@ -1536,28 +1536,6 @@ public:
 			hash_group.global_sort->InitializeMergeRound();
 			auto new_event = make_shared<WindowMergeEvent>(state, pipeline, hash_group);
 			event.InsertEvent(move(new_event));
-			return true;
-		}
-
-		//	Find the next group to sort
-		for (;;) {
-			auto group = state.GetNextSortGroup();
-			if (group >= state.hash_groups.size()) {
-				//	Out of groups
-				return false;
-			}
-
-			auto &hash_group = *state.hash_groups[group];
-			auto &global_sort = *hash_group.global_sort;
-
-			// Prepare for merge sort phase
-			hash_group.PrepareMergePhase();
-			if (global_sort.sorted_blocks.size() > 1) {
-				global_sort.InitializeMergeRound();
-				auto new_event = make_shared<WindowMergeEvent>(state, pipeline, hash_group);
-				event.InsertEvent(move(new_event));
-				return true;
-			}
 		}
 	}
 };
@@ -1581,11 +1559,14 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
-	auto &hash_group = *state.hash_groups[group];
+	// Schedule all the sorts for maximum thread utilisation
+	for (; group < state.hash_groups.size(); group = state.GetNextSortGroup()) {
+		auto &hash_group = *state.hash_groups[group];
 
-	// Prepare for merge sort phase
-	hash_group.PrepareMergePhase();
-	WindowMergeEvent::CreateMergeTasks(pipeline, event, state, hash_group);
+		// Prepare for merge sort phase
+		hash_group.PrepareMergePhase();
+		WindowMergeEvent::CreateMergeTasks(pipeline, event, state, hash_group);
+	}
 
 	return SinkFinalizeType::READY;
 }
