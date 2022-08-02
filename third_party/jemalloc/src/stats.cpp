@@ -112,8 +112,8 @@ mutex_stats_init_cols(emitter_row_t *row, const char *table_name,
     emitter_col_t *name,
     emitter_col_t col_uint64_t[mutex_prof_num_uint64_t_counters],
     emitter_col_t col_uint32_t[mutex_prof_num_uint32_t_counters]) {
-	mutex_prof_uint64_t_counter_ind_t k_uint64_t = 0;
-	mutex_prof_uint32_t_counter_ind_t k_uint32_t = 0;
+	mutex_prof_uint64_t_counter_ind_t k_uint64_t = (mutex_prof_uint64_t_counter_ind_t)0;
+	mutex_prof_uint32_t_counter_ind_t k_uint32_t = (mutex_prof_uint32_t_counter_ind_t)0;
 
 	emitter_col_t *col;
 
@@ -129,7 +129,7 @@ mutex_stats_init_cols(emitter_row_t *row, const char *table_name,
 #define WIDTH_uint64_t 16
 #define OP(counter, counter_type, human, derived, base_counter)		\
 	col = &col_##counter_type[k_##counter_type];			\
-	++k_##counter_type;						\
+	k_##counter_type = (mutex_prof_##counter_type##_counter_ind_t)((counter_type)k_##counter_type + 1);						\
 	emitter_col_init(col, row);					\
 	col->justify = emitter_justify_right;				\
 	col->width = derived ? 8 : WIDTH_##counter_type;		\
@@ -248,8 +248,8 @@ mutex_stats_emit(emitter_t *emitter, emitter_row_t *row,
 		emitter_table_row(emitter, row);
 	}
 
-	mutex_prof_uint64_t_counter_ind_t k_uint64_t = 0;
-	mutex_prof_uint32_t_counter_ind_t k_uint32_t = 0;
+	mutex_prof_uint64_t_counter_ind_t k_uint64_t = (mutex_prof_uint64_t_counter_ind_t)0;
+	mutex_prof_uint32_t_counter_ind_t k_uint32_t = (mutex_prof_uint32_t_counter_ind_t)0;
 
 	emitter_col_t *col;
 
@@ -258,7 +258,7 @@ mutex_stats_emit(emitter_t *emitter, emitter_row_t *row,
 #define OP(counter, type, human, derived, base_counter)		\
 	if (!derived) {                    \
 		col = &col_##type[k_##type];                        \
-		++k_##type;                            \
+		k_##type = (mutex_prof_##type##_counter_ind_t)((type)k_##type + 1);;                            \
 		emitter_json_kv(emitter, #counter, EMITTER_TYPE_##type,        \
 		    (const void *)&col->bool_val); \
 	}
@@ -1028,7 +1028,7 @@ stats_arena_mutexes_print(emitter_t *emitter, unsigned arena_ind, uint64_t uptim
 	stats_arenas_mib[2] = arena_ind;
 	CTL_LEAF_PREPARE(stats_arenas_mib, 3, "mutexes");
 
-	for (mutex_prof_arena_ind_t i = 0; i < mutex_prof_num_arena_mutexes;
+	for (int i = 0; i < mutex_prof_num_arena_mutexes;
 	    i++) {
 		const char *name = arena_mutex_names[i];
 		emitter_json_object_kv_begin(emitter, name);
@@ -1421,18 +1421,18 @@ stats_general_print(emitter_t *emitter) {
 
 	/* opt. */
 #define OPT_WRITE(name, var, size, emitter_type)			\
-	if (je_mallctl("opt."name, (void *)&var, &size, NULL, 0) ==	\
+	if (je_mallctl("opt." name, (void *)&var, &size, NULL, 0) ==	\
 	    0) {							\
-		emitter_kv(emitter, name, "opt."name, emitter_type,	\
+		emitter_kv(emitter, name, "opt." name, emitter_type,	\
 		    &var);						\
 	}
 
 #define OPT_WRITE_MUTABLE(name, var1, var2, size, emitter_type,		\
     altname)								\
-	if (je_mallctl("opt."name, (void *)&var1, &size, NULL, 0) ==	\
+	if (je_mallctl("opt." name, (void *)&var1, &size, NULL, 0) ==	\
 	    0 && je_mallctl(altname, (void *)&var2, &size, NULL, 0)	\
 	    == 0) {							\
-		emitter_kv_note(emitter, name, "opt."name,		\
+		emitter_kv_note(emitter, name, "opt." name,		\
 		    emitter_type, &var1, altname, emitter_type,		\
 		    &var2);						\
 	}
@@ -1748,7 +1748,7 @@ stats_print_helper(emitter_t *emitter, bool merged, bool destroyed,
 	emitter_json_object_end(emitter); /* Close "background_thread". */
 
 	emitter_table_printf(emitter, "Background threads: %zu, "
-	    "num_runs: %"FMTu64", run_interval: %"FMTu64" ns\n",
+	    "num_runs: %" FMTu64", run_interval: %" FMTu64" ns\n",
 	    num_background_threads, background_thread_num_runs,
 	    background_thread_run_interval);
 

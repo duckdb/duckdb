@@ -343,3 +343,5 @@ tsd_te_init(tsd_t *tsd) {
 	te_init(tsd, false);
 	te_assert_invariants(tsd);
 }
+
+} // namespace duckdb_jemalloc

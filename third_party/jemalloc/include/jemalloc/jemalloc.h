@@ -3,9 +3,9 @@
 
 namespace duckdb_jemalloc {
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+//#ifdef __cplusplus
+//extern "C" {
+//#endif
 
 /* Defined if __attribute__((...)) syntax is supported. */
 #define JEMALLOC_HAVE_ATTR
@@ -437,9 +437,9 @@ struct extent_hooks_s {
 #undef je_malloc_size
 #endif
 
-#ifdef __cplusplus
-}
-#endif
+//#ifdef __cplusplus
+//}
+//#endif
 
 } // namespace duckdb_jemalloc
 

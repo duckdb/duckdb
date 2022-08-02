@@ -655,7 +655,11 @@ tcache_init(tsd_t *tsd, tcache_slow_t *tcache_slow, tcache_t *tcache,
 	tcache->tcache_slow = tcache_slow;
 	tcache_slow->tcache = tcache;
 
-	memset(&tcache_slow->link, 0, sizeof(ql_elm(tcache_t)));
+	// DuckDB C++: We can't do "sizeof(ql_elm(tcache_t))" because the struct is unnamed
+	// We statically initialize one here so we can do the sizeof
+	static constexpr const ql_elm(tcache_t) ql_elm_tcache_t{};
+
+	memset(&tcache_slow->link, 0, sizeof(ql_elm_tcache_t));
 	tcache_slow->next_gc_bin = 0;
 	tcache_slow->arena = NULL;
 	tcache_slow->dyn_alloc = mem;
@@ -770,9 +774,9 @@ tcache_create_explicit(tsd_t *tsd) {
 	if (mem == NULL) {
 		return NULL;
 	}
-	tcache_t *tcache = (void *)((uintptr_t)mem + tcache_bin_alloc_size);
+	tcache_t *tcache = (tcache_t *)((uintptr_t)mem + tcache_bin_alloc_size);
 	tcache_slow_t *tcache_slow =
-	    (void *)((uintptr_t)mem + tcache_bin_alloc_size + sizeof(tcache_t));
+	    (tcache_slow_t *)((uintptr_t)mem + tcache_bin_alloc_size + sizeof(tcache_t));
 	tcache_init(tsd, tcache_slow, tcache, mem);
 
 	tcache_arena_associate(tsd_tsdn(tsd), tcache_slow, tcache,
@@ -888,7 +892,7 @@ tcaches_create_prep(tsd_t *tsd, base_t *base) {
 	malloc_mutex_assert_owner(tsd_tsdn(tsd), &tcaches_mtx);
 
 	if (tcaches == NULL) {
-		tcaches = base_alloc(tsd_tsdn(tsd), base,
+		tcaches = (tcaches_t *)base_alloc(tsd_tsdn(tsd), base,
 		    sizeof(tcache_t *) * (MALLOCX_TCACHE_MAX+1), CACHELINE);
 		if (tcaches == NULL) {
 			err = true;
@@ -914,12 +918,13 @@ tcaches_create(tsd_t *tsd, base_t *base, unsigned *r_ind) {
 
 	malloc_mutex_lock(tsd_tsdn(tsd), &tcaches_mtx);
 
+	tcache_t *tcache;
 	if (tcaches_create_prep(tsd, base)) {
 		err = true;
 		goto label_return;
 	}
 
-	tcache_t *tcache = tcache_create_explicit(tsd);
+	tcache = tcache_create_explicit(tsd);
 	if (tcache == NULL) {
 		err = true;
 		goto label_return;

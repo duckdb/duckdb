@@ -123,7 +123,7 @@ struct malloc_mutex_s {
 #  if defined(JEMALLOC_DEBUG)
 #    define MALLOC_MUTEX_INITIALIZER					\
      {{{LOCK_PROF_DATA_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, ATOMIC_INIT(false)}}, \
-           WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT), 0}
+           WITNESS_INITIALIZER("mutex", WITNESS_RANK_OMIT), (malloc_mutex_lock_order_t)0}
 #  else
 #    define MALLOC_MUTEX_INITIALIZER                          \
      {{{LOCK_PROF_DATA_INITIALIZER, PTHREAD_MUTEX_INITIALIZER, ATOMIC_INIT(false)}},	\

@@ -483,13 +483,13 @@ a_prefix##_empty(a_prefix##_t *ph) {					\
 									\
 a_attr a_type *								\
 a_prefix##_first(a_prefix##_t *ph) {					\
-	return ph_first(&ph->ph, offsetof(a_type, a_field),		\
+	return (a_type *)ph_first(&ph->ph, offsetof(a_type, a_field),		\
 	    &a_prefix##_ph_cmp);					\
 }									\
 									\
 a_attr a_type *								\
 a_prefix##_any(a_prefix##_t *ph) {					\
-	return ph_any(&ph->ph, offsetof(a_type, a_field));		\
+	return (a_type *)ph_any(&ph->ph, offsetof(a_type, a_field));		\
 }									\
 									\
 a_attr void								\
@@ -500,7 +500,7 @@ a_prefix##_insert(a_prefix##_t *ph, a_type *phn) {			\
 									\
 a_attr a_type *								\
 a_prefix##_remove_first(a_prefix##_t *ph) {				\
-	return ph_remove_first(&ph->ph, offsetof(a_type, a_field),	\
+	return (a_type *)ph_remove_first(&ph->ph, offsetof(a_type, a_field),	\
 	    a_prefix##_ph_cmp);						\
 }									\
 									\

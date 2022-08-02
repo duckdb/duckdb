@@ -79,9 +79,9 @@ if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
     target_compile_definitions(duckdb_jemalloc PRIVATE -DJEMALLOC_DEBUG)
 endif ()
 
-
 # Need to include this so that RTLD_NEXT is defined
-target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
+#target_compile_options(duckdb_jemalloc PRIVATE -D_GNU_SOURCE)
+# TODO: not sure if needed anymore, seems to have something to do with JEMALLOC_BACKGROUND_THREAD
 
 target_include_directories(duckdb_jemalloc PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 set_target_properties(duckdb_jemalloc PROPERTIES EXPORT_NAME duckdb_jemalloc)

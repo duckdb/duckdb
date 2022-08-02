@@ -22,6 +22,7 @@ san_bump_alloc(tsdn_t *tsdn, san_bump_alloc_t* sba, pac_t *pac,
 	size_t guarded_size = san_one_side_guarded_sz(size);
 
 	malloc_mutex_lock(tsdn, &sba->mtx);
+	size_t trail_size;
 
 	if (sba->curr_reg == NULL ||
 	    edata_size_get(sba->curr_reg) < guarded_size) {
@@ -40,7 +41,7 @@ san_bump_alloc(tsdn_t *tsdn, san_bump_alloc_t* sba, pac_t *pac,
 		to_destroy = NULL;
 	}
 	assert(guarded_size <= edata_size_get(sba->curr_reg));
-	size_t trail_size = edata_size_get(sba->curr_reg) - guarded_size;
+	trail_size = edata_size_get(sba->curr_reg) - guarded_size;
 
 	edata_t* edata;
 	if (trail_size != 0) {

@@ -49,7 +49,7 @@ rtree_node_init(tsdn_t *tsdn, rtree_t *rtree, unsigned level,
 	 * If *elmp is non-null, then it was initialized with the init lock
 	 * held, so we can get by with 'relaxed' here.
 	 */
-	rtree_node_elm_t *node = atomic_load_p(elmp, ATOMIC_RELAXED);
+	rtree_node_elm_t *node = (rtree_node_elm_t *)atomic_load_p(elmp, ATOMIC_RELAXED);
 	if (node == NULL) {
 		node = rtree_node_alloc(tsdn, rtree, ZU(1) <<
 		    rtree_levels[level].bits);
@@ -75,7 +75,7 @@ rtree_leaf_init(tsdn_t *tsdn, rtree_t *rtree, atomic_p_t *elmp) {
 	 * If *elmp is non-null, then it was initialized with the init lock
 	 * held, so we can get by with 'relaxed' here.
 	 */
-	rtree_leaf_elm_t *leaf = atomic_load_p(elmp, ATOMIC_RELAXED);
+	rtree_leaf_elm_t *leaf = (rtree_leaf_elm_t *)atomic_load_p(elmp, ATOMIC_RELAXED);
 	if (leaf == NULL) {
 		leaf = rtree_leaf_alloc(tsdn, rtree, ZU(1) <<
 		    rtree_levels[RTREE_HEIGHT-1].bits);

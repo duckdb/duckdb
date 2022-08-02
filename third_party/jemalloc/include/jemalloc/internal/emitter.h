@@ -5,22 +5,21 @@
 
 namespace duckdb_jemalloc {
 
-typedef enum emitter_output_e emitter_output_t;
 enum emitter_output_e {
 	emitter_output_json,
 	emitter_output_json_compact,
 	emitter_output_table
 };
+typedef enum emitter_output_e emitter_output_t;
 
-typedef enum emitter_justify_e emitter_justify_t;
 enum emitter_justify_e {
 	emitter_justify_left,
 	emitter_justify_right,
 	/* Not for users; just to pass to internal functions. */
 	emitter_justify_none
 };
+typedef enum emitter_justify_e emitter_justify_t;
 
-typedef enum emitter_type_e emitter_type_t;
 enum emitter_type_e {
 	emitter_type_bool,
 	emitter_type_int,
@@ -37,6 +36,7 @@ enum emitter_type_e {
 	 */
 	emitter_type_title,
 };
+typedef enum emitter_type_e emitter_type_t;
 
 typedef struct emitter_col_s emitter_col_t;
 struct emitter_col_s {

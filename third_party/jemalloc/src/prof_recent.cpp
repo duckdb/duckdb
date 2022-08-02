@@ -330,6 +330,8 @@ prof_recent_alloc(tsd_t *tsd, edata_t *edata, size_t size, size_t usize) {
 		prof_recent_alloc_assert_count(tsd);
 	}
 
+	prof_recent_t *tail;
+
 	if (prof_recent_alloc_max_get(tsd) == 0) {
 		assert(prof_recent_alloc_is_empty(tsd));
 		goto label_rollback;
@@ -362,7 +364,7 @@ prof_recent_alloc(tsd_t *tsd, edata_t *edata, size_t size, size_t usize) {
 	}
 
 	/* Fill content into the tail node. */
-	prof_recent_t *tail = ql_last(&prof_recent_alloc_list, link);
+	tail = ql_last(&prof_recent_alloc_list, link);
 	assert(tail != NULL);
 	tail->size = size;
 	tail->usize = usize;

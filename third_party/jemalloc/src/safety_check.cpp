@@ -7,8 +7,8 @@ static safety_check_abort_hook_t safety_check_abort;
 
 void safety_check_fail_sized_dealloc(bool current_dealloc, const void *ptr,
     size_t true_size, size_t input_size) {
-	char *src = current_dealloc ? "the current pointer being freed" :
-	    "in thread cache, possibly from previous deallocations";
+	char *src = (char *)(current_dealloc ? "the current pointer being freed" :
+	    "in thread cache, possibly from previous deallocations");
 
 	safety_check_fail("<jemalloc>: size mismatch detected (true size %zu "
 	    "vs input size %zu), likely caused by application sized "
