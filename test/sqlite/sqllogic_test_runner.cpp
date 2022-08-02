@@ -307,7 +307,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (sort_style == "nosort") {
 					/* Do no sorting */
 					command->sort_style = SortStyle::NO_SORT;
-				} else if (sort_style == "rowsort") {
+				} else if (sort_style == "rowsort" || sort_style == "sort") {
 					/* Row-oriented sorting */
 					command->sort_style = SortStyle::ROW_SORT;
 				} else if (sort_style == "valuesort") {
