@@ -12,8 +12,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 
-struct ArrowSchema;
-
 namespace duckdb {
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
@@ -97,9 +95,6 @@ public:
 			return false;
 		}
 	}
-
-	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> &types, vector<string> &names,
-	                                     string &config_timezone);
 
 	static string GetConfigTimezone(QueryResult &query_result);
 

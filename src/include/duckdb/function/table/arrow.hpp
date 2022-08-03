@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"

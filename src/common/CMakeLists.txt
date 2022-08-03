@@ -1,3 +1,4 @@
+add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(operator)
@@ -17,7 +18,6 @@ add_library_unity(
   duckdb_common
   OBJECT
   allocator.cpp
-  arrow_wrapper.cpp
   assert.cpp
   compressed_file_system.cpp
   constants.cpp

@@ -14,7 +14,6 @@ add_library_unity(
   column_data_collection.cpp
   column_data_collection_segment.cpp
   data_chunk.cpp
-  data_chunk_arrow.cpp
   date.cpp
   decimal.cpp
   hash.cpp

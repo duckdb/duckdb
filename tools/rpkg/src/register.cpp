@@ -1,7 +1,7 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
 
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"

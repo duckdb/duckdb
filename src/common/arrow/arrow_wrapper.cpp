@@ -1,13 +1,15 @@
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 
 #include "duckdb/main/stream_query_result.hpp"
 
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 
 #include "duckdb/main/query_result.hpp"
+
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
@@ -77,7 +79,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	if (!my_stream->column_types.empty()) {
-		QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
+		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+		                              my_stream->timezone_config);
 		return 0;
 	}
 
@@ -97,7 +100,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
+	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
 	return 0;
 }
 
@@ -141,7 +144,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 			agg_chunk_result->Append(*new_chunk, true);
 		}
 	}
-	agg_chunk_result->ToArrowArray(out);
+	ArrowConverter::ToArrowArray(*agg_chunk_result, out);
 	return 0;
 }
 
@@ -161,6 +164,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	return my_stream->last_error.c_str();
 }
+
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
     : result(move(result_p)) {
 	//! We first initialize the private data of the stream

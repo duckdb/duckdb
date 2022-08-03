@@ -1,5 +1,7 @@
 #include "duckdb/main/capi_internal.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 
+using duckdb::ArrowConverter;
 using duckdb::ArrowResultWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
@@ -22,8 +24,8 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 		return DuckDBSuccess;
 	}
 	auto wrapper = (ArrowResultWrapper *)result;
-	QueryResult::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-	                           wrapper->timezone_config);
+	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
+	                              wrapper->timezone_config);
 	return DuckDBSuccess;
 }
 
@@ -39,7 +41,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	wrapper->current_chunk->ToArrowArray((ArrowArray *)*out_array);
+	ArrowConverter::ToArrowArray(*wrapper->current_chunk, (ArrowArray *)*out_array);
 	return DuckDBSuccess;
 }
 

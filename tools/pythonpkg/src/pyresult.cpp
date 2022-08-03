@@ -3,9 +3,10 @@
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" // from Python
-#include "duckdb/common/arrow.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -327,7 +328,7 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk,
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
 	ArrowArray data;
-	duck_chunk.ToArrowArray(&data);
+	ArrowConverter::ToArrowArray(duck_chunk, &data);
 	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
@@ -338,7 +339,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 	}
 	ArrowSchema arrow_schema;
 	string timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
 }
@@ -372,7 +373,7 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	ArrowSchema schema;
 
 	auto timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches = FetchAllArrowChunks(chunk_size);

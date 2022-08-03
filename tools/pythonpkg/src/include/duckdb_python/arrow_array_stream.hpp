@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/table_function.hpp"

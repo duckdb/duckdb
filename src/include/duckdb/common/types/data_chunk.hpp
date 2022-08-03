@@ -12,7 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/allocator.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 struct ArrowArray;
 
@@ -136,9 +136,6 @@ public:
 	//! Verify that the DataChunk is in a consistent, not corrupt state. DEBUG
 	//! FUNCTION ONLY!
 	DUCKDB_API void Verify();
-
-	//! export data chunk as a arrow struct array that can be imported as arrow record batch
-	DUCKDB_API void ToArrowArray(ArrowArray *out_array);
 
 private:
 	//! The amount of tuples stored in the data chunk

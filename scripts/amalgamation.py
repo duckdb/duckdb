@@ -65,7 +65,7 @@ if '--extended' in sys.argv:
         "duckdb/common/types/vector_cache.hpp",
         "duckdb/common/string_map_set.hpp",
         "duckdb/planner/filter/null_filter.hpp",
-        "duckdb/common/arrow_wrapper.hpp",
+        "duckdb/common/arrow/arrow_wrapper.hpp",
         "duckdb/common/hive_partitioning.hpp",
         "duckdb/common/compressed_file_system.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))

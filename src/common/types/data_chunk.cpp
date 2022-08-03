@@ -1,7 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include "duckdb/common/array.hpp"
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"

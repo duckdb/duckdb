@@ -4,10 +4,11 @@
 
 #include <R_ext/Utils.h>
 
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/parser/statement/relation_statement.hpp"
@@ -649,14 +650,13 @@ struct AppendableRList {
 
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
                      ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace, idx_t chunk_size) {
-
 	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
 	}
 	string timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
-	data_chunk->ToArrowArray(&arrow_data);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowArray(*data_chunk, &arrow_data);
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
 	return true;
@@ -690,7 +690,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
 	string timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table

@@ -1,6 +1,6 @@
 #pragma once
 #include "arrow/record_batch.h"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "arrow/array.h"
 #include "catch.hpp"
 

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/vector_buffer.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 namespace duckdb {
 
