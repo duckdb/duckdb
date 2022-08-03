@@ -16,7 +16,7 @@ class InternalError : public std::exception {};
 class ProgrammingError : public std::exception {};
 class NotSupportedError : public std::exception {};
 
-void ThrowHydratedError(const std::string &s) {
+[[noreturn]] void ThrowHydratedError(const std::string &s) {
 	auto location = s.find(":");
 	auto prefix = s.substr(0, location);
 	auto message = s.substr(location + 2); // +2 to skip colon and space
