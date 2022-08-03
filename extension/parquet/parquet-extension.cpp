@@ -45,8 +45,18 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> cur_file;
 	vector<string> names;
 	vector<LogicalType> types;
-	// Indicates that the file from the initial_reader is no longer present in files
-	bool should_flush_initial_reader = false;
+
+	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
+	idx_t initial_file_cardinality;
+	idx_t initial_file_row_groups;
+	ParquetOptions parquet_options;
+
+	void SetInitialReader(shared_ptr<ParquetReader> reader) {
+		initial_reader = std::move(reader);
+		initial_file_cardinality = initial_reader->NumRows();
+		initial_file_row_groups = initial_reader->NumRowGroups();
+		parquet_options = initial_reader->parquet_options;
+	}
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -144,7 +154,7 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
+		result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
 		result->names = result->initial_reader->names;
 		result->types = result->initial_reader->return_types;
 		return move(result);
@@ -162,7 +172,7 @@ public:
 
 		auto &config = DBConfig::GetConfig(context);
 		if (bind_data.files.size() < 2) {
-			if (!bind_data.should_flush_initial_reader) {
+			if (bind_data.initial_reader) {
 				// most common path, scanning single parquet file
 				return ParquetReader::ReadStatistics(*bind_data.initial_reader,
 				                                     bind_data.initial_reader->return_types[column_index], column_index,
@@ -179,6 +189,10 @@ public:
 			// for more than one file, we could be lucky and metadata for *every* file is in the object cache (if
 			// enabled at all)
 			FileSystem &fs = FileSystem::GetFileSystem(context);
+
+			// If we don't have an initial_reader anymore, we may need to allocate a new one here.
+			shared_ptr<ParquetReader> reader;
+
 			for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
 				auto metadata = cache.Get<ParquetFileMetadataCache>(file_name);
@@ -193,9 +207,21 @@ public:
 					// missing or invalid metadata entry in cache, no usable stats overall
 					return nullptr;
 				}
+
+				// If we don't have an initial reader anymore we need to create a reader
+				auto& current_reader = bind_data.initial_reader ? bind_data.initial_reader : reader;
+				if (!current_reader) {
+					std::vector<column_t> ids(bind_data.names.size());
+					std::iota (std::begin(ids), std::end(ids), 0);  // fill with 0,1,2,3.. etc
+
+					current_reader = make_shared<ParquetReader>(
+					    context, bind_data.files[0], bind_data.names, bind_data.types, ids,
+					    bind_data.parquet_options, bind_data.files[0]);
+				}
+
 				// get and merge stats for file
-				auto file_stats = ParquetReader::ReadStatistics(*bind_data.initial_reader,
-				                                                bind_data.initial_reader->return_types[column_index],
+				auto file_stats = ParquetReader::ReadStatistics(*current_reader,
+				                                                current_reader->return_types[column_index],
 				                                                column_index, metadata->metadata.get());
 				if (!file_stats) {
 					return nullptr;
@@ -220,7 +246,7 @@ public:
 		auto result = make_unique<ParquetReadBindData>();
 		result->files = move(files);
 
-		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], parquet_options);
+		result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], parquet_options));
 		return_types = result->types = result->initial_reader->return_types;
 		names = result->names = result->initial_reader->names;
 		return move(result);
@@ -289,13 +315,13 @@ public:
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                              const GlobalTableFunctionState *global_state) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
-		if (bind_data.should_flush_initial_reader && bind_data.files.empty()) {
+		if (bind_data.files.empty()) {
 			return 100.0;
 		}
-		if (bind_data.initial_reader->NumRows() == 0) {
+		if (bind_data.initial_file_cardinality == 0) {
 			return (100.0 * (bind_data.cur_file + 1)) / bind_data.files.size();
 		}
-		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_reader->NumRows()) /
+		auto percentage = (bind_data.chunk_count * STANDARD_VECTOR_SIZE * 100.0 / bind_data.initial_file_cardinality) /
 		                  bind_data.files.size();
 		percentage += 100.0 * bind_data.cur_file / bind_data.files.size();
 		return percentage;
@@ -323,16 +349,16 @@ public:
 
 		auto result = make_unique<ParquetReadGlobalState>();
 
-		if (bind_data.should_flush_initial_reader) {
+		if (bind_data.initial_reader) {
+			result->current_reader = bind_data.initial_reader;
+		} else {
 			if (bind_data.files.empty()) {
 				result->current_reader = nullptr;
 			} else {
 				result->current_reader = make_shared<ParquetReader>(
 				    context, bind_data.files[0], bind_data.names, bind_data.types, input.column_ids,
-				    bind_data.initial_reader->parquet_options, bind_data.files[0]);
+				    bind_data.parquet_options, bind_data.files[0]);
 			}
-		} else {
-			result->current_reader = bind_data.initial_reader;
 		}
 
 		result->row_group_index = 0;
@@ -371,18 +397,12 @@ public:
 
 	static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
-		if (data.should_flush_initial_reader && data.files.empty()) {
-			return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
-		}
-		return make_unique<NodeStatistics>(data.initial_reader->NumRows() * data.files.size());
+		return make_unique<NodeStatistics>(data.initial_file_cardinality * data.files.size());
 	}
 
 	static idx_t ParquetScanMaxThreads(ClientContext &context, const FunctionData *bind_data) {
 		auto &data = (ParquetReadBindData &)*bind_data;
-		if (data.should_flush_initial_reader && data.files.empty()) {
-			return 1;
-		}
-		return data.initial_reader->NumRowGroups() * data.files.size();
+		return data.initial_file_row_groups * data.files.size();
 	}
 
 	static bool ParquetParallelStateNext(ClientContext &context, const ParquetReadBindData &bind_data,
@@ -390,7 +410,6 @@ public:
 		lock_guard<mutex> parallel_lock(parallel_state.lock);
 
 		if (parallel_state.current_reader == nullptr) {
-			D_ASSERT(bind_data.should_flush_initial_reader);
 			return false;
 		}
 
@@ -436,9 +455,13 @@ public:
 		auto data = (ParquetReadBindData *)bind_data_p;
 		auto initial_filename = data->files[0];
 		HivePartitioning::ApplyFiltersToFileList(data->files, filters,
-		                                         data->initial_reader->parquet_options.hive_partitioning,
-		                                         data->initial_reader->parquet_options.filename);
-		data->should_flush_initial_reader |= data->files.empty() || initial_filename != data->files[0];
+		                                         data->parquet_options.hive_partitioning,
+		                                         data->parquet_options.filename);
+
+		if (data->files.empty() || initial_filename != data->files[0]) {
+			// Flush initial reader in case the first file gets filtered out
+			data->initial_reader.reset();
+		}
 	}
 };
 
