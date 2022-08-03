@@ -24,19 +24,17 @@
 
 namespace datasketches {
 
-template<typename A = std::allocator<uint8_t>>
+template <typename A = std::allocator<uint8_t>>
 class CubicInterpolation {
-  public:
-    static double usingXAndYTables(const double xArr[], const double yArr[],
-                                   int len, double x);
+public:
+	static double usingXAndYTables(const double xArr[], const double yArr[], int len, double x);
 
-    static double usingXAndYTables(double x);
+	static double usingXAndYTables(double x);
 
-    static double usingXArrAndYStride(const double xArr[], const int xArrLen,
-                                      double yStride, double x);
+	static double usingXArrAndYStride(const double xArr[], const int xArrLen, double yStride, double x);
 };
 
-}
+} // namespace datasketches
 
 #include "CubicInterpolation-internal.hpp"
 

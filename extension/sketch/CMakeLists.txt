@@ -8,10 +8,7 @@ include_directories(third_party/apache-datasketches/hll/include)
 
 # add_subdirectory(third_party)
 
-set(SKETCH_EXTENSION_FILES
-    sketch-extension.cpp
-    sketch-hll.cpp)
-    
+set(SKETCH_EXTENSION_FILES sketch-extension.cpp sketch-hll.cpp)
 
 add_library(sketch_extension STATIC ${SKETCH_EXTENSION_FILES})
 link_threads(sketch_extension)

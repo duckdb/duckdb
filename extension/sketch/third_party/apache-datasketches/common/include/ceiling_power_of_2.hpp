@@ -27,13 +27,13 @@ namespace datasketches {
 // compute the next highest power of 2 of 32-bit n
 // taken from https://graphics.stanford.edu/~seander/bithacks.html
 static inline uint32_t ceiling_power_of_2(uint32_t n) {
-  --n;
-  n |= n >> 1;
-  n |= n >> 2;
-  n |= n >> 4;
-  n |= n >> 8;
-  n |= n >> 16;
-  return ++n;
+	--n;
+	n |= n >> 1;
+	n |= n >> 2;
+	n |= n >> 4;
+	n |= n >> 8;
+	n |= n >> 16;
+	return ++n;
 }
 
 } /* namespace datasketches */

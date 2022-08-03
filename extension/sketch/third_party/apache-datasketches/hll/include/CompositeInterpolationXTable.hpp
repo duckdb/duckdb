@@ -24,16 +24,16 @@
 
 namespace datasketches {
 
-template<typename A = std::allocator<uint8_t>>
+template <typename A = std::allocator<uint8_t>>
 class CompositeInterpolationXTable {
-  public:
-    static uint32_t get_y_stride(uint8_t logK);
+public:
+	static uint32_t get_y_stride(uint8_t logK);
 
-    static const double* get_x_arr(uint8_t logK);
-    static uint32_t get_x_arr_length();
+	static const double *get_x_arr(uint8_t logK);
+	static uint32_t get_x_arr_length();
 };
 
-}
+} // namespace datasketches
 
 #include "CompositeInterpolationXTable-internal.hpp"
 

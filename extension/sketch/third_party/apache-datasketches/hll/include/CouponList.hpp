@@ -27,64 +27,64 @@
 
 namespace datasketches {
 
-template<typename A>
+template <typename A>
 class HllSketchImplFactory;
 
-template<typename A>
+template <typename A>
 class CouponList : public HllSketchImpl<A> {
-  public:
-    CouponList(uint8_t lgConfigK, target_hll_type tgtHllType, hll_mode mode, const A& allocator);
-    CouponList(const CouponList& that, target_hll_type tgtHllType);
+public:
+	CouponList(uint8_t lgConfigK, target_hll_type tgtHllType, hll_mode mode, const A &allocator);
+	CouponList(const CouponList &that, target_hll_type tgtHllType);
 
-    static CouponList* newList(const void* bytes, size_t len, const A& allocator);
-    static CouponList* newList(std::istream& is, const A& allocator);
-    virtual vector_u8<A> serialize(bool compact, unsigned header_size_bytes) const;
-    virtual void serialize(std::ostream& os, bool compact) const;
+	static CouponList *newList(const void *bytes, size_t len, const A &allocator);
+	static CouponList *newList(std::istream &is, const A &allocator);
+	virtual vector_u8<A> serialize(bool compact, unsigned header_size_bytes) const;
+	virtual void serialize(std::ostream &os, bool compact) const;
 
-    virtual ~CouponList() = default;
-    virtual std::function<void(HllSketchImpl<A>*)> get_deleter() const;
+	virtual ~CouponList() = default;
+	virtual std::function<void(HllSketchImpl<A> *)> get_deleter() const;
 
-    virtual CouponList* copy() const;
-    virtual CouponList* copyAs(target_hll_type tgtHllType) const;
+	virtual CouponList *copy() const;
+	virtual CouponList *copyAs(target_hll_type tgtHllType) const;
 
-    virtual HllSketchImpl<A>* couponUpdate(uint32_t coupon);
+	virtual HllSketchImpl<A> *couponUpdate(uint32_t coupon);
 
-    virtual double getEstimate() const;
-    virtual double getCompositeEstimate() const;
-    virtual double getUpperBound(uint8_t numStdDev) const;
-    virtual double getLowerBound(uint8_t numStdDev) const;
+	virtual double getEstimate() const;
+	virtual double getCompositeEstimate() const;
+	virtual double getUpperBound(uint8_t numStdDev) const;
+	virtual double getLowerBound(uint8_t numStdDev) const;
 
-    virtual bool isEmpty() const;
-    virtual uint32_t getCouponCount() const;
+	virtual bool isEmpty() const;
+	virtual uint32_t getCouponCount() const;
 
-    coupon_iterator<A> begin(bool all = false) const;
-    coupon_iterator<A> end() const;
+	coupon_iterator<A> begin(bool all = false) const;
+	coupon_iterator<A> end() const;
 
-  protected:
-    using ClAlloc = typename std::allocator_traits<A>::template rebind_alloc<CouponList<A>>;
+protected:
+	using ClAlloc = typename std::allocator_traits<A>::template rebind_alloc<CouponList<A>>;
 
-    using vector_int = std::vector<uint32_t, typename std::allocator_traits<A>::template rebind_alloc<uint32_t>>;
+	using vector_int = std::vector<uint32_t, typename std::allocator_traits<A>::template rebind_alloc<uint32_t>>;
 
-    HllSketchImpl<A>* promoteHeapListToSet(CouponList& list);
-    HllSketchImpl<A>* promoteHeapListOrSetToHll(CouponList& src);
+	HllSketchImpl<A> *promoteHeapListToSet(CouponList &list);
+	HllSketchImpl<A> *promoteHeapListOrSetToHll(CouponList &src);
 
-    virtual uint32_t getUpdatableSerializationBytes() const;
-    virtual uint32_t getCompactSerializationBytes() const;
-    virtual uint32_t getMemDataStart() const;
-    virtual uint8_t getPreInts() const;
-    virtual bool isCompact() const;
-    virtual bool isOutOfOrderFlag() const;
-    virtual void putOutOfOrderFlag(bool oooFlag);
+	virtual uint32_t getUpdatableSerializationBytes() const;
+	virtual uint32_t getCompactSerializationBytes() const;
+	virtual uint32_t getMemDataStart() const;
+	virtual uint8_t getPreInts() const;
+	virtual bool isCompact() const;
+	virtual bool isOutOfOrderFlag() const;
+	virtual void putOutOfOrderFlag(bool oooFlag);
 
-    virtual A getAllocator() const;
+	virtual A getAllocator() const;
 
-    uint32_t couponCount_;
-    bool oooFlag_;
-    vector_int coupons_;
+	uint32_t couponCount_;
+	bool oooFlag_;
+	vector_int coupons_;
 
-    friend class HllSketchImplFactory<A>;
+	friend class HllSketchImplFactory<A>;
 };
 
-}
+} // namespace datasketches
 
 #endif /* _COUPONLIST_HPP_ */

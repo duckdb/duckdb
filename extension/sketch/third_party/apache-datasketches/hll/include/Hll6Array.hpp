@@ -24,31 +24,31 @@
 
 namespace datasketches {
 
-template<typename A>
+template <typename A>
 class Hll6Iterator;
 
-template<typename A>
+template <typename A>
 class Hll6Array final : public HllArray<A> {
-  public:
-    Hll6Array(uint8_t lgConfigK, bool startFullSize, const A& allocator);
+public:
+	Hll6Array(uint8_t lgConfigK, bool startFullSize, const A &allocator);
 
-    virtual ~Hll6Array() = default;
-    virtual std::function<void(HllSketchImpl<A>*)> get_deleter() const;
+	virtual ~Hll6Array() = default;
+	virtual std::function<void(HllSketchImpl<A> *)> get_deleter() const;
 
-    virtual Hll6Array* copy() const;
+	virtual Hll6Array *copy() const;
 
-    inline uint8_t getSlot(uint32_t slotNo) const;
-    inline void putSlot(uint32_t slotNo, uint8_t value);
+	inline uint8_t getSlot(uint32_t slotNo) const;
+	inline void putSlot(uint32_t slotNo, uint8_t value);
 
-    virtual HllSketchImpl<A>* couponUpdate(uint32_t coupon) final;
-    void mergeHll(const HllArray<A>& src);
+	virtual HllSketchImpl<A> *couponUpdate(uint32_t coupon) final;
+	void mergeHll(const HllArray<A> &src);
 
-    virtual uint32_t getHllByteArrBytes() const;
+	virtual uint32_t getHllByteArrBytes() const;
 
-  private:
-    void internalCouponUpdate(uint32_t coupon);
+private:
+	void internalCouponUpdate(uint32_t coupon);
 };
 
-}
+} // namespace datasketches
 
 #endif /* _HLL6ARRAY_HPP_ */

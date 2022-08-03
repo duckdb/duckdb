@@ -22,21 +22,22 @@
 
 namespace datasketches {
 
-template<typename A>
-class coupon_iterator: public std::iterator<std::input_iterator_tag, uint32_t> {
+template <typename A>
+class coupon_iterator : public std::iterator<std::input_iterator_tag, uint32_t> {
 public:
-  coupon_iterator(const uint32_t* array, size_t array_slze, size_t index, bool all);
-  coupon_iterator& operator++();
-  bool operator!=(const coupon_iterator& other) const;
-  uint32_t operator*() const;
+	coupon_iterator(const uint32_t *array, size_t array_slze, size_t index, bool all);
+	coupon_iterator &operator++();
+	bool operator!=(const coupon_iterator &other) const;
+	uint32_t operator*() const;
+
 private:
-  const uint32_t* array_;
-  size_t array_size_;
-  size_t index_;
-  bool all_;
+	const uint32_t *array_;
+	size_t array_size_;
+	size_t index_;
+	bool all_;
 };
 
-}
+} // namespace datasketches
 
 #include "coupon_iterator-internal.hpp"
 

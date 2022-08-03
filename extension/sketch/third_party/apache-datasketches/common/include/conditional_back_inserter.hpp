@@ -26,41 +26,52 @@
 namespace datasketches {
 
 template <typename Container, typename Predicate>
-class conditional_back_insert_iterator: public std::back_insert_iterator<Container> {
+class conditional_back_insert_iterator : public std::back_insert_iterator<Container> {
 public:
-  template<typename P>
-  conditional_back_insert_iterator(Container& c, P&& p): std::back_insert_iterator<Container>(c), p(std::forward<P>(p)) {}
+	template <typename P>
+	conditional_back_insert_iterator(Container &c, P &&p)
+	    : std::back_insert_iterator<Container>(c), p(std::forward<P>(p)) {
+	}
 
-  // MSVC seems to insist on having copy constructor and assignment
-  conditional_back_insert_iterator(const conditional_back_insert_iterator& other):
-    std::back_insert_iterator<Container>(other), p(other.p) {}
-  conditional_back_insert_iterator& operator=(const conditional_back_insert_iterator& other) {
-    std::back_insert_iterator<Container>::operator=(other);
-    p = other.p;
-    return *this;
-  }
+	// MSVC seems to insist on having copy constructor and assignment
+	conditional_back_insert_iterator(const conditional_back_insert_iterator &other)
+	    : std::back_insert_iterator<Container>(other), p(other.p) {
+	}
+	conditional_back_insert_iterator &operator=(const conditional_back_insert_iterator &other) {
+		std::back_insert_iterator<Container>::operator=(other);
+		p = other.p;
+		return *this;
+	}
 
-  conditional_back_insert_iterator& operator=(const typename Container::value_type& value) {
-    if (p(value)) std::back_insert_iterator<Container>::operator=(value);
-    return *this;
-  }
+	conditional_back_insert_iterator &operator=(const typename Container::value_type &value) {
+		if (p(value))
+			std::back_insert_iterator<Container>::operator=(value);
+		return *this;
+	}
 
-  conditional_back_insert_iterator& operator=(typename Container::value_type&& value) {
-    if (p(value)) std::back_insert_iterator<Container>::operator=(std::move(value));
-    return *this;
-  }
+	conditional_back_insert_iterator &operator=(typename Container::value_type &&value) {
+		if (p(value))
+			std::back_insert_iterator<Container>::operator=(std::move(value));
+		return *this;
+	}
 
-  conditional_back_insert_iterator& operator*() { return *this; }
-  conditional_back_insert_iterator& operator++() { return *this; }
-  conditional_back_insert_iterator& operator++(int) { return *this; }
+	conditional_back_insert_iterator &operator*() {
+		return *this;
+	}
+	conditional_back_insert_iterator &operator++() {
+		return *this;
+	}
+	conditional_back_insert_iterator &operator++(int) {
+		return *this;
+	}
 
 private:
-  Predicate p;
+	Predicate p;
 };
 
-template<typename Container, typename Predicate>
-conditional_back_insert_iterator<Container, Predicate> conditional_back_inserter(Container& c, Predicate&& p) {
-  return conditional_back_insert_iterator<Container, Predicate>(c, std::forward<Predicate>(p));
+template <typename Container, typename Predicate>
+conditional_back_insert_iterator<Container, Predicate> conditional_back_inserter(Container &c, Predicate &&p) {
+	return conditional_back_insert_iterator<Container, Predicate>(c, std::forward<Predicate>(p));
 }
 
 } /* namespace datasketches */

@@ -28,56 +28,53 @@
 
 namespace datasketches {
 
-template<typename A>
+template <typename A>
 class AuxHashMap final {
-  public:
-    AuxHashMap(uint8_t lgAuxArrInts, uint8_t lgConfigK, const A& allocator);
-    static AuxHashMap* newAuxHashMap(uint8_t lgAuxArrInts, uint8_t lgConfigK, const A& allocator);
-    static AuxHashMap* newAuxHashMap(const AuxHashMap<A>& that);
+public:
+	AuxHashMap(uint8_t lgAuxArrInts, uint8_t lgConfigK, const A &allocator);
+	static AuxHashMap *newAuxHashMap(uint8_t lgAuxArrInts, uint8_t lgConfigK, const A &allocator);
+	static AuxHashMap *newAuxHashMap(const AuxHashMap<A> &that);
 
-    static AuxHashMap* deserialize(const void* bytes, size_t len,
-                                   uint8_t lgConfigK,
-                                   uint32_t auxCount, uint8_t lgAuxArrInts,
-                                   bool srcCompact, const A& allocator);
-    static AuxHashMap* deserialize(std::istream& is, uint8_t lgConfigK,
-                                   uint32_t auxCount, uint8_t lgAuxArrInts,
-                                   bool srcCompact, const A& allocator);
-    virtual ~AuxHashMap() = default;
-    static std::function<void(AuxHashMap<A>*)> make_deleter();
-    
-    AuxHashMap* copy() const;
-    uint32_t getUpdatableSizeBytes() const;
-    uint32_t getCompactSizeBytes() const;
+	static AuxHashMap *deserialize(const void *bytes, size_t len, uint8_t lgConfigK, uint32_t auxCount,
+	                               uint8_t lgAuxArrInts, bool srcCompact, const A &allocator);
+	static AuxHashMap *deserialize(std::istream &is, uint8_t lgConfigK, uint32_t auxCount, uint8_t lgAuxArrInts,
+	                               bool srcCompact, const A &allocator);
+	virtual ~AuxHashMap() = default;
+	static std::function<void(AuxHashMap<A> *)> make_deleter();
 
-    uint32_t getAuxCount() const;
-    uint32_t* getAuxIntArr();
-    uint8_t getLgAuxArrInts() const;
+	AuxHashMap *copy() const;
+	uint32_t getUpdatableSizeBytes() const;
+	uint32_t getCompactSizeBytes() const;
 
-    coupon_iterator<A> begin(bool all = false) const;
-    coupon_iterator<A> end() const;
+	uint32_t getAuxCount() const;
+	uint32_t *getAuxIntArr();
+	uint8_t getLgAuxArrInts() const;
 
-    void mustAdd(uint32_t slotNo, uint8_t value);
-    uint8_t mustFindValueFor(uint32_t slotNo) const;
-    void mustReplace(uint32_t slotNo, uint8_t value);
+	coupon_iterator<A> begin(bool all = false) const;
+	coupon_iterator<A> end() const;
 
-  private:
-    typedef typename std::allocator_traits<A>::template rebind_alloc<AuxHashMap<A>> ahmAlloc;
+	void mustAdd(uint32_t slotNo, uint8_t value);
+	uint8_t mustFindValueFor(uint32_t slotNo) const;
+	void mustReplace(uint32_t slotNo, uint8_t value);
 
-    using vector_int = std::vector<uint32_t, typename std::allocator_traits<A>::template rebind_alloc<uint32_t>>;
+private:
+	typedef typename std::allocator_traits<A>::template rebind_alloc<AuxHashMap<A>> ahmAlloc;
 
-    // static so it can be used when resizing
-    static int32_t find(const uint32_t* auxArr, uint8_t lgAuxArrInts, uint8_t lgConfigK, uint32_t slotNo);
+	using vector_int = std::vector<uint32_t, typename std::allocator_traits<A>::template rebind_alloc<uint32_t>>;
 
-    void checkGrow();
-    void growAuxSpace();
+	// static so it can be used when resizing
+	static int32_t find(const uint32_t *auxArr, uint8_t lgAuxArrInts, uint8_t lgConfigK, uint32_t slotNo);
 
-    const uint8_t lgConfigK;
-    uint8_t lgAuxArrInts;
-    uint32_t auxCount;
-    vector_int entries;
+	void checkGrow();
+	void growAuxSpace();
+
+	const uint8_t lgConfigK;
+	uint8_t lgAuxArrInts;
+	uint32_t auxCount;
+	vector_int entries;
 };
 
-}
+} // namespace datasketches
 
 #include "AuxHashMap-internal.hpp"
 

@@ -8,14 +8,13 @@
 
 #pragma once
 
-
 namespace duckdb {
 
-  class ClientContext; 
+class ClientContext;
 
-  class SketchHll {
-    public:
-      static void RegisterFunction(ClientContext &context);
-  };
+class SketchHll {
+public:
+	static void RegisterFunction(ClientContext &context);
+};
 
 } // namespace duckdb

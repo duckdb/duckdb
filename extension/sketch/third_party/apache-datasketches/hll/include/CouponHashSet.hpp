@@ -24,36 +24,36 @@
 
 namespace datasketches {
 
-template<typename A>
+template <typename A>
 class CouponHashSet : public CouponList<A> {
-  public:
-    static CouponHashSet* newSet(const void* bytes, size_t len, const A& allocator);
-    static CouponHashSet* newSet(std::istream& is, const A& allocator);
-    CouponHashSet(uint8_t lgConfigK, target_hll_type tgtHllType, const A& allocator);
-    CouponHashSet(const CouponHashSet& that, target_hll_type tgtHllType);
+public:
+	static CouponHashSet *newSet(const void *bytes, size_t len, const A &allocator);
+	static CouponHashSet *newSet(std::istream &is, const A &allocator);
+	CouponHashSet(uint8_t lgConfigK, target_hll_type tgtHllType, const A &allocator);
+	CouponHashSet(const CouponHashSet &that, target_hll_type tgtHllType);
 
-    virtual ~CouponHashSet() = default;
-    virtual std::function<void(HllSketchImpl<A>*)> get_deleter() const;
+	virtual ~CouponHashSet() = default;
+	virtual std::function<void(HllSketchImpl<A> *)> get_deleter() const;
 
-  protected:
-    using vector_int = std::vector<uint32_t, typename std::allocator_traits<A>::template rebind_alloc<uint32_t>>;
+protected:
+	using vector_int = std::vector<uint32_t, typename std::allocator_traits<A>::template rebind_alloc<uint32_t>>;
 
-    virtual CouponHashSet* copy() const;
-    virtual CouponHashSet* copyAs(target_hll_type tgtHllType) const;
+	virtual CouponHashSet *copy() const;
+	virtual CouponHashSet *copyAs(target_hll_type tgtHllType) const;
 
-    virtual HllSketchImpl<A>* couponUpdate(uint32_t coupon);
+	virtual HllSketchImpl<A> *couponUpdate(uint32_t coupon);
 
-    virtual uint32_t getMemDataStart() const;
-    virtual uint8_t getPreInts() const;
+	virtual uint32_t getMemDataStart() const;
+	virtual uint8_t getPreInts() const;
 
-    friend class HllSketchImplFactory<A>;
+	friend class HllSketchImplFactory<A>;
 
-  private:
-    using ChsAlloc = typename std::allocator_traits<A>::template rebind_alloc<CouponHashSet<A>>;
-    bool checkGrowOrPromote();
-    void growHashSet(uint8_t tgtLgCoupArrSize);
+private:
+	using ChsAlloc = typename std::allocator_traits<A>::template rebind_alloc<CouponHashSet<A>>;
+	bool checkGrowOrPromote();
+	void growHashSet(uint8_t tgtLgCoupArrSize);
 };
 
-}
+} // namespace datasketches
 
 #endif /* _COUPONHASHSET_HPP_ */
