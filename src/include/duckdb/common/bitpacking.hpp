@@ -89,6 +89,13 @@ public:
 		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
 	}
 
+	// Calculates the minimum required number of bits per value that can store all values,
+	// given a predetermined minimum and maximum value of the buffer
+	template <class T>
+	inline static bitpacking_width_t MinimumBitWidth(T minimum, T maximum) {
+		return FindMinimumBitWidth<T, BYTE_ALIGNED>(minimum, maximum);
+	}
+
 	template <class T>
 	inline static idx_t GetRequiredSize(idx_t count, bitpacking_width_t width) {
 		count = RoundUpToAlgorithmGroupSize(count);
@@ -177,6 +184,18 @@ private:
 		}
 	}
 
+	// Sign bit extension
+	template <class T, class T_U = typename std::make_unsigned<T>::type>
+	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
+		T const mask = ((T_U)1) << (width - 1);
+		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
+			T value = Load<T>(dst + i * sizeof(T));
+			value = value & ((((T_U)1) << width) - ((T_U)1));
+			T result = (value ^ mask) - mask;
+			Store(result, dst + i * sizeof(T));
+		}
+	}
+
 	template <class T>
 	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
 	                        bool skip_sign_extension = false) {
@@ -200,31 +219,12 @@ private:
 	// Prevent compression at widths that are ineffective
 	template <class T>
 	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
-		if (width > 56) {
-			return 64;
+		auto bits_of_type = sizeof(T) * 8;
+		auto type_size = sizeof(T);
+		if (width + type_size > bits_of_type) {
+			return bits_of_type;
 		}
-
-		if (width > 28 && (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value)) {
-			return 32;
-		}
-
-		else if (width > 14 && (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value)) {
-			return 16;
-		}
-
 		return width;
-	}
-
-	// Sign bit extension
-	template <class T, class T_U = typename std::make_unsigned<T>::type>
-	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		T const mask = ((T_U)1) << (width - 1);
-		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-			T value = Load<T>(dst + i * sizeof(T));
-			value = value & ((((T_U)1) << width) - ((T_U)1));
-			T result = (value ^ mask) - mask;
-			Store(result, dst + i * sizeof(T));
-		}
 	}
 
 	template <class T>

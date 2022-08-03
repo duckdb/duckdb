@@ -11,8 +11,8 @@ statement ok
 CREATE TABLE test_rle (a INTEGER);
 
 statement ok
-INSERT INTO test_rle SELECT 2147480000 FROM range(0, 100) tbl(i);
-INSERT INTO test_rle SELECT 2147480001 FROM range(0, 100) tbl(i);
+INSERT INTO test_rle SELECT 2147480000 FROM range(0, 10000) tbl(i);
+INSERT INTO test_rle SELECT 2147480001 FROM range(0, 10000) tbl(i);
 
 statement ok
 CHECKPOINT
