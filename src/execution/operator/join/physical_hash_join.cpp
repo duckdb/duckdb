@@ -358,7 +358,10 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
-	explicit HashJoinGlobalSourceState(const PhysicalHashJoin &op) : op(op), initialized(false), local_hts_done(0) {
+	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
+	    : op(op), probe_ht(make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), op.conditions,
+	                                                  op.children[0]->types, op.join_type)),
+	      probe_count(op.children[0]->estimated_cardinality), initialized(false), local_hts_done(0) {
 	}
 
 	const PhysicalHashJoin &op;
@@ -368,6 +371,7 @@ public:
 
 	//! Only used for external join: Materialized probe-side data and scan structure
 	unique_ptr<JoinHashTable> probe_ht;
+	idx_t probe_count;
 	JoinHTScanState probe_scan_state;
 
 	atomic<bool> initialized;
@@ -389,8 +393,6 @@ public:
 		initialized = true;
 	}
 
-	idx_t probe_count;
-
 	idx_t MaxThreads() override {
 		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * 10);
 	}
@@ -399,7 +401,10 @@ public:
 //! Only used for external join
 class HashJoinLocalSourceState : public LocalSourceState {
 public:
-	HashJoinLocalSourceState() : addresses(LogicalType::POINTER), full_outer_in_progress(0) {
+	HashJoinLocalSourceState(const PhysicalHashJoin &op, Allocator &allocator)
+	    : addresses(LogicalType::POINTER), full_outer_in_progress(0) {
+		join_keys.Initialize(allocator, op.condition_types);
+		payload.Initialize(allocator, op.children[0]->types)
 	}
 
 	//! Same as the input chunk in PhysicalHashJoin::Execute
@@ -415,22 +420,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
-	auto result = make_unique<HashJoinGlobalSourceState>(*this);
-	result->probe_ht =
-	    make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, children[0]->types, join_type);
-	result->probe_count = children[0]->estimated_cardinality;
-
-	return result;
+	return make_unique<HashJoinGlobalSourceState>(*this, context);
 }
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	auto &allocator = Allocator::Get(context.client);
-	auto result = make_unique<HashJoinLocalSourceState>();
-	result->join_keys.Initialize(allocator, condition_types);
-	result->payload.Initialize(allocator, children[0]->types);
-	// TODO: maybe assert that the chunk types match the ht types
-	return result;
+	return make_unique<HashJoinLocalSourceState>(*this, Allocator::Get(context.client));
 }
 
 //! Spinlock to ensure all thread-local probe ht's are partitioned before any thread starts probing
