@@ -1,7 +1,8 @@
 #' DuckDB EXPLAIN query tree
 #' @rdname duckdb_explain-class
+#' @aliases duckdb_explain
 #' @export
-duckdb_explain <- setClass("duckdb_explain", contains = "data.frame", slots = list(explain_key = "character", explain_value = "character"))
+setClass("duckdb_explain", contains = "data.frame", slots = list(explain_key = "character", explain_value = "character"))
 
 #' @rdname duckdb_explain-class
 #' @usage NULL
