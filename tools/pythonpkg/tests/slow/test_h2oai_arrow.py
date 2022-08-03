@@ -1,16 +1,11 @@
 import duckdb
 import os
-import sys
-from pytest import mark, fixture
-try:
-    import pyarrow
-    import pyarrow.csv
-    import requests
-    import numpy as np
-    import math
-    can_run = True
-except:
-    can_run = False
+import math
+from pytest import mark, fixture, importorskip
+
+read_csv = importorskip('pyarrow.csv').read_csv
+requests = importorskip('requests')
+np = importorskip('numpy')
 
 def download_file(url,name):
     r = requests.get(url, allow_redirects=True)
@@ -159,7 +154,7 @@ class TestH2OAIArrow(object):
             return
         con = duckdb.connect()
         download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz','G1_1e7_1e2_5_0.csv.gz')
-        arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('G1_1e7_1e2_5_0.csv.gz').to_batches(2500000))
+        arrow_table = read_csv('G1_1e7_1e2_5_0.csv.gz')
         con.register("x", arrow_table)
         os.remove('G1_1e7_1e2_5_0.csv.gz')
 
@@ -193,16 +188,16 @@ def large_data():
     download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz','J1_1e7_1e7_0_0.csv.gz')
     
     con = duckdb.connect()
-    arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('J1_1e7_NA_0_0.csv.gz').to_batches(2500000))
+    arrow_table = read_csv('J1_1e7_NA_0_0.csv.gz')
     con.register("x", arrow_table)
 
-    arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('J1_1e7_1e1_0_0.csv.gz').to_batches(2500000))
+    arrow_table = read_csv('J1_1e7_1e1_0_0.csv.gz')
     con.register("small", arrow_table)
 
-    arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('J1_1e7_1e4_0_0.csv.gz').to_batches(2500000))
+    arrow_table = read_csv('J1_1e7_1e4_0_0.csv.gz')
     con.register("medium", arrow_table)
 
-    arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('J1_1e7_1e7_0_0.csv.gz').to_batches(2500000))
+    arrow_table = read_csv('J1_1e7_1e7_0_0.csv.gz')
     con.register("big", arrow_table)
 
     yield con
