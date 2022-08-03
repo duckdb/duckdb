@@ -1,5 +1,5 @@
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
@@ -44,12 +44,15 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 }
 
 void LogicalFilter::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteList<idx_t>(projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalFilter::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto projection_map = reader.ReadRequiredList<idx_t>();
+	auto result = make_unique<LogicalFilter>();
+	result->projection_map = projection_map;
+	return result;
 }
 
 } // namespace duckdb

@@ -22,6 +22,10 @@ public:
 		CopyProperties(*result);
 		return move(result);
 	}
+
+protected:
+	void SerializeInternal(Serializer &) const override {
+	}
 };
 
 } // namespace duckdb

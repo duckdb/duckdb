@@ -22,6 +22,11 @@ struct CreateFunctionInfo : public CreateInfo {
 
 	//! Function name
 	string name;
+
+protected:
+	void SerializeInternal(Serializer &serializer) const override {
+		serializer.WriteString(name);
+	}
 };
 
 } // namespace duckdb

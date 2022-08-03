@@ -38,7 +38,8 @@ protected:
 
 public:
 	virtual string ToString() const {
-		throw InternalException("ToString not supported for this type of SQLStatement");
+		throw InternalException("ToString not supported for this type of SQLStatement: '%s'",
+		                        StatementTypeToString(type));
 	}
 	//! Create a copy of this SelectStatement
 	virtual unique_ptr<SQLStatement> Copy() const = 0;

@@ -3,12 +3,14 @@
 namespace duckdb {
 
 void LogicalCreateTable::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteSerializable(*info);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                             FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto info = reader.ReadRequiredSerializable<BoundCreateTableInfo>(context);
+	auto schema = info->schema;
+	return make_unique<LogicalCreateTable>(schema, move(info));
 }
 
 } // namespace duckdb

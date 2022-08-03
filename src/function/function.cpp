@@ -287,7 +287,7 @@ static vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<
 	idx_t best_function = DConstants::INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> candidate_functions;
-	for (auto entry : functions.functions) {
+	for (const auto& entry : functions.functions) {
 		auto f_idx = entry.first;
 		auto &func = entry.second;
 		// check the arguments of the function

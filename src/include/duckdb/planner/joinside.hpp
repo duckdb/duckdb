@@ -23,6 +23,10 @@ public:
 	//! the left/right expressions
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
 	static unique_ptr<Expression> CreateExpression(vector<JoinCondition> conditions);
+	//! Serializes a JoinCondition to a stand-alone binary blob
+	void Serialize(Serializer &serializer) const;
+	//! Deserializes a blob back into a JoinCondition
+	static JoinCondition Deserialize(Deserializer &source, ClientContext &context);
 
 public:
 	unique_ptr<Expression> left;

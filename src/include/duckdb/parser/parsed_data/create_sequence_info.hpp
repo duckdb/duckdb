@@ -63,6 +63,11 @@ public:
 		result->cycle = cycle;
 		return move(result);
 	}
+
+protected:
+	void SerializeInternal(Serializer &) const override {
+		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	}
 };
 
 } // namespace duckdb

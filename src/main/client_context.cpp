@@ -1075,6 +1075,7 @@ bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *exis
 	}
 	return need_rewrite_entry;
 	 */
+	return true;
 }
 
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {

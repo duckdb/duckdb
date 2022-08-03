@@ -5,6 +5,12 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -120,6 +126,20 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientConte
 		break;
 	case ExpressionType::BOUND_FUNCTION:
 		result = BoundFunctionExpression::Deserialize(context, type, reader);
+		break;
+	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case ExpressionType::COMPARE_IN:
+	case ExpressionType::COMPARE_NOT_IN:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+	case ExpressionType::COMPARE_BETWEEN:
+	case ExpressionType::COMPARE_NOT_BETWEEN:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		result = BoundComparisonExpression::Deserialize(context, type, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization!" + ExpressionTypeToString(type));

@@ -12,6 +12,7 @@
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 
 struct ExportedTableData {
 	//! Name of the exported table
