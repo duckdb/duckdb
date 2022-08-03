@@ -404,7 +404,7 @@ public:
 	HashJoinLocalSourceState(const PhysicalHashJoin &op, Allocator &allocator)
 	    : addresses(LogicalType::POINTER), full_outer_in_progress(0) {
 		join_keys.Initialize(allocator, op.condition_types);
-		payload.Initialize(allocator, op.children[0]->types)
+		payload.Initialize(allocator, op.children[0]->types);
 	}
 
 	//! Same as the input chunk in PhysicalHashJoin::Execute
