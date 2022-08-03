@@ -314,10 +314,9 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 void DuckDBPyResult::ChangeToTZType(data_frame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
-			// first localize to UTC
-			auto utc_local = df.attr("__getitem__")(result->names[i]).attr("dt").attr("tz_localize")("UTC");
-			auto tz_converted = utc_local.attr("dt").attr("tz_convert")(timezone_config);
-			df.attr("__setitem__")(result->names[i], tz_converted);
+			// first localize to UTC then convert to timezone_config
+			auto utc_local = df[result->names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
+			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(timezone_config);
 		}
 	}
 }
