@@ -1656,7 +1656,13 @@ void WindowLocalSourceState::MaterializeInput(const vector<LogicalType> &payload
 
 	// scan the sorted row data
 	D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
-	PayloadScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+	auto &sb = *global_sort_state.sorted_blocks[0];
+
+	// Free up some memory before allocating more
+	sb.radix_sorting_data.clear();
+	sb.blob_sorting_data = nullptr;
+
+	PayloadScanner scanner(*sb.payload_data, global_sort_state);
 	DataChunk payload_chunk;
 	payload_chunk.Initialize(allocator, payload_types);
 	for (;;) {
