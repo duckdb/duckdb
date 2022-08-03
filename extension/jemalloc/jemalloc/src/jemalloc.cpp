@@ -2742,8 +2742,8 @@ malloc_default(size_t size) {
 /*
  * Begin malloc(3)-compatible functions.
  */
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_SYS_NOTHROW *
-je_malloc(size_t size) JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE(1) {
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc)
+JEMALLOC_ALLOC_SIZE(1) JEMALLOC_SYS_NOTHROW * je_malloc(size_t size) {
 	return imalloc_fastpath(size, &malloc_default);
 }
 
