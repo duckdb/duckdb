@@ -1,0 +1,54 @@
+# name: test/sql/types/list/mix_numeric_types.test
+# description: Test mixing numeric types in list constructors
+# group: [list]
+
+# larger integers take precedence of unsigned values
+
+#results in SMALLINT
+query I
+select [100::UTINYINT, 10000::SMALLINT];
+----
+[100, 10000]
+
+#results in INTEGER
+query I
+select [100::USMALLINT, 10000::INTEGER];
+----
+[100, 10000]
+
+# decimals take precedence over numeric values, including unsigned values
+query I
+select [100::USMALLINT, 10000.5];
+----
+[100.0, 10000.5]
+
+query I
+select [100::USMALLINT, 0.5::DOUBLE];
+----
+[100.0, 0.5]
+
+# we can mix unsigned and signed types of similar sizes
+
+#results in SMALLINT
+query I
+select [-100::TINYINT, 200::UTINYINT];
+----
+[-100, 200]
+
+#results in INTEGER
+query I
+select [-100::SMALLINT, 50000::USMALLINT];
+----
+[-100, 50000]
+
+#results in BIGINT
+query I
+select [-100::INTEGER, 3000000000::UINTEGER];
+----
+[-100, 3000000000]
+
+#results in HUGEINT
+query I
+select [-100::BIGINT, 9999999999999999999::UBIGINT];
+----
+[-100, 9999999999999999999]
