@@ -147,3 +147,7 @@ TEST_CASE("Test insert_into", "[serialization]") {
 TEST_CASE("Test logical_distinct", "[serialization]") {
 	test_helper("SELECT DISTINCT(i) FROM (SELECT 42 as i)");
 }
+
+TEST_CASE("Test logical_delete", "[serialization]") {
+	test_helper("DELETE FROM tbl", {"CREATE TABLE tbl (foo INTEGER)"});
+}
