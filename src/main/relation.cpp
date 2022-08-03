@@ -323,7 +323,7 @@ vector<shared_ptr<ExternalDependency>> Relation::GetAllDependencies() {
 		if (cur->extra_dependencies) {
 			all_dependencies.push_back(cur->extra_dependencies);
 		}
-		cur = ChildRelation();
+		cur = cur->ChildRelation();
 	}
 	return all_dependencies;
 }
