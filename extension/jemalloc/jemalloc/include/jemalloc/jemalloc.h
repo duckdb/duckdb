@@ -253,35 +253,34 @@ extern JEMALLOC_EXPORT void (*je_malloc_message)(void *cbopaque, const char *s);
 
 JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc)
 JEMALLOC_ALLOC_SIZE(1) JEMALLOC_SYS_NOTHROW * je_malloc(size_t size);
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_SYS_NOTHROW *
-je_calloc(size_t num, size_t size) JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE2(1, 2);
-JEMALLOC_EXPORT int JEMALLOC_SYS_NOTHROW je_posix_memalign(void **memptr, size_t alignment,
-                                                           size_t size) JEMALLOC_CXX_THROW JEMALLOC_ATTR(nonnull(1));
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_SYS_NOTHROW *
-je_aligned_alloc(size_t alignment, size_t size) JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE(2);
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_SYS_NOTHROW *
-je_realloc(void *ptr, size_t size) JEMALLOC_CXX_THROW JEMALLOC_ALLOC_SIZE(2);
-JEMALLOC_EXPORT void JEMALLOC_SYS_NOTHROW je_free(void *ptr) JEMALLOC_CXX_THROW;
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc)
+JEMALLOC_ALLOC_SIZE2(1, 2) JEMALLOC_SYS_NOTHROW * je_calloc(size_t num, size_t size);
+JEMALLOC_EXPORT int JEMALLOC_CXX_THROW JEMALLOC_ATTR(nonnull(1)) JEMALLOC_SYS_NOTHROW
+je_posix_memalign(void **memptr, size_t alignment, size_t size);
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc)
+JEMALLOC_ALLOC_SIZE(2) JEMALLOC_SYS_NOTHROW * je_aligned_alloc(size_t alignment, size_t size);
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_CXX_THROW JEMALLOC_ALLOC_SIZE(2)
+JEMALLOC_SYS_NOTHROW * je_realloc(void *ptr, size_t size);
+JEMALLOC_EXPORT void JEMALLOC_CXX_THROW JEMALLOC_SYS_NOTHROW je_free(void *ptr);
 
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_NOTHROW *je_mallocx(size_t size, int flags)
-    JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE(1);
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_NOTHROW *je_rallocx(void *ptr, size_t size,
-                                                                                              int flags)
-    JEMALLOC_ALLOC_SIZE(2);
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_ATTR(malloc) JEMALLOC_ALLOC_SIZE(1)
+JEMALLOC_NOTHROW *je_mallocx(size_t size, int flags);
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_ALLOC_SIZE(2) JEMALLOC_NOTHROW
+* je_rallocx(void *ptr, size_t size, int flags);
 JEMALLOC_EXPORT size_t JEMALLOC_NOTHROW je_xallocx(void *ptr, size_t size, size_t extra, int flags);
-JEMALLOC_EXPORT size_t JEMALLOC_NOTHROW je_sallocx(const void *ptr, int flags) JEMALLOC_ATTR(pure);
+JEMALLOC_EXPORT size_t JEMALLOC_ATTR(pure) JEMALLOC_NOTHROW je_sallocx(const void *ptr, int flags);
 JEMALLOC_EXPORT void JEMALLOC_NOTHROW je_dallocx(void *ptr, int flags);
 JEMALLOC_EXPORT void JEMALLOC_NOTHROW je_sdallocx(void *ptr, size_t size, int flags);
-JEMALLOC_EXPORT size_t JEMALLOC_NOTHROW je_nallocx(size_t size, int flags) JEMALLOC_ATTR(pure);
+JEMALLOC_EXPORT size_t JEMALLOC_ATTR(pure) JEMALLOC_NOTHROW je_nallocx(size_t size, int flags);
 
-JEMALLOC_EXPORT int JEMALLOC_NOTHROW je_mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp,
-                                                size_t newlen);
+JEMALLOC_EXPORT int JEMALLOC_NOTHROW
+je_mallctl(const char *name, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
 JEMALLOC_EXPORT int JEMALLOC_NOTHROW je_mallctlnametomib(const char *name, size_t *mibp, size_t *miblenp);
-JEMALLOC_EXPORT int JEMALLOC_NOTHROW je_mallctlbymib(const size_t *mib, size_t miblen, void *oldp, size_t *oldlenp,
-                                                     void *newp, size_t newlen);
-JEMALLOC_EXPORT void JEMALLOC_NOTHROW je_malloc_stats_print(void (*write_cb)(void *, const char *), void *je_cbopaque,
-                                                            const char *opts);
-JEMALLOC_EXPORT size_t JEMALLOC_NOTHROW je_malloc_usable_size(JEMALLOC_USABLE_SIZE_CONST void *ptr) JEMALLOC_CXX_THROW;
+JEMALLOC_EXPORT int JEMALLOC_NOTHROW
+je_mallctlbymib(const size_t *mib, size_t miblen, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
+JEMALLOC_EXPORT void JEMALLOC_NOTHROW
+je_malloc_stats_print(void (*write_cb)(void *, const char *), void *je_cbopaque, const char *opts);
+JEMALLOC_EXPORT size_t JEMALLOC_CXX_THROW JEMALLOC_NOTHROW je_malloc_usable_size(JEMALLOC_USABLE_SIZE_CONST void *ptr);
 #ifdef JEMALLOC_HAVE_MALLOC_SIZE
 JEMALLOC_EXPORT size_t JEMALLOC_NOTHROW je_malloc_size(const void *ptr);
 #endif
@@ -292,8 +291,8 @@ je_memalign(size_t alignment, size_t size) JEMALLOC_CXX_THROW JEMALLOC_ATTR(mall
 #endif
 
 #ifdef JEMALLOC_OVERRIDE_VALLOC
-JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void JEMALLOC_SYS_NOTHROW *
-je_valloc(size_t size) JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc);
+JEMALLOC_EXPORT JEMALLOC_ALLOCATOR JEMALLOC_RESTRICT_RETURN void  JEMALLOC_CXX_THROW JEMALLOC_ATTR(malloc)
+JEMALLOC_SYS_NOTHROW * je_valloc(size_t size);
 #endif
 
 typedef struct extent_hooks_s extent_hooks_t;
