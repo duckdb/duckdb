@@ -34,6 +34,7 @@
 #include <google/protobuf/generated_enum_reflection.h>
 #include <google/protobuf/unknown_field_set.h>
 #include <google/protobuf/any.pb.h>
+#include <google/protobuf/empty.pb.h>
 #include "substrait/extensions/extensions.pb.h"
 #include "substrait/type.pb.h"
 // @@protoc_insertion_point(includes)
@@ -51,7 +52,7 @@ struct TableStruct_substrait_2falgebra_2eproto {
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField aux[]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[89]
+  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[95]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
   static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
@@ -155,6 +156,9 @@ extern Expression_Literal_Map_KeyValueDefaultTypeInternal _Expression_Literal_Ma
 class Expression_Literal_Struct;
 struct Expression_Literal_StructDefaultTypeInternal;
 extern Expression_Literal_StructDefaultTypeInternal _Expression_Literal_Struct_default_instance_;
+class Expression_Literal_UserDefined;
+struct Expression_Literal_UserDefinedDefaultTypeInternal;
+extern Expression_Literal_UserDefinedDefaultTypeInternal _Expression_Literal_UserDefined_default_instance_;
 class Expression_Literal_VarChar;
 struct Expression_Literal_VarCharDefaultTypeInternal;
 extern Expression_Literal_VarCharDefaultTypeInternal _Expression_Literal_VarChar_default_instance_;
@@ -269,6 +273,12 @@ extern FetchRelDefaultTypeInternal _FetchRel_default_instance_;
 class FilterRel;
 struct FilterRelDefaultTypeInternal;
 extern FilterRelDefaultTypeInternal _FilterRel_default_instance_;
+class FunctionArgument;
+struct FunctionArgumentDefaultTypeInternal;
+extern FunctionArgumentDefaultTypeInternal _FunctionArgument_default_instance_;
+class FunctionArgument_Enum;
+struct FunctionArgument_EnumDefaultTypeInternal;
+extern FunctionArgument_EnumDefaultTypeInternal _FunctionArgument_Enum_default_instance_;
 class JoinRel;
 struct JoinRelDefaultTypeInternal;
 extern JoinRelDefaultTypeInternal _JoinRel_default_instance_;
@@ -287,6 +297,15 @@ extern ReadRel_LocalFilesDefaultTypeInternal _ReadRel_LocalFiles_default_instanc
 class ReadRel_LocalFiles_FileOrFiles;
 struct ReadRel_LocalFiles_FileOrFilesDefaultTypeInternal;
 extern ReadRel_LocalFiles_FileOrFilesDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_default_instance_;
+class ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions;
+struct ReadRel_LocalFiles_FileOrFiles_ArrowReadOptionsDefaultTypeInternal;
+extern ReadRel_LocalFiles_FileOrFiles_ArrowReadOptionsDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions_default_instance_;
+class ReadRel_LocalFiles_FileOrFiles_OrcReadOptions;
+struct ReadRel_LocalFiles_FileOrFiles_OrcReadOptionsDefaultTypeInternal;
+extern ReadRel_LocalFiles_FileOrFiles_OrcReadOptionsDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_OrcReadOptions_default_instance_;
+class ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions;
+struct ReadRel_LocalFiles_FileOrFiles_ParquetReadOptionsDefaultTypeInternal;
+extern ReadRel_LocalFiles_FileOrFiles_ParquetReadOptionsDefaultTypeInternal _ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions_default_instance_;
 class ReadRel_NamedTable;
 struct ReadRel_NamedTableDefaultTypeInternal;
 extern ReadRel_NamedTableDefaultTypeInternal _ReadRel_NamedTable_default_instance_;
@@ -360,6 +379,7 @@ template<> ::substrait::Expression_Literal_List* Arena::CreateMaybeMessage<::sub
 template<> ::substrait::Expression_Literal_Map* Arena::CreateMaybeMessage<::substrait::Expression_Literal_Map>(Arena*);
 template<> ::substrait::Expression_Literal_Map_KeyValue* Arena::CreateMaybeMessage<::substrait::Expression_Literal_Map_KeyValue>(Arena*);
 template<> ::substrait::Expression_Literal_Struct* Arena::CreateMaybeMessage<::substrait::Expression_Literal_Struct>(Arena*);
+template<> ::substrait::Expression_Literal_UserDefined* Arena::CreateMaybeMessage<::substrait::Expression_Literal_UserDefined>(Arena*);
 template<> ::substrait::Expression_Literal_VarChar* Arena::CreateMaybeMessage<::substrait::Expression_Literal_VarChar>(Arena*);
 template<> ::substrait::Expression_MaskExpression* Arena::CreateMaybeMessage<::substrait::Expression_MaskExpression>(Arena*);
 template<> ::substrait::Expression_MaskExpression_ListSelect* Arena::CreateMaybeMessage<::substrait::Expression_MaskExpression_ListSelect>(Arena*);
@@ -398,12 +418,17 @@ template<> ::substrait::ExtensionMultiRel* Arena::CreateMaybeMessage<::substrait
 template<> ::substrait::ExtensionSingleRel* Arena::CreateMaybeMessage<::substrait::ExtensionSingleRel>(Arena*);
 template<> ::substrait::FetchRel* Arena::CreateMaybeMessage<::substrait::FetchRel>(Arena*);
 template<> ::substrait::FilterRel* Arena::CreateMaybeMessage<::substrait::FilterRel>(Arena*);
+template<> ::substrait::FunctionArgument* Arena::CreateMaybeMessage<::substrait::FunctionArgument>(Arena*);
+template<> ::substrait::FunctionArgument_Enum* Arena::CreateMaybeMessage<::substrait::FunctionArgument_Enum>(Arena*);
 template<> ::substrait::JoinRel* Arena::CreateMaybeMessage<::substrait::JoinRel>(Arena*);
 template<> ::substrait::ProjectRel* Arena::CreateMaybeMessage<::substrait::ProjectRel>(Arena*);
 template<> ::substrait::ReadRel* Arena::CreateMaybeMessage<::substrait::ReadRel>(Arena*);
 template<> ::substrait::ReadRel_ExtensionTable* Arena::CreateMaybeMessage<::substrait::ReadRel_ExtensionTable>(Arena*);
 template<> ::substrait::ReadRel_LocalFiles* Arena::CreateMaybeMessage<::substrait::ReadRel_LocalFiles>(Arena*);
 template<> ::substrait::ReadRel_LocalFiles_FileOrFiles* Arena::CreateMaybeMessage<::substrait::ReadRel_LocalFiles_FileOrFiles>(Arena*);
+template<> ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* Arena::CreateMaybeMessage<::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions>(Arena*);
+template<> ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* Arena::CreateMaybeMessage<::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions>(Arena*);
+template<> ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* Arena::CreateMaybeMessage<::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions>(Arena*);
 template<> ::substrait::ReadRel_NamedTable* Arena::CreateMaybeMessage<::substrait::ReadRel_NamedTable>(Arena*);
 template<> ::substrait::ReadRel_VirtualTable* Arena::CreateMaybeMessage<::substrait::ReadRel_VirtualTable>(Arena*);
 template<> ::substrait::Rel* Arena::CreateMaybeMessage<::substrait::Rel>(Arena*);
@@ -420,31 +445,6 @@ template<> ::substrait::SortRel* Arena::CreateMaybeMessage<::substrait::SortRel>
 PROTOBUF_NAMESPACE_CLOSE
 namespace substrait {
 
-enum ReadRel_LocalFiles_FileOrFiles_FileFormat : int {
-  ReadRel_LocalFiles_FileOrFiles_FileFormat_FILE_FORMAT_UNSPECIFIED = 0,
-  ReadRel_LocalFiles_FileOrFiles_FileFormat_FILE_FORMAT_PARQUET = 1,
-  ReadRel_LocalFiles_FileOrFiles_FileFormat_ReadRel_LocalFiles_FileOrFiles_FileFormat_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
-  ReadRel_LocalFiles_FileOrFiles_FileFormat_ReadRel_LocalFiles_FileOrFiles_FileFormat_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
-};
-bool ReadRel_LocalFiles_FileOrFiles_FileFormat_IsValid(int value);
-constexpr ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_MIN = ReadRel_LocalFiles_FileOrFiles_FileFormat_FILE_FORMAT_UNSPECIFIED;
-constexpr ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_MAX = ReadRel_LocalFiles_FileOrFiles_FileFormat_FILE_FORMAT_PARQUET;
-constexpr int ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_ARRAYSIZE = ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_MAX + 1;
-
-const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* ReadRel_LocalFiles_FileOrFiles_FileFormat_descriptor();
-template<typename T>
-inline const std::string& ReadRel_LocalFiles_FileOrFiles_FileFormat_Name(T enum_t_value) {
-  static_assert(::std::is_same<T, ReadRel_LocalFiles_FileOrFiles_FileFormat>::value ||
-    ::std::is_integral<T>::value,
-    "Incorrect type passed to function ReadRel_LocalFiles_FileOrFiles_FileFormat_Name.");
-  return ::PROTOBUF_NAMESPACE_ID::internal::NameOfEnum(
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_descriptor(), enum_t_value);
-}
-inline bool ReadRel_LocalFiles_FileOrFiles_FileFormat_Parse(
-    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, ReadRel_LocalFiles_FileOrFiles_FileFormat* value) {
-  return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<ReadRel_LocalFiles_FileOrFiles_FileFormat>(
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_descriptor(), name, value);
-}
 enum JoinRel_JoinType : int {
   JoinRel_JoinType_JOIN_TYPE_UNSPECIFIED = 0,
   JoinRel_JoinType_JOIN_TYPE_INNER = 1,
@@ -505,6 +505,32 @@ inline bool SetRel_SetOp_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, SetRel_SetOp* value) {
   return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<SetRel_SetOp>(
     SetRel_SetOp_descriptor(), name, value);
+}
+enum Expression_Cast_FailureBehavior : int {
+  Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_UNSPECIFIED = 0,
+  Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_RETURN_NULL = 1,
+  Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_THROW_EXCEPTION = 2,
+  Expression_Cast_FailureBehavior_Expression_Cast_FailureBehavior_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  Expression_Cast_FailureBehavior_Expression_Cast_FailureBehavior_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool Expression_Cast_FailureBehavior_IsValid(int value);
+constexpr Expression_Cast_FailureBehavior Expression_Cast_FailureBehavior_FailureBehavior_MIN = Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_UNSPECIFIED;
+constexpr Expression_Cast_FailureBehavior Expression_Cast_FailureBehavior_FailureBehavior_MAX = Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_THROW_EXCEPTION;
+constexpr int Expression_Cast_FailureBehavior_FailureBehavior_ARRAYSIZE = Expression_Cast_FailureBehavior_FailureBehavior_MAX + 1;
+
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* Expression_Cast_FailureBehavior_descriptor();
+template<typename T>
+inline const std::string& Expression_Cast_FailureBehavior_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, Expression_Cast_FailureBehavior>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function Expression_Cast_FailureBehavior_Name.");
+  return ::PROTOBUF_NAMESPACE_ID::internal::NameOfEnum(
+    Expression_Cast_FailureBehavior_descriptor(), enum_t_value);
+}
+inline bool Expression_Cast_FailureBehavior_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, Expression_Cast_FailureBehavior* value) {
+  return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<Expression_Cast_FailureBehavior>(
+    Expression_Cast_FailureBehavior_descriptor(), name, value);
 }
 enum Expression_Subquery_SetPredicate_PredicateOp : int {
   Expression_Subquery_SetPredicate_PredicateOp_PREDICATE_OP_UNSPECIFIED = 0,
@@ -616,6 +642,32 @@ inline bool SortField_SortDirection_Parse(
     ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, SortField_SortDirection* value) {
   return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<SortField_SortDirection>(
     SortField_SortDirection_descriptor(), name, value);
+}
+enum AggregateFunction_AggregationInvocation : int {
+  AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_UNSPECIFIED = 0,
+  AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_ALL = 1,
+  AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_DISTINCT = 2,
+  AggregateFunction_AggregationInvocation_AggregateFunction_AggregationInvocation_INT_MIN_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::min(),
+  AggregateFunction_AggregationInvocation_AggregateFunction_AggregationInvocation_INT_MAX_SENTINEL_DO_NOT_USE_ = std::numeric_limits<int32_t>::max()
+};
+bool AggregateFunction_AggregationInvocation_IsValid(int value);
+constexpr AggregateFunction_AggregationInvocation AggregateFunction_AggregationInvocation_AggregationInvocation_MIN = AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_UNSPECIFIED;
+constexpr AggregateFunction_AggregationInvocation AggregateFunction_AggregationInvocation_AggregationInvocation_MAX = AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_DISTINCT;
+constexpr int AggregateFunction_AggregationInvocation_AggregationInvocation_ARRAYSIZE = AggregateFunction_AggregationInvocation_AggregationInvocation_MAX + 1;
+
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* AggregateFunction_AggregationInvocation_descriptor();
+template<typename T>
+inline const std::string& AggregateFunction_AggregationInvocation_Name(T enum_t_value) {
+  static_assert(::std::is_same<T, AggregateFunction_AggregationInvocation>::value ||
+    ::std::is_integral<T>::value,
+    "Incorrect type passed to function AggregateFunction_AggregationInvocation_Name.");
+  return ::PROTOBUF_NAMESPACE_ID::internal::NameOfEnum(
+    AggregateFunction_AggregationInvocation_descriptor(), enum_t_value);
+}
+inline bool AggregateFunction_AggregationInvocation_Parse(
+    ::PROTOBUF_NAMESPACE_ID::ConstStringParam name, AggregateFunction_AggregationInvocation* value) {
+  return ::PROTOBUF_NAMESPACE_ID::internal::ParseNamedEnum<AggregateFunction_AggregationInvocation>(
+    AggregateFunction_AggregationInvocation_descriptor(), name, value);
 }
 enum AggregationPhase : int {
   AGGREGATION_PHASE_UNSPECIFIED = 0,
@@ -2184,6 +2236,360 @@ class ReadRel_ExtensionTable final :
 };
 // -------------------------------------------------------------------
 
+class ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions final :
+    public ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase /* @@protoc_insertion_point(class_definition:substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions) */ {
+ public:
+  inline ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions() : ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(nullptr) {}
+  explicit constexpr ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& from);
+  ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions&& from) noexcept
+    : ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions() {
+    *this = ::std::move(from);
+  }
+
+  inline ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& operator=(const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& operator=(ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* internal_default_instance() {
+    return reinterpret_cast<const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions*>(
+               &_ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    9;
+
+  friend void swap(ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& a, ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& from) {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl(this, from);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& from) {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl(this, from);
+  }
+  public:
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions";
+  }
+  protected:
+  explicit ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_substrait_2falgebra_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions final :
+    public ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase /* @@protoc_insertion_point(class_definition:substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions) */ {
+ public:
+  inline ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions() : ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(nullptr) {}
+  explicit constexpr ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& from);
+  ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions&& from) noexcept
+    : ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions() {
+    *this = ::std::move(from);
+  }
+
+  inline ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& operator=(const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& operator=(ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* internal_default_instance() {
+    return reinterpret_cast<const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions*>(
+               &_ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    10;
+
+  friend void swap(ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& a, ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& from) {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl(this, from);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& from) {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl(this, from);
+  }
+  public:
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions";
+  }
+  protected:
+  explicit ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_substrait_2falgebra_2eproto;
+};
+// -------------------------------------------------------------------
+
+class ReadRel_LocalFiles_FileOrFiles_OrcReadOptions final :
+    public ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase /* @@protoc_insertion_point(class_definition:substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions) */ {
+ public:
+  inline ReadRel_LocalFiles_FileOrFiles_OrcReadOptions() : ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(nullptr) {}
+  explicit constexpr ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& from);
+  ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(ReadRel_LocalFiles_FileOrFiles_OrcReadOptions&& from) noexcept
+    : ReadRel_LocalFiles_FileOrFiles_OrcReadOptions() {
+    *this = ::std::move(from);
+  }
+
+  inline ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& operator=(const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& operator=(ReadRel_LocalFiles_FileOrFiles_OrcReadOptions&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* internal_default_instance() {
+    return reinterpret_cast<const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions*>(
+               &_ReadRel_LocalFiles_FileOrFiles_OrcReadOptions_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    11;
+
+  friend void swap(ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& a, ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ReadRel_LocalFiles_FileOrFiles_OrcReadOptions>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& from) {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::CopyImpl(this, from);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& from) {
+    ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase::MergeImpl(this, from);
+  }
+  public:
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions";
+  }
+  protected:
+  explicit ReadRel_LocalFiles_FileOrFiles_OrcReadOptions(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // @@protoc_insertion_point(class_scope:substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_substrait_2falgebra_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ReadRel_LocalFiles_FileOrFiles final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.ReadRel.LocalFiles.FileOrFiles) */ {
  public:
@@ -2235,12 +2641,20 @@ class ReadRel_LocalFiles_FileOrFiles final :
     PATH_TYPE_NOT_SET = 0,
   };
 
+  enum FileFormatCase {
+    kParquet = 9,
+    kArrow = 10,
+    kOrc = 11,
+    kExtension = 12,
+    FILE_FORMAT_NOT_SET = 0,
+  };
+
   static inline const ReadRel_LocalFiles_FileOrFiles* internal_default_instance() {
     return reinterpret_cast<const ReadRel_LocalFiles_FileOrFiles*>(
                &_ReadRel_LocalFiles_FileOrFiles_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    9;
+    12;
 
   friend void swap(ReadRel_LocalFiles_FileOrFiles& a, ReadRel_LocalFiles_FileOrFiles& b) {
     a.Swap(&b);
@@ -2311,40 +2725,13 @@ class ReadRel_LocalFiles_FileOrFiles final :
 
   // nested types ----------------------------------------------------
 
-  typedef ReadRel_LocalFiles_FileOrFiles_FileFormat FileFormat;
-  static constexpr FileFormat FILE_FORMAT_UNSPECIFIED =
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_FILE_FORMAT_UNSPECIFIED;
-  static constexpr FileFormat FILE_FORMAT_PARQUET =
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_FILE_FORMAT_PARQUET;
-  static inline bool FileFormat_IsValid(int value) {
-    return ReadRel_LocalFiles_FileOrFiles_FileFormat_IsValid(value);
-  }
-  static constexpr FileFormat FileFormat_MIN =
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_MIN;
-  static constexpr FileFormat FileFormat_MAX =
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_MAX;
-  static constexpr int FileFormat_ARRAYSIZE =
-    ReadRel_LocalFiles_FileOrFiles_FileFormat_FileFormat_ARRAYSIZE;
-  static inline const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor*
-  FileFormat_descriptor() {
-    return ReadRel_LocalFiles_FileOrFiles_FileFormat_descriptor();
-  }
-  template<typename T>
-  static inline const std::string& FileFormat_Name(T enum_t_value) {
-    static_assert(::std::is_same<T, FileFormat>::value ||
-      ::std::is_integral<T>::value,
-      "Incorrect type passed to function FileFormat_Name.");
-    return ReadRel_LocalFiles_FileOrFiles_FileFormat_Name(enum_t_value);
-  }
-  static inline bool FileFormat_Parse(::PROTOBUF_NAMESPACE_ID::ConstStringParam name,
-      FileFormat* value) {
-    return ReadRel_LocalFiles_FileOrFiles_FileFormat_Parse(name, value);
-  }
+  typedef ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions ParquetReadOptions;
+  typedef ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions ArrowReadOptions;
+  typedef ReadRel_LocalFiles_FileOrFiles_OrcReadOptions OrcReadOptions;
 
   // accessors -------------------------------------------------------
 
   enum : int {
-    kFormatFieldNumber = 5,
     kPartitionIndexFieldNumber = 6,
     kStartFieldNumber = 7,
     kLengthFieldNumber = 8,
@@ -2352,16 +2739,11 @@ class ReadRel_LocalFiles_FileOrFiles final :
     kUriPathGlobFieldNumber = 2,
     kUriFileFieldNumber = 3,
     kUriFolderFieldNumber = 4,
+    kParquetFieldNumber = 9,
+    kArrowFieldNumber = 10,
+    kOrcFieldNumber = 11,
+    kExtensionFieldNumber = 12,
   };
-  // .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
-  void clear_format();
-  ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat format() const;
-  void set_format(::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat value);
-  private:
-  ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat _internal_format() const;
-  void _internal_set_format(::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat value);
-  public:
-
   // uint64 partition_index = 6;
   void clear_partition_index();
   uint64_t partition_index() const;
@@ -2461,8 +2843,82 @@ class ReadRel_LocalFiles_FileOrFiles final :
   std::string* _internal_mutable_uri_folder();
   public:
 
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions parquet = 9;
+  bool has_parquet() const;
+  private:
+  bool _internal_has_parquet() const;
+  public:
+  void clear_parquet();
+  const ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& parquet() const;
+  PROTOBUF_NODISCARD ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* release_parquet();
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* mutable_parquet();
+  void set_allocated_parquet(::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* parquet);
+  private:
+  const ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& _internal_parquet() const;
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* _internal_mutable_parquet();
+  public:
+  void unsafe_arena_set_allocated_parquet(
+      ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* parquet);
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* unsafe_arena_release_parquet();
+
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions arrow = 10;
+  bool has_arrow() const;
+  private:
+  bool _internal_has_arrow() const;
+  public:
+  void clear_arrow();
+  const ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& arrow() const;
+  PROTOBUF_NODISCARD ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* release_arrow();
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* mutable_arrow();
+  void set_allocated_arrow(::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* arrow);
+  private:
+  const ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& _internal_arrow() const;
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* _internal_mutable_arrow();
+  public:
+  void unsafe_arena_set_allocated_arrow(
+      ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* arrow);
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* unsafe_arena_release_arrow();
+
+  // .substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions orc = 11;
+  bool has_orc() const;
+  private:
+  bool _internal_has_orc() const;
+  public:
+  void clear_orc();
+  const ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& orc() const;
+  PROTOBUF_NODISCARD ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* release_orc();
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* mutable_orc();
+  void set_allocated_orc(::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* orc);
+  private:
+  const ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& _internal_orc() const;
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* _internal_mutable_orc();
+  public:
+  void unsafe_arena_set_allocated_orc(
+      ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* orc);
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* unsafe_arena_release_orc();
+
+  // .google.protobuf.Any extension = 12;
+  bool has_extension() const;
+  private:
+  bool _internal_has_extension() const;
+  public:
+  void clear_extension();
+  const ::PROTOBUF_NAMESPACE_ID::Any& extension() const;
+  PROTOBUF_NODISCARD ::PROTOBUF_NAMESPACE_ID::Any* release_extension();
+  ::PROTOBUF_NAMESPACE_ID::Any* mutable_extension();
+  void set_allocated_extension(::PROTOBUF_NAMESPACE_ID::Any* extension);
+  private:
+  const ::PROTOBUF_NAMESPACE_ID::Any& _internal_extension() const;
+  ::PROTOBUF_NAMESPACE_ID::Any* _internal_mutable_extension();
+  public:
+  void unsafe_arena_set_allocated_extension(
+      ::PROTOBUF_NAMESPACE_ID::Any* extension);
+  ::PROTOBUF_NAMESPACE_ID::Any* unsafe_arena_release_extension();
+
   void clear_path_type();
   PathTypeCase path_type_case() const;
+  void clear_file_format();
+  FileFormatCase file_format_case() const;
   // @@protoc_insertion_point(class_scope:substrait.ReadRel.LocalFiles.FileOrFiles)
  private:
   class _Internal;
@@ -2470,14 +2926,20 @@ class ReadRel_LocalFiles_FileOrFiles final :
   void set_has_uri_path_glob();
   void set_has_uri_file();
   void set_has_uri_folder();
+  void set_has_parquet();
+  void set_has_arrow();
+  void set_has_orc();
+  void set_has_extension();
 
   inline bool has_path_type() const;
   inline void clear_has_path_type();
 
+  inline bool has_file_format() const;
+  inline void clear_has_file_format();
+
   template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
-  int format_;
   uint64_t partition_index_;
   uint64_t start_;
   uint64_t length_;
@@ -2489,8 +2951,16 @@ class ReadRel_LocalFiles_FileOrFiles final :
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr uri_file_;
     ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr uri_folder_;
   } path_type_;
+  union FileFormatUnion {
+    constexpr FileFormatUnion() : _constinit_{} {}
+      ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized _constinit_;
+    ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* parquet_;
+    ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* arrow_;
+    ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* orc_;
+    ::PROTOBUF_NAMESPACE_ID::Any* extension_;
+  } file_format_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
-  uint32_t _oneof_case_[1];
+  uint32_t _oneof_case_[2];
 
   friend struct ::TableStruct_substrait_2falgebra_2eproto;
 };
@@ -2544,7 +3014,7 @@ class ReadRel_LocalFiles final :
                &_ReadRel_LocalFiles_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    10;
+    13;
 
   friend void swap(ReadRel_LocalFiles& a, ReadRel_LocalFiles& b) {
     a.Swap(&b);
@@ -2729,7 +3199,7 @@ class ReadRel final :
                &_ReadRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    11;
+    14;
 
   friend void swap(ReadRel& a, ReadRel& b) {
     a.Swap(&b);
@@ -3064,7 +3534,7 @@ class ProjectRel final :
                &_ProjectRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    12;
+    15;
 
   friend void swap(ProjectRel& a, ProjectRel& b) {
     a.Swap(&b);
@@ -3279,7 +3749,7 @@ class JoinRel final :
                &_JoinRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    13;
+    16;
 
   friend void swap(JoinRel& a, JoinRel& b) {
     a.Swap(&b);
@@ -3587,7 +4057,7 @@ class CrossRel final :
                &_CrossRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    14;
+    17;
 
   friend void swap(CrossRel& a, CrossRel& b) {
     a.Swap(&b);
@@ -3802,7 +4272,7 @@ class FetchRel final :
                &_FetchRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    15;
+    18;
 
   friend void swap(FetchRel& a, FetchRel& b) {
     a.Swap(&b);
@@ -4019,7 +4489,7 @@ class AggregateRel_Grouping final :
                &_AggregateRel_Grouping_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    16;
+    19;
 
   friend void swap(AggregateRel_Grouping& a, AggregateRel_Grouping& b) {
     a.Swap(&b);
@@ -4174,7 +4644,7 @@ class AggregateRel_Measure final :
                &_AggregateRel_Measure_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    17;
+    20;
 
   friend void swap(AggregateRel_Measure& a, AggregateRel_Measure& b) {
     a.Swap(&b);
@@ -4349,7 +4819,7 @@ class AggregateRel final :
                &_AggregateRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    18;
+    21;
 
   friend void swap(AggregateRel& a, AggregateRel& b) {
     a.Swap(&b);
@@ -4587,7 +5057,7 @@ class SortRel final :
                &_SortRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    19;
+    22;
 
   friend void swap(SortRel& a, SortRel& b) {
     a.Swap(&b);
@@ -4802,7 +5272,7 @@ class FilterRel final :
                &_FilterRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    20;
+    23;
 
   friend void swap(FilterRel& a, FilterRel& b) {
     a.Swap(&b);
@@ -5017,7 +5487,7 @@ class SetRel final :
                &_SetRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    21;
+    24;
 
   friend void swap(SetRel& a, SetRel& b) {
     a.Swap(&b);
@@ -5263,7 +5733,7 @@ class ExtensionSingleRel final :
                &_ExtensionSingleRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    22;
+    25;
 
   friend void swap(ExtensionSingleRel& a, ExtensionSingleRel& b) {
     a.Swap(&b);
@@ -5458,7 +5928,7 @@ class ExtensionLeafRel final :
                &_ExtensionLeafRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    23;
+    26;
 
   friend void swap(ExtensionLeafRel& a, ExtensionLeafRel& b) {
     a.Swap(&b);
@@ -5633,7 +6103,7 @@ class ExtensionMultiRel final :
                &_ExtensionMultiRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    24;
+    27;
 
   friend void swap(ExtensionMultiRel& a, ExtensionMultiRel& b) {
     a.Swap(&b);
@@ -5828,7 +6298,7 @@ class ExchangeRel_ScatterFields final :
                &_ExchangeRel_ScatterFields_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    25;
+    28;
 
   friend void swap(ExchangeRel_ScatterFields& a, ExchangeRel_ScatterFields& b) {
     a.Swap(&b);
@@ -5983,7 +6453,7 @@ class ExchangeRel_SingleBucketExpression final :
                &_ExchangeRel_SingleBucketExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    26;
+    29;
 
   friend void swap(ExchangeRel_SingleBucketExpression& a, ExchangeRel_SingleBucketExpression& b) {
     a.Swap(&b);
@@ -6138,7 +6608,7 @@ class ExchangeRel_MultiBucketExpression final :
                &_ExchangeRel_MultiBucketExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    27;
+    30;
 
   friend void swap(ExchangeRel_MultiBucketExpression& a, ExchangeRel_MultiBucketExpression& b) {
     a.Swap(&b);
@@ -6303,7 +6773,7 @@ class ExchangeRel_Broadcast final :
                &_ExchangeRel_Broadcast_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    28;
+    31;
 
   friend void swap(ExchangeRel_Broadcast& a, ExchangeRel_Broadcast& b) {
     a.Swap(&b);
@@ -6422,7 +6892,7 @@ class ExchangeRel_RoundRobin final :
                &_ExchangeRel_RoundRobin_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    29;
+    32;
 
   friend void swap(ExchangeRel_RoundRobin& a, ExchangeRel_RoundRobin& b) {
     a.Swap(&b);
@@ -6574,7 +7044,7 @@ class ExchangeRel_ExchangeTarget final :
                &_ExchangeRel_ExchangeTarget_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    30;
+    33;
 
   friend void swap(ExchangeRel_ExchangeTarget& a, ExchangeRel_ExchangeTarget& b) {
     a.Swap(&b);
@@ -6796,7 +7266,7 @@ class ExchangeRel final :
                &_ExchangeRel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    31;
+    34;
 
   friend void swap(ExchangeRel& a, ExchangeRel& b) {
     a.Swap(&b);
@@ -7145,7 +7615,7 @@ class RelRoot final :
                &_RelRoot_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    32;
+    35;
 
   friend void swap(RelRoot& a, RelRoot& b) {
     a.Swap(&b);
@@ -7342,7 +7812,7 @@ class Rel final :
                &_Rel_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    33;
+    36;
 
   friend void swap(Rel& a, Rel& b) {
     a.Swap(&b);
@@ -7692,6 +8162,418 @@ class Rel final :
 };
 // -------------------------------------------------------------------
 
+class FunctionArgument_Enum final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.FunctionArgument.Enum) */ {
+ public:
+  inline FunctionArgument_Enum() : FunctionArgument_Enum(nullptr) {}
+  ~FunctionArgument_Enum() override;
+  explicit constexpr FunctionArgument_Enum(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  FunctionArgument_Enum(const FunctionArgument_Enum& from);
+  FunctionArgument_Enum(FunctionArgument_Enum&& from) noexcept
+    : FunctionArgument_Enum() {
+    *this = ::std::move(from);
+  }
+
+  inline FunctionArgument_Enum& operator=(const FunctionArgument_Enum& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FunctionArgument_Enum& operator=(FunctionArgument_Enum&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const FunctionArgument_Enum& default_instance() {
+    return *internal_default_instance();
+  }
+  enum EnumKindCase {
+    kSpecified = 1,
+    kUnspecified = 2,
+    ENUM_KIND_NOT_SET = 0,
+  };
+
+  static inline const FunctionArgument_Enum* internal_default_instance() {
+    return reinterpret_cast<const FunctionArgument_Enum*>(
+               &_FunctionArgument_Enum_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    37;
+
+  friend void swap(FunctionArgument_Enum& a, FunctionArgument_Enum& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(FunctionArgument_Enum* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FunctionArgument_Enum* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  FunctionArgument_Enum* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<FunctionArgument_Enum>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
+  void CopyFrom(const FunctionArgument_Enum& from);
+  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
+  void MergeFrom(const FunctionArgument_Enum& from);
+  private:
+  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to, const ::PROTOBUF_NAMESPACE_ID::Message& from);
+  public:
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(FunctionArgument_Enum* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.FunctionArgument.Enum";
+  }
+  protected:
+  explicit FunctionArgument_Enum(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kSpecifiedFieldNumber = 1,
+    kUnspecifiedFieldNumber = 2,
+  };
+  // string specified = 1;
+  bool has_specified() const;
+  private:
+  bool _internal_has_specified() const;
+  public:
+  void clear_specified();
+  const std::string& specified() const;
+  template <typename ArgT0 = const std::string&, typename... ArgT>
+  void set_specified(ArgT0&& arg0, ArgT... args);
+  std::string* mutable_specified();
+  PROTOBUF_NODISCARD std::string* release_specified();
+  void set_allocated_specified(std::string* specified);
+  private:
+  const std::string& _internal_specified() const;
+  inline PROTOBUF_ALWAYS_INLINE void _internal_set_specified(const std::string& value);
+  std::string* _internal_mutable_specified();
+  public:
+
+  // .google.protobuf.Empty unspecified = 2;
+  bool has_unspecified() const;
+  private:
+  bool _internal_has_unspecified() const;
+  public:
+  void clear_unspecified();
+  const ::PROTOBUF_NAMESPACE_ID::Empty& unspecified() const;
+  PROTOBUF_NODISCARD ::PROTOBUF_NAMESPACE_ID::Empty* release_unspecified();
+  ::PROTOBUF_NAMESPACE_ID::Empty* mutable_unspecified();
+  void set_allocated_unspecified(::PROTOBUF_NAMESPACE_ID::Empty* unspecified);
+  private:
+  const ::PROTOBUF_NAMESPACE_ID::Empty& _internal_unspecified() const;
+  ::PROTOBUF_NAMESPACE_ID::Empty* _internal_mutable_unspecified();
+  public:
+  void unsafe_arena_set_allocated_unspecified(
+      ::PROTOBUF_NAMESPACE_ID::Empty* unspecified);
+  ::PROTOBUF_NAMESPACE_ID::Empty* unsafe_arena_release_unspecified();
+
+  void clear_enum_kind();
+  EnumKindCase enum_kind_case() const;
+  // @@protoc_insertion_point(class_scope:substrait.FunctionArgument.Enum)
+ private:
+  class _Internal;
+  void set_has_specified();
+  void set_has_unspecified();
+
+  inline bool has_enum_kind() const;
+  inline void clear_has_enum_kind();
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  union EnumKindUnion {
+    constexpr EnumKindUnion() : _constinit_{} {}
+      ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized _constinit_;
+    ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr specified_;
+    ::PROTOBUF_NAMESPACE_ID::Empty* unspecified_;
+  } enum_kind_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  uint32_t _oneof_case_[1];
+
+  friend struct ::TableStruct_substrait_2falgebra_2eproto;
+};
+// -------------------------------------------------------------------
+
+class FunctionArgument final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.FunctionArgument) */ {
+ public:
+  inline FunctionArgument() : FunctionArgument(nullptr) {}
+  ~FunctionArgument() override;
+  explicit constexpr FunctionArgument(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  FunctionArgument(const FunctionArgument& from);
+  FunctionArgument(FunctionArgument&& from) noexcept
+    : FunctionArgument() {
+    *this = ::std::move(from);
+  }
+
+  inline FunctionArgument& operator=(const FunctionArgument& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline FunctionArgument& operator=(FunctionArgument&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const FunctionArgument& default_instance() {
+    return *internal_default_instance();
+  }
+  enum ArgTypeCase {
+    kEnum = 1,
+    kType = 2,
+    kValue = 3,
+    ARG_TYPE_NOT_SET = 0,
+  };
+
+  static inline const FunctionArgument* internal_default_instance() {
+    return reinterpret_cast<const FunctionArgument*>(
+               &_FunctionArgument_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    38;
+
+  friend void swap(FunctionArgument& a, FunctionArgument& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(FunctionArgument* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(FunctionArgument* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  FunctionArgument* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<FunctionArgument>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
+  void CopyFrom(const FunctionArgument& from);
+  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
+  void MergeFrom(const FunctionArgument& from);
+  private:
+  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to, const ::PROTOBUF_NAMESPACE_ID::Message& from);
+  public:
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(FunctionArgument* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.FunctionArgument";
+  }
+  protected:
+  explicit FunctionArgument(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  typedef FunctionArgument_Enum Enum;
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kEnumFieldNumber = 1,
+    kTypeFieldNumber = 2,
+    kValueFieldNumber = 3,
+  };
+  // .substrait.FunctionArgument.Enum enum = 1;
+  bool has_enum_() const;
+  private:
+  bool _internal_has_enum_() const;
+  public:
+  void clear_enum_();
+  const ::substrait::FunctionArgument_Enum& enum_() const;
+  PROTOBUF_NODISCARD ::substrait::FunctionArgument_Enum* release_enum_();
+  ::substrait::FunctionArgument_Enum* mutable_enum_();
+  void set_allocated_enum_(::substrait::FunctionArgument_Enum* enum_);
+  private:
+  const ::substrait::FunctionArgument_Enum& _internal_enum_() const;
+  ::substrait::FunctionArgument_Enum* _internal_mutable_enum_();
+  public:
+  void unsafe_arena_set_allocated_enum_(
+      ::substrait::FunctionArgument_Enum* enum_);
+  ::substrait::FunctionArgument_Enum* unsafe_arena_release_enum_();
+
+  // .substrait.Type type = 2;
+  bool has_type() const;
+  private:
+  bool _internal_has_type() const;
+  public:
+  void clear_type();
+  const ::substrait::Type& type() const;
+  PROTOBUF_NODISCARD ::substrait::Type* release_type();
+  ::substrait::Type* mutable_type();
+  void set_allocated_type(::substrait::Type* type);
+  private:
+  const ::substrait::Type& _internal_type() const;
+  ::substrait::Type* _internal_mutable_type();
+  public:
+  void unsafe_arena_set_allocated_type(
+      ::substrait::Type* type);
+  ::substrait::Type* unsafe_arena_release_type();
+
+  // .substrait.Expression value = 3;
+  bool has_value() const;
+  private:
+  bool _internal_has_value() const;
+  public:
+  void clear_value();
+  const ::substrait::Expression& value() const;
+  PROTOBUF_NODISCARD ::substrait::Expression* release_value();
+  ::substrait::Expression* mutable_value();
+  void set_allocated_value(::substrait::Expression* value);
+  private:
+  const ::substrait::Expression& _internal_value() const;
+  ::substrait::Expression* _internal_mutable_value();
+  public:
+  void unsafe_arena_set_allocated_value(
+      ::substrait::Expression* value);
+  ::substrait::Expression* unsafe_arena_release_value();
+
+  void clear_arg_type();
+  ArgTypeCase arg_type_case() const;
+  // @@protoc_insertion_point(class_scope:substrait.FunctionArgument)
+ private:
+  class _Internal;
+  void set_has_enum_();
+  void set_has_type();
+  void set_has_value();
+
+  inline bool has_arg_type() const;
+  inline void clear_has_arg_type();
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  union ArgTypeUnion {
+    constexpr ArgTypeUnion() : _constinit_{} {}
+      ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized _constinit_;
+    ::substrait::FunctionArgument_Enum* enum__;
+    ::substrait::Type* type_;
+    ::substrait::Expression* value_;
+  } arg_type_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  uint32_t _oneof_case_[1];
+
+  friend struct ::TableStruct_substrait_2falgebra_2eproto;
+};
+// -------------------------------------------------------------------
+
 class Expression_Enum_Empty final :
     public ::PROTOBUF_NAMESPACE_ID::internal::ZeroFieldsBase /* @@protoc_insertion_point(class_definition:substrait.Expression.Enum.Empty) */ {
  public:
@@ -7739,7 +8621,7 @@ class Expression_Enum_Empty final :
                &_Expression_Enum_Empty_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    34;
+    39;
 
   friend void swap(Expression_Enum_Empty& a, Expression_Enum_Empty& b) {
     a.Swap(&b);
@@ -7864,7 +8746,7 @@ class Expression_Enum final :
                &_Expression_Enum_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    35;
+    40;
 
   friend void swap(Expression_Enum& a, Expression_Enum& b) {
     a.Swap(&b);
@@ -8054,7 +8936,7 @@ class Expression_Literal_VarChar final :
                &_Expression_Literal_VarChar_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    36;
+    41;
 
   friend void swap(Expression_Literal_VarChar& a, Expression_Literal_VarChar& b) {
     a.Swap(&b);
@@ -8216,7 +9098,7 @@ class Expression_Literal_Decimal final :
                &_Expression_Literal_Decimal_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    37;
+    42;
 
   friend void swap(Expression_Literal_Decimal& a, Expression_Literal_Decimal& b) {
     a.Swap(&b);
@@ -8389,7 +9271,7 @@ class Expression_Literal_Map_KeyValue final :
                &_Expression_Literal_Map_KeyValue_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    38;
+    43;
 
   friend void swap(Expression_Literal_Map_KeyValue& a, Expression_Literal_Map_KeyValue& b) {
     a.Swap(&b);
@@ -8564,7 +9446,7 @@ class Expression_Literal_Map final :
                &_Expression_Literal_Map_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    39;
+    44;
 
   friend void swap(Expression_Literal_Map& a, Expression_Literal_Map& b) {
     a.Swap(&b);
@@ -8721,7 +9603,7 @@ class Expression_Literal_IntervalYearToMonth final :
                &_Expression_Literal_IntervalYearToMonth_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    40;
+    45;
 
   friend void swap(Expression_Literal_IntervalYearToMonth& a, Expression_Literal_IntervalYearToMonth& b) {
     a.Swap(&b);
@@ -8878,7 +9760,7 @@ class Expression_Literal_IntervalDayToSecond final :
                &_Expression_Literal_IntervalDayToSecond_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    41;
+    46;
 
   friend void swap(Expression_Literal_IntervalDayToSecond& a, Expression_Literal_IntervalDayToSecond& b) {
     a.Swap(&b);
@@ -8954,6 +9836,7 @@ class Expression_Literal_IntervalDayToSecond final :
   enum : int {
     kDaysFieldNumber = 1,
     kSecondsFieldNumber = 2,
+    kMicrosecondsFieldNumber = 3,
   };
   // int32 days = 1;
   void clear_days();
@@ -8973,6 +9856,15 @@ class Expression_Literal_IntervalDayToSecond final :
   void _internal_set_seconds(int32_t value);
   public:
 
+  // int32 microseconds = 3;
+  void clear_microseconds();
+  int32_t microseconds() const;
+  void set_microseconds(int32_t value);
+  private:
+  int32_t _internal_microseconds() const;
+  void _internal_set_microseconds(int32_t value);
+  public:
+
   // @@protoc_insertion_point(class_scope:substrait.Expression.Literal.IntervalDayToSecond)
  private:
   class _Internal;
@@ -8982,6 +9874,7 @@ class Expression_Literal_IntervalDayToSecond final :
   typedef void DestructorSkippable_;
   int32_t days_;
   int32_t seconds_;
+  int32_t microseconds_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_substrait_2falgebra_2eproto;
 };
@@ -9035,7 +9928,7 @@ class Expression_Literal_Struct final :
                &_Expression_Literal_Struct_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    42;
+    47;
 
   friend void swap(Expression_Literal_Struct& a, Expression_Literal_Struct& b) {
     a.Swap(&b);
@@ -9190,7 +10083,7 @@ class Expression_Literal_List final :
                &_Expression_Literal_List_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    43;
+    48;
 
   friend void swap(Expression_Literal_List& a, Expression_Literal_List& b) {
     a.Swap(&b);
@@ -9297,6 +10190,192 @@ class Expression_Literal_List final :
 };
 // -------------------------------------------------------------------
 
+class Expression_Literal_UserDefined final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.Expression.Literal.UserDefined) */ {
+ public:
+  inline Expression_Literal_UserDefined() : Expression_Literal_UserDefined(nullptr) {}
+  ~Expression_Literal_UserDefined() override;
+  explicit constexpr Expression_Literal_UserDefined(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  Expression_Literal_UserDefined(const Expression_Literal_UserDefined& from);
+  Expression_Literal_UserDefined(Expression_Literal_UserDefined&& from) noexcept
+    : Expression_Literal_UserDefined() {
+    *this = ::std::move(from);
+  }
+
+  inline Expression_Literal_UserDefined& operator=(const Expression_Literal_UserDefined& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline Expression_Literal_UserDefined& operator=(Expression_Literal_UserDefined&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const Expression_Literal_UserDefined& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const Expression_Literal_UserDefined* internal_default_instance() {
+    return reinterpret_cast<const Expression_Literal_UserDefined*>(
+               &_Expression_Literal_UserDefined_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    49;
+
+  friend void swap(Expression_Literal_UserDefined& a, Expression_Literal_UserDefined& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(Expression_Literal_UserDefined* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(Expression_Literal_UserDefined* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  Expression_Literal_UserDefined* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<Expression_Literal_UserDefined>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
+  void CopyFrom(const Expression_Literal_UserDefined& from);
+  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
+  void MergeFrom(const Expression_Literal_UserDefined& from);
+  private:
+  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to, const ::PROTOBUF_NAMESPACE_ID::Message& from);
+  public:
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(Expression_Literal_UserDefined* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.Expression.Literal.UserDefined";
+  }
+  protected:
+  explicit Expression_Literal_UserDefined(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTypeParametersFieldNumber = 3,
+    kValueFieldNumber = 2,
+    kTypeReferenceFieldNumber = 1,
+  };
+  // repeated .substrait.Type.Parameter type_parameters = 3;
+  int type_parameters_size() const;
+  private:
+  int _internal_type_parameters_size() const;
+  public:
+  void clear_type_parameters();
+  ::substrait::Type_Parameter* mutable_type_parameters(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Type_Parameter >*
+      mutable_type_parameters();
+  private:
+  const ::substrait::Type_Parameter& _internal_type_parameters(int index) const;
+  ::substrait::Type_Parameter* _internal_add_type_parameters();
+  public:
+  const ::substrait::Type_Parameter& type_parameters(int index) const;
+  ::substrait::Type_Parameter* add_type_parameters();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Type_Parameter >&
+      type_parameters() const;
+
+  // .google.protobuf.Any value = 2;
+  bool has_value() const;
+  private:
+  bool _internal_has_value() const;
+  public:
+  void clear_value();
+  const ::PROTOBUF_NAMESPACE_ID::Any& value() const;
+  PROTOBUF_NODISCARD ::PROTOBUF_NAMESPACE_ID::Any* release_value();
+  ::PROTOBUF_NAMESPACE_ID::Any* mutable_value();
+  void set_allocated_value(::PROTOBUF_NAMESPACE_ID::Any* value);
+  private:
+  const ::PROTOBUF_NAMESPACE_ID::Any& _internal_value() const;
+  ::PROTOBUF_NAMESPACE_ID::Any* _internal_mutable_value();
+  public:
+  void unsafe_arena_set_allocated_value(
+      ::PROTOBUF_NAMESPACE_ID::Any* value);
+  ::PROTOBUF_NAMESPACE_ID::Any* unsafe_arena_release_value();
+
+  // uint32 type_reference = 1;
+  void clear_type_reference();
+  uint32_t type_reference() const;
+  void set_type_reference(uint32_t value);
+  private:
+  uint32_t _internal_type_reference() const;
+  void _internal_set_type_reference(uint32_t value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:substrait.Expression.Literal.UserDefined)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Type_Parameter > type_parameters_;
+  ::PROTOBUF_NAMESPACE_ID::Any* value_;
+  uint32_t type_reference_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_substrait_2falgebra_2eproto;
+};
+// -------------------------------------------------------------------
+
 class Expression_Literal final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.Expression.Literal) */ {
  public:
@@ -9367,6 +10446,7 @@ class Expression_Literal final :
     kList = 30,
     kEmptyList = 31,
     kEmptyMap = 32,
+    kUserDefined = 33,
     LITERAL_TYPE_NOT_SET = 0,
   };
 
@@ -9375,7 +10455,7 @@ class Expression_Literal final :
                &_Expression_Literal_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    44;
+    50;
 
   friend void swap(Expression_Literal& a, Expression_Literal& b) {
     a.Swap(&b);
@@ -9453,11 +10533,13 @@ class Expression_Literal final :
   typedef Expression_Literal_IntervalDayToSecond IntervalDayToSecond;
   typedef Expression_Literal_Struct Struct;
   typedef Expression_Literal_List List;
+  typedef Expression_Literal_UserDefined UserDefined;
 
   // accessors -------------------------------------------------------
 
   enum : int {
     kNullableFieldNumber = 50,
+    kTypeVariationReferenceFieldNumber = 51,
     kBooleanFieldNumber = 1,
     kI8FieldNumber = 2,
     kI16FieldNumber = 3,
@@ -9484,6 +10566,7 @@ class Expression_Literal final :
     kListFieldNumber = 30,
     kEmptyListFieldNumber = 31,
     kEmptyMapFieldNumber = 32,
+    kUserDefinedFieldNumber = 33,
   };
   // bool nullable = 50;
   void clear_nullable();
@@ -9492,6 +10575,15 @@ class Expression_Literal final :
   private:
   bool _internal_nullable() const;
   void _internal_set_nullable(bool value);
+  public:
+
+  // uint32 type_variation_reference = 51;
+  void clear_type_variation_reference();
+  uint32_t type_variation_reference() const;
+  void set_type_variation_reference(uint32_t value);
+  private:
+  uint32_t _internal_type_variation_reference() const;
+  void _internal_set_type_variation_reference(uint32_t value);
   public:
 
   // bool boolean = 1;
@@ -9907,6 +10999,24 @@ class Expression_Literal final :
       ::substrait::Type_Map* empty_map);
   ::substrait::Type_Map* unsafe_arena_release_empty_map();
 
+  // .substrait.Expression.Literal.UserDefined user_defined = 33;
+  bool has_user_defined() const;
+  private:
+  bool _internal_has_user_defined() const;
+  public:
+  void clear_user_defined();
+  const ::substrait::Expression_Literal_UserDefined& user_defined() const;
+  PROTOBUF_NODISCARD ::substrait::Expression_Literal_UserDefined* release_user_defined();
+  ::substrait::Expression_Literal_UserDefined* mutable_user_defined();
+  void set_allocated_user_defined(::substrait::Expression_Literal_UserDefined* user_defined);
+  private:
+  const ::substrait::Expression_Literal_UserDefined& _internal_user_defined() const;
+  ::substrait::Expression_Literal_UserDefined* _internal_mutable_user_defined();
+  public:
+  void unsafe_arena_set_allocated_user_defined(
+      ::substrait::Expression_Literal_UserDefined* user_defined);
+  ::substrait::Expression_Literal_UserDefined* unsafe_arena_release_user_defined();
+
   void clear_literal_type();
   LiteralTypeCase literal_type_case() const;
   // @@protoc_insertion_point(class_scope:substrait.Expression.Literal)
@@ -9938,6 +11048,7 @@ class Expression_Literal final :
   void set_has_list();
   void set_has_empty_list();
   void set_has_empty_map();
+  void set_has_user_defined();
 
   inline bool has_literal_type() const;
   inline void clear_has_literal_type();
@@ -9946,6 +11057,7 @@ class Expression_Literal final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   bool nullable_;
+  uint32_t type_variation_reference_;
   union LiteralTypeUnion {
     constexpr LiteralTypeUnion() : _constinit_{} {}
       ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized _constinit_;
@@ -9975,6 +11087,7 @@ class Expression_Literal final :
     ::substrait::Expression_Literal_List* list_;
     ::substrait::Type_List* empty_list_;
     ::substrait::Type_Map* empty_map_;
+    ::substrait::Expression_Literal_UserDefined* user_defined_;
   } literal_type_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   uint32_t _oneof_case_[1];
@@ -10031,7 +11144,7 @@ class Expression_ScalarFunction final :
                &_Expression_ScalarFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    45;
+    51;
 
   friend void swap(Expression_ScalarFunction& a, Expression_ScalarFunction& b) {
     a.Swap(&b);
@@ -10106,26 +11219,45 @@ class Expression_ScalarFunction final :
 
   enum : int {
     kArgsFieldNumber = 2,
+    kArgumentsFieldNumber = 4,
     kOutputTypeFieldNumber = 3,
     kFunctionReferenceFieldNumber = 1,
   };
-  // repeated .substrait.Expression args = 2;
-  int args_size() const;
+  // repeated .substrait.Expression args = 2 [deprecated = true];
+  PROTOBUF_DEPRECATED int args_size() const;
   private:
   int _internal_args_size() const;
   public:
-  void clear_args();
-  ::substrait::Expression* mutable_args(int index);
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
+  PROTOBUF_DEPRECATED void clear_args();
+  PROTOBUF_DEPRECATED ::substrait::Expression* mutable_args(int index);
+  PROTOBUF_DEPRECATED ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
       mutable_args();
   private:
   const ::substrait::Expression& _internal_args(int index) const;
   ::substrait::Expression* _internal_add_args();
   public:
-  const ::substrait::Expression& args(int index) const;
-  ::substrait::Expression* add_args();
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
+  PROTOBUF_DEPRECATED const ::substrait::Expression& args(int index) const;
+  PROTOBUF_DEPRECATED ::substrait::Expression* add_args();
+  PROTOBUF_DEPRECATED const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
       args() const;
+
+  // repeated .substrait.FunctionArgument arguments = 4;
+  int arguments_size() const;
+  private:
+  int _internal_arguments_size() const;
+  public:
+  void clear_arguments();
+  ::substrait::FunctionArgument* mutable_arguments(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >*
+      mutable_arguments();
+  private:
+  const ::substrait::FunctionArgument& _internal_arguments(int index) const;
+  ::substrait::FunctionArgument* _internal_add_arguments();
+  public:
+  const ::substrait::FunctionArgument& arguments(int index) const;
+  ::substrait::FunctionArgument* add_arguments();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >&
+      arguments() const;
 
   // .substrait.Type output_type = 3;
   bool has_output_type() const;
@@ -10162,6 +11294,7 @@ class Expression_ScalarFunction final :
   typedef void InternalArenaConstructable_;
   typedef void DestructorSkippable_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression > args_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument > arguments_;
   ::substrait::Type* output_type_;
   uint32_t function_reference_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
@@ -10217,7 +11350,7 @@ class Expression_WindowFunction_Bound_Preceding final :
                &_Expression_WindowFunction_Bound_Preceding_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    46;
+    52;
 
   friend void swap(Expression_WindowFunction_Bound_Preceding& a, Expression_WindowFunction_Bound_Preceding& b) {
     a.Swap(&b);
@@ -10363,7 +11496,7 @@ class Expression_WindowFunction_Bound_Following final :
                &_Expression_WindowFunction_Bound_Following_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    47;
+    53;
 
   friend void swap(Expression_WindowFunction_Bound_Following& a, Expression_WindowFunction_Bound_Following& b) {
     a.Swap(&b);
@@ -10508,7 +11641,7 @@ class Expression_WindowFunction_Bound_CurrentRow final :
                &_Expression_WindowFunction_Bound_CurrentRow_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    48;
+    54;
 
   friend void swap(Expression_WindowFunction_Bound_CurrentRow& a, Expression_WindowFunction_Bound_CurrentRow& b) {
     a.Swap(&b);
@@ -10626,7 +11759,7 @@ class Expression_WindowFunction_Bound_Unbounded final :
                &_Expression_WindowFunction_Bound_Unbounded_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    49;
+    55;
 
   friend void swap(Expression_WindowFunction_Bound_Unbounded& a, Expression_WindowFunction_Bound_Unbounded& b) {
     a.Swap(&b);
@@ -10753,7 +11886,7 @@ class Expression_WindowFunction_Bound final :
                &_Expression_WindowFunction_Bound_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    50;
+    56;
 
   friend void swap(Expression_WindowFunction_Bound& a, Expression_WindowFunction_Bound& b) {
     a.Swap(&b);
@@ -10988,7 +12121,7 @@ class Expression_WindowFunction final :
                &_Expression_WindowFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    51;
+    57;
 
   friend void swap(Expression_WindowFunction& a, Expression_WindowFunction& b) {
     a.Swap(&b);
@@ -11067,6 +12200,7 @@ class Expression_WindowFunction final :
     kPartitionsFieldNumber = 2,
     kSortsFieldNumber = 3,
     kArgsFieldNumber = 8,
+    kArgumentsFieldNumber = 9,
     kUpperBoundFieldNumber = 4,
     kLowerBoundFieldNumber = 5,
     kOutputTypeFieldNumber = 7,
@@ -11109,23 +12243,41 @@ class Expression_WindowFunction final :
   const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::SortField >&
       sorts() const;
 
-  // repeated .substrait.Expression args = 8;
-  int args_size() const;
+  // repeated .substrait.Expression args = 8 [deprecated = true];
+  PROTOBUF_DEPRECATED int args_size() const;
   private:
   int _internal_args_size() const;
   public:
-  void clear_args();
-  ::substrait::Expression* mutable_args(int index);
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
+  PROTOBUF_DEPRECATED void clear_args();
+  PROTOBUF_DEPRECATED ::substrait::Expression* mutable_args(int index);
+  PROTOBUF_DEPRECATED ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
       mutable_args();
   private:
   const ::substrait::Expression& _internal_args(int index) const;
   ::substrait::Expression* _internal_add_args();
   public:
-  const ::substrait::Expression& args(int index) const;
-  ::substrait::Expression* add_args();
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
+  PROTOBUF_DEPRECATED const ::substrait::Expression& args(int index) const;
+  PROTOBUF_DEPRECATED ::substrait::Expression* add_args();
+  PROTOBUF_DEPRECATED const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
       args() const;
+
+  // repeated .substrait.FunctionArgument arguments = 9;
+  int arguments_size() const;
+  private:
+  int _internal_arguments_size() const;
+  public:
+  void clear_arguments();
+  ::substrait::FunctionArgument* mutable_arguments(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >*
+      mutable_arguments();
+  private:
+  const ::substrait::FunctionArgument& _internal_arguments(int index) const;
+  ::substrait::FunctionArgument* _internal_add_arguments();
+  public:
+  const ::substrait::FunctionArgument& arguments(int index) const;
+  ::substrait::FunctionArgument* add_arguments();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >&
+      arguments() const;
 
   // .substrait.Expression.WindowFunction.Bound upper_bound = 4;
   bool has_upper_bound() const;
@@ -11209,6 +12361,7 @@ class Expression_WindowFunction final :
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression > partitions_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::SortField > sorts_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression > args_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument > arguments_;
   ::substrait::Expression_WindowFunction_Bound* upper_bound_;
   ::substrait::Expression_WindowFunction_Bound* lower_bound_;
   ::substrait::Type* output_type_;
@@ -11267,7 +12420,7 @@ class Expression_IfThen_IfClause final :
                &_Expression_IfThen_IfClause_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    52;
+    58;
 
   friend void swap(Expression_IfThen_IfClause& a, Expression_IfThen_IfClause& b) {
     a.Swap(&b);
@@ -11442,7 +12595,7 @@ class Expression_IfThen final :
                &_Expression_IfThen_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    53;
+    59;
 
   friend void swap(Expression_IfThen& a, Expression_IfThen& b) {
     a.Swap(&b);
@@ -11619,7 +12772,7 @@ class Expression_Cast final :
                &_Expression_Cast_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    54;
+    60;
 
   friend void swap(Expression_Cast& a, Expression_Cast& b) {
     a.Swap(&b);
@@ -11690,11 +12843,44 @@ class Expression_Cast final :
 
   // nested types ----------------------------------------------------
 
+  typedef Expression_Cast_FailureBehavior FailureBehavior;
+  static constexpr FailureBehavior FAILURE_BEHAVIOR_UNSPECIFIED =
+    Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_UNSPECIFIED;
+  static constexpr FailureBehavior FAILURE_BEHAVIOR_RETURN_NULL =
+    Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_RETURN_NULL;
+  static constexpr FailureBehavior FAILURE_BEHAVIOR_THROW_EXCEPTION =
+    Expression_Cast_FailureBehavior_FAILURE_BEHAVIOR_THROW_EXCEPTION;
+  static inline bool FailureBehavior_IsValid(int value) {
+    return Expression_Cast_FailureBehavior_IsValid(value);
+  }
+  static constexpr FailureBehavior FailureBehavior_MIN =
+    Expression_Cast_FailureBehavior_FailureBehavior_MIN;
+  static constexpr FailureBehavior FailureBehavior_MAX =
+    Expression_Cast_FailureBehavior_FailureBehavior_MAX;
+  static constexpr int FailureBehavior_ARRAYSIZE =
+    Expression_Cast_FailureBehavior_FailureBehavior_ARRAYSIZE;
+  static inline const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor*
+  FailureBehavior_descriptor() {
+    return Expression_Cast_FailureBehavior_descriptor();
+  }
+  template<typename T>
+  static inline const std::string& FailureBehavior_Name(T enum_t_value) {
+    static_assert(::std::is_same<T, FailureBehavior>::value ||
+      ::std::is_integral<T>::value,
+      "Incorrect type passed to function FailureBehavior_Name.");
+    return Expression_Cast_FailureBehavior_Name(enum_t_value);
+  }
+  static inline bool FailureBehavior_Parse(::PROTOBUF_NAMESPACE_ID::ConstStringParam name,
+      FailureBehavior* value) {
+    return Expression_Cast_FailureBehavior_Parse(name, value);
+  }
+
   // accessors -------------------------------------------------------
 
   enum : int {
     kTypeFieldNumber = 1,
     kInputFieldNumber = 2,
+    kFailureBehaviorFieldNumber = 3,
   };
   // .substrait.Type type = 1;
   bool has_type() const;
@@ -11732,6 +12918,15 @@ class Expression_Cast final :
       ::substrait::Expression* input);
   ::substrait::Expression* unsafe_arena_release_input();
 
+  // .substrait.Expression.Cast.FailureBehavior failure_behavior = 3;
+  void clear_failure_behavior();
+  ::substrait::Expression_Cast_FailureBehavior failure_behavior() const;
+  void set_failure_behavior(::substrait::Expression_Cast_FailureBehavior value);
+  private:
+  ::substrait::Expression_Cast_FailureBehavior _internal_failure_behavior() const;
+  void _internal_set_failure_behavior(::substrait::Expression_Cast_FailureBehavior value);
+  public:
+
   // @@protoc_insertion_point(class_scope:substrait.Expression.Cast)
  private:
   class _Internal;
@@ -11741,6 +12936,7 @@ class Expression_Cast final :
   typedef void DestructorSkippable_;
   ::substrait::Type* type_;
   ::substrait::Expression* input_;
+  int failure_behavior_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_substrait_2falgebra_2eproto;
 };
@@ -11794,7 +12990,7 @@ class Expression_SwitchExpression_IfValue final :
                &_Expression_SwitchExpression_IfValue_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    55;
+    61;
 
   friend void swap(Expression_SwitchExpression_IfValue& a, Expression_SwitchExpression_IfValue& b) {
     a.Swap(&b);
@@ -11969,7 +13165,7 @@ class Expression_SwitchExpression final :
                &_Expression_SwitchExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    56;
+    62;
 
   friend void swap(Expression_SwitchExpression& a, Expression_SwitchExpression& b) {
     a.Swap(&b);
@@ -12166,7 +13362,7 @@ class Expression_SingularOrList final :
                &_Expression_SingularOrList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    57;
+    63;
 
   friend void swap(Expression_SingularOrList& a, Expression_SingularOrList& b) {
     a.Swap(&b);
@@ -12341,7 +13537,7 @@ class Expression_MultiOrList_Record final :
                &_Expression_MultiOrList_Record_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    58;
+    64;
 
   friend void swap(Expression_MultiOrList_Record& a, Expression_MultiOrList_Record& b) {
     a.Swap(&b);
@@ -12496,7 +13692,7 @@ class Expression_MultiOrList final :
                &_Expression_MultiOrList_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    59;
+    65;
 
   friend void swap(Expression_MultiOrList& a, Expression_MultiOrList& b) {
     a.Swap(&b);
@@ -12673,7 +13869,7 @@ class Expression_EmbeddedFunction_PythonPickleFunction final :
                &_Expression_EmbeddedFunction_PythonPickleFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    60;
+    66;
 
   friend void swap(Expression_EmbeddedFunction_PythonPickleFunction& a, Expression_EmbeddedFunction_PythonPickleFunction& b) {
     a.Swap(&b);
@@ -12850,7 +14046,7 @@ class Expression_EmbeddedFunction_WebAssemblyFunction final :
                &_Expression_EmbeddedFunction_WebAssemblyFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    61;
+    67;
 
   friend void swap(Expression_EmbeddedFunction_WebAssemblyFunction& a, Expression_EmbeddedFunction_WebAssemblyFunction& b) {
     a.Swap(&b);
@@ -13033,7 +14229,7 @@ class Expression_EmbeddedFunction final :
                &_Expression_EmbeddedFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    62;
+    68;
 
   friend void swap(Expression_EmbeddedFunction& a, Expression_EmbeddedFunction& b) {
     a.Swap(&b);
@@ -13264,7 +14460,7 @@ class Expression_ReferenceSegment_MapKey final :
                &_Expression_ReferenceSegment_MapKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    63;
+    69;
 
   friend void swap(Expression_ReferenceSegment_MapKey& a, Expression_ReferenceSegment_MapKey& b) {
     a.Swap(&b);
@@ -13439,7 +14635,7 @@ class Expression_ReferenceSegment_StructField final :
                &_Expression_ReferenceSegment_StructField_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    64;
+    70;
 
   friend void swap(Expression_ReferenceSegment_StructField& a, Expression_ReferenceSegment_StructField& b) {
     a.Swap(&b);
@@ -13605,7 +14801,7 @@ class Expression_ReferenceSegment_ListElement final :
                &_Expression_ReferenceSegment_ListElement_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    65;
+    71;
 
   friend void swap(Expression_ReferenceSegment_ListElement& a, Expression_ReferenceSegment_ListElement& b) {
     a.Swap(&b);
@@ -13778,7 +14974,7 @@ class Expression_ReferenceSegment final :
                &_Expression_ReferenceSegment_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    66;
+    72;
 
   friend void swap(Expression_ReferenceSegment& a, Expression_ReferenceSegment& b) {
     a.Swap(&b);
@@ -13998,7 +15194,7 @@ class Expression_MaskExpression_Select final :
                &_Expression_MaskExpression_Select_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    67;
+    73;
 
   friend void swap(Expression_MaskExpression_Select& a, Expression_MaskExpression_Select& b) {
     a.Swap(&b);
@@ -14207,7 +15403,7 @@ class Expression_MaskExpression_StructSelect final :
                &_Expression_MaskExpression_StructSelect_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    68;
+    74;
 
   friend void swap(Expression_MaskExpression_StructSelect& a, Expression_MaskExpression_StructSelect& b) {
     a.Swap(&b);
@@ -14362,7 +15558,7 @@ class Expression_MaskExpression_StructItem final :
                &_Expression_MaskExpression_StructItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    69;
+    75;
 
   friend void swap(Expression_MaskExpression_StructItem& a, Expression_MaskExpression_StructItem& b) {
     a.Swap(&b);
@@ -14528,7 +15724,7 @@ class Expression_MaskExpression_ListSelect_ListSelectItem_ListElement final :
                &_Expression_MaskExpression_ListSelect_ListSelectItem_ListElement_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    70;
+    76;
 
   friend void swap(Expression_MaskExpression_ListSelect_ListSelectItem_ListElement& a, Expression_MaskExpression_ListSelect_ListSelectItem_ListElement& b) {
     a.Swap(&b);
@@ -14674,7 +15870,7 @@ class Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice final :
                &_Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    71;
+    77;
 
   friend void swap(Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice& a, Expression_MaskExpression_ListSelect_ListSelectItem_ListSlice& b) {
     a.Swap(&b);
@@ -14837,7 +16033,7 @@ class Expression_MaskExpression_ListSelect_ListSelectItem final :
                &_Expression_MaskExpression_ListSelect_ListSelectItem_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    72;
+    78;
 
   friend void swap(Expression_MaskExpression_ListSelect_ListSelectItem& a, Expression_MaskExpression_ListSelect_ListSelectItem& b) {
     a.Swap(&b);
@@ -15028,7 +16224,7 @@ class Expression_MaskExpression_ListSelect final :
                &_Expression_MaskExpression_ListSelect_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    73;
+    79;
 
   friend void swap(Expression_MaskExpression_ListSelect& a, Expression_MaskExpression_ListSelect& b) {
     a.Swap(&b);
@@ -15205,7 +16401,7 @@ class Expression_MaskExpression_MapSelect_MapKey final :
                &_Expression_MaskExpression_MapSelect_MapKey_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    74;
+    80;
 
   friend void swap(Expression_MaskExpression_MapSelect_MapKey& a, Expression_MaskExpression_MapSelect_MapKey& b) {
     a.Swap(&b);
@@ -15356,7 +16552,7 @@ class Expression_MaskExpression_MapSelect_MapKeyExpression final :
                &_Expression_MaskExpression_MapSelect_MapKeyExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    75;
+    81;
 
   friend void swap(Expression_MaskExpression_MapSelect_MapKeyExpression& a, Expression_MaskExpression_MapSelect_MapKeyExpression& b) {
     a.Swap(&b);
@@ -15513,7 +16709,7 @@ class Expression_MaskExpression_MapSelect final :
                &_Expression_MaskExpression_MapSelect_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    76;
+    82;
 
   friend void swap(Expression_MaskExpression_MapSelect& a, Expression_MaskExpression_MapSelect& b) {
     a.Swap(&b);
@@ -15724,7 +16920,7 @@ class Expression_MaskExpression final :
                &_Expression_MaskExpression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    77;
+    83;
 
   friend void swap(Expression_MaskExpression& a, Expression_MaskExpression& b) {
     a.Swap(&b);
@@ -15895,7 +17091,7 @@ class Expression_FieldReference_RootReference final :
                &_Expression_FieldReference_RootReference_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    78;
+    84;
 
   friend void swap(Expression_FieldReference_RootReference& a, Expression_FieldReference_RootReference& b) {
     a.Swap(&b);
@@ -16014,7 +17210,7 @@ class Expression_FieldReference_OuterReference final :
                &_Expression_FieldReference_OuterReference_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    79;
+    85;
 
   friend void swap(Expression_FieldReference_OuterReference& a, Expression_FieldReference_OuterReference& b) {
     a.Swap(&b);
@@ -16173,7 +17369,7 @@ class Expression_FieldReference final :
                &_Expression_FieldReference_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    80;
+    86;
 
   friend void swap(Expression_FieldReference& a, Expression_FieldReference& b) {
     a.Swap(&b);
@@ -16436,7 +17632,7 @@ class Expression_Subquery_Scalar final :
                &_Expression_Subquery_Scalar_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    81;
+    87;
 
   friend void swap(Expression_Subquery_Scalar& a, Expression_Subquery_Scalar& b) {
     a.Swap(&b);
@@ -16591,7 +17787,7 @@ class Expression_Subquery_InPredicate final :
                &_Expression_Subquery_InPredicate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    82;
+    88;
 
   friend void swap(Expression_Subquery_InPredicate& a, Expression_Subquery_InPredicate& b) {
     a.Swap(&b);
@@ -16766,7 +17962,7 @@ class Expression_Subquery_SetPredicate final :
                &_Expression_Subquery_SetPredicate_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    83;
+    89;
 
   friend void swap(Expression_Subquery_SetPredicate& a, Expression_Subquery_SetPredicate& b) {
     a.Swap(&b);
@@ -16964,7 +18160,7 @@ class Expression_Subquery_SetComparison final :
                &_Expression_Subquery_SetComparison_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    84;
+    90;
 
   friend void swap(Expression_Subquery_SetComparison& a, Expression_Subquery_SetComparison& b) {
     a.Swap(&b);
@@ -17241,7 +18437,7 @@ class Expression_Subquery final :
                &_Expression_Subquery_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    85;
+    91;
 
   friend void swap(Expression_Subquery& a, Expression_Subquery& b) {
     a.Swap(&b);
@@ -17480,9 +18676,9 @@ class Expression final :
     kSwitchExpression = 7,
     kSingularOrList = 8,
     kMultiOrList = 9,
-    kEnum = 10,
     kCast = 11,
     kSubquery = 12,
+    kEnum = 10,
     REX_TYPE_NOT_SET = 0,
   };
 
@@ -17491,7 +18687,7 @@ class Expression final :
                &_Expression_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    86;
+    92;
 
   friend void swap(Expression& a, Expression& b) {
     a.Swap(&b);
@@ -17588,9 +18784,9 @@ class Expression final :
     kSwitchExpressionFieldNumber = 7,
     kSingularOrListFieldNumber = 8,
     kMultiOrListFieldNumber = 9,
-    kEnumFieldNumber = 10,
     kCastFieldNumber = 11,
     kSubqueryFieldNumber = 12,
+    kEnumFieldNumber = 10,
   };
   // .substrait.Expression.Literal literal = 1;
   bool has_literal() const;
@@ -17736,24 +18932,6 @@ class Expression final :
       ::substrait::Expression_MultiOrList* multi_or_list);
   ::substrait::Expression_MultiOrList* unsafe_arena_release_multi_or_list();
 
-  // .substrait.Expression.Enum enum = 10;
-  bool has_enum_() const;
-  private:
-  bool _internal_has_enum_() const;
-  public:
-  void clear_enum_();
-  const ::substrait::Expression_Enum& enum_() const;
-  PROTOBUF_NODISCARD ::substrait::Expression_Enum* release_enum_();
-  ::substrait::Expression_Enum* mutable_enum_();
-  void set_allocated_enum_(::substrait::Expression_Enum* enum_);
-  private:
-  const ::substrait::Expression_Enum& _internal_enum_() const;
-  ::substrait::Expression_Enum* _internal_mutable_enum_();
-  public:
-  void unsafe_arena_set_allocated_enum_(
-      ::substrait::Expression_Enum* enum_);
-  ::substrait::Expression_Enum* unsafe_arena_release_enum_();
-
   // .substrait.Expression.Cast cast = 11;
   bool has_cast() const;
   private:
@@ -17790,6 +18968,24 @@ class Expression final :
       ::substrait::Expression_Subquery* subquery);
   ::substrait::Expression_Subquery* unsafe_arena_release_subquery();
 
+  // .substrait.Expression.Enum enum = 10 [deprecated = true];
+  PROTOBUF_DEPRECATED bool has_enum_() const;
+  private:
+  bool _internal_has_enum_() const;
+  public:
+  PROTOBUF_DEPRECATED void clear_enum_();
+  PROTOBUF_DEPRECATED const ::substrait::Expression_Enum& enum_() const;
+  PROTOBUF_NODISCARD PROTOBUF_DEPRECATED ::substrait::Expression_Enum* release_enum_();
+  PROTOBUF_DEPRECATED ::substrait::Expression_Enum* mutable_enum_();
+  PROTOBUF_DEPRECATED void set_allocated_enum_(::substrait::Expression_Enum* enum_);
+  private:
+  const ::substrait::Expression_Enum& _internal_enum_() const;
+  ::substrait::Expression_Enum* _internal_mutable_enum_();
+  public:
+  PROTOBUF_DEPRECATED void unsafe_arena_set_allocated_enum_(
+      ::substrait::Expression_Enum* enum_);
+  PROTOBUF_DEPRECATED ::substrait::Expression_Enum* unsafe_arena_release_enum_();
+
   void clear_rex_type();
   RexTypeCase rex_type_case() const;
   // @@protoc_insertion_point(class_scope:substrait.Expression)
@@ -17803,9 +18999,9 @@ class Expression final :
   void set_has_switch_expression();
   void set_has_singular_or_list();
   void set_has_multi_or_list();
-  void set_has_enum_();
   void set_has_cast();
   void set_has_subquery();
+  void set_has_enum_();
 
   inline bool has_rex_type() const;
   inline void clear_has_rex_type();
@@ -17824,9 +19020,9 @@ class Expression final :
     ::substrait::Expression_SwitchExpression* switch_expression_;
     ::substrait::Expression_SingularOrList* singular_or_list_;
     ::substrait::Expression_MultiOrList* multi_or_list_;
-    ::substrait::Expression_Enum* enum__;
     ::substrait::Expression_Cast* cast_;
     ::substrait::Expression_Subquery* subquery_;
+    ::substrait::Expression_Enum* enum__;
   } rex_type_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   uint32_t _oneof_case_[1];
@@ -17889,7 +19085,7 @@ class SortField final :
                &_SortField_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    87;
+    93;
 
   friend void swap(SortField& a, SortField& b) {
     a.Swap(&b);
@@ -18125,7 +19321,7 @@ class AggregateFunction final :
                &_AggregateFunction_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    88;
+    94;
 
   friend void swap(AggregateFunction& a, AggregateFunction& b) {
     a.Swap(&b);
@@ -18196,31 +19392,65 @@ class AggregateFunction final :
 
   // nested types ----------------------------------------------------
 
+  typedef AggregateFunction_AggregationInvocation AggregationInvocation;
+  static constexpr AggregationInvocation AGGREGATION_INVOCATION_UNSPECIFIED =
+    AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_UNSPECIFIED;
+  static constexpr AggregationInvocation AGGREGATION_INVOCATION_ALL =
+    AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_ALL;
+  static constexpr AggregationInvocation AGGREGATION_INVOCATION_DISTINCT =
+    AggregateFunction_AggregationInvocation_AGGREGATION_INVOCATION_DISTINCT;
+  static inline bool AggregationInvocation_IsValid(int value) {
+    return AggregateFunction_AggregationInvocation_IsValid(value);
+  }
+  static constexpr AggregationInvocation AggregationInvocation_MIN =
+    AggregateFunction_AggregationInvocation_AggregationInvocation_MIN;
+  static constexpr AggregationInvocation AggregationInvocation_MAX =
+    AggregateFunction_AggregationInvocation_AggregationInvocation_MAX;
+  static constexpr int AggregationInvocation_ARRAYSIZE =
+    AggregateFunction_AggregationInvocation_AggregationInvocation_ARRAYSIZE;
+  static inline const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor*
+  AggregationInvocation_descriptor() {
+    return AggregateFunction_AggregationInvocation_descriptor();
+  }
+  template<typename T>
+  static inline const std::string& AggregationInvocation_Name(T enum_t_value) {
+    static_assert(::std::is_same<T, AggregationInvocation>::value ||
+      ::std::is_integral<T>::value,
+      "Incorrect type passed to function AggregationInvocation_Name.");
+    return AggregateFunction_AggregationInvocation_Name(enum_t_value);
+  }
+  static inline bool AggregationInvocation_Parse(::PROTOBUF_NAMESPACE_ID::ConstStringParam name,
+      AggregationInvocation* value) {
+    return AggregateFunction_AggregationInvocation_Parse(name, value);
+  }
+
   // accessors -------------------------------------------------------
 
   enum : int {
     kArgsFieldNumber = 2,
     kSortsFieldNumber = 3,
+    kArgumentsFieldNumber = 7,
     kOutputTypeFieldNumber = 5,
     kFunctionReferenceFieldNumber = 1,
     kPhaseFieldNumber = 4,
+    kInvocationFieldNumber = 6,
   };
-  // repeated .substrait.Expression args = 2;
-  int args_size() const;
+  // repeated .substrait.Expression args = 2 [deprecated = true];
+  PROTOBUF_DEPRECATED int args_size() const;
   private:
   int _internal_args_size() const;
   public:
-  void clear_args();
-  ::substrait::Expression* mutable_args(int index);
-  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
+  PROTOBUF_DEPRECATED void clear_args();
+  PROTOBUF_DEPRECATED ::substrait::Expression* mutable_args(int index);
+  PROTOBUF_DEPRECATED ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
       mutable_args();
   private:
   const ::substrait::Expression& _internal_args(int index) const;
   ::substrait::Expression* _internal_add_args();
   public:
-  const ::substrait::Expression& args(int index) const;
-  ::substrait::Expression* add_args();
-  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
+  PROTOBUF_DEPRECATED const ::substrait::Expression& args(int index) const;
+  PROTOBUF_DEPRECATED ::substrait::Expression* add_args();
+  PROTOBUF_DEPRECATED const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
       args() const;
 
   // repeated .substrait.SortField sorts = 3;
@@ -18240,6 +19470,24 @@ class AggregateFunction final :
   ::substrait::SortField* add_sorts();
   const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::SortField >&
       sorts() const;
+
+  // repeated .substrait.FunctionArgument arguments = 7;
+  int arguments_size() const;
+  private:
+  int _internal_arguments_size() const;
+  public:
+  void clear_arguments();
+  ::substrait::FunctionArgument* mutable_arguments(int index);
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >*
+      mutable_arguments();
+  private:
+  const ::substrait::FunctionArgument& _internal_arguments(int index) const;
+  ::substrait::FunctionArgument* _internal_add_arguments();
+  public:
+  const ::substrait::FunctionArgument& arguments(int index) const;
+  ::substrait::FunctionArgument* add_arguments();
+  const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >&
+      arguments() const;
 
   // .substrait.Type output_type = 5;
   bool has_output_type() const;
@@ -18277,6 +19525,15 @@ class AggregateFunction final :
   void _internal_set_phase(::substrait::AggregationPhase value);
   public:
 
+  // .substrait.AggregateFunction.AggregationInvocation invocation = 6;
+  void clear_invocation();
+  ::substrait::AggregateFunction_AggregationInvocation invocation() const;
+  void set_invocation(::substrait::AggregateFunction_AggregationInvocation value);
+  private:
+  ::substrait::AggregateFunction_AggregationInvocation _internal_invocation() const;
+  void _internal_set_invocation(::substrait::AggregateFunction_AggregationInvocation value);
+  public:
+
   // @@protoc_insertion_point(class_scope:substrait.AggregateFunction)
  private:
   class _Internal;
@@ -18286,9 +19543,11 @@ class AggregateFunction final :
   typedef void DestructorSkippable_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression > args_;
   ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::SortField > sorts_;
+  ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument > arguments_;
   ::substrait::Type* output_type_;
   uint32_t function_reference_;
   int phase_;
+  int invocation_;
   mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
   friend struct ::TableStruct_substrait_2falgebra_2eproto;
 };
@@ -19482,6 +20741,18 @@ inline void ReadRel_ExtensionTable::set_allocated_detail(::PROTOBUF_NAMESPACE_ID
 
 // -------------------------------------------------------------------
 
+// ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions
+
+// -------------------------------------------------------------------
+
+// ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions
+
+// -------------------------------------------------------------------
+
+// ReadRel_LocalFiles_FileOrFiles_OrcReadOptions
+
+// -------------------------------------------------------------------
+
 // ReadRel_LocalFiles_FileOrFiles
 
 // string uri_path = 1;
@@ -19812,26 +21083,6 @@ inline void ReadRel_LocalFiles_FileOrFiles::set_allocated_uri_folder(std::string
   // @@protoc_insertion_point(field_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.uri_folder)
 }
 
-// .substrait.ReadRel.LocalFiles.FileOrFiles.FileFormat format = 5;
-inline void ReadRel_LocalFiles_FileOrFiles::clear_format() {
-  format_ = 0;
-}
-inline ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles::_internal_format() const {
-  return static_cast< ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat >(format_);
-}
-inline ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat ReadRel_LocalFiles_FileOrFiles::format() const {
-  // @@protoc_insertion_point(field_get:substrait.ReadRel.LocalFiles.FileOrFiles.format)
-  return _internal_format();
-}
-inline void ReadRel_LocalFiles_FileOrFiles::_internal_set_format(::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat value) {
-  
-  format_ = value;
-}
-inline void ReadRel_LocalFiles_FileOrFiles::set_format(::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat value) {
-  _internal_set_format(value);
-  // @@protoc_insertion_point(field_set:substrait.ReadRel.LocalFiles.FileOrFiles.format)
-}
-
 // uint64 partition_index = 6;
 inline void ReadRel_LocalFiles_FileOrFiles::clear_partition_index() {
   partition_index_ = uint64_t{0u};
@@ -19892,14 +21143,311 @@ inline void ReadRel_LocalFiles_FileOrFiles::set_length(uint64_t value) {
   // @@protoc_insertion_point(field_set:substrait.ReadRel.LocalFiles.FileOrFiles.length)
 }
 
+// .substrait.ReadRel.LocalFiles.FileOrFiles.ParquetReadOptions parquet = 9;
+inline bool ReadRel_LocalFiles_FileOrFiles::_internal_has_parquet() const {
+  return file_format_case() == kParquet;
+}
+inline bool ReadRel_LocalFiles_FileOrFiles::has_parquet() const {
+  return _internal_has_parquet();
+}
+inline void ReadRel_LocalFiles_FileOrFiles::set_has_parquet() {
+  _oneof_case_[1] = kParquet;
+}
+inline void ReadRel_LocalFiles_FileOrFiles::clear_parquet() {
+  if (_internal_has_parquet()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete file_format_.parquet_;
+    }
+    clear_has_file_format();
+  }
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* ReadRel_LocalFiles_FileOrFiles::release_parquet() {
+  // @@protoc_insertion_point(field_release:substrait.ReadRel.LocalFiles.FileOrFiles.parquet)
+  if (_internal_has_parquet()) {
+    clear_has_file_format();
+      ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* temp = file_format_.parquet_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    file_format_.parquet_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& ReadRel_LocalFiles_FileOrFiles::_internal_parquet() const {
+  return _internal_has_parquet()
+      ? *file_format_.parquet_
+      : reinterpret_cast< ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions&>(::substrait::_ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions_default_instance_);
+}
+inline const ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions& ReadRel_LocalFiles_FileOrFiles::parquet() const {
+  // @@protoc_insertion_point(field_get:substrait.ReadRel.LocalFiles.FileOrFiles.parquet)
+  return _internal_parquet();
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* ReadRel_LocalFiles_FileOrFiles::unsafe_arena_release_parquet() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.ReadRel.LocalFiles.FileOrFiles.parquet)
+  if (_internal_has_parquet()) {
+    clear_has_file_format();
+    ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* temp = file_format_.parquet_;
+    file_format_.parquet_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ReadRel_LocalFiles_FileOrFiles::unsafe_arena_set_allocated_parquet(::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* parquet) {
+  clear_file_format();
+  if (parquet) {
+    set_has_parquet();
+    file_format_.parquet_ = parquet;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.parquet)
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* ReadRel_LocalFiles_FileOrFiles::_internal_mutable_parquet() {
+  if (!_internal_has_parquet()) {
+    clear_file_format();
+    set_has_parquet();
+    file_format_.parquet_ = CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions >(GetArenaForAllocation());
+  }
+  return file_format_.parquet_;
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* ReadRel_LocalFiles_FileOrFiles::mutable_parquet() {
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ParquetReadOptions* _msg = _internal_mutable_parquet();
+  // @@protoc_insertion_point(field_mutable:substrait.ReadRel.LocalFiles.FileOrFiles.parquet)
+  return _msg;
+}
+
+// .substrait.ReadRel.LocalFiles.FileOrFiles.ArrowReadOptions arrow = 10;
+inline bool ReadRel_LocalFiles_FileOrFiles::_internal_has_arrow() const {
+  return file_format_case() == kArrow;
+}
+inline bool ReadRel_LocalFiles_FileOrFiles::has_arrow() const {
+  return _internal_has_arrow();
+}
+inline void ReadRel_LocalFiles_FileOrFiles::set_has_arrow() {
+  _oneof_case_[1] = kArrow;
+}
+inline void ReadRel_LocalFiles_FileOrFiles::clear_arrow() {
+  if (_internal_has_arrow()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete file_format_.arrow_;
+    }
+    clear_has_file_format();
+  }
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* ReadRel_LocalFiles_FileOrFiles::release_arrow() {
+  // @@protoc_insertion_point(field_release:substrait.ReadRel.LocalFiles.FileOrFiles.arrow)
+  if (_internal_has_arrow()) {
+    clear_has_file_format();
+      ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* temp = file_format_.arrow_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    file_format_.arrow_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& ReadRel_LocalFiles_FileOrFiles::_internal_arrow() const {
+  return _internal_has_arrow()
+      ? *file_format_.arrow_
+      : reinterpret_cast< ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions&>(::substrait::_ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions_default_instance_);
+}
+inline const ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions& ReadRel_LocalFiles_FileOrFiles::arrow() const {
+  // @@protoc_insertion_point(field_get:substrait.ReadRel.LocalFiles.FileOrFiles.arrow)
+  return _internal_arrow();
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* ReadRel_LocalFiles_FileOrFiles::unsafe_arena_release_arrow() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.ReadRel.LocalFiles.FileOrFiles.arrow)
+  if (_internal_has_arrow()) {
+    clear_has_file_format();
+    ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* temp = file_format_.arrow_;
+    file_format_.arrow_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ReadRel_LocalFiles_FileOrFiles::unsafe_arena_set_allocated_arrow(::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* arrow) {
+  clear_file_format();
+  if (arrow) {
+    set_has_arrow();
+    file_format_.arrow_ = arrow;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.arrow)
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* ReadRel_LocalFiles_FileOrFiles::_internal_mutable_arrow() {
+  if (!_internal_has_arrow()) {
+    clear_file_format();
+    set_has_arrow();
+    file_format_.arrow_ = CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions >(GetArenaForAllocation());
+  }
+  return file_format_.arrow_;
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* ReadRel_LocalFiles_FileOrFiles::mutable_arrow() {
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_ArrowReadOptions* _msg = _internal_mutable_arrow();
+  // @@protoc_insertion_point(field_mutable:substrait.ReadRel.LocalFiles.FileOrFiles.arrow)
+  return _msg;
+}
+
+// .substrait.ReadRel.LocalFiles.FileOrFiles.OrcReadOptions orc = 11;
+inline bool ReadRel_LocalFiles_FileOrFiles::_internal_has_orc() const {
+  return file_format_case() == kOrc;
+}
+inline bool ReadRel_LocalFiles_FileOrFiles::has_orc() const {
+  return _internal_has_orc();
+}
+inline void ReadRel_LocalFiles_FileOrFiles::set_has_orc() {
+  _oneof_case_[1] = kOrc;
+}
+inline void ReadRel_LocalFiles_FileOrFiles::clear_orc() {
+  if (_internal_has_orc()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete file_format_.orc_;
+    }
+    clear_has_file_format();
+  }
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* ReadRel_LocalFiles_FileOrFiles::release_orc() {
+  // @@protoc_insertion_point(field_release:substrait.ReadRel.LocalFiles.FileOrFiles.orc)
+  if (_internal_has_orc()) {
+    clear_has_file_format();
+      ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* temp = file_format_.orc_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    file_format_.orc_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& ReadRel_LocalFiles_FileOrFiles::_internal_orc() const {
+  return _internal_has_orc()
+      ? *file_format_.orc_
+      : reinterpret_cast< ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions&>(::substrait::_ReadRel_LocalFiles_FileOrFiles_OrcReadOptions_default_instance_);
+}
+inline const ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions& ReadRel_LocalFiles_FileOrFiles::orc() const {
+  // @@protoc_insertion_point(field_get:substrait.ReadRel.LocalFiles.FileOrFiles.orc)
+  return _internal_orc();
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* ReadRel_LocalFiles_FileOrFiles::unsafe_arena_release_orc() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.ReadRel.LocalFiles.FileOrFiles.orc)
+  if (_internal_has_orc()) {
+    clear_has_file_format();
+    ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* temp = file_format_.orc_;
+    file_format_.orc_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ReadRel_LocalFiles_FileOrFiles::unsafe_arena_set_allocated_orc(::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* orc) {
+  clear_file_format();
+  if (orc) {
+    set_has_orc();
+    file_format_.orc_ = orc;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.orc)
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* ReadRel_LocalFiles_FileOrFiles::_internal_mutable_orc() {
+  if (!_internal_has_orc()) {
+    clear_file_format();
+    set_has_orc();
+    file_format_.orc_ = CreateMaybeMessage< ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions >(GetArenaForAllocation());
+  }
+  return file_format_.orc_;
+}
+inline ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* ReadRel_LocalFiles_FileOrFiles::mutable_orc() {
+  ::substrait::ReadRel_LocalFiles_FileOrFiles_OrcReadOptions* _msg = _internal_mutable_orc();
+  // @@protoc_insertion_point(field_mutable:substrait.ReadRel.LocalFiles.FileOrFiles.orc)
+  return _msg;
+}
+
+// .google.protobuf.Any extension = 12;
+inline bool ReadRel_LocalFiles_FileOrFiles::_internal_has_extension() const {
+  return file_format_case() == kExtension;
+}
+inline bool ReadRel_LocalFiles_FileOrFiles::has_extension() const {
+  return _internal_has_extension();
+}
+inline void ReadRel_LocalFiles_FileOrFiles::set_has_extension() {
+  _oneof_case_[1] = kExtension;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* ReadRel_LocalFiles_FileOrFiles::release_extension() {
+  // @@protoc_insertion_point(field_release:substrait.ReadRel.LocalFiles.FileOrFiles.extension)
+  if (_internal_has_extension()) {
+    clear_has_file_format();
+      ::PROTOBUF_NAMESPACE_ID::Any* temp = file_format_.extension_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    file_format_.extension_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::PROTOBUF_NAMESPACE_ID::Any& ReadRel_LocalFiles_FileOrFiles::_internal_extension() const {
+  return _internal_has_extension()
+      ? *file_format_.extension_
+      : reinterpret_cast< ::PROTOBUF_NAMESPACE_ID::Any&>(::PROTOBUF_NAMESPACE_ID::_Any_default_instance_);
+}
+inline const ::PROTOBUF_NAMESPACE_ID::Any& ReadRel_LocalFiles_FileOrFiles::extension() const {
+  // @@protoc_insertion_point(field_get:substrait.ReadRel.LocalFiles.FileOrFiles.extension)
+  return _internal_extension();
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* ReadRel_LocalFiles_FileOrFiles::unsafe_arena_release_extension() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.ReadRel.LocalFiles.FileOrFiles.extension)
+  if (_internal_has_extension()) {
+    clear_has_file_format();
+    ::PROTOBUF_NAMESPACE_ID::Any* temp = file_format_.extension_;
+    file_format_.extension_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ReadRel_LocalFiles_FileOrFiles::unsafe_arena_set_allocated_extension(::PROTOBUF_NAMESPACE_ID::Any* extension) {
+  clear_file_format();
+  if (extension) {
+    set_has_extension();
+    file_format_.extension_ = extension;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.ReadRel.LocalFiles.FileOrFiles.extension)
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* ReadRel_LocalFiles_FileOrFiles::_internal_mutable_extension() {
+  if (!_internal_has_extension()) {
+    clear_file_format();
+    set_has_extension();
+    file_format_.extension_ = CreateMaybeMessage< ::PROTOBUF_NAMESPACE_ID::Any >(GetArenaForAllocation());
+  }
+  return file_format_.extension_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* ReadRel_LocalFiles_FileOrFiles::mutable_extension() {
+  ::PROTOBUF_NAMESPACE_ID::Any* _msg = _internal_mutable_extension();
+  // @@protoc_insertion_point(field_mutable:substrait.ReadRel.LocalFiles.FileOrFiles.extension)
+  return _msg;
+}
+
 inline bool ReadRel_LocalFiles_FileOrFiles::has_path_type() const {
   return path_type_case() != PATH_TYPE_NOT_SET;
 }
 inline void ReadRel_LocalFiles_FileOrFiles::clear_has_path_type() {
   _oneof_case_[0] = PATH_TYPE_NOT_SET;
 }
+inline bool ReadRel_LocalFiles_FileOrFiles::has_file_format() const {
+  return file_format_case() != FILE_FORMAT_NOT_SET;
+}
+inline void ReadRel_LocalFiles_FileOrFiles::clear_has_file_format() {
+  _oneof_case_[1] = FILE_FORMAT_NOT_SET;
+}
 inline ReadRel_LocalFiles_FileOrFiles::PathTypeCase ReadRel_LocalFiles_FileOrFiles::path_type_case() const {
   return ReadRel_LocalFiles_FileOrFiles::PathTypeCase(_oneof_case_[0]);
+}
+inline ReadRel_LocalFiles_FileOrFiles::FileFormatCase ReadRel_LocalFiles_FileOrFiles::file_format_case() const {
+  return ReadRel_LocalFiles_FileOrFiles::FileFormatCase(_oneof_case_[1]);
 }
 // -------------------------------------------------------------------
 
@@ -26749,6 +28297,394 @@ inline Rel::RelTypeCase Rel::rel_type_case() const {
 }
 // -------------------------------------------------------------------
 
+// FunctionArgument_Enum
+
+// string specified = 1;
+inline bool FunctionArgument_Enum::_internal_has_specified() const {
+  return enum_kind_case() == kSpecified;
+}
+inline bool FunctionArgument_Enum::has_specified() const {
+  return _internal_has_specified();
+}
+inline void FunctionArgument_Enum::set_has_specified() {
+  _oneof_case_[0] = kSpecified;
+}
+inline void FunctionArgument_Enum::clear_specified() {
+  if (_internal_has_specified()) {
+    enum_kind_.specified_.Destroy(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+    clear_has_enum_kind();
+  }
+}
+inline const std::string& FunctionArgument_Enum::specified() const {
+  // @@protoc_insertion_point(field_get:substrait.FunctionArgument.Enum.specified)
+  return _internal_specified();
+}
+template <typename ArgT0, typename... ArgT>
+inline void FunctionArgument_Enum::set_specified(ArgT0&& arg0, ArgT... args) {
+  if (!_internal_has_specified()) {
+    clear_enum_kind();
+    set_has_specified();
+    enum_kind_.specified_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  }
+  enum_kind_.specified_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, static_cast<ArgT0 &&>(arg0), args..., GetArenaForAllocation());
+  // @@protoc_insertion_point(field_set:substrait.FunctionArgument.Enum.specified)
+}
+inline std::string* FunctionArgument_Enum::mutable_specified() {
+  std::string* _s = _internal_mutable_specified();
+  // @@protoc_insertion_point(field_mutable:substrait.FunctionArgument.Enum.specified)
+  return _s;
+}
+inline const std::string& FunctionArgument_Enum::_internal_specified() const {
+  if (_internal_has_specified()) {
+    return enum_kind_.specified_.Get();
+  }
+  return ::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited();
+}
+inline void FunctionArgument_Enum::_internal_set_specified(const std::string& value) {
+  if (!_internal_has_specified()) {
+    clear_enum_kind();
+    set_has_specified();
+    enum_kind_.specified_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  }
+  enum_kind_.specified_.Set(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, value, GetArenaForAllocation());
+}
+inline std::string* FunctionArgument_Enum::_internal_mutable_specified() {
+  if (!_internal_has_specified()) {
+    clear_enum_kind();
+    set_has_specified();
+    enum_kind_.specified_.UnsafeSetDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited());
+  }
+  return enum_kind_.specified_.Mutable(
+      ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+}
+inline std::string* FunctionArgument_Enum::release_specified() {
+  // @@protoc_insertion_point(field_release:substrait.FunctionArgument.Enum.specified)
+  if (_internal_has_specified()) {
+    clear_has_enum_kind();
+    return enum_kind_.specified_.ReleaseNonDefault(&::PROTOBUF_NAMESPACE_ID::internal::GetEmptyStringAlreadyInited(), GetArenaForAllocation());
+  } else {
+    return nullptr;
+  }
+}
+inline void FunctionArgument_Enum::set_allocated_specified(std::string* specified) {
+  if (has_enum_kind()) {
+    clear_enum_kind();
+  }
+  if (specified != nullptr) {
+    set_has_specified();
+    enum_kind_.specified_.UnsafeSetDefault(specified);
+    ::PROTOBUF_NAMESPACE_ID::Arena* arena = GetArenaForAllocation();
+    if (arena != nullptr) {
+      arena->Own(specified);
+    }
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.FunctionArgument.Enum.specified)
+}
+
+// .google.protobuf.Empty unspecified = 2;
+inline bool FunctionArgument_Enum::_internal_has_unspecified() const {
+  return enum_kind_case() == kUnspecified;
+}
+inline bool FunctionArgument_Enum::has_unspecified() const {
+  return _internal_has_unspecified();
+}
+inline void FunctionArgument_Enum::set_has_unspecified() {
+  _oneof_case_[0] = kUnspecified;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Empty* FunctionArgument_Enum::release_unspecified() {
+  // @@protoc_insertion_point(field_release:substrait.FunctionArgument.Enum.unspecified)
+  if (_internal_has_unspecified()) {
+    clear_has_enum_kind();
+      ::PROTOBUF_NAMESPACE_ID::Empty* temp = enum_kind_.unspecified_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    enum_kind_.unspecified_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::PROTOBUF_NAMESPACE_ID::Empty& FunctionArgument_Enum::_internal_unspecified() const {
+  return _internal_has_unspecified()
+      ? *enum_kind_.unspecified_
+      : reinterpret_cast< ::PROTOBUF_NAMESPACE_ID::Empty&>(::PROTOBUF_NAMESPACE_ID::_Empty_default_instance_);
+}
+inline const ::PROTOBUF_NAMESPACE_ID::Empty& FunctionArgument_Enum::unspecified() const {
+  // @@protoc_insertion_point(field_get:substrait.FunctionArgument.Enum.unspecified)
+  return _internal_unspecified();
+}
+inline ::PROTOBUF_NAMESPACE_ID::Empty* FunctionArgument_Enum::unsafe_arena_release_unspecified() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.FunctionArgument.Enum.unspecified)
+  if (_internal_has_unspecified()) {
+    clear_has_enum_kind();
+    ::PROTOBUF_NAMESPACE_ID::Empty* temp = enum_kind_.unspecified_;
+    enum_kind_.unspecified_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void FunctionArgument_Enum::unsafe_arena_set_allocated_unspecified(::PROTOBUF_NAMESPACE_ID::Empty* unspecified) {
+  clear_enum_kind();
+  if (unspecified) {
+    set_has_unspecified();
+    enum_kind_.unspecified_ = unspecified;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.FunctionArgument.Enum.unspecified)
+}
+inline ::PROTOBUF_NAMESPACE_ID::Empty* FunctionArgument_Enum::_internal_mutable_unspecified() {
+  if (!_internal_has_unspecified()) {
+    clear_enum_kind();
+    set_has_unspecified();
+    enum_kind_.unspecified_ = CreateMaybeMessage< ::PROTOBUF_NAMESPACE_ID::Empty >(GetArenaForAllocation());
+  }
+  return enum_kind_.unspecified_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Empty* FunctionArgument_Enum::mutable_unspecified() {
+  ::PROTOBUF_NAMESPACE_ID::Empty* _msg = _internal_mutable_unspecified();
+  // @@protoc_insertion_point(field_mutable:substrait.FunctionArgument.Enum.unspecified)
+  return _msg;
+}
+
+inline bool FunctionArgument_Enum::has_enum_kind() const {
+  return enum_kind_case() != ENUM_KIND_NOT_SET;
+}
+inline void FunctionArgument_Enum::clear_has_enum_kind() {
+  _oneof_case_[0] = ENUM_KIND_NOT_SET;
+}
+inline FunctionArgument_Enum::EnumKindCase FunctionArgument_Enum::enum_kind_case() const {
+  return FunctionArgument_Enum::EnumKindCase(_oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
+// FunctionArgument
+
+// .substrait.FunctionArgument.Enum enum = 1;
+inline bool FunctionArgument::_internal_has_enum_() const {
+  return arg_type_case() == kEnum;
+}
+inline bool FunctionArgument::has_enum_() const {
+  return _internal_has_enum_();
+}
+inline void FunctionArgument::set_has_enum_() {
+  _oneof_case_[0] = kEnum;
+}
+inline void FunctionArgument::clear_enum_() {
+  if (_internal_has_enum_()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete arg_type_.enum__;
+    }
+    clear_has_arg_type();
+  }
+}
+inline ::substrait::FunctionArgument_Enum* FunctionArgument::release_enum_() {
+  // @@protoc_insertion_point(field_release:substrait.FunctionArgument.enum)
+  if (_internal_has_enum_()) {
+    clear_has_arg_type();
+      ::substrait::FunctionArgument_Enum* temp = arg_type_.enum__;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    arg_type_.enum__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::FunctionArgument_Enum& FunctionArgument::_internal_enum_() const {
+  return _internal_has_enum_()
+      ? *arg_type_.enum__
+      : reinterpret_cast< ::substrait::FunctionArgument_Enum&>(::substrait::_FunctionArgument_Enum_default_instance_);
+}
+inline const ::substrait::FunctionArgument_Enum& FunctionArgument::enum_() const {
+  // @@protoc_insertion_point(field_get:substrait.FunctionArgument.enum)
+  return _internal_enum_();
+}
+inline ::substrait::FunctionArgument_Enum* FunctionArgument::unsafe_arena_release_enum_() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.FunctionArgument.enum)
+  if (_internal_has_enum_()) {
+    clear_has_arg_type();
+    ::substrait::FunctionArgument_Enum* temp = arg_type_.enum__;
+    arg_type_.enum__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void FunctionArgument::unsafe_arena_set_allocated_enum_(::substrait::FunctionArgument_Enum* enum_) {
+  clear_arg_type();
+  if (enum_) {
+    set_has_enum_();
+    arg_type_.enum__ = enum_;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.FunctionArgument.enum)
+}
+inline ::substrait::FunctionArgument_Enum* FunctionArgument::_internal_mutable_enum_() {
+  if (!_internal_has_enum_()) {
+    clear_arg_type();
+    set_has_enum_();
+    arg_type_.enum__ = CreateMaybeMessage< ::substrait::FunctionArgument_Enum >(GetArenaForAllocation());
+  }
+  return arg_type_.enum__;
+}
+inline ::substrait::FunctionArgument_Enum* FunctionArgument::mutable_enum_() {
+  ::substrait::FunctionArgument_Enum* _msg = _internal_mutable_enum_();
+  // @@protoc_insertion_point(field_mutable:substrait.FunctionArgument.enum)
+  return _msg;
+}
+
+// .substrait.Type type = 2;
+inline bool FunctionArgument::_internal_has_type() const {
+  return arg_type_case() == kType;
+}
+inline bool FunctionArgument::has_type() const {
+  return _internal_has_type();
+}
+inline void FunctionArgument::set_has_type() {
+  _oneof_case_[0] = kType;
+}
+inline ::substrait::Type* FunctionArgument::release_type() {
+  // @@protoc_insertion_point(field_release:substrait.FunctionArgument.type)
+  if (_internal_has_type()) {
+    clear_has_arg_type();
+      ::substrait::Type* temp = arg_type_.type_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    arg_type_.type_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::Type& FunctionArgument::_internal_type() const {
+  return _internal_has_type()
+      ? *arg_type_.type_
+      : reinterpret_cast< ::substrait::Type&>(::substrait::_Type_default_instance_);
+}
+inline const ::substrait::Type& FunctionArgument::type() const {
+  // @@protoc_insertion_point(field_get:substrait.FunctionArgument.type)
+  return _internal_type();
+}
+inline ::substrait::Type* FunctionArgument::unsafe_arena_release_type() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.FunctionArgument.type)
+  if (_internal_has_type()) {
+    clear_has_arg_type();
+    ::substrait::Type* temp = arg_type_.type_;
+    arg_type_.type_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void FunctionArgument::unsafe_arena_set_allocated_type(::substrait::Type* type) {
+  clear_arg_type();
+  if (type) {
+    set_has_type();
+    arg_type_.type_ = type;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.FunctionArgument.type)
+}
+inline ::substrait::Type* FunctionArgument::_internal_mutable_type() {
+  if (!_internal_has_type()) {
+    clear_arg_type();
+    set_has_type();
+    arg_type_.type_ = CreateMaybeMessage< ::substrait::Type >(GetArenaForAllocation());
+  }
+  return arg_type_.type_;
+}
+inline ::substrait::Type* FunctionArgument::mutable_type() {
+  ::substrait::Type* _msg = _internal_mutable_type();
+  // @@protoc_insertion_point(field_mutable:substrait.FunctionArgument.type)
+  return _msg;
+}
+
+// .substrait.Expression value = 3;
+inline bool FunctionArgument::_internal_has_value() const {
+  return arg_type_case() == kValue;
+}
+inline bool FunctionArgument::has_value() const {
+  return _internal_has_value();
+}
+inline void FunctionArgument::set_has_value() {
+  _oneof_case_[0] = kValue;
+}
+inline void FunctionArgument::clear_value() {
+  if (_internal_has_value()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete arg_type_.value_;
+    }
+    clear_has_arg_type();
+  }
+}
+inline ::substrait::Expression* FunctionArgument::release_value() {
+  // @@protoc_insertion_point(field_release:substrait.FunctionArgument.value)
+  if (_internal_has_value()) {
+    clear_has_arg_type();
+      ::substrait::Expression* temp = arg_type_.value_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    arg_type_.value_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::Expression& FunctionArgument::_internal_value() const {
+  return _internal_has_value()
+      ? *arg_type_.value_
+      : reinterpret_cast< ::substrait::Expression&>(::substrait::_Expression_default_instance_);
+}
+inline const ::substrait::Expression& FunctionArgument::value() const {
+  // @@protoc_insertion_point(field_get:substrait.FunctionArgument.value)
+  return _internal_value();
+}
+inline ::substrait::Expression* FunctionArgument::unsafe_arena_release_value() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.FunctionArgument.value)
+  if (_internal_has_value()) {
+    clear_has_arg_type();
+    ::substrait::Expression* temp = arg_type_.value_;
+    arg_type_.value_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void FunctionArgument::unsafe_arena_set_allocated_value(::substrait::Expression* value) {
+  clear_arg_type();
+  if (value) {
+    set_has_value();
+    arg_type_.value_ = value;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.FunctionArgument.value)
+}
+inline ::substrait::Expression* FunctionArgument::_internal_mutable_value() {
+  if (!_internal_has_value()) {
+    clear_arg_type();
+    set_has_value();
+    arg_type_.value_ = CreateMaybeMessage< ::substrait::Expression >(GetArenaForAllocation());
+  }
+  return arg_type_.value_;
+}
+inline ::substrait::Expression* FunctionArgument::mutable_value() {
+  ::substrait::Expression* _msg = _internal_mutable_value();
+  // @@protoc_insertion_point(field_mutable:substrait.FunctionArgument.value)
+  return _msg;
+}
+
+inline bool FunctionArgument::has_arg_type() const {
+  return arg_type_case() != ARG_TYPE_NOT_SET;
+}
+inline void FunctionArgument::clear_has_arg_type() {
+  _oneof_case_[0] = ARG_TYPE_NOT_SET;
+}
+inline FunctionArgument::ArgTypeCase FunctionArgument::arg_type_case() const {
+  return FunctionArgument::ArgTypeCase(_oneof_case_[0]);
+}
+// -------------------------------------------------------------------
+
 // Expression_Enum_Empty
 
 // -------------------------------------------------------------------
@@ -27406,6 +29342,26 @@ inline void Expression_Literal_IntervalDayToSecond::set_seconds(int32_t value) {
   // @@protoc_insertion_point(field_set:substrait.Expression.Literal.IntervalDayToSecond.seconds)
 }
 
+// int32 microseconds = 3;
+inline void Expression_Literal_IntervalDayToSecond::clear_microseconds() {
+  microseconds_ = 0;
+}
+inline int32_t Expression_Literal_IntervalDayToSecond::_internal_microseconds() const {
+  return microseconds_;
+}
+inline int32_t Expression_Literal_IntervalDayToSecond::microseconds() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Literal.IntervalDayToSecond.microseconds)
+  return _internal_microseconds();
+}
+inline void Expression_Literal_IntervalDayToSecond::_internal_set_microseconds(int32_t value) {
+  
+  microseconds_ = value;
+}
+inline void Expression_Literal_IntervalDayToSecond::set_microseconds(int32_t value) {
+  _internal_set_microseconds(value);
+  // @@protoc_insertion_point(field_set:substrait.Expression.Literal.IntervalDayToSecond.microseconds)
+}
+
 // -------------------------------------------------------------------
 
 // Expression_Literal_Struct
@@ -27492,6 +29448,153 @@ inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression_
 Expression_Literal_List::values() const {
   // @@protoc_insertion_point(field_list:substrait.Expression.Literal.List.values)
   return values_;
+}
+
+// -------------------------------------------------------------------
+
+// Expression_Literal_UserDefined
+
+// uint32 type_reference = 1;
+inline void Expression_Literal_UserDefined::clear_type_reference() {
+  type_reference_ = 0u;
+}
+inline uint32_t Expression_Literal_UserDefined::_internal_type_reference() const {
+  return type_reference_;
+}
+inline uint32_t Expression_Literal_UserDefined::type_reference() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Literal.UserDefined.type_reference)
+  return _internal_type_reference();
+}
+inline void Expression_Literal_UserDefined::_internal_set_type_reference(uint32_t value) {
+  
+  type_reference_ = value;
+}
+inline void Expression_Literal_UserDefined::set_type_reference(uint32_t value) {
+  _internal_set_type_reference(value);
+  // @@protoc_insertion_point(field_set:substrait.Expression.Literal.UserDefined.type_reference)
+}
+
+// repeated .substrait.Type.Parameter type_parameters = 3;
+inline int Expression_Literal_UserDefined::_internal_type_parameters_size() const {
+  return type_parameters_.size();
+}
+inline int Expression_Literal_UserDefined::type_parameters_size() const {
+  return _internal_type_parameters_size();
+}
+inline ::substrait::Type_Parameter* Expression_Literal_UserDefined::mutable_type_parameters(int index) {
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.Literal.UserDefined.type_parameters)
+  return type_parameters_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Type_Parameter >*
+Expression_Literal_UserDefined::mutable_type_parameters() {
+  // @@protoc_insertion_point(field_mutable_list:substrait.Expression.Literal.UserDefined.type_parameters)
+  return &type_parameters_;
+}
+inline const ::substrait::Type_Parameter& Expression_Literal_UserDefined::_internal_type_parameters(int index) const {
+  return type_parameters_.Get(index);
+}
+inline const ::substrait::Type_Parameter& Expression_Literal_UserDefined::type_parameters(int index) const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Literal.UserDefined.type_parameters)
+  return _internal_type_parameters(index);
+}
+inline ::substrait::Type_Parameter* Expression_Literal_UserDefined::_internal_add_type_parameters() {
+  return type_parameters_.Add();
+}
+inline ::substrait::Type_Parameter* Expression_Literal_UserDefined::add_type_parameters() {
+  ::substrait::Type_Parameter* _add = _internal_add_type_parameters();
+  // @@protoc_insertion_point(field_add:substrait.Expression.Literal.UserDefined.type_parameters)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Type_Parameter >&
+Expression_Literal_UserDefined::type_parameters() const {
+  // @@protoc_insertion_point(field_list:substrait.Expression.Literal.UserDefined.type_parameters)
+  return type_parameters_;
+}
+
+// .google.protobuf.Any value = 2;
+inline bool Expression_Literal_UserDefined::_internal_has_value() const {
+  return this != internal_default_instance() && value_ != nullptr;
+}
+inline bool Expression_Literal_UserDefined::has_value() const {
+  return _internal_has_value();
+}
+inline const ::PROTOBUF_NAMESPACE_ID::Any& Expression_Literal_UserDefined::_internal_value() const {
+  const ::PROTOBUF_NAMESPACE_ID::Any* p = value_;
+  return p != nullptr ? *p : reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Any&>(
+      ::PROTOBUF_NAMESPACE_ID::_Any_default_instance_);
+}
+inline const ::PROTOBUF_NAMESPACE_ID::Any& Expression_Literal_UserDefined::value() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Literal.UserDefined.value)
+  return _internal_value();
+}
+inline void Expression_Literal_UserDefined::unsafe_arena_set_allocated_value(
+    ::PROTOBUF_NAMESPACE_ID::Any* value) {
+  if (GetArenaForAllocation() == nullptr) {
+    delete reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(value_);
+  }
+  value_ = value;
+  if (value) {
+    
+  } else {
+    
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.Expression.Literal.UserDefined.value)
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* Expression_Literal_UserDefined::release_value() {
+  
+  ::PROTOBUF_NAMESPACE_ID::Any* temp = value_;
+  value_ = nullptr;
+#ifdef PROTOBUF_FORCE_COPY_IN_RELEASE
+  auto* old =  reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(temp);
+  temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+  if (GetArenaForAllocation() == nullptr) { delete old; }
+#else  // PROTOBUF_FORCE_COPY_IN_RELEASE
+  if (GetArenaForAllocation() != nullptr) {
+    temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+  }
+#endif  // !PROTOBUF_FORCE_COPY_IN_RELEASE
+  return temp;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* Expression_Literal_UserDefined::unsafe_arena_release_value() {
+  // @@protoc_insertion_point(field_release:substrait.Expression.Literal.UserDefined.value)
+  
+  ::PROTOBUF_NAMESPACE_ID::Any* temp = value_;
+  value_ = nullptr;
+  return temp;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* Expression_Literal_UserDefined::_internal_mutable_value() {
+  
+  if (value_ == nullptr) {
+    auto* p = CreateMaybeMessage<::PROTOBUF_NAMESPACE_ID::Any>(GetArenaForAllocation());
+    value_ = p;
+  }
+  return value_;
+}
+inline ::PROTOBUF_NAMESPACE_ID::Any* Expression_Literal_UserDefined::mutable_value() {
+  ::PROTOBUF_NAMESPACE_ID::Any* _msg = _internal_mutable_value();
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.Literal.UserDefined.value)
+  return _msg;
+}
+inline void Expression_Literal_UserDefined::set_allocated_value(::PROTOBUF_NAMESPACE_ID::Any* value) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  if (message_arena == nullptr) {
+    delete reinterpret_cast< ::PROTOBUF_NAMESPACE_ID::MessageLite*>(value_);
+  }
+  if (value) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<
+            ::PROTOBUF_NAMESPACE_ID::MessageLite>::GetOwningArena(
+                reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(value));
+    if (message_arena != submessage_arena) {
+      value = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, value, submessage_arena);
+    }
+    
+  } else {
+    
+  }
+  value_ = value;
+  // @@protoc_insertion_point(field_set_allocated:substrait.Expression.Literal.UserDefined.value)
 }
 
 // -------------------------------------------------------------------
@@ -29042,6 +31145,80 @@ inline ::substrait::Type_Map* Expression_Literal::mutable_empty_map() {
   return _msg;
 }
 
+// .substrait.Expression.Literal.UserDefined user_defined = 33;
+inline bool Expression_Literal::_internal_has_user_defined() const {
+  return literal_type_case() == kUserDefined;
+}
+inline bool Expression_Literal::has_user_defined() const {
+  return _internal_has_user_defined();
+}
+inline void Expression_Literal::set_has_user_defined() {
+  _oneof_case_[0] = kUserDefined;
+}
+inline void Expression_Literal::clear_user_defined() {
+  if (_internal_has_user_defined()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete literal_type_.user_defined_;
+    }
+    clear_has_literal_type();
+  }
+}
+inline ::substrait::Expression_Literal_UserDefined* Expression_Literal::release_user_defined() {
+  // @@protoc_insertion_point(field_release:substrait.Expression.Literal.user_defined)
+  if (_internal_has_user_defined()) {
+    clear_has_literal_type();
+      ::substrait::Expression_Literal_UserDefined* temp = literal_type_.user_defined_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    literal_type_.user_defined_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::Expression_Literal_UserDefined& Expression_Literal::_internal_user_defined() const {
+  return _internal_has_user_defined()
+      ? *literal_type_.user_defined_
+      : reinterpret_cast< ::substrait::Expression_Literal_UserDefined&>(::substrait::_Expression_Literal_UserDefined_default_instance_);
+}
+inline const ::substrait::Expression_Literal_UserDefined& Expression_Literal::user_defined() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Literal.user_defined)
+  return _internal_user_defined();
+}
+inline ::substrait::Expression_Literal_UserDefined* Expression_Literal::unsafe_arena_release_user_defined() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.Expression.Literal.user_defined)
+  if (_internal_has_user_defined()) {
+    clear_has_literal_type();
+    ::substrait::Expression_Literal_UserDefined* temp = literal_type_.user_defined_;
+    literal_type_.user_defined_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Expression_Literal::unsafe_arena_set_allocated_user_defined(::substrait::Expression_Literal_UserDefined* user_defined) {
+  clear_literal_type();
+  if (user_defined) {
+    set_has_user_defined();
+    literal_type_.user_defined_ = user_defined;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.Expression.Literal.user_defined)
+}
+inline ::substrait::Expression_Literal_UserDefined* Expression_Literal::_internal_mutable_user_defined() {
+  if (!_internal_has_user_defined()) {
+    clear_literal_type();
+    set_has_user_defined();
+    literal_type_.user_defined_ = CreateMaybeMessage< ::substrait::Expression_Literal_UserDefined >(GetArenaForAllocation());
+  }
+  return literal_type_.user_defined_;
+}
+inline ::substrait::Expression_Literal_UserDefined* Expression_Literal::mutable_user_defined() {
+  ::substrait::Expression_Literal_UserDefined* _msg = _internal_mutable_user_defined();
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.Literal.user_defined)
+  return _msg;
+}
+
 // bool nullable = 50;
 inline void Expression_Literal::clear_nullable() {
   nullable_ = false;
@@ -29060,6 +31237,26 @@ inline void Expression_Literal::_internal_set_nullable(bool value) {
 inline void Expression_Literal::set_nullable(bool value) {
   _internal_set_nullable(value);
   // @@protoc_insertion_point(field_set:substrait.Expression.Literal.nullable)
+}
+
+// uint32 type_variation_reference = 51;
+inline void Expression_Literal::clear_type_variation_reference() {
+  type_variation_reference_ = 0u;
+}
+inline uint32_t Expression_Literal::_internal_type_variation_reference() const {
+  return type_variation_reference_;
+}
+inline uint32_t Expression_Literal::type_variation_reference() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Literal.type_variation_reference)
+  return _internal_type_variation_reference();
+}
+inline void Expression_Literal::_internal_set_type_variation_reference(uint32_t value) {
+  
+  type_variation_reference_ = value;
+}
+inline void Expression_Literal::set_type_variation_reference(uint32_t value) {
+  _internal_set_type_variation_reference(value);
+  // @@protoc_insertion_point(field_set:substrait.Expression.Literal.type_variation_reference)
 }
 
 inline bool Expression_Literal::has_literal_type() const {
@@ -29095,44 +31292,44 @@ inline void Expression_ScalarFunction::set_function_reference(uint32_t value) {
   // @@protoc_insertion_point(field_set:substrait.Expression.ScalarFunction.function_reference)
 }
 
-// repeated .substrait.Expression args = 2;
-inline int Expression_ScalarFunction::_internal_args_size() const {
-  return args_.size();
+// repeated .substrait.FunctionArgument arguments = 4;
+inline int Expression_ScalarFunction::_internal_arguments_size() const {
+  return arguments_.size();
 }
-inline int Expression_ScalarFunction::args_size() const {
-  return _internal_args_size();
+inline int Expression_ScalarFunction::arguments_size() const {
+  return _internal_arguments_size();
 }
-inline void Expression_ScalarFunction::clear_args() {
-  args_.Clear();
+inline void Expression_ScalarFunction::clear_arguments() {
+  arguments_.Clear();
 }
-inline ::substrait::Expression* Expression_ScalarFunction::mutable_args(int index) {
-  // @@protoc_insertion_point(field_mutable:substrait.Expression.ScalarFunction.args)
-  return args_.Mutable(index);
+inline ::substrait::FunctionArgument* Expression_ScalarFunction::mutable_arguments(int index) {
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.ScalarFunction.arguments)
+  return arguments_.Mutable(index);
 }
-inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
-Expression_ScalarFunction::mutable_args() {
-  // @@protoc_insertion_point(field_mutable_list:substrait.Expression.ScalarFunction.args)
-  return &args_;
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >*
+Expression_ScalarFunction::mutable_arguments() {
+  // @@protoc_insertion_point(field_mutable_list:substrait.Expression.ScalarFunction.arguments)
+  return &arguments_;
 }
-inline const ::substrait::Expression& Expression_ScalarFunction::_internal_args(int index) const {
-  return args_.Get(index);
+inline const ::substrait::FunctionArgument& Expression_ScalarFunction::_internal_arguments(int index) const {
+  return arguments_.Get(index);
 }
-inline const ::substrait::Expression& Expression_ScalarFunction::args(int index) const {
-  // @@protoc_insertion_point(field_get:substrait.Expression.ScalarFunction.args)
-  return _internal_args(index);
+inline const ::substrait::FunctionArgument& Expression_ScalarFunction::arguments(int index) const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.ScalarFunction.arguments)
+  return _internal_arguments(index);
 }
-inline ::substrait::Expression* Expression_ScalarFunction::_internal_add_args() {
-  return args_.Add();
+inline ::substrait::FunctionArgument* Expression_ScalarFunction::_internal_add_arguments() {
+  return arguments_.Add();
 }
-inline ::substrait::Expression* Expression_ScalarFunction::add_args() {
-  ::substrait::Expression* _add = _internal_add_args();
-  // @@protoc_insertion_point(field_add:substrait.Expression.ScalarFunction.args)
+inline ::substrait::FunctionArgument* Expression_ScalarFunction::add_arguments() {
+  ::substrait::FunctionArgument* _add = _internal_add_arguments();
+  // @@protoc_insertion_point(field_add:substrait.Expression.ScalarFunction.arguments)
   return _add;
 }
-inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
-Expression_ScalarFunction::args() const {
-  // @@protoc_insertion_point(field_list:substrait.Expression.ScalarFunction.args)
-  return args_;
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >&
+Expression_ScalarFunction::arguments() const {
+  // @@protoc_insertion_point(field_list:substrait.Expression.ScalarFunction.arguments)
+  return arguments_;
 }
 
 // .substrait.Type output_type = 3;
@@ -29219,6 +31416,46 @@ inline void Expression_ScalarFunction::set_allocated_output_type(::substrait::Ty
   }
   output_type_ = output_type;
   // @@protoc_insertion_point(field_set_allocated:substrait.Expression.ScalarFunction.output_type)
+}
+
+// repeated .substrait.Expression args = 2 [deprecated = true];
+inline int Expression_ScalarFunction::_internal_args_size() const {
+  return args_.size();
+}
+inline int Expression_ScalarFunction::args_size() const {
+  return _internal_args_size();
+}
+inline void Expression_ScalarFunction::clear_args() {
+  args_.Clear();
+}
+inline ::substrait::Expression* Expression_ScalarFunction::mutable_args(int index) {
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.ScalarFunction.args)
+  return args_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
+Expression_ScalarFunction::mutable_args() {
+  // @@protoc_insertion_point(field_mutable_list:substrait.Expression.ScalarFunction.args)
+  return &args_;
+}
+inline const ::substrait::Expression& Expression_ScalarFunction::_internal_args(int index) const {
+  return args_.Get(index);
+}
+inline const ::substrait::Expression& Expression_ScalarFunction::args(int index) const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.ScalarFunction.args)
+  return _internal_args(index);
+}
+inline ::substrait::Expression* Expression_ScalarFunction::_internal_add_args() {
+  return args_.Add();
+}
+inline ::substrait::Expression* Expression_ScalarFunction::add_args() {
+  ::substrait::Expression* _add = _internal_add_args();
+  // @@protoc_insertion_point(field_add:substrait.Expression.ScalarFunction.args)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
+Expression_ScalarFunction::args() const {
+  // @@protoc_insertion_point(field_list:substrait.Expression.ScalarFunction.args)
+  return args_;
 }
 
 // -------------------------------------------------------------------
@@ -29976,7 +32213,47 @@ inline void Expression_WindowFunction::set_allocated_output_type(::substrait::Ty
   // @@protoc_insertion_point(field_set_allocated:substrait.Expression.WindowFunction.output_type)
 }
 
-// repeated .substrait.Expression args = 8;
+// repeated .substrait.FunctionArgument arguments = 9;
+inline int Expression_WindowFunction::_internal_arguments_size() const {
+  return arguments_.size();
+}
+inline int Expression_WindowFunction::arguments_size() const {
+  return _internal_arguments_size();
+}
+inline void Expression_WindowFunction::clear_arguments() {
+  arguments_.Clear();
+}
+inline ::substrait::FunctionArgument* Expression_WindowFunction::mutable_arguments(int index) {
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.WindowFunction.arguments)
+  return arguments_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >*
+Expression_WindowFunction::mutable_arguments() {
+  // @@protoc_insertion_point(field_mutable_list:substrait.Expression.WindowFunction.arguments)
+  return &arguments_;
+}
+inline const ::substrait::FunctionArgument& Expression_WindowFunction::_internal_arguments(int index) const {
+  return arguments_.Get(index);
+}
+inline const ::substrait::FunctionArgument& Expression_WindowFunction::arguments(int index) const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.WindowFunction.arguments)
+  return _internal_arguments(index);
+}
+inline ::substrait::FunctionArgument* Expression_WindowFunction::_internal_add_arguments() {
+  return arguments_.Add();
+}
+inline ::substrait::FunctionArgument* Expression_WindowFunction::add_arguments() {
+  ::substrait::FunctionArgument* _add = _internal_add_arguments();
+  // @@protoc_insertion_point(field_add:substrait.Expression.WindowFunction.arguments)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >&
+Expression_WindowFunction::arguments() const {
+  // @@protoc_insertion_point(field_list:substrait.Expression.WindowFunction.arguments)
+  return arguments_;
+}
+
+// repeated .substrait.Expression args = 8 [deprecated = true];
 inline int Expression_WindowFunction::_internal_args_size() const {
   return args_.size();
 }
@@ -30512,6 +32789,26 @@ inline void Expression_Cast::set_allocated_input(::substrait::Expression* input)
   }
   input_ = input;
   // @@protoc_insertion_point(field_set_allocated:substrait.Expression.Cast.input)
+}
+
+// .substrait.Expression.Cast.FailureBehavior failure_behavior = 3;
+inline void Expression_Cast::clear_failure_behavior() {
+  failure_behavior_ = 0;
+}
+inline ::substrait::Expression_Cast_FailureBehavior Expression_Cast::_internal_failure_behavior() const {
+  return static_cast< ::substrait::Expression_Cast_FailureBehavior >(failure_behavior_);
+}
+inline ::substrait::Expression_Cast_FailureBehavior Expression_Cast::failure_behavior() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.Cast.failure_behavior)
+  return _internal_failure_behavior();
+}
+inline void Expression_Cast::_internal_set_failure_behavior(::substrait::Expression_Cast_FailureBehavior value) {
+  
+  failure_behavior_ = value;
+}
+inline void Expression_Cast::set_failure_behavior(::substrait::Expression_Cast_FailureBehavior value) {
+  _internal_set_failure_behavior(value);
+  // @@protoc_insertion_point(field_set:substrait.Expression.Cast.failure_behavior)
 }
 
 // -------------------------------------------------------------------
@@ -35500,80 +37797,6 @@ inline ::substrait::Expression_MultiOrList* Expression::mutable_multi_or_list() 
   return _msg;
 }
 
-// .substrait.Expression.Enum enum = 10;
-inline bool Expression::_internal_has_enum_() const {
-  return rex_type_case() == kEnum;
-}
-inline bool Expression::has_enum_() const {
-  return _internal_has_enum_();
-}
-inline void Expression::set_has_enum_() {
-  _oneof_case_[0] = kEnum;
-}
-inline void Expression::clear_enum_() {
-  if (_internal_has_enum_()) {
-    if (GetArenaForAllocation() == nullptr) {
-      delete rex_type_.enum__;
-    }
-    clear_has_rex_type();
-  }
-}
-inline ::substrait::Expression_Enum* Expression::release_enum_() {
-  // @@protoc_insertion_point(field_release:substrait.Expression.enum)
-  if (_internal_has_enum_()) {
-    clear_has_rex_type();
-      ::substrait::Expression_Enum* temp = rex_type_.enum__;
-    if (GetArenaForAllocation() != nullptr) {
-      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
-    }
-    rex_type_.enum__ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline const ::substrait::Expression_Enum& Expression::_internal_enum_() const {
-  return _internal_has_enum_()
-      ? *rex_type_.enum__
-      : reinterpret_cast< ::substrait::Expression_Enum&>(::substrait::_Expression_Enum_default_instance_);
-}
-inline const ::substrait::Expression_Enum& Expression::enum_() const {
-  // @@protoc_insertion_point(field_get:substrait.Expression.enum)
-  return _internal_enum_();
-}
-inline ::substrait::Expression_Enum* Expression::unsafe_arena_release_enum_() {
-  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.Expression.enum)
-  if (_internal_has_enum_()) {
-    clear_has_rex_type();
-    ::substrait::Expression_Enum* temp = rex_type_.enum__;
-    rex_type_.enum__ = nullptr;
-    return temp;
-  } else {
-    return nullptr;
-  }
-}
-inline void Expression::unsafe_arena_set_allocated_enum_(::substrait::Expression_Enum* enum_) {
-  clear_rex_type();
-  if (enum_) {
-    set_has_enum_();
-    rex_type_.enum__ = enum_;
-  }
-  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.Expression.enum)
-}
-inline ::substrait::Expression_Enum* Expression::_internal_mutable_enum_() {
-  if (!_internal_has_enum_()) {
-    clear_rex_type();
-    set_has_enum_();
-    rex_type_.enum__ = CreateMaybeMessage< ::substrait::Expression_Enum >(GetArenaForAllocation());
-  }
-  return rex_type_.enum__;
-}
-inline ::substrait::Expression_Enum* Expression::mutable_enum_() {
-  ::substrait::Expression_Enum* _msg = _internal_mutable_enum_();
-  // @@protoc_insertion_point(field_mutable:substrait.Expression.enum)
-  return _msg;
-}
-
 // .substrait.Expression.Cast cast = 11;
 inline bool Expression::_internal_has_cast() const {
   return rex_type_case() == kCast;
@@ -35719,6 +37942,80 @@ inline ::substrait::Expression_Subquery* Expression::_internal_mutable_subquery(
 inline ::substrait::Expression_Subquery* Expression::mutable_subquery() {
   ::substrait::Expression_Subquery* _msg = _internal_mutable_subquery();
   // @@protoc_insertion_point(field_mutable:substrait.Expression.subquery)
+  return _msg;
+}
+
+// .substrait.Expression.Enum enum = 10 [deprecated = true];
+inline bool Expression::_internal_has_enum_() const {
+  return rex_type_case() == kEnum;
+}
+inline bool Expression::has_enum_() const {
+  return _internal_has_enum_();
+}
+inline void Expression::set_has_enum_() {
+  _oneof_case_[0] = kEnum;
+}
+inline void Expression::clear_enum_() {
+  if (_internal_has_enum_()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete rex_type_.enum__;
+    }
+    clear_has_rex_type();
+  }
+}
+inline ::substrait::Expression_Enum* Expression::release_enum_() {
+  // @@protoc_insertion_point(field_release:substrait.Expression.enum)
+  if (_internal_has_enum_()) {
+    clear_has_rex_type();
+      ::substrait::Expression_Enum* temp = rex_type_.enum__;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    rex_type_.enum__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::Expression_Enum& Expression::_internal_enum_() const {
+  return _internal_has_enum_()
+      ? *rex_type_.enum__
+      : reinterpret_cast< ::substrait::Expression_Enum&>(::substrait::_Expression_Enum_default_instance_);
+}
+inline const ::substrait::Expression_Enum& Expression::enum_() const {
+  // @@protoc_insertion_point(field_get:substrait.Expression.enum)
+  return _internal_enum_();
+}
+inline ::substrait::Expression_Enum* Expression::unsafe_arena_release_enum_() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.Expression.enum)
+  if (_internal_has_enum_()) {
+    clear_has_rex_type();
+    ::substrait::Expression_Enum* temp = rex_type_.enum__;
+    rex_type_.enum__ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void Expression::unsafe_arena_set_allocated_enum_(::substrait::Expression_Enum* enum_) {
+  clear_rex_type();
+  if (enum_) {
+    set_has_enum_();
+    rex_type_.enum__ = enum_;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.Expression.enum)
+}
+inline ::substrait::Expression_Enum* Expression::_internal_mutable_enum_() {
+  if (!_internal_has_enum_()) {
+    clear_rex_type();
+    set_has_enum_();
+    rex_type_.enum__ = CreateMaybeMessage< ::substrait::Expression_Enum >(GetArenaForAllocation());
+  }
+  return rex_type_.enum__;
+}
+inline ::substrait::Expression_Enum* Expression::mutable_enum_() {
+  ::substrait::Expression_Enum* _msg = _internal_mutable_enum_();
+  // @@protoc_insertion_point(field_mutable:substrait.Expression.enum)
   return _msg;
 }
 
@@ -35934,44 +38231,44 @@ inline void AggregateFunction::set_function_reference(uint32_t value) {
   // @@protoc_insertion_point(field_set:substrait.AggregateFunction.function_reference)
 }
 
-// repeated .substrait.Expression args = 2;
-inline int AggregateFunction::_internal_args_size() const {
-  return args_.size();
+// repeated .substrait.FunctionArgument arguments = 7;
+inline int AggregateFunction::_internal_arguments_size() const {
+  return arguments_.size();
 }
-inline int AggregateFunction::args_size() const {
-  return _internal_args_size();
+inline int AggregateFunction::arguments_size() const {
+  return _internal_arguments_size();
 }
-inline void AggregateFunction::clear_args() {
-  args_.Clear();
+inline void AggregateFunction::clear_arguments() {
+  arguments_.Clear();
 }
-inline ::substrait::Expression* AggregateFunction::mutable_args(int index) {
-  // @@protoc_insertion_point(field_mutable:substrait.AggregateFunction.args)
-  return args_.Mutable(index);
+inline ::substrait::FunctionArgument* AggregateFunction::mutable_arguments(int index) {
+  // @@protoc_insertion_point(field_mutable:substrait.AggregateFunction.arguments)
+  return arguments_.Mutable(index);
 }
-inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
-AggregateFunction::mutable_args() {
-  // @@protoc_insertion_point(field_mutable_list:substrait.AggregateFunction.args)
-  return &args_;
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >*
+AggregateFunction::mutable_arguments() {
+  // @@protoc_insertion_point(field_mutable_list:substrait.AggregateFunction.arguments)
+  return &arguments_;
 }
-inline const ::substrait::Expression& AggregateFunction::_internal_args(int index) const {
-  return args_.Get(index);
+inline const ::substrait::FunctionArgument& AggregateFunction::_internal_arguments(int index) const {
+  return arguments_.Get(index);
 }
-inline const ::substrait::Expression& AggregateFunction::args(int index) const {
-  // @@protoc_insertion_point(field_get:substrait.AggregateFunction.args)
-  return _internal_args(index);
+inline const ::substrait::FunctionArgument& AggregateFunction::arguments(int index) const {
+  // @@protoc_insertion_point(field_get:substrait.AggregateFunction.arguments)
+  return _internal_arguments(index);
 }
-inline ::substrait::Expression* AggregateFunction::_internal_add_args() {
-  return args_.Add();
+inline ::substrait::FunctionArgument* AggregateFunction::_internal_add_arguments() {
+  return arguments_.Add();
 }
-inline ::substrait::Expression* AggregateFunction::add_args() {
-  ::substrait::Expression* _add = _internal_add_args();
-  // @@protoc_insertion_point(field_add:substrait.AggregateFunction.args)
+inline ::substrait::FunctionArgument* AggregateFunction::add_arguments() {
+  ::substrait::FunctionArgument* _add = _internal_add_arguments();
+  // @@protoc_insertion_point(field_add:substrait.AggregateFunction.arguments)
   return _add;
 }
-inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
-AggregateFunction::args() const {
-  // @@protoc_insertion_point(field_list:substrait.AggregateFunction.args)
-  return args_;
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::FunctionArgument >&
+AggregateFunction::arguments() const {
+  // @@protoc_insertion_point(field_list:substrait.AggregateFunction.arguments)
+  return arguments_;
 }
 
 // repeated .substrait.SortField sorts = 3;
@@ -36120,9 +38417,81 @@ inline void AggregateFunction::set_allocated_output_type(::substrait::Type* outp
   // @@protoc_insertion_point(field_set_allocated:substrait.AggregateFunction.output_type)
 }
 
+// .substrait.AggregateFunction.AggregationInvocation invocation = 6;
+inline void AggregateFunction::clear_invocation() {
+  invocation_ = 0;
+}
+inline ::substrait::AggregateFunction_AggregationInvocation AggregateFunction::_internal_invocation() const {
+  return static_cast< ::substrait::AggregateFunction_AggregationInvocation >(invocation_);
+}
+inline ::substrait::AggregateFunction_AggregationInvocation AggregateFunction::invocation() const {
+  // @@protoc_insertion_point(field_get:substrait.AggregateFunction.invocation)
+  return _internal_invocation();
+}
+inline void AggregateFunction::_internal_set_invocation(::substrait::AggregateFunction_AggregationInvocation value) {
+  
+  invocation_ = value;
+}
+inline void AggregateFunction::set_invocation(::substrait::AggregateFunction_AggregationInvocation value) {
+  _internal_set_invocation(value);
+  // @@protoc_insertion_point(field_set:substrait.AggregateFunction.invocation)
+}
+
+// repeated .substrait.Expression args = 2 [deprecated = true];
+inline int AggregateFunction::_internal_args_size() const {
+  return args_.size();
+}
+inline int AggregateFunction::args_size() const {
+  return _internal_args_size();
+}
+inline void AggregateFunction::clear_args() {
+  args_.Clear();
+}
+inline ::substrait::Expression* AggregateFunction::mutable_args(int index) {
+  // @@protoc_insertion_point(field_mutable:substrait.AggregateFunction.args)
+  return args_.Mutable(index);
+}
+inline ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >*
+AggregateFunction::mutable_args() {
+  // @@protoc_insertion_point(field_mutable_list:substrait.AggregateFunction.args)
+  return &args_;
+}
+inline const ::substrait::Expression& AggregateFunction::_internal_args(int index) const {
+  return args_.Get(index);
+}
+inline const ::substrait::Expression& AggregateFunction::args(int index) const {
+  // @@protoc_insertion_point(field_get:substrait.AggregateFunction.args)
+  return _internal_args(index);
+}
+inline ::substrait::Expression* AggregateFunction::_internal_add_args() {
+  return args_.Add();
+}
+inline ::substrait::Expression* AggregateFunction::add_args() {
+  ::substrait::Expression* _add = _internal_add_args();
+  // @@protoc_insertion_point(field_add:substrait.AggregateFunction.args)
+  return _add;
+}
+inline const ::PROTOBUF_NAMESPACE_ID::RepeatedPtrField< ::substrait::Expression >&
+AggregateFunction::args() const {
+  // @@protoc_insertion_point(field_list:substrait.AggregateFunction.args)
+  return args_;
+}
+
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------
@@ -36306,11 +38675,6 @@ inline void AggregateFunction::set_allocated_output_type(::substrait::Type* outp
 
 PROTOBUF_NAMESPACE_OPEN
 
-template <> struct is_proto_enum< ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat> : ::std::true_type {};
-template <>
-inline const EnumDescriptor* GetEnumDescriptor< ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat>() {
-  return ::substrait::ReadRel_LocalFiles_FileOrFiles_FileFormat_descriptor();
-}
 template <> struct is_proto_enum< ::substrait::JoinRel_JoinType> : ::std::true_type {};
 template <>
 inline const EnumDescriptor* GetEnumDescriptor< ::substrait::JoinRel_JoinType>() {
@@ -36320,6 +38684,11 @@ template <> struct is_proto_enum< ::substrait::SetRel_SetOp> : ::std::true_type 
 template <>
 inline const EnumDescriptor* GetEnumDescriptor< ::substrait::SetRel_SetOp>() {
   return ::substrait::SetRel_SetOp_descriptor();
+}
+template <> struct is_proto_enum< ::substrait::Expression_Cast_FailureBehavior> : ::std::true_type {};
+template <>
+inline const EnumDescriptor* GetEnumDescriptor< ::substrait::Expression_Cast_FailureBehavior>() {
+  return ::substrait::Expression_Cast_FailureBehavior_descriptor();
 }
 template <> struct is_proto_enum< ::substrait::Expression_Subquery_SetPredicate_PredicateOp> : ::std::true_type {};
 template <>
@@ -36340,6 +38709,11 @@ template <> struct is_proto_enum< ::substrait::SortField_SortDirection> : ::std:
 template <>
 inline const EnumDescriptor* GetEnumDescriptor< ::substrait::SortField_SortDirection>() {
   return ::substrait::SortField_SortDirection_descriptor();
+}
+template <> struct is_proto_enum< ::substrait::AggregateFunction_AggregationInvocation> : ::std::true_type {};
+template <>
+inline const EnumDescriptor* GetEnumDescriptor< ::substrait::AggregateFunction_AggregationInvocation>() {
+  return ::substrait::AggregateFunction_AggregationInvocation_descriptor();
 }
 template <> struct is_proto_enum< ::substrait::AggregationPhase> : ::std::true_type {};
 template <>
