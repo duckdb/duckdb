@@ -16,6 +16,9 @@ class InternalError : public std::exception {};
 class ProgrammingError : public std::exception {};
 class NotSupportedError : public std::exception {};
 
+/**
+ * TODO: should this (or something like this) live in the core duckdb library?
+ */
 [[noreturn]] void ThrowHydratedError(const std::string &s) {
 	auto location = s.find(":");
 	auto prefix = s.substr(0, location);
