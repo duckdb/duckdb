@@ -57,10 +57,10 @@ class TestMap(object):
         with pytest.raises(duckdb.InvalidInputException, match='Expected 1 columns from UDF, got 2'):
             print(testrel.map(evil1).df())
 
-        with pytest.raises(RuntimeError, match='UDF column type mismatch'):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF column type mismatch'):
             print(testrel.map(evil2).df())
 
-        with pytest.raises(RuntimeError, match='UDF column name mismatch'):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF column name mismatch'):
             print(testrel.map(evil3).df())
 
         with pytest.raises(AttributeError):
