@@ -5,6 +5,35 @@
 var duckdb = require('./duckdb-binding.js');
 module.exports = exports = duckdb;
 
+/**
+ * Check that errno attribute equals this to check for a duckdb error
+ */
+var ERROR = duckdb.ERROR
+
+/**
+ * Open database in readonly mode
+ */
+var OPEN_READONLY = duckdb.OPEN_READONLY;
+/**
+ * Currently ignored
+ */
+var OPEN_READWRITE = duckdb.OPEN_READWRITE;
+/**
+ * Currently ignored
+ */
+var OPEN_CREATE = duckdb.OPEN_CREATE;
+/**
+ * Currently ignored
+ */
+var OPEN_FULLMUTEX = duckdb.OPEN_FULLMUTEX;
+/**
+ * Currently ignored
+ */
+var OPEN_SHAREDCACHE = duckdb.OPEN_SHAREDCACHE;
+/**
+ * Currently ignored
+ */
+var OPEN_PRIVATECACHE  = duckdb.OPEN_PRIVATECACHE;
 
 // some wrappers for compatibilities sake
 /**
