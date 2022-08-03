@@ -50,8 +50,39 @@ public:
 	}
 
 protected:
-	void SerializeInternal(Serializer &) const override {
-		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	void SerializeInternal(Serializer &serializer) const override {
+		FieldWriter writer(serializer);
+		writer.WriteField(index_type);
+		writer.WriteString(index_name);
+		writer.WriteField(constraint_type);
+		writer.WriteSerializableList<ParsedExpression>(expressions);
+		writer.WriteSerializableList<ParsedExpression>(parsed_expressions);
+		table->Serialize(writer);
+		writer.Finalize();
+	}
+
+public:
+	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer) {
+		auto result = make_unique<CreateIndexInfo>();
+		// result->DeserializeBase(deserializer);
+
+		FieldReader reader(deserializer);
+		result->index_type = reader.ReadRequired<IndexType>();
+		// TODO: something is wrong below
+		result->index_name = reader.ReadRequired<std::string>();
+		result->constraint_type = reader.ReadRequired<IndexConstraintType>();
+		// TODO: something is wrong below
+		result->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+		result->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+
+		// TODO(stephwang): review below for unique_ptr<BaseTableRef> table
+		unique_ptr<TableRef> table;
+		table = BaseTableRef::Deserialize(reader);
+		result->table = unique_ptr_cast<TableRef, BaseTableRef>(move(table));
+
+		reader.Finalize();
+
+		return result;
 	}
 };
 
