@@ -151,3 +151,7 @@ TEST_CASE("Test logical_distinct", "[serialization]") {
 TEST_CASE("Test logical_delete", "[serialization]") {
 	test_helper("DELETE FROM tbl", {"CREATE TABLE tbl (foo INTEGER)"});
 }
+
+TEST_CASE("Test logical_cteref", "[serialization]") {
+	test_helper("with cte1 as (select 42), cte2 as (select * from cte1) select * FROM cte2");
+}
