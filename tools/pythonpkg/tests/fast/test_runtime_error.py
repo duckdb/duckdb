@@ -20,7 +20,7 @@ class TestRuntimeError(object):
 
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.InvalidInputException):
             con.execute("select i::int from tbl").arrow()
 
     def test_register_error(self):
