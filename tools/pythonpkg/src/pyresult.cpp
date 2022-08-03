@@ -316,7 +316,7 @@ void DuckDBPyResult::ChangeToTZType(data_frame &df) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC
 			auto utc_local = df.attr("__getitem__")(result->names[i]).attr("dt").attr("tz_localize")("UTC");
-			auto tz_converted = utc_local.attr("dt").attr("tz_convert")(timezone);
+			auto tz_converted = utc_local.attr("dt").attr("tz_convert")(timezone_config);
 			df.attr("__setitem__")(result->names[i], tz_converted);
 		}
 	}
@@ -330,13 +330,13 @@ data_frame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
 }
 
 data_frame DuckDBPyResult::FetchDF() {
-	timezone = QueryResult::GetConfigTimezone(*result);
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(FetchNumpyInternal());
 }
 
 data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
-	if (timezone.empty()) {
-		timezone = QueryResult::GetConfigTimezone(*result);
+	if (timezone_config.empty()) {
+		timezone_config = QueryResult::GetConfigTimezone(*result);
 	}
 	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
 }
@@ -355,7 +355,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
@@ -389,7 +389,7 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
 
-	auto timezone_config = QueryResult::GetConfigTimezone(*result);
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 

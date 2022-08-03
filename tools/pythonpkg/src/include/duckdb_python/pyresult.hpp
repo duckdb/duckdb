@@ -25,7 +25,7 @@ public:
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, py::object> categories_type;
 
-	string timezone;
+	string timezone_config;
 
 	explicit DuckDBPyResult() {};
 
