@@ -2,7 +2,9 @@ import duckdb
 import pandas as pd
 import pytest
 
-closed = lambda: pytest.raises(RuntimeError, match='connection closed')
+runtime = lambda match: pytest.raises(RuntimeError, match=match)
+closed = lambda: runtime('connection closed')
+no_result_set = lambda: runtime('no open result set')
 
 
 class TestRuntimeError(object):
@@ -29,7 +31,7 @@ class TestRuntimeError(object):
     def test_register_error(self):
         con = duckdb.connect()
         py_obj = "this is a string"
-        with closed():
+        with runtime('Python Object str not suitable to be registered as a view'):
             con.register(py_obj, "v")
 
     def test_arrow_fetch_table_error(self):
@@ -40,7 +42,7 @@ class TestRuntimeError(object):
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
-        with closed():
+        with runtime('There is no query result'):
             res.fetch_arrow_table()
 
     def test_arrow_record_batch_reader_error(self):
@@ -51,7 +53,7 @@ class TestRuntimeError(object):
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
-        with closed():
+        with runtime('There is no query result'):
             res.fetch_arrow_reader(1)
 
     def test_relation_fetchall_error(self):
@@ -136,26 +138,26 @@ class TestRuntimeError(object):
     def test_missing_result_from_conn_exceptions(self):
         conn = duckdb.connect()
 
-        with closed():
+        with no_result_set():
             conn.fetchone()
 
-        with closed():
+        with no_result_set():
             conn.fetchall()
 
-        with closed():
+        with no_result_set():
             conn.fetchnumpy()
 
-        with closed():
+        with no_result_set():
             conn.fetchdf()
 
-        with closed():
+        with no_result_set():
             conn.fetch_df_chunk()
 
-        with closed():
+        with no_result_set():
             conn.fetch_arrow_table()
 
-        # with closed():
+        # with no_result_set():
         #    conn.fetch_arrow_chunk()
 
-        with closed():
+        with no_result_set():
             conn.fetch_record_batch()

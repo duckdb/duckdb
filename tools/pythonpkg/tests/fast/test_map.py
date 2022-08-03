@@ -54,7 +54,7 @@ class TestMap(object):
         def return_empty_df(df):
             return pd.DataFrame()
 
-        with pytest.raises(RuntimeError, match='Unknown error in python binding Invalid Input Error: Expected 1 columns from UDF, got 2'):
+        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 columns from UDF, got 2'):
             print(testrel.map(evil1).df())
 
         with pytest.raises(RuntimeError, match='UDF column type mismatch'):
@@ -79,7 +79,7 @@ class TestMap(object):
 
         testrel.map(return_dataframe).df().equals(pd.DataFrame({'A' : [1]}))
         
-        with pytest.raises(RuntimeError, match='Unknown error in python binding Invalid Input Error: UDF returned more than 1024 rows, which is not allowed.'):
+        with pytest.raises(duckdb.InvalidInputException, match='UDF returned more than 1024 rows, which is not allowed.'):
             testrel.map(return_big_dataframe).df()
 
         empty_rel.map(return_dataframe).df().equals(pd.DataFrame({'A' : []}))
