@@ -55,7 +55,6 @@ Suggests:
     DBItest,
     dplyr,
     dbplyr,
-    nycflights13,
     testthat,
     tibble,
     vctrs,
