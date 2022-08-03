@@ -150,8 +150,6 @@ class TestH2OAIArrow(object):
     ])
     @mark.parametrize('threads', [1, 4])
     def test_group_by(self, threads, function):
-        if not can_run:
-            return
         con = duckdb.connect()
         download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz','G1_1e7_1e2_5_0.csv.gz')
         arrow_table = read_csv('G1_1e7_1e2_5_0.csv.gz')
@@ -172,9 +170,6 @@ class TestH2OAIArrow(object):
     ])
     @mark.usefixtures('large_data')
     def test_join(self, threads, function, large_data):
-        if not can_run:
-            return
-
         large_data.execute(f"PRAGMA threads={threads}")
 
         function(large_data)
