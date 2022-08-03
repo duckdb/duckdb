@@ -160,3 +160,7 @@ TEST_CASE("Test logical_cteref", "[serialization]") {
 TEST_CASE("Test logical_recursive_cte", "[serialization]") {
 	test_helper("with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t");
 }
+
+TEST_CASE("Test ``logical_cross_product``", "[serialization]") {
+	test_helper("SELECT * FROM (SELECT 42 as i) CROSS JOIN (SELECT 42 as j)");
+}

@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(ClientContext &cont
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto column_count = reader.ReadRequired<idx_t>();
 	auto union_all = reader.ReadRequired<bool>();
-	// TODO(stephwang) review if unique_ptr<LogicalOperator> plan is needed
+	// TODO(stephwang): review if unique_ptr<LogicalOperator> plan is needed
 	return unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE(table_index, column_count, union_all, type));
 }
 
