@@ -12,6 +12,7 @@ library("duckdb")
 skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
 
 test_that("round trip arrow stream", {
+  skip_if_not_installed("tidyduck")
 
   ds <- open_dataset(rep("data/userdata1.parquet", 4))
 
@@ -33,6 +34,7 @@ test_that("round trip arrow stream", {
 })
 
 test_that("round trip arrow stream with query", {
+  skip_if_not_installed("tidyduck")
 
   ds <- open_dataset(rep("data/userdata1.parquet", 4))
 
