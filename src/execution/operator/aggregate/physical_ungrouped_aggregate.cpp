@@ -7,6 +7,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
 namespace duckdb {
 
@@ -62,16 +63,55 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
-	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates)
-	    : state(aggregates), finished(false) {
+	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates, ClientContext &client)
+	    : any_distinct(false), state(aggregates), finished(false) {
+		vector<idx_t> distinct_aggregate_indices;
+		//! Determine which (if any) aggregates are distinct
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			auto &aggr = (BoundAggregateExpression &)*(aggregates[i]);
+			if (!aggr.distinct) {
+				continue;
+			}
+			distinct_aggregate_indices.push_back(i);
+		}
+		//! No distinct aggregations
+		if (distinct_aggregate_indices.empty()) {
+			return;
+		}
+		distinct_hashtables.reserve(distinct_aggregate_indices.size());
+		grouped_aggregate_data.reserve(distinct_aggregate_indices.size());
+		any_distinct = true;
+
+		//! For every distinct aggregate, create a hashtable
+		for (idx_t i = 0; i < distinct_aggregate_indices.size(); i++) {
+			auto aggr_idx = distinct_aggregate_indices[i];
+			auto &aggr = (BoundAggregateExpression &)*(aggregates[aggr_idx]);
+
+			GroupingSet set;
+			for (size_t set_idx = 0; set_idx < aggr.children.size(); set_idx++) {
+				set.insert(set_idx);
+			}
+			grouped_aggregate_data.emplace_back();
+			grouped_aggregate_data[i].SetDistinctGroupData(aggregates[aggr_idx]->Copy());
+			distinct_hashtables.emplace_back(set, grouped_aggregate_data[i]);
+			radix_states[i] = distinct_hashtables[i].GetGlobalSinkState(client);
+		}
 	}
 
+	//! Whether any of the aggregates are distinct
+	bool any_distinct;
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The global aggregate state
 	AggregateState state;
 	//! Whether or not the aggregate is finished
 	bool finished;
+	//! Every distinct aggregate has a hash table to keep track of which values have already been seen
+	vector<RadixPartitionedHashTable> distinct_hashtables;
+	//! contains the data for the hashtables
+	vector<GroupedAggregateData> grouped_aggregate_data;
+	//! The global sink states of the hash tables
+	vector<unique_ptr<GlobalSinkState>> radix_states;
 };
 
 class SimpleAggregateLocalState : public LocalSinkState {
@@ -113,7 +153,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SimpleAggregateGlobalState>(aggregates);
+	return make_unique<SimpleAggregateGlobalState>(aggregates, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {

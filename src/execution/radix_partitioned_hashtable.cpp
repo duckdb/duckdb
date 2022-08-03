@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const PhysicalHashAggregate &op_p)
+RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
     : grouping_set(grouping_set_p), op(op_p) {
 
 	for (idx_t i = 0; i < op.groups.size(); i++) {
