@@ -25,6 +25,8 @@ class NotSupportedError : public std::exception {};
 		throw BinderException(message);
 	} else if ("Conversion Error" == prefix) {
 		throw ConversionException(message);
+	} else if ("Catalog Error" == prefix) {
+		throw CatalogException(message);
 	} else {
 		throw std::runtime_error("Unknown error in python binding " + s);
 	}
