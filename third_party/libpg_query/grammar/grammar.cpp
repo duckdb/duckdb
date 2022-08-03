@@ -167,12 +167,15 @@ makeSampleSize(PGValue *sample_size, bool is_percentage) {
 }
 
 static PGNode *
-makeSampleOptions(PGNode *sample_size, char *method, int seed, int location) {
+makeSampleOptions(PGNode *sample_size, char *method, int *seed, int location) {
 	PGSampleOptions *n = makeNode(PGSampleOptions);
 
 	n->sample_size = sample_size;
 	n->method = method;
-	n->seed = seed;
+	if (seed) {
+		n->has_seed = true;
+		n->seed = *seed;
+	}
 	n->location = location;
 
 	return (PGNode *)n;
