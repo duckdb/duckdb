@@ -39,10 +39,10 @@
 namespace duckdb {
 
 // Macro to delete a field if present and set it to nullptr.
-#define DESTROY_FIELD(_x_)         \
-	if (this->_x_ != nullptr) {    \
-		delete (this->_x_);        \ 
-		this->_x_ = nullptr;       \
+#define DESTROY_FIELD(_x_)                                                                                             \
+	if (this->_x_ != nullptr) {                                                                                        \
+		delete (this->_x_);                                                                                            \
+		this->_x_ = nullptr;                                                                                           \
 	}
 
 /**
