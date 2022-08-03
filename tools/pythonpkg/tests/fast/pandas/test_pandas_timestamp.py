@@ -1,6 +1,8 @@
 import duckdb
 import pandas as pd
+from pytest import mark
 
+@mark.parametrize('timezone', ['UTC', 'CET', 'Asia/Kathmandu'])
 def run_pandas_with_tz(timezone):
     con = duckdb.connect()
     con.execute("SET TimeZone = '"+timezone+"'")
@@ -11,12 +13,3 @@ def run_pandas_with_tz(timezone):
     print (df)
     print(duck_df)
     assert df.equals(duck_df)
-
-def test_pandas_tz_utc():
-    run_pandas_with_tz('UTC')
-
-def test_pandas_tz_utc():
-    run_pandas_with_tz('CET')
-
-def test_pandas_tz_utc():
-    run_pandas_with_tz('Asia/Kathmandu')
