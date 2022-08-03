@@ -304,11 +304,15 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	}
 }
 
+static idx_t HTCapacity(idx_t count) {
+	return NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
+}
+
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
 	idx_t count = external ? MaxValue<idx_t>(tuples_per_round, Count()) : Count();
-	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = HTCapacity(count);
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -1041,7 +1045,7 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 	idx_t total_count = 0;
 	idx_t total_size = 0;
 	for (auto &ht : local_hts) {
-		// TODO: SizeInBytes / SwizzledSize overestimates size by a lot because we make copies of heap blocks
+		// TODO: SizeInBytes / SwizzledSize overestimates size by a lot because we make extra references of heap blocks
 		//  Need to re-compute this somehow
 		total_count += ht->Count() + ht->SwizzledCount();
 		total_size += ht->SizeInBytes() + ht->SwizzledSize();
@@ -1051,6 +1055,12 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 		return;
 	}
 
+	// Need to take HT pointer table size into account
+	// Pointer table capacity is a power of two, and we need at least half of it to be empty
+	// Best case one tuple takes up 2 ptr slots (because half must be empty)
+	// Worst case almost 4 ptr slots (because we take the capacity as the next power of two)
+	// We take 3 for the average
+	total_size += total_count * 3 * sizeof(data_ptr_t);
 	idx_t avg_tuple_size = total_size / total_count;
 	tuples_per_round = max_ht_size / avg_tuple_size;
 
@@ -1060,10 +1070,12 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 	}
 
 	// Set the number of radix bits (minimum 4, maximum 8)
-	// TODO: tweak this experimentally
 	for (radix_bits = 4; radix_bits < 8; radix_bits++) {
 		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-		if (total_size / num_partitions < max_ht_size) {
+		auto avg_partition_size = total_size / num_partitions;
+
+		// We aim for at least 8 partitions per probe round (TODO: tweak this experimentally)
+		if (avg_partition_size * 8 < max_ht_size) {
 			break;
 		}
 	}
