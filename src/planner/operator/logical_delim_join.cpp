@@ -4,6 +4,10 @@
 namespace duckdb {
 
 void LogicalDelimJoin::Serialize(FieldWriter &writer) const {
+	if (type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) { // DeliminatorPlanUpdater::VisitOperator can turn a
+		                                                        // delim join into a comparison join
+		return LogicalComparisonJoin::Serialize(writer);
+	}
 	writer.WriteField(join_type);
 	writer.WriteSerializableList(duplicate_eliminated_columns);
 }

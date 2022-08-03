@@ -164,7 +164,17 @@ unique_ptr<Expression> BoundCastExpression::Copy() {
 }
 
 void BoundCastExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	writer.WriteSerializable(*child);
+	writer.WriteSerializable(return_type);
+	writer.WriteField(try_cast);
+}
+
+unique_ptr<Expression> BoundCastExpression::Deserialize(ClientContext &context, ExpressionType type,
+                                                        FieldReader &reader) {
+	auto child = reader.ReadRequiredSerializable<Expression>(context);
+	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto try_cast = reader.ReadRequired<bool>();
+	return make_unique<BoundCastExpression>(move(child), move(target_type), try_cast);
 }
 
 } // namespace duckdb

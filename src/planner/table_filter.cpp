@@ -64,9 +64,22 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &source) {
 	case TableFilterType::CONSTANT_COMPARISON:
 		result = ConstantFilter::Deserialize(reader);
 		break;
+	case TableFilterType::CONJUNCTION_AND:
+		result = ConjunctionAndFilter::Deserialize(reader);
+		break;
+	case TableFilterType::CONJUNCTION_OR:
+		result = ConjunctionOrFilter::Deserialize(reader);
+		break;
+	case TableFilterType::IS_NOT_NULL:
+		result = IsNotNullFilter::Deserialize(reader);
+		break;
+	case TableFilterType::IS_NULL:
+		result = IsNullFilter::Deserialize(reader);
+		break;
 	default:
 		throw NotImplementedException("Unsupported table filter type for deserialization");
 	}
+	reader.Finalize();
 	return result;
 }
 

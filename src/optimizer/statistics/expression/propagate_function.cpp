@@ -14,7 +14,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundFuncti
 		return nullptr;
 	}
 	FunctionStatisticsInput input(func, func.bind_info.get(), stats, expr_ptr);
-	return func.function.statistics(context, input);
+	auto new_stats = func.function.statistics(context, input);
+	if (func.function.function_set_key == DConstants::INVALID_INDEX) {
+		throw BinderException("Function %s propagated to invalid set key", func.function.name);
+	}
+	return new_stats;
 }
 
 } // namespace duckdb

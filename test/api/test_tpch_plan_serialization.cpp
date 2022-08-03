@@ -7,6 +7,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/parser/statement/logical_plan_statement.hpp"
 
 #include "tpch-extension.hpp"
 
@@ -16,7 +17,8 @@
 using namespace duckdb;
 using namespace std;
 
-static void tpch_test_helper(Connection &con, string sql) {
+static void tpch_test_helper(Connection &con, idx_t q) {
+	auto sql = TPCHExtension::GetQuery(q);
 
 	con.BeginTransaction();
 	Parser p;
@@ -26,9 +28,12 @@ static void tpch_test_helper(Connection &con, string sql) {
 	planner.CreatePlan(move(p.statements[0]));
 	auto plan = move(planner.plan);
 
-	Optimizer optimizer(*planner.binder, *con.context);
+	// TODO try serializing both non-optimized and optimized plans
 
+	Optimizer optimizer(*planner.binder, *con.context);
 	plan = optimizer.Optimize(move(plan));
+
+	printf("Original plan:\n%s\n", plan->ToString().c_str());
 
 	BufferedSerializer serializer;
 	plan->Serialize(serializer);
@@ -36,20 +41,21 @@ static void tpch_test_helper(Connection &con, string sql) {
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
-	printf("Deserialized plan\n");
+	new_plan->ResolveOperatorTypes();
 
-	printf("Original plan:\n%s\n", plan->ToString().c_str());
-	printf("New plan:\n%s\n", new_plan->ToString().c_str());
+	auto statement = make_unique<LogicalPlanStatement>(move(new_plan));
+	auto result = con.Query(move(statement));
+	REQUIRE(result->success);
+	COMPARE_CSV(result, TPCHExtension::GetAnswer(0.01, q), true);
 
-	auto optimized_plan = optimizer.Optimize(move(new_plan));
-	printf("Optimized plan:\n%s\n", optimized_plan->ToString().c_str());
 	con.Rollback();
 }
 
-TEST_CASE("plan serialize tpch Q1", "[api]") {
+TEST_CASE("plan serialize tpch", "[api]") {
 	DuckDB db;
 	Connection con(db);
-	con.EnableQueryVerification();
-	con.Query("CALL dbgen(sf=0)");
-	tpch_test_helper(con, TPCHExtension::GetQuery(1));
+	// con.EnableQueryVerification(); // can't because LogicalPlanStatement can't be copied
+	con.Query("CALL dbgen(sf=0.01)");
+	tpch_test_helper(con, 1);
+	//	tpch_test_helper(con, 2);
 }

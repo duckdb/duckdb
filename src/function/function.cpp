@@ -287,7 +287,7 @@ static vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<
 	idx_t best_function = DConstants::INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> candidate_functions;
-	for (const auto& entry : functions.functions) {
+	for (const auto &entry : functions.functions) {
 		auto f_idx = entry.first;
 		auto &func = entry.second;
 		// check the arguments of the function
@@ -506,6 +506,10 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 
 	// now create the function
 	auto return_type = bound_function.return_type;
+	// check if we messed up the function index
+	if (bound_function.function_set_key == DConstants::INVALID_INDEX) {
+		throw BinderException("Function %s bound with invalid set key", bound_function.name);
+	}
 	return make_unique<BoundFunctionExpression>(move(return_type), move(bound_function), move(children),
 	                                            move(bind_info), is_operator);
 }

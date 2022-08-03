@@ -74,11 +74,16 @@ void BoundFunctionExpression::Verify() const {
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
-	D_ASSERT(function.function_set_key != DConstants::INVALID_INDEX);
+	if (function.function_set_key == DConstants::INVALID_INDEX) {
+		throw SerializationException("Invalid function serialization key for %s", function.name);
+	}
 	// TODO need to serialize function arguments too cause e.g. sum changes those
 	writer.WriteField(function.function_set_key);
+
 	writer.WriteField(is_operator);
 	writer.WriteSerializable(return_type);
+	writer.WriteRegularSerializableList(function.arguments);
+
 	writer.WriteSerializableList(children);
 
 	writer.WriteField(bind_info != nullptr);
@@ -98,7 +103,8 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 
 	auto is_operator = reader.ReadRequired<bool>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.ReadRequiredSerializableList<Expression>(context);
+	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 
 	// TODO this is duplicated in logical_get and bound_aggregate_expression more or less, make it a template or so
 
@@ -113,6 +119,10 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 	auto function = functions->functions.GetFunction(function_set_key);
 	unique_ptr<FunctionData> bind_info;
 
+	// sometimes the bind changes those, not sure if we should generically set those
+	function.return_type = return_type;
+	function.arguments = move(arguments);
+
 	auto has_bind_info = reader.ReadRequired<bool>();
 
 	if (has_bind_info) {
@@ -122,6 +132,6 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 		bind_info = function.deserialize(context, reader, function);
 	}
 
-	return make_unique<BoundFunctionExpression>(return_type, function, move(arguments), move(bind_info), is_operator);
+	return make_unique<BoundFunctionExpression>(return_type, function, move(children), move(bind_info), is_operator);
 }
 } // namespace duckdb

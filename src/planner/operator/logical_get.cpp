@@ -85,6 +85,8 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
 	writer.WriteField(function.function_set_key);
+	D_ASSERT(function.function_set_key != DConstants::INVALID_INDEX);
+
 	writer.WriteField(bind_data != nullptr);
 	if (bind_data && !function.serialize) {
 		throw InvalidInputException("Can't serialize table function %s", function.name);
@@ -102,6 +104,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, Logi
 
 	auto name = reader.ReadRequired<string>();
 	auto function_set_key = reader.ReadRequired<idx_t>();
+	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
+
 	auto has_bind_data = reader.ReadRequired<bool>();
 
 	auto &catalog = Catalog::GetCatalog(context);

@@ -82,7 +82,9 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
-	D_ASSERT(function.function_set_key != DConstants::INVALID_INDEX);
+	if (function.function_set_key == DConstants::INVALID_INDEX) {
+		throw SerializationException("Invalid function serialization key for %s", function.name);
+	}
 	writer.WriteField(function.function_set_key);
 	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);

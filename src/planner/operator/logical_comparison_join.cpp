@@ -24,7 +24,7 @@ string LogicalComparisonJoin::ParamsToString() const {
 void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
 	writer.WriteField(join_type);
 	writer.WriteRegularSerializableList(conditions);
-	writer.WriteList<LogicalType>(delim_types);
+	writer.WriteRegularSerializableList(delim_types);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &co
 	auto join_type = reader.ReadRequired<JoinType>();
 	auto result = make_unique<LogicalComparisonJoin>(join_type, type);
 	result->conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition, ClientContext &>(context);
-	result->delim_types = reader.ReadRequiredList<LogicalType>();
+	result->delim_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	return result;
 }
 

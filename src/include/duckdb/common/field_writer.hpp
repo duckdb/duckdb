@@ -231,7 +231,7 @@ public:
 	template <class T, class RETURN_TYPE = unique_ptr<T>>
 	RETURN_TYPE ReadRequiredSerializable() {
 		if (field_count >= max_field_count) {
-			// field is not there, read the default value
+			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
 		}
 		// field is there, read the actual value
@@ -242,7 +242,7 @@ public:
 	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
 	RETURN_TYPE ReadRequiredSerializable(ARGS &&...args) {
 		if (field_count >= max_field_count) {
-			// field is not there, read the default value
+			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
 		}
 		// field is there, read the actual value
@@ -253,7 +253,7 @@ public:
 	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
 	vector<RETURN_TYPE> ReadRequiredSerializableList(ARGS &&...args) {
 		if (field_count >= max_field_count) {
-			// field is not there, read the default value
+			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
 		}
 		// field is there, read the actual value
