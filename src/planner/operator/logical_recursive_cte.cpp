@@ -3,12 +3,18 @@
 namespace duckdb {
 
 void LogicalRecursiveCTE::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField(table_index);
+	writer.WriteField(column_count);
+	writer.WriteField(union_all);
 }
 
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                              FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto table_index = reader.ReadRequired<idx_t>();
+	auto column_count = reader.ReadRequired<idx_t>();
+	auto union_all = reader.ReadRequired<bool>();
+	// TODO(stephwang) review if unique_ptr<LogicalOperator> plan is needed
+	return unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE(table_index, column_count, union_all, type));
 }
 
 } // namespace duckdb

@@ -13,6 +13,10 @@
 namespace duckdb {
 
 class LogicalRecursiveCTE : public LogicalOperator {
+	LogicalRecursiveCTE(idx_t table_index, idx_t column_count, bool union_all, LogicalOperatorType type)
+	    : LogicalOperator(type), union_all(union_all), table_index(table_index), column_count(column_count) {
+	}
+
 public:
 	LogicalRecursiveCTE(idx_t table_index, idx_t column_count, bool union_all, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type)

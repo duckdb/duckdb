@@ -155,3 +155,8 @@ TEST_CASE("Test logical_delete", "[serialization]") {
 TEST_CASE("Test logical_cteref", "[serialization]") {
 	test_helper("with cte1 as (select 42), cte2 as (select * from cte1) select * FROM cte2");
 }
+
+// TODO(stephwang): check why we lost x<3 expression in filter
+TEST_CASE("Test logical_recursive_cte", "[serialization]") {
+	test_helper("with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t");
+}
