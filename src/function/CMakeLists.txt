@@ -1,4 +1,5 @@
 add_subdirectory(aggregate)
+add_subdirectory(cast)
 add_subdirectory(pragma)
 add_subdirectory(scalar)
 add_subdirectory(table)

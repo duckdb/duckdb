@@ -113,6 +113,10 @@ void DBConfig::AddExtensionOption(string name, string description, LogicalType p
 	extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
 }
 
+CastFunctionSet &DBConfig::GetCastFunctions() {
+	return *cast_functions;
+}
+
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
 		return DConstants::INVALID_INDEX;

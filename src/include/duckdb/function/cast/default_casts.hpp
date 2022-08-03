@@ -1,0 +1,68 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/function/cast/default_casts.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
+
+namespace duckdb {
+class CastFunctionSet;
+
+//! Extra data that can be attached to a bind function of a cast, and is available during binding
+struct BindCastInfo {
+	DUCKDB_API virtual ~BindCastInfo();
+};
+
+//! Extra data that can be returned by the bind of a cast, and is available during execution of a cast
+struct BoundCastData {
+	DUCKDB_API virtual ~BoundCastData();
+
+	DUCKDB_API virtual unique_ptr<BoundCastData> Copy() const = 0;
+};
+
+struct CastParameters {
+	//! whether or not to enable strict casting
+	bool strict = false;
+	// out: error message in case cast has failed
+	string *error_message = nullptr;
+	//! The bound cast data (if any)
+	BoundCastData *cast_data = nullptr;
+};
+
+typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+
+struct BoundCastInfo {
+	BoundCastInfo(cast_function_t function, unique_ptr<BoundCastData> cast_data = nullptr); // NOLINT: allow explicit cast from cast_function_t
+
+	cast_function_t function;
+	unique_ptr<BoundCastData> cast_data;
+
+public:
+	BoundCastInfo Copy();
+};
+
+struct BindCastInput {
+	BindCastInput(CastFunctionSet &function_set, BindCastInfo *info) : function_set(function_set), info(info) {}
+
+	CastFunctionSet &function_set;
+	BindCastInfo *info;
+};
+
+struct DefaultCasts {
+	static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+
+	static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+
+private:
+	static BoundCastInfo NumericCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo StructCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+};
+
+
+} // namespace duckdb
