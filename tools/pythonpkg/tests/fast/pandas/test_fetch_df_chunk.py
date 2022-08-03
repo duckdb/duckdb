@@ -91,6 +91,6 @@ class TestType(object):
         query = duckdb_cursor.execute("SELECT a FROM t")
         
         # Return -1 vector should not work
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             cur_chunk = query.fetch_df_chunk(-1)
         duckdb_cursor.execute("DROP TABLE t")

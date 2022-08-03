@@ -39,20 +39,20 @@ def aggregation_generic(aggregation_function,assertion_answers):
 
     if len(assertion_answers) < 3:
         # Shouldn't be able to aggregate on string
-        with pytest.raises(Exception, match='No function matches the given name'):
+        with pytest.raises(duckdb.BinderException, match='No function matches the given name'):
             aggregation_function('k').execute().fetchall()
     else:
         print (aggregation_function('k').execute().fetchall())
         munge_compare( aggregation_function('k').execute().fetchall(), assertion_answers[2])
     # Check empty
-    with pytest.raises(Exception, match='incompatible function arguments'):
+    with pytest.raises(TypeError, match='incompatible function arguments'):
         aggregation_function().execute().fetchall()
     # Check Null
-    with pytest.raises(Exception, match='incompatible function arguments'):
+    with pytest.raises(TypeError, match='incompatible function arguments'):
         aggregation_function(None).execute().fetchall()
         
     # Check broken
-    with pytest.raises(Exception, match='Referenced column "nonexistant" not found'):
+    with pytest.raises(duckdb.BinderException, match='Referenced column "nonexistant" not found'):
         aggregation_function('nonexistant').execute().fetchall()
 
 class TestRAPIAggregations(object):
@@ -115,14 +115,14 @@ class TestRAPIAggregations(object):
         assert aggregation_function(extra_param,'k').execute().fetchone() == ('a',)
 
         # Check empty
-        with pytest.raises(Exception, match='incompatible function arguments'):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             aggregation_function().execute().fetchone()
         # Check Null
-        with pytest.raises(Exception, match='incompatible function arguments'):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             aggregation_function(None).execute().fetchone()
     
         # Check broken
-        with pytest.raises(Exception, match='incompatible function arguments.'):
+        with pytest.raises(TypeError, match='incompatible function arguments.'):
             aggregation_function('bla').execute().fetchone()
         duckdb_cursor.execute("drop table bla")
 
@@ -131,7 +131,7 @@ class TestRAPIAggregations(object):
         rel = initialize(con)
         con.execute("insert into bla values (1,2.1,'a'), (NULL, NULL, NULL)")
         munge_compare(rel.value_counts('i').execute().fetchall(),[(None, 0), (1, 2), (2, 1)])
-        with pytest.raises(Exception, match='Only one column is accepted'):
+        with pytest.raises(RuntimeError, match='Only one column is accepted'):
             rel.value_counts('i,j').execute().fetchall()
 
     def test_length(self, duckdb_cursor):

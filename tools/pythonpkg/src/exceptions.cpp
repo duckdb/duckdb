@@ -29,6 +29,8 @@ class NotSupportedError : public std::exception {};
 		throw CatalogException(message);
 	} else if ("INTERNAL Error" == prefix) {
 		throw InternalException(message);
+	} else if ("Invalid Input Error" == prefix) {
+		throw InvalidInputException(message);
 	} else {
 		throw std::runtime_error("Unknown error in python binding " + s);
 	}

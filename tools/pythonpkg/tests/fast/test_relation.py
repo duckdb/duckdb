@@ -138,14 +138,14 @@ class TestRelation(object):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             rel.query("select j from test")
 
     def test_execute_fail(self,duckdb_cursor):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError, match='incompatible function arguments'):
             rel.execute("select j from test")
 
     def test_df_proj(self,duckdb_cursor):

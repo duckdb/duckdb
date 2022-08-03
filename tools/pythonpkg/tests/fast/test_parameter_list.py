@@ -15,5 +15,5 @@ class TestParameterList(object):
         df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
         conn.execute("create table bool_table (a bool)")
         conn.execute("insert into bool_table values (TRUE)")
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.NotImplementedException, match='Unable to transform'):
             res = conn.execute("select count(*) from bool_table where a =?",[df_in])
