@@ -291,7 +291,9 @@ BlockPointer SwizzleablePointer::Serialize(ART &art, duckdb::MetaBlockWriter &wr
 
 void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
 
-	// TODO: debug if I am correctly going through the key bytes with depth (+ mismatch_pos)
+	// TODO: go over this code and see where I do need to delete stuff
+	// TODO: especially when I am creating/growing nodes
+	// TODO: I also might want to delete r_art/r_node in the process
 
 	// make sure that this node has a shorter or equal prefix length than other_node
 	if (l_node->prefix_length > r_node->prefix_length) {
@@ -352,48 +354,93 @@ void Node::ResolvePrefixesAndMerge(ART &l_art, ART &r_art, Node *l_node, Node *r
 
 void Node::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
 
-	// make sure that the smaller node is l_node
-	if (l_node->type > r_node->type) {
+	// always try to merge the smaller node into the bigger node
+	// because maybe there is enough free space in the bigger node to fit the smaller one
+	// without too much recursion
+
+	// make sure that l_node has the bigger node type
+	if (l_node->type < r_node->type) {
 		Merge(r_art, l_art, r_node, l_node, depth);
 		return;
 	}
 
-	switch (l_node->type) {
-	case NodeType::NLeaf: {
+	if (r_node->type == NodeType::NLeaf) {
 		// leaf - leaf
-		// leaf - n4
-		// leaf - n16
-		// leaf - n48
-		// leaf - n256
-		Leaf::Merge(l_node, r_node, depth);
-		break;
+		// node - leaf
+		Leaf::Merge(l_art, r_art, l_node, r_node, depth);
+		return;
 	}
-	case NodeType::N4: {
-		// n4 - n4
-		// n4 - n16
-		// n4 - n48
-		// n4 - n256
-		Node4::Merge(l_node, r_node, depth);
-		break;
-	}
-	case NodeType::N16: {
-		// n16 - n16
-		// n16 - n48
-		// n16 - n256
-		Node16::Merge(l_node, r_node, depth);
+
+	switch (r_node->type) {
+	case NodeType::N256: {
+		Node::MergeNodeWithNode256(l_art, r_art, l_node, r_node, depth);
 		break;
 	}
 	case NodeType::N48: {
-		// n48 - n48
-		// n48 - n256
-		Node48::Merge(l_node, r_node, depth);
+		Node::MergeNodeWithNode48(l_art, r_art, l_node, r_node, depth);
 		break;
 	}
-	case NodeType::N256: {
-		// n256 - n256
-		Node256::Merge(l_node, r_node, depth);
+	case NodeType::N16: {
+		Node::MergeNodeWithNode16OrNode4<Node16>(l_art, r_art, l_node, r_node, depth);
 		break;
 	}
+	case NodeType::N4: {
+		Node::MergeNodeWithNode16OrNode4<Node4>(l_art, r_art, l_node, r_node, depth);
+		break;
+	}
+	default: {
+		D_ASSERT(0);
+	}
+	}
+}
+
+template <class R_NODE_TYPE>
+void Node::MergeNodeWithNode16OrNode4(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+
+	R_NODE_TYPE *r_n = (R_NODE_TYPE *)r_node;
+
+	for (idx_t i = 0; i < r_node->count; i++) {
+
+		auto l_child_pos = l_node->GetChildPos(r_n->key[i]);
+		Node::MergeByte(l_art, r_art, l_node, r_node, depth, l_child_pos, i, r_n->key[i]);
+	}
+}
+
+void Node::MergeNodeWithNode48(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+
+	Node48 *r_n = (Node48 *)r_node;
+
+	for (idx_t i = 0; i < 256; i++) {
+		if (r_n->child_index[i] != Node::EMPTY_MARKER) {
+
+			auto l_child_pos = l_node->GetChildPos(i);
+			auto key_byte = (uint8_t)i;
+			Node::MergeByte(l_art, r_art, l_node, r_node, depth, l_child_pos, i, key_byte);
+		}
+	}
+}
+
+void Node::MergeNodeWithNode256(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
+
+	for (idx_t i = 0; i < 256; i++) {
+		if (r_node->GetChildPos(i) != DConstants::INVALID_INDEX) {
+
+			auto l_child_pos = l_node->GetChildPos(i);
+			auto key_byte = (uint8_t)i;
+			Node::MergeByte(l_art, r_art, l_node, r_node, depth, l_child_pos, i, key_byte);
+		}
+	}
+}
+
+void Node::MergeByte(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth, idx_t &l_child_pos, idx_t &r_pos,
+                     uint8_t &key_byte) {
+
+	auto r_child = r_node->GetChild(r_art, r_pos);
+	if (l_child_pos == DConstants::INVALID_INDEX) {
+		Node::InsertChildNode(l_node, key_byte, r_child);
+	} else {
+		// recurse
+		Node::ResolvePrefixesAndMerge(l_art, r_art, l_node->GetChild(l_art, l_child_pos), r_child, depth + 1);
 	}
 }
 

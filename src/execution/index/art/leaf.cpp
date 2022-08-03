@@ -97,62 +97,53 @@ void Leaf::Remove(row_t row_id) {
 	}
 }
 
-void Leaf::Merge(Node *l_node, Node *r_node, idx_t depth) {
+void Leaf::Merge(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
 
-	Leaf *l_n = (Leaf *)l_node;
-
-	switch (r_node->type) {
-	case NodeType::NLeaf: {
-		Leaf *r_n = (Leaf *)r_node;
-		Leaf::MergeNLeafNLeaf(l_n, r_n, depth);
-		break;
-	}
-	case NodeType::N4: {
-		Node4 *r_n = (Node4 *)r_node;
-		Leaf::MergeNLeafNode4(l_n, r_n, depth);
-		break;
-	}
-	case NodeType::N16: {
-		// TODO
-		break;
-	}
-	case NodeType::N48: {
-		// TODO
-		break;
-	}
-	case NodeType::N256: {
-		// TODO
-		break;
-	}
+	if (l_node->type == NodeType::NLeaf) {
+		Leaf::MergeNLeafNLeaf(l_node, r_node);
+	} else {
+		Leaf::MergeNodeNLeaf(l_art, r_art, l_node, r_node, depth);
 	}
 }
 
-void Leaf::MergeNLeafNLeaf(Leaf *l_node, Leaf *r_node, idx_t depth) {
+void Leaf::MergeNLeafNLeaf(Node *l_node, Node *r_node) {
 
-	// push row_ids of l_node in a map to avoid duplicates
-	unordered_map<row_t, bool> l_node_row_ids;
-	for (idx_t i = 0; i < l_node->num_elements; i++) {
-		l_node_row_ids[l_node->GetRowId(i)] = true;
+	Leaf *l_n = (Leaf *)l_node;
+	Leaf *r_n = (Leaf *)r_node;
+
+	// push row_ids of l_n in a map to avoid duplicates
+	unordered_map<row_t, bool> l_n_row_ids;
+	for (idx_t i = 0; i < l_n->num_elements; i++) {
+		l_n_row_ids[l_n->GetRowId(i)] = true;
 	}
 
-	// append non-duplicate row_ids to l_node
-	for (idx_t i = 0; i < r_node->num_elements; i++) {
-		if (!l_node_row_ids[r_node->GetRowId(i)]) {
-			l_node->Insert(r_node->GetRowId(i));
+	// append non-duplicate row_ids to l_n
+	for (idx_t i = 0; i < r_n->num_elements; i++) {
+		if (!l_n_row_ids[r_n->GetRowId(i)]) {
+			l_n->Insert(r_n->GetRowId(i));
 		}
 	}
 }
 
-void Leaf::MergeNLeafNode4(Leaf *l_node, Node4 *r_node, idx_t depth) {
-}
+void Leaf::MergeNodeNLeaf(ART &l_art, ART &r_art, Node *l_node, Node *r_node, idx_t depth) {
 
-void Leaf::MergeNLeafNode16(Leaf *l_node, Node16 *r_node, idx_t depth) {
-}
+	// merging any leaf with another node always looks like this
+	// because by our construction a key cannot be contained in another key
+	// so either the leaf becomes a child of the node, or we recurse
 
-void Leaf::MergeNLeafNode48(Leaf *l_node, Node48 *r_node, idx_t depth) {
-}
+	Leaf *r_n = (Leaf *)r_node;
+	D_ASSERT(r_n->value->len > depth);
 
-void Leaf::MergeNLeafNode256(Leaf *l_node, Node256 *r_node, idx_t depth) {
+	auto &value = *r_n->value;
+	auto child_pos = l_node->GetChildPos(value[depth]);
+
+	if (child_pos == DConstants::INVALID_INDEX) {
+		Node::InsertChildNode(l_node, value[depth], r_node);
+	} else {
+		// recurse
+		auto child_node = l_node->GetChild(l_art, child_pos);
+		Node::ResolvePrefixesAndMerge(l_art, r_art, child_node, r_node, depth + 1);
+	}
 }
 
 } // namespace duckdb

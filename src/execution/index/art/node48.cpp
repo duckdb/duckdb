@@ -113,20 +113,4 @@ void Node48::Erase(Node *&node, int pos, ART &art) {
 	}
 }
 
-void Node48::Merge(Node *l_node, Node *r_node, idx_t depth) {
-
-	Node48 *n = (Node48 *)l_node;
-
-	switch (r_node->type) {
-	case NodeType::N48: {
-		// TODO
-		break;
-	}
-	case NodeType::N256: {
-		// TODO
-		break;
-	}
-	}
-}
-
 } // namespace duckdb
