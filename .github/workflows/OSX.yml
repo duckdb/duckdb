@@ -65,6 +65,7 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       BUILD_EXCEL: 1
+      BUILD_JEMALLOC: 1
       OSX_BUILD_UNIVERSAL: 1
 
     steps:
