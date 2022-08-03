@@ -30,6 +30,83 @@ string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionF
 	return ExceptionFormatValue::Format(msg, values);
 }
 
+ExceptionType Exception::StringToExceptionType(const std::string &code) {
+	if (code == "Invalid")
+		return ExceptionType::INVALID;
+	else if (code == "Out of Range")
+		return ExceptionType::OUT_OF_RANGE;
+	else if (code == "Conversion")
+		return ExceptionType::CONVERSION;
+	else if (code == "Unknown Type")
+		return ExceptionType::UNKNOWN_TYPE;
+	else if (code == "Decimal")
+		return ExceptionType::DECIMAL;
+	else if (code == "Mismatch Type")
+		return ExceptionType::MISMATCH_TYPE;
+	else if (code == "Divide by Zero")
+		return ExceptionType::DIVIDE_BY_ZERO;
+	else if (code == "Object Size")
+		return ExceptionType::OBJECT_SIZE;
+	else if (code == "Invalid type")
+		return ExceptionType::INVALID_TYPE;
+	else if (code == "Serialization")
+		return ExceptionType::SERIALIZATION;
+	else if (code == "TransactionContext")
+		return ExceptionType::TRANSACTION;
+	else if (code == "Not implemented")
+		return ExceptionType::NOT_IMPLEMENTED;
+	else if (code == "Expression")
+		return ExceptionType::EXPRESSION;
+	else if (code == "Catalog")
+		return ExceptionType::CATALOG;
+	else if (code == "Parser")
+		return ExceptionType::PARSER;
+	else if (code == "Binder")
+		return ExceptionType::BINDER;
+	else if (code == "Planner")
+		return ExceptionType::PLANNER;
+	else if (code == "Scheduler")
+		return ExceptionType::SCHEDULER;
+	else if (code == "Executor")
+		return ExceptionType::EXECUTOR;
+	else if (code == "Constraint")
+		return ExceptionType::CONSTRAINT;
+	else if (code == "Index")
+		return ExceptionType::INDEX;
+	else if (code == "Stat")
+		return ExceptionType::STAT;
+	else if (code == "Connection")
+		return ExceptionType::CONNECTION;
+	else if (code == "Syntax")
+		return ExceptionType::SYNTAX;
+	else if (code == "Settings")
+		return ExceptionType::SETTINGS;
+	else if (code == "Optimizer")
+		return ExceptionType::OPTIMIZER;
+	else if (code == "NullPointer")
+		return ExceptionType::NULL_POINTER;
+	else if (code == "IO")
+		return ExceptionType::IO;
+	else if (code == "INTERRUPT")
+		return ExceptionType::INTERRUPT;
+	else if (code == "FATAL")
+		return ExceptionType::FATAL;
+	else if (code == "INTERNAL")
+		return ExceptionType::INTERNAL;
+	else if (code == "Invalid Input")
+		return ExceptionType::INVALID_INPUT;
+	else if (code == "Out of Memory")
+		return ExceptionType::OUT_OF_MEMORY;
+	else if (code == "Permission")
+		return ExceptionType::PERMISSION;
+	else if (code == "Parameter Not Resolved")
+		return ExceptionType::PARAMETER_NOT_RESOLVED;
+	else if (code == "Parameter Not Allowed")
+		return ExceptionType::PARAMETER_NOT_ALLOWED;
+	else
+		throw std::runtime_error("Unknown error: " + code);
+}
+
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	switch (type) {
 	case ExceptionType::INVALID:

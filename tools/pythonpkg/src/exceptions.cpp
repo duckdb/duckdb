@@ -21,20 +21,24 @@ class NotSupportedError : public std::exception {};
  */
 [[noreturn]] void ThrowHydratedError(const std::string &s) {
 	auto location = s.find(":");
-	auto prefix = s.substr(0, location);
 	auto message = s.substr(location + 2); // +2 to skip colon and space
+	location = s.rfind(" ", location);
+	auto prefix = s.substr(0, location);
 
-	if ("Binder Error" == prefix) {
+	auto exception_type = Exception::StringToExceptionType(prefix);
+
+	switch (exception_type) {
+	case ExceptionType::BINDER:
 		throw BinderException(message);
-	} else if ("Conversion Error" == prefix) {
+	case ExceptionType::CONVERSION:
 		throw ConversionException(message);
-	} else if ("Catalog Error" == prefix) {
+	case ExceptionType::CATALOG:
 		throw CatalogException(message);
-	} else if ("INTERNAL Error" == prefix) {
+	case ExceptionType::INTERNAL:
 		throw InternalException(message);
-	} else if ("Invalid Input Error" == prefix) {
+	case ExceptionType::INVALID_INPUT:
 		throw InvalidInputException(message);
-	} else {
+	default:
 		throw std::runtime_error("Unknown error in python binding " + s);
 	}
 }
