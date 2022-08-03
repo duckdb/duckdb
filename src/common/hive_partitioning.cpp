@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-static std::map<string, string> GetKnownColumnValues(string &filename, bool filename_col, bool hive_partition_cols) {
-	std::map<string, string> result;
+static unordered_map<string, string> GetKnownColumnValues(string &filename, bool filename_col, bool hive_partition_cols) {
+	unordered_map<string, string> result;
 
 	if (filename_col) {
 		result["filename"] = filename;
@@ -28,7 +28,7 @@ static std::map<string, string> GetKnownColumnValues(string &filename, bool file
 }
 
 // Takes an expression and converts a list of known column_refs to constants
-static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr, map<string, string> &known_column_values) {
+static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr, unordered_map<string, string> &known_column_values) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
 		auto lookup = known_column_values.find(expr->alias);
 		if (lookup != known_column_values.end()) {

@@ -223,7 +223,6 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                               vector<unique_ptr<Expression>> &filters) {
-	;
 	auto data = (ReadCSVData *)bind_data_p;
 	string first_file = data->files[0];
 
