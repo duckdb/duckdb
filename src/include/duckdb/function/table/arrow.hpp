@@ -37,6 +37,7 @@ enum class ArrowDateTimeType : uint8_t {
 struct ArrowConvertData {
 	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
 	ArrowConvertData() {};
+
 	//! Hold type of dictionary
 	LogicalType dictionary_type;
 	//! If its a variable size type (e.g., strings, blobs, lists) holds which type it is

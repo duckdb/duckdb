@@ -21,6 +21,7 @@
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include <list>
+#include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
@@ -525,6 +526,10 @@ struct ArrowChunkConverter {
 };
 
 void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array) {
+	ArrowAppender appender(input.GetTypes(), input.size());
+	appender.Append(input);
+	*out_array = appender.Finalize();
+	return;
 	input.Flatten();
 	D_ASSERT(out_array);
 
