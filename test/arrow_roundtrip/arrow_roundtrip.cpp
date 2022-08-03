@@ -12,8 +12,9 @@
 using namespace duckdb;
 
 struct ArrowRoundtripFactory {
-	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p, unique_ptr<MaterializedQueryResult> result_p) :
-		types(move(types_p)), names(move(names_p)), tz(move(tz_p)), result(move(result_p)) {
+	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
+	                      unique_ptr<MaterializedQueryResult> result_p)
+	    : types(move(types_p)), names(move(names_p)), tz(move(tz_p)), result(move(result_p)) {
 	}
 
 	vector<LogicalType> types;
@@ -23,7 +24,8 @@ struct ArrowRoundtripFactory {
 
 public:
 	struct ArrowArrayStreamData {
-		ArrowArrayStreamData(ArrowRoundtripFactory &factory) : factory(factory) {}
+		ArrowArrayStreamData(ArrowRoundtripFactory &factory) : factory(factory) {
+		}
 
 		ArrowRoundtripFactory &factory;
 	};
@@ -32,7 +34,7 @@ public:
 		if (!stream->private_data) {
 			throw InternalException("No private data!?");
 		}
-		auto &data = *((ArrowArrayStreamData *) stream->private_data);
+		auto &data = *((ArrowArrayStreamData *)stream->private_data);
 		data.factory.ToArrowSchema(out);
 		return 0;
 	}
@@ -41,7 +43,7 @@ public:
 		if (!stream->private_data) {
 			throw InternalException("No private data!?");
 		}
-		auto &data = *((ArrowArrayStreamData *) stream->private_data);
+		auto &data = *((ArrowArrayStreamData *)stream->private_data);
 		auto chunk = data.factory.result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			return 0;
@@ -58,7 +60,7 @@ public:
 		if (!stream->private_data) {
 			return;
 		}
-		auto data = (ArrowArrayStreamData *) stream->private_data;
+		auto data = (ArrowArrayStreamData *)stream->private_data;
 		delete data;
 		stream->private_data = nullptr;
 	}
@@ -128,4 +130,6 @@ static void TestArrowRoundtrip(const string &query) {
 TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT * FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then null else i end i FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT case when i%2=0 then true else false end b FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT case when i%2=0 then i%4=0 else null end b FROM range(10) tbl(i)");
 }
