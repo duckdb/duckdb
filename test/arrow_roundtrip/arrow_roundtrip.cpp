@@ -6,6 +6,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -14,14 +15,15 @@ using namespace duckdb;
 
 struct ArrowRoundtripFactory {
 	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
-	                      unique_ptr<QueryResult> result_p)
-	    : types(move(types_p)), names(move(names_p)), tz(move(tz_p)), result(move(result_p)) {
+	                      unique_ptr<QueryResult> result_p, bool big_result)
+	    : types(move(types_p)), names(move(names_p)), tz(move(tz_p)), result(move(result_p)), big_result(big_result) {
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
 	string tz;
 	unique_ptr<QueryResult> result;
+	bool big_result;
 
 public:
 	struct ArrowArrayStreamData {
@@ -45,11 +47,27 @@ public:
 			throw InternalException("No private data!?");
 		}
 		auto &data = *((ArrowArrayStreamData *)stream->private_data);
-		auto chunk = data.factory.result->Fetch();
-		if (!chunk || chunk->size() == 0) {
-			return 0;
+		if (!data.factory.big_result) {
+			auto chunk = data.factory.result->Fetch();
+			if (!chunk || chunk->size() == 0) {
+				return 0;
+			}
+			ArrowConverter::ToArrowArray(*chunk, out);
+		} else {
+			ArrowAppender appender(data.factory.result->types, STANDARD_VECTOR_SIZE);
+			idx_t count = 0;
+			while (true) {
+				auto chunk = data.factory.result->Fetch();
+				if (!chunk || chunk->size() == 0) {
+					break;
+				}
+				count += chunk->size();
+				appender.Append(*chunk);
+			}
+			if (count > 0) {
+				*out = appender.Finalize();
+			}
 		}
-		ArrowConverter::ToArrowArray(*chunk, out);
 		return 0;
 	}
 
@@ -96,7 +114,7 @@ public:
 	}
 };
 
-void RunArrowComparison(Connection &con, const string &query) {
+void RunArrowComparison(Connection &con, const string &query, bool big_result = false) {
 	// run the query
 	auto initial_result = con.Query(query);
 	if (!initial_result->success) {
@@ -107,7 +125,7 @@ void RunArrowComparison(Connection &con, const string &query) {
 	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowRoundtripFactory factory(move(types), move(names), tz, move(initial_result));
+	ArrowRoundtripFactory factory(move(types), move(names), tz, move(initial_result), big_result);
 
 	// construct the arrow scan
 	vector<Value> params;
@@ -152,6 +170,7 @@ static void TestArrowRoundtrip(const string &query) {
 	DuckDB db;
 	Connection con(db);
 
+	RunArrowComparison(con, query, true);
 	RunArrowComparison(con, query);
 }
 
@@ -166,10 +185,12 @@ static void TestParquetRoundtrip(const string &path) {
 
 	// run the query
 	auto query = "SELECT * FROM parquet_scan('" + path + "')";
+	RunArrowComparison(con, query, true);
 	RunArrowComparison(con, query);
 }
 
 TEST_CASE("Test arrow roundtrip", "[arrow]") {
+	TestArrowRoundtrip("SELECT * FROM range(10000) tbl(i) UNION ALL SELECT NULL");
 	TestArrowRoundtrip("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)");
 	TestArrowRoundtrip("SELECT * FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then null else i end i FROM range(10) tbl(i)");

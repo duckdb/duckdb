@@ -650,13 +650,12 @@ struct AppendableRList {
 
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
                      ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace, idx_t chunk_size) {
-	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
-	if (!data_chunk || data_chunk->size() == 0) {
+	auto count = ArrowUtil::FetchChunk(result, chunk_size, &arrow_data);
+	if (count == 0) {
 		return false;
 	}
 	string timezone_config = QueryResult::GetConfigTimezone(*result);
 	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
-	ArrowConverter::ToArrowArray(*data_chunk, &arrow_data);
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
 	return true;

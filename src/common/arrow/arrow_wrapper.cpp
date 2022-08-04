@@ -7,7 +7,7 @@
 #include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
-
+#include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
@@ -186,6 +186,12 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 }
 
 unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
+	if (result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = (StreamQueryResult &)result;
+		if (!stream_result.IsOpen()) {
+			return nullptr;
+		}
+	}
 	auto chunk = result.Fetch();
 	if (!result.success) {
 		throw std::runtime_error(result.error);
@@ -193,19 +199,21 @@ unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
 	return chunk;
 }
 
-unique_ptr<DataChunk> ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size) {
-	auto data_chunk = FetchNext(*result);
-	if (!data_chunk) {
-		return data_chunk;
-	}
-	while (data_chunk->size() < chunk_size) {
-		auto next_chunk = FetchNext(*result);
-		if (!next_chunk || next_chunk->size() == 0) {
+idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out) {
+	idx_t count = 0;
+	ArrowAppender appender(result->types, chunk_size);
+	while (count < chunk_size) {
+		auto data_chunk = FetchNext(*result);
+		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
-		data_chunk->Append(*next_chunk, true);
+		count += data_chunk->size();
+		appender.Append(*data_chunk);
 	}
-	return data_chunk;
+	if (count > 0) {
+		*out = appender.Finalize();
+	}
+	return count;
 }
 
 } // namespace duckdb

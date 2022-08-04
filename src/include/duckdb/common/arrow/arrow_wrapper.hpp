@@ -55,7 +55,7 @@ public:
 
 class ArrowUtil {
 public:
-	static unique_ptr<DataChunk> FetchChunk(QueryResult *result, idx_t chunk_size);
+	static idx_t FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out);
 
 private:
 	static unique_ptr<DataChunk> FetchNext(QueryResult &result);

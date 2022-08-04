@@ -563,7 +563,6 @@ struct ArrowMapData {
 		auto &key_vector = ListVector::GetEntry(*struct_entries[0]);
 		auto &value_vector = ListVector::GetEntry(*struct_entries[1]);
 		auto list_size = child_indices.size();
-		D_ASSERT(list_size == ListVector::GetListSize(*struct_entries[1]));
 		key_vector.Slice(child_sel, list_size);
 		value_vector.Slice(child_sel, list_size);
 
