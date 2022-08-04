@@ -45,7 +45,7 @@ statement ok
 INSERT INTO t SELECT i, i FROM RANGE(2048) tbl(i)
 
 # Insert uncommitted data 
-statement ok 
+statement ok
 BEGIN TRANSACTION
 
 statement ok 
@@ -172,4 +172,46 @@ query I
 SELECT COUNT(*) FROM t WHERE j IS NULL
 ----
 0
+
+# Scenario #4, Create table then Alter in the same tran
+# Set in the same tran
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+ALTER TABLE t ALTER COLUMN i SET NOT NULL
+
+statement ok
+INSERT INTO t SELECT 1 FROM RANGE(1024)
+
+statement ok
+COMMIT
+
+statement error
+INSERT INTO t VALUES(NULL)
+
+# Drop in the same tran
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER NOT NULL)
+
+statement ok
+INSERT INTO t SELECT 1 FROM RANGE(1024)
+
+statement ok
+ALTER TABLE t ALTER COLUMN i DROP NOT NULL
+
+statement ok
+INSERT INTO t VALUES(NULL)
+
+statement ok
+COMMIT
+
+statement ok
+INSERT INTO t VALUES(NULL)
 
