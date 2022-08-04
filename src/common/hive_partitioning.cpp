@@ -52,7 +52,7 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 		}
 	} else {
 		ExpressionIterator::EnumerateChildren(
-		    *expr, [&](unique_ptr<Expression> &child) { ConvertKnownColRefToConstants(child, known_column_values); });
+		    *expr, [&](unique_ptr<Expression> &child) { ConvertKnownColRefToConstants(child, known_column_values, table_index); });
 	}
 }
 
