@@ -1,4 +1,6 @@
+#include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -14,18 +16,19 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	if (bind_data && !function.serialize) {
 		throw InvalidInputException("Can't serialize copy function %s", function.name);
 	}
+
 	function.serialize(writer, *bind_data, function);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                            FieldReader &reader) {
-	auto file_path = reader.ReadRequired<string>();
-	auto use_tmp_file = reader.ReadRequired<bool>();
-	auto is_file_and_exists = reader.ReadRequired<bool>();
+	// auto file_path = reader.ReadRequired<string>();
+	// auto use_tmp_file = reader.ReadRequired<bool>();
+	// auto is_file_and_exists = reader.ReadRequired<bool>();
 
 	auto copy_func_name = reader.ReadRequired<string>();
 
-	auto has_bind_data = reader.ReadRequired<bool>();
+	// auto has_bind_data = reader.ReadRequired<bool>();
 
 	auto &catalog = Catalog::GetCatalog(context);
 	auto func_catalog =
@@ -35,6 +38,8 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(ClientContext &contex
 	}
 	auto copy_func_catalog_entry = (CopyFunctionCatalogEntry *)func_catalog;
 	// TODO(stephwang): find out how to get CopyFunction from CopyFunctionCatalogEntry
+	CopyFunction func = copy_func_catalog_entry->function;
+	return nullptr;
 }
 
 } // namespace duckdb
