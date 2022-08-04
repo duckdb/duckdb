@@ -31,7 +31,7 @@ private:
 	//! The types of the chunks that will be appended in
 	vector<LogicalType> types;
 	//! The root arrow append data
-	vector<ArrowAppendData> root_data;
+	vector<unique_ptr<ArrowAppendData>> root_data;
 	//! The total row count that has been appended
 	idx_t row_count = 0;
 };

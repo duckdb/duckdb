@@ -106,7 +106,7 @@ struct ArrowAppendData {
 	finalize_t finalize = nullptr;
 
 	// child data (if any)
-	vector<ArrowAppendData> child_data;
+	vector<unique_ptr<ArrowAppendData>> child_data;
 
 	//! the arrow array C API data, only set after Finalize
 	unique_ptr<ArrowArray> array;
@@ -117,7 +117,7 @@ struct ArrowAppendData {
 //===--------------------------------------------------------------------===//
 // ArrowAppender
 //===--------------------------------------------------------------------===//
-static ArrowAppendData InitializeArrowChild(const LogicalType &type, idx_t capacity);
+static unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity);
 static ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_data);
 
 ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity) : types(move(types_p)) {
@@ -265,7 +265,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		result.main_buffer.reserve(capacity * sizeof(TGT));
 		// construct the enum child data
 		auto enum_data = InitializeArrowChild(LogicalType::VARCHAR, EnumType::GetSize(type));
-		enum_data.append_vector(enum_data, EnumType::GetValuesInsertOrder(type), EnumType::GetSize(type));
+		enum_data->append_vector(*enum_data, EnumType::GetValuesInsertOrder(type), EnumType::GetSize(type));
 		result.child_data.push_back(move(enum_data));
 	}
 
@@ -273,7 +273,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 		result->n_buffers = 2;
 		result->buffers[1] = append_data.main_buffer.data();
 		// finalize the enum child data, and assign it to the dictionary
-		result->dictionary = FinalizeArrowChild(LogicalType::VARCHAR, append_data.child_data[0]);
+		result->dictionary = FinalizeArrowChild(LogicalType::VARCHAR, *append_data.child_data[0]);
 	}
 };
 
@@ -426,7 +426,8 @@ struct ArrowStructData {
 		auto &children = StructVector::GetEntries(input);
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = children[child_idx];
-			append_data.child_data[child_idx].append_vector(append_data.child_data[child_idx], *child, size);
+			auto &child_data = *append_data.child_data[child_idx];
+			child_data.append_vector(child_data, *child, size);
 		}
 		append_data.row_count += size;
 	}
@@ -440,7 +441,7 @@ struct ArrowStructData {
 		result->n_children = child_types.size();
 		for (idx_t i = 0; i < child_types.size(); i++) {
 			auto &child_type = child_types[i].second;
-			append_data.child_pointers[i] = FinalizeArrowChild(child_type, append_data.child_data[i]);
+			append_data.child_pointers[i] = FinalizeArrowChild(child_type, *append_data.child_data[i]);
 		}
 	}
 };
@@ -493,7 +494,7 @@ struct ArrowListData {
 		auto &child = ListVector::GetEntry(input);
 		auto child_size = ListVector::GetListSize(input);
 		child.Flatten(child_size);
-		append_data.child_data[0].append_vector(append_data.child_data[0], child, child_size);
+		append_data.child_data[0]->append_vector(*append_data.child_data[0], child, child_size);
 		append_data.row_count += size;
 	}
 
@@ -505,7 +506,7 @@ struct ArrowListData {
 		append_data.child_pointers.resize(1);
 		result->children = append_data.child_pointers.data();
 		result->n_children = 1;
-		append_data.child_pointers[0] = FinalizeArrowChild(child_type, append_data.child_data[0]);
+		append_data.child_pointers[0] = FinalizeArrowChild(child_type, *append_data.child_data[0]);
 	}
 };
 
@@ -521,9 +522,9 @@ struct ArrowMapData {
 
 		auto &key_type = MapType::KeyType(type);
 		auto &value_type = MapType::ValueType(type);
-		ArrowAppendData internal_struct;
-		internal_struct.child_data.push_back(InitializeArrowChild(key_type, capacity));
-		internal_struct.child_data.push_back(InitializeArrowChild(value_type, capacity));
+		auto internal_struct = make_unique<ArrowAppendData>();
+		internal_struct->child_data.push_back(InitializeArrowChild(key_type, capacity));
+		internal_struct->child_data.push_back(InitializeArrowChild(value_type, capacity));
 
 		result.child_data.push_back(move(internal_struct));
 	}
@@ -550,9 +551,9 @@ struct ArrowMapData {
 		D_ASSERT(list_size == ListVector::GetListSize(*struct_entries[1]));
 
 		// perform the append
-		auto &struct_data = append_data.child_data[0];
-		auto &key_data = struct_data.child_data[0];
-		auto &value_data = struct_data.child_data[1];
+		auto &struct_data = *append_data.child_data[0];
+		auto &key_data = *struct_data.child_data[0];
+		auto &value_data = *struct_data.child_data[1];
 		key_data.append_vector(key_data, key_vector, list_size);
 		value_data.append_vector(value_data, value_vector, list_size);
 
@@ -569,19 +570,23 @@ struct ArrowMapData {
 		append_data.child_pointers.resize(1);
 		result->children = append_data.child_pointers.data();
 		result->n_children = 1;
-		append_data.child_pointers[0] = FinalizeArrowChild(type, append_data.child_data[0]);
+		append_data.child_pointers[0] = FinalizeArrowChild(type, *append_data.child_data[0]);
 
 		// now that struct has two children: the key and the value type
-		auto &struct_data = append_data.child_data[0];
+		auto &struct_data = *append_data.child_data[0];
 		auto &struct_result = append_data.child_pointers[0];
 		struct_data.child_pointers.resize(2);
+		struct_result->n_buffers = 1;
 		struct_result->n_children = 2;
+		struct_result->length = struct_data.child_data[0]->row_count;
 		struct_result->children = struct_data.child_pointers.data();
+
+		D_ASSERT(struct_data.child_data[0]->row_count == struct_data.child_data[1]->row_count);
 
 		auto &key_type = MapType::KeyType(type);
 		auto &value_type = MapType::ValueType(type);
-		struct_data.child_pointers[0] = FinalizeArrowChild(key_type, struct_data.child_data[0]);
-		struct_data.child_pointers[1] = FinalizeArrowChild(value_type, struct_data.child_data[1]);
+		struct_data.child_pointers[0] = FinalizeArrowChild(key_type, *struct_data.child_data[0]);
+		struct_data.child_pointers[1] = FinalizeArrowChild(value_type, *struct_data.child_data[1]);
 
 		// keys cannot have null values
 		if (struct_data.child_pointers[0]->null_count > 0) {
@@ -594,7 +599,7 @@ struct ArrowMapData {
 void ArrowAppender::Append(DataChunk &input) {
 	D_ASSERT(types == input.GetTypes());
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		root_data[i].append_vector(root_data[i], input.data[i], input.size());
+		root_data[i]->append_vector(*root_data[i], input.data[i], input.size());
 	}
 	row_count += input.size();
 }
@@ -708,13 +713,13 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	}
 }
 
-ArrowAppendData InitializeArrowChild(const LogicalType &type, idx_t capacity) {
-	ArrowAppendData result;
-	InitializeFunctionPointers(result, type);
+unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity) {
+	auto result = make_unique<ArrowAppendData>();
+	InitializeFunctionPointers(*result, type);
 
 	auto byte_count = (capacity + 7) / 8;
-	result.validity.reserve(byte_count);
-	result.initialize(result, type, capacity);
+	result->validity.reserve(byte_count);
+	result->initialize(*result, type, capacity);
 	return result;
 }
 
@@ -754,6 +759,7 @@ ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_
 
 //! Returns the underlying arrow array
 ArrowArray ArrowAppender::Finalize() {
+	D_ASSERT(root_data.size() == types.size());
 	auto root_holder = make_unique<ArrowAppendData>();
 
 	ArrowArray result;
@@ -772,7 +778,7 @@ ArrowArray ArrowAppender::Finalize() {
 	root_holder->child_data = move(root_data);
 
 	for (idx_t i = 0; i < root_holder->child_data.size(); i++) {
-		root_holder->child_pointers[i] = FinalizeArrowChild(types[i], root_holder->child_data[i]);
+		root_holder->child_pointers[i] = FinalizeArrowChild(types[i], *root_holder->child_data[i]);
 	}
 
 	// Release ownership to caller
