@@ -39,6 +39,8 @@ struct FSSTStorage {
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
+
+	static char* FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset);
 };
 
 //===--------------------------------------------------------------------===//
@@ -519,7 +521,6 @@ bp_delta_offsets_t CalculateBpDeltaOffsets(int64_t last_known_row, idx_t start, 
 //===--------------------------------------------------------------------===//
 template <bool ALLOW_FSST_VECTORS>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-
                                     idx_t result_offset) {
 
 	auto &scan_state = (FSSTScanState &)*state.scan_state;
@@ -529,7 +530,6 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto dict = GetDictionary(segment, scan_state.handle);
 	auto base_data = (data_ptr_t)(baseptr + sizeof(fsst_compression_header_t));
 	string_t *result_data;
-	unique_ptr<Vector> output_vector;
 
 	if (scan_count == 0) {
 		return;
@@ -548,10 +548,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		}
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		output_vector = make_unique<Vector>(result.GetType(), scan_count);
-		output_vector->SetVectorType(VectorType::FSST_VECTOR);
-		FSSTVector::RegisterDecoder(*output_vector, scan_state.duckdb_fsst_decoder);
-		result_data = FSSTVector::GetCompressedData<string_t>(*output_vector);
+		result_data = FlatVector::GetData<string_t>(result);
 	}
 
 	// TODO: shouldn't this fail across segments?
@@ -568,21 +565,41 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
 	                   offsets.total_delta_decode_count, scan_state.last_known_index);
 
-	// Lookup decompressed offsets in dict
-	for (idx_t i = 0; i < scan_count; i++) {
-		uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
-		result_data[i] = UncompressedStringStorage::FetchStringFromDict(
-		    segment, dict, result, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values],
-		    string_length);
+	if (ALLOW_FSST_VECTORS){
+		// Lookup decompressed offsets in dict
+		for (idx_t i = 0; i < scan_count; i++) {
+			uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
+			result_data[i] = UncompressedStringStorage::FetchStringFromDict(
+			    segment, dict, result, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values],
+			    string_length);
+		}
+	} else {
+		// Just decompress
+		for (idx_t i = 0; i < scan_count; i++) {
+			uint32_t str_len = bitunpack_buffer[i + offsets.scan_offset];
+			auto str_ptr = FSSTStorage::FetchStringPointer(dict, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values]);
+
+			if (str_len > 0) {
+				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
+
+				auto decompressed_string_size =
+				    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)scan_state.duckdb_fsst_decoder.get(), /* IN: use this symbol table for compression. */
+				                           str_len,        /* IN: byte-length of compressed string. */
+				                           (unsigned char *)str_ptr, /* IN: compressed string. */
+				                           StringUncompressed::STRING_BLOCK_LIMIT + 1, /* IN: byte-length of output buffer. */
+				                           &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
+				    );
+
+				D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
+				result_data[i + result_offset] = StringVector::AddStringOrBlob(result, (const char *)decompress_buffer, decompressed_string_size);
+			} else {
+				result_data[i + result_offset] = string_t(nullptr, 0);
+			}
+		}
 	}
 
 	scan_state.StoreLastDelta(delta_decode_buffer[scan_count + offsets.unused_delta_decoded_values - 1],
 	                          start + scan_count - 1);
-
-	if (!ALLOW_FSST_VECTORS) {
-		VectorOperations::Copy(*output_vector, result, scan_count, 0, result_offset);
-		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	}
 }
 
 void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
@@ -671,4 +688,15 @@ StringDictionaryContainer FSSTStorage::GetDictionary(ColumnSegment &segment, Buf
 	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
 	return container;
 }
+
+char* FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset) {
+    if (dict_offset == 0) {
+        return nullptr;
+    }
+
+    auto dict_end = baseptr + dict.end;
+    auto dict_pos = dict_end - dict_offset;
+    return (char *)(dict_pos);
+}
+
 } // namespace duckdb
