@@ -16,6 +16,21 @@ PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types
                                                        idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::UNGROUPED_AGGREGATE, move(types), estimated_cardinality),
       aggregates(move(expressions)) {
+
+	vector<idx_t> distinct_aggregate_indices;
+	//! Determine which (if any) aggregates are distinct
+	for (idx_t i = 0; i < aggregates.size(); i++) {
+		auto &aggr = (BoundAggregateExpression &)*(aggregates[i]);
+		if (!aggr.distinct) {
+			continue;
+		}
+		distinct_aggregate_indices.push_back(i);
+	}
+	//! No distinct aggregations
+	if (distinct_aggregate_indices.empty()) {
+		return;
+	}
+	distinct_aggregate_data.Initialize(aggregates, distinct_aggregate_indices);
 }
 
 //===--------------------------------------------------------------------===//
@@ -63,53 +78,29 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
-	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates, ClientContext &client)
-	    : any_distinct(false), state(aggregates), finished(false) {
-		vector<idx_t> distinct_aggregate_indices;
-		//! Determine which (if any) aggregates are distinct
-		for (idx_t i = 0; i < aggregates.size(); i++) {
-			auto &aggr = (BoundAggregateExpression &)*(aggregates[i]);
-			if (!aggr.distinct) {
-				continue;
-			}
-			distinct_aggregate_indices.push_back(i);
-		}
-		//! No distinct aggregations
-		if (distinct_aggregate_indices.empty()) {
+	SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates,
+	                           const DistinctAggregateData &distinct_data, ClientContext &client)
+	    : state(aggregates), finished(false) {
+		if (!distinct_data.AnyDistinct()) {
 			return;
 		}
-		distinct_hashtables.reserve(distinct_aggregate_indices.size());
-		grouped_aggregate_data.reserve(distinct_aggregate_indices.size());
-		any_distinct = true;
-
-		//! For every distinct aggregate, create a hashtable
-		for (idx_t i = 0; i < distinct_aggregate_indices.size(); i++) {
-			auto aggr_idx = distinct_aggregate_indices[i];
-			auto &aggr = (BoundAggregateExpression &)*(aggregates[aggr_idx]);
-
-			GroupingSet set;
-			for (size_t set_idx = 0; set_idx < aggr.children.size(); set_idx++) {
-				set.insert(set_idx);
+		radix_states.resize(distinct_data.radix_tables.size());
+		for (idx_t i = 0; i < distinct_data.radix_tables.size(); i++) {
+			if (!distinct_data.radix_tables[i]) {
+				// This aggregate is not distinct
+				continue;
 			}
-			grouped_aggregate_data.emplace_back();
-			grouped_aggregate_data[i].SetDistinctGroupData(aggregates[aggr_idx]->Copy());
-			distinct_hashtables.emplace_back(set, grouped_aggregate_data[i]);
-			radix_states[i] = distinct_hashtables[i].GetGlobalSinkState(client);
+			auto &radix_table = *distinct_data.radix_tables[i];
+			radix_states[i] = radix_table.GetGlobalSinkState(client);
 		}
 	}
 
-	//! Whether any of the aggregates are distinct
-	bool any_distinct;
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The global aggregate state
 	AggregateState state;
 	//! Whether or not the aggregate is finished
 	bool finished;
-	//! Every distinct aggregate has a hash table to keep track of which values have already been seen
-	vector<RadixPartitionedHashTable> distinct_hashtables;
-	//! contains the data for the hashtables
-	vector<GroupedAggregateData> grouped_aggregate_data;
 	//! The global sink states of the hash tables
 	vector<unique_ptr<GlobalSinkState>> radix_states;
 };
@@ -117,8 +108,11 @@ public:
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
 	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
-	                          const vector<LogicalType> &child_types)
+	                          const vector<LogicalType> &child_types,
+	                          const DistinctAggregateData &distinct_aggregate_data, ExecutionContext &context)
 	    : state(aggregates), child_executor(allocator) {
+
+		InitializeDistinctAggregates(distinct_aggregate_data, context);
 		vector<LogicalType> payload_types;
 		vector<AggregateObject> aggregate_objects;
 		for (auto &aggregate : aggregates) {
@@ -138,9 +132,6 @@ public:
 		}
 		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
-	void Reset() {
-		payload_chunk.Reset();
-	}
 
 	//! The local aggregate state
 	AggregateState state;
@@ -150,14 +141,45 @@ public:
 	DataChunk payload_chunk;
 	//! Aggregate filter data set
 	AggregateFilterDataSet filter_set;
+	//! The global sink states of the distinct aggregates hash tables
+	vector<unique_ptr<LocalSinkState>> radix_states;
+	//! The input chunks for each distinct aggregate
+	vector<unique_ptr<DataChunk>> distinct_input_chunks;
+
+public:
+	void Reset() {
+		payload_chunk.Reset();
+	}
+	void InitializeDistinctAggregates(const DistinctAggregateData &data, ExecutionContext &context) {
+		if (!data.AnyDistinct()) {
+			// No distinct aggregates
+			return;
+		}
+		radix_states.resize(data.radix_tables.size());
+		distinct_input_chunks.resize(data.radix_tables.size());
+		for (idx_t i = 0; i < data.radix_tables.size(); i++) {
+			if (!data.radix_tables[i]) {
+				// Aggregate at this index is not distinct
+				continue;
+			}
+			auto &radix_table = *data.radix_tables[i];
+			radix_states[i] = radix_table.GetLocalSinkState(context);
+			auto &payload_types = data.grouped_aggregate_data[i]->payload_types;
+			if (!payload_types.empty()) {
+				distinct_input_chunks[i] = make_unique<DataChunk>();
+				distinct_input_chunks[i]->InitializeEmpty(payload_types);
+			}
+		}
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SimpleAggregateGlobalState>(aggregates, context);
+	return make_unique<SimpleAggregateGlobalState>(aggregates, distinct_aggregate_data, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes());
+	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes(),
+	                                              distinct_aggregate_data, context);
 }
 
 SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
@@ -168,8 +190,27 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 	sink.Reset();
 
 	DataChunk &payload_chunk = sink.payload_chunk;
+
+	idx_t next_payload_idx = 0;
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+
+		payload_idx = next_payload_idx;
+		next_payload_idx = payload_idx + aggregate.children.size();
+
+		if (sink.radix_states[aggr_idx]) {
+			//! aggregate is distinct, can't be calculated yet
+			D_ASSERT(this->distinct_aggregate_data.radix_tables[aggr_idx]);
+			auto &global_sink = (SimpleAggregateGlobalState &)state;
+			auto &radix_table = *distinct_aggregate_data.radix_tables[aggr_idx];
+			auto &radix_global_sink = *global_sink.radix_states[aggr_idx];
+			auto &radix_local_sink = *sink.radix_states[aggr_idx];
+			auto &input_chunk = *sink.distinct_input_chunks[aggr_idx];
+
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input_chunk);
+			continue;
+		}
+
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
@@ -199,7 +240,6 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
 		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], aggr_input_data,
 		                                 payload_cnt, sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
-		payload_idx += payload_cnt;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -219,6 +259,19 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	lock_guard<mutex> glock(gstate.lock);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
+
+		if (source.radix_states[aggr_idx]) {
+			//! aggregate is distinct, can't be calculated yet
+			D_ASSERT(this->distinct_aggregate_data.radix_tables[aggr_idx]);
+			auto &global_sink = (SimpleAggregateGlobalState &)state;
+			auto &radix_table = *distinct_aggregate_data.radix_tables[aggr_idx];
+			auto &radix_global_sink = *global_sink.radix_states[aggr_idx];
+			auto &radix_local_sink = *source.radix_states[aggr_idx];
+
+			radix_table.Combine(context, radix_global_sink, radix_local_sink);
+			continue;
+		}
+
 		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
 		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 
@@ -238,6 +291,16 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
                                                       GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
 
+	if (distinct_aggregate_data.AnyDistinct()) {
+		for (idx_t i = 0; i < distinct_aggregate_data.radix_tables.size(); i++) {
+			auto &radix_table_p = distinct_aggregate_data.radix_tables[i];
+			if (!radix_table_p) {
+				continue;
+			}
+			auto &radix_state = *gstate.radix_states[i];
+			radix_table_p->Finalize(context, radix_state);
+		}
+	}
 	D_ASSERT(!gstate.finished);
 	gstate.finished = true;
 	return SinkFinalizeType::READY;
