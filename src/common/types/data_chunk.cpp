@@ -151,7 +151,7 @@ void DataChunk::Fuse(DataChunk &other) {
 }
 
 void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
-	idx_t new_size = sel ? size() + sel_count : size() + other.size();
+	idx_t new_size = NextPowerOfTwo(sel ? size() + sel_count : size() + other.size());
 	if (other.size() == 0) {
 		return;
 	}

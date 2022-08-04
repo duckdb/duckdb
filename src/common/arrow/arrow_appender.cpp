@@ -1,5 +1,5 @@
 #include "duckdb/common/arrow/arrow_appender.hpp"
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/types/interval.hpp"
@@ -8,85 +8,8 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Arrow buffers & append data
+// Arrow append data
 //===--------------------------------------------------------------------===//
-struct ArrowBuffer {
-	ArrowBuffer() : dataptr(nullptr), count(0), capacity(0) {
-	}
-	~ArrowBuffer() {
-		if (!dataptr) {
-			return;
-		}
-		free(dataptr);
-		dataptr = nullptr;
-		count = 0;
-		capacity = 0;
-	}
-	// disable copy constructors
-	ArrowBuffer(const ArrowBuffer &other) = delete;
-	ArrowBuffer &operator=(const ArrowBuffer &) = delete;
-	//! enable move constructors
-	ArrowBuffer(ArrowBuffer &&other) noexcept {
-		std::swap(dataptr, other.dataptr);
-		std::swap(count, other.count);
-		std::swap(capacity, other.capacity);
-	}
-	ArrowBuffer &operator=(ArrowBuffer &&other) noexcept {
-		std::swap(dataptr, other.dataptr);
-		std::swap(count, other.count);
-		std::swap(capacity, other.capacity);
-		return *this;
-	}
-
-	void reserve(idx_t bytes) {
-		auto new_capacity = NextPowerOfTwo(bytes);
-		if (new_capacity <= capacity) {
-			return;
-		}
-		reserve_internal(new_capacity);
-	}
-
-	void resize(idx_t bytes) {
-		reserve(bytes);
-		count = bytes;
-	}
-
-	void resize(idx_t bytes, data_t value) {
-		reserve(bytes);
-		for (idx_t i = count; i < bytes; i++) {
-			dataptr[i] = value;
-		}
-		count = bytes;
-	}
-
-	idx_t size() {
-		return count;
-	}
-
-	data_ptr_t data() {
-		return dataptr;
-	}
-
-	void shrink_to_fit() {
-		reserve_internal(count);
-	}
-
-private:
-	void reserve_internal(idx_t bytes) {
-		if (dataptr) {
-			dataptr = (data_ptr_t)realloc(dataptr, bytes);
-		} else {
-			dataptr = (data_ptr_t)malloc(bytes);
-		}
-		capacity = bytes;
-	}
-
-private:
-	data_ptr_t dataptr = nullptr;
-	idx_t count = 0;
-	idx_t capacity = 0;
-};
-
 typedef void (*initialize_t)(ArrowAppendData &result, const LogicalType &type, idx_t capacity);
 typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input, idx_t size);
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
