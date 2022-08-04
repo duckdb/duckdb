@@ -40,7 +40,7 @@ protected:
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 
-	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer);
+	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer, ClientContext &context);
 };
 
 } // namespace duckdb

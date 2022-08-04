@@ -8,7 +8,7 @@ void LogicalCreate::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalCreate::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	auto info = CreateInfo::Deserialize(reader.GetSource());
+	auto info = CreateInfo::Deserialize(reader.GetSource(), context);
 
 	auto &catalog = Catalog::GetCatalog(context);
 	// TODO(stephwang): review if below is necessary or just not pass schema_catalog_entry

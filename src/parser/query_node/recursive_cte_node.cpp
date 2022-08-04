@@ -54,12 +54,12 @@ void RecursiveCTENode::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(aliases);
 }
 
-unique_ptr<QueryNode> RecursiveCTENode::Deserialize(FieldReader &reader) {
+unique_ptr<QueryNode> RecursiveCTENode::Deserialize(FieldReader &reader, ClientContext& context) {
 	auto result = make_unique<RecursiveCTENode>();
 	result->ctename = reader.ReadRequired<string>();
 	result->union_all = reader.ReadRequired<bool>();
-	result->left = reader.ReadRequiredSerializable<QueryNode>();
-	result->right = reader.ReadRequiredSerializable<QueryNode>();
+	result->left = reader.ReadRequiredSerializable<QueryNode>(context);
+	result->right = reader.ReadRequiredSerializable<QueryNode>(context);
 	result->aliases = reader.ReadRequiredList<string>();
 	return move(result);
 }

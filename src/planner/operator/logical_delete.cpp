@@ -10,7 +10,7 @@ void LogicalDelete::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalDelete::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
+	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 
 	auto &catalog = Catalog::GetCatalog(context);
 

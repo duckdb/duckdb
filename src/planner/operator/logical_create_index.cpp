@@ -14,7 +14,7 @@ void LogicalCreateIndex::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                             FieldReader &reader) {
-	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource());
+	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto &catalog = Catalog::GetCatalog(context);
 	TableCatalogEntry *table = catalog.GetEntry<TableCatalogEntry>(context, catalog_info->schema, catalog_info->table);
 
@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(ClientContext &conte
 
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(context);
 
-	auto create_info = reader.ReadOptional<CreateInfo>(nullptr);
+	auto create_info = reader.ReadOptional<CreateInfo>(nullptr, context);
 	if (create_info->type != CatalogType::INDEX_ENTRY) {
 		throw InternalException("Unexpected type: '%s', expected '%s'", CatalogTypeToString(create_info->type),
 		                        CatalogTypeToString(CatalogType::INDEX_ENTRY));

@@ -57,9 +57,9 @@ void ConjunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(children);
 }
 
-unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext &context) {
 	auto result = make_unique<ConjunctionExpression>(type);
-	result->children = reader.ReadRequiredSerializableList<ParsedExpression>();
+	result->children = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 	return move(result);
 }
 

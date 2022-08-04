@@ -15,6 +15,7 @@ namespace duckdb {
 class CatalogEntry;
 class DataChunk;
 class WriteAheadLog;
+class ClientContext;
 
 struct DataTableInfo;
 struct DeleteInfo;
@@ -22,7 +23,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	explicit CommitState(transaction_t commit_id, WriteAheadLog *log = nullptr);
+	explicit CommitState(ClientContext& context, transaction_t commit_id, WriteAheadLog *log = nullptr);
 
 	WriteAheadLog *log;
 	transaction_t commit_id;
@@ -47,6 +48,8 @@ private:
 	void WriteUpdate(UpdateInfo *info);
 
 	void AppendRowId(row_t rowid);
+
+	ClientContext& context;
 };
 
 } // namespace duckdb

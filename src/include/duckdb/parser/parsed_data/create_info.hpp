@@ -52,7 +52,7 @@ protected:
 public:
 	void Serialize(Serializer &serializer) const;
 
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, ClientContext& context);
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 

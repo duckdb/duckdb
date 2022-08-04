@@ -192,12 +192,12 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(qualify);
 }
 
-unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
+unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto result = make_unique<SelectNode>();
-	result->select_list = reader.ReadRequiredSerializableList<ParsedExpression>();
-	result->from_table = reader.ReadOptional<TableRef>(nullptr);
-	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-	result->groups.group_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	result->select_list = reader.ReadRequiredSerializableList<ParsedExpression>(context);
+	result->from_table = reader.ReadOptional<TableRef>(nullptr, context);
+	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr, context);
+	result->groups.group_expressions = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 
 	auto grouping_set_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
@@ -209,10 +209,11 @@ unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
 		}
 		result->groups.grouping_sets.push_back(grouping_set);
 	}
+
 	result->aggregate_handling = reader.ReadRequired<AggregateHandling>();
-	result->having = reader.ReadOptional<ParsedExpression>(nullptr);
+	result->having = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	result->sample = reader.ReadOptional<SampleOptions>(nullptr);
-	result->qualify = reader.ReadOptional<ParsedExpression>(nullptr);
+	result->qualify = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	return move(result);
 }
 

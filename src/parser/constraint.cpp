@@ -20,7 +20,7 @@ void Constraint::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
+unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source, ClientContext& context) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<ConstraintType>();
 	unique_ptr<Constraint> result;
@@ -29,7 +29,7 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 		result = NotNullConstraint::Deserialize(reader);
 		break;
 	case ConstraintType::CHECK:
-		result = CheckConstraint::Deserialize(reader);
+		result = CheckConstraint::Deserialize(reader, context);
 		break;
 	case ConstraintType::UNIQUE:
 		result = UniqueConstraint::Deserialize(reader);

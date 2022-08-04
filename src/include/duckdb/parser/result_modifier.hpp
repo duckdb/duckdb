@@ -45,7 +45,7 @@ public:
 	//! Serializes a ResultModifier to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a ResultModifier
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &source, ClientContext& context);
 };
 
 //! Single node in ORDER BY statement
@@ -64,7 +64,7 @@ struct OrderByNode {
 public:
 	void Serialize(Serializer &serializer) const;
 	string ToString() const;
-	static OrderByNode Deserialize(Deserializer &source);
+	static OrderByNode Deserialize(Deserializer &source, ClientContext &context);
 };
 
 class LimitModifier : public ResultModifier {
@@ -81,7 +81,7 @@ public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader, ClientContext &context);
 };
 
 class OrderModifier : public ResultModifier {
@@ -96,7 +96,7 @@ public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader, ClientContext& context);
 };
 
 class DistinctModifier : public ResultModifier {
@@ -111,7 +111,7 @@ public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader, ClientContext &context);
 };
 
 class LimitPercentModifier : public ResultModifier {
@@ -128,7 +128,7 @@ public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader, ClientContext &context);
 };
 
 } // namespace duckdb

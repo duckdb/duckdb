@@ -56,7 +56,7 @@ public:
 		return make_unique<BoundExpression>(move(expression));
 	}
 
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source) {
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source, ClientContext& context) {
 		return make_unique<BoundExpression>(nullptr);
 	}
 };

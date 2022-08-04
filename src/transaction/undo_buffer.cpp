@@ -16,7 +16,7 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context) : allocator(BufferAllocator::Get(*context)) {
+UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context) : allocator(BufferAllocator::Get(*context)), context(*context){
 	D_ASSERT(context);
 }
 
@@ -130,7 +130,7 @@ void UndoBuffer::Cleanup() {
 }
 
 void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog *log, transaction_t commit_id) {
-	CommitState state(commit_id, log);
+	CommitState state(context, commit_id, log);
 	if (log) {
 		// commit WITH write ahead log
 		IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CommitEntry<true>(type, data); });
@@ -141,7 +141,7 @@ void UndoBuffer::Commit(UndoBuffer::IteratorState &iterator_state, WriteAheadLog
 }
 
 void UndoBuffer::RevertCommit(UndoBuffer::IteratorState &end_state, transaction_t transaction_id) {
-	CommitState state(transaction_id, nullptr);
+	CommitState state(context, transaction_id, nullptr);
 	UndoBuffer::IteratorState start_state;
 	IterateEntries(start_state, end_state, [&](UndoFlags type, data_ptr_t data) { state.RevertCommit(type, data); });
 }

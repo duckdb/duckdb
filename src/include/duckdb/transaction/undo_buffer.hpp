@@ -57,6 +57,8 @@ private:
 	void IterateEntries(UndoBuffer::IteratorState &state, UndoBuffer::IteratorState &end_state, T &&callback);
 	template <class T>
 	void ReverseIterateEntries(T &&callback);
+
+	ClientContext& context;
 };
 
 } // namespace duckdb

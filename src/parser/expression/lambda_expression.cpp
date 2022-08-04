@@ -34,9 +34,9 @@ void LambdaExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*expr);
 }
 
-unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto lhs = reader.ReadRequiredSerializable<ParsedExpression>();
-	auto expr = reader.ReadRequiredSerializable<ParsedExpression>();
+unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext& context) {
+	auto lhs = reader.ReadRequiredSerializable<ParsedExpression>(context);
+	auto expr = reader.ReadRequiredSerializable<ParsedExpression>(context);
 	return make_unique<LambdaExpression>(move(lhs), move(expr));
 }
 

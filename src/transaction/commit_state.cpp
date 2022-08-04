@@ -17,8 +17,8 @@
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
-    : log(log), commit_id(commit_id), current_table_info(nullptr) {
+CommitState::CommitState(ClientContext& context, transaction_t commit_id, WriteAheadLog *log)
+    : log(log), commit_id(commit_id), current_table_info(nullptr), context(context) {
 }
 
 void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {
@@ -45,7 +45,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source);
+			auto info = AlterInfo::Deserialize(source, context);
 			// write the alter table in the log
 			table_entry->CommitAlter(*info);
 			log->WriteAlter(*info);
@@ -68,7 +68,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source);
+			auto info = AlterInfo::Deserialize(source, context);
 			// write the alter table in the log
 			log->WriteAlter(*info);
 		} else {

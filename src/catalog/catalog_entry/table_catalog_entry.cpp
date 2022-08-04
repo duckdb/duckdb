@@ -598,14 +598,14 @@ void TableCatalogEntry::Serialize(Serializer &serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
 	auto info = make_unique<CreateTableInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
 	info->table = reader.ReadRequired<string>();
-	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
-	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
+	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>(context);
+	info->constraints = reader.ReadRequiredSerializableList<Constraint>(context);
 	reader.Finalize();
 
 	return info;

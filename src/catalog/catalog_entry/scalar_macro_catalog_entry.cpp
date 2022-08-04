@@ -37,20 +37,20 @@ void ScalarMacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &main_source) {
+unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext &context) {
 	auto info = make_unique<CreateMacroInfo>(CatalogType::MACRO_ENTRY);
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
-	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>(context);
 	auto func = make_unique<ScalarMacroFunction>(move(expression));
 	info->function = move(func);
-	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
+	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 	auto default_param_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
-		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
+		info->function->default_parameters[name] = ParsedExpression::Deserialize(source, context);
 	}
 	// dont like this
 	// info->type=CatalogType::MACRO_ENTRY;
@@ -80,20 +80,20 @@ void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &main_source) {
+unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext& context) {
 	auto info = make_unique<CreateMacroInfo>(CatalogType::TABLE_MACRO_ENTRY);
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
-	auto query_node = reader.ReadRequiredSerializable<QueryNode>();
+	auto query_node = reader.ReadRequiredSerializable<QueryNode>(context);
 	auto table_function = make_unique<TableMacroFunction>(move(query_node));
 	info->function = move(table_function);
-	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
+	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 	auto default_param_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
-		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
+		info->function->default_parameters[name] = ParsedExpression::Deserialize(source, context);
 	}
 
 	reader.Finalize();
