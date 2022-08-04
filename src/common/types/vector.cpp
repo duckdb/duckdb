@@ -459,8 +459,8 @@ Value Vector::GetValue(const Vector &v_p, idx_t index_p) {
 			auto str_compressed = ((string_t *)data)[index];
 			auto decompressed_string_size =
 			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-			                    str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
-			                    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
+			                           str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
+			                           StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
 			return Value(string((char *)decompress_buffer, decompressed_string_size));
@@ -626,14 +626,14 @@ string Vector::ToString(idx_t count) const {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = ((string_t *)data)[i];
 			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-			auto decompressed_string_size =
-			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(
-			                        const_cast<Vector &>(*this)), /* IN: use this symbol table for compression. */
-			                    compressed_string.GetSize(),      /* IN: byte-length of compressed string. */
-			                    (unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
-			                    StringUncompressed::STRING_BLOCK_LIMIT + 1, /* IN: byte-length of output buffer. */
-			                    &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
-			    );
+			auto decompressed_string_size = duckdb_fsst_decompress(
+			    (duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(
+			        const_cast<Vector &>(*this)),                   /* IN: use this symbol table for compression. */
+			    compressed_string.GetSize(),                        /* IN: byte-length of compressed string. */
+			    (unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
+			    StringUncompressed::STRING_BLOCK_LIMIT + 1,         /* IN: byte-length of output buffer. */
+			    &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
+			);
 
 			if (decompressed_string_size > StringUncompressed::STRING_BLOCK_LIMIT) {
 				throw InternalException("Failed to decompress entire FSST string");

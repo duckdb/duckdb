@@ -40,7 +40,7 @@ struct FSSTStorage {
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
 
-	static char* FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset);
+	static char *FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset);
 };
 
 //===--------------------------------------------------------------------===//
@@ -105,7 +105,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	auto string_count = state.fsst_strings.size();
 	if (string_count) {
-		size_t output_buffer_size = 7+2*state.fsst_string_total_size; // Size as specified in fsst.h
+		size_t output_buffer_size = 7 + 2 * state.fsst_string_total_size; // Size as specified in fsst.h
 
 		std::vector<size_t> fsst_string_sizes;
 		std::vector<unsigned char *> fsst_string_ptrs;
@@ -121,7 +121,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		auto compressed_sizes = std::vector<size_t>(string_count, 0);
 		auto compressed_buffer = std::vector<unsigned char>(output_buffer_size, 0);
 
-		auto res = duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
+		auto res =
+		    duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
 		                         output_buffer_size, &compressed_buffer[0], &compressed_sizes[0], &compressed_ptrs[0]);
 
 		if (string_count != res) {
@@ -228,7 +229,6 @@ public:
 		size_t current_dict_size = current_dictionary.size;
 		idx_t current_string_count = index_buffer.size();
 
-		// TODO we don't need to calculate this every time?
 		size_t dict_offsets_size =
 		    BitpackingPrimitives::GetRequiredSize<idx_t>(current_string_count + 1, required_minimum_width);
 
@@ -273,7 +273,7 @@ public:
 		                                               (uint32_t *)(index_buffer.data()), current_segment->count,
 		                                               current_width);
 
-		// Write the fsst symbol table or nothing TODO has this been serialized already?
+		// Write the fsst symbol table or nothing
 		if (fsst_encoder != nullptr) {
 			memcpy(base_ptr + symbol_table_offset, &fsst_serialized_symbol_table[0], fsst_serialized_symbol_table_size);
 		} else {
@@ -319,7 +319,7 @@ public:
 
 	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
-	size_t fsst_serialized_symbol_table_size = sizeof(duckdb_fsst_decoder_t); // TODO calculate actual value somewhere?
+	size_t fsst_serialized_symbol_table_size = sizeof(duckdb_fsst_decoder_t);
 };
 
 unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
@@ -372,7 +372,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	}
 
 	// Compress buffers
-	size_t compress_buffer_size = MaxValue<size_t>(total_size * 3 + 7, 1); // TODO what size?
+	size_t compress_buffer_size = MaxValue<size_t>(total_size * 2 + 7, 1);
 	vector<unsigned char *> strings_out(total_count, nullptr);
 	vector<size_t> sizes_out(total_count, 0);
 	vector<unsigned char> compress_buffer(compress_buffer_size, 0);
@@ -453,7 +453,8 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
-	auto retval = ParseFSSTSegmentHeader(base_ptr, (duckdb_fsst_decoder_t *)state->duckdb_fsst_decoder.get(), &state->current_width);
+	auto retval = ParseFSSTSegmentHeader(base_ptr, (duckdb_fsst_decoder_t *)state->duckdb_fsst_decoder.get(),
+	                                     &state->current_width);
 	if (!retval) {
 		state->duckdb_fsst_decoder = nullptr;
 	}
@@ -551,7 +552,6 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		result_data = FlatVector::GetData<string_t>(result);
 	}
 
-	// TODO: shouldn't this fail across segments?
 	if (start == 0 || scan_state.last_known_row >= (int64_t)start) {
 		scan_state.ResetStoredDelta();
 	}
@@ -565,7 +565,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
 	                   offsets.total_delta_decode_count, scan_state.last_known_index);
 
-	if (ALLOW_FSST_VECTORS){
+	if (ALLOW_FSST_VECTORS) {
 		// Lookup decompressed offsets in dict
 		for (idx_t i = 0; i < scan_count; i++) {
 			uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
@@ -577,21 +577,24 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		// Just decompress
 		for (idx_t i = 0; i < scan_count; i++) {
 			uint32_t str_len = bitunpack_buffer[i + offsets.scan_offset];
-			auto str_ptr = FSSTStorage::FetchStringPointer(dict, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values]);
+			auto str_ptr = FSSTStorage::FetchStringPointer(
+			    dict, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values]);
 
 			if (str_len > 0) {
 				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
 
-				auto decompressed_string_size =
-				    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)scan_state.duckdb_fsst_decoder.get(), /* IN: use this symbol table for compression. */
-				                           str_len,        /* IN: byte-length of compressed string. */
-				                           (unsigned char *)str_ptr, /* IN: compressed string. */
-				                           StringUncompressed::STRING_BLOCK_LIMIT + 1, /* IN: byte-length of output buffer. */
-				                           &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
-				    );
+				auto decompressed_string_size = duckdb_fsst_decompress(
+				    (duckdb_fsst_decoder_t *)
+				        scan_state.duckdb_fsst_decoder.get(),   /* IN: use this symbol table for compression. */
+				    str_len,                                    /* IN: byte-length of compressed string. */
+				    (unsigned char *)str_ptr,                   /* IN: compressed string. */
+				    StringUncompressed::STRING_BLOCK_LIMIT + 1, /* IN: byte-length of output buffer. */
+				    &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
+				);
 
 				D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-				result_data[i + result_offset] = StringVector::AddStringOrBlob(result, (const char *)decompress_buffer, decompressed_string_size);
+				result_data[i + result_offset] =
+				    StringVector::AddStringOrBlob(result, (const char *)decompress_buffer, decompressed_string_size);
 			} else {
 				result_data[i + result_offset] = string_t(nullptr, 0);
 			}
@@ -642,9 +645,9 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
 		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
-		auto decompressed_string_size =
-		    duckdb_fsst_decompress(&decoder, compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
-		                    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
+		auto decompressed_string_size = duckdb_fsst_decompress(
+		    &decoder, compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
+		    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 
 		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
@@ -689,14 +692,14 @@ StringDictionaryContainer FSSTStorage::GetDictionary(ColumnSegment &segment, Buf
 	return container;
 }
 
-char* FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset) {
-    if (dict_offset == 0) {
-        return nullptr;
-    }
+char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset) {
+	if (dict_offset == 0) {
+		return nullptr;
+	}
 
-    auto dict_end = baseptr + dict.end;
-    auto dict_pos = dict_end - dict_offset;
-    return (char *)(dict_pos);
+	auto dict_end = baseptr + dict.end;
+	auto dict_pos = dict_end - dict_offset;
+	return (char *)(dict_pos);
 }
 
 } // namespace duckdb

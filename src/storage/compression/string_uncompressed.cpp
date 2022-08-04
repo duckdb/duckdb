@@ -96,9 +96,9 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	// TODO FSST:
 	//  	decompress bitpacked+delta encoded offsets
 	//			- if first element: start from 0, bitunpack+decode the first min(bitpacking_group_width, scan_count
-	//values)
+	// values)
 	//			- else start from last cached value, bitunpack the values from last cached value (rounded down to
-	//multiple
+	// multiple
 	//          - of bitpacking_group_width) up until the max scanned index rounded to multiple of
 	//          bitpacking_group_width.
 	// 		use those to fetchstringfromdict en set result to FSST
