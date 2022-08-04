@@ -179,6 +179,9 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
+BEGIN TRANSACTION
+
+statement ok
 CREATE TABLE t(i INTEGER)
 
 statement ok
@@ -196,6 +199,9 @@ INSERT INTO t VALUES(NULL)
 # Drop in the same tran
 statement ok
 DROP TABLE IF EXISTS t
+
+statement ok
+BEGIN TRANSACTION
 
 statement ok
 CREATE TABLE t(i INTEGER NOT NULL)
