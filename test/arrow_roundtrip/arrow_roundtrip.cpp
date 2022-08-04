@@ -8,6 +8,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 using namespace duckdb;
 
@@ -95,17 +96,13 @@ public:
 	}
 };
 
-static void TestArrowRoundtrip(const string &query) {
-	DuckDB db;
-	Connection con(db);
-
+void RunArrowComparison(Connection &con, const string &query) {
 	// run the query
 	auto initial_result = con.Query(query);
 	if (!initial_result->success) {
 		initial_result->Print();
 		FAIL();
 	}
-
 	// create the roundtrip factory
 	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
 	auto types = initial_result->types;
@@ -121,16 +118,55 @@ static void TestArrowRoundtrip(const string &query) {
 
 	// run the arrow scan over the result
 	auto arrow_result = con.TableFunction("arrow_scan", params)->Execute();
+	REQUIRE(arrow_result->type == QueryResultType::MATERIALIZED_RESULT);
+	if (!arrow_result->success) {
+		printf("-------------------------------------\n");
+		printf("Arrow round-trip query error: %s\n", arrow_result->error.c_str());
+		printf("-------------------------------------\n");
+		printf("Query: %s\n", query.c_str());
+		printf("-------------------------------------\n");
+		FAIL();
+	}
+	auto &materialized_arrow = (MaterializedQueryResult &)*arrow_result;
 
-	// run the initial query again
 	auto result = con.Query(query);
+
 	// compare the results
-	if (!result->Equals(*arrow_result)) {
+	string error;
+	if (!ColumnDataCollection::ResultEquals(result->Collection(), materialized_arrow.Collection(), error)) {
+		printf("-------------------------------------\n");
+		printf("Arrow round-trip failed: %s\n", error.c_str());
+		printf("-------------------------------------\n");
+		printf("Query: %s\n", query.c_str());
+		printf("-----------------DuckDB-------------------\n");
 		result->Print();
-		arrow_result->Print();
+		printf("-----------------Arrow--------------------\n");
+		materialized_arrow.Print();
+		printf("-------------------------------------\n");
 		FAIL();
 	}
 	REQUIRE(1);
+}
+
+static void TestArrowRoundtrip(const string &query) {
+	DuckDB db;
+	Connection con(db);
+
+	RunArrowComparison(con, query);
+}
+
+static void TestParquetRoundtrip(const string &path) {
+	DuckDB db;
+	Connection con(db);
+
+	if (ExtensionHelper::LoadExtension(db, "parquet") == ExtensionLoadResult::NOT_LOADED) {
+		FAIL();
+		return;
+	}
+
+	// run the query
+	auto query = "SELECT * FROM parquet_scan('" + path + "')";
+	RunArrowComparison(con, query);
 }
 
 TEST_CASE("Test arrow roundtrip", "[arrow]") {
@@ -155,6 +191,71 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	                   "dec18, (1.5 + i)::DECIMAL(38,3) dec38 FROM range(10) tbl(i)");
 	TestArrowRoundtrip(
 	    "SELECT case when i%2=0 then null else INTERVAL (i) seconds end AS interval FROM range(10) tbl(i)");
-	TestArrowRoundtrip("SELECT * EXCLUDE (uuid, small_enum, medium_enum, large_enum, hugeint, time_tz, json) REPLACE "
+	TestArrowRoundtrip("SELECT * REPLACE "
 	                   "(interval (1) seconds AS interval) FROM test_all_types()");
+}
+
+TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
+	std::vector<std::string> data;
+	// data.emplace_back("data/parquet-testing/7-set.snappy.arrow2.parquet");
+	//	data.emplace_back("data/parquet-testing/adam_genotypes.parquet");
+	data.emplace_back("data/parquet-testing/apkwan.parquet");
+	data.emplace_back("data/parquet-testing/aws1.snappy.parquet");
+	// not supported by arrow
+	// data.emplace_back("data/parquet-testing/aws2.parquet");
+	data.emplace_back("data/parquet-testing/binary_string.parquet");
+	data.emplace_back("data/parquet-testing/blob.parquet");
+	data.emplace_back("data/parquet-testing/boolean_stats.parquet");
+	// arrow can't read this
+	// data.emplace_back("data/parquet-testing/broken-arrow.parquet");
+	data.emplace_back("data/parquet-testing/bug1554.parquet");
+	data.emplace_back("data/parquet-testing/bug1588.parquet");
+	data.emplace_back("data/parquet-testing/bug1589.parquet");
+	data.emplace_back("data/parquet-testing/bug1618_struct_strings.parquet");
+	data.emplace_back("data/parquet-testing/bug2267.parquet");
+	data.emplace_back("data/parquet-testing/bug2557.parquet");
+	// slow
+	// data.emplace_back("data/parquet-testing/bug687_nulls.parquet");
+	// data.emplace_back("data/parquet-testing/complex.parquet");
+	data.emplace_back("data/parquet-testing/data-types.parquet");
+	data.emplace_back("data/parquet-testing/date.parquet");
+	data.emplace_back("data/parquet-testing/date_stats.parquet");
+	data.emplace_back("data/parquet-testing/decimal_stats.parquet");
+	data.emplace_back("data/parquet-testing/decimals.parquet");
+	data.emplace_back("data/parquet-testing/enum.parquet");
+	data.emplace_back("data/parquet-testing/filter_bug1391.parquet");
+	//	data.emplace_back("data/parquet-testing/fixed.parquet");
+	// slow
+	// data.emplace_back("data/parquet-testing/leftdate3_192_loop_1.parquet");
+	data.emplace_back("data/parquet-testing/lineitem-top10000.gzip.parquet");
+	data.emplace_back("data/parquet-testing/manyrowgroups.parquet");
+	data.emplace_back("data/parquet-testing/manyrowgroups2.parquet");
+	//	data.emplace_back("data/parquet-testing/map.parquet");
+	// Can't roundtrip NaNs
+	data.emplace_back("data/parquet-testing/nan-float.parquet");
+	// null byte in file
+	// data.emplace_back("data/parquet-testing/nullbyte.parquet");
+	// data.emplace_back("data/parquet-testing/nullbyte_multiple.parquet");
+	// borked
+	// data.emplace_back("data/parquet-testing/p2.parquet");
+	// data.emplace_back("data/parquet-testing/p2strings.parquet");
+	data.emplace_back("data/parquet-testing/pandas-date.parquet");
+	data.emplace_back("data/parquet-testing/signed_stats.parquet");
+	data.emplace_back("data/parquet-testing/silly-names.parquet");
+	// borked
+	// data.emplace_back("data/parquet-testing/simple.parquet");
+	// data.emplace_back("data/parquet-testing/sorted.zstd_18_131072_small.parquet");
+	data.emplace_back("data/parquet-testing/struct.parquet");
+	data.emplace_back("data/parquet-testing/struct_skip_test.parquet");
+	data.emplace_back("data/parquet-testing/timestamp-ms.parquet");
+	data.emplace_back("data/parquet-testing/timestamp.parquet");
+	data.emplace_back("data/parquet-testing/unsigned.parquet");
+	data.emplace_back("data/parquet-testing/unsigned_stats.parquet");
+	data.emplace_back("data/parquet-testing/userdata1.parquet");
+	data.emplace_back("data/parquet-testing/varchar_stats.parquet");
+	data.emplace_back("data/parquet-testing/zstd.parquet");
+
+	for (auto &parquet_path : data) {
+		TestParquetRoundtrip(parquet_path);
+	}
 }
