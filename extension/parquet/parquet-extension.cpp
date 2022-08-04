@@ -181,7 +181,7 @@ public:
 				                                     bind_data.initial_reader->return_types[column_index], column_index,
 				                                     bind_data.initial_reader->metadata->metadata.get());
 			} else if (!config.options.object_cache_enable) {
-				// our initial reader should be flushed and we have no object cache, so no luck
+				// our initial reader was reset
 				return nullptr;
 			}
 		} else if (config.options.object_cache_enable) {
@@ -468,7 +468,7 @@ public:
 		                                         data->parquet_options.filename);
 
 		if (data->files.empty() || initial_filename != data->files[0]) {
-			// Flush initial reader in case the first file gets filtered out
+			// Remove initial reader in case the first file gets filtered out
 			data->initial_reader.reset();
 		}
 	}
