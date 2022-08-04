@@ -1,3 +1,6 @@
+# AVX512 instrinsics are disabled by default, comment this out to enable it
+add_definitions(-DDUCKDB_FSST_DISABLE_INTRINSINCS)
+
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()
@@ -20,7 +23,7 @@ if(CMAKE_BUILD_TYPE STREQUAL Release)
     )
 endif()
 
-add_library(duckdb_fsst STATIC libfsst.cpp fsst_avx512.cpp)
+add_library(duckdb_fsst STATIC libfsst.cpp fsst_avx512.cpp fsst_avx512_unroll1.inc fsst_avx512_unroll2.inc fsst_avx512_unroll3.inc fsst_avx512_unroll4.inc)
 
 target_include_directories(duckdb_fsst PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
 set_target_properties(duckdb_fsst PROPERTIES EXPORT_NAME duckdb_fsst)
