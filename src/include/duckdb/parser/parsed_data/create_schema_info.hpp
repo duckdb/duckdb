@@ -23,6 +23,12 @@ public:
 		return move(result);
 	}
 
+	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &deserializer) {
+		auto result = make_unique<CreateSchemaInfo>();
+		result->DeserializeBase(deserializer);
+		return result;
+	}
+
 protected:
 	void SerializeInternal(Serializer &) const override {
 	}

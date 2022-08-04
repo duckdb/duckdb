@@ -168,3 +168,11 @@ TEST_CASE("Test logical_cross_product", "[serialization]") {
 TEST_CASE("Test logical_create_index", "[serialization]") {
 	test_helper("CREATE INDEX idx ON tbl (foo)", {"CREATE TABLE tbl (foo INTEGER)"});
 }
+
+TEST_CASE("Test logical_create_schema", "[serialization]") {
+	test_helper("CREATE SCHEMA test");
+}
+
+TEST_CASE("Test logical_create_view", "[serialization]") {
+	test_helper("CREATE VIEW test_view AS (SELECT 42)");
+}
