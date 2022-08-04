@@ -91,7 +91,7 @@ void ScanPandasFpColumn(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 	auto tgt_ptr = FlatVector::GetData<T>(out);
 	auto &mask = FlatVector::Validity(out);
 	for (idx_t i = 0; i < count; i++) {
-		if (ValueIsNull(tgt_ptr[i])) {
+		if (Value::IsNan<T>(tgt_ptr[i])) {
 			mask.SetInvalid(i);
 		}
 	}
