@@ -83,7 +83,7 @@ QueryResult.prototype[Symbol.asyncIterator] = async function*() {
 /**
  * @arg sql
  * @param {...*} params
- * @param cb
+ * @param callback
  */
 Connection.prototype.run = function(sql) {
     var statement = new Statement(this, sql);
@@ -93,7 +93,7 @@ Connection.prototype.run = function(sql) {
 /**
  * @arg sql
  * @param {...*} params
- * @param cb
+ * @param callback
  */
 Connection.prototype.all = function(sql) {
     var statement = new Statement(this,sql);
@@ -103,7 +103,7 @@ Connection.prototype.all = function(sql) {
 /**
  * @arg sql
  * @param {...*} params
- * @param cb
+ * @param callback
  */
 Connection.prototype.each = function(sql) {
     var statement = new Statement(this, sql);
@@ -113,7 +113,7 @@ Connection.prototype.each = function(sql) {
 /**
  * @arg sql
  * @param {...*} params
- * @yields {hello}
+ * @yields row chunks
  */
 Connection.prototype.stream = async function*(sql) {
     const statement = new Statement(this, sql);
@@ -124,7 +124,8 @@ Connection.prototype.stream = async function*(sql) {
 }
 
 /**
- * @method
+ * Register a User Defined Function
+ *
  * @arg name
  * @arg return_type
  * @arg fun
@@ -245,18 +246,34 @@ Connection.prototype.register = function(name, return_type, fun) {
 
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
 Connection.prototype.prepare;
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
-Connection.prototype.exec;
+ Connection.prototype.exec;
 /**
+ * Register a User Defined Function
+ *
  * @method
+ * @arg name
+ * @arg return_type
+ * @param callback
  */
 Connection.prototype.register_bulk;
 /**
+ * Unregister a User Defined Function
+ *
  * @method
+ * @arg name
+ * @arg return_type
+ * @param callback
  */
 Connection.prototype.unregister;
 
@@ -270,38 +287,48 @@ default_connection = function(o) {
 
 /**
  * @method
+ * @param callback
  */
 Database.prototype.close;
 /**
  * @method
+ * TODO: what does this do?
  */
 Database.prototype.wait;
 /**
  * @method
+ * TODO: what does this do?
  */
 Database.prototype.serialize;
 /**
  * @method
+ * TODO: what does this do?
  */
 Database.prototype.parallelize;
 /**
  * @method
  * @arg path the database to connect to, either a file path, or `:memory:`
+ * @return {Connection}
  */
 Database.prototype.connect;
 /**
  * @method
+ * TODO: what does this do?
  */
 Database.prototype.interrupt;
 
 /**
  * @arg sql
+ * @return {Statement}
  */
 Database.prototype.prepare = function() {
     return default_connection(this).prepare.apply(this.default_connection, arguments);
 }
 
 /**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
 Database.prototype.run = function() {
     default_connection(this).run.apply(this.default_connection, arguments);
@@ -309,27 +336,42 @@ Database.prototype.run = function() {
 }
 
 /**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
-Database.prototype.each = function() {
+ Database.prototype.each = function() {
     default_connection(this).each.apply(this.default_connection, arguments);
     return this;
 }
 
 /**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
-Database.prototype.all = function() {
+ Database.prototype.all = function() {
     default_connection(this).all.apply(this.default_connection, arguments);
     return this;
 }
 
 /**
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
-Database.prototype.exec = function() {
+ Database.prototype.exec = function() {
     default_connection(this).exec.apply(this.default_connection, arguments);
     return this;
 }
 
 /**
+ * Register a User Defined Function
+ *
+ * Convenience method for Connection#register
+ * @arg name
+ * @arg return_type
+ * @arg fun
  */
 Database.prototype.register = function() {
     default_connection(this).register.apply(this.default_connection, arguments);
@@ -337,6 +379,10 @@ Database.prototype.register = function() {
 }
 
 /**
+ * Unregister a User Defined Function
+ *
+ * Convenience method for Connection#unregister
+ * @arg name
  */
 Database.prototype.unregister = function() {
     default_connection(this).unregister.apply(this.default_connection, arguments);
@@ -359,21 +405,36 @@ Statement.prototype.get = function() {
 
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
  Statement.prototype.run;
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
  Statement.prototype.all;
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
  Statement.prototype.each;
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @param callback
  */
  Statement.prototype.finalize
 /**
  * @method
+ * @arg sql
+ * @param {...*} params
+ * @yield callback
  */
 Statement.prototype.stream;
