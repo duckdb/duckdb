@@ -30,14 +30,13 @@ public:
 	JoinHTScanState() : position(0), block_position(0), total(0), scan_index(0), scanned(0) {
 	}
 
-	mutex lock;
 	idx_t position;
 	idx_t block_position;
 
 	//! Used for synchronization of parallel external join
 	idx_t total;
 	idx_t scan_index;
-	idx_t scanned;
+	atomic<idx_t> scanned;
 
 public:
 	void Reset() {
@@ -148,8 +147,12 @@ public:
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 
-	idx_t Count() {
+	idx_t Count() const {
 		return block_collection->count;
+	}
+
+	const RowDataCollection &GetBlockCollection() const {
+		return *block_collection;
 	}
 
 	//! BufferManager
@@ -243,9 +246,9 @@ public:
 	idx_t SwizzledCount() {
 		return swizzled_block_collection->count;
 	}
-	//! The size of the data in memory
+	//! The size of the data in memory if we build a hash table of this
 	idx_t SizeInBytes() {
-		return block_collection->SizeInBytes() + string_heap->SizeInBytes();
+		return block_collection->SizeInBytes() + string_heap->SizeInBytes() + Count() * 3 * sizeof(data_ptr_t);
 	}
 	//! Size of swizzled_block_collection + swizzled_string_heap in bytes
 	idx_t SwizzledSize() {
@@ -273,11 +276,9 @@ public:
 
 	//! If this is the probe-side HT, prepare the next partitioned probe round
 	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
-	//! If this is the probe-side HT, assign the next tuples to scan
-	idx_t AssignProbeTuples(JoinHTScanState &state, idx_t &position, idx_t &block_position);
 	//! If this is the probe-side HT, gather the next tuples given the assignment
-	void GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
-	                       idx_t block_position, idx_t count);
+	void GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t &block_idx,
+	                       idx_t &entry_idx, idx_t &block_idx_deleted, const idx_t &block_idx_end);
 
 private:
 	//! Number of tuples for the build-side HT per partitioned round

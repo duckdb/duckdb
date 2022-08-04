@@ -1239,69 +1239,51 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 	probe_scan_state.total = block_collection->count;
 }
 
-idx_t JoinHashTable::AssignProbeTuples(JoinHTScanState &state, idx_t &position, idx_t &block_position) {
-	D_ASSERT(state.scan_index < state.total);
+void JoinHashTable::GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t &block_idx,
+                                      idx_t &entry_idx, idx_t &block_idx_deleted, const idx_t &block_idx_end) {
+	D_ASSERT(block_idx < block_idx_end);
 
-	// Set start positions
-	position = state.position;
-	block_position = state.block_position;
-
-	idx_t count = 0;
-	while (state.scan_index < state.total) {
-		auto &block = *block_collection->blocks[state.block_position];
-		auto block_remaining = block.count - state.position;
-		auto next = MinValue<idx_t>(block_remaining, STANDARD_VECTOR_SIZE - count);
-
-		state.position += next;
-		if (state.position == block.count) {
-			state.block_position++;
-			state.position = 0;
-		}
-
-		state.scan_index += next;
-		count += next;
-		if (count == STANDARD_VECTOR_SIZE) {
-			break;
+	// Delete references to blocks that we've passed, to make sure they aren't written back to disk
+	for (; block_idx_deleted < block_idx; block_idx_deleted++) {
+		block_collection->blocks[block_idx_deleted] = nullptr;
+		if (!layout.AllConstant()) {
+			string_heap->blocks[block_idx_deleted] = nullptr;
 		}
 	}
-	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
-	D_ASSERT(state.scan_index <= state.total);
 
-	return count;
-}
-
-void JoinHashTable::GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t position,
-                                      idx_t block_position, idx_t count) {
-	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 	vector<BufferHandle> handles;
+	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
 
-	idx_t done = 0;
-	while (done != count) {
-		auto &block = *block_collection->blocks[block_position];
-		auto next = MinValue<idx_t>(block.count - position, count - done);
+	idx_t count = 0;
+	while (count != STANDARD_VECTOR_SIZE && block_idx < block_idx_end) {
+		auto &block = *block_collection->blocks[block_idx];
+		auto next = MinValue<idx_t>(block.count - entry_idx, STANDARD_VECTOR_SIZE - count);
+
 		auto block_handle = buffer_manager.Pin(block.block);
-		auto row_ptr = block_handle.Ptr() + position * layout.GetRowWidth();
+		auto row_ptr = block_handle.Ptr() + entry_idx * layout.GetRowWidth();
 		if (!layout.AllConstant()) {
 			// Unswizzle if necessary
-			auto &heap_block = *string_heap->blocks[block_position];
+			auto &heap_block = *string_heap->blocks[block_idx];
 			auto heap_handle = buffer_manager.Pin(heap_block.block);
 			RowOperations::UnswizzlePointers(layout, row_ptr, heap_handle.Ptr(), next);
 			handles.push_back(move(heap_handle));
 		}
 		handles.push_back(move(block_handle));
+
 		// Set up pointers
-		for (idx_t i = done; i < done + next; i++) {
+		for (idx_t i = count; i < count + next; i++) {
 			key_locations[i] = row_ptr;
 			row_ptr += layout.GetRowWidth();
 		}
-		// Increment indices
-		position += next;
-		if (position == block.count) {
-			position = 0;
-			block_position++;
+
+		entry_idx += next;
+		if (entry_idx == block.count) {
+			block_idx++;
+			entry_idx = 0;
 		}
-		done += next;
+		count += next;
 	}
+	D_ASSERT(count != 0);
 
 	// Gather join keys
 	join_keys.Reset();
