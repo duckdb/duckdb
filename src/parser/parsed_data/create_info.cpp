@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -26,6 +27,8 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.Read<CatalogType>();
 	switch (type) {
+	case CatalogType::INDEX_ENTRY:
+		return CreateIndexInfo::Deserialize(deserializer);
 	case CatalogType::TABLE_ENTRY:
 		return CreateTableInfo::Deserialize(deserializer);
 	case CatalogType::SCHEMA_ENTRY:

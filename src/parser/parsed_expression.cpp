@@ -116,6 +116,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	case ExpressionClass::BETWEEN:
 		result = BetweenExpression::Deserialize(type, reader);
 		break;
+	case ExpressionClass::BOUND_EXPRESSION:
+		result = BoundExpression::Deserialize(type, reader);
+		break;
 	case ExpressionClass::CASE:
 		result = CaseExpression::Deserialize(type, reader);
 		break;
