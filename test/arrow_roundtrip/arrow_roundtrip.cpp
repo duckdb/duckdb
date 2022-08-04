@@ -14,14 +14,14 @@ using namespace duckdb;
 
 struct ArrowRoundtripFactory {
 	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
-	                      unique_ptr<MaterializedQueryResult> result_p)
+	                      unique_ptr<QueryResult> result_p)
 	    : types(move(types_p)), names(move(names_p)), tz(move(tz_p)), result(move(result_p)) {
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
 	string tz;
-	unique_ptr<MaterializedQueryResult> result;
+	unique_ptr<QueryResult> result;
 
 public:
 	struct ArrowArrayStreamData {
@@ -74,7 +74,7 @@ public:
 		}
 
 		auto stream_wrapper = make_unique<ArrowArrayStreamWrapper>();
-		stream_wrapper->number_of_rows = factory.result->RowCount();
+		stream_wrapper->number_of_rows = -1;
 		auto private_data = make_unique<ArrowArrayStreamData>(factory);
 		stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 		stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
@@ -170,6 +170,7 @@ static void TestParquetRoundtrip(const string &path) {
 }
 
 TEST_CASE("Test arrow roundtrip", "[arrow]") {
+	TestArrowRoundtrip("SELECT m from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)");
 	TestArrowRoundtrip("SELECT * FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then null else i end i FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then true else false end b FROM range(10) tbl(i)");

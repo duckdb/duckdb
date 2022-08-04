@@ -389,13 +389,9 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
 
-<<<<<<< HEAD
-	auto timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
-=======
 	timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
->>>>>>> master
+	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches = FetchAllArrowChunks(chunk_size);

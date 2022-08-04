@@ -449,7 +449,8 @@ struct ArrowStructData {
 //===--------------------------------------------------------------------===//
 // Lists
 //===--------------------------------------------------------------------===//
-void AppendListOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t size) {
+void AppendListOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format, idx_t size,
+                       vector<sel_t> &child_sel) {
 	// resize the offset buffer - the offset buffer holds the offsets into the child array
 	append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
 	auto data = (list_entry_t *)format.data;
@@ -470,8 +471,13 @@ void AppendListOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format
 		}
 
 		// append the offset data
-		last_offset += data[source_idx].length;
+		auto list_length = data[source_idx].length;
+		last_offset += list_length;
 		offset_data[offset_idx] = last_offset;
+
+		for (idx_t k = 0; k < list_length; k++) {
+			child_sel.push_back(data[source_idx].offset + k);
+		}
 	}
 }
 
@@ -487,13 +493,16 @@ struct ArrowListData {
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(size, format);
 
+		vector<sel_t> child_indices;
 		AppendValidity(append_data, format, size);
-		AppendListOffsets(append_data, format, size);
+		AppendListOffsets(append_data, format, size, child_indices);
 
 		// append the child vector of the list
+		SelectionVector child_sel(child_indices.data());
 		auto &child = ListVector::GetEntry(input);
-		auto child_size = ListVector::GetListSize(input);
-		child.Flatten(child_size);
+		auto child_size = child_indices.size();
+		child.Slice(child_sel, child_size);
+
 		append_data.child_data[0]->append_vector(*append_data.child_data[0], child, child_size);
 		append_data.row_count += size;
 	}
@@ -538,17 +547,22 @@ struct ArrowMapData {
 		// since both lists are the same, arrow tries to be smart by storing the offsets only once
 		// we can append the offsets from any of the two children
 		auto &children = StructVector::GetEntries(input);
+
 		UnifiedVectorFormat child_format;
 		children[0]->ToUnifiedFormat(size, child_format);
-		AppendListOffsets(append_data, child_format, size);
+		vector<sel_t> child_indices;
+		AppendListOffsets(append_data, child_format, size, child_indices);
 
 		// now we can append the children to the lists
 		auto &struct_entries = StructVector::GetEntries(input);
 		D_ASSERT(struct_entries.size() == 2);
+		SelectionVector child_sel(child_indices.data());
 		auto &key_vector = ListVector::GetEntry(*struct_entries[0]);
 		auto &value_vector = ListVector::GetEntry(*struct_entries[1]);
-		auto list_size = ListVector::GetListSize(*struct_entries[0]);
+		auto list_size = child_indices.size();
 		D_ASSERT(list_size == ListVector::GetListSize(*struct_entries[1]));
+		key_vector.Slice(child_sel, list_size);
+		value_vector.Slice(child_sel, list_size);
 
 		// perform the append
 		auto &struct_data = *append_data.child_data[0];
