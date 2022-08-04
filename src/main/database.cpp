@@ -271,4 +271,11 @@ string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
 	}
 }
 
+void DatabaseInstance::Invalidate() {
+	this->is_invalidated = true;
+}
+bool DatabaseInstance::IsInvalidated() {
+	return this->is_invalidated;
+}
+
 } // namespace duckdb

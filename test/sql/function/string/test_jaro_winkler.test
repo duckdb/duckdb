@@ -1,0 +1,189 @@
+# name: test/sql/function/string/test_jaro_winkler.test
+# description: Test jaro and jaro_winkler function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query T
+select jaro_winkler_similarity('CRATE', 'TRACE')
+----
+0.733333
+
+query T
+select jaro_winkler_similarity('DwAyNE', 'DuANE')
+----
+0.8400000000000001
+
+# stole these from the jaro winkler library
+query T
+select jaro_winkler_similarity('0', '0')
+----
+1
+
+query T
+select jaro_winkler_similarity('00', '00')
+----
+1
+
+query T
+select jaro_winkler_similarity('0', '00')
+----
+0.85
+
+query T
+select jaro_winkler_similarity('00000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000000')
+----
+1
+
+query T
+select jaro_winkler_similarity('0000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000000')
+----
+0.9969
+
+query T
+select jaro_winkler_similarity('000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000000')
+----
+0.9938
+
+query T
+select jaro_winkler_similarity('10000000000000000000000000000000000000000000000000000000000000020', '00000000000000000000000000000000000000000000000000000000000000000')
+----
+0.97948
+
+query T
+select jaro_winkler_similarity('0000000000000000000000000000000000000000000000000000000000000000000000000000001', '00000000000000100000000000000000000000010000000000000000000000000')
+----
+0.95333
+
+query T
+select jaro_winkler_similarity('01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000', '00000000000000000000000000000000000000000000000000000000000000000')
+----
+0.85234
+
+# stole these from the Apache Commons library jaro winkler implementation
+query T
+select jaro_winkler_similarity(null, null)
+----
+NULL
+
+query T
+select jaro_winkler_similarity('foo', null)
+----
+NULL
+
+query T
+select jaro_winkler_similarity(null, 'foo')
+----
+NULL
+
+# this is 1.0 in the apache commons library, but 0.0 in our library
+query T
+select jaro_winkler_similarity('', '')
+----
+0.0
+
+query T
+select jaro_winkler_similarity('foo', 'foo')
+----
+1.0
+
+query T
+select jaro_winkler_similarity('foo', 'foo ')
+----
+0.94
+
+query T
+select jaro_winkler_similarity('foo', 'foo  ')
+----
+0.91
+
+query T
+select jaro_winkler_similarity('foo', ' foo ')
+----
+0.87
+
+query T
+select jaro_winkler_similarity('foo', '  foo')
+----
+0.51
+
+query T
+select jaro_winkler_similarity('', 'a')
+----
+0.0
+
+query T
+select jaro_winkler_similarity('aaapppp', '')
+----
+0.0
+
+query T
+select jaro_winkler_similarity('frog', 'fog')
+----
+0.93
+
+query T
+select jaro_winkler_similarity('fly', 'ant')
+----
+0.0
+
+query T
+select jaro_winkler_similarity('elephant', 'hippo')
+----
+0.44
+
+query T
+select jaro_winkler_similarity('hippo', 'elephant')
+----
+0.44
+
+query T
+select jaro_winkler_similarity('hippo', 'zzzzzzzz')
+----
+0.0
+
+query T
+select jaro_winkler_similarity('hello', 'hallo')
+----
+0.88
+
+query T
+select jaro_winkler_similarity('ABC Corporation', 'ABC Corp')
+----
+0.91
+
+# this is 0.95 in the apache commons library but 0.8648324514991181 in ours
+query T
+select jaro_winkler_similarity('D N H Enterprises Inc', 'D &amp; H Enterprises, Inc.')
+----
+0.8648324514991181
+
+# this is 0.92 in the apache commons library but 0.942 in ours
+query T
+select jaro_winkler_similarity('My Gym Children''s Fitness Center', 'My Gym. Childrens Fitness')
+----
+0.942
+
+# this is 0.88 in the apache commons library but 0.8980186480186481 in ours
+query T
+select jaro_winkler_similarity('PENNSYLVANIA', 'PENNCISYLVNIA')
+----
+0.8980186480186481
+
+# test with table just in case
+statement ok
+create table test as select '0000' || range::varchar s from range(10000);
+
+# results should be the same regardless of the constant being first or second arg!
+# because of floating point arithmetic this is off slightly at smaller vector sizes
+
+require vector_size 1024
+
+query T nosort q0
+select avg(jaro_winkler_similarity('00000000', s)) from test;
+----
+
+query T nosort q0
+select avg(jaro_winkler_similarity(s, '00000000')) from test;
+----
