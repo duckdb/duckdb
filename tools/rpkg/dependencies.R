@@ -1,5 +1,5 @@
 local({
-  pkg <- c("DBI", "callr", "DBItest", "dbplyr", "nycflights13", "testthat", "bit64", "cpp11", "arrow", "covr", "pkgbuild", "remotes", "bit64")
+  pkg <- c("DBI", "callr", "DBItest", "dbplyr", "testthat", "bit64", "cpp11", "arrow", "covr", "pkgbuild", "remotes", "bit64")
 
   if (.Platform$OS.type == "unix") {
     options(HTTPUserAgent = sprintf("R/4.1.0 R (4.1.0 %s)", paste(R.version$platform, R.version$arch, R.version$os)))
