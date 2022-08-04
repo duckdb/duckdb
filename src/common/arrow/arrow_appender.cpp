@@ -217,11 +217,7 @@ struct ArrowIntervalConverter {
 };
 
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
-struct ArrowScalarData {
-	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.main_buffer.reserve(capacity * sizeof(TGT));
-	}
-
+struct ArrowScalarBaseData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(size, format);
@@ -246,10 +242,38 @@ struct ArrowScalarData {
 		}
 		append_data.row_count += size;
 	}
+};
+
+template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
+struct ArrowScalarData : public ArrowScalarBaseData<TGT, SRC, OP> {
+	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
+		result.main_buffer.reserve(capacity * sizeof(TGT));
+	}
 
 	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
 		result->n_buffers = 2;
 		result->buffers[1] = append_data.main_buffer.data();
+	}
+};
+
+//===--------------------------------------------------------------------===//
+// Enums
+//===--------------------------------------------------------------------===//
+template <class TGT>
+struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
+	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
+		result.main_buffer.reserve(capacity * sizeof(TGT));
+		// construct the enum child data
+		auto enum_data = InitializeArrowChild(LogicalType::VARCHAR, EnumType::GetSize(type));
+		enum_data.append_vector(enum_data, EnumType::GetValuesInsertOrder(type), EnumType::GetSize(type));
+		result.child_data.push_back(move(enum_data));
+	}
+
+	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
+		result->n_buffers = 2;
+		result->buffers[1] = append_data.main_buffer.data();
+		// finalize the enum child data, and assign it to the dictionary
+		result->dictionary = FinalizeArrowChild(LogicalType::VARCHAR, append_data.child_data[0]);
 	}
 };
 
@@ -612,7 +636,20 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
 		return;
 	case LogicalTypeId::ENUM:
-		throw InternalException("FIXME: special logical type");
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			InitializeFunctionPointers<ArrowEnumData<uint8_t>>(append_data);
+			break;
+		case PhysicalType::UINT16:
+			InitializeFunctionPointers<ArrowEnumData<uint16_t>>(append_data);
+			break;
+		case PhysicalType::UINT32:
+			InitializeFunctionPointers<ArrowEnumData<uint32_t>>(append_data);
+			break;
+		default:
+			throw InternalException("Unsupported internal enum type");
+		}
+		return;
 	default:
 		break;
 	}
