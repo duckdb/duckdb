@@ -312,15 +312,32 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-static data_frame FrameFromNumpy(const py::handle &o) {
-	return py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+void DuckDBPyResult::ChangeToTZType(data_frame &df) {
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
+			// first localize to UTC then convert to timezone_config
+			auto utc_local = df[result->names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
+			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(timezone_config);
+		}
+	}
+}
+
+data_frame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+	auto df = py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
+	ChangeToTZType(df);
+	return df;
 }
 
 data_frame DuckDBPyResult::FetchDF() {
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(FetchNumpyInternal());
 }
 
 data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+	if (timezone_config.empty()) {
+		timezone_config = QueryResult::GetConfigTimezone(*result);
+	}
 	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
 }
 
@@ -338,7 +355,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
@@ -372,8 +389,13 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
 
+<<<<<<< HEAD
 	auto timezone_config = QueryResult::GetConfigTimezone(*result);
 	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+=======
+	timezone_config = QueryResult::GetConfigTimezone(*result);
+	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+>>>>>>> master
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches = FetchAllArrowChunks(chunk_size);

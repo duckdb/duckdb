@@ -28,32 +28,57 @@ DROP TABLE a
 
 endloop
 
+statement ok
+CREATE TABLE test (d INT32);
+
+# Range too big to force bitpacking
+statement ok
+INSERT INTO test VALUES (-2147483648), (2147483647);
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'INTEGER')
+----
+Uncompressed
 
 statement ok
-CREATE TABLE test (a INT64, b INT32, c INT16, d INT8);
+DROP TABLE IF EXISTS test;
 
 statement ok
-INSERT INTO test SELECT i, i, i, i FROM range(-128, 128) tbl(i);
-INSERT INTO test SELECT i, i, i, NULL FROM range(-32767, 32768) tbl(i);
-INSERT INTO test SELECT i, i, NULL, NULL FROM range(-2147483648, -2147482648) tbl(i);
-INSERT INTO test SELECT i, i, NULL, NULL FROM range(2147482648, 2147483648) tbl(i);
-INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(-9223372036854775808, -9223372036854774808) tbl(i);
-INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(9223372036854774808, 9223372036854775807) tbl(i);
-INSERT INTO test values (9223372036854775807, NULL, NULL, NULL);
+CREATE TABLE test (a INT64, b INT32, c INT16, d TINYINT);
+
+# Only using (SIZEOF(TYPE)*8)-1
+# (All but 1 bit)
+# Because bitpacking wont accept a value range bigger than that
+statement ok
+INSERT INTO test VALUES (-4611686018427387904, -1073741824, -16384, -64), (4611686018427387903, 1073741823, 16383, 63);
 
 statement ok
 checkpoint
 
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'BIGINT' OR
+	segment_type ILIKE 'INTEGER' OR
+	segment_type ILIKE 'SMALLINT' OR
+	segment_type ILIKE 'TINYINT')
+----
+BitPacking
+BitPacking
+BitPacking
+BitPacking
+
 query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
--0.030491	-0.016639	-0.001946	-0.500000	69791
+-0.5	-0.5	-0.5	-0.5	2
 
 statement ok
 drop table test
 
 statement ok
 CREATE TABLE test (a UINT64, b UINT32, c UINT16, d UINT8);
+
 
 statement ok
 INSERT INTO test SELECT i, i, i, i FROM range(0, 256) tbl(i);
@@ -67,7 +92,7 @@ checkpoint
 query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
-5665461940419088384.000000	1903811655.425532	25716.671975	127.500000	3256
+5.665461940419088e+18	1903811655.4255319	25716.671974522294	127.5	3256
 
 statement ok
 CREATE TABLE test_bool (id VARCHAR, col BOOL)

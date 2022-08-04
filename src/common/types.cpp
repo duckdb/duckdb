@@ -252,44 +252,8 @@ string TypeIdToString(PhysicalType type) {
 		return "INVALID";
 	case PhysicalType::BIT:
 		return "BIT";
-	case PhysicalType::NA:
-		return "NA";
-	case PhysicalType::HALF_FLOAT:
-		return "HALF_FLOAT";
-	case PhysicalType::STRING:
-		return "ARROW_STRING";
-	case PhysicalType::BINARY:
-		return "BINARY";
-	case PhysicalType::FIXED_SIZE_BINARY:
-		return "FIXED_SIZE_BINARY";
-	case PhysicalType::DATE32:
-		return "DATE32";
-	case PhysicalType::DATE64:
-		return "DATE64";
-	case PhysicalType::TIMESTAMP:
-		return "TIMESTAMP";
-	case PhysicalType::TIME32:
-		return "TIME32";
-	case PhysicalType::TIME64:
-		return "TIME64";
-	case PhysicalType::UNION:
-		return "UNION";
-	case PhysicalType::DICTIONARY:
-		return "DICTIONARY";
 	case PhysicalType::MAP:
 		return "MAP";
-	case PhysicalType::EXTENSION:
-		return "EXTENSION";
-	case PhysicalType::FIXED_SIZE_LIST:
-		return "FIXED_SIZE_LIST";
-	case PhysicalType::DURATION:
-		return "DURATION";
-	case PhysicalType::LARGE_STRING:
-		return "LARGE_STRING";
-	case PhysicalType::LARGE_BINARY:
-		return "LARGE_BINARY";
-	case PhysicalType::LARGE_LIST:
-		return "LARGE_LIST";
 	case PhysicalType::UNKNOWN:
 		return "UNKNOWN";
 	}
@@ -339,9 +303,8 @@ idx_t GetTypeIdSize(PhysicalType type) {
 }
 
 bool TypeIsConstantSize(PhysicalType type) {
-	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) ||
-	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::INTERVAL) ||
-	       type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
+	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) || type == PhysicalType::INTERVAL ||
+	       type == PhysicalType::INT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;

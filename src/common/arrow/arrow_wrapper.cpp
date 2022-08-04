@@ -86,7 +86,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 
 	auto &result = *my_stream->result;
 	if (!result.success) {
-		my_stream->last_error = "Query Failed";
+		my_stream->last_error = result.GetError();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
@@ -111,7 +111,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	auto &result = *my_stream->result;
 	if (!result.success) {
-		my_stream->last_error = "Query Failed";
+		my_stream->last_error = result.GetError();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
@@ -128,6 +128,10 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	unique_ptr<DataChunk> chunk_result = result.Fetch();
 	if (!chunk_result) {
+		if (!result.success) {
+			my_stream->last_error = result.GetError();
+			return -1;
+		}
 		// Nothing to output
 		out->release = nullptr;
 		return 0;
@@ -190,7 +194,6 @@ unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
 }
 
 unique_ptr<DataChunk> ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size) {
-
 	auto data_chunk = FetchNext(*result);
 	if (!data_chunk) {
 		return data_chunk;
