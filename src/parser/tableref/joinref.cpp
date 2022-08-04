@@ -71,7 +71,7 @@ void JoinRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(using_columns);
 }
 
-unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto result = make_unique<JoinRef>();
 	result->left = reader.ReadRequiredSerializable<TableRef>(context);
 	result->right = reader.ReadRequiredSerializable<TableRef>(context);

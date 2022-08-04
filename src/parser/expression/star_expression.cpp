@@ -77,7 +77,8 @@ void StarExpression::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext &context) {
+unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader,
+                                                         ClientContext &context) {
 	auto &source = reader.GetSource();
 
 	auto result = make_unique<StarExpression>();

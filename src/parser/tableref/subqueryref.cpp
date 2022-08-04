@@ -35,7 +35,7 @@ void SubqueryRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(column_name_alias);
 }
 
-unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto subquery = reader.ReadRequiredSerializable<SelectStatement>(context);
 	auto result = make_unique<SubqueryRef>(move(subquery));
 	result->column_name_alias = reader.ReadRequiredList<string>();

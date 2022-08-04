@@ -166,7 +166,7 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source, ClientContext& context) {
+unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source, ClientContext &context) {
 	FieldReader reader(main_source);
 
 	auto type = reader.ReadRequired<QueryNodeType>();

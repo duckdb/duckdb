@@ -45,7 +45,7 @@ public:
 	//! Serializes a ResultModifier to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a ResultModifier
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source, ClientContext& context);
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &source, ClientContext &context);
 };
 
 //! Single node in ORDER BY statement
@@ -96,7 +96,7 @@ public:
 	bool Equals(const ResultModifier *other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader, ClientContext& context);
+	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader, ClientContext &context);
 };
 
 class DistinctModifier : public ResultModifier {

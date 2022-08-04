@@ -16,7 +16,8 @@
 namespace duckdb {
 constexpr uint32_t UNDO_ENTRY_HEADER_SIZE = sizeof(UndoFlags) + sizeof(uint32_t);
 
-UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context) : allocator(BufferAllocator::Get(*context)), context(*context){
+UndoBuffer::UndoBuffer(const shared_ptr<ClientContext> &context)
+    : allocator(BufferAllocator::Get(*context)), context(*context) {
 	D_ASSERT(context);
 }
 

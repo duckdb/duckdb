@@ -69,7 +69,7 @@ void SetOperationNode::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*right);
 }
 
-unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto result = make_unique<SetOperationNode>();
 	result->setop_type = reader.ReadRequired<SetOperationType>();
 	result->left = reader.ReadRequiredSerializable<QueryNode>(context);

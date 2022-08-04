@@ -138,7 +138,8 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(filter_expr);
 }
 
-unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext& context) {
+unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader,
+                                                           ClientContext &context) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
 	auto expr = make_unique<WindowExpression>(type, schema, function_name);

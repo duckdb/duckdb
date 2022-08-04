@@ -18,7 +18,7 @@ void AlterInfo::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source, ClientContext& context) {
+unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<AlterType>();
 
@@ -79,7 +79,7 @@ void AlterTableInfo::Serialize(FieldWriter &writer) const {
 	SerializeAlterTable(writer);
 }
 
-unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto type = reader.ReadRequired<AlterTableType>();
 	auto schema = reader.ReadRequired<string>();
 	auto table = reader.ReadRequired<string>();
@@ -168,7 +168,8 @@ void AddColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteSerializable(new_column);
 }
 
-unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, string schema, string table, ClientContext& context) {
+unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, string schema, string table,
+                                                 ClientContext &context) {
 	auto new_column = reader.ReadRequiredSerializable<ColumnDefinition, ColumnDefinition>(context);
 	return make_unique<AddColumnInfo>(move(schema), move(table), move(new_column));
 }
@@ -222,7 +223,8 @@ void ChangeColumnTypeInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteOptional(expression);
 }
 
-unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, string schema, string table, ClientContext& context) {
+unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, string schema, string table,
+                                                        ClientContext &context) {
 	auto column_name = reader.ReadRequired<string>();
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr, context);
@@ -251,7 +253,8 @@ void SetDefaultInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteOptional(expression);
 }
 
-unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string schema, string table, ClientContext& context) {
+unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string schema, string table,
+                                                  ClientContext &context) {
 	auto column_name = reader.ReadRequired<string>();
 	auto new_default = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	return make_unique<SetDefaultInfo>(move(schema), move(table), move(column_name), move(new_default));

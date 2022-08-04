@@ -29,7 +29,7 @@ void CrossProductRef::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*right);
 }
 
-unique_ptr<TableRef> CrossProductRef::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<TableRef> CrossProductRef::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto result = make_unique<CrossProductRef>();
 
 	result->left = reader.ReadRequiredSerializable<TableRef>(context);

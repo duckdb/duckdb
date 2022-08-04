@@ -80,7 +80,7 @@ void TableMacroCatalogEntry::Serialize(Serializer &main_serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext& context) {
+unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &main_source, ClientContext &context) {
 	auto info = make_unique<CreateMacroInfo>(CatalogType::TABLE_MACRO_ENTRY);
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();

@@ -57,7 +57,8 @@ void SubqueryExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<ExpressionType>(comparison_type);
 }
 
-unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext& context) {
+unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type, FieldReader &reader,
+                                                             ClientContext &context) {
 	// FIXME: this shouldn't use a source
 	auto &source = reader.GetSource();
 

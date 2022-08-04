@@ -24,7 +24,7 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	SerializeInternal(serializer);
 }
 
-unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer, ClientContext& context) {
+unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer, ClientContext &context) {
 	auto type = deserializer.Read<CatalogType>();
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:

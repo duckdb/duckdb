@@ -18,7 +18,7 @@ void ResultModifier::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source, ClientContext& context) {
+unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<ResultModifierType>();
 
@@ -73,7 +73,7 @@ void LimitModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(offset);
 }
 
-unique_ptr<ResultModifier> LimitModifier::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<ResultModifier> LimitModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<LimitModifier>();
 	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr, context);
@@ -103,7 +103,7 @@ void DistinctModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(distinct_on_targets);
 }
 
-unique_ptr<ResultModifier> DistinctModifier::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<ResultModifier> DistinctModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<DistinctModifier>();
 	mod->distinct_on_targets = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 	return move(mod);
@@ -183,7 +183,7 @@ void OrderModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(orders);
 }
 
-unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<OrderModifier>();
 	mod->orders = reader.ReadRequiredSerializableList<OrderByNode, OrderByNode>(context);
 	return move(mod);

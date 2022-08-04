@@ -49,8 +49,7 @@ public:
 		writer.WriteOptional(expr);
 	}
 
-
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source, ClientContext& context) {
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source, ClientContext &context) {
 		unique_ptr<Expression> expression;
 		expression = source.ReadOptional<Expression>(move(expression), context);
 		return make_unique<BoundExpression>(move(expression));

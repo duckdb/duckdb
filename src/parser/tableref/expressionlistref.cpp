@@ -73,7 +73,7 @@ void ExpressionListRef::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader, ClientContext& context) {
+unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto result = make_unique<ExpressionListRef>();
 	// value list
 	result->expected_names = reader.ReadRequiredList<string>();

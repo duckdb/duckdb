@@ -49,7 +49,8 @@ void OperatorExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(children);
 }
 
-unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext& context) {
+unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader,
+                                                             ClientContext &context) {
 	auto expression = make_unique<OperatorExpression>(type);
 	expression->children = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 	return move(expression);

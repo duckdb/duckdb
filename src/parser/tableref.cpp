@@ -52,7 +52,7 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source, ClientContext& context) {
+unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 
 	auto type = reader.ReadRequired<TableReferenceType>();

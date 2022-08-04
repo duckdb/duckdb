@@ -55,7 +55,8 @@ void CaseExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable<ParsedExpression>(*else_expr);
 }
 
-unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader, ClientContext &context) {
+unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader,
+                                                         ClientContext &context) {
 	auto result = make_unique<CaseExpression>();
 	auto &source = reader.GetSource();
 	auto count = reader.ReadRequired<uint32_t>();

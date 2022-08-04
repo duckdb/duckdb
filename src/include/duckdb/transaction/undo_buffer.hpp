@@ -58,7 +58,7 @@ private:
 	template <class T>
 	void ReverseIterateEntries(T &&callback);
 
-	ClientContext& context;
+	ClientContext &context;
 };
 
 } // namespace duckdb
