@@ -2,6 +2,8 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -183,10 +185,41 @@ static void AppendValidity(ArrowAppendData &append_data, UnifiedVectorFormat &fo
 //===--------------------------------------------------------------------===//
 // Scalar Types
 //===--------------------------------------------------------------------===//
-template <class T>
+struct ArrowScalarConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		return input;
+	}
+
+	static bool SkipNulls() {
+		return false;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+	}
+};
+
+struct ArrowIntervalConverter {
+	template <class TGT, class SRC>
+	static TGT Operation(SRC input) {
+		return Interval::GetMilli(input);
+	}
+
+	static bool SkipNulls() {
+		return true;
+	}
+
+	template <class TGT>
+	static void SetNull(TGT &value) {
+		value = 0;
+	}
+};
+
+template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.main_buffer.reserve(capacity * sizeof(T));
+		result.main_buffer.reserve(capacity * sizeof(TGT));
 	}
 
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
@@ -197,15 +230,19 @@ struct ArrowScalarData {
 		AppendValidity(append_data, format, size);
 
 		// append the main data
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(T) * size);
-		auto data = (T *)format.data;
-		auto result_data = (T *)append_data.main_buffer.data();
+		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(TGT) * size);
+		auto data = (SRC *)format.data;
+		auto result_data = (TGT *)append_data.main_buffer.data();
 
 		for (idx_t i = 0; i < size; i++) {
 			auto source_idx = format.sel->get_index(i);
 			auto result_idx = append_data.row_count + i;
 
-			result_data[result_idx] = data[source_idx];
+			if (OP::SkipNulls() && !format.validity.RowIsValid(source_idx)) {
+				OP::template SetNull<TGT>(result_data[result_idx]);
+				continue;
+			}
+			result_data[result_idx] = OP::template Operation<TGT, SRC>(data[source_idx]);
 		}
 		append_data.row_count += size;
 	}
@@ -260,6 +297,31 @@ struct ArrowBoolData {
 //===--------------------------------------------------------------------===//
 // Varchar
 //===--------------------------------------------------------------------===//
+struct ArrowVarcharConverter {
+	template <class SRC>
+	static idx_t GetLength(SRC input) {
+		return input.GetSize();
+	}
+
+	template <class SRC>
+	static void WriteData(data_ptr_t target, SRC input) {
+		memcpy(target, input.GetDataUnsafe(), input.GetSize());
+	}
+};
+
+struct ArrowUUIDConverter {
+	template <class SRC>
+	static idx_t GetLength(SRC input) {
+		return UUID::STRING_SIZE;
+	}
+
+	template <class SRC>
+	static void WriteData(data_ptr_t target, SRC input) {
+		UUID::ToString(input, (char *)target);
+	}
+};
+
+template <class SRC = string_t, class OP = ArrowVarcharConverter>
 struct ArrowVarcharData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve((capacity + 1) * sizeof(uint32_t));
@@ -276,7 +338,7 @@ struct ArrowVarcharData {
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
-		auto data = (string_t *)format.data;
+		auto data = (SRC *)format.data;
 		auto offset_data = (uint32_t *)append_data.main_buffer.data();
 		if (append_data.row_count == 0) {
 			// first entry
@@ -297,8 +359,7 @@ struct ArrowVarcharData {
 				continue;
 			}
 
-			auto string_data = data[source_idx].GetDataUnsafe();
-			auto string_length = data[source_idx].GetSize();
+			auto string_length = OP::GetLength(data[source_idx]);
 
 			// append the offset data
 			auto current_offset = last_offset + string_length;
@@ -306,7 +367,7 @@ struct ArrowVarcharData {
 
 			// resize the string buffer if required, and write the string data
 			append_data.aux_buffer.resize(current_offset);
-			memcpy(append_data.aux_buffer.data() + last_offset, string_data, string_length);
+			OP::WriteData(append_data.aux_buffer.data() + last_offset, data[source_idx]);
 
 			last_offset = current_offset;
 		}
@@ -529,10 +590,28 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::MAP:
 		InitializeFunctionPointers<ArrowMapData>(append_data);
 		return;
-	case LogicalTypeId::UUID:
-	case LogicalTypeId::INTERVAL:
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			InitializeFunctionPointers<ArrowScalarData<hugeint_t, int16_t>>(append_data);
+			break;
+		case PhysicalType::INT32:
+			InitializeFunctionPointers<ArrowScalarData<hugeint_t, int32_t>>(append_data);
+			break;
+		case PhysicalType::INT64:
+			InitializeFunctionPointers<ArrowScalarData<hugeint_t, int64_t>>(append_data);
+			break;
+		case PhysicalType::INT128:
+			InitializeFunctionPointers<ArrowScalarData<hugeint_t>>(append_data);
+			break;
+		default:
+			throw InternalException("Unsupported internal decimal type");
+		}
+		return;
+	case LogicalTypeId::UUID:
+		InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
+		return;
+	case LogicalTypeId::ENUM:
 		throw InternalException("FIXME: special logical type");
 	default:
 		break;
@@ -543,7 +622,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeFunctionPointers<ArrowBoolData>(append_data);
 		break;
 	case PhysicalType::VARCHAR:
-		InitializeFunctionPointers<ArrowVarcharData>(append_data);
+		InitializeFunctionPointers<ArrowVarcharData<string_t>>(append_data);
 		break;
 	case PhysicalType::STRUCT:
 		InitializeFunctionPointers<ArrowStructData>(append_data);
@@ -583,6 +662,9 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	case PhysicalType::DOUBLE:
 		InitializeFunctionPointers<ArrowScalarData<double>>(append_data);
+		break;
+	case PhysicalType::INTERVAL:
+		InitializeFunctionPointers<ArrowScalarData<int64_t, interval_t, ArrowIntervalConverter>>(append_data);
 		break;
 	default:
 		throw InternalException("FIXME: unsupported physical type");
