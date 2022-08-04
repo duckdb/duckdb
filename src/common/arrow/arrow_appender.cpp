@@ -133,16 +133,16 @@ ArrowAppender::~ArrowAppender() {
 //===--------------------------------------------------------------------===//
 // Append Helper Functions
 //===--------------------------------------------------------------------===//
-static void GetBitPosition(idx_t row_idx, uint8_t &current_byte, uint8_t &current_bit) {
+static void GetBitPosition(idx_t row_idx, idx_t &current_byte, uint8_t &current_bit) {
 	current_byte = row_idx / 8;
 	current_bit = row_idx % 8;
 }
 
-static void UnsetBit(uint8_t *data, uint8_t current_byte, uint8_t current_bit) {
+static void UnsetBit(uint8_t *data, idx_t current_byte, uint8_t current_bit) {
 	data[current_byte] &= ~(1 << current_bit);
 }
 
-static void NextBit(uint8_t &current_byte, uint8_t &current_bit) {
+static void NextBit(idx_t &current_byte, uint8_t &current_bit) {
 	current_bit++;
 	if (current_bit == 8) {
 		current_byte++;
@@ -155,7 +155,7 @@ static void ResizeValidity(ArrowBuffer &buffer, idx_t row_count) {
 	buffer.resize(byte_count, 0xFF);
 }
 
-static void SetNull(ArrowAppendData &append_data, uint8_t *validity_data, uint8_t current_byte, uint8_t current_bit) {
+static void SetNull(ArrowAppendData &append_data, uint8_t *validity_data, idx_t current_byte, uint8_t current_bit) {
 	UnsetBit(validity_data, current_byte, current_bit);
 	append_data.null_count++;
 }
@@ -170,7 +170,8 @@ static void AppendValidity(ArrowAppendData &append_data, UnifiedVectorFormat &fo
 
 	// otherwise we iterate through the validity mask
 	auto validity_data = (uint8_t *)append_data.validity.data();
-	uint8_t current_bit, current_byte;
+	uint8_t current_bit;
+	idx_t current_byte;
 	GetBitPosition(append_data.row_count, current_byte, current_bit);
 	for (idx_t i = 0; i < size; i++) {
 		auto source_idx = format.sel->get_index(i);
@@ -297,7 +298,8 @@ struct ArrowBoolData {
 
 		auto result_data = (uint8_t *)append_data.main_buffer.data();
 		auto validity_data = (uint8_t *)append_data.validity.data();
-		uint8_t current_bit, current_byte;
+		uint8_t current_bit;
+		idx_t current_byte;
 		GetBitPosition(append_data.row_count, current_byte, current_bit);
 		for (idx_t i = 0; i < size; i++) {
 			auto source_idx = format.sel->get_index(i);
@@ -376,7 +378,8 @@ struct ArrowVarcharData {
 			auto offset_idx = append_data.row_count + i + 1;
 
 			if (!format.validity.RowIsValid(source_idx)) {
-				uint8_t current_bit, current_byte;
+				uint8_t current_bit;
+				idx_t current_byte;
 				GetBitPosition(append_data.row_count + i, current_byte, current_bit);
 				SetNull(append_data, validity_data, current_byte, current_bit);
 				offset_data[offset_idx] = last_offset;
