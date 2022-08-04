@@ -81,13 +81,15 @@ public:
 		any_distinct = true;
 
 		vector<LogicalType> payload_types_filters;
-		for (auto &child : aggr.children) {
+		for (idx_t i = 0; i < aggr.children.size(); i++) {
+			auto &child = aggr.children[i];
 			auto &child_ref = (BoundColumnRefExpression &)*child;
 			group_types.push_back(child_ref.return_type);
 			payload_types.push_back(child_ref.return_type);
 			if (aggr.filter) {
 				payload_types_filters.push_back(aggr.filter->return_type);
 			}
+			groups.push_back(make_unique<BoundReferenceExpression>(child_ref.return_type, i));
 		}
 		if (!aggr.function.combine) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
