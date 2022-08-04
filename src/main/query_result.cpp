@@ -90,6 +90,9 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 				if (lvalue.IsNull() && rvalue.IsNull()) {
 					continue;
 				}
+				if (lvalue.IsNull() != rvalue.IsNull()) {
+					return false;
+				}
 				if (lvalue != rvalue) {
 					return false;
 				}

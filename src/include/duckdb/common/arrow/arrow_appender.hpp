@@ -28,12 +28,6 @@ public:
 	DUCKDB_API ArrowArray Finalize();
 
 private:
-	ArrowAppendData Initialize(const LogicalType &type, idx_t capacity);
-
-	void AppendVector(ArrowAppendData &append_data, Vector &input, idx_t size);
-	ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_data);
-
-private:
 	//! The types of the chunks that will be appended in
 	vector<LogicalType> types;
 	//! The root arrow append data

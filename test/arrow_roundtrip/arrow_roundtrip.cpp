@@ -120,11 +120,13 @@ static void TestArrowRoundtrip(const string &query) {
 
 	// run the initial query again
 	auto result = con.Query(query);
-	result->Print();
-	arrow_result->Print();
-
 	// compare the results
-	REQUIRE(result->Equals(*arrow_result));
+	if (!result->Equals(*arrow_result)) {
+		result->Print();
+		arrow_result->Print();
+		FAIL();
+	}
+	REQUIRE(1);
 }
 
 TEST_CASE("Test arrow roundtrip", "[arrow]") {
@@ -132,4 +134,9 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT case when i%2=0 then null else i end i FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then true else false end b FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then i%4=0 else null end b FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT 'thisisalongstring'||i::varchar str FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT case when i%2=0 then null else 'thisisalongstring'||i::varchar end str FROM range(10) tbl(i)");
+TestArrowRoundtrip("SELECT {'i': i, 'b': 10-i} str FROM range(10) tbl(i)");
+TestArrowRoundtrip("SELECT case when i%2=0 then {'i': case when i%4=0 then null else i end, 'b': 10-i} else null end str FROM range(10) tbl(i)");
+TestArrowRoundtrip("SELECT [i, i+1, i+2] FROM range(10) tbl(i)");
 }
