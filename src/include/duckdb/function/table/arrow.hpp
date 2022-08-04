@@ -46,9 +46,18 @@ struct ArrowConvertData {
 	vector<ArrowDateTimeType> date_time_precision;
 };
 
-typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(
-    uintptr_t stream_factory_ptr, pair<unordered_map<idx_t, string>, vector<string>> &project_columns,
-    TableFilterSet *filters);
+struct ArrowProjectedColumns {
+	unordered_map<idx_t, string> projection_map;
+	vector<string> columns;
+};
+
+struct ArrowStreamParameters {
+	ArrowProjectedColumns projected_columns;
+	TableFilterSet *filters;
+};
+
+typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_t stream_factory_ptr,
+                                                                        ArrowStreamParameters &parameters);
 typedef void (*stream_factory_get_schema_t)(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema);
 
 struct ArrowScanFunctionData : public PyTableFunctionData {
