@@ -4,6 +4,7 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 
 #include "parquet-extension.hpp"
 #include "parquet_reader.hpp"
@@ -458,18 +459,20 @@ public:
 		auto data = (ParquetReadBindData *)bind_data_p;
 		auto initial_filename = data->files[0];
 
-		unordered_map<string, column_t> column_map;
-		for (idx_t i = 0; i < get.column_ids.size(); i++) {
-			column_map.insert({data->names[get.column_ids[i]], i});
-		}
+		if (data->parquet_options.hive_partitioning || data->parquet_options.filename) {
+			unordered_map<string, column_t> column_map;
+			for (idx_t i = 0; i < get.column_ids.size(); i++) {
+				column_map.insert({get.names[get.column_ids[i]], i});
+			}
 
-		HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
-		                                         data->parquet_options.hive_partitioning,
-		                                         data->parquet_options.filename);
+			HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+			                                         data->parquet_options.hive_partitioning,
+			                                         data->parquet_options.filename);
 
-		if (data->files.empty() || initial_filename != data->files[0]) {
-			// Remove initial reader in case the first file gets filtered out
-			data->initial_reader.reset();
+			if (data->files.empty() || initial_filename != data->files[0]) {
+				// Remove initial reader in case the first file gets filtered out
+				data->initial_reader.reset();
+			}
 		}
 	}
 };

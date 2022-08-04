@@ -51,8 +51,9 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 			expr = make_unique<BoundConstantExpression>(Value(lookup->second));
 		}
 	} else {
-		ExpressionIterator::EnumerateChildren(
-		    *expr, [&](unique_ptr<Expression> &child) { ConvertKnownColRefToConstants(child, known_column_values, table_index); });
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			ConvertKnownColRefToConstants(child, known_column_values, table_index);
+		});
 	}
 }
 
