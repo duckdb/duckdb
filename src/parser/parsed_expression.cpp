@@ -169,7 +169,7 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization: '%s'!",
-			ExpressionClassToString(expression_class));
+		                             ExpressionClassToString(expression_class));
 	}
 	result->alias = alias;
 	reader.Finalize();

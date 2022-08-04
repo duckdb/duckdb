@@ -176,3 +176,7 @@ TEST_CASE("Test logical_create_schema", "[serialization]") {
 TEST_CASE("Test logical_create_view", "[serialization]") {
 	test_helper("CREATE VIEW test_view AS (SELECT 42)");
 }
+
+TEST_CASE("Test logical_copy_to_file", "[serialization]") {
+	test_helper("COPY tbl TO 'test_table.tbl' ( DELIMITER '|', HEADER )", {"CREATE TABLE tbl (foo INTEGER)"});
+}
