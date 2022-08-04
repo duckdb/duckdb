@@ -6,6 +6,7 @@ namespace duckdb {
 
 DistinctRelation::DistinctRelation(shared_ptr<Relation> child_p)
     : Relation(child_p->context, RelationType::DISTINCT_RELATION), child(move(child_p)) {
+	D_ASSERT(child.get() != this);
 	vector<ColumnDefinition> dummy_columns;
 	context.GetContext()->TryBindRelation(*this, dummy_columns);
 }

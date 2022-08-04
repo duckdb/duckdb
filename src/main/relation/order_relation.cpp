@@ -8,6 +8,7 @@ namespace duckdb {
 
 OrderRelation::OrderRelation(shared_ptr<Relation> child_p, vector<OrderByNode> orders)
     : Relation(child_p->context, RelationType::ORDER_RELATION), orders(move(orders)), child(move(child_p)) {
+	D_ASSERT(child.get() != this);
 	// bind the expressions
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }

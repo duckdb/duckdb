@@ -9,11 +9,11 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression='bitpacking'
 
-# Uncompressed value size: 64bit
-# Compress value size: 12bit
-# Ratio: 64bit/12bit = 5.3333...
+# Uncompressed value size: (1024 * 64bit) = 65536
+# Compress value size: 64(bits) + 64(frame-of-reference) + (1024 * 1) = 1152
+# Ratio: 65536 / 1152 = 56.88
 statement ok
-CREATE TABLE test_bitpacked AS SELECT (2000 + i%2)::INT64 AS i FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_bitpacked AS SELECT (2000 + i%2)::INT64 AS i FROM range(0, 10000000) tbl(i);
 
 statement ok
 checkpoint
@@ -22,15 +22,20 @@ statement ok
 PRAGMA force_compression='uncompressed'
 
 statement ok
-CREATE TABLE test_uncompressed AS SELECT (i % 2000)::INT64 AS i FROM range(0, 2500000) tbl(i);
+CREATE TABLE test_uncompressed AS SELECT (2000 + i%2)::INT64 AS i FROM range(0, 10000000) tbl(i);
 
 statement ok
 checkpoint
 
-# This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
+query I
+SELECT compression FROM pragma_storage_info('test_bitpacked') WHERE segment_type != 'VALIDITY' AND compression != 'BitPacking';
+----
+
+
+# This query keeps a pretty wide margin in compression ratio on purpose to account for possible changes that
 # influence compression ratio.
 query II
-select (uncompressed::FLOAT / bitpacked::FLOAT) > 3, (uncompressed::FLOAT / bitpacked::FLOAT) < 6  FROM (
+select (uncompressed::FLOAT / bitpacked::FLOAT) > 45, (uncompressed::FLOAT / bitpacked::FLOAT) < 57 FROM (
     select
         (select count(distinct block_id) from pragma_storage_info('test_bitpacked') where segment_type not in('VARCHAR', 'VALIDITY')) as bitpacked,
         (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type not in('VARCHAR', 'VALIDITY')) as uncompressed
