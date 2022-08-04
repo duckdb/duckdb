@@ -212,10 +212,15 @@ public:
 		current_segment->count++;
 	}
 
-	// Nulls and empty values are both treated the same:
-	void AddNullOrEmpty() {
+	void AddNull() {
 		index_buffer.push_back(0);
 		current_segment->count++;
+	}
+
+	void AddEmptyString() {
+		index_buffer.push_back(0);
+		current_segment->count++;
+		UncompressedStringStorage::UpdateStringStats(current_segment->stats, "");
 	}
 
 	bool HasEnoughSpace(size_t string_len) {
@@ -366,7 +371,14 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	// Only Nulls, nothing to compress
 	if (total_count == 0 || state.fsst_encoder == nullptr) {
 		for (idx_t i = 0; i < count; i++) {
-			state.AddNullOrEmpty();
+			auto idx = vdata.sel->get_index(i);
+			if (!vdata.validity.RowIsValid(idx)) {
+				state.AddNull();
+			} else if (data[idx].GetSize() == 0) {
+				state.AddEmptyString();
+			} else {
+				D_ASSERT(0);
+			}
 		}
 		return;
 	}
@@ -397,12 +409,13 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	idx_t compressed_idx = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		auto row_is_valid = vdata.validity.RowIsValid(idx) && data[idx].GetSize();
-		if (row_is_valid) {
+		if (!vdata.validity.RowIsValid(idx)) {
+			state.AddNull();
+		} else if (data[idx].GetSize() == 0) {
+			state.AddEmptyString();
+		} else {
 			state.UpdateState(data[idx], strings_out[compressed_idx], sizes_out[compressed_idx]);
 			compressed_idx++;
-		} else {
-			state.AddNullOrEmpty();
 		}
 	}
 }
