@@ -51,7 +51,7 @@ struct ArrowBuffer {
 
 	void resize(idx_t bytes, data_t value) {
 		reserve(bytes);
-		for(idx_t i = count; i < bytes; i++) {
+		for (idx_t i = count; i < bytes; i++) {
 			dataptr[i] = value;
 		}
 		count = bytes;
@@ -99,9 +99,9 @@ struct ArrowAppendData {
 	idx_t null_count = 0;
 
 	// function pointers for construction
-	initialize_t initialize;
-	append_vector_t append_vector;
-	finalize_t finalize;
+	initialize_t initialize = nullptr;
+	append_vector_t append_vector = nullptr;
+	finalize_t finalize = nullptr;
 
 	// child data (if any)
 	vector<ArrowAppendData> child_data;
@@ -183,7 +183,7 @@ static void AppendValidity(ArrowAppendData &append_data, UnifiedVectorFormat &fo
 //===--------------------------------------------------------------------===//
 // Scalar Types
 //===--------------------------------------------------------------------===//
-template<class T>
+template <class T>
 struct ArrowScalarData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve(capacity * sizeof(T));
@@ -339,7 +339,7 @@ struct ArrowStructData {
 		AppendValidity(append_data, format, size);
 		// append the children of the struct
 		auto &children = StructVector::GetEntries(input);
-		for(idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 			auto &child = children[child_idx];
 			append_data.child_data[child_idx].append_vector(append_data.child_data[child_idx], *child, size);
 		}
@@ -423,17 +423,87 @@ struct ArrowListData {
 		append_data.child_pointers[0] = FinalizeArrowChild(child_type, append_data.child_data[0]);
 	}
 };
-//
-//void AppendMap(ArrowAppendData &append_data, UnifiedVectorFormat &format, Vector &input, idx_t size) {
-//	AppendValidity(append_data, format, size);
-//	// maps exist as a struct of two lists, e.g. STRUCT(key VARCHAR[], value VARCHAR[])
-//	// since both lists are the same, arrow tries to be smart by storing the offsets only once
-//	// we can append the offsets from any of the two children
-//	auto &children = StructVector::GetEntries(input);
-//	UnifiedVectorFormat child_format;
-//	children[0]->ToUnifiedFormat(size, child_format);
-//	AppendListOffsets(append_data, child_format, size);
-//}
+
+//===--------------------------------------------------------------------===//
+// Maps
+//===--------------------------------------------------------------------===//
+struct ArrowMapData {
+	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
+		// map types are stored in a (too) clever way
+		// the main buffer holds the null values and the offsets
+		// then we have a single child, which is a struct of the map_type, and the key_type
+		result.main_buffer.reserve((capacity + 1) * sizeof(uint32_t));
+
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		ArrowAppendData internal_struct;
+		internal_struct.child_data.push_back(InitializeArrowChild(key_type, capacity));
+		internal_struct.child_data.push_back(InitializeArrowChild(value_type, capacity));
+
+		result.child_data.push_back(move(internal_struct));
+	}
+
+	static void Append(ArrowAppendData &append_data, Vector &input, idx_t size) {
+		UnifiedVectorFormat format;
+		input.ToUnifiedFormat(size, format);
+
+		AppendValidity(append_data, format, size);
+		// maps exist as a struct of two lists, e.g. STRUCT(key VARCHAR[], value VARCHAR[])
+		// since both lists are the same, arrow tries to be smart by storing the offsets only once
+		// we can append the offsets from any of the two children
+		auto &children = StructVector::GetEntries(input);
+		UnifiedVectorFormat child_format;
+		children[0]->ToUnifiedFormat(size, child_format);
+		AppendListOffsets(append_data, child_format, size);
+
+		// now we can append the children to the lists
+		auto &struct_entries = StructVector::GetEntries(input);
+		D_ASSERT(struct_entries.size() == 2);
+		auto &key_vector = ListVector::GetEntry(*struct_entries[0]);
+		auto &value_vector = ListVector::GetEntry(*struct_entries[1]);
+		auto list_size = ListVector::GetListSize(*struct_entries[0]);
+		D_ASSERT(list_size == ListVector::GetListSize(*struct_entries[1]));
+
+		// perform the append
+		auto &struct_data = append_data.child_data[0];
+		auto &key_data = struct_data.child_data[0];
+		auto &value_data = struct_data.child_data[1];
+		key_data.append_vector(key_data, key_vector, list_size);
+		value_data.append_vector(value_data, value_vector, list_size);
+
+		append_data.row_count += size;
+		struct_data.row_count += size;
+	}
+
+	static void Finalize(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result) {
+		// set up the main map buffer
+		result->n_buffers = 2;
+		result->buffers[1] = append_data.main_buffer.data();
+
+		// the main map buffer has a single child: a struct
+		append_data.child_pointers.resize(1);
+		result->children = append_data.child_pointers.data();
+		result->n_children = 1;
+		append_data.child_pointers[0] = FinalizeArrowChild(type, append_data.child_data[0]);
+
+		// now that struct has two children: the key and the value type
+		auto &struct_data = append_data.child_data[0];
+		auto &struct_result = append_data.child_pointers[0];
+		struct_data.child_pointers.resize(2);
+		struct_result->n_children = 2;
+		struct_result->children = struct_data.child_pointers.data();
+
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		struct_data.child_pointers[0] = FinalizeArrowChild(key_type, struct_data.child_data[0]);
+		struct_data.child_pointers[1] = FinalizeArrowChild(value_type, struct_data.child_data[1]);
+
+		// keys cannot have null values
+		if (struct_data.child_pointers[0]->null_count > 0) {
+			throw std::runtime_error("Arrow doesn't accept NULL keys on Maps");
+		}
+	}
+};
 
 //! Append a data chunk to the underlying arrow array
 void ArrowAppender::Append(DataChunk &input) {
@@ -446,7 +516,7 @@ void ArrowAppender::Append(DataChunk &input) {
 //===--------------------------------------------------------------------===//
 // Initialize Arrow Child
 //===--------------------------------------------------------------------===//
-template<class OP>
+template <class OP>
 static void InitializeFunctionPointers(ArrowAppendData &append_data) {
 	append_data.initialize = OP::Initialize;
 	append_data.append_vector = OP::Append;
@@ -457,8 +527,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	// handle special logical types
 	switch (type.id()) {
 	case LogicalTypeId::MAP:
-//		AppendMap(append_data, format, input, size);
-//		break;
+		InitializeFunctionPointers<ArrowMapData>(append_data);
+		return;
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::ENUM:
@@ -519,7 +589,6 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	}
 }
 
-
 ArrowAppendData InitializeArrowChild(const LogicalType &type, idx_t capacity) {
 	ArrowAppendData result;
 	InitializeFunctionPointers(result, type);
@@ -556,7 +625,9 @@ ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_
 	result->length = append_data.row_count;
 	result->buffers[0] = append_data.validity.data();
 
-	append_data.finalize(append_data, type, result.get());
+	if (append_data.finalize) {
+		append_data.finalize(append_data, type, result.get());
+	}
 
 	append_data.array = move(result);
 	return append_data.array.get();

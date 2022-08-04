@@ -101,6 +101,10 @@ static void TestArrowRoundtrip(const string &query) {
 
 	// run the query
 	auto initial_result = con.Query(query);
+	if (!initial_result->success) {
+		initial_result->Print();
+		FAIL();
+	}
 
 	// create the roundtrip factory
 	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
@@ -135,8 +139,16 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	TestArrowRoundtrip("SELECT case when i%2=0 then true else false end b FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT case when i%2=0 then i%4=0 else null end b FROM range(10) tbl(i)");
 	TestArrowRoundtrip("SELECT 'thisisalongstring'||i::varchar str FROM range(10) tbl(i)");
-	TestArrowRoundtrip("SELECT case when i%2=0 then null else 'thisisalongstring'||i::varchar end str FROM range(10) tbl(i)");
-TestArrowRoundtrip("SELECT {'i': i, 'b': 10-i} str FROM range(10) tbl(i)");
-TestArrowRoundtrip("SELECT case when i%2=0 then {'i': case when i%4=0 then null else i end, 'b': 10-i} else null end str FROM range(10) tbl(i)");
-TestArrowRoundtrip("SELECT [i, i+1, i+2] FROM range(10) tbl(i)");
+	TestArrowRoundtrip(
+	    "SELECT case when i%2=0 then null else 'thisisalongstring'||i::varchar end str FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT {'i': i, 'b': 10-i} str FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT case when i%2=0 then {'i': case when i%4=0 then null else i end, 'b': 10-i} else null "
+	                   "end str FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT [i, i+1, i+2] FROM range(10) tbl(i)");
+	TestArrowRoundtrip(
+	    "SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a");
+	TestArrowRoundtrip(
+	    "SELECT MAP(LIST_VALUE({'i':i,'j':i+2},{'i':3,'j':NULL}),LIST_VALUE({'i':i+10,'j':2},{'i':i+4,'j':4})) as a "
+	    "FROM range(10) tbl(i)");
+	TestArrowRoundtrip("SELECT MAP(['hello', 'world'||i::VARCHAR],[i + 1, NULL]) as a FROM range(10) tbl(i)");
 }

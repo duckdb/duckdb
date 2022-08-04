@@ -108,8 +108,12 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		return;
 	}
 
-	if (ListVector::GetListSize(args.data[0]) != ListVector::GetListSize(args.data[1])) {
-		throw Exception("Key list has a different size from Value list");
+	auto key_count = ListVector::GetListSize(args.data[0]);
+	auto value_count = ListVector::GetListSize(args.data[1]);
+	if (key_count != value_count) {
+		throw InvalidInputException(
+		    "Error in MAP creation: key list has a different size from value list (%lld keys, %lld values)", key_count,
+		    value_count);
 	}
 
 	key_vector.Reference(args.data[0]);
