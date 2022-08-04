@@ -151,7 +151,7 @@ void DataChunk::Fuse(DataChunk &other) {
 }
 
 void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
-	idx_t new_size = NextPowerOfTwo(sel ? size() + sel_count : size() + other.size());
+	idx_t new_size = sel ? size() + sel_count : size() + other.size();
 	if (other.size() == 0) {
 		return;
 	}
@@ -160,10 +160,11 @@ void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel
 	}
 	if (new_size > capacity) {
 		if (resize) {
+			auto new_capacity = NextPowerOfTwo(new_size);
 			for (idx_t i = 0; i < ColumnCount(); i++) {
-				data[i].Resize(size(), new_size);
+				data[i].Resize(size(), new_capacity);
 			}
-			capacity = new_size;
+			capacity = new_capacity;
 		} else {
 			throw InternalException("Can't append chunk to other chunk without resizing");
 		}
