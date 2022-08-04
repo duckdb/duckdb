@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <limits>
 
@@ -226,7 +227,13 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	auto data = (ReadCSVData *)bind_data_p;
 	string first_file = data->files[0];
 
-	HivePartitioning::ApplyFiltersToFileList(data->files, filters, data->options.include_parsed_hive_partitions,
+	unordered_map<string, column_t> column_map;
+	for (idx_t i = 0; i < get.column_ids.size(); i++) {
+		column_map.insert({data->options.names[get.column_ids[i]], i});
+	}
+
+	HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+	                                         data->options.include_parsed_hive_partitions,
 	                                         data->options.include_file_name);
 
 	if (data->files.empty() || data->files[0] != first_file) {

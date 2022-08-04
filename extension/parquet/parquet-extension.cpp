@@ -33,6 +33,8 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
+
+#include "duckdb/planner/operator/logical_get.hpp"
 #endif
 
 namespace duckdb {
@@ -154,7 +156,8 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		result->SetInitialReader(make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
+		result->SetInitialReader(
+		    make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options));
 		result->names = result->initial_reader->names;
 		result->types = result->initial_reader->return_types;
 		return move(result);
@@ -209,20 +212,20 @@ public:
 				}
 
 				// If we don't have an initial reader anymore we need to create a reader
-				auto& current_reader = bind_data.initial_reader ? bind_data.initial_reader : reader;
+				auto &current_reader = bind_data.initial_reader ? bind_data.initial_reader : reader;
 				if (!current_reader) {
 					std::vector<column_t> ids(bind_data.names.size());
-					std::iota (std::begin(ids), std::end(ids), 0);  // fill with 0,1,2,3.. etc
+					std::iota(std::begin(ids), std::end(ids), 0); // fill with 0,1,2,3.. etc
 
-					current_reader = make_shared<ParquetReader>(
-					    context, bind_data.files[0], bind_data.names, bind_data.types, ids,
-					    bind_data.parquet_options, bind_data.files[0]);
+					current_reader =
+					    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types, ids,
+					                               bind_data.parquet_options, bind_data.files[0]);
 				}
 
 				// get and merge stats for file
-				auto file_stats = ParquetReader::ReadStatistics(*current_reader,
-				                                                current_reader->return_types[column_index],
-				                                                column_index, metadata->metadata.get());
+				auto file_stats =
+				    ParquetReader::ReadStatistics(*current_reader, current_reader->return_types[column_index],
+				                                  column_index, metadata->metadata.get());
 				if (!file_stats) {
 					return nullptr;
 				}
@@ -355,9 +358,9 @@ public:
 			if (bind_data.files.empty()) {
 				result->current_reader = nullptr;
 			} else {
-				result->current_reader = make_shared<ParquetReader>(
-				    context, bind_data.files[0], bind_data.names, bind_data.types, input.column_ids,
-				    bind_data.parquet_options, bind_data.files[0]);
+				result->current_reader =
+				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.names, bind_data.types,
+				                               input.column_ids, bind_data.parquet_options, bind_data.files[0]);
 			}
 		}
 
@@ -454,7 +457,13 @@ public:
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto data = (ParquetReadBindData *)bind_data_p;
 		auto initial_filename = data->files[0];
-		HivePartitioning::ApplyFiltersToFileList(data->files, filters,
+
+		unordered_map<string, column_t> column_map;
+		for (idx_t i = 0; i < get.column_ids.size(); i++) {
+			column_map.insert({data->names[get.column_ids[i]], i});
+		}
+
+		HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
 		                                         data->parquet_options.hive_partitioning,
 		                                         data->parquet_options.filename);
 

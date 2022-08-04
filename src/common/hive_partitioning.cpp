@@ -10,17 +10,25 @@
 
 namespace duckdb {
 
-static unordered_map<string, string> GetKnownColumnValues(string &filename, bool filename_col, bool hive_partition_cols) {
-	unordered_map<string, string> result;
+static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
+                                                            unordered_map<string, column_t> &column_map,
+                                                            bool filename_col, bool hive_partition_cols) {
+	unordered_map<column_t, string> result;
 
 	if (filename_col) {
-		result["filename"] = filename;
+		auto lookup_column_id = column_map.find("filename");
+		if (lookup_column_id != column_map.end()) {
+			result[lookup_column_id->second] = filename;
+		}
 	}
 
 	if (hive_partition_cols) {
 		auto partitions = HivePartitioning::Parse(filename);
 		for (auto &partition : partitions) {
-			result[partition.first] = partition.second;
+			auto lookup_column_id = column_map.find(partition.first);
+			if (lookup_column_id != column_map.end()) {
+				result[lookup_column_id->second] = partition.second;
+			}
 		}
 	}
 
@@ -28,9 +36,17 @@ static unordered_map<string, string> GetKnownColumnValues(string &filename, bool
 }
 
 // Takes an expression and converts a list of known column_refs to constants
-static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr, unordered_map<string, string> &known_column_values) {
+static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
+                                          unordered_map<column_t, string> &known_column_values, idx_t table_index) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto lookup = known_column_values.find(expr->alias);
+		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+
+		// This bound column ref is for another table
+		if (table_index != bound_colref.binding.table_index) {
+			return;
+		}
+
+		auto lookup = known_column_values.find(bound_colref.binding.column_index);
 		if (lookup != known_column_values.end()) {
 			expr = make_unique<BoundConstantExpression>(Value(lookup->second));
 		}
@@ -61,6 +77,7 @@ std::map<string, string> HivePartitioning::Parse(string &filename) {
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
+                                              unordered_map<string, column_t> &column_map, idx_t table_index,
                                               bool hive_enabled, bool filename_enabled) {
 	vector<string> pruned_files;
 	vector<unique_ptr<Expression>> pruned_filters;
@@ -72,12 +89,12 @@ void HivePartitioning::ApplyFiltersToFileList(vector<string> &files, vector<uniq
 	for (idx_t i = 0; i < files.size(); i++) {
 		auto &file = files[i];
 		bool should_prune_file = false;
-		auto known_values = GetKnownColumnValues(file, filename_enabled, hive_enabled);
+		auto known_values = GetKnownColumnValues(file, column_map, filename_enabled, hive_enabled);
 
 		FilterCombiner combiner;
 		for (auto &filter : filters) {
 			unique_ptr<Expression> filter_copy = filter->Copy();
-			ConvertKnownColRefToConstants(filter_copy, known_values);
+			ConvertKnownColRefToConstants(filter_copy, known_values, table_index);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
 			Value result_value;
 			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
