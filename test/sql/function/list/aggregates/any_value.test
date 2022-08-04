@@ -1,0 +1,114 @@
+# name: test/sql/function/list/aggregates/any_value.test
+# description: Test the list_any_value aggregate function
+# group: [aggregates]
+
+query I
+SELECT list_aggr([NULL, 1, 2], 'any_value')
+----
+1
+
+# incorrect usage
+statement error
+SELECT list_any_value()
+
+# different types
+
+# numerics
+foreach type <numeric>
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_any_value(i) FROM five
+----
+1
+NULL
+NULL
+NULL
+1
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# temporal
+statement ok
+CREATE TABLE five_dates AS
+	SELECT
+		LIST(NULLIF(i,0)::integer) AS i,
+		LIST('2021-08-20'::DATE + NULLIF(i,0)::INTEGER) AS d,
+		LIST('2021-08-20'::TIMESTAMP + INTERVAL (NULLIF(i,0)) HOUR) AS dt,
+		LIST('14:59:37'::TIME + INTERVAL (NULLIF(i,0)) MINUTE) AS t,
+		LIST(INTERVAL (NULLIF(i,0)) SECOND) AS s
+	FROM range(0, 6, 1) t1(i)
+
+query IIII
+SELECT list_any_value(d), list_any_value(dt), list_any_value(t), list_any_value(s) FROM five_dates
+----
+2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+
+statement ok
+DROP TABLE five_dates
+
+# with time zone
+statement ok
+CREATE TABLE five_dates_tz AS
+	SELECT
+		LIST(('2021-08-20'::TIMESTAMP + INTERVAL (NULLIF(i,0)) HOUR)::TIMESTAMPTZ) AS dt,
+		LIST(('14:59:37'::TIME + INTERVAL (NULLIF(i,0)) MINUTE)::TIMETZ) AS t,
+	FROM range(0, 6, 1) t1(i)
+
+query II
+SELECT list_any_value(dt), list_any_value(t) FROM five_dates_tz
+----
+2021-08-20 01:00:00+00	15:00:37+00
+
+statement ok
+DROP TABLE five_dates_tz
+
+# complex types
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		LIST(NULLIF(i,0)::integer) AS i,
+		LIST(NULLIF(i,0)::VARCHAR) AS s,
+		LIST([NULLIF(i,0)]) AS l,
+		LIST({'a': NULLIF(i,0)}) AS r
+	FROM range(0, 6, 1) t1(i)
+
+query III
+SELECT list_any_value(s), list_any_value(l), list_any_value(r)
+FROM five_complex
+----
+1	[NULL]	{'a': NULL}
+
+statement ok
+DROP TABLE five_complex
+
+# decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT LIST(i::${type}) AS i FROM range(1, 6, 1) t1(i)
+
+statement ok
+INSERT INTO five VALUES (NULL), ([NULL]), ([]), ([NULL, 1, 2])
+
+query I
+SELECT list_any_value(i) FROM five
+----
+1.0
+NULL
+NULL
+NULL
+1.0
+
+statement ok
+DROP TABLE five
+
+endloop
