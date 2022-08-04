@@ -26,28 +26,8 @@ public:
 	vector<unique_ptr<RadixPartitionedHashTable>> radix_tables;
 
 public:
-	void Initialize(vector<unique_ptr<Expression>> &aggregates, const vector<idx_t> &indices) {
-		idx_t distinct_aggregates = indices.size();
-		radix_tables.resize(distinct_aggregates);
-		grouped_aggregate_data.resize(distinct_aggregates);
-
-		//! For every distinct aggregate, create a hashtable
-		for (idx_t i = 0; i < indices.size(); i++) {
-			auto aggr_idx = indices[i];
-			auto &aggr = (BoundAggregateExpression &)*(aggregates[aggr_idx]);
-
-			GroupingSet set;
-			for (size_t set_idx = 0; set_idx < aggr.children.size(); set_idx++) {
-				set.insert(set_idx);
-			}
-			grouped_aggregate_data[aggr_idx] = make_unique<GroupedAggregateData>();
-			grouped_aggregate_data[aggr_idx]->SetDistinctGroupData(aggregates[aggr_idx]->Copy());
-			radix_tables[aggr_idx] = make_unique<RadixPartitionedHashTable>(set, *grouped_aggregate_data[aggr_idx]);
-		}
-	}
-	bool AnyDistinct() const {
-		return !radix_tables.empty();
-	}
+	void Initialize(vector<unique_ptr<Expression>> &aggregates, const vector<idx_t> &indices);
+	bool AnyDistinct() const;
 };
 
 //! PhysicalUngroupedAggregate is an aggregate operator that can only perform aggregates (1) without any groups, (2)
@@ -60,7 +40,7 @@ public:
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
 	//! The data used for the distinct aggregates (if any)
-	struct DistinctAggregateData distinct_aggregate_data;
+	DistinctAggregateData distinct_aggregate_data;
 
 public:
 	// Source interface

@@ -11,6 +11,30 @@
 
 namespace duckdb {
 
+void DistinctAggregateData::Initialize(vector<unique_ptr<Expression>> &aggregates, const vector<idx_t> &indices) {
+	idx_t distinct_aggregates = indices.size();
+	radix_tables.resize(distinct_aggregates);
+	grouped_aggregate_data.resize(distinct_aggregates);
+
+	//! For every distinct aggregate, create a hashtable
+	for (idx_t i = 0; i < indices.size(); i++) {
+		auto aggr_idx = indices[i];
+		auto &aggr = (BoundAggregateExpression &)*(aggregates[aggr_idx]);
+
+		GroupingSet grouping_set;
+		for (size_t set_idx = 0; set_idx < aggr.children.size(); set_idx++) {
+			grouping_set.insert(set_idx);
+		}
+		grouped_aggregate_data[aggr_idx] = make_unique<GroupedAggregateData>();
+		grouped_aggregate_data[aggr_idx]->SetDistinctGroupData(aggregates[aggr_idx]->Copy());
+		radix_tables[aggr_idx] =
+		    make_unique<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[aggr_idx]);
+	}
+}
+bool DistinctAggregateData::AnyDistinct() const {
+	return !radix_tables.empty();
+}
+
 PhysicalUngroupedAggregate::PhysicalUngroupedAggregate(vector<LogicalType> types,
                                                        vector<unique_ptr<Expression>> expressions,
                                                        idx_t estimated_cardinality)
