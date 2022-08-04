@@ -20,7 +20,7 @@ struct SimpleFactory {
 	}
 
 	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
-	                                                                     ArrowStreamParameters &parameters) {
+	                                                                     duckdb::ArrowStreamParameters &parameters) {
 		//! Create a new batch reader
 		auto &factory = *reinterpret_cast<SimpleFactory *>(this_ptr); //! NOLINT
 		REQUIRE_RESULT(auto reader, arrow::RecordBatchReader::Make(factory.batches, factory.schema));
