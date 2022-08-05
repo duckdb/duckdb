@@ -27,6 +27,7 @@ class Task;
 
 struct PipelineEventStack;
 struct ProducerToken;
+struct ScheduleEventData;
 
 using event_map_t = unordered_map<const Pipeline *, PipelineEventStack>;
 
@@ -92,16 +93,12 @@ private:
 	void InitializeInternal(PhysicalOperator *physical_plan);
 
 	void ScheduleEvents();
-	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines,
-	                            unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
-	                            vector<shared_ptr<Event>> &events, bool main_schedule = true);
+	void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
-	                      vector<shared_ptr<Event>> &events, bool complete_pipeline);
+	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data);
 	Pipeline *ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, const Pipeline *parent,
-	                                event_map_t &event_map, vector<shared_ptr<Event>> &events);
-	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, event_map_t &event_map,
-	                           vector<shared_ptr<Event>> &events);
+	                                ScheduleEventData &event_data);
+	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
 
