@@ -159,6 +159,7 @@ public:
 
 		InitializeDistinctAggregates(distinct_aggregate_data, context);
 		vector<LogicalType> payload_types;
+		vector<LogicalType> output_types;
 		vector<AggregateObject> aggregate_objects;
 		for (auto &aggregate : aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
@@ -168,6 +169,10 @@ public:
 				for (auto &child : aggr.children) {
 					payload_types.push_back(child->return_type);
 					child_executor.AddExpression(*child);
+					if (aggr.distinct) {
+						//! Save the types of the distinct children, these will serve as 'groups'
+						output_types.push_back(child->return_type);
+					}
 				}
 			}
 			aggregate_objects.emplace_back(&aggr);
@@ -177,9 +182,12 @@ public:
 		}
 		for (auto &aggregate : aggregates) {
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
-			payload_types.push_back(aggr.return_type);
+			if (!aggr.distinct) {
+				continue;
+			}
+			output_types.push_back(aggr.return_type);
 		}
-		execution_data->output_chunk.Initialize(allocator, payload_types);
+		execution_data->output_chunk.Initialize(allocator, output_types);
 		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
 
