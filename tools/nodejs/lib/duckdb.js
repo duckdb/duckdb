@@ -33,7 +33,7 @@ var OPEN_SHAREDCACHE = duckdb.OPEN_SHAREDCACHE;
 /**
  * Currently ignored
  */
-var OPEN_PRIVATECACHE  = duckdb.OPEN_PRIVATECACHE;
+var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 
 // some wrappers for compatibilities sake
 /**
@@ -85,7 +85,7 @@ QueryResult.prototype[Symbol.asyncIterator] = async function*() {
  * @param {...*} params
  * @param callback
  */
-Connection.prototype.run = function(sql) {
+Connection.prototype.run = function (sql) {
     var statement = new Statement(this, sql);
     return statement.run.apply(statement, arguments);
 }
@@ -95,8 +95,8 @@ Connection.prototype.run = function(sql) {
  * @param {...*} params
  * @param callback
  */
-Connection.prototype.all = function(sql) {
-    var statement = new Statement(this,sql);
+Connection.prototype.all = function (sql) {
+    var statement = new Statement(this, sql);
     return statement.all.apply(statement, arguments);
 }
 
@@ -105,7 +105,7 @@ Connection.prototype.all = function(sql) {
  * @param {...*} params
  * @param callback
  */
-Connection.prototype.each = function(sql) {
+Connection.prototype.each = function (sql) {
     var statement = new Statement(this, sql);
     return statement.each.apply(statement, arguments);
 }
@@ -115,7 +115,7 @@ Connection.prototype.each = function(sql) {
  * @param {...*} params
  * @yields row chunks
  */
-Connection.prototype.stream = async function*(sql) {
+Connection.prototype.stream = async function* (sql) {
     const statement = new Statement(this, sql);
     const queryResult = await statement.stream.apply(statement, arguments);
     for await (const result of queryResult) {
@@ -131,9 +131,9 @@ Connection.prototype.stream = async function*(sql) {
  * @arg fun
  * @note this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
  */
-Connection.prototype.register = function(name, return_type, fun) {
+Connection.prototype.register = function (name, return_type, fun) {
     // TODO what if this throws an error somewhere? do we need a try/catch?
-    return this.register_bulk(name, return_type, function(desc) {
+    return this.register_bulk(name, return_type, function (desc) {
         try {
             // Build an argument resolver
             const buildResolver = (arg) => {
@@ -233,13 +233,13 @@ Connection.prototype.register = function(name, return_type, fun) {
                 desc.ret.data[i] = res;
                 desc.ret.validity[i] = res === undefined || res === null ? 0 : 1;
             }
-        } catch(error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
+        } catch (error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
             console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
                 msg = error.message
             }
-            throw {name: 'DuckDB-UDF-Exception', message : msg};
+            throw { name: 'DuckDB-UDF-Exception', message: msg };
         }
     })
 }
@@ -257,7 +257,7 @@ Connection.prototype.prepare;
  * @param {...*} params
  * @param callback
  */
- Connection.prototype.exec;
+Connection.prototype.exec;
 /**
  * Register a User Defined Function
  *
@@ -277,11 +277,11 @@ Connection.prototype.register_bulk;
  */
 Connection.prototype.unregister;
 
-default_connection = function(o) {
+default_connection = function (o) {
     if (o.default_connection == undefined) {
         o.default_connection = new duckdb.Connection(o);
     }
-    return(o.default_connection);
+    return o.default_connection;
 }
 
 
@@ -321,7 +321,7 @@ Database.prototype.interrupt;
  * @arg sql
  * @return {Statement}
  */
-Database.prototype.prepare = function() {
+Database.prototype.prepare = function () {
     return default_connection(this).prepare.apply(this.default_connection, arguments);
 }
 
@@ -330,7 +330,7 @@ Database.prototype.prepare = function() {
  * @param {...*} params
  * @param callback
  */
-Database.prototype.run = function() {
+Database.prototype.run = function () {
     default_connection(this).run.apply(this.default_connection, arguments);
     return this;
 }
@@ -340,7 +340,7 @@ Database.prototype.run = function() {
  * @param {...*} params
  * @param callback
  */
- Database.prototype.each = function() {
+Database.prototype.each = function () {
     default_connection(this).each.apply(this.default_connection, arguments);
     return this;
 }
@@ -350,7 +350,7 @@ Database.prototype.run = function() {
  * @param {...*} params
  * @param callback
  */
- Database.prototype.all = function() {
+Database.prototype.all = function () {
     default_connection(this).all.apply(this.default_connection, arguments);
     return this;
 }
@@ -360,7 +360,7 @@ Database.prototype.run = function() {
  * @param {...*} params
  * @param callback
  */
- Database.prototype.exec = function() {
+Database.prototype.exec = function () {
     default_connection(this).exec.apply(this.default_connection, arguments);
     return this;
 }
@@ -373,7 +373,7 @@ Database.prototype.run = function() {
  * @arg return_type
  * @arg fun
  */
-Database.prototype.register = function() {
+Database.prototype.register = function () {
     default_connection(this).register.apply(this.default_connection, arguments);
     return this;
 }
@@ -384,7 +384,7 @@ Database.prototype.register = function() {
  * Convenience method for Connection#unregister
  * @arg name
  */
-Database.prototype.unregister = function() {
+Database.prototype.unregister = function () {
     default_connection(this).unregister.apply(this.default_connection, arguments);
     return this;
 }
@@ -392,14 +392,14 @@ Database.prototype.unregister = function() {
 /**
  * Not implemented
  */
-Database.prototype.get = function() {
+Database.prototype.get = function () {
     throw "get() is not implemented because it's evil";
 }
 
 /**
  * Not implemented
  */
-Statement.prototype.get = function() {
+Statement.prototype.get = function () {
     throw "get() is not implemented because it's evil";
 }
 
@@ -409,28 +409,28 @@ Statement.prototype.get = function() {
  * @param {...*} params
  * @param callback
  */
- Statement.prototype.run;
+Statement.prototype.run;
 /**
  * @method
  * @arg sql
  * @param {...*} params
  * @param callback
  */
- Statement.prototype.all;
+Statement.prototype.all;
 /**
  * @method
  * @arg sql
  * @param {...*} params
  * @param callback
  */
- Statement.prototype.each;
+Statement.prototype.each;
 /**
  * @method
  * @arg sql
  * @param {...*} params
  * @param callback
  */
- Statement.prototype.finalize
+Statement.prototype.finalize
 /**
  * @method
  * @arg sql
