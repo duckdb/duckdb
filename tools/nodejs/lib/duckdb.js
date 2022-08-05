@@ -67,9 +67,11 @@ var QueryResult = duckdb.QueryResult;
 QueryResult.prototype.nextChunk;
 
 /**
- * @method duckdb.QueryResult#asyncIterator
- * @async
- * @yields hello
+ * @name asyncIterator
+ * @memberof module:duckdb~QueryResult
+ * @method
+ * @instance
+ * @yields data chunks
  */
 QueryResult.prototype[Symbol.asyncIterator] = async function*() {
     let prefetch = this.nextChunk();
