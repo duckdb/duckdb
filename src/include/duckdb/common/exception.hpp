@@ -264,14 +264,21 @@ public:
 
 class FatalException : public Exception {
 public:
-	DUCKDB_API explicit FatalException(const string &msg);
-
+	DUCKDB_API explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
+	}
 	template <typename... Args>
 	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
 	}
+
+protected:
+	DUCKDB_API explicit FatalException(ExceptionType type, const string &msg);
+	template <typename... Args>
+	explicit FatalException(ExceptionType type, const string &msg, Args... params)
+	    : FatalException(type, ConstructMessage(msg, params...)) {
+	}
 };
 
-class InternalException : public Exception {
+class InternalException : public FatalException {
 public:
 	DUCKDB_API explicit InternalException(const string &msg);
 

@@ -283,34 +283,6 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, double>(
 			    result, state_vector.state_vector, count);
 			break;
-		case PhysicalType::DATE32:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
-			    result, state_vector.state_vector, count);
-			break;
-		case PhysicalType::DATE64:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
-			    result, state_vector.state_vector, count);
-			break;
-		case PhysicalType::TIMESTAMP:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
-			    result, state_vector.state_vector, count);
-			break;
-		case PhysicalType::TIME32:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int32_t>(
-			    result, state_vector.state_vector, count);
-			break;
-		case PhysicalType::TIME64:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeValueFunctor, int64_t>(
-			    result, state_vector.state_vector, count);
-			break;
-		case PhysicalType::STRING:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
-			    result, state_vector.state_vector, count);
-			break;
-		case PhysicalType::LARGE_STRING:
-			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
-			    result, state_vector.state_vector, count);
-			break;
 		case PhysicalType::VARCHAR:
 			FUNCTION_FUNCTOR::template ListExecuteFunction<FinalizeStringValueFunctor, string>(
 			    result, state_vector.state_vector, count);
