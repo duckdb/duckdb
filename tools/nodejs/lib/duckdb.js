@@ -7,33 +7,40 @@ module.exports = exports = duckdb;
 
 /**
  * Check that errno attribute equals this to check for a duckdb error
+ * @constant {number}
  */
-duckdb.ERROR;
+var ERROR = duckdb.ERROR;
 
 /**
  * Open database in readonly mode
+ * @constant {number}
  */
-duckdb.OPEN_READONLY;
+var OPEN_READONLY = duckdb.OPEN_READONLY;
 /**
  * Currently ignored
+ * @constant {number}
  */
-duckdb.OPEN_READWRITE;
+var OPEN_READWRITE = duckdb.OPEN_READWRITE;
 /**
  * Currently ignored
+ * @constant {number}
  */
-duckdb.OPEN_CREATE;
+var OPEN_CREATE = duckdb.OPEN_CREATE;
 /**
  * Currently ignored
+ * @constant {number}
  */
-duckdb.OPEN_FULLMUTEX;
+var OPEN_FULLMUTEX = duckdb.OPEN_FULLMUTEX;
 /**
  * Currently ignored
+ * @constant {number}
  */
-duckdb.OPEN_SHAREDCACHE;
+var OPEN_SHAREDCACHE = duckdb.OPEN_SHAREDCACHE;
 /**
  * Currently ignored
+ * @constant {number}
  */
-duckdb.OPEN_PRIVATECACHE;
+var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 
 // some wrappers for compatibilities sake
 /**
