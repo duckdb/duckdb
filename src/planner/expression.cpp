@@ -133,6 +133,10 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientConte
 	case ExpressionType::CASE_EXPR:
 		result = BoundCaseExpression::Deserialize(context, type, reader);
 		break;
+	case ExpressionType::CONJUNCTION_AND:
+	case ExpressionType::CONJUNCTION_OR:
+		result = BoundConjunctionExpression::Deserialize(context, type, reader);
+		break;
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_LESSTHAN:

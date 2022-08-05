@@ -41,7 +41,14 @@ unique_ptr<Expression> BoundConjunctionExpression::Copy() {
 }
 
 void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	writer.WriteSerializableList(children);
+}
+
+unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader) {
+	auto children = reader.ReadRequiredSerializableList<Expression>(context);
+	auto res = make_unique<BoundConjunctionExpression>(type);
+	res->children = move(children);
+	return res;
 }
 
 } // namespace duckdb

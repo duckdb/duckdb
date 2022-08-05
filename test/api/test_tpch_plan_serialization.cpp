@@ -66,16 +66,16 @@ TEST_CASE("plan serialize tpch", "[api]") {
 	tpch_test_helper(con, 8);
 	tpch_test_helper(con, 9);
 	tpch_test_helper(con, 10);
-	// tpch_test_helper(con, 11); FIRST()
-	// tpch_test_helper(con, 12); // OR
-	// tpch_test_helper(con, 13); // PREFIX()
-	// tpch_test_helper(con, 14); // PREFIX()
-	// tpch_test_helper(con, 15); // FIRST()
-	// tpch_test_helper(con, 16); // CHUNK_GET
-	//	tpch_test_helper(con, 17);
+	tpch_test_helper(con, 11);
+	tpch_test_helper(con, 12);
+	tpch_test_helper(con, 13);
+	tpch_test_helper(con, 14);
+	tpch_test_helper(con, 15);
+	tpch_test_helper(con, 16);
+	tpch_test_helper(con, 17);
 	tpch_test_helper(con, 18);
 	tpch_test_helper(con, 19);
 	tpch_test_helper(con, 20);
-	//	tpch_test_helper(con, 21);
-	//	tpch_test_helper(con, 22); // ?
+	//tpch_test_helper(con, 21);
+	tpch_test_helper(con, 22); // ?
 }
