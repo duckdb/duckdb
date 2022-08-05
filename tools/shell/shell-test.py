@@ -309,7 +309,7 @@ SELECT 42,43;
 test('''
 .timer on
 SELECT NULL;
-''', out="Run Time:")
+''', out="Run Time (s):")
 
 test('''
 .scanstats on
