@@ -127,6 +127,12 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientConte
 	case ExpressionType::BOUND_FUNCTION:
 		result = BoundFunctionExpression::Deserialize(context, type, reader);
 		break;
+	case ExpressionType::OPERATOR_CAST:
+		result = BoundCastExpression::Deserialize(context, type, reader);
+		break;
+	case ExpressionType::CASE_EXPR:
+		result = BoundCaseExpression::Deserialize(context, type, reader);
+		break;
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_NOTEQUAL:
 	case ExpressionType::COMPARE_LESSTHAN:
@@ -142,7 +148,8 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientConte
 		result = BoundComparisonExpression::Deserialize(context, type, reader);
 		break;
 	default:
-		throw SerializationException("Unsupported type for expression deserialization!" + ExpressionTypeToString(type));
+		throw SerializationException("Unsupported type for expression deserialization %s",
+		                             ExpressionTypeToString(type));
 	}
 	reader.Finalize();
 	return result;

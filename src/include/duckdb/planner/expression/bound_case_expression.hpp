@@ -15,6 +15,9 @@ namespace duckdb {
 struct BoundCaseCheck {
 	unique_ptr<Expression> when_expr;
 	unique_ptr<Expression> then_expr;
+
+	void Serialize(Serializer &serializer) const;
+	static BoundCaseCheck Deserialize(Deserializer &source, ClientContext &context);
 };
 
 class BoundCaseExpression : public Expression {

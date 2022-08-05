@@ -30,12 +30,15 @@ public:
 
 public:
 	void AddFunction(T function) {
-		auto new_key = functions.size();
+		if (function.function_set_key == DConstants::INVALID_INDEX) {
+			auto new_key = functions.size();
 #ifdef DEBUG
-		new_key += 42; // artifically introduce a large gap in the key space to catch problems where the index should be
-		               // used instead of an offset
+			new_key += 42; // artifically introduce a large gap in the key space to catch problems where the index
+			               // should be used instead of an offset
 #endif
-		AddFunction(move(function), new_key);
+			function.function_set_key = new_key;
+		}
+		AddFunction(move(function), function.function_set_key);
 	}
 	T GetFunction(idx_t key) {
 		if (key == DConstants::INVALID_INDEX) {
