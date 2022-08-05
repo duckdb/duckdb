@@ -69,7 +69,6 @@ public:
 	unique_ptr<AllocatedData> Allocate(idx_t size) {
 		return make_unique<AllocatedData>(*this, AllocateData(size), size);
 	}
-
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
 		return (data_ptr_t)malloc(size);
 	}
@@ -86,10 +85,6 @@ public:
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
 	}
-
-	//! Transfer private data from this allocator to the other allocator
-	//! This should only be used when this allocator is overriden with another allocator
-	void TransferPrivateData(Allocator &other);
 
 	static Allocator &DefaultAllocator();
 

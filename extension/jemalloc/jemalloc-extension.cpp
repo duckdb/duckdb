@@ -6,37 +6,26 @@
 
 namespace duckdb {
 
-class JEMallocWrapper {
-public:
-	static inline data_ptr_t Allocate(PrivateAllocatorData *private_data, idx_t size) {
-		return (data_ptr_t)duckdb_jemalloc::je_malloc(size);
-	};
-
-	static inline void Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-		duckdb_jemalloc::je_free(pointer);
-	};
-
-	static inline data_ptr_t ReAllocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
-	                                    idx_t size) {
-		return (data_ptr_t)duckdb_jemalloc::je_realloc(pointer, size);
-	};
-};
-
 void JEMallocExtension::Load(DuckDB &db) {
-	// Initialize an Allocator that uses JEMalloc
-	auto jemallocator =
-	    make_unique<Allocator>(JEMallocWrapper::Allocate, JEMallocWrapper::Free, JEMallocWrapper::ReAllocate, nullptr);
-
-	// Move any of the owned data to the new allocator
-	db.instance->config.allocator->TransferPrivateData(*jemallocator);
-
-	// Override the DB instance's allocator
-	db.instance->config.allocator = move(jemallocator);
+	// NOP: This extension can only be loaded statically
 }
 
 std::string JEMallocExtension::Name() {
 	return "jemalloc";
 }
+
+data_ptr_t JEMallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
+	return (data_ptr_t)duckdb_jemalloc::je_malloc(size);
+};
+
+void JEMallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+	duckdb_jemalloc::je_free(pointer);
+};
+
+data_ptr_t JEMallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+                                         idx_t size) {
+	return (data_ptr_t)duckdb_jemalloc::je_realloc(pointer, size);
+};
 
 } // namespace duckdb
 

@@ -1,12 +1,18 @@
 #include "duckdb/common/allocator.hpp"
+
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/exception.hpp"
 #ifdef DUCKDB_DEBUG_ALLOCATION
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
+
 #include <execinfo.h>
+#endif
+
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+#include "jemalloc-extension.hpp"
 #endif
 
 namespace duckdb {
@@ -61,9 +67,15 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
+#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
+Allocator::Allocator()
+    : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
+}
+#else
 Allocator::Allocator()
     : Allocator(Allocator::DefaultAllocate, Allocator::DefaultFree, Allocator::DefaultReallocate, nullptr) {
 }
+#endif
 
 Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
                      reallocate_function_ptr_t reallocate_function_p, unique_ptr<PrivateAllocatorData> private_data_p)
@@ -118,12 +130,6 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 Allocator &Allocator::DefaultAllocator() {
 	static Allocator DEFAULT_ALLOCATOR;
 	return DEFAULT_ALLOCATOR;
-}
-
-void Allocator::TransferPrivateData(duckdb::Allocator &other) {
-	if (private_data) {
-		other.private_data = move(private_data);
-	}
 }
 
 //===--------------------------------------------------------------------===//
