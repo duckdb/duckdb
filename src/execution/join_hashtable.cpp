@@ -302,15 +302,11 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	}
 }
 
-static idx_t HTCapacity(idx_t count) {
-	return NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
-}
-
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
 	idx_t count = external ? MaxValue<idx_t>(tuples_per_round, Count()) : Count();
-	idx_t capacity = HTCapacity(count);
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -1022,7 +1018,7 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 		auto avg_partition_size = total_size / num_partitions;
 
-		// We aim for at least 8 partitions per probe round (TODO: tweak this experimentally)
+		// We aim for at least 8 partitions per probe round (tweaked experimentally)
 		if (avg_partition_size * 8 < max_ht_size) {
 			break;
 		}
