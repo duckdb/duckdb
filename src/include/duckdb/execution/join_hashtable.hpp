@@ -246,16 +246,16 @@ public:
 	idx_t SwizzledCount() {
 		return swizzled_block_collection->count;
 	}
-	//! The size of the data in memory if we build the hash table, takes into account the size of the pointer table
-	//! Pointer table is least half empty, and the capacity is a power of two
-	//! Therefore, in the best case one tuple takes up 2 ptr slots, worst case 4 slots, we take the average of 3
+	//! Size of the in-memory data
 	idx_t SizeInBytes() {
-		return block_collection->SizeInBytes() + string_heap->SizeInBytes() + Count() * 3 * sizeof(data_ptr_t);
+		return block_collection->SizeInBytes() + string_heap->SizeInBytes();
 	}
-	//! Size of the data in memory if we build a hash table of the swizzled data
+	//! Size of the swizzled data
 	idx_t SwizzledSize() {
-		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes() +
-		       SwizzledCount() * 3 * sizeof(data_ptr_t);
+		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
+	}
+	idx_t PointerTableSize(idx_t count) {
+		return count * 3 * sizeof(data_ptr_t);
 	}
 
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)

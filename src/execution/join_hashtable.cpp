@@ -1008,6 +1008,7 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 		return;
 	}
 
+	total_size += PointerTableSize(total_count);
 	idx_t avg_tuple_size = total_size / total_count;
 	tuples_per_round = max_ht_size / avg_tuple_size;
 

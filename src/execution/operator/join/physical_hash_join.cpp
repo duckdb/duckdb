@@ -179,6 +179,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// TODO: add statement to check for possible per
 	// build the HT
+	auto &ht = *lstate.hash_table;
 	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
@@ -186,18 +187,18 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
 			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
 		}
-		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
+		ht.Build(lstate.join_keys, lstate.build_chunk);
 	} else if (!build_types.empty()) {
 		// there is not a projected map: place the entire right chunk in the HT
-		lstate.hash_table->Build(lstate.join_keys, input);
+		ht.Build(lstate.join_keys, input);
 	} else {
 		// there are only keys: place an empty chunk in the payload
 		lstate.build_chunk.SetCardinality(input.size());
-		lstate.hash_table->Build(lstate.join_keys, lstate.build_chunk);
+		ht.Build(lstate.join_keys, lstate.build_chunk);
 	}
 
 	// swizzle if we reach memory limit
-	if (!recursive_cte && lstate.hash_table->SizeInBytes() >= gstate.sink_memory_per_thread) {
+	if (!recursive_cte && ht.SizeInBytes() + ht.PointerTableSize(ht.Count()) >= gstate.sink_memory_per_thread) {
 		lstate.hash_table->SwizzleBlocks();
 		gstate.external = true;
 	}
@@ -393,7 +394,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
-		std::cout << "Sinking into: " << state.local_sink_ht << std::endl;
+//		std::cout << "Sinking into: " << state.local_sink_ht << std::endl;
 		if (state.local_sink_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
 			// Swizzle data collected so far (if needed)
 			state.local_sink_ht->SwizzleBlocks();
@@ -532,7 +533,7 @@ void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState
 			if (sink.local_hash_tables.empty()) {
 				continue;
 			}
-			std::cout << "Partitioning: " << sink.local_hash_tables.back().get() << std::endl;
+//			std::cout << "Partitioning: " << sink.local_hash_tables.back().get() << std::endl;
 			local_ht = move(sink.local_hash_tables.back());
 			sink.local_hash_tables.pop_back();
 		}
