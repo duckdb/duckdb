@@ -1,5 +1,5 @@
-# AVX512 instrinsics are disabled by default, comment this out to enable it
-add_definitions(-DDUCKDB_FSST_DISABLE_INTRINSINCS)
+# AVX512 instrinsics are disabled by default, uncomment this to enable
+#add_definitions(-DDUCKDB_FSST_ENABLE_INTRINSINCS)
 
 if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)

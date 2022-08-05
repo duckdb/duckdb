@@ -17,7 +17,7 @@
 // You can contact the authors via the FSST source repository : https://github.com/cwida/fsst
 #include "libfsst.hpp"
 
-#if !DUCKDB_FSST_DISABLE_INTRINSINCS && (defined(__x86_64__) || defined(_M_X64))
+#if DUCKDB_FSST_ENABLE_INTRINSINCS && (defined(__x86_64__) || defined(_M_X64))
 #include <immintrin.h>
 
 #ifdef _WIN32
@@ -73,7 +73,7 @@ bool duckdb_fsst_hasAVX512() { return false; }
 size_t duckdb_fsst_compressAVX512(SymbolTable &symbolTable, u8* codeBase, u8* symbolBase, SIMDjob *input, SIMDjob *output, size_t n, size_t unroll) {
 	size_t processed = 0;
 	// define some constants (all_x means that all 8 lanes contain 64-bits value X)
-#if defined(__AVX512F__) and !DUCKDB_FSST_DISABLE_INTRINSINCS
+#if defined(__AVX512F__) and DUCKDB_FSST_ENABLE_INTRINSINCS
 	//__m512i all_suffixLim= _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) symbolTable->suffixLim)); -- for variants b,c
 	__m512i all_MASK     = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) -1));
 	__m512i all_PRIME    = _mm512_broadcastq_epi64(_mm_set1_epi64((__m64) (u64) FSST_HASH_PRIME));
