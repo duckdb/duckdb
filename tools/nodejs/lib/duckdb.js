@@ -1,5 +1,6 @@
 /**
  * @module duckdb
+ * @summary these jsdoc annotations are still a work in progress - feedback and suggestions are welcome!
  */
 
 var duckdb = require('./duckdb-binding.js');
