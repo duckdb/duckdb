@@ -222,7 +222,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		payload_idx = next_payload_idx;
 		next_payload_idx = payload_idx + aggregate.children.size();
 
-		if (sink.radix_states[aggr_idx]) {
+		if (!sink.radix_states.empty() && sink.radix_states[aggr_idx]) {
 			//! aggregate is distinct, can't be calculated yet
 			D_ASSERT(this->distinct_aggregate_data.radix_tables[aggr_idx]);
 			auto &global_sink = (SimpleAggregateGlobalState &)state;
@@ -284,7 +284,7 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
-		if (source.radix_states[aggr_idx]) {
+		if (!source.radix_states.empty() && source.radix_states[aggr_idx]) {
 			//! aggregate is distinct, can't be calculated yet
 			D_ASSERT(this->distinct_aggregate_data.radix_tables[aggr_idx]);
 			auto &global_sink = (SimpleAggregateGlobalState &)state;
