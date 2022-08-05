@@ -240,15 +240,22 @@ jobs:
          name: duckdb-binaries-linux-aarch64
          path: /tmp
 
+     - name: Decompress
+       shell: bash
+       run: |
+          cd /tmp
+          unzip duckdb_unittest-linux-aarch64.zip
+          chmod +x unittest
+
      - name: Set up QEMU
        uses: docker/setup-qemu-action@v2
        with:
          platforms: arm64
 
      - name: Run tests on QEMU
-      shell: bash
-      run: |
-          docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled"  arm64v8/ubuntu:18.04 /duckdb_crosscompiled/unittest '*' --test-dir /duckdb_dir
+       shell: bash
+       run: |
+           docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled"  arm64v8/ubuntu:18.04 /duckdb_crosscompiled/unittest '*' --test-dir /duckdb_dir
 
  old-gcc:
     name: GCC 4.8
