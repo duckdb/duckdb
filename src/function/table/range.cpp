@@ -24,32 +24,46 @@ public:
 };
 
 template <bool GENERATE_SERIES>
+static void GenerateRangeParameters(const vector<Value> &inputs, RangeFunctionBindData &result) {
+	for (auto &input : inputs) {
+		if (input.IsNull()) {
+			result.start = GENERATE_SERIES ? 1 : 0;
+			result.end = 0;
+			result.increment = 1;
+			return;
+		}
+	}
+	if (inputs.size() < 2) {
+		// single argument: only the end is specified
+		result.start = 0;
+		result.end = inputs[0].GetValue<int64_t>();
+	} else {
+		// two arguments: first two arguments are start and end
+		result.start = inputs[0].GetValue<int64_t>();
+		result.end = inputs[1].GetValue<int64_t>();
+	}
+	if (inputs.size() < 3) {
+		result.increment = 1;
+	} else {
+		result.increment = inputs[2].GetValue<int64_t>();
+	}
+	if (result.increment == 0) {
+		throw BinderException("interval cannot be 0!");
+	}
+	if (result.start > result.end && result.increment > 0) {
+		throw BinderException("start is bigger than end, but increment is positive: cannot generate infinite series");
+	} else if (result.start < result.end && result.increment < 0) {
+		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
+	}
+}
+
+template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionBindData>();
 	auto &inputs = input.inputs;
-	if (inputs.size() < 2) {
-		// single argument: only the end is specified
-		result->start = 0;
-		result->end = inputs[0].GetValue<int64_t>();
-	} else {
-		// two arguments: first two arguments are start and end
-		result->start = inputs[0].GetValue<int64_t>();
-		result->end = inputs[1].GetValue<int64_t>();
-	}
-	if (inputs.size() < 3) {
-		result->increment = 1;
-	} else {
-		result->increment = inputs[2].GetValue<int64_t>();
-	}
-	if (result->increment == 0) {
-		throw BinderException("interval cannot be 0!");
-	}
-	if (result->start > result->end && result->increment > 0) {
-		throw BinderException("start is bigger than end, but increment is positive: cannot generate infinite series");
-	} else if (result->start < result->end && result->increment < 0) {
-		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
-	}
+	GenerateRangeParameters<GENERATE_SERIES>(inputs, *result);
+
 	return_types.emplace_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
 		// generate_series has inclusive bounds on the RHS

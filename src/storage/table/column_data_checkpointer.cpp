@@ -55,7 +55,8 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
-void ForceCompression(vector<CompressionFunction *> &compression_functions, CompressionType compression_type) {
+CompressionType ForceCompression(vector<CompressionFunction *> &compression_functions,
+                                 CompressionType compression_type) {
 	// On of the force_compression flags has been set
 	// check if this compression method is available
 	bool found = false;
@@ -68,25 +69,31 @@ void ForceCompression(vector<CompressionFunction *> &compression_functions, Comp
 	if (found) {
 		// the force_compression method is available
 		// clear all other compression methods
+		// except the uncompressed method, so we can fall back on that
 		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (compression_functions[i]->type == CompressionType::COMPRESSION_UNCOMPRESSED) {
+				continue;
+			}
 			if (compression_functions[i]->type != compression_type) {
 				compression_functions[i] = nullptr;
 			}
 		}
 	}
+	return found ? compression_type : CompressionType::COMPRESSION_AUTO;
 }
 
 unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
 	auto &config = DBConfig::GetConfig(GetDatabase());
+	CompressionType forced_method = CompressionType::COMPRESSION_AUTO;
 
 	auto compression_type = checkpoint_info.compression_type;
 	if (compression_type != CompressionType::COMPRESSION_AUTO) {
-		ForceCompression(compression_functions, compression_type);
+		forced_method = ForceCompression(compression_functions, compression_type);
 	}
 	if (compression_type == CompressionType::COMPRESSION_AUTO &&
 	    config.options.force_compression != CompressionType::COMPRESSION_AUTO) {
-		ForceCompression(compression_functions, config.options.force_compression);
+		forced_method = ForceCompression(compression_functions, config.options.force_compression);
 	}
 	// set up the analyze states for each compression method
 	vector<unique_ptr<AnalyzeState>> analyze_states;
@@ -124,11 +131,17 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		if (!compression_functions[i]) {
 			continue;
 		}
+		//! Check if the method type is the forced method (if forced is used)
+		bool forced_method_found = compression_functions[i]->type == forced_method;
 		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
-		if (score < best_score) {
+		if (score < best_score || forced_method_found) {
 			compression_idx = i;
 			best_score = score;
 			state = move(analyze_states[i]);
+		}
+		//! If we have found the forced method, we're done
+		if (forced_method_found) {
+			break;
 		}
 	}
 	return state;
@@ -158,7 +171,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	auto analyze_state = DetectBestCompressionMethod(compression_idx);
 
 	if (!analyze_state) {
-		throw InternalException("No suitable compression/storage method found to store column");
+		throw FatalException("No suitable compression/storage method found to store column");
 	}
 
 	// now that we have analyzed the compression functions we can start writing to disk

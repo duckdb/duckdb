@@ -17,6 +17,10 @@ static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
 	}
 	switch (wexpr->type) {
 	// TODO: add more expression types here?
+	case ExpressionType::WINDOW_AGGREGATE:
+		// We can stream aggregates if they are "running totals" and don't use filters
+		return wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr->end == WindowBoundary::CURRENT_ROW_ROWS &&
+		       !wexpr->filter_expr;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_RANK:

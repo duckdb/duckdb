@@ -6,6 +6,23 @@ module.exports = exports = duckdb;
 var Database = duckdb.Database;
 var Connection = duckdb.Connection;
 var Statement = duckdb.Statement;
+var QueryResult = duckdb.QueryResult;
+
+QueryResult.prototype[Symbol.asyncIterator] = async function*() {
+    let prefetch = this.nextChunk();
+    while (true) {
+        const chunk = await prefetch;
+        // Null chunk indicates end of stream
+        if (!chunk) {
+            return;
+        }
+        // Prefetch the next chunk while we're iterating
+        prefetch = this.nextChunk();
+        for (const row of chunk) {
+            yield row;
+        }
+    }
+}
 
 
 Connection.prototype.run = function(sql) {
@@ -21,6 +38,14 @@ Connection.prototype.all = function(sql) {
 Connection.prototype.each = function(sql) {
     var statement = new Statement(this, sql);
     return statement.each.apply(statement, arguments);
+}
+
+Connection.prototype.stream = async function*(sql) {
+    const statement = new Statement(this, sql);
+    const queryResult = await statement.stream.apply(statement, arguments);
+    for await (const result of queryResult) {
+        yield result;
+    }
 }
 
 // this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly

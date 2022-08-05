@@ -348,6 +348,34 @@ struct Type_MapDefaultTypeInternal {
   };
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Type_MapDefaultTypeInternal _Type_Map_default_instance_;
+constexpr Type_UserDefined::Type_UserDefined(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : type_parameters_()
+  , type_reference_(0u)
+  , type_variation_reference_(0u)
+  , nullability_(0)
+{}
+struct Type_UserDefinedDefaultTypeInternal {
+  constexpr Type_UserDefinedDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~Type_UserDefinedDefaultTypeInternal() {}
+  union {
+    Type_UserDefined _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Type_UserDefinedDefaultTypeInternal _Type_UserDefined_default_instance_;
+constexpr Type_Parameter::Type_Parameter(
+  ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
+  : _oneof_case_{}{}
+struct Type_ParameterDefaultTypeInternal {
+  constexpr Type_ParameterDefaultTypeInternal()
+    : _instance(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized{}) {}
+  ~Type_ParameterDefaultTypeInternal() {}
+  union {
+    Type_Parameter _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT Type_ParameterDefaultTypeInternal _Type_Parameter_default_instance_;
 constexpr Type::Type(
   ::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized)
   : _oneof_case_{}{}
@@ -374,7 +402,7 @@ struct NamedStructDefaultTypeInternal {
 };
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT NamedStructDefaultTypeInternal _NamedStruct_default_instance_;
 }  // namespace substrait
-static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2ftype_2eproto[25];
+static ::PROTOBUF_NAMESPACE_ID::Metadata file_level_metadata_substrait_2ftype_2eproto[27];
 static const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* file_level_enum_descriptors_substrait_2ftype_2eproto[1];
 static constexpr ::PROTOBUF_NAMESPACE_ID::ServiceDescriptor const** file_level_service_descriptors_substrait_2ftype_2eproto = nullptr;
 
@@ -573,11 +601,35 @@ const uint32_t TableStruct_substrait_2ftype_2eproto::offsets[] PROTOBUF_SECTION_
   PROTOBUF_FIELD_OFFSET(::substrait::Type_Map, type_variation_reference_),
   PROTOBUF_FIELD_OFFSET(::substrait::Type_Map, nullability_),
   ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_UserDefined, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_UserDefined, type_reference_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_UserDefined, type_variation_reference_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_UserDefined, nullability_),
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_UserDefined, type_parameters_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_Parameter, _internal_metadata_),
+  ~0u,  // no _extensions_
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_Parameter, _oneof_case_[0]),
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
+  PROTOBUF_FIELD_OFFSET(::substrait::Type_Parameter, parameter_),
+  ~0u,  // no _has_bits_
   PROTOBUF_FIELD_OFFSET(::substrait::Type, _internal_metadata_),
   ~0u,  // no _extensions_
   PROTOBUF_FIELD_OFFSET(::substrait::Type, _oneof_case_[0]),
   ~0u,  // no _weak_field_map_
   ~0u,  // no _inlined_string_donated_
+  ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
   ::PROTOBUF_NAMESPACE_ID::internal::kInvalidFieldOffsetTag,
@@ -636,8 +688,10 @@ static const ::PROTOBUF_NAMESPACE_ID::internal::MigrationSchema schemas[] PROTOB
   { 165, -1, -1, sizeof(::substrait::Type_Struct)},
   { 174, -1, -1, sizeof(::substrait::Type_List)},
   { 183, -1, -1, sizeof(::substrait::Type_Map)},
-  { 193, -1, -1, sizeof(::substrait::Type)},
-  { 224, -1, -1, sizeof(::substrait::NamedStruct)},
+  { 193, -1, -1, sizeof(::substrait::Type_UserDefined)},
+  { 203, -1, -1, sizeof(::substrait::Type_Parameter)},
+  { 216, -1, -1, sizeof(::substrait::Type)},
+  { 248, -1, -1, sizeof(::substrait::NamedStruct)},
 };
 
 static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] = {
@@ -664,109 +718,125 @@ static ::PROTOBUF_NAMESPACE_ID::Message const * const file_default_instances[] =
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Type_Struct_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Type_List_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Type_Map_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Type_UserDefined_default_instance_),
+  reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Type_Parameter_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_Type_default_instance_),
   reinterpret_cast<const ::PROTOBUF_NAMESPACE_ID::Message*>(&::substrait::_NamedStruct_default_instance_),
 };
 
 const char descriptor_table_protodef_substrait_2ftype_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
-  "\n\024substrait/type.proto\022\tsubstrait\"\245\033\n\004Ty"
-  "pe\022\'\n\004bool\030\001 \001(\0132\027.substrait.Type.Boolea"
-  "nH\000\022 \n\002i8\030\002 \001(\0132\022.substrait.Type.I8H\000\022\"\n"
-  "\003i16\030\003 \001(\0132\023.substrait.Type.I16H\000\022\"\n\003i32"
-  "\030\005 \001(\0132\023.substrait.Type.I32H\000\022\"\n\003i64\030\007 \001"
-  "(\0132\023.substrait.Type.I64H\000\022$\n\004fp32\030\n \001(\0132"
-  "\024.substrait.Type.FP32H\000\022$\n\004fp64\030\013 \001(\0132\024."
-  "substrait.Type.FP64H\000\022(\n\006string\030\014 \001(\0132\026."
-  "substrait.Type.StringH\000\022(\n\006binary\030\r \001(\0132"
-  "\026.substrait.Type.BinaryH\000\022.\n\ttimestamp\030\016"
-  " \001(\0132\031.substrait.Type.TimestampH\000\022$\n\004dat"
-  "e\030\020 \001(\0132\024.substrait.Type.DateH\000\022$\n\004time\030"
-  "\021 \001(\0132\024.substrait.Type.TimeH\000\0225\n\rinterva"
-  "l_year\030\023 \001(\0132\034.substrait.Type.IntervalYe"
-  "arH\000\0223\n\014interval_day\030\024 \001(\0132\033.substrait.T"
-  "ype.IntervalDayH\000\0223\n\014timestamp_tz\030\035 \001(\0132"
-  "\033.substrait.Type.TimestampTZH\000\022$\n\004uuid\030 "
-  " \001(\0132\024.substrait.Type.UUIDH\000\022/\n\nfixed_ch"
-  "ar\030\025 \001(\0132\031.substrait.Type.FixedCharH\000\022*\n"
-  "\007varchar\030\026 \001(\0132\027.substrait.Type.VarCharH"
-  "\000\0223\n\014fixed_binary\030\027 \001(\0132\033.substrait.Type"
-  ".FixedBinaryH\000\022*\n\007decimal\030\030 \001(\0132\027.substr"
-  "ait.Type.DecimalH\000\022(\n\006struct\030\031 \001(\0132\026.sub"
-  "strait.Type.StructH\000\022$\n\004list\030\033 \001(\0132\024.sub"
-  "strait.Type.ListH\000\022\"\n\003map\030\034 \001(\0132\023.substr"
-  "ait.Type.MapH\000\022%\n\033user_defined_type_refe"
-  "rence\030\037 \001(\rH\000\032]\n\007Boolean\022 \n\030type_variati"
-  "on_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162"
-  "\033.substrait.Type.Nullability\032X\n\002I8\022 \n\030ty"
-  "pe_variation_reference\030\001 \001(\r\0220\n\013nullabil"
-  "ity\030\002 \001(\0162\033.substrait.Type.Nullability\032Y"
-  "\n\003I16\022 \n\030type_variation_reference\030\001 \001(\r\022"
-  "0\n\013nullability\030\002 \001(\0162\033.substrait.Type.Nu"
-  "llability\032Y\n\003I32\022 \n\030type_variation_refer"
-  "ence\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.substr"
-  "ait.Type.Nullability\032Y\n\003I64\022 \n\030type_vari"
-  "ation_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001"
-  "(\0162\033.substrait.Type.Nullability\032Z\n\004FP32\022"
-  " \n\030type_variation_reference\030\001 \001(\r\0220\n\013nul"
-  "lability\030\002 \001(\0162\033.substrait.Type.Nullabil"
-  "ity\032Z\n\004FP64\022 \n\030type_variation_reference\030"
-  "\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.substrait.T"
-  "ype.Nullability\032\\\n\006String\022 \n\030type_variat"
-  "ion_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\016"
-  "2\033.substrait.Type.Nullability\032\\\n\006Binary\022"
-  " \n\030type_variation_reference\030\001 \001(\r\0220\n\013nul"
-  "lability\030\002 \001(\0162\033.substrait.Type.Nullabil"
-  "ity\032_\n\tTimestamp\022 \n\030type_variation_refer"
-  "ence\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.substr"
-  "ait.Type.Nullability\032Z\n\004Date\022 \n\030type_var"
-  "iation_reference\030\001 \001(\r\0220\n\013nullability\030\002 "
-  "\001(\0162\033.substrait.Type.Nullability\032Z\n\004Time"
+  "\n\024substrait/type.proto\022\tsubstrait\032\033googl"
+  "e/protobuf/empty.proto\"\277\036\n\004Type\022\'\n\004bool\030"
+  "\001 \001(\0132\027.substrait.Type.BooleanH\000\022 \n\002i8\030\002"
+  " \001(\0132\022.substrait.Type.I8H\000\022\"\n\003i16\030\003 \001(\0132"
+  "\023.substrait.Type.I16H\000\022\"\n\003i32\030\005 \001(\0132\023.su"
+  "bstrait.Type.I32H\000\022\"\n\003i64\030\007 \001(\0132\023.substr"
+  "ait.Type.I64H\000\022$\n\004fp32\030\n \001(\0132\024.substrait"
+  ".Type.FP32H\000\022$\n\004fp64\030\013 \001(\0132\024.substrait.T"
+  "ype.FP64H\000\022(\n\006string\030\014 \001(\0132\026.substrait.T"
+  "ype.StringH\000\022(\n\006binary\030\r \001(\0132\026.substrait"
+  ".Type.BinaryH\000\022.\n\ttimestamp\030\016 \001(\0132\031.subs"
+  "trait.Type.TimestampH\000\022$\n\004date\030\020 \001(\0132\024.s"
+  "ubstrait.Type.DateH\000\022$\n\004time\030\021 \001(\0132\024.sub"
+  "strait.Type.TimeH\000\0225\n\rinterval_year\030\023 \001("
+  "\0132\034.substrait.Type.IntervalYearH\000\0223\n\014int"
+  "erval_day\030\024 \001(\0132\033.substrait.Type.Interva"
+  "lDayH\000\0223\n\014timestamp_tz\030\035 \001(\0132\033.substrait"
+  ".Type.TimestampTZH\000\022$\n\004uuid\030  \001(\0132\024.subs"
+  "trait.Type.UUIDH\000\022/\n\nfixed_char\030\025 \001(\0132\031."
+  "substrait.Type.FixedCharH\000\022*\n\007varchar\030\026 "
+  "\001(\0132\027.substrait.Type.VarCharH\000\0223\n\014fixed_"
+  "binary\030\027 \001(\0132\033.substrait.Type.FixedBinar"
+  "yH\000\022*\n\007decimal\030\030 \001(\0132\027.substrait.Type.De"
+  "cimalH\000\022(\n\006struct\030\031 \001(\0132\026.substrait.Type"
+  ".StructH\000\022$\n\004list\030\033 \001(\0132\024.substrait.Type"
+  ".ListH\000\022\"\n\003map\030\034 \001(\0132\023.substrait.Type.Ma"
+  "pH\000\0223\n\014user_defined\030\036 \001(\0132\033.substrait.Ty"
+  "pe.UserDefinedH\000\022)\n\033user_defined_type_re"
+  "ference\030\037 \001(\rB\002\030\001H\000\032]\n\007Boolean\022 \n\030type_v"
+  "ariation_reference\030\001 \001(\r\0220\n\013nullability\030"
+  "\002 \001(\0162\033.substrait.Type.Nullability\032X\n\002I8"
   "\022 \n\030type_variation_reference\030\001 \001(\r\0220\n\013nu"
   "llability\030\002 \001(\0162\033.substrait.Type.Nullabi"
-  "lity\032a\n\013TimestampTZ\022 \n\030type_variation_re"
-  "ference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.sub"
-  "strait.Type.Nullability\032b\n\014IntervalYear\022"
-  " \n\030type_variation_reference\030\001 \001(\r\0220\n\013nul"
-  "lability\030\002 \001(\0162\033.substrait.Type.Nullabil"
-  "ity\032a\n\013IntervalDay\022 \n\030type_variation_ref"
-  "erence\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.subs"
-  "trait.Type.Nullability\032Z\n\004UUID\022 \n\030type_v"
-  "ariation_reference\030\001 \001(\r\0220\n\013nullability\030"
-  "\002 \001(\0162\033.substrait.Type.Nullability\032o\n\tFi"
-  "xedChar\022\016\n\006length\030\001 \001(\005\022 \n\030type_variatio"
-  "n_reference\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033"
-  ".substrait.Type.Nullability\032m\n\007VarChar\022\016"
-  "\n\006length\030\001 \001(\005\022 \n\030type_variation_referen"
-  "ce\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.substrai"
-  "t.Type.Nullability\032q\n\013FixedBinary\022\016\n\006len"
-  "gth\030\001 \001(\005\022 \n\030type_variation_reference\030\002 "
-  "\001(\r\0220\n\013nullability\030\003 \001(\0162\033.substrait.Typ"
-  "e.Nullability\032\177\n\007Decimal\022\r\n\005scale\030\001 \001(\005\022"
-  "\021\n\tprecision\030\002 \001(\005\022 \n\030type_variation_ref"
-  "erence\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162\033.subs"
-  "trait.Type.Nullability\032|\n\006Struct\022\036\n\005type"
-  "s\030\001 \003(\0132\017.substrait.Type\022 \n\030type_variati"
-  "on_reference\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162"
-  "\033.substrait.Type.Nullability\032y\n\004List\022\035\n\004"
-  "type\030\001 \001(\0132\017.substrait.Type\022 \n\030type_vari"
-  "ation_reference\030\002 \001(\r\0220\n\013nullability\030\003 \001"
-  "(\0162\033.substrait.Type.Nullability\032\227\001\n\003Map\022"
-  "\034\n\003key\030\001 \001(\0132\017.substrait.Type\022\036\n\005value\030\002"
-  " \001(\0132\017.substrait.Type\022 \n\030type_variation_"
-  "reference\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162\033.s"
-  "ubstrait.Type.Nullability\"^\n\013Nullability"
-  "\022\033\n\027NULLABILITY_UNSPECIFIED\020\000\022\030\n\024NULLABI"
-  "LITY_NULLABLE\020\001\022\030\n\024NULLABILITY_REQUIRED\020"
-  "\002B\006\n\004kind\"D\n\013NamedStruct\022\r\n\005names\030\001 \003(\t\022"
-  "&\n\006struct\030\002 \001(\0132\026.substrait.Type.StructB"
-  "W\n\022io.substrait.protoP\001Z*github.com/subs"
-  "trait-io/substrait-go/proto\252\002\022Substrait."
-  "Protobufb\006proto3"
+  "lity\032Y\n\003I16\022 \n\030type_variation_reference\030"
+  "\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.substrait.T"
+  "ype.Nullability\032Y\n\003I32\022 \n\030type_variation"
+  "_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033."
+  "substrait.Type.Nullability\032Y\n\003I64\022 \n\030typ"
+  "e_variation_reference\030\001 \001(\r\0220\n\013nullabili"
+  "ty\030\002 \001(\0162\033.substrait.Type.Nullability\032Z\n"
+  "\004FP32\022 \n\030type_variation_reference\030\001 \001(\r\022"
+  "0\n\013nullability\030\002 \001(\0162\033.substrait.Type.Nu"
+  "llability\032Z\n\004FP64\022 \n\030type_variation_refe"
+  "rence\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033.subst"
+  "rait.Type.Nullability\032\\\n\006String\022 \n\030type_"
+  "variation_reference\030\001 \001(\r\0220\n\013nullability"
+  "\030\002 \001(\0162\033.substrait.Type.Nullability\032\\\n\006B"
+  "inary\022 \n\030type_variation_reference\030\001 \001(\r\022"
+  "0\n\013nullability\030\002 \001(\0162\033.substrait.Type.Nu"
+  "llability\032_\n\tTimestamp\022 \n\030type_variation"
+  "_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162\033."
+  "substrait.Type.Nullability\032Z\n\004Date\022 \n\030ty"
+  "pe_variation_reference\030\001 \001(\r\0220\n\013nullabil"
+  "ity\030\002 \001(\0162\033.substrait.Type.Nullability\032Z"
+  "\n\004Time\022 \n\030type_variation_reference\030\001 \001(\r"
+  "\0220\n\013nullability\030\002 \001(\0162\033.substrait.Type.N"
+  "ullability\032a\n\013TimestampTZ\022 \n\030type_variat"
+  "ion_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\016"
+  "2\033.substrait.Type.Nullability\032b\n\014Interva"
+  "lYear\022 \n\030type_variation_reference\030\001 \001(\r\022"
+  "0\n\013nullability\030\002 \001(\0162\033.substrait.Type.Nu"
+  "llability\032a\n\013IntervalDay\022 \n\030type_variati"
+  "on_reference\030\001 \001(\r\0220\n\013nullability\030\002 \001(\0162"
+  "\033.substrait.Type.Nullability\032Z\n\004UUID\022 \n\030"
+  "type_variation_reference\030\001 \001(\r\0220\n\013nullab"
+  "ility\030\002 \001(\0162\033.substrait.Type.Nullability"
+  "\032o\n\tFixedChar\022\016\n\006length\030\001 \001(\005\022 \n\030type_va"
+  "riation_reference\030\002 \001(\r\0220\n\013nullability\030\003"
+  " \001(\0162\033.substrait.Type.Nullability\032m\n\007Var"
+  "Char\022\016\n\006length\030\001 \001(\005\022 \n\030type_variation_r"
+  "eference\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.su"
+  "bstrait.Type.Nullability\032q\n\013FixedBinary\022"
+  "\016\n\006length\030\001 \001(\005\022 \n\030type_variation_refere"
+  "nce\030\002 \001(\r\0220\n\013nullability\030\003 \001(\0162\033.substra"
+  "it.Type.Nullability\032\177\n\007Decimal\022\r\n\005scale\030"
+  "\001 \001(\005\022\021\n\tprecision\030\002 \001(\005\022 \n\030type_variati"
+  "on_reference\030\003 \001(\r\0220\n\013nullability\030\004 \001(\0162"
+  "\033.substrait.Type.Nullability\032|\n\006Struct\022\036"
+  "\n\005types\030\001 \003(\0132\017.substrait.Type\022 \n\030type_v"
+  "ariation_reference\030\002 \001(\r\0220\n\013nullability\030"
+  "\003 \001(\0162\033.substrait.Type.Nullability\032y\n\004Li"
+  "st\022\035\n\004type\030\001 \001(\0132\017.substrait.Type\022 \n\030typ"
+  "e_variation_reference\030\002 \001(\r\0220\n\013nullabili"
+  "ty\030\003 \001(\0162\033.substrait.Type.Nullability\032\227\001"
+  "\n\003Map\022\034\n\003key\030\001 \001(\0132\017.substrait.Type\022\036\n\005v"
+  "alue\030\002 \001(\0132\017.substrait.Type\022 \n\030type_vari"
+  "ation_reference\030\003 \001(\r\0220\n\013nullability\030\004 \001"
+  "(\0162\033.substrait.Type.Nullability\032\255\001\n\013User"
+  "Defined\022\026\n\016type_reference\030\001 \001(\r\022 \n\030type_"
+  "variation_reference\030\002 \001(\r\0220\n\013nullability"
+  "\030\003 \001(\0162\033.substrait.Type.Nullability\0222\n\017t"
+  "ype_parameters\030\004 \003(\0132\031.substrait.Type.Pa"
+  "rameter\032\256\001\n\tParameter\022&\n\004null\030\001 \001(\0132\026.go"
+  "ogle.protobuf.EmptyH\000\022$\n\tdata_type\030\002 \001(\013"
+  "2\017.substrait.TypeH\000\022\021\n\007boolean\030\003 \001(\010H\000\022\021"
+  "\n\007integer\030\004 \001(\003H\000\022\016\n\004enum\030\005 \001(\tH\000\022\020\n\006str"
+  "ing\030\006 \001(\tH\000B\013\n\tparameter\"^\n\013Nullability\022"
+  "\033\n\027NULLABILITY_UNSPECIFIED\020\000\022\030\n\024NULLABIL"
+  "ITY_NULLABLE\020\001\022\030\n\024NULLABILITY_REQUIRED\020\002"
+  "B\006\n\004kind\"D\n\013NamedStruct\022\r\n\005names\030\001 \003(\t\022&"
+  "\n\006struct\030\002 \001(\0132\026.substrait.Type.StructBW"
+  "\n\022io.substrait.protoP\001Z*github.com/subst"
+  "rait-io/substrait-go/proto\252\002\022Substrait.P"
+  "rotobufb\006proto3"
   ;
+static const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable*const descriptor_table_substrait_2ftype_2eproto_deps[1] = {
+  &::descriptor_table_google_2fprotobuf_2fempty_2eproto,
+};
 static ::PROTOBUF_NAMESPACE_ID::internal::once_flag descriptor_table_substrait_2ftype_2eproto_once;
 const ::PROTOBUF_NAMESPACE_ID::internal::DescriptorTable descriptor_table_substrait_2ftype_2eproto = {
-  false, false, 3696, descriptor_table_protodef_substrait_2ftype_2eproto, "substrait/type.proto", 
-  &descriptor_table_substrait_2ftype_2eproto_once, nullptr, 0, 25,
+  false, false, 4135, descriptor_table_protodef_substrait_2ftype_2eproto, "substrait/type.proto", 
+  &descriptor_table_substrait_2ftype_2eproto_once, descriptor_table_substrait_2ftype_2eproto_deps, 1, 27,
   schemas, file_default_instances, TableStruct_substrait_2ftype_2eproto::offsets,
   file_level_metadata_substrait_2ftype_2eproto, file_level_enum_descriptors_substrait_2ftype_2eproto, file_level_service_descriptors_substrait_2ftype_2eproto,
 };
@@ -6014,6 +6084,726 @@ void Type_Map::InternalSwap(Type_Map* other) {
 
 // ===================================================================
 
+class Type_UserDefined::_Internal {
+ public:
+};
+
+Type_UserDefined::Type_UserDefined(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned),
+  type_parameters_(arena) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.Type.UserDefined)
+}
+Type_UserDefined::Type_UserDefined(const Type_UserDefined& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message(),
+      type_parameters_(from.type_parameters_) {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::memcpy(&type_reference_, &from.type_reference_,
+    static_cast<size_t>(reinterpret_cast<char*>(&nullability_) -
+    reinterpret_cast<char*>(&type_reference_)) + sizeof(nullability_));
+  // @@protoc_insertion_point(copy_constructor:substrait.Type.UserDefined)
+}
+
+inline void Type_UserDefined::SharedCtor() {
+::memset(reinterpret_cast<char*>(this) + static_cast<size_t>(
+    reinterpret_cast<char*>(&type_reference_) - reinterpret_cast<char*>(this)),
+    0, static_cast<size_t>(reinterpret_cast<char*>(&nullability_) -
+    reinterpret_cast<char*>(&type_reference_)) + sizeof(nullability_));
+}
+
+Type_UserDefined::~Type_UserDefined() {
+  // @@protoc_insertion_point(destructor:substrait.Type.UserDefined)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void Type_UserDefined::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+}
+
+void Type_UserDefined::ArenaDtor(void* object) {
+  Type_UserDefined* _this = reinterpret_cast< Type_UserDefined* >(object);
+  (void)_this;
+}
+void Type_UserDefined::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void Type_UserDefined::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void Type_UserDefined::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.Type.UserDefined)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  type_parameters_.Clear();
+  ::memset(&type_reference_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&nullability_) -
+      reinterpret_cast<char*>(&type_reference_)) + sizeof(nullability_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* Type_UserDefined::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // uint32 type_reference = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          type_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 type_variation_reference = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          type_variation_reference_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Type.Nullability nullability = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_nullability(static_cast<::substrait::Type_Nullability>(val));
+        } else
+          goto handle_unusual;
+        continue;
+      // repeated .substrait.Type.Parameter type_parameters = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_type_parameters(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<34>(ptr));
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* Type_UserDefined::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.Type.UserDefined)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // uint32 type_reference = 1;
+  if (this->_internal_type_reference() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(1, this->_internal_type_reference(), target);
+  }
+
+  // uint32 type_variation_reference = 2;
+  if (this->_internal_type_variation_reference() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(2, this->_internal_type_variation_reference(), target);
+  }
+
+  // .substrait.Type.Nullability nullability = 3;
+  if (this->_internal_nullability() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_nullability(), target);
+  }
+
+  // repeated .substrait.Type.Parameter type_parameters = 4;
+  for (unsigned int i = 0,
+      n = static_cast<unsigned int>(this->_internal_type_parameters_size()); i < n; i++) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(4, this->_internal_type_parameters(i), target, stream);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.Type.UserDefined)
+  return target;
+}
+
+size_t Type_UserDefined::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.Type.UserDefined)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  // repeated .substrait.Type.Parameter type_parameters = 4;
+  total_size += 1UL * this->_internal_type_parameters_size();
+  for (const auto& msg : this->type_parameters_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
+  }
+
+  // uint32 type_reference = 1;
+  if (this->_internal_type_reference() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_type_reference());
+  }
+
+  // uint32 type_variation_reference = 2;
+  if (this->_internal_type_variation_reference() != 0) {
+    total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32SizePlusOne(this->_internal_type_variation_reference());
+  }
+
+  // .substrait.Type.Nullability nullability = 3;
+  if (this->_internal_nullability() != 0) {
+    total_size += 1 +
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::EnumSize(this->_internal_nullability());
+  }
+
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData Type_UserDefined::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    Type_UserDefined::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Type_UserDefined::GetClassData() const { return &_class_data_; }
+
+void Type_UserDefined::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<Type_UserDefined *>(to)->MergeFrom(
+      static_cast<const Type_UserDefined &>(from));
+}
+
+
+void Type_UserDefined::MergeFrom(const Type_UserDefined& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.Type.UserDefined)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  type_parameters_.MergeFrom(from.type_parameters_);
+  if (from._internal_type_reference() != 0) {
+    _internal_set_type_reference(from._internal_type_reference());
+  }
+  if (from._internal_type_variation_reference() != 0) {
+    _internal_set_type_variation_reference(from._internal_type_variation_reference());
+  }
+  if (from._internal_nullability() != 0) {
+    _internal_set_nullability(from._internal_nullability());
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void Type_UserDefined::CopyFrom(const Type_UserDefined& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.Type.UserDefined)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool Type_UserDefined::IsInitialized() const {
+  return true;
+}
+
+void Type_UserDefined::InternalSwap(Type_UserDefined* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  type_parameters_.InternalSwap(&other->type_parameters_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(Type_UserDefined, nullability_)
+      + sizeof(Type_UserDefined::nullability_)
+      - PROTOBUF_FIELD_OFFSET(Type_UserDefined, type_reference_)>(
+          reinterpret_cast<char*>(&type_reference_),
+          reinterpret_cast<char*>(&other->type_reference_));
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata Type_UserDefined::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2ftype_2eproto_getter, &descriptor_table_substrait_2ftype_2eproto_once,
+      file_level_metadata_substrait_2ftype_2eproto[23]);
+}
+
+// ===================================================================
+
+class Type_Parameter::_Internal {
+ public:
+  static const ::PROTOBUF_NAMESPACE_ID::Empty& null(const Type_Parameter* msg);
+  static const ::substrait::Type& data_type(const Type_Parameter* msg);
+};
+
+const ::PROTOBUF_NAMESPACE_ID::Empty&
+Type_Parameter::_Internal::null(const Type_Parameter* msg) {
+  return *msg->parameter_.null_;
+}
+const ::substrait::Type&
+Type_Parameter::_Internal::data_type(const Type_Parameter* msg) {
+  return *msg->parameter_.data_type_;
+}
+void Type_Parameter::set_allocated_null(::PROTOBUF_NAMESPACE_ID::Empty* null) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_parameter();
+  if (null) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+        ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<
+            ::PROTOBUF_NAMESPACE_ID::MessageLite>::GetOwningArena(
+                reinterpret_cast<::PROTOBUF_NAMESPACE_ID::MessageLite*>(null));
+    if (message_arena != submessage_arena) {
+      null = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, null, submessage_arena);
+    }
+    set_has_null();
+    parameter_.null_ = null;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.Type.Parameter.null)
+}
+void Type_Parameter::clear_null() {
+  if (_internal_has_null()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete parameter_.null_;
+    }
+    clear_has_parameter();
+  }
+}
+void Type_Parameter::set_allocated_data_type(::substrait::Type* data_type) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_parameter();
+  if (data_type) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Type>::GetOwningArena(data_type);
+    if (message_arena != submessage_arena) {
+      data_type = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, data_type, submessage_arena);
+    }
+    set_has_data_type();
+    parameter_.data_type_ = data_type;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.Type.Parameter.data_type)
+}
+Type_Parameter::Type_Parameter(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor();
+  if (!is_message_owned) {
+    RegisterArenaDtor(arena);
+  }
+  // @@protoc_insertion_point(arena_constructor:substrait.Type.Parameter)
+}
+Type_Parameter::Type_Parameter(const Type_Parameter& from)
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  clear_has_parameter();
+  switch (from.parameter_case()) {
+    case kNull: {
+      _internal_mutable_null()->::PROTOBUF_NAMESPACE_ID::Empty::MergeFrom(from._internal_null());
+      break;
+    }
+    case kDataType: {
+      _internal_mutable_data_type()->::substrait::Type::MergeFrom(from._internal_data_type());
+      break;
+    }
+    case kBoolean: {
+      _internal_set_boolean(from._internal_boolean());
+      break;
+    }
+    case kInteger: {
+      _internal_set_integer(from._internal_integer());
+      break;
+    }
+    case kEnum: {
+      _internal_set_enum_(from._internal_enum_());
+      break;
+    }
+    case kString: {
+      _internal_set_string(from._internal_string());
+      break;
+    }
+    case PARAMETER_NOT_SET: {
+      break;
+    }
+  }
+  // @@protoc_insertion_point(copy_constructor:substrait.Type.Parameter)
+}
+
+inline void Type_Parameter::SharedCtor() {
+clear_has_parameter();
+}
+
+Type_Parameter::~Type_Parameter() {
+  // @@protoc_insertion_point(destructor:substrait.Type.Parameter)
+  if (GetArenaForAllocation() != nullptr) return;
+  SharedDtor();
+  _internal_metadata_.Delete<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+inline void Type_Parameter::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  if (has_parameter()) {
+    clear_parameter();
+  }
+}
+
+void Type_Parameter::ArenaDtor(void* object) {
+  Type_Parameter* _this = reinterpret_cast< Type_Parameter* >(object);
+  (void)_this;
+}
+void Type_Parameter::RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena*) {
+}
+void Type_Parameter::SetCachedSize(int size) const {
+  _cached_size_.Set(size);
+}
+
+void Type_Parameter::clear_parameter() {
+// @@protoc_insertion_point(one_of_clear_start:substrait.Type.Parameter)
+  switch (parameter_case()) {
+    case kNull: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete parameter_.null_;
+      }
+      break;
+    }
+    case kDataType: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete parameter_.data_type_;
+      }
+      break;
+    }
+    case kBoolean: {
+      // No need to clear
+      break;
+    }
+    case kInteger: {
+      // No need to clear
+      break;
+    }
+    case kEnum: {
+      parameter_.enum__.Destroy(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+      break;
+    }
+    case kString: {
+      parameter_.string_.Destroy(::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::EmptyDefault{}, GetArenaForAllocation());
+      break;
+    }
+    case PARAMETER_NOT_SET: {
+      break;
+    }
+  }
+  _oneof_case_[0] = PARAMETER_NOT_SET;
+}
+
+
+void Type_Parameter::Clear() {
+// @@protoc_insertion_point(message_clear_start:substrait.Type.Parameter)
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  clear_parameter();
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
+}
+
+const char* Type_Parameter::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::PROTOBUF_NAMESPACE_ID::internal::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
+      // .google.protobuf.Empty null = 1;
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr = ctx->ParseMessage(_internal_mutable_null(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // .substrait.Type data_type = 2;
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr = ctx->ParseMessage(_internal_mutable_data_type(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // bool boolean = 3;
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _internal_set_boolean(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // int64 integer = 4;
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _internal_set_integer(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string enum = 5;
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          auto str = _internal_mutable_enum_();
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "substrait.Type.Parameter.enum"));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // string string = 6;
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          auto str = _internal_mutable_string();
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(::PROTOBUF_NAMESPACE_ID::internal::VerifyUTF8(str, "substrait.Type.Parameter.string"));
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
+    }
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
+failure:
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
+}
+
+uint8_t* Type_Parameter::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
+  // @@protoc_insertion_point(serialize_to_array_start:substrait.Type.Parameter)
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  // .google.protobuf.Empty null = 1;
+  if (_internal_has_null()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        1, _Internal::null(this), target, stream);
+  }
+
+  // .substrait.Type data_type = 2;
+  if (_internal_has_data_type()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        2, _Internal::data_type(this), target, stream);
+  }
+
+  // bool boolean = 3;
+  if (_internal_has_boolean()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteBoolToArray(3, this->_internal_boolean(), target);
+  }
+
+  // int64 integer = 4;
+  if (_internal_has_integer()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteInt64ToArray(4, this->_internal_integer(), target);
+  }
+
+  // string enum = 5;
+  if (_internal_has_enum_()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_enum_().data(), static_cast<int>(this->_internal_enum_().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "substrait.Type.Parameter.enum");
+    target = stream->WriteStringMaybeAliased(
+        5, this->_internal_enum_(), target);
+  }
+
+  // string string = 6;
+  if (_internal_has_string()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_string().data(), static_cast<int>(this->_internal_string().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
+      "substrait.Type.Parameter.string");
+    target = stream->WriteStringMaybeAliased(
+        6, this->_internal_string(), target);
+  }
+
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:substrait.Type.Parameter)
+  return target;
+}
+
+size_t Type_Parameter::ByteSizeLong() const {
+// @@protoc_insertion_point(message_byte_size_start:substrait.Type.Parameter)
+  size_t total_size = 0;
+
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  switch (parameter_case()) {
+    // .google.protobuf.Empty null = 1;
+    case kNull: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *parameter_.null_);
+      break;
+    }
+    // .substrait.Type data_type = 2;
+    case kDataType: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *parameter_.data_type_);
+      break;
+    }
+    // bool boolean = 3;
+    case kBoolean: {
+      total_size += 1 + 1;
+      break;
+    }
+    // int64 integer = 4;
+    case kInteger: {
+      total_size += ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::Int64SizePlusOne(this->_internal_integer());
+      break;
+    }
+    // string enum = 5;
+    case kEnum: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+          this->_internal_enum_());
+      break;
+    }
+    // string string = 6;
+    case kString: {
+      total_size += 1 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+          this->_internal_string());
+      break;
+    }
+    case PARAMETER_NOT_SET: {
+      break;
+    }
+  }
+  return MaybeComputeUnknownFieldsSize(total_size, &_cached_size_);
+}
+
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData Type_Parameter::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSizeCheck,
+    Type_Parameter::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*Type_Parameter::GetClassData() const { return &_class_data_; }
+
+void Type_Parameter::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to,
+                      const ::PROTOBUF_NAMESPACE_ID::Message& from) {
+  static_cast<Type_Parameter *>(to)->MergeFrom(
+      static_cast<const Type_Parameter &>(from));
+}
+
+
+void Type_Parameter::MergeFrom(const Type_Parameter& from) {
+// @@protoc_insertion_point(class_specific_merge_from_start:substrait.Type.Parameter)
+  GOOGLE_DCHECK_NE(&from, this);
+  uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  switch (from.parameter_case()) {
+    case kNull: {
+      _internal_mutable_null()->::PROTOBUF_NAMESPACE_ID::Empty::MergeFrom(from._internal_null());
+      break;
+    }
+    case kDataType: {
+      _internal_mutable_data_type()->::substrait::Type::MergeFrom(from._internal_data_type());
+      break;
+    }
+    case kBoolean: {
+      _internal_set_boolean(from._internal_boolean());
+      break;
+    }
+    case kInteger: {
+      _internal_set_integer(from._internal_integer());
+      break;
+    }
+    case kEnum: {
+      _internal_set_enum_(from._internal_enum_());
+      break;
+    }
+    case kString: {
+      _internal_set_string(from._internal_string());
+      break;
+    }
+    case PARAMETER_NOT_SET: {
+      break;
+    }
+  }
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+}
+
+void Type_Parameter::CopyFrom(const Type_Parameter& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:substrait.Type.Parameter)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+bool Type_Parameter::IsInitialized() const {
+  return true;
+}
+
+void Type_Parameter::InternalSwap(Type_Parameter* other) {
+  using std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(parameter_, other->parameter_);
+  swap(_oneof_case_[0], other->_oneof_case_[0]);
+}
+
+::PROTOBUF_NAMESPACE_ID::Metadata Type_Parameter::GetMetadata() const {
+  return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
+      &descriptor_table_substrait_2ftype_2eproto_getter, &descriptor_table_substrait_2ftype_2eproto_once,
+      file_level_metadata_substrait_2ftype_2eproto[24]);
+}
+
+// ===================================================================
+
 class Type::_Internal {
  public:
   static const ::substrait::Type_Boolean& bool_(const Type* msg);
@@ -6039,6 +6829,7 @@ class Type::_Internal {
   static const ::substrait::Type_Struct& struct_(const Type* msg);
   static const ::substrait::Type_List& list(const Type* msg);
   static const ::substrait::Type_Map& map(const Type* msg);
+  static const ::substrait::Type_UserDefined& user_defined(const Type* msg);
 };
 
 const ::substrait::Type_Boolean&
@@ -6132,6 +6923,10 @@ Type::_Internal::list(const Type* msg) {
 const ::substrait::Type_Map&
 Type::_Internal::map(const Type* msg) {
   return *msg->kind_.map_;
+}
+const ::substrait::Type_UserDefined&
+Type::_Internal::user_defined(const Type* msg) {
+  return *msg->kind_.user_defined_;
 }
 void Type::set_allocated_bool_(::substrait::Type_Boolean* bool_) {
   ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
@@ -6478,6 +7273,21 @@ void Type::set_allocated_map(::substrait::Type_Map* map) {
   }
   // @@protoc_insertion_point(field_set_allocated:substrait.Type.map)
 }
+void Type::set_allocated_user_defined(::substrait::Type_UserDefined* user_defined) {
+  ::PROTOBUF_NAMESPACE_ID::Arena* message_arena = GetArenaForAllocation();
+  clear_kind();
+  if (user_defined) {
+    ::PROTOBUF_NAMESPACE_ID::Arena* submessage_arena =
+      ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper<::substrait::Type_UserDefined>::GetOwningArena(user_defined);
+    if (message_arena != submessage_arena) {
+      user_defined = ::PROTOBUF_NAMESPACE_ID::internal::GetOwnedMessage(
+          message_arena, user_defined, submessage_arena);
+    }
+    set_has_user_defined();
+    kind_.user_defined_ = user_defined;
+  }
+  // @@protoc_insertion_point(field_set_allocated:substrait.Type.user_defined)
+}
 Type::Type(::PROTOBUF_NAMESPACE_ID::Arena* arena,
                          bool is_message_owned)
   : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
@@ -6582,6 +7392,10 @@ Type::Type(const Type& from)
     }
     case kMap: {
       _internal_mutable_map()->::substrait::Type_Map::MergeFrom(from._internal_map());
+      break;
+    }
+    case kUserDefined: {
+      _internal_mutable_user_defined()->::substrait::Type_UserDefined::MergeFrom(from._internal_user_defined());
       break;
     }
     case kUserDefinedTypeReference: {
@@ -6761,6 +7575,12 @@ void Type::clear_kind() {
     case kMap: {
       if (GetArenaForAllocation() == nullptr) {
         delete kind_.map_;
+      }
+      break;
+    }
+    case kUserDefined: {
+      if (GetArenaForAllocation() == nullptr) {
+        delete kind_.user_defined_;
       }
       break;
     }
@@ -6968,7 +7788,15 @@ const char* Type::_InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::inter
         } else
           goto handle_unusual;
         continue;
-      // uint32 user_defined_type_reference = 31;
+      // .substrait.Type.UserDefined user_defined = 30;
+      case 30:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 242)) {
+          ptr = ctx->ParseMessage(_internal_mutable_user_defined(), ptr);
+          CHK_(ptr);
+        } else
+          goto handle_unusual;
+        continue;
+      // uint32 user_defined_type_reference = 31 [deprecated = true];
       case 31:
         if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 248)) {
           _internal_set_user_defined_type_reference(::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr));
@@ -7189,7 +8017,15 @@ uint8_t* Type::_InternalSerialize(
         29, _Internal::timestamp_tz(this), target, stream);
   }
 
-  // uint32 user_defined_type_reference = 31;
+  // .substrait.Type.UserDefined user_defined = 30;
+  if (_internal_has_user_defined()) {
+    target = stream->EnsureSpace(target);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(
+        30, _Internal::user_defined(this), target, stream);
+  }
+
+  // uint32 user_defined_type_reference = 31 [deprecated = true];
   if (_internal_has_user_defined_type_reference()) {
     target = stream->EnsureSpace(target);
     target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::WriteUInt32ToArray(31, this->_internal_user_defined_type_reference(), target);
@@ -7381,7 +8217,14 @@ size_t Type::ByteSizeLong() const {
           *kind_.map_);
       break;
     }
-    // uint32 user_defined_type_reference = 31;
+    // .substrait.Type.UserDefined user_defined = 30;
+    case kUserDefined: {
+      total_size += 2 +
+        ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+          *kind_.user_defined_);
+      break;
+    }
+    // uint32 user_defined_type_reference = 31 [deprecated = true];
     case kUserDefinedTypeReference: {
       total_size += 2 +
         ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::UInt32Size(
@@ -7507,6 +8350,10 @@ void Type::MergeFrom(const Type& from) {
       _internal_mutable_map()->::substrait::Type_Map::MergeFrom(from._internal_map());
       break;
     }
+    case kUserDefined: {
+      _internal_mutable_user_defined()->::substrait::Type_UserDefined::MergeFrom(from._internal_user_defined());
+      break;
+    }
     case kUserDefinedTypeReference: {
       _internal_set_user_defined_type_reference(from._internal_user_defined_type_reference());
       break;
@@ -7539,7 +8386,7 @@ void Type::InternalSwap(Type* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata Type::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_2eproto_getter, &descriptor_table_substrait_2ftype_2eproto_once,
-      file_level_metadata_substrait_2ftype_2eproto[23]);
+      file_level_metadata_substrait_2ftype_2eproto[25]);
 }
 
 // ===================================================================
@@ -7772,7 +8619,7 @@ void NamedStruct::InternalSwap(NamedStruct* other) {
 ::PROTOBUF_NAMESPACE_ID::Metadata NamedStruct::GetMetadata() const {
   return ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(
       &descriptor_table_substrait_2ftype_2eproto_getter, &descriptor_table_substrait_2ftype_2eproto_once,
-      file_level_metadata_substrait_2ftype_2eproto[24]);
+      file_level_metadata_substrait_2ftype_2eproto[26]);
 }
 
 // @@protoc_insertion_point(namespace_scope)
@@ -7846,6 +8693,12 @@ template<> PROTOBUF_NOINLINE ::substrait::Type_List* Arena::CreateMaybeMessage< 
 }
 template<> PROTOBUF_NOINLINE ::substrait::Type_Map* Arena::CreateMaybeMessage< ::substrait::Type_Map >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::Type_Map >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::Type_UserDefined* Arena::CreateMaybeMessage< ::substrait::Type_UserDefined >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::Type_UserDefined >(arena);
+}
+template<> PROTOBUF_NOINLINE ::substrait::Type_Parameter* Arena::CreateMaybeMessage< ::substrait::Type_Parameter >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::substrait::Type_Parameter >(arena);
 }
 template<> PROTOBUF_NOINLINE ::substrait::Type* Arena::CreateMaybeMessage< ::substrait::Type >(Arena* arena) {
   return Arena::CreateMessageInternal< ::substrait::Type >(arena);

@@ -507,13 +507,16 @@ function cleanup_tasks(tasks, state)
     for task in tasks
         Base.wait(task)
     end
-    return duckdb_destroy_task_state(state)
+    duckdb_destroy_task_state(state)
+    GC.enable(true)
+    return
 end
 
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     bind_parameters(stmt, params)
 
     handle = Ref{duckdb_result}()
+    GC.enable(false)
     # if multi-threading is enabled, launch tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
     tasks = []
