@@ -39,6 +39,8 @@ public:
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
+	DUCKDB_API void Invalidate();
+	DUCKDB_API bool IsInvalidated();
 
 	idx_t NumberOfThreads();
 
@@ -59,6 +61,8 @@ private:
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
 	unordered_set<std::string> loaded_extensions;
+	//! Set to true if a fatal exception has occurred
+	bool is_invalidated = false;
 };
 
 //! The database object. This object holds the catalog and all the

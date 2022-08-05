@@ -5,7 +5,9 @@
 %   R/dbExistsTable__duckdb_connection_character.R,
 %   R/dbGetInfo__duckdb_connection.R, R/dbIsValid__duckdb_connection.R,
 %   R/dbListFields__duckdb_connection_character.R,
-%   R/dbListTables__duckdb_connection.R, R/dbQuoteLiteral__duckdb_connection.R,
+%   R/dbListTables__duckdb_connection.R,
+%   R/dbQuoteIdentifier__duckdb_connection.R,
+%   R/dbQuoteLiteral__duckdb_connection.R,
 %   R/dbRemoveTable__duckdb_connection_character.R,
 %   R/dbRollback__duckdb_connection.R,
 %   R/dbSendQuery__duckdb_connection_character.R,
@@ -33,6 +35,10 @@
 \alias{dbListFields,duckdb_connection,character-method}
 \alias{dbListTables__duckdb_connection}
 \alias{dbListTables,duckdb_connection-method}
+\alias{dbQuoteIdentifier,duckdb_connection,ANY-method}
+\alias{dbQuoteIdentifier,duckdb_connection,character-method}
+\alias{dbQuoteIdentifier,duckdb_connection,SQL-method}
+\alias{dbQuoteIdentifier,duckdb_connection,Id-method}
 \alias{dbQuoteLiteral__duckdb_connection}
 \alias{dbQuoteLiteral,duckdb_connection-method}
 \alias{dbRemoveTable__duckdb_connection_character}
@@ -64,6 +70,8 @@
 \S4method{dbListFields}{duckdb_connection,character}(conn, name, ...)
 
 \S4method{dbListTables}{duckdb_connection}(conn, ...)
+
+\S4method{dbQuoteIdentifier}{duckdb_connection,ANY}(conn, x, ...)
 
 \S4method{dbQuoteLiteral}{duckdb_connection}(conn, x, ...)
 
