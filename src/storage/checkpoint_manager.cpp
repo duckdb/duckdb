@@ -291,7 +291,7 @@ void CheckpointManager::WriteView(ViewCatalogEntry &view) {
 }
 
 void CheckpointManager::ReadView(ClientContext &context, MetaBlockReader &reader) {
-	auto info = ViewCatalogEntry::Deserialize(reader);
+	auto info = ViewCatalogEntry::Deserialize(reader, context);
 
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateView(context, info.get());
@@ -327,7 +327,7 @@ void CheckpointManager::WriteIndex(IndexCatalogEntry &index_catalog) {
 void CheckpointManager::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
 
 	// Deserialize the index meta data
-	auto info = IndexCatalogEntry::Deserialize(reader);
+	auto info = IndexCatalogEntry::Deserialize(reader, context);
 
 	// Create index in the catalog
 	auto &catalog = Catalog::GetCatalog(db);
@@ -404,7 +404,7 @@ void CheckpointManager::WriteMacro(ScalarMacroCatalogEntry &macro) {
 }
 
 void CheckpointManager::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = ScalarMacroCatalogEntry::Deserialize(reader);
+	auto info = ScalarMacroCatalogEntry::Deserialize(reader, context);
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }
@@ -414,7 +414,7 @@ void CheckpointManager::WriteTableMacro(TableMacroCatalogEntry &macro) {
 }
 
 void CheckpointManager::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = TableMacroCatalogEntry::Deserialize(reader);
+	auto info = TableMacroCatalogEntry::Deserialize(reader, context);
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateFunction(context, info.get());
 }
@@ -432,7 +432,7 @@ void CheckpointManager::WriteTable(TableCatalogEntry &table) {
 
 void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reader) {
 	// deserialize the table meta data
-	auto info = TableCatalogEntry::Deserialize(reader);
+	auto info = TableCatalogEntry::Deserialize(reader, context);
 	// bind the info
 	auto binder = Binder::CreateBinder(context);
 	auto bound_info = binder->BindCreateTableInfo(move(info));

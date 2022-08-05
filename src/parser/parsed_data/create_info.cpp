@@ -1,5 +1,9 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
+
+#include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 namespace duckdb {
 void CreateInfo::DeserializeBase(Deserializer &deserializer) {
@@ -20,11 +24,17 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	SerializeInternal(serializer);
 }
 
-unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer, ClientContext &context) {
 	auto type = deserializer.Read<CatalogType>();
 	switch (type) {
+	case CatalogType::INDEX_ENTRY:
+		return CreateIndexInfo::Deserialize(deserializer, context);
 	case CatalogType::TABLE_ENTRY:
-		return CreateTableInfo::Deserialize(deserializer);
+		return CreateTableInfo::Deserialize(deserializer, context);
+	case CatalogType::SCHEMA_ENTRY:
+		return CreateSchemaInfo::Deserialize(deserializer);
+	case CatalogType::VIEW_ENTRY:
+		return CreateViewInfo::Deserialize(deserializer, context);
 	default:
 		throw NotImplementedException("Cannot deserialize '%s'", CatalogTypeToString(type));
 	}

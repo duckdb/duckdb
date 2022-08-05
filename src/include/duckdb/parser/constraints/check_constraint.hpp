@@ -28,7 +28,7 @@ public:
 	DUCKDB_API unique_ptr<Constraint> Copy() const override;
 
 	DUCKDB_API void Serialize(FieldWriter &writer) const override;
-	DUCKDB_API static unique_ptr<Constraint> Deserialize(FieldReader &source);
+	DUCKDB_API static unique_ptr<Constraint> Deserialize(FieldReader &source, ClientContext &context);
 };
 
 } // namespace duckdb
