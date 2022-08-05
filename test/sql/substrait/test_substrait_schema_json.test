@@ -14,7 +14,7 @@ CREATE TABLE type (a integer not null)
 query I
 CALL get_substrait_json('select * from type;')
 ----
-{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_REQUIRED"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"names":["a"]}}]}
+{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_REQUIRED"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}}]}},"names":["a"]}}]}
 
 statement ok
 drop table type
@@ -25,7 +25,7 @@ CREATE TABLE type (a integer)
 query I
 CALL get_substrait_json('select * from type;')
 ----
-{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"names":["a"]}}]}
+{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}}]}},"names":["a"]}}]}
 
 statement ok
 drop table type
@@ -38,7 +38,7 @@ CREATE TABLE type (a integer, b varchar, c decimal (3,2))
 query I
 CALL get_substrait_json('select * from type;')
 ----
-{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a","b","c"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}},{"varchar":{"nullability":"NULLABILITY_NULLABLE"}},{"decimal":{"scale":2,"precision":3,"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}}}},{"selection":{"directReference":{"structField":{"field":1}}}},{"selection":{"directReference":{"structField":{"field":2}}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}}}},{"selection":{"directReference":{"structField":{"field":1}}}},{"selection":{"directReference":{"structField":{"field":2}}}}]}},"names":["a","b","c"]}}]}
+{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a","b","c"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}},{"varchar":{"nullability":"NULLABILITY_NULLABLE"}},{"decimal":{"scale":2,"precision":3,"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":1}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":2}},"rootReference":{}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":1}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":2}},"rootReference":{}}}]}},"names":["a","b","c"]}}]}
 
 statement ok
 insert into type values (0, 'abc',0)
@@ -48,7 +48,7 @@ insert into type values (0, 'abc',0)
 query I
 CALL get_substrait_json('select * from type;')
 ----
-{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a","b","c"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}},{"varchar":{"length":3,"nullability":"NULLABILITY_NULLABLE"}},{"decimal":{"scale":2,"precision":3,"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}}}},{"selection":{"directReference":{"structField":{"field":1}}}},{"selection":{"directReference":{"structField":{"field":2}}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}}}},{"selection":{"directReference":{"structField":{"field":1}}}},{"selection":{"directReference":{"structField":{"field":2}}}}]}},"names":["a","b","c"]}}]}
+{"relations":[{"root":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["a","b","c"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}},{"varchar":{"length":3,"nullability":"NULLABILITY_NULLABLE"}},{"decimal":{"scale":2,"precision":3,"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["type"]}}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":1}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":2}},"rootReference":{}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":1}},"rootReference":{}}},{"selection":{"directReference":{"structField":{"field":2}},"rootReference":{}}}]}},"names":["a","b","c"]}}]}
 
 statement ok
 CREATE TABLE integers (i integer)
@@ -56,4 +56,4 @@ CREATE TABLE integers (i integer)
 query I
 CALL get_substrait_json('select * from integers limit 5')
 ----
-{"relations":[{"root":{"input":{"fetch":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["i"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["integers"]}}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}}}}]}},"count":"5"}},"names":["i"]}}]}
+{"relations":[{"root":{"input":{"fetch":{"input":{"project":{"input":{"project":{"input":{"read":{"baseSchema":{"names":["i"],"struct":{"types":[{"i32":{"nullability":"NULLABILITY_NULLABLE"}}],"nullability":"NULLABILITY_REQUIRED"}},"namedTable":{"names":["integers"]}}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}}]}},"expressions":[{"selection":{"directReference":{"structField":{}},"rootReference":{}}}]}},"count":"5"}},"names":["i"]}}]}

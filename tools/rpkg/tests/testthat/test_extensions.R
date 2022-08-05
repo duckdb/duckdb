@@ -69,7 +69,7 @@ test_that("substrait extension json test", {
   con <- load_extension("substrait.duckdb_extension")
   on.exit(dbDisconnect(con, shutdown = TRUE))
   dbExecute(con, "CREATE TABLE integers (i INTEGER)")
-  expected_json <- "{\"relations\":[{\"root\":{\"input\":{\"fetch\":{\"input\":{\"project\":{\"input\":{\"project\":{\"input\":{\"read\":{\"baseSchema\":{\"names\":[\"i\"],\"struct\":{\"types\":[{\"i32\":{\"nullability\":\"NULLABILITY_NULLABLE\"}}],\"nullability\":\"NULLABILITY_REQUIRED\"}},\"namedTable\":{\"names\":[\"integers\"]}}},\"expressions\":[{\"selection\":{\"directReference\":{\"structField\":{}}}}]}},\"expressions\":[{\"selection\":{\"directReference\":{\"structField\":{}}}}]}},\"count\":\"5\"}},\"names\":[\"i\"]}}]}"
+  expected_json <- "{\"relations\":[{\"root\":{\"input\":{\"fetch\":{\"input\":{\"project\":{\"input\":{\"project\":{\"input\":{\"read\":{\"baseSchema\":{\"names\":[\"i\"],\"struct\":{\"types\":[{\"i32\":{\"nullability\":\"NULLABILITY_NULLABLE\"}}],\"nullability\":\"NULLABILITY_REQUIRED\"}},\"namedTable\":{\"names\":[\"integers\"]}}},\"expressions\":[{\"selection\":{\"directReference\":{\"structField\":{}},\"rootReference\":{}}}]}},\"expressions\":[{\"selection\":{\"directReference\":{\"structField\":{}},\"rootReference\":{}}}]}},\"count\":\"5\"}},\"names\":[\"i\"]}}]}"
   json <- duckdb::duckdb_get_substrait_json(con, "select * from integers limit 5")
   expect_equal(json, expected_json)
 })
