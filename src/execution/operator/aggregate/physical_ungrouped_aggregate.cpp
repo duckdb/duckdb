@@ -104,14 +104,14 @@ struct AggregateState {
 };
 
 struct AggregateExecutionData {
-	AggregateExecutionData(Allocator &allocator) : child_executor(allocator) {
+	AggregateExecutionData(Allocator &allocator) : child_executor(allocator), payload_chunk() {
 	}
 	//! The executor
 	ExpressionExecutor child_executor;
+	//! The payload chunk, containing all the Vectors for the aggregates
+	DataChunk payload_chunk;
 	//! Aggregate filter data set
 	AggregateFilterDataSet filter_set;
-	//! The input chunks for each distinct aggregate
-	vector<unique_ptr<DataChunk>> distinct_input_chunks;
 };
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
@@ -150,10 +150,10 @@ public:
 	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
 	                          const vector<LogicalType> &child_types,
 	                          const DistinctAggregateData &distinct_aggregate_data, ExecutionContext &context)
-	    : state(aggregates), execution_data(allocator) {
+	    : state(aggregates), execution_data(make_unique<AggregateExecutionData>(allocator)) {
 
-		auto &child_executor = execution_data.child_executor;
-		auto &filter_set = execution_data.filter_set;
+		auto &child_executor = execution_data->child_executor;
+		auto &filter_set = execution_data->filter_set;
 
 		InitializeDistinctAggregates(distinct_aggregate_data, context);
 		vector<LogicalType> payload_types;
@@ -171,7 +171,7 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			payload_chunk.Initialize(allocator, payload_types);
+			execution_data->payload_chunk.Initialize(allocator, payload_types);
 		}
 		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
@@ -179,38 +179,21 @@ public:
 	//! The local aggregate state
 	AggregateState state;
 	//! Used to store the data needed to perform aggregations
-	AggregateExecutionData execution_data;
-	//! The payload chunk
-	DataChunk payload_chunk;
+	unique_ptr<AggregateExecutionData> execution_data;
 	//! The local sink states of the distinct aggregates hash tables
 	vector<unique_ptr<LocalSinkState>> radix_states;
 
 public:
 	void Reset() {
-		payload_chunk.Reset();
+		execution_data->payload_chunk.Reset();
 	}
 	void InitializeDistinctAggregates(const DistinctAggregateData &data, ExecutionContext &context) {
-		auto &distinct_input_chunks = execution_data.distinct_input_chunks;
 
 		if (!data.AnyDistinct()) {
 			// No distinct aggregates
 			return;
 		}
 		radix_states.resize(data.radix_tables.size());
-		distinct_input_chunks.resize(data.radix_tables.size());
-		for (idx_t i = 0; i < data.radix_tables.size(); i++) {
-			if (!data.radix_tables[i]) {
-				// Aggregate at this index is not distinct
-				continue;
-			}
-			auto &radix_table = *data.radix_tables[i];
-			radix_states[i] = radix_table.GetLocalSinkState(context);
-			auto &payload_types = data.grouped_aggregate_data[i]->payload_types;
-			if (!payload_types.empty()) {
-				distinct_input_chunks[i] = make_unique<DataChunk>();
-				distinct_input_chunks[i]->InitializeEmpty(payload_types);
-			}
-		}
 	}
 };
 
@@ -230,7 +213,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 	idx_t payload_idx = 0, payload_expr_idx = 0;
 	sink.Reset();
 
-	DataChunk &payload_chunk = sink.payload_chunk;
+	DataChunk &payload_chunk = sink.execution_data->payload_chunk;
 
 	idx_t next_payload_idx = 0;
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
@@ -246,22 +229,21 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 			auto &radix_table = *distinct_aggregate_data.radix_tables[aggr_idx];
 			auto &radix_global_sink = *global_sink.radix_states[aggr_idx];
 			auto &radix_local_sink = *sink.radix_states[aggr_idx];
-			auto &input_chunk = *sink.execution_data.distinct_input_chunks[aggr_idx];
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input_chunk);
+			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
 			continue;
 		}
 
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
-			auto &filtered_data = sink.execution_data.filter_set.GetFilterData(aggr_idx);
+			auto &filtered_data = sink.execution_data->filter_set.GetFilterData(aggr_idx);
 			auto count = filtered_data.ApplyFilter(input);
 
-			sink.execution_data.child_executor.SetChunk(filtered_data.filtered_payload);
+			sink.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
-			sink.execution_data.child_executor.SetChunk(input);
+			sink.execution_data->child_executor.SetChunk(input);
 			payload_chunk.SetCardinality(input);
 		}
 
@@ -272,8 +254,8 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-				sink.execution_data.child_executor.ExecuteExpression(payload_expr_idx,
-				                                                     payload_chunk.data[payload_idx + payload_cnt]);
+				sink.execution_data->child_executor.ExecuteExpression(payload_expr_idx,
+				                                                      payload_chunk.data[payload_idx + payload_cnt]);
 				payload_expr_idx++;
 				payload_cnt++;
 			}
@@ -325,13 +307,13 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &source.execution_data.child_executor, "child_executor", 0);
+	context.thread.profiler.Flush(this, &source.execution_data->child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
 
 	if (distinct_aggregate_data.AnyDistinct() && !gstate.execution_data) {
 		// there are distinct aggregates, and we have not stolen execution_data from a thread yet
 		// which we'll need to perform the aggregations in Finalize
-		gstate.execution_data = make_unique<AggregateExecutionData>(move(source.execution_data));
+		gstate.execution_data = move(source.execution_data);
 	}
 }
 
@@ -349,6 +331,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 	D_ASSERT(gstate.execution_data);
 
 	DataChunk intermediate_chunk; // used to get the data from the hash table
+	auto &payload_chunk = gstate.execution_data->payload_chunk;
 	ThreadContext temp_thread_context(context);
 	ExecutionContext temp_exec_context(context, temp_thread_context);
 
@@ -389,8 +372,8 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 			gstate.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
-			gstate.execution_data->child_executor.SetChunk(input);
-			payload_chunk.SetCardinality(input);
+			gstate.execution_data->child_executor.SetChunk(intermediate_chunk);
+			payload_chunk.SetCardinality(intermediate_chunk);
 		}
 
 		// resolve the child expressions of the aggregate (if any)
@@ -403,9 +386,11 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 			}
 		}
 
+		auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
+		//! Update the aggregate state
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], aggr_input_data,
-		                                 payload_cnt, gstate.state.aggregates[i].get(), payload_chunk.size());
+		aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt, gstate.state.aggregates[i].get(),
+		                                 payload_chunk.size());
 
 		intermediate_chunk.Reset();
 	}

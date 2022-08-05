@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/aggregate/aggregate_object.hpp
+// duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
