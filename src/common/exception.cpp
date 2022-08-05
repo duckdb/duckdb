@@ -31,80 +31,81 @@ string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionF
 }
 
 ExceptionType Exception::StringToExceptionType(const std::string &code) {
-	if (code == "Invalid")
+	if (code == "Invalid") {
 		return ExceptionType::INVALID;
-	else if (code == "Out of Range")
+	} else if (code == "Out of Range") {
 		return ExceptionType::OUT_OF_RANGE;
-	else if (code == "Conversion")
+	} else if (code == "Conversion") {
 		return ExceptionType::CONVERSION;
-	else if (code == "Unknown Type")
+	} else if (code == "Unknown Type") {
 		return ExceptionType::UNKNOWN_TYPE;
-	else if (code == "Decimal")
+	} else if (code == "Decimal") {
 		return ExceptionType::DECIMAL;
-	else if (code == "Mismatch Type")
+	} else if (code == "Mismatch Type") {
 		return ExceptionType::MISMATCH_TYPE;
-	else if (code == "Divide by Zero")
+	} else if (code == "Divide by Zero") {
 		return ExceptionType::DIVIDE_BY_ZERO;
-	else if (code == "Object Size")
+	} else if (code == "Object Size") {
 		return ExceptionType::OBJECT_SIZE;
-	else if (code == "Invalid type")
+	} else if (code == "Invalid type") {
 		return ExceptionType::INVALID_TYPE;
-	else if (code == "Serialization")
+	} else if (code == "Serialization") {
 		return ExceptionType::SERIALIZATION;
-	else if (code == "TransactionContext")
+	} else if (code == "TransactionContext") {
 		return ExceptionType::TRANSACTION;
-	else if (code == "Not implemented")
+	} else if (code == "Not implemented") {
 		return ExceptionType::NOT_IMPLEMENTED;
-	else if (code == "Expression")
+	} else if (code == "Expression") {
 		return ExceptionType::EXPRESSION;
-	else if (code == "Catalog")
+	} else if (code == "Catalog") {
 		return ExceptionType::CATALOG;
-	else if (code == "Parser")
+	} else if (code == "Parser") {
 		return ExceptionType::PARSER;
-	else if (code == "Binder")
+	} else if (code == "Binder") {
 		return ExceptionType::BINDER;
-	else if (code == "Planner")
+	} else if (code == "Planner") {
 		return ExceptionType::PLANNER;
-	else if (code == "Scheduler")
+	} else if (code == "Scheduler") {
 		return ExceptionType::SCHEDULER;
-	else if (code == "Executor")
+	} else if (code == "Executor") {
 		return ExceptionType::EXECUTOR;
-	else if (code == "Constraint")
+	} else if (code == "Constraint") {
 		return ExceptionType::CONSTRAINT;
-	else if (code == "Index")
+	} else if (code == "Index") {
 		return ExceptionType::INDEX;
-	else if (code == "Stat")
+	} else if (code == "Stat") {
 		return ExceptionType::STAT;
-	else if (code == "Connection")
+	} else if (code == "Connection") {
 		return ExceptionType::CONNECTION;
-	else if (code == "Syntax")
+	} else if (code == "Syntax") {
 		return ExceptionType::SYNTAX;
-	else if (code == "Settings")
+	} else if (code == "Settings") {
 		return ExceptionType::SETTINGS;
-	else if (code == "Optimizer")
+	} else if (code == "Optimizer") {
 		return ExceptionType::OPTIMIZER;
-	else if (code == "NullPointer")
+	} else if (code == "NullPointer") {
 		return ExceptionType::NULL_POINTER;
-	else if (code == "IO")
+	} else if (code == "IO") {
 		return ExceptionType::IO;
-	else if (code == "INTERRUPT")
+	} else if (code == "INTERRUPT") {
 		return ExceptionType::INTERRUPT;
-	else if (code == "FATAL")
+	} else if (code == "FATAL") {
 		return ExceptionType::FATAL;
-	else if (code == "INTERNAL")
+	} else if (code == "INTERNAL") {
 		return ExceptionType::INTERNAL;
-	else if (code == "Invalid Input")
+	} else if (code == "Invalid Input") {
 		return ExceptionType::INVALID_INPUT;
-	else if (code == "Out of Memory")
+	} else if (code == "Out of Memory") {
 		return ExceptionType::OUT_OF_MEMORY;
-	else if (code == "Permission")
+	} else if (code == "Permission") {
 		return ExceptionType::PERMISSION;
-	else if (code == "Parameter Not Resolved")
+	} else if (code == "Parameter Not Resolved") {
 		return ExceptionType::PARAMETER_NOT_RESOLVED;
-	else if (code == "Parameter Not Allowed")
+	} else if (code == "Parameter Not Allowed") {
 		return ExceptionType::PARAMETER_NOT_ALLOWED;
-	else
+	} else {
 		throw std::runtime_error("Unknown error: " + code);
+	}
 }
 
 string Exception::ExceptionTypeToString(ExceptionType type) {

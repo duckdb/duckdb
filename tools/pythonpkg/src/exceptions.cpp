@@ -20,9 +20,9 @@ class NotSupportedError : public std::exception {};
  * TODO: should this (or something like this) live in the core duckdb library?
  */
 [[noreturn]] void ThrowHydratedError(const std::string &s) {
-	auto location = s.find(":");
+	auto location = s.find(':');
 	auto message = s.substr(location + 2); // +2 to skip colon and space
-	location = s.rfind(" ", location);
+	location = s.rfind(' ', location);
 	auto prefix = s.substr(0, location);
 
 	auto exception_type = Exception::StringToExceptionType(prefix);
