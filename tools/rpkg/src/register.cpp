@@ -35,7 +35,7 @@ using namespace duckdb;
 
 [[cpp11::register]] void rapi_unregister_df(duckdb::conn_eptr_t conn, std::string name) {
 	if (!conn || !conn.get() || !conn->conn) {
-		cpp11::stop("rapi_unregister_df: Invalid connection");
+		return;
 	}
 	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
 	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
@@ -254,9 +254,8 @@ unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context
 
 [[cpp11::register]] void rapi_unregister_arrow(duckdb::conn_eptr_t conn, std::string name) {
 	if (!conn || !conn.get() || !conn->conn) {
-		cpp11::stop("rapi_unregister_arrow: Invalid connection");
+		return; // if the connection is already dead there is probably no point in cleaning this
 	}
-
 	{
 		lock_guard<mutex> arrow_scans_lock(conn->db_eptr->lock);
 		auto &arrow_scans = conn->db_eptr->arrow_scans;
