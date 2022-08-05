@@ -6,7 +6,6 @@ var duckdb = require("..");
 var jsdoc = require("jsdoc3-parser");
 const { expect } = require('chai');
 const { promisify } = require('util');
-const { writeFile } = require('fs/promises');
 
 function lastDot(string) {
   const array = string.split('.');
@@ -28,11 +27,6 @@ describe("JSDoc contains all methods", () => {
   let docs;
   before(async () => {
     docs = await promisify(jsdoc)(require.resolve("../lib/duckdb"));
-
-    await writeFile(
-      'jsdocout.json',
-      JSON.stringify(docs, undefined, 2)
-    );
   })
 
   function checkDocs(obj, scope) {
