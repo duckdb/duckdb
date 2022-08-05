@@ -249,24 +249,28 @@ jobs:
          arch: aarch64
          distro: ubuntu18.04
 
+         # The shell to run commands with in the container
+         shell: /bin/sh
+
          # Create an artifacts directory
          setup: |
            pwd
            mv /tmp/duckdb_unittest-linux-aarch64.zip .
            unzip duckdb_unittest-linux-aarch64.zip
            chmod +x unittest
-           ls
+           mkdir test_folder
+           mv unittest test_folder
 
-#         # Mount the artifacts directory as /artifacts in the container
-#         dockerRunArgs: |
-#           --volume "${PWD}/test_folder:/test_folder"
+         # Mount the artifacts directory as /artifacts in the container
+         dockerRunArgs: |
+           --volume "${PWD}/test_folder:/test_folder"
 
          # Set an output parameter `uname` for use in subsequent steps
          run: |
            uname -a
            pwd
-           ls
-           ./unittest
+           ls /test_folder
+           /test_folder/unittest
 
      - name: Get the output
        # Echo the `uname` output parameter from the `runcmd` step
