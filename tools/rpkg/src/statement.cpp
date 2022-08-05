@@ -35,8 +35,7 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 }
 
 [[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query) {
-
-	if (!conn || !conn->conn) {
+	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_get_substrait: Invalid connection");
 	}
 
@@ -55,8 +54,7 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 }
 
 [[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query) {
-
-	if (!conn || !conn->conn) {
+	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_get_substrait_json: Invalid connection");
 	}
 
@@ -69,7 +67,6 @@ static void VectorToR(Vector &src_vec, size_t count, void *dest, uint64_t dest_o
 }
 
 static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
-
 	cpp11::writable::list retlist;
 	retlist.reserve(6);
 	retlist.push_back({"str"_nm = query});
@@ -98,7 +95,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 }
 
 [[cpp11::register]] cpp11::list rapi_prepare_substrait(duckdb::conn_eptr_t conn, cpp11::sexp query) {
-	if (!conn || !conn->conn) {
+	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_prepare_substrait: Invalid connection");
 	}
 
@@ -119,7 +116,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 }
 
 [[cpp11::register]] cpp11::list rapi_prepare(duckdb::conn_eptr_t conn, std::string query) {
-	if (!conn || !conn->conn) {
+	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_prepare: Invalid connection");
 	}
 
@@ -145,7 +142,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 }
 
 [[cpp11::register]] cpp11::list rapi_bind(duckdb::stmt_eptr_t stmt, cpp11::list params, bool arrow, bool integer64) {
-	if (!stmt || !stmt->stmt) {
+	if (!stmt || !stmt.get() || !stmt->stmt) {
 		cpp11::stop("rapi_bind: Invalid statement");
 	}
 

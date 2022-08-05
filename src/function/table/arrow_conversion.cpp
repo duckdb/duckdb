@@ -18,8 +18,8 @@ void ShiftRight(unsigned char *ar, int size, int shift) {
 	}
 }
 
-
-void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size, int64_t nested_offset = -1, bool add_null = false) {
+void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+                     int64_t nested_offset = -1, bool add_null = false) {
 	if (array.null_count != 0 && array.buffers[0]) {
 		auto bit_offset = scan_state.chunk_offset + array.offset;
 		if (nested_offset != -1) {
@@ -43,7 +43,7 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState 
 		auto byte_offset = bit_offset / 8;
 		auto source_data = (uint8_t *)array.buffers[0];
 		bit_offset %= 8;
-		for(idx_t i = 0; i < size; i++) {
+		for (idx_t i = 0; i < size; i++) {
 			mask.Set(i, source_data[byte_offset] & (1 << bit_offset));
 			bit_offset++;
 			if (bit_offset == 8) {

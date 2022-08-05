@@ -76,7 +76,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 // DuckDB Relations
 
 [[cpp11::register]] SEXP rapi_rel_from_df(duckdb::conn_eptr_t con, data_frame df) {
-	if (!con->conn) {
+	if (!con || !con.get() || !con->conn) {
 		stop("rel_from_df: Invalid connection");
 	}
 	if (df.size() == 0) {
