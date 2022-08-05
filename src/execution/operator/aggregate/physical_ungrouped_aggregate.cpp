@@ -110,6 +110,8 @@ struct AggregateExecutionData {
 	ExpressionExecutor child_executor;
 	//! The payload chunk, containing all the Vectors for the aggregates
 	DataChunk payload_chunk;
+	//! The data used to get the distinct values out of the hash tables
+	DataChunk output_chunk;
 	//! Aggregate filter data set
 	AggregateFilterDataSet filter_set;
 };
@@ -173,6 +175,11 @@ public:
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
 			execution_data->payload_chunk.Initialize(allocator, payload_types);
 		}
+		for (auto &aggregate : aggregates) {
+			auto &aggr = (BoundAggregateExpression &)*aggregate;
+			payload_types.push_back(aggr.return_type);
+		}
+		execution_data->output_chunk.Initialize(allocator, payload_types);
 		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
 
@@ -337,19 +344,9 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 
 	//! Verify that we have stolen execution data, because we'll need it here
 	D_ASSERT(gstate.execution_data);
-
-	DataChunk intermediate_chunk; // used to get the data from the hash table
 	auto &payload_chunk = gstate.execution_data->payload_chunk;
 
-	auto aggregate_types = payload_chunk.GetTypes();
-	auto group_types = payload_chunk.GetTypes();
-	vector<LogicalType> all_types(move(aggregate_types));
-	for (auto &expr : aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*expr;
-		all_types.push_back(aggr.return_type);
-	}
-
-	intermediate_chunk.Initialize(all_types);
+	auto &intermediate_chunk = gstate.execution_data->output_chunk;
 	ThreadContext temp_thread_context(context);
 	ExecutionContext temp_exec_context(context, temp_thread_context);
 
@@ -393,6 +390,10 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 			gstate.execution_data->child_executor.SetChunk(intermediate_chunk);
 			payload_chunk.SetCardinality(intermediate_chunk);
 		}
+
+#ifdef DEBUG
+		gstate.state.counts[i] += payload_chunk.size();
+#endif
 
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
