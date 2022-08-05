@@ -5,9 +5,13 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+
+#include <iostream>
 
 namespace duckdb {
 
@@ -85,7 +89,7 @@ public:
 	DataChunk join_keys;
 	ExpressionExecutor build_executor;
 
-	//! Thread-local local HT
+	//! Thread-local HT
 	unique_ptr<JoinHashTable> hash_table;
 };
 
@@ -216,6 +220,51 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
+class PartitionTask : public ExecutorTask {
+public:
+	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht, JoinHashTable &local_ht)
+	    : ExecutorTask(context), event(move(event_p)), global_ht(global_ht), local_ht(local_ht) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		local_ht.Partition(global_ht);
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+
+	JoinHashTable &global_ht;
+	JoinHashTable &local_ht;
+};
+
+class PartitionEvent : public Event {
+public:
+	PartitionEvent(Pipeline &pipeline_p, JoinHashTable &global_ht, vector<unique_ptr<JoinHashTable>> &local_hts)
+	    : Event(pipeline_p.executor), pipeline(pipeline_p), global_ht(global_ht), local_hts(local_hts) {
+	}
+
+	Pipeline &pipeline;
+	JoinHashTable &global_ht;
+	vector<unique_ptr<JoinHashTable>> &local_hts;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline.GetClientContext();
+		vector<unique_ptr<Task>> partition_tasks;
+		for (auto &local_ht : local_hts) {
+			partition_tasks.push_back(make_unique<PartitionTask>(shared_from_this(), context, global_ht, *local_ht));
+		}
+		SetTasks(move(partition_tasks));
+	}
+
+	void FinishEvent() override {
+		local_hts.clear();
+		global_ht.FinalizeExternal();
+	}
+};
+
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalSinkState &)gstate;
@@ -224,7 +273,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		D_ASSERT(!recursive_cte);
 		// External join - partition HT
 		sink.perfect_join_executor.reset();
-		sink.hash_table->SchedulePartitionTasks(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
+		sink.hash_table->ComputePartitionSizes(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
+		auto new_event = make_shared<PartitionEvent>(pipeline, *sink.hash_table, sink.local_hash_tables);
+		event.InsertEvent(move(new_event));
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
 	} else {
@@ -342,6 +393,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
+		std::cout << "Sinking into: " << state.local_sink_ht << std::endl;
 		if (state.local_sink_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
 			// Swizzle data collected so far (if needed)
 			state.local_sink_ht->SwizzleBlocks();
@@ -445,7 +497,12 @@ void HashJoinGlobalSourceState::AssignProbeBlocks(duckdb::HashJoinLocalSourceSta
 	lstate.block_idx = probe_ss.block_position;
 	idx_t total = 0;
 	for (; probe_ss.block_position < block_collection.blocks.size(); probe_ss.block_position++) {
-		total += block_collection.blocks[probe_ss.block_position]->count;
+		auto &block = *block_collection.blocks[probe_ss.block_position];
+		if (block.count == 0) {
+			// Skip over empty blocks just in case
+			continue;
+		}
+		total += block.count;
 		if (total >= idx_t(parallel_scan_vector_count * STANDARD_VECTOR_SIZE)) {
 			break;
 		}
@@ -475,6 +532,7 @@ void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState
 			if (sink.local_hash_tables.empty()) {
 				continue;
 			}
+			std::cout << "Partitioning: " << sink.local_hash_tables.back().get() << std::endl;
 			local_ht = move(sink.local_hash_tables.back());
 			sink.local_hash_tables.pop_back();
 		}

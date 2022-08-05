@@ -246,13 +246,16 @@ public:
 	idx_t SwizzledCount() {
 		return swizzled_block_collection->count;
 	}
-	//! The size of the data in memory if we build a hash table of this
+	//! The size of the data in memory if we build the hash table, takes into account the size of the pointer table
+	//! Pointer table is least half empty, and the capacity is a power of two
+	//! Therefore, in the best case one tuple takes up 2 ptr slots, worst case 4 slots, we take the average of 3
 	idx_t SizeInBytes() {
 		return block_collection->SizeInBytes() + string_heap->SizeInBytes() + Count() * 3 * sizeof(data_ptr_t);
 	}
-	//! Size of swizzled_block_collection + swizzled_string_heap in bytes
+	//! Size of the data in memory if we build a hash table of the swizzled data
 	idx_t SwizzledSize() {
-		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
+		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes() +
+		       SwizzledCount() * 3 * sizeof(data_ptr_t);
 	}
 
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
@@ -260,9 +263,9 @@ public:
 	//! Unswizzle the blocks in this HT (moves from swizzled_... to block_collection and string_heap)
 	void UnswizzleBlocks();
 
-	//! Schedules one task for every HT in local_hts to partition them and add them to this HT
-	void SchedulePartitionTasks(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts,
-	                            idx_t max_ht_size);
+	//! Computes partition sizes and number of radix bits (called before scheduling partition tasks)
+	void ComputePartitionSizes(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts,
+	                           idx_t max_ht_size);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 

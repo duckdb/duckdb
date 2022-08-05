@@ -5,8 +5,6 @@
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/event.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -992,53 +990,8 @@ void JoinHashTable::UnswizzleBlocks() {
 	D_ASSERT(SwizzledCount() == 0);
 }
 
-class PartitionTask : public ExecutorTask {
-public:
-	PartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht, JoinHashTable &local_ht)
-	    : ExecutorTask(context), event(move(event_p)), global_ht(global_ht), local_ht(local_ht) {
-	}
-
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		local_ht.Partition(global_ht);
-		event->FinishTask();
-		return TaskExecutionResult::TASK_FINISHED;
-	}
-
-private:
-	shared_ptr<Event> event;
-
-	JoinHashTable &global_ht;
-	JoinHashTable &local_ht;
-};
-
-class PartitionEvent : public Event {
-public:
-	PartitionEvent(Pipeline &pipeline_p, JoinHashTable &global_ht, vector<unique_ptr<JoinHashTable>> &local_hts)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), global_ht(global_ht), local_hts(local_hts) {
-	}
-
-	Pipeline &pipeline;
-	JoinHashTable &global_ht;
-	vector<unique_ptr<JoinHashTable>> &local_hts;
-
-public:
-	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
-		vector<unique_ptr<Task>> partition_tasks;
-		for (auto &local_ht : local_hts) {
-			partition_tasks.push_back(make_unique<PartitionTask>(shared_from_this(), context, global_ht, *local_ht));
-		}
-		SetTasks(move(partition_tasks));
-	}
-
-	void FinishEvent() override {
-		local_hts.clear();
-		global_ht.FinalizeExternal();
-	}
-};
-
-void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
-                                           vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
+void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
+                                          vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
 	external = true;
 
 	// First set the number of tuples in the HT per partitioned round
@@ -1055,12 +1008,6 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 		return;
 	}
 
-	// Need to take HT pointer table size into account
-	// Pointer table capacity is a power of two, and we need at least half of it to be empty
-	// Best case one tuple takes up 2 ptr slots (because half must be empty)
-	// Worst case almost 4 ptr slots (because we take the capacity as the next power of two)
-	// We take 3 for the average
-	total_size += total_count * 3 * sizeof(data_ptr_t);
 	idx_t avg_tuple_size = total_size / total_count;
 	tuples_per_round = max_ht_size / avg_tuple_size;
 
@@ -1079,10 +1026,6 @@ void JoinHashTable::SchedulePartitionTasks(Pipeline &pipeline, Event &event,
 			break;
 		}
 	}
-
-	// Schedule events to partition local hts
-	auto new_event = make_shared<PartitionEvent>(pipeline, *this, local_hts);
-	event.InsertEvent(move(new_event));
 }
 
 void JoinHashTable::Partition(JoinHashTable &global_ht) {
