@@ -28,13 +28,15 @@ public:
 	static constexpr const idx_t TMP_BUF_SIZE = 8;
 
 public:
+	//! Apply bitmask on the highest bits, and right shift to get a number between 0 and NUM_PARTITIONS
 	static inline hash_t ApplyMask(hash_t hash) {
-		return hash & Mask();
+		return (hash & Mask()) >> (sizeof(hash_t) * 8 - NUM_RADIX_BITS);
 	}
 
 private:
+	//! Bitmask of the highest bits
 	static inline constexpr hash_t Mask() {
-		return (hash_t(1) << NUM_RADIX_BITS) - 1;
+		return hash_t(-1) ^ ((hash_t(1) << (sizeof(hash_t) * 8 - NUM_RADIX_BITS)) - 1);
 	}
 };
 

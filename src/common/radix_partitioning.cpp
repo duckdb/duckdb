@@ -12,8 +12,6 @@ template <class OP, class RETURN_TYPE, typename... ARGS>
 RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
 	switch (radix_bits) {
-	case 0:
-		return OP::template Operation<0>(std::forward<ARGS>(args)...);
 	case 1:
 		return OP::template Operation<1>(std::forward<ARGS>(args)...);
 	case 2:
@@ -43,8 +41,6 @@ template <class OP, class RETURN_TYPE, idx_t radix_bits_1, typename... ARGS>
 RETURN_TYPE DoubleRadixBitsSwitch2(idx_t radix_bits_2, ARGS &&...args) {
 	D_ASSERT(radix_bits_2 <= sizeof(hash_t) * 8);
 	switch (radix_bits_2) {
-	case 0:
-		return OP::template Operation<radix_bits_1, 0>(std::forward<ARGS>(args)...);
 	case 1:
 		return OP::template Operation<radix_bits_1, 1>(std::forward<ARGS>(args)...);
 	case 2:
@@ -74,8 +70,6 @@ template <class OP, class RETURN_TYPE, typename... ARGS>
 RETURN_TYPE DoubleRadixBitsSwitch1(idx_t radix_bits_1, idx_t radix_bits_2, ARGS &&...args) {
 	D_ASSERT(radix_bits_1 <= sizeof(hash_t) * 8);
 	switch (radix_bits_1) {
-	case 0:
-		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 0>(radix_bits_2, std::forward<ARGS>(args)...);
 	case 1:
 		return DoubleRadixBitsSwitch2<OP, RETURN_TYPE, 1>(radix_bits_2, std::forward<ARGS>(args)...);
 	case 2:
