@@ -265,7 +265,7 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string sc
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
 SetNotNullInfo::SetNotNullInfo(string schema_p, string table_p, string column_name_p)
-    : AlterTableInfo(AlterTableType::SET_NOT_NULL, move(schema_p), move(table_p)), column_name(move(column_name_p)){
+    : AlterTableInfo(AlterTableType::SET_NOT_NULL, move(schema_p), move(table_p)), column_name(move(column_name_p)) {
 }
 SetNotNullInfo::~SetNotNullInfo() {
 }
@@ -287,7 +287,7 @@ unique_ptr<AlterInfo> SetNotNullInfo::Deserialize(FieldReader &reader, string sc
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
 DropNotNullInfo::DropNotNullInfo(string schema_p, string table_p, string column_name_p)
-    : AlterTableInfo(AlterTableType::DROP_NOT_NULL, move(schema_p), move(table_p)), column_name(move(column_name_p)){
+    : AlterTableInfo(AlterTableType::DROP_NOT_NULL, move(schema_p), move(table_p)), column_name(move(column_name_p)) {
 }
 DropNotNullInfo::~DropNotNullInfo() {
 }

@@ -191,7 +191,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	row_groups = parent.row_groups;
 	parent.is_root = false;
-
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
@@ -626,8 +625,8 @@ static void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bf
 	VerifyForeignKeyConstraint(bfk, context, chunk, false);
 }
 
-void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint* constraint) {
-	if(constraint->type != ConstraintType::NOT_NULL){
+void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint *constraint) {
+	if (constraint->type != ConstraintType::NOT_NULL) {
 		throw NotImplementedException("FIXME: ALTER COLUMN with such constraint is not supported yet");
 	}
 	// scan the original table, check if there's any null value
@@ -646,15 +645,16 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 
 	while (current_row_group) {
 		current_row_group->InitializeScan(scan_state.row_group_scan_state);
-		while(true){
+		while (true) {
 			scan_chunk.Reset();
 			current_row_group->Scan(transaction, scan_state.row_group_scan_state, scan_chunk);
-			if(scan_chunk.size() == 0){
+			if (scan_chunk.size() == 0) {
 				break;
 			}
 			// Check constraint
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table, column_definitions[not_null_constraint.index].GetName());
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+				                          column_definitions[not_null_constraint.index].GetName());
 			}
 		}
 		current_row_group = (RowGroup *)current_row_group->next.get();
@@ -662,20 +662,20 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 
 	// For local storage
 	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);
-	if(scan_state.local_state.GetStorage()){
-		while(scan_state.local_state.chunk_index <= scan_state.local_state.max_index){
+	if (scan_state.local_state.GetStorage()) {
+		while (scan_state.local_state.chunk_index <= scan_state.local_state.max_index) {
 			scan_chunk.Reset();
 			transaction.storage.Scan(scan_state.local_state, scan_state.column_ids, scan_chunk);
-			if(scan_chunk.size() == 0){
+			if (scan_chunk.size() == 0) {
 				break;
 			}
 			// Check constraint
 			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table, column_definitions[not_null_constraint.index].GetName());
+				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+				                          column_definitions[not_null_constraint.index].GetName());
 			}
 		}
 	}
-
 }
 
 void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk) {

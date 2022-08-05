@@ -1,4 +1,4 @@
-# name: test/sql/alter/not_null/test_not_null_in_tran.test
+# name: test/sql/alter/alter_col/test_not_null_in_tran.test
 # description: Test Set/Drop NOT NULL in transaction
 # group: [alter_col]
 

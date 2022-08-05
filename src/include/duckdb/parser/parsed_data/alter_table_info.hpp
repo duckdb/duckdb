@@ -79,7 +79,7 @@ enum class AlterTableType : uint8_t {
 	SET_DEFAULT = 6,
 	FOREIGN_KEY_CONSTRAINT = 7,
 	SET_NOT_NULL = 8,
-	DROP_NOT_NULL = 9 
+	DROP_NOT_NULL = 9
 };
 
 struct AlterTableInfo : public AlterInfo {

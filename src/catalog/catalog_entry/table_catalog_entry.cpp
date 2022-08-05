@@ -457,7 +457,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
-	
+
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
@@ -468,9 +468,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 	bool has_not_null = false;
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
-		if(constraint->type == ConstraintType::NOT_NULL){
-			auto &not_null = (NotNullConstraint&)*constraint;
-			if(not_null.index == not_null_idx){
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			auto &not_null = (NotNullConstraint &)*constraint;
+			if (not_null.index == not_null_idx) {
 				has_not_null = true;
 			}
 		}
@@ -484,12 +484,12 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, S
 
 	// Early return
 	if (has_not_null) {
-		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
 	}
 
 	// Return with new storage info
-	auto new_storage =
-	    make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
+	auto new_storage = make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
 	                                      new_storage);
 }
@@ -505,9 +505,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, 
 	for (idx_t i = 0; i < constraints.size(); i++) {
 		auto constraint = constraints[i]->Copy();
 		// Skip/drop not_null
-		if(constraint->type == ConstraintType::NOT_NULL){
-			auto &not_null = (NotNullConstraint&)*constraint;
-			if(not_null.index == not_null_idx){
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			auto &not_null = (NotNullConstraint &)*constraint;
+			if (not_null.index == not_null_idx) {
 				continue;
 			}
 		}
