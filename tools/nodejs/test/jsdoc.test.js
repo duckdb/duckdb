@@ -8,6 +8,9 @@ const { expect } = require('chai');
 const { promisify } = require('util');
 
 function lastDot(string) {
+  if (string.endsWith(')')) {
+    string = string.substr(0, string.length - 1);
+  }
   const array = string.split('.');
   return array[array.length - 1];
 }
@@ -30,11 +33,10 @@ describe("JSDoc contains all methods", () => {
   })
 
   function checkDocs(obj, scope) {
-    // TODO: reenable once we sort out the Symbol docs
-    // const symbols = Object.getOwnPropertySymbols(obj).map(i => lastDot(i.description));
+    const symbols = Object.getOwnPropertySymbols(obj).map(i => lastDot(i.toString()));
     const expected = Object
       .getOwnPropertyNames(obj)
-      // .concat(symbols)
+      .concat(symbols)
       .sort()
       .filter(name => name !== 'constructor');
 
