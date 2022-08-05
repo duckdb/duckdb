@@ -8,6 +8,11 @@ const { expect } = require('chai');
 const { promisify } = require('util');
 const { writeFile } = require('fs/promises');
 
+function lastDot(string) {
+  const array = string.split('.');
+  return array[array.length - 1];
+}
+
 /**
  * @typedef {Object} Node
  * @property {string} name
@@ -34,16 +39,13 @@ describe("JSDoc contains all methods", () => {
     it(clazz, async () => {
 
       const prot = duckdb[clazz].prototype;
-      const expected = Object.getOwnPropertyNames(prot)
-        .concat(
-          Object.getOwnPropertySymbols(prot).map(i => i.description.split('.')[1])
-        )
-        .map(i => i.toString())
-        .sort();
+
+      const symbols = Object.getOwnPropertySymbols(prot).map(i => lastDot(i.description));
+      const expected = Object.getOwnPropertyNames(prot).concat(symbols).sort();
 
       const actual = docs
         .filter((node) => node.memberof === `module:duckdb~${clazz}` && !node.undocumented)
-        .map((node) => node.name)
+        .map((node) => lastDot(node.name))
         .concat(['constructor'])
         .sort();
 
