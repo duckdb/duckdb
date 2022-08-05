@@ -89,6 +89,8 @@ void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);
 	writer.WriteOptional(filter);
+	writer.WriteSerializable(return_type);
+	writer.WriteRegularSerializableList(function.arguments);
 
 	writer.WriteField(bind_info != nullptr);
 	if (bind_info) {
@@ -110,6 +112,8 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 
 	unique_ptr<Expression> filter;
 	filter = reader.ReadOptional<Expression>(move(filter), context);
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
 	// TODO this is duplicated in logical_get more or less, make it a template or so
 	auto &catalog = Catalog::GetCatalog(context);
@@ -122,6 +126,11 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 	auto functions = (AggregateFunctionCatalogEntry *)func_catalog;
 	auto function = functions->functions.GetFunction(function_set_key);
 	unique_ptr<FunctionData> bind_info;
+
+	// sometimes the bind changes those, not sure if we should generically set those
+	function.return_type = return_type;
+	function.arguments = move(arguments);
+
 
 	auto has_bind_info = reader.ReadRequired<bool>();
 

@@ -181,10 +181,10 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
 	                                  BindDecimalSum),
 	                0);
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT16), 1); // TODO ugly, don't repeat keys
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT32), 2);
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT64), 3);
-	sum.AddFunction(GetSumAggregate(PhysicalType::INT128), 4);
+	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
+	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
+	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
+	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	                    LogicalType::DOUBLE, LogicalType::DOUBLE),
 	                5);
