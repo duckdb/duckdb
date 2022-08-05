@@ -8,32 +8,32 @@ module.exports = exports = duckdb;
 /**
  * Check that errno attribute equals this to check for a duckdb error
  */
-var ERROR = duckdb.ERROR
+duckdb.ERROR;
 
 /**
  * Open database in readonly mode
  */
-var OPEN_READONLY = duckdb.OPEN_READONLY;
+duckdb.OPEN_READONLY;
 /**
  * Currently ignored
  */
-var OPEN_READWRITE = duckdb.OPEN_READWRITE;
+duckdb.OPEN_READWRITE;
 /**
  * Currently ignored
  */
-var OPEN_CREATE = duckdb.OPEN_CREATE;
+duckdb.OPEN_CREATE;
 /**
  * Currently ignored
  */
-var OPEN_FULLMUTEX = duckdb.OPEN_FULLMUTEX;
+duckdb.OPEN_FULLMUTEX;
 /**
  * Currently ignored
  */
-var OPEN_SHAREDCACHE = duckdb.OPEN_SHAREDCACHE;
+duckdb.OPEN_SHAREDCACHE;
 /**
  * Currently ignored
  */
-var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
+duckdb.OPEN_PRIVATECACHE;
 
 // some wrappers for compatibilities sake
 /**
@@ -55,6 +55,7 @@ var QueryResult = duckdb.QueryResult;
 
 /**
  * @method
+ * @return data chunk
  */
 QueryResult.prototype.nextChunk;
 
@@ -84,6 +85,7 @@ QueryResult.prototype[Symbol.asyncIterator] = async function*() {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Connection.prototype.run = function (sql) {
     var statement = new Statement(this, sql);
@@ -94,6 +96,7 @@ Connection.prototype.run = function (sql) {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Connection.prototype.all = function (sql) {
     var statement = new Statement(this, sql);
@@ -104,6 +107,7 @@ Connection.prototype.all = function (sql) {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Connection.prototype.each = function (sql) {
     var statement = new Statement(this, sql);
@@ -129,6 +133,7 @@ Connection.prototype.stream = async function* (sql) {
  * @arg name
  * @arg return_type
  * @arg fun
+ * @return {void}
  * @note this follows the wasm udfs somewhat but is simpler because we can pass data much more cleanly
  */
 Connection.prototype.register = function (name, return_type, fun) {
@@ -249,6 +254,7 @@ Connection.prototype.register = function (name, return_type, fun) {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {Statement}
  */
 Connection.prototype.prepare;
 /**
@@ -256,6 +262,7 @@ Connection.prototype.prepare;
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Connection.prototype.exec;
 /**
@@ -265,6 +272,7 @@ Connection.prototype.exec;
  * @arg name
  * @arg return_type
  * @param callback
+ * @return {void}
  */
 Connection.prototype.register_bulk;
 /**
@@ -274,6 +282,7 @@ Connection.prototype.register_bulk;
  * @arg name
  * @arg return_type
  * @param callback
+ * @return {void}
  */
 Connection.prototype.unregister;
 
@@ -288,32 +297,46 @@ default_connection = function (o) {
 /**
  * @method
  * @param callback
+ * @return {void}
  */
 Database.prototype.close;
+
 /**
  * @method
+ * @param callback
  * TODO: what does this do?
+ * @return {void}
  */
 Database.prototype.wait;
+
 /**
- * @method
  * TODO: what does this do?
+ * @method
+ * @param callback
+ * @return {void}
  */
 Database.prototype.serialize;
+
 /**
- * @method
  * TODO: what does this do?
+ * @method
+ * @param callback
+ * @return {void}
  */
 Database.prototype.parallelize;
+
 /**
  * @method
  * @arg path the database to connect to, either a file path, or `:memory:`
  * @return {Connection}
  */
 Database.prototype.connect;
+
 /**
- * @method
  * TODO: what does this do?
+ * @method
+ * @param callback
+ * @return {void}
  */
 Database.prototype.interrupt;
 
@@ -329,6 +352,7 @@ Database.prototype.prepare = function () {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Database.prototype.run = function () {
     default_connection(this).run.apply(this.default_connection, arguments);
@@ -339,6 +363,7 @@ Database.prototype.run = function () {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Database.prototype.each = function () {
     default_connection(this).each.apply(this.default_connection, arguments);
@@ -349,6 +374,7 @@ Database.prototype.each = function () {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Database.prototype.all = function () {
     default_connection(this).all.apply(this.default_connection, arguments);
@@ -359,6 +385,7 @@ Database.prototype.all = function () {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Database.prototype.exec = function () {
     default_connection(this).exec.apply(this.default_connection, arguments);
@@ -372,6 +399,7 @@ Database.prototype.exec = function () {
  * @arg name
  * @arg return_type
  * @arg fun
+ * @return {this}
  */
 Database.prototype.register = function () {
     default_connection(this).register.apply(this.default_connection, arguments);
@@ -383,6 +411,7 @@ Database.prototype.register = function () {
  *
  * Convenience method for Connection#unregister
  * @arg name
+ * @return {this}
  */
 Database.prototype.unregister = function () {
     default_connection(this).unregister.apply(this.default_connection, arguments);
@@ -408,6 +437,7 @@ Statement.prototype.get = function () {
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Statement.prototype.run;
 /**
@@ -415,6 +445,7 @@ Statement.prototype.run;
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Statement.prototype.all;
 /**
@@ -422,6 +453,7 @@ Statement.prototype.all;
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Statement.prototype.each;
 /**
@@ -429,6 +461,7 @@ Statement.prototype.each;
  * @arg sql
  * @param {...*} params
  * @param callback
+ * @return {void}
  */
 Statement.prototype.finalize
 /**
