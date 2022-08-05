@@ -55,14 +55,14 @@ void ViewCatalogEntry::Serialize(Serializer &serializer) {
 	writer.Finalize();
 }
 
-unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
+unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
 	auto info = make_unique<CreateViewInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
 	info->view_name = reader.ReadRequired<string>();
 	info->sql = reader.ReadRequired<string>();
-	info->query = reader.ReadRequiredSerializable<SelectStatement>();
+	info->query = reader.ReadRequiredSerializable<SelectStatement>(context);
 	info->aliases = reader.ReadRequiredList<string>();
 	info->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	reader.Finalize();

@@ -29,7 +29,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 
 	auto column_index_map = reader.ReadRequiredList<idx_t>();
 	auto expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
+	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);

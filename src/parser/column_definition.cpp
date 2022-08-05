@@ -52,11 +52,11 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
+ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 	auto column_name = reader.ReadRequired<string>();
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
+	auto expression = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
 	reader.Finalize();
 

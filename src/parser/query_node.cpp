@@ -166,11 +166,11 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
+unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source, ClientContext &context) {
 	FieldReader reader(main_source);
 
 	auto type = reader.ReadRequired<QueryNodeType>();
-	auto modifiers = reader.ReadRequiredSerializableList<ResultModifier>();
+	auto modifiers = reader.ReadRequiredSerializableList<ResultModifier>(context);
 	// cte_map
 	auto cte_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
@@ -179,19 +179,19 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 		auto name = source.Read<string>();
 		auto info = make_unique<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
-		info->query = SelectStatement::Deserialize(source);
+		info->query = SelectStatement::Deserialize(source, context);
 		new_map[name] = move(info);
 	}
 	unique_ptr<QueryNode> result;
 	switch (type) {
 	case QueryNodeType::SELECT_NODE:
-		result = SelectNode::Deserialize(reader);
+		result = SelectNode::Deserialize(reader, context);
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		result = SetOperationNode::Deserialize(reader);
+		result = SetOperationNode::Deserialize(reader, context);
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = RecursiveCTENode::Deserialize(reader);
+		result = RecursiveCTENode::Deserialize(reader, context);
 		break;
 	default:
 		throw SerializationException("Could not deserialize Query Node: unknown type!");

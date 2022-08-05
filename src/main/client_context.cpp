@@ -916,7 +916,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	BufferedSerializer serializer;
 	select_stmt->Serialize(serializer);
 	BufferedDeserializer source(serializer);
-	auto deserialized_stmt = SelectStatement::Deserialize(source);
+	auto deserialized_stmt = SelectStatement::Deserialize(source, *this);
 
 	auto query_str = select_stmt->ToString();
 	Parser parser;

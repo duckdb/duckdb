@@ -14,6 +14,8 @@ namespace duckdb {
 
 //! LogicalCrossProduct represents a cross product between two relations
 class LogicalCrossProduct : public LogicalOperator {
+	LogicalCrossProduct() : LogicalOperator(LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {};
+
 public:
 	LogicalCrossProduct(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right);
 

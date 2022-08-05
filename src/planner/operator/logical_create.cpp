@@ -3,12 +3,18 @@
 namespace duckdb {
 
 void LogicalCreate::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	info->Serialize(writer.GetSerializer());
 }
 
 unique_ptr<LogicalOperator> LogicalCreate::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto info = CreateInfo::Deserialize(reader.GetSource(), context);
+
+	auto &catalog = Catalog::GetCatalog(context);
+	// TODO(stephwang): review if below is necessary or just not pass schema_catalog_entry
+	SchemaCatalogEntry *schema_catalog_entry = catalog.GetSchema(context, info->schema, true);
+
+	return make_unique<LogicalCreate>(type, move(info), schema_catalog_entry);
 }
 
 } // namespace duckdb

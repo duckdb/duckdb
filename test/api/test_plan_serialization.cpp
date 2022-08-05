@@ -147,3 +147,36 @@ TEST_CASE("Test insert_into", "[serialization]") {
 TEST_CASE("Test logical_distinct", "[serialization]") {
 	test_helper("SELECT DISTINCT(i) FROM (SELECT 42 as i)");
 }
+
+TEST_CASE("Test logical_delete", "[serialization]") {
+	test_helper("DELETE FROM tbl", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_cteref", "[serialization]") {
+	test_helper("with cte1 as (select 42), cte2 as (select * from cte1) select * FROM cte2");
+}
+
+// TODO(stephwang): check why we lost x<3 expression in filter
+TEST_CASE("Test logical_recursive_cte", "[serialization]") {
+	test_helper("with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t");
+}
+
+TEST_CASE("Test logical_cross_product", "[serialization]") {
+	test_helper("SELECT * FROM (SELECT 42 as i) CROSS JOIN (SELECT 42 as j)");
+}
+
+TEST_CASE("Test logical_create_index", "[serialization]") {
+	test_helper("CREATE INDEX idx ON tbl (foo)", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_create_schema", "[serialization]") {
+	test_helper("CREATE SCHEMA test");
+}
+
+TEST_CASE("Test logical_create_view", "[serialization]") {
+	test_helper("CREATE VIEW test_view AS (SELECT 42)");
+}
+
+TEST_CASE("Test logical_copy_to_file", "[serialization]") {
+	test_helper("COPY tbl TO 'test_table.csv' ( DELIMITER '|', HEADER )", {"CREATE TABLE tbl (foo INTEGER)"});
+}

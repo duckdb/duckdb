@@ -34,12 +34,13 @@ unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperat
 }
 
 void LogicalCrossProduct::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
 }
 
 unique_ptr<LogicalOperator> LogicalCrossProduct::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                              FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	// TODO(stephwang): review if unique_ptr<LogicalOperator> plan is needed
+	auto result = unique_ptr<LogicalCrossProduct>(new LogicalCrossProduct());
+	return result;
 }
 
 } // namespace duckdb

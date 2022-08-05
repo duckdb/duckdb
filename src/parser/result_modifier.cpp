@@ -18,23 +18,23 @@ void ResultModifier::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
+unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<ResultModifierType>();
 
 	unique_ptr<ResultModifier> result;
 	switch (type) {
 	case ResultModifierType::LIMIT_MODIFIER:
-		result = LimitModifier::Deserialize(reader);
+		result = LimitModifier::Deserialize(reader, context);
 		break;
 	case ResultModifierType::ORDER_MODIFIER:
-		result = OrderModifier::Deserialize(reader);
+		result = OrderModifier::Deserialize(reader, context);
 		break;
 	case ResultModifierType::DISTINCT_MODIFIER:
-		result = DistinctModifier::Deserialize(reader);
+		result = DistinctModifier::Deserialize(reader, context);
 		break;
 	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-		result = LimitPercentModifier::Deserialize(reader);
+		result = LimitPercentModifier::Deserialize(reader, context);
 		break;
 	default:
 		throw InternalException("Unrecognized ResultModifierType for Deserialization");
@@ -73,10 +73,10 @@ void LimitModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(offset);
 }
 
-unique_ptr<ResultModifier> LimitModifier::Deserialize(FieldReader &reader) {
+unique_ptr<ResultModifier> LimitModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<LimitModifier>();
-	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr);
-	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr);
+	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr, context);
+	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	return move(mod);
 }
 
@@ -103,9 +103,9 @@ void DistinctModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(distinct_on_targets);
 }
 
-unique_ptr<ResultModifier> DistinctModifier::Deserialize(FieldReader &reader) {
+unique_ptr<ResultModifier> DistinctModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<DistinctModifier>();
-	mod->distinct_on_targets = reader.ReadRequiredSerializableList<ParsedExpression>();
+	mod->distinct_on_targets = reader.ReadRequiredSerializableList<ParsedExpression>(context);
 	return move(mod);
 }
 
@@ -170,11 +170,11 @@ void OrderByNode::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-OrderByNode OrderByNode::Deserialize(Deserializer &source) {
+OrderByNode OrderByNode::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<OrderType>();
 	auto null_order = reader.ReadRequired<OrderByNullType>();
-	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>(context);
 	reader.Finalize();
 	return OrderByNode(type, null_order, move(expression));
 }
@@ -183,9 +183,9 @@ void OrderModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(orders);
 }
 
-unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader) {
+unique_ptr<ResultModifier> OrderModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<OrderModifier>();
-	mod->orders = reader.ReadRequiredSerializableList<OrderByNode, OrderByNode>();
+	mod->orders = reader.ReadRequiredSerializableList<OrderByNode, OrderByNode>(context);
 	return move(mod);
 }
 
@@ -219,10 +219,10 @@ void LimitPercentModifier::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(offset);
 }
 
-unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(FieldReader &reader) {
+unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(FieldReader &reader, ClientContext &context) {
 	auto mod = make_unique<LimitPercentModifier>();
-	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr);
-	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr);
+	mod->limit = reader.ReadOptional<ParsedExpression>(nullptr, context);
+	mod->offset = reader.ReadOptional<ParsedExpression>(nullptr, context);
 	return move(mod);
 }
 

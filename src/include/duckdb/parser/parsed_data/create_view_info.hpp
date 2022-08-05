@@ -39,9 +39,28 @@ public:
 		return move(result);
 	}
 
+	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer, ClientContext &context) {
+		auto result = make_unique<CreateViewInfo>();
+		result->DeserializeBase(deserializer);
+
+		FieldReader reader(deserializer);
+		result->view_name = reader.ReadRequired<string>();
+		result->aliases = reader.ReadRequiredList<string>();
+		result->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		result->query = reader.ReadOptional<SelectStatement>(nullptr, context);
+		reader.Finalize();
+
+		return result;
+	}
+
 protected:
-	void SerializeInternal(Serializer &) const override {
-		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	void SerializeInternal(Serializer &serializer) const override {
+		FieldWriter writer(serializer);
+		writer.WriteString(view_name);
+		writer.WriteList<string>(aliases);
+		writer.WriteRegularSerializableList(types);
+		writer.WriteOptional(query);
+		writer.Finalize();
 	}
 };
 
