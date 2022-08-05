@@ -232,8 +232,6 @@ jobs:
    name: Linux tests (aarch64)
    runs-on: ubuntu-latest
    needs: linux-release-64
-   env:
-     FORCE_WARN_UNUSED: 1
 
    steps:
      - uses: actions/checkout@v2.1.0
@@ -242,40 +240,15 @@ jobs:
          name: duckdb-binaries-linux-aarch64
          path: /tmp
 
-     - uses: uraimo/run-on-arch-action@v2
-       name: Run commands
-       id: runcmd
+     - name: Set up QEMU
+       uses: docker/setup-qemu-action@v2
        with:
-         arch: aarch64
-         distro: ubuntu18.04
+         platforms: arm64
 
-         # The shell to run commands with in the container
-         shell: /bin/sh
-
-         # Create an artifacts directory
-         setup: |
-           pwd
-           mv /tmp/duckdb_unittest-linux-aarch64.zip .
-           unzip duckdb_unittest-linux-aarch64.zip
-           chmod +x unittest
-           mkdir test_folder
-           mv unittest test_folder
-
-         # Mount the artifacts directory as /artifacts in the container
-         dockerRunArgs: |
-           --volume "${PWD}/test_folder:/test_folder"
-
-         # Set an output parameter `uname` for use in subsequent steps
-         run: |
-           uname -a
-           pwd
-           ls /test_folder
-           /test_folder/unittest
-
-     - name: Get the output
-       # Echo the `uname` output parameter from the `runcmd` step
-       run: |
-         echo "The uname output was ${{ steps.runcmd.outputs.uname }}"
+     - name: Run tests on QEMU
+      shell: bash
+      run: |
+          docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled"  arm64v8/ubuntu:18.04 /duckdb_crosscompiled/unittest '*' --test-dir /duckdb_dir
 
  old-gcc:
     name: GCC 4.8
