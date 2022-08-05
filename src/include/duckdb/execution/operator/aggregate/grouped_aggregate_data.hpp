@@ -81,6 +81,7 @@ public:
 		any_distinct = true;
 
 		vector<LogicalType> payload_types_filters;
+		aggregate_return_types.push_back(aggr.return_type);
 		for (idx_t i = 0; i < aggr.children.size(); i++) {
 			auto &child = aggr.children[i];
 			auto &child_ref = (BoundColumnRefExpression &)*child;

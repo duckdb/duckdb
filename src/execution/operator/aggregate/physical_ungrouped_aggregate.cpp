@@ -193,7 +193,15 @@ public:
 			// No distinct aggregates
 			return;
 		}
+		D_ASSERT(!data.radix_tables.empty());
 		radix_states.resize(data.radix_tables.size());
+		for (idx_t i = 0; i < data.radix_tables.size(); i++) {
+			if (!data.radix_tables[i]) {
+				continue;
+			}
+			auto &radix_table = *data.radix_tables[i];
+			radix_states[i] = radix_table.GetLocalSinkState(context);
+		}
 	}
 };
 
@@ -332,6 +340,16 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 
 	DataChunk intermediate_chunk; // used to get the data from the hash table
 	auto &payload_chunk = gstate.execution_data->payload_chunk;
+
+	auto aggregate_types = payload_chunk.GetTypes();
+	auto group_types = payload_chunk.GetTypes();
+	vector<LogicalType> all_types(move(aggregate_types));
+	for (auto &expr : aggregates) {
+		auto &aggr = (BoundAggregateExpression &)*expr;
+		all_types.push_back(aggr.return_type);
+	}
+
+	intermediate_chunk.Initialize(all_types);
 	ThreadContext temp_thread_context(context);
 	ExecutionContext temp_exec_context(context, temp_thread_context);
 
