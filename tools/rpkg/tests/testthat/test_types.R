@@ -5,6 +5,6 @@ test_that("test_all_types() output", {
   local_edition(3)
 
   expect_snapshot({
-    unclass(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
+    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
   })
 })

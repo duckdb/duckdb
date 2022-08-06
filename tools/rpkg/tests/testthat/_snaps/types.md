@@ -1,7 +1,7 @@
 # test_all_types() output
 
     Code
-      unclass(dbGetQuery(con,
+      as.list(dbGetQuery(con,
         "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
     Warning <simpleWarning>
       Coercing nanoseconds to a lower resolution may result in a loss of data.
@@ -227,6 +227,4 @@
       [1] NA
       
       
-      attr(,"row.names")
-      [1] 1 2 3
 
