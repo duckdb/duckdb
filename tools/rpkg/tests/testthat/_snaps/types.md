@@ -3,8 +3,6 @@
     Code
       as.list(dbGetQuery(con,
         "SELECT * EXCLUDE (timestamp_tz, time_tz, uuid, interval, json, map) FROM test_all_types()"))
-    Warning <simpleWarning>
-      Coercing nanoseconds to a lower resolution may result in a loss of data.
     Output
       $bool
       [1] FALSE  TRUE    NA
