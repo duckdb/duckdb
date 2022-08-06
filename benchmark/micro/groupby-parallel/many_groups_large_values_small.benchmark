@@ -1,0 +1,16 @@
+# name: benchmark/micro/groupby-parallel/many_groups_large_values_small.benchmark
+# description: Aggregation with many groups and large values
+# group: [groupby-parallel]
+
+name Grouped Aggregate (S, 10M)
+group aggregate
+subgroup parallel
+
+load
+create temporary table df as
+select (i/2 * 5000000000)::bigint AS g1,
+       (case when i%2=0 then 0 else 5000000000 end)::BIGINT g2,
+       ((random() * 100000000) * 5000000000)::BIGINT AS d from range(10000000) t(i);
+
+run
+select sum(d), count(*) from df group by g1, g2 limit 1;
