@@ -6,8 +6,9 @@
 namespace duckdb {
 
 template <class T>
-void TemplatedRadixScatter(VectorData &vdata, const SelectionVector &sel, idx_t add_count, data_ptr_t *key_locations,
-                           const bool desc, const bool has_null, const bool nulls_first, const idx_t offset) {
+void TemplatedRadixScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
+                           data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
+                           const idx_t offset) {
 	auto source = (T *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -50,9 +51,9 @@ void TemplatedRadixScatter(VectorData &vdata, const SelectionVector &sel, idx_t 
 	}
 }
 
-void RadixScatterStringVector(VectorData &vdata, const SelectionVector &sel, idx_t add_count, data_ptr_t *key_locations,
-                              const bool desc, const bool has_null, const bool nulls_first, const idx_t prefix_len,
-                              idx_t offset) {
+void RadixScatterStringVector(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
+                              data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
+                              const idx_t prefix_len, idx_t offset) {
 	auto source = (string_t *)vdata.data;
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -95,7 +96,7 @@ void RadixScatterStringVector(VectorData &vdata, const SelectionVector &sel, idx
 	}
 }
 
-void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector &sel, idx_t add_count,
+void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
                             data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                             const idx_t prefix_len, const idx_t width, const idx_t offset) {
 	auto list_data = ListVector::GetData(v);
@@ -171,9 +172,9 @@ void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector 
 	}
 }
 
-void RadixScatterStructVector(Vector &v, VectorData &vdata, idx_t vcount, const SelectionVector &sel, idx_t add_count,
-                              data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
-                              const idx_t prefix_len, idx_t width, const idx_t offset) {
+void RadixScatterStructVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount, const SelectionVector &sel,
+                              idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
+                              const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
 	// serialize null values
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -210,8 +211,8 @@ void RadixScatterStructVector(Vector &v, VectorData &vdata, idx_t vcount, const 
 void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
                                  data_ptr_t *key_locations, bool desc, bool has_null, bool nulls_first,
                                  idx_t prefix_len, idx_t width, idx_t offset) {
-	VectorData vdata;
-	v.Orrify(vcount, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(vcount, vdata);
 	switch (v.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

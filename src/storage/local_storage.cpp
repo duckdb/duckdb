@@ -231,8 +231,8 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 		// Slice out the rows that are being deleted from the storage Chunk
 		auto &chunk = storage->collection.GetChunk(chunk_idx);
 
-		VectorData row_ids_data;
-		row_ids.Orrify(count, row_ids_data);
+		UnifiedVectorFormat row_ids_data;
+		row_ids.ToUnifiedFormat(count, row_ids_data);
 		auto row_identifiers = (const row_t *)row_ids_data.data;
 		SelectionVector sel(count);
 		for (idx_t i = 0; i < count; ++i) {
@@ -280,8 +280,8 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 template <class T>
 static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vector &row_ids, idx_t count,
                                 idx_t base_index) {
-	VectorData udata;
-	update_vector.Orrify(count, udata);
+	UnifiedVectorFormat udata;
+	update_vector.ToUnifiedFormat(count, udata);
 
 	auto target = FlatVector::GetData<T>(data_vector);
 	auto &mask = FlatVector::Validity(data_vector);
@@ -465,7 +465,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 		} else {
 			FlatVector::Validity(result).SetAllInvalid(chunk.size());
 		}
-		result.Normalify(chunk.size());
+		result.Flatten(chunk.size());
 		chunk.data.push_back(move(result));
 	}
 
@@ -488,8 +488,8 @@ void LocalStorage::FetchChunk(DataTable *table, Vector &row_ids, idx_t count, Da
 	idx_t chunk_idx = GetChunk(row_ids);
 	auto &chunk = storage->collection.GetChunk(chunk_idx);
 
-	VectorData row_ids_data;
-	row_ids.Orrify(count, row_ids_data);
+	UnifiedVectorFormat row_ids_data;
+	row_ids.ToUnifiedFormat(count, row_ids_data);
 	auto row_identifiers = (const row_t *)row_ids_data.data;
 	SelectionVector sel(count);
 	for (idx_t i = 0; i < count; ++i) {

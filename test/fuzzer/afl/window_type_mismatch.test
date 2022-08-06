@@ -1,0 +1,16 @@
+# name: test/fuzzer/afl/window_type_mismatch.test
+# description: Window functions typing issue
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT rank() OVER (), lag(NULL) OVER ();
+----
+1	NULL
+
+query II
+SELECT rank() OVER (), lag(NULL) OVER (ORDER BY x) FROM (VALUES (1)) tbl(x);
+----
+1	NULL

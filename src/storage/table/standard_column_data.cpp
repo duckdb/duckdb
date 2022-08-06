@@ -81,7 +81,8 @@ void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
 	state.child_appends.push_back(move(child_append));
 }
 
-void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) {
+void StandardColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata,
+                                    idx_t count) {
 	ColumnData::AppendData(stats, state, vdata, count);
 
 	validity.AppendData(*stats.validity_stats, state.child_appends[0], vdata, count);

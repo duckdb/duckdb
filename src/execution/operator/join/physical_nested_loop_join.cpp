@@ -18,8 +18,8 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<P
 
 static bool HasNullValues(DataChunk &chunk) {
 	for (idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
-		VectorData vdata;
-		chunk.data[col_idx].Orrify(chunk.size(), vdata);
+		UnifiedVectorFormat vdata;
+		chunk.data[col_idx].ToUnifiedFormat(chunk.size(), vdata);
 
 		if (vdata.validity.AllValid()) {
 			continue;
@@ -78,8 +78,8 @@ void PhysicalJoin::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left
 	auto bool_result = FlatVector::GetData<bool>(mark_vector);
 	auto &mask = FlatVector::Validity(mark_vector);
 	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		VectorData jdata;
-		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
+		UnifiedVectorFormat jdata;
+		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
 		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);

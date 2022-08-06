@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/array_wrapper.hpp
+// duckdb_python/vector_conversion.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,28 +11,11 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
 #include "duckdb.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb_python/python_object_container.hpp"
-namespace duckdb {
+#include "duckdb_python/pandas_analyzer.hpp"
 
-enum class PandasType : uint8_t {
-	BOOL,
-	BOOLEAN,
-	TINYINT,
-	SMALLINT,
-	INTEGER,
-	BIGINT,
-	UTINYINT,
-	USMALLINT,
-	UINTEGER,
-	UBIGINT,
-	FLOAT,
-	DOUBLE,
-	TIMESTAMP,
-	INTERVAL,
-	VARCHAR,
-	OBJECT,
-	CATEGORY
-};
+namespace duckdb {
 
 struct NumPyArrayWrapper {
 	explicit NumPyArrayWrapper(py::array numpy_array) : numpy_array(move(numpy_array)) {
@@ -57,8 +40,8 @@ public:
 	static void NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
 	                          Vector &out);
 
-	static void BindPandas(py::handle df, vector<PandasColumnBindData> &out, vector<LogicalType> &return_types,
-	                       vector<string> &names);
+	static void BindPandas(const DBConfig &config, py::handle df, vector<PandasColumnBindData> &out,
+	                       vector<LogicalType> &return_types, vector<string> &names);
 };
 
 } // namespace duckdb

@@ -1,0 +1,10 @@
+# name: test/sql/types/nested/map/map_from_entries/empty.test
+# description: Show expected behavior with an empty arguments list
+# group: [map_from_entries]
+
+statement ok
+PRAGMA enable_verification
+
+# Empty arguments not allowed
+statement error
+SELECT map_from_entries();

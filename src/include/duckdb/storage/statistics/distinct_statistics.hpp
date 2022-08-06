@@ -41,7 +41,7 @@ public:
 	static unique_ptr<DistinctStatistics> Deserialize(FieldReader &reader);
 
 	void Update(Vector &update, idx_t count, bool sample = true);
-	void Update(VectorData &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
+	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);
 
 	string ToString() const override;
 	idx_t GetCount() const;

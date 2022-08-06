@@ -489,3 +489,23 @@ select nextval(1 + 1);
 
 statement error
 select currval(true);
+
+# max value specified more than once
+statement error
+CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
+
+# min value specified more than once
+statement error
+CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
+
+# start value specified more than once
+statement error
+CREATE SEQUENCE wrongseq START 13 START WITH 3;
+
+# cycle value specified more than once
+statement error
+CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
+
+# increment value specified more than once
+statement error
+CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;

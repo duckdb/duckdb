@@ -1,4 +1,5 @@
 #include "duckdb_node.hpp"
+#include "napi.h"
 #include "parquet-amalgamation.hpp"
 
 namespace node_duckdb {
@@ -86,7 +87,8 @@ struct OpenTask : public Task {
 	bool success = false;
 };
 
-Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(info), task_inflight(false) {
+Database::Database(const Napi::CallbackInfo &info)
+    : Napi::ObjectWrap<Database>(info), task_inflight(false), env(info.Env()) {
 	auto env = info.Env();
 
 	if (info.Length() < 1 || !info[0].IsString()) {
@@ -119,6 +121,10 @@ Database::Database(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Database>(
 	Schedule(env, duckdb::make_unique<OpenTask>(*this, filename, access_mode, config, callback));
 }
 
+Database::~Database() {
+	Napi::MemoryManagement::AdjustExternalMemory(env, -bytes_allocated);
+}
+
 void Database::Schedule(Napi::Env env, std::unique_ptr<Task> task) {
 	{
 		std::lock_guard<std::mutex> lock(task_mutex);
@@ -135,9 +141,7 @@ static void TaskExecuteCallback(napi_env e, void *data) {
 static void TaskCompleteCallback(napi_env e, napi_status status, void *data) {
 	std::unique_ptr<TaskHolder> holder((TaskHolder *)data);
 	holder->db->TaskComplete(e);
-	if (holder->task->callback.Value().IsFunction()) {
-		holder->task->Callback();
-	}
+	holder->task->DoCallback();
 }
 
 void Database::TaskComplete(Napi::Env env) {
@@ -146,6 +150,16 @@ void Database::TaskComplete(Napi::Env env) {
 		task_inflight = false;
 	}
 	Process(env);
+
+	if (database) {
+		// Bookkeeping: tell node (and the node GC in particular) how much
+		// memory we're using, such that it can make better decisions on when to
+		// trigger collections.
+		auto &buffer_manager = duckdb::BufferManager::GetBufferManager(*database->instance);
+		auto current_bytes = buffer_manager.GetUsedMemory();
+		Napi::MemoryManagement::AdjustExternalMemory(env, current_bytes - bytes_allocated);
+		bytes_allocated = current_bytes;
+	}
 }
 
 void Database::Process(Napi::Env env) {

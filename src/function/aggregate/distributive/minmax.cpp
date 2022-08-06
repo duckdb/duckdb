@@ -216,9 +216,9 @@ struct MaxOperationString : public StringMinMaxBase {
 
 template <typename T, class OP>
 static bool TemplatedOptimumType(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount) {
-	VectorData lvdata, rvdata;
-	left.Orrify(lcount, lvdata);
-	right.Orrify(rcount, rvdata);
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(lcount, lvdata);
+	right.ToUnifiedFormat(rcount, rvdata);
 
 	lidx = lvdata.sel->get_index(lidx);
 	ridx = rvdata.sel->get_index(ridx);
@@ -287,9 +287,9 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx_p, idx_t lcount, Vec
                                    idx_t rcount) {
 	// STRUCT dictionaries apply to all the children
 	// so map the indexes first
-	VectorData lvdata, rvdata;
-	left.Orrify(lcount, lvdata);
-	right.Orrify(rcount, rvdata);
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(lcount, lvdata);
+	right.ToUnifiedFormat(rcount, rvdata);
 
 	idx_t lidx = lvdata.sel->get_index(lidx_p);
 	idx_t ridx = rvdata.sel->get_index(ridx_p);
@@ -329,9 +329,9 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx_p, idx_t lcount, Vec
 
 template <class OP>
 static bool TemplatedOptimumList(Vector &left, idx_t lidx, idx_t lcount, Vector &right, idx_t ridx, idx_t rcount) {
-	VectorData lvdata, rvdata;
-	left.Orrify(lcount, lvdata);
-	right.Orrify(rcount, rvdata);
+	UnifiedVectorFormat lvdata, rvdata;
+	left.ToUnifiedFormat(lcount, lvdata);
+	right.ToUnifiedFormat(rcount, rvdata);
 
 	// Update the indexes and vector sizes for recursion.
 	lidx = lvdata.sel->get_index(lidx);
@@ -419,11 +419,11 @@ struct VectorMinMaxBase {
 	template <class STATE, class OP>
 	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
-		VectorData idata;
-		input.Orrify(count, idata);
+		UnifiedVectorFormat idata;
+		input.ToUnifiedFormat(count, idata);
 
-		VectorData sdata;
-		state_vector.Orrify(count, sdata);
+		UnifiedVectorFormat sdata;
+		state_vector.ToUnifiedFormat(count, sdata);
 
 		auto states = (STATE **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {

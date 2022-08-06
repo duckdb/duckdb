@@ -29,10 +29,10 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto &key = args.data[1];
 
 	auto key_value = key.GetValue(0);
-	VectorData offset_data;
+	UnifiedVectorFormat offset_data;
 
 	auto &children = StructVector::GetEntries(map);
-	children[0]->Orrify(args.size(), offset_data);
+	children[0]->ToUnifiedFormat(args.size(), offset_data);
 	auto &key_type = ListType::GetChildType(children[0]->GetType());
 	if (key_type != LogicalTypeId::SQLNULL) {
 		key_value = key_value.CastAs(key_type);

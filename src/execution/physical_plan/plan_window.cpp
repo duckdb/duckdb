@@ -17,6 +17,10 @@ static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
 	}
 	switch (wexpr->type) {
 	// TODO: add more expression types here?
+	case ExpressionType::WINDOW_AGGREGATE:
+		// We can stream aggregates if they are "running totals" and don't use filters
+		return wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr->end == WindowBoundary::CURRENT_ROW_ROWS &&
+		       !wexpr->filter_expr;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_RANK:
@@ -95,7 +99,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		plan = move(window);
 
 		// Remember the projection order if we changed it
-		if (!remaining.empty() || !evaluation_order.empty()) {
+		if (!streaming_windows.empty() || !blocking_windows.empty() || !evaluation_order.empty()) {
 			evaluation_order.insert(evaluation_order.end(), matching.begin(), matching.end());
 		}
 	}

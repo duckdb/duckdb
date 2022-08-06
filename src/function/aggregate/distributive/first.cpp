@@ -154,8 +154,8 @@ struct FirstVectorFunction {
 
 	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
-		VectorData sdata;
-		state_vector.Orrify(count, sdata);
+		UnifiedVectorFormat sdata;
+		state_vector.ToUnifiedFormat(count, sdata);
 
 		auto states = (FirstStateVector **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {

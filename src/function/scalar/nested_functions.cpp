@@ -21,6 +21,7 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<ListRangeFun>();
 	Register<ListFlattenFun>();
 	Register<MapFun>();
+	Register<MapFromEntriesFun>();
 	Register<MapExtractFun>();
 	Register<CardinalityFun>();
 }

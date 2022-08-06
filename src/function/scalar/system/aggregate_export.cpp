@@ -78,8 +78,8 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 
 	auto state_vec_ptr = FlatVector::GetData<data_ptr_t>(local_state.addresses);
 
-	VectorData state_data;
-	input.data[0].Orrify(input.size(), state_data);
+	UnifiedVectorFormat state_data;
+	input.data[0].ToUnifiedFormat(input.size(), state_data);
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
 		auto state_entry = &((string_t *)state_data.data)[state_idx];
@@ -122,9 +122,9 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		                  input.data[0].GetType().ToString(), input.data[1].GetType().ToString());
 	}
 
-	VectorData state0_data, state1_data;
-	input.data[0].Orrify(input.size(), state0_data);
-	input.data[1].Orrify(input.size(), state1_data);
+	UnifiedVectorFormat state0_data, state1_data;
+	input.data[0].ToUnifiedFormat(input.size(), state0_data);
+	input.data[1].ToUnifiedFormat(input.size(), state1_data);
 
 	auto result_ptr = FlatVector::GetData<string_t>(result);
 

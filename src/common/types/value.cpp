@@ -1292,16 +1292,17 @@ string Value::ToString() const {
 		return duckdb_fmt::format("{}", value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
+		auto width = DecimalType::GetWidth(type_);
 		auto scale = DecimalType::GetScale(type_);
 		if (internal_type == PhysicalType::INT16) {
-			return Decimal::ToString(value_.smallint, scale);
+			return Decimal::ToString(value_.smallint, width, scale);
 		} else if (internal_type == PhysicalType::INT32) {
-			return Decimal::ToString(value_.integer, scale);
+			return Decimal::ToString(value_.integer, width, scale);
 		} else if (internal_type == PhysicalType::INT64) {
-			return Decimal::ToString(value_.bigint, scale);
+			return Decimal::ToString(value_.bigint, width, scale);
 		} else {
 			D_ASSERT(internal_type == PhysicalType::INT128);
-			return Decimal::ToString(value_.hugeint, scale);
+			return Decimal::ToString(value_.hugeint, width, scale);
 		}
 	}
 	case LogicalTypeId::DATE:

@@ -62,7 +62,7 @@ enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
 template <class T, class TARGET>
 static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
-	v.Normalify(count);
+	v.Flatten(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &mask = FlatVector::Validity(v);
 	for (idx_t i = 0; i < count; i++) {
@@ -83,7 +83,7 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 	} else {
 		result_vector = &v;
 	}
-	result_vector->Normalify(count);
+	result_vector->Flatten(count);
 	auto data_ptr = FlatVector::GetData<string_t>(*result_vector);
 	auto &mask = FlatVector::Validity(*result_vector);
 	for (idx_t i = 0; i < count; i++) {

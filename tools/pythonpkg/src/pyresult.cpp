@@ -1,3 +1,5 @@
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" // from Python
@@ -34,6 +36,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 }
 
 py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType &type) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (val.IsNull()) {
 		return py::none();
 	}
@@ -63,8 +66,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	case LogicalTypeId::DOUBLE:
 		return py::cast(val.GetValue<double>());
 	case LogicalTypeId::DECIMAL: {
-		py::object decimal_py = py::module_::import("decimal").attr("Decimal");
-		return decimal_py(val.ToString());
+		return import_cache.decimal.Decimal()(val.ToString());
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
@@ -137,14 +139,13 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 	case LogicalTypeId::UUID: {
 		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
-		return py::cast<py::object>(py::module::import("uuid").attr("UUID")(UUID::ToString(uuid_value)));
+		return py::cast<py::object>(import_cache.uuid.UUID()(UUID::ToString(uuid_value)));
 	}
 	case LogicalTypeId::INTERVAL: {
 		auto interval_value = val.GetValueUnsafe<interval_t>();
 		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
 		return py::cast<py::object>(
-		    py::module::import("datetime")
-		        .attr("timedelta")(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+		    import_cache.datetime.timedelta()(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
 	}
 
 	default:
@@ -310,12 +311,33 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-py::object DuckDBPyResult::FetchDF() {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal());
+void DuckDBPyResult::ChangeToTZType(data_frame &df) {
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
+			// first localize to UTC then convert to timezone_config
+			auto utc_local = df[result->names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
+			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(timezone_config);
+		}
+	}
 }
 
-py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal(true, num_of_vectors));
+data_frame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+	auto df = py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
+	ChangeToTZType(df);
+	return df;
+}
+
+data_frame DuckDBPyResult::FetchDF() {
+	timezone_config = QueryResult::GetConfigTimezone(*result);
+	return FrameFromNumpy(FetchNumpyInternal());
+}
+
+data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+	if (timezone_config.empty()) {
+		timezone_config = QueryResult::GetConfigTimezone(*result);
+	}
+	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
 }
 
 void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk, py::list &batches) {
@@ -332,7 +354,7 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	string timezone_config = QueryResult::GetConfigTimezone(*result);
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
 	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
 	return true;
@@ -366,7 +388,7 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
 	ArrowSchema schema;
 
-	auto timezone_config = QueryResult::GetConfigTimezone(*result);
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 

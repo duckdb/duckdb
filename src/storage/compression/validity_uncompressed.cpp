@@ -338,7 +338,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	result.Normalify(scan_count);
+	result.Flatten(scan_count);
 
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
@@ -397,7 +397,8 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	return nullptr;
 }
 
-idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {
+idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset,
+                     idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
 	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
 

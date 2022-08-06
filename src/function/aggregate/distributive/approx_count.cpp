@@ -62,8 +62,8 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
 		agg_state->log = new HyperLogLog();
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	inputs[0].ToUnifiedFormat(count, vdata);
 
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
@@ -76,8 +76,8 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
                                               Vector &state_vector, idx_t count) {
 	D_ASSERT(input_count == 1);
 
-	VectorData sdata;
-	state_vector.Orrify(count, sdata);
+	UnifiedVectorFormat sdata;
+	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = (ApproxDistinctCountState **)sdata.data;
 
 	for (idx_t i = 0; i < count; i++) {
@@ -87,8 +87,8 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 		}
 	}
 
-	VectorData vdata;
-	inputs[0].Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	inputs[0].ToUnifiedFormat(count, vdata);
 
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];

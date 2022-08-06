@@ -35,8 +35,8 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	// copy over the first column
 	bool result_has_value[STANDARD_VECTOR_SIZE];
 	{
-		VectorData vdata;
-		args.data[0].Orrify(args.size(), vdata);
+		UnifiedVectorFormat vdata;
+		args.data[0].ToUnifiedFormat(args.size(), vdata);
 		auto input_data = (T *)vdata.data;
 		for (idx_t i = 0; i < args.size(); i++) {
 			auto vindex = vdata.sel->get_index(i);
@@ -56,8 +56,8 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 			continue;
 		}
 
-		VectorData vdata;
-		args.data[col_idx].Orrify(args.size(), vdata);
+		UnifiedVectorFormat vdata;
+		args.data[col_idx].ToUnifiedFormat(args.size(), vdata);
 
 		auto input_data = (T *)vdata.data;
 		if (!vdata.validity.AllValid()) {

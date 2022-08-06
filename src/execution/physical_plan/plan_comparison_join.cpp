@@ -72,6 +72,16 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	if (op.join_stats.empty()) {
 		return;
 	}
+	for (auto &type : op.children[1]->types) {
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+			return;
+		default:
+			break;
+		}
+	}
 	// with equality condition and null values not equal
 	for (auto &&condition : op.conditions) {
 		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {

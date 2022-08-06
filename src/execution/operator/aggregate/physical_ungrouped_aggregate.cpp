@@ -224,8 +224,8 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 		auto &aggr = (BoundAggregateExpression &)*aggregates[aggr_idx];
 		if (state.counts[aggr_idx] == 0 && aggr.function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 			// Default is when 0 values go in, NULL comes out
-			VectorData vdata;
-			chunk.data[aggr_idx].Orrify(1, vdata);
+			UnifiedVectorFormat vdata;
+			chunk.data[aggr_idx].ToUnifiedFormat(1, vdata);
 			D_ASSERT(!vdata.validity.RowIsValid(vdata.sel->get_index(0)));
 		}
 	}

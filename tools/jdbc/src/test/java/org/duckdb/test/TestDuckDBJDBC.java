@@ -1215,7 +1215,7 @@ public class TestDuckDBJDBC {
 		ps.setLong(5, (long) 85);
 		ps.setFloat(6, (float) 8.6);
 		ps.setDouble(7, (double) 8.7);
-		ps.setString(8, "eight eight");
+		ps.setString(8, "eight eight\n\t");
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
@@ -1226,7 +1226,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getLong(5), (long) 85);
 		assertEquals(rs.getFloat(6), 8.6, 0.001);
 		assertEquals(rs.getDouble(7), 8.7, 0.001);
-		assertEquals(rs.getString(8), "eight eight");
+		assertEquals(rs.getString(8), "eight eight\n\t");
 		rs.close();
 
 		ps.setObject(1, false);
@@ -1236,7 +1236,7 @@ public class TestDuckDBJDBC {
 		ps.setObject(5, (long) 85);
 		ps.setObject(6, (float) 8.6);
 		ps.setObject(7, (double) 8.7);
-		ps.setObject(8, "eight eight");
+		ps.setObject(8, "𫝼🔥😜䭔🟢");
 
 		rs = ps.executeQuery();
 		assertTrue(rs.next());
@@ -1247,7 +1247,7 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getLong(5), (long) 85);
 		assertEquals(rs.getFloat(6), 8.6, 0.001);
 		assertEquals(rs.getDouble(7), 8.7, 0.001);
-		assertEquals(rs.getString(8), "eight eight");
+		assertEquals(rs.getString(8), "𫝼🔥😜䭔🟢");
 
 		ps.setNull(1, 0);
 		ps.setNull(2, 0);

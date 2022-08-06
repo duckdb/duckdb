@@ -17,7 +17,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (!is_lambda) {
 		// this is for binding JSON
 		auto lhs_expr = expr.lhs->Copy();
-		OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), move(expr.expr));
+		OperatorExpression arrow_expr(ExpressionType::ARROW, move(lhs_expr), expr.expr->Copy());
 		return BindExpression(arrow_expr, depth);
 	}
 

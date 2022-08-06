@@ -72,7 +72,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			break;
 		default:
 			// FLAT VECTOR, we can directly OR the nullmask
-			args.data[i].Normalify(args.size());
+			args.data[i].Flatten(args.size());
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			result_validity.Combine(FlatVector::Validity(args.data[i]), args.size());
 			break;
@@ -111,7 +111,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				break;
 			}
 			case LogicalTypeId::SMALLINT: {
-				auto arg_data = FlatVector::GetData<int8_t>(col);
+				auto arg_data = FlatVector::GetData<int16_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}

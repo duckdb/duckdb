@@ -30,6 +30,15 @@ static unique_ptr<FunctionData> ToSubstraitBind(ClientContext &context, TableFun
 	return move(result);
 }
 
+static unique_ptr<FunctionData> ToJsonBind(ClientContext &context, TableFunctionBindInput &input,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_unique<ToSubstraitFunctionData>();
+	result->query = input.inputs[0].ToString();
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("Json");
+	return move(result);
+}
+
 shared_ptr<Relation> SubstraitPlanToDuckDBRel(Connection &conn, string &serialized) {
 	SubstraitToDuckDB transformer_s2d(conn, serialized);
 	return transformer_s2d.TransformPlan();
@@ -45,7 +54,7 @@ static void ToSubFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	// We might want to disable the optimizer of our new connection
 	new_conn.context->config.enable_optimizer = context.config.enable_optimizer;
 	auto query_plan = new_conn.context->ExtractPlan(data.query);
-	DuckDBToSubstrait transformer_d2s(*query_plan);
+	DuckDBToSubstrait transformer_d2s(context, *query_plan);
 	auto serialized = transformer_d2s.SerializeToString();
 
 	output.SetValue(0, 0, Value::BLOB_RAW(serialized));
@@ -62,6 +71,23 @@ static void ToSubFunction(ClientContext &context, TableFunctionInput &data_p, Da
 			throw InternalException("The query result of DuckDB's query plan does not match Substrait");
 		}
 	}
+}
+
+static void ToJsonFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = (ToSubstraitFunctionData &)*data_p.bind_data;
+	if (data.finished) {
+		return;
+	}
+	output.SetCardinality(1);
+	auto new_conn = Connection(*context.db);
+	// We might want to disable the optimizer of our new connection
+	new_conn.context->config.enable_optimizer = context.config.enable_optimizer;
+	auto query_plan = new_conn.context->ExtractPlan(data.query);
+	DuckDBToSubstrait transformer_d2s(context, *query_plan);
+	auto serialized = transformer_d2s.SerializeToJson();
+
+	output.SetValue(0, 0, serialized);
+	data.finished = true;
 }
 
 struct FromSubstraitFunctionData : public TableFunctionData {
@@ -112,6 +138,11 @@ void SubstraitExtension::Load(DuckDB &db) {
 	TableFunction from_sub_func("from_substrait", {LogicalType::BLOB}, FromSubFunction, FromSubstraitBind);
 	CreateTableFunctionInfo from_sub_info(from_sub_func);
 	catalog.CreateTableFunction(*con.context, &from_sub_info);
+
+	// create the from_substrait table function that allows us to get a query result from a substrait plan
+	TableFunction get_substrait_json("get_substrait_json", {LogicalType::VARCHAR}, ToJsonFunction, ToJsonBind);
+	CreateTableFunctionInfo get_substrait_json_info(get_substrait_json);
+	catalog.CreateTableFunction(*con.context, &get_substrait_json_info);
 
 	con.Commit();
 }

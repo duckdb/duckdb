@@ -53,7 +53,7 @@ public:
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
 	//! probe.
 	struct ScanStructure {
-		unique_ptr<VectorData[]> key_data;
+		unique_ptr<UnifiedVectorFormat[]> key_data;
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
@@ -183,7 +183,7 @@ private:
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
 
-	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
+	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
 	//! The RowDataCollection holding the main data of the hash table

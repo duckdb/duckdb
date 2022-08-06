@@ -73,7 +73,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
-	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);
+	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
 
 	auto df_columns = py::list(df.attr("columns"));
 	auto get_fun = df.attr("__getitem__");

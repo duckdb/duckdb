@@ -2564,3 +2564,41 @@ end
 function duckdb_execute_tasks(handle, max_tasks)
     return ccall((:duckdb_execute_tasks, libduckdb), Cvoid, (duckdb_database, UInt64), handle, max_tasks)
 end
+
+# Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
+#  duckdb_finish_execution is called on the state.
+#
+# duckdb_destroy_state should be called on the result in order to free memory.
+#
+# * returns: The task state that can be used with duckdb_execute_tasks_state.
+function duckdb_create_task_state(database)
+    return ccall((:duckdb_create_task_state, libduckdb), duckdb_task_state, (duckdb_database,), database)
+end
+
+# Execute DuckDB tasks on this thread.
+#
+# The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
+# Multiple threads can share the same duckdb_task_state.
+#
+# * database: The database object to execute tasks for
+# * state: The task state of the executor
+function duckdb_execute_tasks_state(state)
+    return ccall((:duckdb_execute_tasks_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+# Finish execution on a specific task.
+#
+# * state: The task state to finish execution
+function duckdb_finish_execution(state)
+    return ccall((:duckdb_finish_execution, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+# Destroys the task state returned from duckdb_create_task_state.
+#
+# Note that this should not be called while there is an active duckdb_execute_tasks_state running
+# on the task state.
+#
+# * state: The task state to clean up
+function duckdb_destroy_task_state(state)
+    return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end

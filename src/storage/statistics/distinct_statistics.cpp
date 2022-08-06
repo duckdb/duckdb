@@ -55,12 +55,12 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &read
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {
-	VectorData vdata;
-	v.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(count, vdata);
 	Update(vdata, v.GetType(), count, sample);
 }
 
-void DistinctStatistics::Update(VectorData &vdata, const LogicalType &type, idx_t count, bool sample) {
+void DistinctStatistics::Update(UnifiedVectorFormat &vdata, const LogicalType &type, idx_t count, bool sample) {
 	if (count == 0) {
 		return;
 	}
