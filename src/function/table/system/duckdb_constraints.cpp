@@ -54,7 +54,6 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("constraint_column_indexes");
-	;
 	return_types.push_back(LogicalType::LIST(LogicalType::BIGINT));
 
 	names.emplace_back("constraint_column_names");
@@ -126,9 +125,15 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			case ConstraintType::NOT_NULL:
 				constraint_type = "NOT NULL";
 				break;
-			case ConstraintType::FOREIGN_KEY:
-				constraint_type = "FOREIGN KEY";
-				break;
+			case ConstraintType::FOREIGN_KEY: {
+				auto &bound_constraint =
+				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
+				if (bound_constraint.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+					constraint_type = "REFERENCED KEY";
+				} else {
+					constraint_type = "FOREIGN KEY";
+				}
+			} break;
 			default:
 				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
 			}
@@ -168,8 +173,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				break;
 			}
 			case ConstraintType::FOREIGN_KEY: {
-				auto &bound_foreign_key = (BoundForeignKeyConstraint &)bound_constraint;
-				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
+				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
+				for (auto &col_idx : bound_foreign_key.info.GetKeys()) {
 					column_index_list.push_back(column_t(col_idx));
 				}
 				break;

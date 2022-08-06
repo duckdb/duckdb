@@ -44,7 +44,15 @@ struct ForeignKeyInfo {
 	//! The set of main key table's column's index
 	vector<storage_t> pk_keys;
 	//! The set of foreign key table's column's index
-	vector<idx_t> fk_keys;
+	vector<storage_t> fk_keys;
+
+	const vector<storage_t> &GetKeys() const {
+		if (type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+			return pk_keys;
+		} else {
+			return fk_keys;
+		}
+	}
 };
 
 //! Constraint is the base class of any type of table constraint.
