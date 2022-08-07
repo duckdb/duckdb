@@ -38,14 +38,23 @@ public:
 	vector<BoundAggregateExpression *> bindings;
 
 public:
-	idx_t SetGroups(vector<unique_ptr<Expression>> groups) {
-		for (auto &expr : groups) {
-			group_types.push_back(expr->return_type);
-		}
-		this->groups = move(groups);
-		return this->groups.size();
+	idx_t GroupsCount() const {
+		return groups.size();
 	}
-	void SetAggregates(vector<unique_ptr<Expression>> expressions) {
+
+	const vector<vector<idx_t>> &GetGroupingFunctions() const {
+		return grouping_functions;
+	}
+
+	void GetGroupTypes(GroupingSet &set, vector<LogicalType> &result) const {
+		for (auto &entry : set) {
+			D_ASSERT(entry < group_types.size());
+			result.push_back(group_types[entry]);
+		}
+	}
+
+	void InitializeGroupby(vector<unique_ptr<Expression>> groups, vector<unique_ptr<Expression>> expressions) {
+		InitializeGroupbyGroups(move(groups));
 		for (auto &expr : expressions) {
 			D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 			D_ASSERT(expr->IsAggregate());
@@ -74,8 +83,8 @@ public:
 			}
 		}
 	}
-	//! Used to create distinct data
-	void SetDistinctGroupData(unique_ptr<Expression> aggregate) {
+	//! Initialize a GroupedAggregateData object for use with distinct aggregates
+	void InitializeDistinct(unique_ptr<Expression> aggregate) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		D_ASSERT(aggr.distinct);
 		any_distinct = true;
@@ -99,6 +108,15 @@ public:
 		for (const auto &pay_filters : payload_types_filters) {
 			payload_types.push_back(pay_filters);
 		}
+	}
+
+private:
+	void InitializeGroupbyGroups(vector<unique_ptr<Expression>> groups) {
+		// Add all the expressions of the group by clause
+		for (auto &expr : groups) {
+			group_types.push_back(expr->return_type);
+		}
+		this->groups = move(groups);
 	}
 };
 

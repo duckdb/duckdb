@@ -36,7 +36,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), grouping_sets(move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
-	idx_t groups_amount = grouped_aggregate_data.SetGroups(move(groups_p));
+	idx_t groups_amount = groups_p.size();
 	if (grouping_sets.empty()) {
 		GroupingSet set;
 		for (idx_t i = 0; i < groups_amount; i++) {
@@ -44,7 +44,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 		grouping_sets.push_back(move(set));
 	}
-	grouped_aggregate_data.SetAggregates(move(expressions));
+	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions));
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...

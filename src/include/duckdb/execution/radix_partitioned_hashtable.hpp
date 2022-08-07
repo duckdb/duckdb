@@ -57,6 +57,9 @@ public:
 
 	static void SetMultiScan(GlobalSinkState &state);
 	bool ForceSingleHT(GlobalSinkState &state) const;
+
+private:
+	void SetGroupingValues();
 };
 
 } // namespace duckdb

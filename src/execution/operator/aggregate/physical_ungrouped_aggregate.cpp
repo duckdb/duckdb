@@ -29,7 +29,7 @@ void DistinctAggregateData::Initialize(vector<unique_ptr<Expression>> &aggregate
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[aggr_idx] = make_unique<GroupedAggregateData>();
-		grouped_aggregate_data[aggr_idx]->SetDistinctGroupData(aggregates[aggr_idx]->Copy());
+		grouped_aggregate_data[aggr_idx]->InitializeDistinct(aggregates[aggr_idx]->Copy());
 		radix_tables[aggr_idx] =
 		    make_unique<RadixPartitionedHashTable>(grouping_sets[aggr_idx], *grouped_aggregate_data[aggr_idx]);
 	}
