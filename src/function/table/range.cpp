@@ -23,10 +23,11 @@ public:
 	}
 };
 
+template <bool GENERATE_SERIES>
 static void GenerateRangeParameters(const vector<Value> &inputs, RangeFunctionBindData &result) {
 	for (auto &input : inputs) {
 		if (input.IsNull()) {
-			result.start = 1;
+			result.start = GENERATE_SERIES ? 1 : 0;
 			result.end = 0;
 			result.increment = 1;
 			return;
@@ -61,7 +62,7 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableF
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_unique<RangeFunctionBindData>();
 	auto &inputs = input.inputs;
-	GenerateRangeParameters(inputs, *result);
+	GenerateRangeParameters<GENERATE_SERIES>(inputs, *result);
 
 	return_types.emplace_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
