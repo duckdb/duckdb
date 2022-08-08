@@ -19,8 +19,9 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {".duckdb", "extensions", DuckDB::SourceID(), DuckDB::Platform()};
 }
 
-string ExtensionHelper::ExtensionDirectory(FileSystem &fs) {
-	string local_path = fs.GetHomeDirectory();
+string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
+	auto &fs = FileSystem::GetFileSystem(context);
+	string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
 	if (!fs.DirectoryExists(local_path)) {
 		throw InternalException("Can't find the home directory at " + local_path);
 	}
@@ -34,14 +35,14 @@ string ExtensionHelper::ExtensionDirectory(FileSystem &fs) {
 	return local_path;
 }
 
-void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &extension, bool force_install) {
-	auto &config = DBConfig::GetConfig(db);
+void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
+	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
-	auto &fs = FileSystem::GetFileSystem(db);
+	auto &fs = FileSystem::GetFileSystem(context);
 
-	string local_path = ExtensionDirectory(fs);
+	string local_path = ExtensionDirectory(context);
 
 	auto extension_name = fs.ExtractBaseName(extension);
 

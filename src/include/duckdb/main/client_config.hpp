@@ -23,6 +23,8 @@ typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context
     get_result_collector_t;
 
 struct ClientConfig {
+	//! The home directory used by the system (if any)
+	string home_directory;
 	//! If the query profiler is enabled or not.
 	bool enable_profiler = false;
 	//! If detailed query profiling is enabled
