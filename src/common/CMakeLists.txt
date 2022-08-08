@@ -29,6 +29,7 @@ add_library_unity(
   file_buffer.cpp
   file_system.cpp
   gzip_file_system.cpp
+  hive_partitioning.cpp
   pipe_file_system.cpp
   limits.cpp
   local_file_system.cpp
