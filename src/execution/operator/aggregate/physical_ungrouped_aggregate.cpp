@@ -357,7 +357,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
-	idx_t payload_expr_idx = 0;
 
 	// TODO:
 	//  Create a selection vector to Slice the intermediary chunk into only the part we need
@@ -387,50 +386,55 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 		auto local_source_state = radix_table_p->GetLocalSourceState(temp_exec_context);
 
 		//! Retrieve the stored data from the hashtable
-		radix_table_p->GetData(temp_exec_context, intermediate_chunk, *gstate.radix_states[i], *global_source_state,
-		                       *local_source_state);
+		while (true) {
+			radix_table_p->GetData(temp_exec_context, intermediate_chunk, *gstate.radix_states[i], *global_source_state,
+			                       *local_source_state);
+			if (intermediate_chunk.size() == 0) {
+				break;
+			}
 
-		for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-			payload_chunk.data[payload_idx + child_idx].Reference(intermediate_chunk.data[child_idx]);
-		}
-		payload_chunk.SetCardinality(intermediate_chunk);
+			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
+				payload_chunk.data[payload_idx + child_idx].Reference(intermediate_chunk.data[child_idx]);
+			}
+			payload_chunk.SetCardinality(intermediate_chunk);
 
-		idx_t payload_cnt = 0;
-		// resolve the filter (if any)
-		if (aggregate.filter) {
-			auto &filtered_data = gstate.execution_data->filter_set.GetFilterData(i);
-			auto count = filtered_data.ApplyFilter(payload_chunk);
+			idx_t payload_cnt = 0;
+			// resolve the filter (if any)
+			if (aggregate.filter) {
+				auto &filtered_data = gstate.execution_data->filter_set.GetFilterData(i);
+				auto count = filtered_data.ApplyFilter(payload_chunk);
 
-			gstate.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
-			payload_chunk.SetCardinality(count);
-		} else {
-			gstate.execution_data->child_executor.SetChunk(payload_chunk);
-		}
+				gstate.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
+				payload_chunk.SetCardinality(count);
+			} else {
+				gstate.execution_data->child_executor.SetChunk(payload_chunk);
+			}
 
 #ifdef DEBUG
-		gstate.state.counts[i] += payload_chunk.size();
+			gstate.state.counts[i] += payload_chunk.size();
 #endif
 
-		// resolve the child expressions of the aggregate (if any)
-		if (!aggregate.children.empty()) {
-			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); ++child_idx) {
-				// TODO: change 'distinct_output_chunks' to a single chunk, or change the expression executor's internal
-				// list of expressions the Vector in the chunk that is loaded into the expression_executor has to match
-				// the expression_idx that is provided here
-				gstate.execution_data->child_executor.ExecuteExpression(payload_expr_idx,
-				                                                        payload_chunk.data[payload_idx + payload_cnt]);
-				payload_expr_idx++;
-				payload_cnt++;
+			// resolve the child expressions of the aggregate (if any)
+			if (!aggregate.children.empty()) {
+				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); ++child_idx) {
+					// TODO: change 'distinct_output_chunks' to a single chunk, or change the expression executor's
+					// internal list of expressions the Vector in the chunk that is loaded into the expression_executor
+					// has to match the expression_idx that is provided here
+					gstate.execution_data->child_executor.ExecuteExpression(
+					    payload_idx + payload_cnt, payload_chunk.data[payload_idx + payload_cnt]);
+					payload_cnt++;
+				}
 			}
+
+			auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
+			//! Update the aggregate state
+			AggregateInputData aggr_input_data(aggregate.bind_info.get());
+			aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
+			                                 gstate.state.aggregates[i].get(), payload_chunk.size());
+
+			payload_chunk.Reset();
+			intermediate_chunk.Reset();
 		}
-
-		auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
-		//! Update the aggregate state
-		AggregateInputData aggr_input_data(aggregate.bind_info.get());
-		aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt, gstate.state.aggregates[i].get(),
-		                                 payload_chunk.size());
-
-		payload_chunk.Reset();
 	}
 	D_ASSERT(!gstate.finished);
 	gstate.finished = true;
