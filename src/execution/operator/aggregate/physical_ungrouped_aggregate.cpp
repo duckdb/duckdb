@@ -251,7 +251,15 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 			auto &radix_global_sink = *global_sink.radix_states[aggr_idx];
 			auto &radix_local_sink = *sink.radix_states[aggr_idx];
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
+			if (aggregate.filter) {
+				auto &filtered_data = sink.execution_data->filter_set.GetFilterData(aggr_idx);
+				(void)filtered_data.ApplyFilter(input);
+
+				radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
+				                 filtered_data.filtered_payload);
+			} else {
+				radix_table.Sink(context, radix_global_sink, radix_local_sink, input, input);
+			}
 			continue;
 		}
 
@@ -399,16 +407,8 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 			payload_chunk.SetCardinality(intermediate_chunk);
 
 			idx_t payload_cnt = 0;
-			// resolve the filter (if any)
-			if (aggregate.filter) {
-				auto &filtered_data = gstate.execution_data->filter_set.GetFilterData(i);
-				auto count = filtered_data.ApplyFilter(payload_chunk);
-
-				gstate.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
-				payload_chunk.SetCardinality(count);
-			} else {
-				gstate.execution_data->child_executor.SetChunk(payload_chunk);
-			}
+			// We dont need to resolve the filter, we already did this in Sink
+			gstate.execution_data->child_executor.SetChunk(payload_chunk);
 
 #ifdef DEBUG
 			gstate.state.counts[i] += payload_chunk.size();
