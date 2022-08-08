@@ -126,29 +126,15 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	unique_ptr<DataChunk> chunk_result = result.Fetch();
-	if (!chunk_result) {
-		if (!result.success) {
-			my_stream->last_error = result.GetError();
-			return -1;
-		}
+	auto result_count = ArrowUtil::FetchChunk(&result, my_stream->batch_size, out);
+	if (!result.success) {
+		my_stream->last_error = result.GetError();
+		return -1;
+	}
+	if (result_count == 0) {
 		// Nothing to output
 		out->release = nullptr;
-		return 0;
 	}
-	unique_ptr<DataChunk> agg_chunk_result = make_unique<DataChunk>();
-	agg_chunk_result->Initialize(Allocator::DefaultAllocator(), chunk_result->GetTypes());
-	agg_chunk_result->Append(*chunk_result, true);
-
-	while (agg_chunk_result->size() < my_stream->batch_size) {
-		auto new_chunk = result.Fetch();
-		if (!new_chunk) {
-			break;
-		} else {
-			agg_chunk_result->Append(*new_chunk, true);
-		}
-	}
-	ArrowConverter::ToArrowArray(*agg_chunk_result, out);
 	return 0;
 }
 
