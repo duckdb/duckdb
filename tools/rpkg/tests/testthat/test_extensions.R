@@ -64,3 +64,13 @@ test_that("substrait extension test", {
   expect_equal(df2$i, 42L)
 })
 
+test_that("substrait extension json test", {
+  skip_if(Sys.getenv("DUCKDB_R_TEST_EXTENSION_REQUIRED") != "1", "DUCKDB_R_TEST_EXTENSION_REQUIRED not set, hence not testing extensions")
+  con <- load_extension("substrait.duckdb_extension")
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  dbExecute(con, "CREATE TABLE integers (i INTEGER)")
+  expected_json <- "{\"relations\":[{\"root\":{\"input\":{\"fetch\":{\"input\":{\"project\":{\"input\":{\"project\":{\"input\":{\"read\":{\"baseSchema\":{\"names\":[\"i\"],\"struct\":{\"types\":[{\"i32\":{\"nullability\":\"NULLABILITY_NULLABLE\"}}],\"nullability\":\"NULLABILITY_REQUIRED\"}},\"namedTable\":{\"names\":[\"integers\"]}}},\"expressions\":[{\"selection\":{\"directReference\":{\"structField\":{}},\"rootReference\":{}}}]}},\"expressions\":[{\"selection\":{\"directReference\":{\"structField\":{}},\"rootReference\":{}}}]}},\"count\":\"5\"}},\"names\":[\"i\"]}}]}"
+  json <- duckdb::duckdb_get_substrait_json(con, "select * from integers limit 5")
+  expect_equal(json, expected_json)
+})
+

@@ -61,6 +61,9 @@ public:
 	//! Returns the number of threads
 	int32_t NumberOfThreads();
 
+	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
+	void Signal(idx_t n);
+
 private:
 	void SetThreadsInternal(int32_t n);
 

@@ -190,7 +190,7 @@ struct string_t;
 
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;
-// we should be using single_thread_ptr here but cross-thread access to ChunkCollections currently prohibits this.
+//! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;
 
@@ -214,8 +214,8 @@ struct list_entry_t {
 
 // taken from arrow's type.h
 enum class PhysicalType : uint8_t {
-	/// A NULL type having no physical storage
-	NA = 0,
+	///// A NULL type having no physical storage
+	//NA = 0,
 
 	/// Boolean as 8 bit "bool" value
 	BOOL = 1,
@@ -244,8 +244,8 @@ enum class PhysicalType : uint8_t {
 	/// Signed 64-bit little-endian integer
 	INT64 = 9,
 
-	/// 2-byte floating point value
-	HALF_FLOAT = 10,
+	///// 2-byte floating point value
+	//HALF_FLOAT = 10,
 
 	/// 4-byte floating point value
 	FLOAT = 11,
@@ -253,32 +253,32 @@ enum class PhysicalType : uint8_t {
 	/// 8-byte floating point value
 	DOUBLE = 12,
 
-	/// UTF8 variable-length string as List<Char>
-	STRING = 13,
+	///// UTF8 variable-length string as List<Char>
+	//STRING = 13,
 
-	/// Variable-length bytes (no guarantee of UTF8-ness)
-	BINARY = 14,
+	///// Variable-length bytes (no guarantee of UTF8-ness)
+	//BINARY = 14,
 
-	/// Fixed-size binary. Each value occupies the same number of bytes
-	FIXED_SIZE_BINARY = 15,
+	///// Fixed-size binary. Each value occupies the same number of bytes
+	//FIXED_SIZE_BINARY = 15,
 
-	/// int32_t days since the UNIX epoch
-	DATE32 = 16,
+	///// int32_t days since the UNIX epoch
+	//DATE32 = 16,
 
-	/// int64_t milliseconds since the UNIX epoch
-	DATE64 = 17,
+	///// int64_t milliseconds since the UNIX epoch
+	//DATE64 = 17,
 
-	/// Exact timestamp encoded with int64 since UNIX epoch
-	/// Default unit millisecond
-	TIMESTAMP = 18,
+	///// Exact timestamp encoded with int64 since UNIX epoch
+	///// Default unit millisecond
+	//TIMESTAMP = 18,
 
-	/// Time as signed 32-bit integer, representing either seconds or
-	/// milliseconds since midnight
-	TIME32 = 19,
+	///// Time as signed 32-bit integer, representing either seconds or
+	///// milliseconds since midnight
+	//TIME32 = 19,
 
-	/// Time as signed 64-bit integer, representing either microseconds or
-	/// nanoseconds since midnight
-	TIME64 = 20,
+	///// Time as signed 64-bit integer, representing either microseconds or
+	///// nanoseconds since midnight
+	//TIME64 = 20,
 
 	/// YEAR_MONTH or DAY_TIME interval in SQL style
 	INTERVAL = 21,
@@ -293,36 +293,36 @@ enum class PhysicalType : uint8_t {
 	/// Struct of logical types
 	STRUCT = 24,
 
-	/// Unions of logical types
-	UNION = 25,
+	///// Unions of logical types
+	//UNION = 25,
 
-	/// Dictionary-encoded type, also called "categorical" or "factor"
-	/// in other programming languages. Holds the dictionary value
-	/// type but not the dictionary itself, which is part of the
-	/// ArrayData struct
-	DICTIONARY = 26,
+	///// Dictionary-encoded type, also called "categorical" or "factor"
+	///// in other programming languages. Holds the dictionary value
+	///// type but not the dictionary itself, which is part of the
+	///// ArrayData struct
+	//DICTIONARY = 26,
 
 	/// Map, a repeated struct logical type
 	MAP = 27,
 
-	/// Custom data type, implemented by user
-	EXTENSION = 28,
+	///// Custom data type, implemented by user
+	//EXTENSION = 28,
 
-	/// Fixed size list of some logical type
-	FIXED_SIZE_LIST = 29,
+	///// Fixed size list of some logical type
+	//FIXED_SIZE_LIST = 29,
 
-	/// Measure of elapsed time in either seconds, milliseconds, microseconds
-	/// or nanoseconds.
-	DURATION = 30,
+	///// Measure of elapsed time in either seconds, milliseconds, microseconds
+	///// or nanoseconds.
+	//DURATION = 30,
 
-	/// Like STRING, but with 64-bit offsets
-	LARGE_STRING = 31,
+	///// Like STRING, but with 64-bit offsets
+	//LARGE_STRING = 31,
 
-	/// Like BINARY, but with 64-bit offsets
-	LARGE_BINARY = 32,
+	///// Like BINARY, but with 64-bit offsets
+	//LARGE_BINARY = 32,
 
-	/// Like LIST, but with 64-bit offsets
-	LARGE_LIST = 33,
+	///// Like LIST, but with 64-bit offsets
+	//LARGE_LIST = 33,
 
 	/// DuckDB Extensions
 	VARCHAR = 200, // our own string representation, different from STRING and LARGE_STRING above
@@ -437,7 +437,8 @@ struct LogicalType {
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
 	DUCKDB_API hash_t Hash() const;
-	DUCKDB_API void SetAlias(string &alias);
+	DUCKDB_API void SetAlias(string alias);
+	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
@@ -461,6 +462,7 @@ private:
 
 public:
 	static constexpr const LogicalTypeId SQLNULL = LogicalTypeId::SQLNULL;
+	static constexpr const LogicalTypeId UNKNOWN = LogicalTypeId::UNKNOWN;
 	static constexpr const LogicalTypeId BOOLEAN = LogicalTypeId::BOOLEAN;
 	static constexpr const LogicalTypeId TINYINT = LogicalTypeId::TINYINT;
 	static constexpr const LogicalTypeId UTINYINT = LogicalTypeId::UTINYINT;
@@ -590,11 +592,11 @@ PhysicalType GetTypeId() {
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
 	} else if (std::is_same<T, date_t>()) {
-		return PhysicalType::DATE32;
+		return PhysicalType::INT32;
 	} else if (std::is_same<T, dtime_t>()) {
-		return PhysicalType::TIME32;
+		return PhysicalType::INT64;
 	} else if (std::is_same<T, timestamp_t>()) {
-		return PhysicalType::TIMESTAMP;
+		return PhysicalType::INT64;
 	} else if (std::is_same<T, float>()) {
 		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>()) {

@@ -15,6 +15,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
 
+#include "duckdb/parser/expression/comparison_expression.hpp"
+
 #include "substrait/plan.pb.h"
 
 namespace duckdb {
@@ -82,6 +84,9 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformSelectionExpr(const sub
 unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(const substrait::Expression &sexpr) {
 	auto function_name = FindFunction(sexpr.scalar_function().function_reference());
 	vector<unique_ptr<ParsedExpression>> children;
+	for (auto &sarg : sexpr.scalar_function().arguments()) {
+		children.push_back(TransformExpr(sarg.value()));
+	}
 	for (auto &sarg : sexpr.scalar_function().args()) {
 		children.push_back(TransformExpr(sarg));
 	}
@@ -92,29 +97,38 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	} else if (function_name == "or") {
 		return make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, move(children));
 	} else if (function_name == "lt") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "equal") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, move(children[0]), move(children[1]));
 	} else if (function_name == "not_equal") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOTEQUAL, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "lte") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "gte") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "gt") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_GREATERTHAN, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "is_not_null") {
+		D_ASSERT(children.size() == 1);
 		return make_unique<OperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
 	} else if (function_name == "is_not_distinct_from") {
+		D_ASSERT(children.size() == 2);
 		return make_unique<ComparisonExpression>(ExpressionType::COMPARE_NOT_DISTINCT_FROM, move(children[0]),
 		                                         move(children[1]));
 	} else if (function_name == "between") {
 		// FIXME: ADD between to substrait extension
+		D_ASSERT(children.size() == 3);
 		return make_unique<BetweenExpression>(move(children[0]), move(children[1]), move(children[2]));
 	}
 
@@ -306,6 +320,9 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Re
 
 	for (auto &smeas : sop.aggregate().measures()) {
 		vector<unique_ptr<ParsedExpression>> children;
+		for (auto &sarg : smeas.measure().arguments()) {
+			children.push_back(TransformExpr(sarg.value()));
+		}
 		for (auto &sarg : smeas.measure().args()) {
 			children.push_back(TransformExpr(sarg));
 		}

@@ -14,6 +14,7 @@ const duckdb_bind_info = Ptr{Cvoid}
 const duckdb_init_info = Ptr{Cvoid}
 const duckdb_function_info = Ptr{Cvoid}
 const duckdb_replacement_scan_info = Ptr{Cvoid}
+const duckdb_task_state = Ptr{Cvoid}
 const DuckDBSuccess = 0;
 const DuckDBError = 1;
 const duckdb_state = Int32;

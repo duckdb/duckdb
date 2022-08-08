@@ -65,18 +65,12 @@ interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 
 template <>
 date_t SubtractOperator::Operation(date_t left, interval_t right) {
-	right.months = -right.months;
-	right.days = -right.days;
-	right.micros = -right.micros;
-	return AddOperator::Operation<date_t, interval_t, date_t>(left, right);
+	return AddOperator::Operation<date_t, interval_t, date_t>(left, Interval::Invert(right));
 }
 
 template <>
 timestamp_t SubtractOperator::Operation(timestamp_t left, interval_t right) {
-	right.months = -right.months;
-	right.days = -right.days;
-	right.micros = -right.micros;
-	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, right);
+	return AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(left, Interval::Invert(right));
 }
 
 template <>

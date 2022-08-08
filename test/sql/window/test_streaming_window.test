@@ -19,6 +19,31 @@ explain select first_value(i IGNORE NULLS) over () from integers
 ----
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
+# Unsupported aggregates
+query TT
+EXPLAIN
+SELECT i, COUNT(*) OVER() FROM integers;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT i, SUM(i) OVER() FROM integers;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT j, COUNT(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT j, SUM(j) FILTER(WHERE i = 2) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+
 # Test each of the streaming window functions
 query TT
 explain select row_number() over (), i, j from integers
@@ -72,6 +97,72 @@ select percent_rank() over (), i, j from integers
 0.0	1	2
 0.0	1	NULL
 
+# Test running aggregates
+query TT
+EXPLAIN
+SELECT i, COUNT(*) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, COUNT(*) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	1
+2	2
+1	3
+1	4
+
+query TT
+EXPLAIN
+SELECT j, COUNT(j) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT j, COUNT(j) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	1
+1	2
+2	3
+NULL	3
+
+query TT
+EXPLAIN
+SELECT i, SUM(i) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TT
+EXPLAIN
+SELECT i, SUM(i) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query II
+SELECT i, SUM(i) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM integers;
+----
+2	2
+2	4
+1	5
+1	6
+
+query TT
+EXPLAIN
+SELECT SUM(s) FROM (
+	SELECT SUM(i) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) s
+	FROM range(5000) tbl(i)
+);
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query I
+SELECT SUM(s) FROM (
+	SELECT SUM(i) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) s
+	FROM range(5000) tbl(i)
+);
+----
+20833332500
+
 # Some combinations of compatible window functions
 query TT
 explain select i, j, first_value(i) over (), first_value(j) over () from integers
@@ -112,22 +203,22 @@ physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 query TT
 explain select first_value(i) over (), last_value(i) over () from integers
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
 
 query TT
 explain select last_value(i) over (), first_value(i) over () from integers
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
 
 query TT
 explain select first_value(i) over (), last_value(i) over (order by j) from integers
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
 
 query TT
 explain select last_value(i) over (order by j), first_value(i) over () from integers
 ----
-physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
+physical_plan	<REGEX>:.*STREAMING_WINDOW.* WINDOW .*
 
 #
 # Global state tests from #3275

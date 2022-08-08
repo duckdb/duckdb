@@ -60,7 +60,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::JSON, "json", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
-	                    Value("\\x00\\x00\\x00a"));
+	                    Value::BLOB("\\x00\\x00\\x00a"));
 
 	// enums
 	Vector small_enum(LogicalType::VARCHAR, 2);

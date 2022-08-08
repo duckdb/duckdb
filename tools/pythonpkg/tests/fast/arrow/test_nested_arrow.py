@@ -21,19 +21,19 @@ class TestArrowNested(object):
     def test_lists_basic(self,duckdb_cursor):
         if not can_run:
             return
-        
+
         #Test Constant List
-        query = duckdb.query("SELECT a from (select list_value(3,5,10) as a) as t").arrow()['a'].to_numpy() 
+        query = duckdb.query("SELECT a from (select list_value(3,5,10) as a) as t").arrow()['a'].to_numpy()
         assert query[0][0] == 3
         assert query[0][1] == 5
         assert query[0][2] == 10
 
         # Empty List
-        query = duckdb.query("SELECT a from (select list_value() as a) as t").arrow()['a'].to_numpy() 
+        query = duckdb.query("SELECT a from (select list_value() as a) as t").arrow()['a'].to_numpy()
         assert len(query[0]) == 0
 
         #Test Constant List With Null
-        query = duckdb.query("SELECT a from (select list_value(3,NULL) as a) as t").arrow()['a'].to_numpy() 
+        query = duckdb.query("SELECT a from (select list_value(3,NULL) as a) as t").arrow()['a'].to_numpy()
         assert query[0][0] == 3
         assert np.isnan(query[0][1])
 
@@ -115,9 +115,9 @@ class TestArrowNested(object):
         if not can_run:
             return
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t")
-        
+
         compare_results("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t")
-        
+
         compare_results("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t")
         compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t")
         compare_results("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie','Tenacious D'),LIST_VALUE(10,10)) as a) as t")
@@ -142,7 +142,7 @@ class TestArrowNested(object):
         )
         with pytest.raises(Exception, match="Invalid Input Error: Arrow map contains duplicate key, which isn't supported by DuckDB map type"):
             rel = duckdb.from_arrow(arrow_table).fetchall()
-    
+
     def test_map_arrow_to_pandas(self,duckdb_cursor):
         if not can_run:
             return
@@ -161,11 +161,11 @@ class TestArrowNested(object):
 
         # Lists of structs with lists
         compare_results("SELECT [{'i':1,'j':[2,3]},NULL]")
-                
+
         # Maps embedded in a struct
         compare_results("SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
 
-        # List of maps 
+        # List of maps
         compare_results("SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t")
 
         # Map with list as key and/or value

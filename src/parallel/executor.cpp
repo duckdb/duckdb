@@ -1,18 +1,16 @@
 #include "duckdb/execution/executor.hpp"
 
+#include "duckdb/execution/execution_context.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/execution_context.hpp"
-#include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/parallel/pipeline_executor.hpp"
-
-#include "duckdb/parallel/pipeline_event.hpp"
-#include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
-
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/parallel/pipeline_event.hpp"
+#include "duckdb/parallel/pipeline_executor.hpp"
+#include "duckdb/parallel/pipeline_finish_event.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 
 #include <algorithm>
 
@@ -208,8 +206,8 @@ void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_pt
 	}
 	auto child_entry = child_pipelines.find(pipeline_ptr);
 	if (child_entry != child_pipelines.end()) {
-		for (auto &entry : child_entry->second) {
-			ExtractPipelines(entry, result);
+		for (auto entry = child_entry->second.rbegin(); entry != child_entry->second.rend(); ++entry) {
+			ExtractPipelines(*entry, result);
 		}
 		child_pipelines.erase(pipeline_ptr);
 	}
@@ -219,6 +217,7 @@ bool Executor::NextExecutor() {
 	if (root_pipeline_idx >= root_pipelines.size()) {
 		return false;
 	}
+	root_pipelines[root_pipeline_idx]->Reset();
 	root_executor = make_unique<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
 	root_pipeline_idx++;
 	return true;

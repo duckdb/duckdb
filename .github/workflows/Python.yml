@@ -282,10 +282,6 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" "psutil>=5.9.0"'
-        CIBW_TEST_REQUIRES: 'pytest'
-        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy "psutil>=5.9.0"'
-        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
         TWINE_USERNAME: 'hfmuehleisen'
@@ -317,7 +313,7 @@ jobs:
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-          cibuildwheel --output-dir wheelhouse duckdb_tarball
+          cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
       - name: Deploy
         shell: bash
@@ -361,8 +357,71 @@ jobs:
           cd tools/pythonpkg
           export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-          python setup.py install --user
+          pip install . --user
           (cd tests/ && python -m pytest)
+
+   python-address-sanitizer:
+      name: Python Address Sanitizer (Linux)
+      runs-on: ubuntu-latest
+      container: ubuntu:16.04
+      needs: linux-python3-9
+      env:
+         GEN: ninja
+         DUCKDEBUG: 1
+         ASAN_OPTIONS: detect_leaks=0
+
+      steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/ubuntu_16_setup
+        with:
+          openssl: 0
+          python: 0
+
+      - name: Install OpenSSL
+        shell: bash
+        run: |
+          apt-get install -y -qq libbz2-dev
+          wget https://www.openssl.org/source/openssl-1.0.2o.tar.gz
+          tar -xf openssl-1.0.2o.tar.gz
+          cd openssl-1.0.2o
+          ./config shared --prefix=/usr/local/
+          make
+          make install
+          mkdir lib
+          cp ./*.{so,so.1.0.0,a,pc} ./lib
+
+      - name: Install Python 3 With Sanitizers
+        shell: bash
+        run: |
+          wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
+          unzip v3.9.12.zip
+          rm v3.9.12.zip
+          cd cpython-3.9.12
+          mkdir debug-build
+          export LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/openssl-1.0.2o/lib
+          ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --with-openssl=${GITHUB_WORKSPACE}/openssl-1.0.2o --prefix=${GITHUB_WORKSPACE}/debug-build
+          make -j
+          make install        
+
+      - name: Install Python Test Dependencies
+        shell: bash
+        run: |
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install numpy pandas pyarrow pytest psutil
+
+      - name: Install DuckDB Python
+        shell: bash
+        run: |
+          cd tools/pythonpkg
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
+
+      - name: Run Python Tests
+        shell: bash
+        run: |
+          cd tools/pythonpkg
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast
 
    linux-release-cleanup:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'

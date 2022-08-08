@@ -1,0 +1,44 @@
+# name: test/fuzzer/afl/generate_series_null.test
+# description: Fuzzer: NULL in generate series
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT c0 FROM generate_series(NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM generate_series(0, NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM generate_series(0, 0, NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM generate_series(NULL, NULL, NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM range(NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM range(1, NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM range(1, 1, NULL) t3(c0);
+----
+
+query I
+SELECT c0 FROM range(NULL, NULL, NULL) t3(c0);
+----
+
+query II
+SELECT c0, c0 FROM generate_series(1) t3(c0);
+----
+0	0
+1	1

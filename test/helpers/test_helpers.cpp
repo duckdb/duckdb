@@ -120,20 +120,20 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		fprintf(stderr, "Query failed with message: %s\n", result.error.c_str());
 		return false;
 	}
-	if (!(result.names.size() == result.types.size())) {
+	if (result.names.size() != result.types.size()) {
 		// column names do not match
 		result.Print();
 		return false;
 	}
 	if (values.size() == 0) {
-		if (result.collection.Count() != 0) {
+		if (result.RowCount() != 0) {
 			result.Print();
 			return false;
 		} else {
 			return true;
 		}
 	}
-	if (result.collection.Count() == 0) {
+	if (result.RowCount() == 0) {
 		result.Print();
 		return false;
 	}
@@ -141,37 +141,20 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		result.Print();
 		return false;
 	}
-	size_t chunk_index = 0;
-	for (size_t i = 0; i < values.size();) {
-		if (chunk_index >= result.collection.ChunkCount()) {
-			// ran out of chunks
-			result.Print();
-			return false;
+	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
+		auto value = result.GetValue(column_number, row_idx);
+		// NULL <> NULL, hence special handling
+		if (value.IsNull() && values[row_idx].IsNull()) {
+			continue;
 		}
-		// check this vector
-		auto &chunk = result.collection.GetChunk(chunk_index);
-		auto &vector = chunk.data[column_number];
-		if (i + chunk.size() > values.size()) {
-			// too many values in this vector
-			result.Print();
-			return false;
-		}
-		for (size_t j = 0; j < chunk.size(); j++) {
-			// NULL <> NULL, hence special handling
-			if (vector.GetValue(j).IsNull() && values[i + j].IsNull()) {
-				continue;
-			}
 
-			if (!Value::ValuesAreEqual(vector.GetValue(j), values[i + j])) {
-				// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
-				// +
-				//      " but expected " + values[i + j].ToString());
-				result.Print();
-				return false;
-			}
+		if (!Value::ValuesAreEqual(value, values[row_idx])) {
+			// FAIL("Incorrect result! Got " + vector.GetValue(j).ToString()
+			// +
+			//      " but expected " + values[i + j].ToString());
+			result.Print();
+			return false;
 		}
-		chunk_index++;
-		i += chunk.size();
 	}
 	return true;
 }
@@ -197,7 +180,7 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 		return materialized.error;
 	}
 	string error;
-	if (!compare_result(csv, materialized.collection, materialized.types, header, error)) {
+	if (!compare_result(csv, materialized.Collection(), materialized.types, header, error)) {
 		return error;
 	}
 	return "";
@@ -245,32 +228,9 @@ string show_diff(DataChunk &left, DataChunk &right) {
 	return difference;
 }
 
-bool compare_chunk(DataChunk &left, DataChunk &right) {
-	if (left.ColumnCount() != right.ColumnCount()) {
-		return false;
-	}
-	if (left.size() != right.size()) {
-		return false;
-	}
-	for (size_t i = 0; i < left.ColumnCount(); i++) {
-		auto &left_vector = left.data[i];
-		auto &right_vector = right.data[i];
-		if (left_vector.GetType() == right_vector.GetType()) {
-			for (size_t j = 0; j < left.size(); j++) {
-				auto left_value = left_vector.GetValue(j);
-				auto right_value = right_vector.GetValue(j);
-				if (!Value::ValuesAreEqual(left_value, right_value)) {
-					return false;
-				}
-			}
-		}
-	}
-	return true;
-}
-
 //! Compares the result of a pipe-delimited CSV with the given DataChunk
 //! Returns true if they are equal, and stores an error_message otherwise
-bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType> sql_types, bool has_header,
+bool compare_result(string csv, ColumnDataCollection &collection, vector<LogicalType> sql_types, bool has_header,
                     string &error_message) {
 	D_ASSERT(collection.Count() == 0 || collection.Types().size() == sql_types.size());
 
@@ -296,8 +256,8 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 	DuckDB db;
 	Connection con(db);
 	BufferedCSVReader reader(*con.context, move(options), sql_types);
-	idx_t collection_index = 0;
-	idx_t tuple_count = 0;
+
+	ColumnDataCollection csv_data_collection(*con.context, sql_types);
 	while (true) {
 		// parse a chunk from the CSV file
 		try {
@@ -308,34 +268,14 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 			return false;
 		}
 		if (parsed_result.size() == 0) {
-			// out of tuples in CSV file
-			if (collection_index < collection.ChunkCount()) {
-				error_message = StringUtil::Format("Too many tuples in result! Found %llu tuples, but expected %llu",
-				                                   collection.Count(), tuple_count);
-				return false;
-			}
-			return true;
+			break;
 		}
-		if (collection_index >= collection.ChunkCount()) {
-			// ran out of chunks in the collection, but there are still tuples in the result
-			// keep parsing the csv file to get the total expected count
-			while (parsed_result.size() > 0) {
-				tuple_count += parsed_result.size();
-				parsed_result.Reset();
-				reader.ParseCSV(parsed_result);
-			}
-			error_message = StringUtil::Format("Too few tuples in result! Found %llu tuples, but expected %llu",
-			                                   collection.Count(), tuple_count);
-			return false;
-		}
-		// same counts, compare tuples in chunks
-		if (!compare_chunk(collection.GetChunk(collection_index), parsed_result)) {
-			error_message = show_diff(collection.GetChunk(collection_index), parsed_result);
-			return false;
-		}
-
-		collection_index++;
-		tuple_count += parsed_result.size();
+		csv_data_collection.Append(parsed_result);
 	}
+	string error;
+	if (!ColumnDataCollection::ResultEquals(collection, csv_data_collection, error_message)) {
+		return false;
+	}
+	return true;
 }
 } // namespace duckdb

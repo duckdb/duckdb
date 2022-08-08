@@ -16,30 +16,12 @@ skip_duckdb_includes = False
 
 src_dir = 'src'
 include_dir = os.path.join('src', 'include')
-fmt_dir = os.path.join('third_party', 'fmt')
-fmt_include_dir = os.path.join('third_party', 'fmt', 'include')
-miniz_dir = os.path.join('third_party', 'miniz')
-re2_dir = os.path.join('third_party', 're2')
-pg_query_dir = os.path.join('third_party', 'libpg_query')
-pg_query_include_dir = os.path.join('third_party', 'libpg_query', 'include')
-hll_dir = os.path.join('third_party', 'hyperloglog')
-fastpforlib_dir = os.path.join('third_party', 'fastpforlib')
-tdigest_dir = os.path.join('third_party', 'tdigest')
-utf8proc_dir = os.path.join('third_party', 'utf8proc')
-utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
-httplib_include_dir = os.path.join('third_party', 'httplib')
-fastfloat_include_dir = os.path.join('third_party', 'fast_float')
-mbedtls_dir = os.path.join('third_party', 'mbedtls')
-mbedtls_include_dir = os.path.join('third_party', 'mbedtls', 'include')
-mbedtls_include_dir2 = os.path.join('third_party', 'mbedtls', 'library')
-moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
-pcg_include_dir = os.path.join('third_party', 'pcg')
 
 # files included in the amalgamated "duckdb.hpp" file
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb.h'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
-    os.path.join(include_dir, 'duckdb', 'common', 'arrow.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'blob.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'decimal.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
@@ -81,19 +63,22 @@ if '--extended' in sys.argv:
         "duckdb/planner/filter/constant_filter.hpp",
         "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
         "duckdb/common/types/vector_cache.hpp",
+        "duckdb/common/string_map_set.hpp",
         "duckdb/planner/filter/null_filter.hpp",
-        "duckdb/common/arrow_wrapper.hpp",
+        "duckdb/common/arrow/arrow_wrapper.hpp",
         "duckdb/common/hive_partitioning.hpp",
+        "duckdb/planner/operator/logical_get.hpp",
         "duckdb/common/compressed_file_system.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
     main_header_files = normalize_path(main_header_files)
 
+import package_build
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, fastpforlib_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir, fastfloat_include_dir, mbedtls_include_dir, mbedtls_include_dir2, mbedtls_dir]
+include_paths = [include_dir] + package_build.third_party_includes()
 # paths of where to look for files to compile and include to the final amalgamation
-compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, fastpforlib_dir, utf8proc_dir, pg_query_dir, mbedtls_dir]
+compile_directories = [src_dir] + package_build.third_party_sources()
 
 # files always excluded
 always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])

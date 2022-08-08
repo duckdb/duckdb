@@ -7,6 +7,41 @@ import re
 
 excluded_objects = ['utf8proc_data.cpp']
 
+def third_party_includes():
+    includes = []
+    includes += [os.path.join('third_party', 'fmt', 'include')]
+    includes += [os.path.join('third_party', 're2')]
+    includes += [os.path.join('third_party', 'miniz')]
+    includes += [os.path.join('third_party', 'utf8proc', 'include')]
+    includes += [os.path.join('third_party', 'utf8proc')]
+    includes += [os.path.join('third_party', 'hyperloglog')]
+    includes += [os.path.join('third_party', 'fastpforlib')]
+    includes += [os.path.join('third_party', 'tdigest')]
+    includes += [os.path.join('third_party', 'libpg_query', 'include')]
+    includes += [os.path.join('third_party', 'libpg_query')]
+    includes += [os.path.join('third_party', 'concurrentqueue')]
+    includes += [os.path.join('third_party', 'pcg')]
+    includes += [os.path.join('third_party', 'httplib')]
+    includes += [os.path.join('third_party', 'fast_float')]
+    includes += [os.path.join('third_party', 'mbedtls')]
+    includes += [os.path.join('third_party', 'mbedtls', 'include')]
+    includes += [os.path.join('third_party', 'mbedtls', 'library')]
+    includes += [os.path.join('third_party', 'jaro_winkler')]
+    includes += [os.path.join('third_party', 'jaro_winkler', 'details')]
+    return includes
+
+def third_party_sources():
+    sources = []
+    sources += [os.path.join('third_party', 'fmt')]
+    sources += [os.path.join('third_party', 'miniz')]
+    sources += [os.path.join('third_party', 're2')]
+    sources += [os.path.join('third_party', 'hyperloglog')]
+    sources += [os.path.join('third_party', 'fastpforlib')]
+    sources += [os.path.join('third_party', 'utf8proc')]
+    sources += [os.path.join('third_party', 'libpg_query')]
+    sources += [os.path.join('third_party', 'mbedtls')]
+    return sources
+
 def get_libraries(binary_dir, libraries, extensions):
     result_libs = []
     def find_library_recursive(search_dir, potential_libnames):

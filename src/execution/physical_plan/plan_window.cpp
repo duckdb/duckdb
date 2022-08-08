@@ -17,6 +17,10 @@ static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
 	}
 	switch (wexpr->type) {
 	// TODO: add more expression types here?
+	case ExpressionType::WINDOW_AGGREGATE:
+		// We can stream aggregates if they are "running totals" and don't use filters
+		return wexpr->start == WindowBoundary::UNBOUNDED_PRECEDING && wexpr->end == WindowBoundary::CURRENT_ROW_ROWS &&
+		       !wexpr->filter_expr;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_RANK:
@@ -44,18 +48,21 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 	types.resize(output_idx);
 
 	// Identify streaming windows
-	vector<idx_t> window_expressions;
-	bool process_streaming = true;
+	vector<idx_t> blocking_windows;
+	vector<idx_t> streaming_windows;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
-		window_expressions.push_back(expr_idx);
-		if (!IsStreamingWindow(op.expressions[expr_idx])) {
-			process_streaming = false;
+		if (IsStreamingWindow(op.expressions[expr_idx])) {
+			streaming_windows.push_back(expr_idx);
+		} else {
+			blocking_windows.push_back(expr_idx);
 		}
 	}
+
 	// Process the window functions by sharing the partition/order definitions
 	vector<idx_t> evaluation_order;
-	while (!window_expressions.empty()) {
-		auto &remaining = window_expressions;
+	while (!blocking_windows.empty() || !streaming_windows.empty()) {
+		const bool process_streaming = blocking_windows.empty();
+		auto &remaining = process_streaming ? streaming_windows : blocking_windows;
 
 		// Find all functions that share the partitioning of the first remaining expression
 		const auto over_idx = remaining[0];
@@ -92,7 +99,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		plan = move(window);
 
 		// Remember the projection order if we changed it
-		if (!remaining.empty() || !evaluation_order.empty()) {
+		if (!streaming_windows.empty() || !blocking_windows.empty() || !evaluation_order.empty()) {
 			evaluation_order.insert(evaluation_order.end(), matching.begin(), matching.end());
 		}
 	}

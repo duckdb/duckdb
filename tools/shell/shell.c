@@ -295,7 +295,7 @@ static void endTimer(void){
     sqlite3_int64 iEnd = timeOfDay();
     struct rusage sEnd;
     getrusage(RUSAGE_SELF, &sEnd);
-    printf("Run Time: real %.3f user %f sys %f\n",
+    printf("Run Time (s): real %.3f user %f sys %f\n",
        (iEnd - iBegin)*0.001,
        timeDiff(&sBegin.ru_utime, &sEnd.ru_utime),
        timeDiff(&sBegin.ru_stime, &sEnd.ru_stime));
@@ -374,7 +374,7 @@ static void endTimer(void){
     FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
     sqlite3_int64 ftWallEnd = timeOfDay();
     getProcessTimesAddr(hProcess,&ftCreation,&ftExit,&ftKernelEnd,&ftUserEnd);
-    printf("Run Time: real %.3f user %f sys %f\n",
+    printf("Run Time (s): real %.3f user %f sys %f\n",
        (ftWallEnd - ftWallBegin)*0.001,
        timeDiff(&ftUserBegin, &ftUserEnd),
        timeDiff(&ftKernelBegin, &ftKernelEnd));
@@ -10808,6 +10808,7 @@ struct ShellState {
 #define MODE_Box     16  /* Unicode box-drawing characters */
 #define MODE_Latex   17  /* Latex tabular formatting */
 #define MODE_Trash   18  /* Discard output */
+#define MODE_Jsonlines 19  /* Output JSON Lines */
 
 static const char *modeDescr[] = {
   "line",
@@ -10828,7 +10829,8 @@ static const char *modeDescr[] = {
   "table",
   "box",
   "latex",
-  "trash"
+  "trash",
+    "jsonlines"
 };
 
 /*
@@ -11822,12 +11824,19 @@ static int shell_callback(
       raw_printf(p->out,");\n");
       break;
     }
-    case MODE_Json: {
+    case MODE_Json:
+	case MODE_Jsonlines: {
       if( azArg==0 ) break;
       if( p->cnt==0 ){
-        fputs("[{", p->out);
+        if (p->cMode == MODE_Json) {
+          fputc('[', p->out);
+        }
+        fputc('{', p->out);
       }else{
-        fputs(",\n{", p->out);
+        if (p->cMode == MODE_Json) {
+          fputc(',', p->out);
+        }
+        fputs("\n{", p->out);
       }
       p->cnt++;
       for(i=0; i<nArg; i++){
@@ -12938,6 +12947,9 @@ static void exec_prepared_stmt(
       sqlite3_free(pData);
       if( pArg->cMode==MODE_Json ){
         fputs("]\n", pArg->out);
+      }
+      if( pArg->cMode==MODE_Jsonlines ){
+        fputs("\n", pArg->out);
       }
     }
   }
@@ -18251,6 +18263,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Latex;
     }else if( c2=='t' && strncmp(azArg[1],"trash",n2)==0 ){
       p->mode = MODE_Trash;
+	}else if( c2=='j' && strncmp(azArg[1],"jsonlines",n2)==0 ){
+		p->mode = MODE_Jsonlines;
     }else if( nArg==1 ){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
@@ -20693,6 +20707,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.mode = MODE_Column;
     }else if( strcmp(z,"-json")==0 ){
       data.mode = MODE_Json;
+	}else if( strcmp(z,"-jsonlines")==0 ){
+		data.mode = MODE_Jsonlines;
     }else if( strcmp(z,"-markdown")==0 ){
       data.mode = MODE_Markdown;
     }else if( strcmp(z,"-table")==0 ){
