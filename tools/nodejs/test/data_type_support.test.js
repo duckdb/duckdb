@@ -70,7 +70,7 @@ describe("data type support", function () {
     });
   });
 
-  it.only("recursively supports NULL values", function (done) {
+  it("recursively supports NULL values", function (done) {
     db.run(
       `CREATE TABLE recursive_struct AS SELECT [
       { 'a': 42, 'b': [1, 2, 3]},
