@@ -664,7 +664,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
-		auto decompressed_string = StringVector::AddString(result, (char *)decompress_buffer, decompressed_string_size);
+		auto decompressed_string = StringVector::AddStringOrBlob(result, (char *)decompress_buffer, decompressed_string_size);
 		result_data[result_idx] = decompressed_string;
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
