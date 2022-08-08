@@ -555,9 +555,50 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data) {
 static void InitializeFunctionPointers(ArrowAppendData &append_data, const LogicalType &type) {
 	// handle special logical types
 	switch (type.id()) {
-	case LogicalTypeId::MAP:
-		InitializeFunctionPointers<ArrowMapData>(append_data);
-		return;
+	case LogicalTypeId::BOOLEAN:
+		InitializeFunctionPointers<ArrowBoolData>(append_data);
+		break;
+	case LogicalTypeId::TINYINT:
+		InitializeFunctionPointers<ArrowScalarData<int8_t>>(append_data);
+		break;
+	case LogicalTypeId::SMALLINT:
+		InitializeFunctionPointers<ArrowScalarData<int16_t>>(append_data);
+		break;
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::INTEGER:
+		InitializeFunctionPointers<ArrowScalarData<int32_t>>(append_data);
+		break;
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::BIGINT:
+		InitializeFunctionPointers<ArrowScalarData<int64_t>>(append_data);
+		break;
+	case LogicalTypeId::HUGEINT:
+		InitializeFunctionPointers<ArrowScalarData<hugeint_t>>(append_data);
+		break;
+	case LogicalTypeId::UTINYINT:
+		InitializeFunctionPointers<ArrowScalarData<uint8_t>>(append_data);
+		break;
+	case LogicalTypeId::USMALLINT:
+		InitializeFunctionPointers<ArrowScalarData<uint16_t>>(append_data);
+		break;
+	case LogicalTypeId::UINTEGER:
+		InitializeFunctionPointers<ArrowScalarData<uint32_t>>(append_data);
+		break;
+	case LogicalTypeId::UBIGINT:
+		InitializeFunctionPointers<ArrowScalarData<uint64_t>>(append_data);
+		break;
+	case LogicalTypeId::FLOAT:
+		InitializeFunctionPointers<ArrowScalarData<float>>(append_data);
+		break;
+	case LogicalTypeId::DOUBLE:
+		InitializeFunctionPointers<ArrowScalarData<double>>(append_data);
+		break;
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
@@ -575,10 +616,15 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		default:
 			throw InternalException("Unsupported internal decimal type");
 		}
-		return;
+		break;
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::JSON:
+		InitializeFunctionPointers<ArrowVarcharData<string_t>>(append_data);
+		break;
 	case LogicalTypeId::UUID:
 		InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
-		return;
+		break;
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
@@ -593,62 +639,21 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		default:
 			throw InternalException("Unsupported internal enum type");
 		}
-		return;
-	default:
 		break;
-	}
-
-	switch (type.InternalType()) {
-	case PhysicalType::BOOL:
-		InitializeFunctionPointers<ArrowBoolData>(append_data);
-		break;
-	case PhysicalType::VARCHAR:
-		InitializeFunctionPointers<ArrowVarcharData<string_t>>(append_data);
-		break;
-	case PhysicalType::STRUCT:
-		InitializeFunctionPointers<ArrowStructData>(append_data);
-		break;
-	case PhysicalType::LIST:
-		InitializeFunctionPointers<ArrowListData>(append_data);
-		break;
-	case PhysicalType::INT8:
-		InitializeFunctionPointers<ArrowScalarData<int8_t>>(append_data);
-		break;
-	case PhysicalType::INT16:
-		InitializeFunctionPointers<ArrowScalarData<int16_t>>(append_data);
-		break;
-	case PhysicalType::INT32:
-		InitializeFunctionPointers<ArrowScalarData<int32_t>>(append_data);
-		break;
-	case PhysicalType::INT64:
-		InitializeFunctionPointers<ArrowScalarData<int64_t>>(append_data);
-		break;
-	case PhysicalType::UINT8:
-		InitializeFunctionPointers<ArrowScalarData<uint8_t>>(append_data);
-		break;
-	case PhysicalType::UINT16:
-		InitializeFunctionPointers<ArrowScalarData<uint16_t>>(append_data);
-		break;
-	case PhysicalType::UINT32:
-		InitializeFunctionPointers<ArrowScalarData<uint32_t>>(append_data);
-		break;
-	case PhysicalType::UINT64:
-		InitializeFunctionPointers<ArrowScalarData<uint64_t>>(append_data);
-		break;
-	case PhysicalType::INT128:
-		InitializeFunctionPointers<ArrowScalarData<hugeint_t>>(append_data);
-		break;
-	case PhysicalType::FLOAT:
-		InitializeFunctionPointers<ArrowScalarData<float>>(append_data);
-		break;
-	case PhysicalType::DOUBLE:
-		InitializeFunctionPointers<ArrowScalarData<double>>(append_data);
-		break;
-	case PhysicalType::INTERVAL:
+	case LogicalTypeId::INTERVAL:
 		InitializeFunctionPointers<ArrowScalarData<int64_t, interval_t, ArrowIntervalConverter>>(append_data);
 		break;
+	case LogicalTypeId::STRUCT:
+		InitializeFunctionPointers<ArrowStructData>(append_data);
+		break;
+	case LogicalTypeId::LIST:
+		InitializeFunctionPointers<ArrowListData>(append_data);
+		break;
+	case LogicalTypeId::MAP:
+		InitializeFunctionPointers<ArrowMapData>(append_data);
+		break;
 	default:
-		throw InternalException("FIXME: unsupported physical type");
+		throw InternalException("Unsupported type in DuckDB -> Arrow Conversion: %s\n", type.ToString());
 	}
 }
 
