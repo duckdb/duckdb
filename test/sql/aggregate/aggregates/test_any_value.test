@@ -17,12 +17,6 @@ SELECT ANY_VALUE(i) AS a FROM tbl
 ----
 2
 
-query I
-SELECT ANY_VALUE(i) OVER () AS a FROM tbl
-----
-2
-2
-2
 
 statement ok
 DROP TABLE tbl
@@ -220,3 +214,15 @@ ORDER BY 1
 
 statement ok
 DROP TABLE five_complex
+
+# Window Function
+require vector_size 512
+
+query I
+SELECT ANY_VALUE(i) OVER () AS a FROM generate_series(1, 5) t(i);
+----
+1
+1
+1
+1
+1
