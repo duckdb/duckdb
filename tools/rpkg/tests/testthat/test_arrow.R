@@ -202,31 +202,31 @@ test_that("to_arrow roundtrip, with dataset", {
 con <- dbConnect(duckdb::duckdb())
 dbExecute(con, "PRAGMA threads=1")
 on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
-#
-# test_that("Joining, auto-cleanup enabled", {
-#   ds <- InMemoryDataset$create(example_data)
-#
-#   table_one_name <- "my_arrow_table_1"
-#   table_one <- to_duckdb(ds, con = con, table_name = table_one_name)
-#   table_two_name <- "my_arrow_table_2"
-#   table_two <- to_duckdb(ds, con = con, table_name = table_two_name)
-#
-#   res <- dbGetQuery(
-#     con,
-#     paste0(
-#       "SELECT * FROM ", table_one_name,
-#       " INNER JOIN ", table_two_name,
-#       " ON ", table_one_name, ".int = ", table_two_name, ".int"
-#     )
-#   )
-#   expect_identical(dim(res), c(9L, 14L))
-#
-#   # clean up cleans up the tables
-#   expect_true(all(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
-#   rm(table_one, table_two)
-#   gc()
-#   expect_false(any(c(table_one_name,     table_two_name) %in% duckdb::duckdb_list_arrow(con)))
-# })
+
+test_that("Joining, auto-cleanup enabled", {
+  ds <- InMemoryDataset$create(example_data)
+
+  table_one_name <- "my_arrow_table_1"
+  table_one <- to_duckdb(ds, con = con, table_name = table_one_name)
+  table_two_name <- "my_arrow_table_2"
+  table_two <- to_duckdb(ds, con = con, table_name = table_two_name)
+
+  res <- dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM ", table_one_name,
+      " INNER JOIN ", table_two_name,
+      " ON ", table_one_name, ".int = ", table_two_name, ".int"
+    )
+  )
+  expect_identical(dim(res), c(9L, 14L))
+
+  # clean up cleans up the tables
+  expect_true(all(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
+  rm(table_one, table_two)
+  gc()
+  expect_false(any(c(table_one_name,     table_two_name) %in% duckdb::duckdb_list_arrow(con)))
+})
 
 test_that("Joining, auto-cleanup disabled", {
   ds <- InMemoryDataset$create(example_data)
