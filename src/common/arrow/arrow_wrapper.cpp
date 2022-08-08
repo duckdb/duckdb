@@ -173,12 +173,22 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 }
 
+bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, string &error) {
+	if (result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = (StreamQueryResult &)result;
+		if (!stream_result.IsOpen()) {
+			return true;
+		}
+	}
+	return result.TryFetch(chunk, error);
+}
+
 bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count, string &error) {
 	count = 0;
 	ArrowAppender appender(result->types, chunk_size);
 	while (count < chunk_size) {
 		unique_ptr<DataChunk> data_chunk;
-		if (!result->TryFetch(data_chunk, error)) {
+		if (!TryFetchNext(*result, data_chunk, error)) {
 			if (!result->success) {
 				error = result->error;
 			}
