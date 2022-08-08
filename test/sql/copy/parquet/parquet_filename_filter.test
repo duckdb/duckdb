@@ -1,0 +1,94 @@
+# name: test/sql/copy/parquet/parquet_filename_filter.test
+# description: Test the filename filter pushdown
+# group: [parquet]
+
+require parquet
+
+# requires notwindows for windows-style path backslash reasons
+require notwindows
+
+query III
+select i, j, filename from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) order by i;
+----
+1	a	data/parquet-testing/glob/t1.parquet
+2	b	data/parquet-testing/glob/t2.parquet
+3	c	data/parquet-testing/glob2/t1.parquet
+
+query III
+select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet' or file='data/parquet-testing/glob/t2.parquet' order by i;
+----
+2	b	data/parquet-testing/glob/t2.parquet
+3	c	data/parquet-testing/glob2/t1.parquet
+
+query III
+select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet' and i=3 order by i;
+----
+3	c	data/parquet-testing/glob2/t1.parquet
+
+query III
+select i, j, filename as file from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where file='data/parquet-testing/glob2/t1.parquet' and i=2 order by i;
+----
+
+# This query should trigger the file skipping mechanism, which prevents reading metadata for files that are not scanned
+query IIII
+select id, value, date, filename from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) order by id;
+----
+1	value1	2012-01-01	data/parquet-testing/hive-partitioning/different_order/date=2012-01-01/part=a/test.parquet
+2	value2	2013-01-01	data/parquet-testing/hive-partitioning/different_order/part=b/date=2013-01-01/test.parquet
+
+# These queries test that the file skipping mechanism works even for complex filters on multiple filename-based filters
+query IIII
+select id, value, date, filename from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) where concat(date,filename)='2013-01-01data/parquet-testing/hive-partitioning/different_order/part=b/date=2013-01-01/test.parquet';
+----
+2	value2	2013-01-01	data/parquet-testing/hive-partitioning/different_order/part=b/date=2013-01-01/test.parquet
+
+query IIII
+select id, value, date, filename from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, FILENAME=1) where concat(date,filename)='2012-01-01data/parquet-testing/hive-partitioning/different_order/date=2012-01-01/part=a/test.parquet';
+----
+1	value1	2012-01-01	data/parquet-testing/hive-partitioning/different_order/date=2012-01-01/part=a/test.parquet
+
+# Ensure we don't somehow endup mixing things up
+query III
+select id, value as filename, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where filename='value2';
+----
+2	value2	2013-01-01
+
+query III
+select id, value as filename, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where filename='value1';
+----
+1	value1	2012-01-01
+
+# These tests confirm that the ParquetScanStats will properly handle the pruned files list
+
+statement ok
+pragma enable_object_cache
+
+query II
+select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%mismatching_count%' and id > 1;
+----
+2	value2
+
+query II
+select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%mismatching_count%' and id > 1;
+----
+2	value2
+
+query II
+select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%mismatching_count%' and value = 'value1';
+----
+1	value1
+
+query II
+select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%mismatching_count%' and value = 'value2';
+----
+2	value2
+
+query II
+select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%simple%' and value = 'value1';
+----
+1	value1
+
+query II
+select id, value from parquet_scan('data/parquet-testing/hive-partitioning/*/*/*/test.parquet', FILENAME=1) where filename like '%simple%' and value = 'value2';
+----
+2	value2
