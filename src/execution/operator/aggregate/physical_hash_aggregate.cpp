@@ -44,7 +44,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 		grouping_sets.push_back(move(set));
 	}
-	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions));
+	grouped_aggregate_data.InitializeGroupby(move(groups_p), move(expressions), move(grouping_functions_p));
 
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	// filter_indexes must be pre-built, not lazily instantiated in parallel...

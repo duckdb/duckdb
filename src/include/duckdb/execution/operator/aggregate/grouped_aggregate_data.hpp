@@ -53,8 +53,13 @@ public:
 		}
 	}
 
-	void InitializeGroupby(vector<unique_ptr<Expression>> groups, vector<unique_ptr<Expression>> expressions) {
+	void InitializeGroupby(vector<unique_ptr<Expression>> groups, vector<unique_ptr<Expression>> expressions,
+	                       vector<vector<idx_t>> grouping_functions) {
 		InitializeGroupbyGroups(move(groups));
+		vector<LogicalType> payload_types_filters;
+
+		SetGroupingFunctions(grouping_functions);
+
 		for (auto &expr : expressions) {
 			D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 			D_ASSERT(expr->IsAggregate());
@@ -65,7 +70,6 @@ public:
 				any_distinct = true;
 			}
 
-			vector<LogicalType> payload_types_filters;
 			aggregate_return_types.push_back(aggr.return_type);
 			for (auto &child : aggr.children) {
 				payload_types.push_back(child->return_type);
@@ -77,10 +81,9 @@ public:
 				throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 			}
 			aggregates.push_back(move(expr));
-
-			for (const auto &pay_filters : payload_types_filters) {
-				payload_types.push_back(pay_filters);
-			}
+		}
+		for (const auto &pay_filters : payload_types_filters) {
+			payload_types.push_back(pay_filters);
 		}
 	}
 	//! Initialize a GroupedAggregateData object for use with distinct aggregates
@@ -116,6 +119,13 @@ private:
 			group_types.push_back(expr->return_type);
 		}
 		this->groups = move(groups);
+	}
+
+	void SetGroupingFunctions(vector<vector<idx_t>> &functions) {
+		grouping_functions.reserve(functions.size());
+		for (idx_t i = 0; i < functions.size(); i++) {
+			grouping_functions.push_back(move(functions[i]));
+		}
 	}
 };
 
