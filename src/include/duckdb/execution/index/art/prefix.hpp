@@ -32,8 +32,9 @@ public:
 	// Used when deleting a Node.
 	// other.prefix + key + this->Prefix
 	void Concatenate(uint8_t key, Prefix &other);
-	// Reduces the prefix in n elements
-	void Reduce(uint32_t n);
+	// Reduces the prefix in n elements, and returns what would be the first one as a key
+	// I hate this function, looks messy
+	uint8_t Reduce(uint32_t n);
 	// Serializes Prefix
 	void Serialize(duckdb::MetaBlockWriter &writer);
 	// Deserializes Prefix
@@ -50,6 +51,7 @@ public:
 
 private:
 	unique_ptr<uint8_t[]> prefix;
+	uint32_t size;
 };
 
 } // namespace duckdb

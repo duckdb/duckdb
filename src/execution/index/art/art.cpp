@@ -317,9 +317,10 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 
 		Node *new_node = new Node4();
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
-		node->prefix.Reduce(new_prefix_length);
-		Node4::Insert(new_node, leaf_prefix[new_prefix_length], node);
-		Node *leaf_node = new Leaf(*value, new_prefix_length, row_id);
+		// fixme: I think leaf_prefix[0] should be returned from reduce and reduce -1
+		auto key_byte = node->prefix.Reduce(new_prefix_length);
+		Node4::Insert(new_node, key_byte, node);
+		Node *leaf_node = new Leaf(*value, new_prefix_length + 1, row_id);
 		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
@@ -333,9 +334,10 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 			Node *new_node = new Node4();
 			new_node->prefix = Prefix(key, depth, mismatch_pos);
 			// Break up prefix
-			Node4::Insert(new_node, node->prefix[mismatch_pos], node);
-			node->prefix.Reduce(mismatch_pos + 1);
-			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + node->prefix.Size(), row_id);
+			auto key_byte = node->prefix.Reduce(mismatch_pos);
+			Node4::Insert(new_node, key_byte, node);
+
+			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + 1, row_id);
 			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
@@ -352,7 +354,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		node->ReplaceChildPointer(pos, child);
 		return insertion_result;
 	}
-	Node *new_node = new Leaf(*value, depth, row_id);
+	Node *new_node = new Leaf(*value, depth + 1, row_id);
 	Node::InsertLeaf(node, key[depth], new_node);
 	return true;
 }

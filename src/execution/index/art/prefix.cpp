@@ -3,19 +3,19 @@
 namespace duckdb {
 
 uint32_t Prefix::Size() const {
-	return sizeof(prefix) / sizeof(prefix[0]);
+	return size;
 }
 
-Prefix::Prefix() {
+Prefix::Prefix() : size(0) {
 }
 
-Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) {
+Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) : size(size) {
 	// Allocate new prefix
 	prefix = unique_ptr<uint8_t[]>(new uint8_t[size]);
 
 	// Copy Key to Prefix
 	idx_t prefix_idx = 0;
-	for (idx_t i = depth; i < key.len; i++) {
+	for (idx_t i = depth; i < size; i++) {
 		prefix[prefix_idx++] = key.data[i];
 	}
 }
@@ -26,70 +26,72 @@ uint8_t &Prefix::operator[](idx_t idx) {
 }
 
 Prefix &Prefix::operator=(const Prefix &src) {
-	auto src_size = src.Size();
 	// Allocate new prefix
-	prefix = unique_ptr<uint8_t[]>(new uint8_t[src_size]);
+	prefix = unique_ptr<uint8_t[]>(new uint8_t[src.size]);
 
 	// Copy
-	for (idx_t i = 0; i < src_size; i++) {
+	for (idx_t i = 0; i < src.size; i++) {
 		prefix[i] = src.prefix[i];
 	}
+	size = src.size;
 	return *this;
 }
 
 Prefix &Prefix::operator=(Prefix &&other) noexcept {
 	prefix = move(other.prefix);
+	size = other.size;
 	return *this;
 }
 
-void Prefix::Reduce(uint32_t n) {
-	auto cur_size = Size();
-	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[cur_size - n]);
-	for (idx_t i = n; i < cur_size; i++) {
-		new_prefix[i - n] = prefix[i];
+uint8_t Prefix::Reduce(uint32_t n) {
+	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[size - n - 1]);
+	idx_t new_prefix_idx = 0;
+	auto key = prefix[n];
+	for (idx_t i = n + 1; i < size; i++) {
+		new_prefix[new_prefix_idx++] = prefix[i];
 	}
 	prefix = move(new_prefix);
+	size -= n + 1;
+	return key;
 }
 
 void Prefix::Concatenate(uint8_t key, Prefix &other) {
-	auto new_length = Size() + 1 + other.Size();
+	auto new_length = size + 1 + other.size;
 	// have to allocate space in our prefix array
 	unique_ptr<uint8_t[]> new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_length]);
 	idx_t new_prefix_idx = 0;
 	// 1) Add the to-be deleted Node's prefix
-	for (uint32_t i = 0; i < other.Size(); i++) {
+	for (uint32_t i = 0; i < other.size; i++) {
 		new_prefix[new_prefix_idx++] = other[i];
 	}
 	// 2) now move the current key as part of the prefix
 	new_prefix[new_prefix_idx++] = key;
 	// 3) move the existing prefix (if any)
-	for (uint32_t i = 0; i < Size(); i++) {
+	for (uint32_t i = 0; i < size; i++) {
 		new_prefix[new_prefix_idx++] = prefix[i];
 	}
 	prefix = move(new_prefix);
-	D_ASSERT(new_prefix_idx == Size());
+	size = new_length;
 }
 
 void Prefix::Serialize(duckdb::MetaBlockWriter &writer) {
-	auto cur_size = Size();
-	writer.Write(cur_size);
-	for (idx_t i = 0; i < cur_size; i++) {
+	writer.Write(size);
+	for (idx_t i = 0; i < size; i++) {
 		writer.Write(prefix[i]);
 	}
 }
 
 void Prefix::Deserialize(duckdb::MetaBlockReader &reader) {
-	auto prefix_length = reader.Read<uint32_t>();
-	prefix = unique_ptr<uint8_t[]>(new uint8_t[prefix_length]);
-	for (idx_t i = 0; i < prefix_length; i++) {
+	size = reader.Read<uint32_t>();
+	prefix = unique_ptr<uint8_t[]>(new uint8_t[size]);
+	for (idx_t i = 0; i < size; i++) {
 		prefix[i] = reader.Read<uint8_t>();
 	}
 }
 
 uint32_t Prefix::KeyMismatch(Key &key, uint64_t depth) {
 	uint64_t pos;
-	auto cur_size = Size();
-	for (pos = 0; pos < cur_size; pos++) {
+	for (pos = 0; pos < size; pos++) {
 		if (key[depth + pos] != prefix[pos]) {
 			return pos;
 		}
@@ -98,8 +100,7 @@ uint32_t Prefix::KeyMismatch(Key &key, uint64_t depth) {
 }
 
 bool Prefix::EqualKey(Key &key, unsigned depth) {
-	auto prefix_length = Size();
-	for (idx_t i = 0; i < prefix_length; i++) {
+	for (idx_t i = 0; i < size; i++) {
 		if (prefix[i] != key.data[i + depth]) {
 			return false;
 		}
@@ -108,8 +109,7 @@ bool Prefix::EqualKey(Key &key, unsigned depth) {
 }
 
 bool Prefix::GTKey(Key &key, unsigned depth) {
-	auto prefix_length = Size();
-	for (idx_t i = 0; i < prefix_length; i++) {
+	for (idx_t i = 0; i < size; i++) {
 		if (prefix[i] > key.data[i + depth]) {
 			return true;
 		} else if (prefix[i] < key.data[i + depth]) {
@@ -120,8 +120,7 @@ bool Prefix::GTKey(Key &key, unsigned depth) {
 }
 
 bool Prefix::GTEKey(Key &key, unsigned depth) {
-	auto prefix_length = Size();
-	for (idx_t i = 0; i < prefix_length; i++) {
+	for (idx_t i = 0; i < size; i++) {
 		if (prefix[i] > key.data[i + depth]) {
 			return true;
 		} else if (prefix[i] < key.data[i + depth]) {

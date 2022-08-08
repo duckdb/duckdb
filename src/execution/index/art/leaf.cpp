@@ -15,7 +15,7 @@ Leaf::Leaf(Key &value, unsigned depth, row_t row_id) : Node(NodeType::NLeaf) {
 }
 
 Leaf::Leaf(unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p, Prefix &prefix_p) : Node(NodeType::NLeaf) {
-	capacity = num_elements;
+	capacity = num_elements_p;
 	row_ids = move(row_ids_p);
 	num_elements = num_elements_p;
 	prefix = prefix_p;
