@@ -314,6 +314,13 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 		}
 		if (new_set->count == relations.size()) {
 			full_plan_found = true;
+			// If we find a full plan, we need to keep track of which nodes are in the full plan.
+			// It's possible the DP algorithm updates one of these nodes, then goes on to solve
+			// the order approximately. In the approximate algorithm, it's not guaranteed that the
+			// node references are updated. If the original full plan is determined to still have
+			// the lowest cost, it's possible to get use-after-free errors.
+			// If we know a node in the full plan is updated, we can prevent ourselves from exiting the
+			// DP algorithm until the last plan updated is a full plan
 			UpdateJoinNodesInFullPlan(result);
 			if (must_update_full_plan) {
 				must_update_full_plan = false;
@@ -329,7 +336,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 bool JoinOrderOptimizer::TryEmitPair(JoinRelationSet *left, JoinRelationSet *right,
                                      const vector<NeighborInfo *> &info) {
 	pairs++;
-	// If a full plan is created, it's possible a child not gets updated. When this happens, make sure you keep
+	// If a full plan is created, it's possible a node in the plan gets updated. When this happens, make sure you keep
 	// emitting pairs until you emit another final plan. Another final plan is guaranteed to be produced because of
 	// our symmetry guarantees.
 	if (pairs >= 10000 && !must_update_full_plan) {

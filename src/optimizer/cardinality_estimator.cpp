@@ -462,23 +462,25 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
-		if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-			auto comparison_filter = (ConstantFilter &)*child_filter;
-			if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-				auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
-				auto column_count = base_stats->GetDistinctCount();
-				auto filtered_card = cardinality;
-				if (column_count > 0) {
-					// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
-					filtered_card = (cardinality + column_count - 1) / column_count;
-					cardinality_after_filters = filtered_card;
-				}
-				if (has_equality_filter) {
-					cardinality_after_filters = MinValue(filtered_card, cardinality_after_filters);
-				}
-				has_equality_filter = true;
-			}
+		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
+			continue;
 		}
+		auto comparison_filter = (ConstantFilter &)*child_filter;
+		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
+			continue;
+		}
+		auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
+		auto column_count = base_stats->GetDistinctCount();
+		auto filtered_card = cardinality;
+		if (column_count > 0) {
+			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
+			filtered_card = (cardinality + column_count - 1) / column_count;
+			cardinality_after_filters = filtered_card;
+		}
+		if (has_equality_filter) {
+			cardinality_after_filters = MinValue(filtered_card, cardinality_after_filters);
+		}
+		has_equality_filter = true;
 	}
 	return cardinality_after_filters;
 }
@@ -488,19 +490,20 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
-		if (child_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-			auto comparison_filter = (ConstantFilter &)*child_filter;
-			if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-				auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
-				auto column_count = base_stats->GetDistinctCount();
-				auto increment = MaxValue((idx_t)((cardinality + column_count - 1) / column_count), (idx_t)1);
-				if (has_equality_filter) {
-					cardinality_after_filters += increment;
-				} else {
-					cardinality_after_filters = increment;
-				}
-				has_equality_filter = true;
+		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
+			continue;
+		}
+		auto comparison_filter = (ConstantFilter &)*child_filter;
+		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
+			auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
+			auto column_count = base_stats->GetDistinctCount();
+			auto increment = MaxValue<idx_t>(((cardinality + column_count - 1) / column_count), 1);
+			if (has_equality_filter) {
+				cardinality_after_filters += increment;
+			} else {
+				cardinality_after_filters = increment;
 			}
+			has_equality_filter = true;
 		}
 	}
 	D_ASSERT(cardinality_after_filters > 0);
@@ -510,7 +513,6 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
 	idx_t cardinality_after_filters = cardinality;
 	auto catalog_table = GetCatalogTableEntry(op);
-	unordered_map<idx_t, unique_ptr<TableFilter>>::iterator it;
 	if (!catalog_table) {
 		return cardinality_after_filters;
 	}
@@ -529,7 +531,7 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 	// and there are other table filters, use default selectivity.
 	bool has_equality_filter = (cardinality_after_filters != cardinality);
 	if (!has_equality_filter && !table_filters->filters.empty()) {
-		cardinality_after_filters = MaxValue((idx_t)(cardinality * DEFAULT_SELECTIVITY), (idx_t)1);
+		cardinality_after_filters = MaxValue<idx_t>(cardinality * DEFAULT_SELECTIVITY, 1);
 	}
 	return cardinality_after_filters;
 }

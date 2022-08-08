@@ -7,6 +7,16 @@
 
 namespace duckdb {
 
+LogicalOperator::LogicalOperator(LogicalOperatorType type) : type(type) {
+}
+
+LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
+    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+}
+
+LogicalOperator::~LogicalOperator() {
+}
+
 vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
 	return {ColumnBinding(0, 0)};
 }

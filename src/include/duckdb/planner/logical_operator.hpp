@@ -9,10 +9,9 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/optimizer/join_node.hpp"
+#include "duckdb/optimizer/estimated_properties.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding.hpp"
@@ -26,14 +25,9 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	explicit LogicalOperator(LogicalOperatorType type)
-	    : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
-	}
-	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-	    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
-	}
-	virtual ~LogicalOperator() {
-	}
+	explicit LogicalOperator(LogicalOperatorType type);
+	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
+	virtual ~LogicalOperator();
 
 	//! The type of the logical operator
 	LogicalOperatorType type;

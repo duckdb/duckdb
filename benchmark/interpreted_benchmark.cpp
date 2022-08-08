@@ -145,7 +145,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 			extensions.insert(splits[1]);
 		} else if (splits[0] == "connect") {
 			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("connect reqiures a database path"));
+				throw std::runtime_error(reader.FormatException("connect requires a database path"));
 			}
 			db_path = (splits[1]);
 		} else if (splits[0] == "cache") {
