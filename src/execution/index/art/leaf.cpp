@@ -1,26 +1,24 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 #include <cstring>
 
 namespace duckdb {
 
-Leaf::Leaf(Key &value, unsigned depth, row_t row_id) : Node(NodeType::NLeaf, value.len - depth) {
+Leaf::Leaf(Key &value, unsigned depth, row_t row_id) : Node(NodeType::NLeaf) {
 	capacity = 1;
 	row_ids = unique_ptr<row_t[]>(new row_t[capacity]);
 	row_ids[0] = row_id;
 	num_elements = 1;
-	for (idx_t i = depth; i < value.len; i++) {
-		prefix[i - depth] = value.data[i];
-	}
+	prefix = Prefix(value, depth, value.len - depth);
 }
 
-Leaf::Leaf(unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p, unique_ptr<data_t[]> prefix_p)
-    : Node(NodeType::NLeaf, 0) {
+Leaf::Leaf(unique_ptr<row_t[]> row_ids_p, idx_t num_elements_p, Prefix &prefix_p) : Node(NodeType::NLeaf) {
 	capacity = num_elements;
 	row_ids = move(row_ids_p);
 	num_elements = num_elements_p;
-	prefix = move(prefix_p);
+	prefix = prefix_p;
 }
 
 void Leaf::Insert(row_t row_id) {
@@ -52,16 +50,14 @@ BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 }
 
 Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
-	unique_ptr<data_t[]> prefix = unique_ptr<data_t[]>(new data_t[prefix_length]);
-	for (idx_t i = 0; i < prefix_length; i++) {
-		prefix[i] = reader.Read<data_t>();
-	}
+	Prefix prefix;
+	prefix.Deserialize(reader);
 	auto num_elements = reader.Read<idx_t>();
 	auto elements = unique_ptr<row_t[]>(new row_t[num_elements]);
 	for (idx_t i = 0; i < num_elements; i++) {
 		elements[i] = reader.Read<row_t>();
 	}
-	return new Leaf(move(elements), num_elements, move(prefix));
+	return new Leaf(move(elements), num_elements, prefix);
 }
 
 void Leaf::Remove(row_t row_id) {

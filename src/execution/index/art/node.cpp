@@ -4,10 +4,7 @@
 #include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 namespace duckdb {
 
-Node::Node(NodeType type, size_t compressed_prefix_size) : count(0), type(type), prefix(compressed_prefix_size) {
-}
-
-Node::Node(NodeType type) : count(0), type(type), prefix(0) {
+Node::Node(NodeType type) : count(0), type(type) {
 }
 
 // LCOV_EXCL_START

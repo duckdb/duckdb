@@ -17,7 +17,7 @@ class Leaf : public Node {
 public:
 	Leaf(Key &value, unsigned depth, row_t row_id);
 
-	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, unique_ptr<data_t[]> prefix);
+	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
 	idx_t capacity;
 	idx_t num_elements;
 

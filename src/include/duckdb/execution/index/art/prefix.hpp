@@ -5,20 +5,33 @@
 //
 //
 //===----------------------------------------------------------------------===//
+#pragma once
 
 #include "duckdb/execution/index/art/node.hpp"
+
 namespace duckdb {
 class Prefix {
 public:
-	explicit Prefix(uint32_t prefix_length);
+	Prefix();
+	// Prefix created from key starting on `depth`.
+	Prefix(Key &key, uint32_t depth, uint32_t size);
 
 	// Returns the Prefix's size
-	uint32_t Size();
+	uint32_t Size() const;
 
 	// Subscript operator
 	uint8_t &operator[](idx_t idx);
-	// Assing operator
-	void operator=(Prefix &src);
+
+	// Assign operator
+	Prefix &operator=(const Prefix &src);
+
+	// Move operator
+	Prefix &operator=(Prefix &&other) noexcept;
+
+	// Concatenate Prefix with a key and another prefix
+	// Used when deleting a Node.
+	// other.prefix + key + this->Prefix
+	void Concatenate(uint8_t key, Prefix &other);
 	// Reduces the prefix in n elements
 	void Reduce(uint32_t n);
 	// Serializes Prefix

@@ -13,7 +13,6 @@ namespace duckdb {
 
 class Node16 : public Node {
 public:
-	explicit Node16(size_t compression_length);
 	explicit Node16();
 	uint8_t key[16];
 	SwizzleablePointer children[16];

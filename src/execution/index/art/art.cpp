@@ -49,7 +49,7 @@ ART::~ART() {
 
 bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
 	auto leaf = static_cast<Leaf *>(node);
-	return leaf->EqualKey(key, depth);
+	return leaf->prefix.EqualKey(key, depth);
 }
 
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, Value value,
@@ -304,21 +304,20 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 		auto &leaf_prefix = leaf->prefix;
 		uint32_t new_prefix_length = 0;
 		// Leaf node is already there, update row_id vector
-		if (new_prefix_length == leaf->prefix_length && depth + leaf->prefix_length == key.len) {
+		if (new_prefix_length == leaf->prefix.Size() && depth + leaf->prefix.Size() == key.len) {
 			return InsertToLeaf(*leaf, row_id);
 		}
 		while (leaf_prefix[new_prefix_length] == key[depth + new_prefix_length]) {
 			new_prefix_length++;
 			// Leaf node is already there, update row_id vector
-			if (new_prefix_length == leaf->prefix_length && depth + leaf->prefix_length == key.len) {
+			if (new_prefix_length == leaf->prefix.Size() && depth + leaf->prefix.Size() == key.len) {
 				return InsertToLeaf(*leaf, row_id);
 			}
 		}
 
-		Node *new_node = new Node4(new_prefix_length);
-		new_node->prefix_length = new_prefix_length;
-		memcpy(new_node->prefix.get(), &key[depth], new_prefix_length);
-		node->ReducePrefix(new_prefix_length);
+		Node *new_node = new Node4();
+		new_node->prefix = Prefix(key, depth, new_prefix_length);
+		node->prefix.Reduce(new_prefix_length);
 		Node4::Insert(new_node, leaf_prefix[new_prefix_length], node);
 		Node *leaf_node = new Leaf(*value, new_prefix_length, row_id);
 		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
@@ -327,23 +326,21 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 	}
 
 	// Handle prefix of inner node
-	if (node->prefix_length) {
-		uint32_t mismatch_pos = Node::PrefixMismatch(node, key, depth);
-		if (mismatch_pos != node->prefix_length) {
+	if (node->prefix.Size()) {
+		uint32_t mismatch_pos = node->prefix.KeyMismatch(key, depth);
+		if (mismatch_pos != node->prefix.Size()) {
 			// Prefix differs, create new node
-			Node *new_node = new Node4(mismatch_pos);
-			new_node->prefix_length = mismatch_pos;
-			memcpy(new_node->prefix.get(), node->prefix.get(), mismatch_pos);
+			Node *new_node = new Node4();
+			new_node->prefix = Prefix(key, depth, mismatch_pos);
 			// Break up prefix
 			Node4::Insert(new_node, node->prefix[mismatch_pos], node);
-			node->prefix_length -= (mismatch_pos + 1);
-			memmove(node->prefix.get(), node->prefix.get() + mismatch_pos + 1, node->prefix_length);
-			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + node->prefix_length, row_id);
+			node->prefix.Reduce(mismatch_pos + 1);
+			Node *leaf_node = new Leaf(*value, depth + mismatch_pos + node->prefix.Size(), row_id);
 			Node4::Insert(new_node, key[depth + mismatch_pos], leaf_node);
 			node = new_node;
 			return true;
 		}
-		depth += node->prefix_length;
+		depth += node->prefix.Size();
 	}
 
 	// Recurse
@@ -414,11 +411,11 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 	}
 
 	// Handle prefix
-	if (node->prefix_length) {
-		if (Node::PrefixMismatch(node, key, depth) != node->prefix_length) {
+	if (node->prefix.Size()) {
+		if (node->prefix.KeyMismatch(key, depth) != node->prefix.Size()) {
 			return;
 		}
-		depth += node->prefix_length;
+		depth += node->prefix.Size();
 	}
 	idx_t pos = node->GetChildPos(key[depth]);
 	if (pos != DConstants::INVALID_INDEX) {
@@ -510,20 +507,20 @@ Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
 			auto leaf = (Leaf *)node;
 			auto &leaf_prefix = leaf->prefix;
 			//! Check leaf
-			for (idx_t i = 0; i < leaf->prefix_length; i++) {
+			for (idx_t i = 0; i < leaf->prefix.Size(); i++) {
 				if (leaf_prefix[i] != key[i + depth]) {
 					return nullptr;
 				}
 			}
 			return node;
 		}
-		if (node->prefix_length) {
-			for (idx_t pos = 0; pos < node->prefix_length; pos++) {
+		if (node->prefix.Size()) {
+			for (idx_t pos = 0; pos < node->prefix.Size(); pos++) {
 				if (key[depth + pos] != node->prefix[pos]) {
 					return nullptr;
 				}
 			}
-			depth += node->prefix_length;
+			depth += node->prefix.Size();
 		}
 		idx_t pos = node->GetChildPos(key[depth]);
 		if (pos == DConstants::INVALID_INDEX) {
@@ -546,11 +543,11 @@ bool ART::IteratorScan(ARTIndexScanState *state, Iterator *it, Key *bound, idx_t
 		if (HAS_BOUND) {
 			D_ASSERT(bound);
 			if (INCLUSIVE) {
-				if (it->node->GTKey(*bound, it->depth)) {
+				if (it->node->prefix.GTKey(*bound, it->depth)) {
 					break;
 				}
 			} else {
-				if (it->node->GTEKey(*bound, it->depth)) {
+				if (it->node->prefix.GTEKey(*bound, it->depth)) {
 					break;
 				}
 			}
@@ -637,7 +634,7 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 			it.node = leaf;
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key
-			if (leaf->EqualKey(key, depth)) {
+			if (leaf->prefix.EqualKey(key, depth)) {
 				// if it's not inclusive check if there is a next leaf
 				if (!inclusive && !IteratorNext(it)) {
 					return false;
@@ -646,29 +643,29 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 				}
 			}
 
-			if (leaf->GTKey(key, depth)) {
+			if (leaf->prefix.GTKey(key, depth)) {
 				return true;
 			}
 			// Leaf is lower than key
 			// Check if next leaf is still lower than key
 			while (IteratorNext(it)) {
 
-				if (leaf->EqualKey(key, depth)) {
+				if (leaf->prefix.EqualKey(key, depth)) {
 					// if its not inclusive check if there is a next leaf
 					if (!inclusive && !IteratorNext(it)) {
 						return false;
 					} else {
 						return true;
 					}
-				} else if (leaf->GTKey(key, depth)) {
+				} else if (leaf->prefix.GTKey(key, depth)) {
 					// if its not inclusive check if there is a next leaf
 					return true;
 				}
 			}
 			return false;
 		}
-		uint32_t mismatch_pos = Node::PrefixMismatch(node, key, depth);
-		if (mismatch_pos != node->prefix_length) {
+		uint32_t mismatch_pos = node->prefix.KeyMismatch(key, depth);
+		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
 				it.depth--;
@@ -680,7 +677,7 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 			}
 		}
 		// prefix matches, search inside the child for the key
-		depth += node->prefix_length;
+		depth += node->prefix.Size();
 
 		top.pos = node->GetChildGreaterEqual(key[depth], equal);
 		if (top.pos == DConstants::INVALID_INDEX) {
@@ -763,7 +760,7 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 		// first find the minimum value in the ART: we start scanning from this value
 		auto &minimum = FindMinimum(state->iterator, *tree);
 		// early out min value higher than upper bound query
-		if (minimum.GTKey(*upper_bound, it->depth)) {
+		if (minimum.prefix.GTKey(*upper_bound, it->depth)) {
 			return true;
 		}
 		it->start = true;
