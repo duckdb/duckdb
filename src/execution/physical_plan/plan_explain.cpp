@@ -1,8 +1,9 @@
-#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
 #include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
 #include "duckdb/common/tree_renderer.hpp"
 
@@ -35,9 +36,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	}
 
-	// create a ChunkCollection from the output
+	// create a ColumnDataCollection from the output
 	auto &allocator = Allocator::Get(context);
-	auto collection = make_unique<ChunkCollection>(allocator);
+	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
+	auto collection =
+	    make_unique<ColumnDataCollection>(context, plan_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 
 	DataChunk chunk;
 	chunk.Initialize(allocator, op.types);
@@ -54,7 +57,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 
 	// create a chunk scan to output the result
 	auto chunk_scan =
-	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, op.estimated_cardinality);
+	    make_unique<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
 	chunk_scan->owned_collection = move(collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return move(chunk_scan);

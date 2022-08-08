@@ -835,11 +835,11 @@ protected:
 	}
 };
 
-void LogicalType::SetAlias(string &alias) {
+void LogicalType::SetAlias(string alias) {
 	if (!type_info_) {
-		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, alias);
+		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, move(alias));
 	} else {
-		type_info_->alias = alias;
+		type_info_->alias = move(alias);
 	}
 }
 
@@ -849,6 +849,13 @@ string LogicalType::GetAlias() const {
 	} else {
 		return type_info_->alias;
 	}
+}
+
+bool LogicalType::HasAlias() const {
+	if (!type_info_) {
+		return false;
+	}
+	return !type_info_->alias.empty();
 }
 
 void LogicalType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {

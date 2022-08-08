@@ -98,11 +98,10 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(Allocator &allocator) {
-		buffer = make_unique<ChunkCollection>(allocator);
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
 	}
 
-	unique_ptr<ChunkCollection> buffer;
+	ColumnDataCollection buffer;
 };
 
 class ParquetScanFunction {
@@ -531,12 +530,12 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 
 	// append data to the local (buffered) chunk collection
-	local_state.buffer->Append(input);
-	if (local_state.buffer->Count() > bind_data.row_group_size) {
+	local_state.buffer.Append(input);
+	if (local_state.buffer.Count() > bind_data.row_group_size) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
-		global_state.writer->Flush(*local_state.buffer);
+		global_state.writer->Flush(local_state.buffer);
 		// and reset the buffer
-		local_state.buffer = make_unique<ChunkCollection>(Allocator::Get(context.client));
+		local_state.buffer.Reset();
 	}
 }
 
@@ -545,7 +544,7 @@ void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, Glo
 	auto &global_state = (ParquetWriteGlobalState &)gstate;
 	auto &local_state = (ParquetWriteLocalState &)lstate;
 	// flush any data left in the local state to the file
-	global_state.writer->Flush(*local_state.buffer);
+	global_state.writer->Flush(local_state.buffer);
 }
 
 void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
@@ -554,8 +553,9 @@ void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, Globa
 	global_state.writer->Finalize();
 }
 
-unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
-	return make_unique<ParquetWriteLocalState>(Allocator::Get(context.client));
+unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
+	auto &bind_data = (ParquetWriteBindData &)bind_data_p;
+	return make_unique<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
 unique_ptr<TableFunctionRef> ParquetScanReplacement(ClientContext &context, const string &table_name,

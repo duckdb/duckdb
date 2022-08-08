@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 class Pipeline;
@@ -21,7 +22,7 @@ public:
 	~PhysicalRecursiveCTE() override;
 
 	bool union_all;
-	std::shared_ptr<ChunkCollection> working_table;
+	std::shared_ptr<ColumnDataCollection> working_table;
 	vector<shared_ptr<Pipeline>> pipelines;
 
 public:

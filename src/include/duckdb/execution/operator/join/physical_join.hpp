@@ -27,7 +27,6 @@ public:
 	static void ConstructAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
 	                                    bool has_null);
-	static void ConstructLeftJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 
 public:
 	static void BuildJoinPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state,

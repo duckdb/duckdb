@@ -14,6 +14,7 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -122,12 +123,15 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	ChunkCollection collection(*context);
+	if (chunk.size() == 0) {
+		return;
+	}
+	ColumnDataCollection collection(Allocator::Get(*context), chunk.GetTypes());
 	collection.Append(chunk);
 	Append(description, collection);
 }
 
-void Connection::Append(TableDescription &description, ChunkCollection &collection) {
+void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {
 	context->Append(description, collection);
 }
 
