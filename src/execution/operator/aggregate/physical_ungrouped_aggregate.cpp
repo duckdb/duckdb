@@ -29,7 +29,7 @@ void DistinctAggregateData::Initialize(vector<unique_ptr<Expression>> &aggregate
 		}
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[aggr_idx] = make_unique<GroupedAggregateData>();
-		grouped_aggregate_data[aggr_idx]->InitializeDistinct(aggregates[aggr_idx]->Copy());
+		grouped_aggregate_data[aggr_idx]->InitializeDistinct(aggregates[aggr_idx]);
 		radix_tables[aggr_idx] =
 		    make_unique<RadixPartitionedHashTable>(grouping_sets[aggr_idx], *grouped_aggregate_data[aggr_idx]);
 	}
@@ -138,7 +138,6 @@ public:
 			for (auto &child_p : aggregate.children) {
 				chunk_types.push_back(child_p->return_type);
 			}
-			chunk_types.push_back(aggregate.return_type);
 			distinct_output_chunks[i] = make_unique<DataChunk>();
 			distinct_output_chunks[i]->Initialize(client, chunk_types);
 		}
@@ -390,17 +389,19 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 		radix_table_p->GetData(temp_exec_context, intermediate_chunk, *gstate.radix_states[i], *global_source_state,
 		                       *local_source_state);
 
+		SelectionVector sel_vec;
+		payload_chunk.Slice(intermediate_chunk, sel_vec, intermediate_chunk.size(), payload_idx);
+
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
 			auto &filtered_data = gstate.execution_data->filter_set.GetFilterData(i);
-			auto count = filtered_data.ApplyFilter(intermediate_chunk);
+			auto count = filtered_data.ApplyFilter(payload_chunk);
 
 			gstate.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
-			gstate.execution_data->child_executor.SetChunk(intermediate_chunk);
-			payload_chunk.SetCardinality(intermediate_chunk);
+			gstate.execution_data->child_executor.SetChunk(payload_chunk);
 		}
 
 #ifdef DEBUG
@@ -426,7 +427,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 		aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt, gstate.state.aggregates[i].get(),
 		                                 payload_chunk.size());
 
-		intermediate_chunk.Reset();
+		payload_chunk.Reset();
 	}
 	D_ASSERT(!gstate.finished);
 	gstate.finished = true;
