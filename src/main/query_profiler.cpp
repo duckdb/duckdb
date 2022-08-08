@@ -47,6 +47,9 @@ QueryProfiler &QueryProfiler::Get(ClientContext &context) {
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze, bool start_at_optimizer) {
+	if (is_explain_analyze) {
+		StartExplainAnalyze();
+	}
 	if (!IsEnabled()) {
 		return;
 	}
@@ -58,9 +61,6 @@ void QueryProfiler::StartQuery(string query, bool is_explain_analyze, bool start
 		// Called while already running: this should only happen when we print optimizer output
 		D_ASSERT(PrintOptimizerOutput());
 		return;
-	}
-	if (is_explain_analyze) {
-		StartExplainAnalyze();
 	}
 	this->running = true;
 	this->query = move(query);
