@@ -23,7 +23,9 @@ string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = fs.GetHomeDirectory(FileSystem::GetFileOpener(context));
 	if (!fs.DirectoryExists(local_path)) {
-		throw InternalException("Can't find the home directory at " + local_path);
+		throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
+		                  "home_directory='/path/to/dir' option.",
+		                  local_path);
 	}
 	auto path_components = PathComponents();
 	for (auto &path_ele : path_components) {
