@@ -126,9 +126,11 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	auto result_count = ArrowUtil::FetchChunk(&result, my_stream->batch_size, out);
-	if (!result.success) {
-		my_stream->last_error = result.GetError();
+	idx_t result_count;
+	string error;
+	if (!ArrowUtil::TryFetchChunk(&result, my_stream->batch_size, out, result_count, error)) {
+		D_ASSERT(!error.empty());
+		my_stream->last_error = error;
 		return -1;
 	}
 	if (result_count == 0) {
@@ -171,25 +173,17 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 }
 
-unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
-	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
-		if (!stream_result.IsOpen()) {
-			return nullptr;
-		}
-	}
-	auto chunk = result.Fetch();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
-	}
-	return chunk;
-}
-
-idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out) {
-	idx_t count = 0;
+bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count, string &error) {
+	count = 0;
 	ArrowAppender appender(result->types, chunk_size);
 	while (count < chunk_size) {
-		auto data_chunk = FetchNext(*result);
+		unique_ptr<DataChunk> data_chunk;
+		if (!result->TryFetch(data_chunk, error)) {
+			if (!result->success) {
+				error = result->error;
+			}
+			return false;
+		}
 		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
@@ -199,7 +193,16 @@ idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *o
 	if (count > 0) {
 		*out = appender.Finalize();
 	}
-	return count;
+	return true;
+}
+
+idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out) {
+	string error;
+	idx_t result_count;
+	if (!TryFetchChunk(result, chunk_size, out, result_count, error)) {
+		throw std::runtime_error(error);
+	}
+	return result_count;
 }
 
 } // namespace duckdb

@@ -55,9 +55,11 @@ public:
 
 class ArrowUtil {
 public:
+	static bool TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &result_count,
+	                          string &error);
 	static idx_t FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out);
 
 private:
-	static unique_ptr<DataChunk> FetchNext(QueryResult &result);
+	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, string &error);
 };
 } // namespace duckdb
