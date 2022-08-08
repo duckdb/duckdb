@@ -30,12 +30,12 @@ public:
 public:
 	//! Apply bitmask on the highest bits, and right shift to get a number between 0 and NUM_PARTITIONS
 	static inline hash_t ApplyMask(hash_t hash) {
-		return (hash & mask) >> (sizeof(hash_t) * 8 - NUM_RADIX_BITS);
+		return (hash & MASK) >> (sizeof(hash_t) * 8 - NUM_RADIX_BITS);
 	}
 
 private:
 	//! Bitmask of the highest bits
-	static constexpr const hash_t mask = hash_t(-1) ^ ((hash_t(1) << (sizeof(hash_t) * 8 - NUM_RADIX_BITS)) - 1);
+	static constexpr const hash_t MASK = hash_t(-1) ^ ((hash_t(1) << (sizeof(hash_t) * 8 - NUM_RADIX_BITS)) - 1);
 };
 
 //! Generic radix partitioning functions

@@ -11,8 +11,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-#include <iostream>
-
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -394,7 +392,6 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
-//		std::cout << "Sinking into: " << state.local_sink_ht << std::endl;
 		if (state.local_sink_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
 			// Swizzle data collected so far (if needed)
 			state.local_sink_ht->SwizzleBlocks();
@@ -533,7 +530,6 @@ void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState
 			if (sink.local_hash_tables.empty()) {
 				continue;
 			}
-//			std::cout << "Partitioning: " << sink.local_hash_tables.back().get() << std::endl;
 			local_ht = move(sink.local_hash_tables.back());
 			sink.local_hash_tables.pop_back();
 		}
