@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/csv_home_directory.test
 # description: CSV writer home directory
-# group: [writer]
+# group: [csv]
 
 statement ok
 PRAGMA enable_verification
