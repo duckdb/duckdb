@@ -230,12 +230,13 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
                                                 LocalSinkState &lstate, DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
-	idx_t payload_idx = 0, payload_expr_idx = 0;
 	sink.Reset();
 
 	DataChunk &payload_chunk = sink.execution_data->payload_chunk;
 
+	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
+
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
@@ -274,16 +275,16 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-				sink.execution_data->child_executor.ExecuteExpression(payload_expr_idx,
+				sink.execution_data->child_executor.ExecuteExpression(payload_idx + payload_cnt,
 				                                                      payload_chunk.data[payload_idx + payload_cnt]);
-				payload_expr_idx++;
 				payload_cnt++;
 			}
 		}
 
+		auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
 		AggregateInputData aggr_input_data(aggregate.bind_info.get());
-		aggregate.function.simple_update(payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx], aggr_input_data,
-		                                 payload_cnt, sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
+		aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
+		                                 sink.state.aggregates[aggr_idx].get(), payload_chunk.size());
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -363,7 +364,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 	//  Or create multiple intermediary chunks
 	//  Or create the chunks in such a way that it corresponds to the radixHT's localstate scan_chunk
 
-	for (idx_t i = 0; i < distinct_aggregate_data.radix_tables.size(); i++) {
+	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &radix_table_p = distinct_aggregate_data.radix_tables[i];
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
@@ -389,8 +390,10 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 		radix_table_p->GetData(temp_exec_context, intermediate_chunk, *gstate.radix_states[i], *global_source_state,
 		                       *local_source_state);
 
-		SelectionVector sel_vec;
-		payload_chunk.Slice(intermediate_chunk, sel_vec, intermediate_chunk.size(), payload_idx);
+		for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
+			payload_chunk.data[payload_idx + child_idx].Reference(intermediate_chunk.data[child_idx]);
+		}
+		payload_chunk.SetCardinality(intermediate_chunk);
 
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)

@@ -95,10 +95,10 @@ public:
 			auto &child = aggr.children[i];
 			group_types.push_back(child->return_type);
 			payload_types.push_back(child->return_type);
-			if (aggr.filter) {
-				payload_types_filters.push_back(aggr.filter->return_type);
-			}
 			groups.push_back(child->Copy());
+		}
+		if (aggr.filter) {
+			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
