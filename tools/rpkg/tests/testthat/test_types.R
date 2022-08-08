@@ -1,4 +1,6 @@
 test_that("test_all_types() output", {
+  skip_on_os("windows")
+
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
