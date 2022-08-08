@@ -26,6 +26,8 @@
   },
   "devDependencies": {
     "aws-sdk": "^2.790.0",
+    "chai": "^4.3.6",
+    "jsdoc3-parser": "^2.0.0",
     "mocha": "^8.3.0"
   },
   "repository": {
