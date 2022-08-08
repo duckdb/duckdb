@@ -265,6 +265,17 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	return result;
 }
 
+static bool IsExplainAnalyze(SQLStatement *statement) {
+	if (!statement) {
+		return false;
+	}
+	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
+		return false;
+	}
+	auto &explain = (ExplainStatement &)*statement;
+	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
+}
+
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
                                                                          unique_ptr<SQLStatement> statement,
                                                                          vector<Value> *values) {
@@ -272,6 +283,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	if (values) {
@@ -561,17 +573,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *res
 		return false;
 	}
 	return active_query->open_result == result;
-}
-
-static bool IsExplainAnalyze(SQLStatement *statement) {
-	if (!statement) {
-		return false;
-	}
-	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
-		return false;
-	}
-	auto &explain = (ExplainStatement &)*statement;
-	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
