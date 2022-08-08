@@ -172,9 +172,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 // Alter column to add new constraint
 DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Constraint> constraint)
-    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
-	// prevent any tuples from being added to the parent
-	lock_guard<mutex> lock(append_lock);
+    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), row_groups(parent.row_groups),
+      is_root(true) {
+
+	lock_guard<mutex> parent_lock(parent.append_lock);
 	for (auto &column_def : parent.column_definitions) {
 		column_definitions.emplace_back(column_def.Copy());
 	}
@@ -189,7 +190,6 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, unique_ptr<Const
 	auto &transaction = Transaction::GetTransaction(context);
 	transaction.storage.MoveStorage(&parent, this);
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
-	row_groups = parent.row_groups;
 	parent.is_root = false;
 }
 
@@ -638,27 +638,27 @@ void DataTable::VerifyNewConstraint(ClientContext &context, DataTable &parent, c
 	auto &allocator = Allocator::Get(context);
 	scan_chunk.Initialize(allocator, scan_types);
 
+	CreateIndexScanState state;
+	vector<column_t> cids;
+	cids.push_back(not_null_constraint.index);
+	// Use ScanCreateIndex to scan the latest committed data
+	InitializeCreateIndexScan(state, cids);
+	while (true) {
+		scan_chunk.Reset();
+		ScanCreateIndex(state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		if (scan_chunk.size() == 0) {
+			break;
+		}
+		// Check constraint
+		if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
+			throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
+			                          column_definitions[not_null_constraint.index].GetName());
+		}
+	}
+
 	TableScanState scan_state;
 	scan_state.column_ids.push_back(not_null_constraint.index);
 	scan_state.max_row = total_rows;
-	auto current_row_group = (RowGroup *)parent.row_groups->GetRootSegment();
-
-	while (current_row_group) {
-		current_row_group->InitializeScan(scan_state.row_group_scan_state);
-		while (true) {
-			scan_chunk.Reset();
-			current_row_group->Scan(transaction, scan_state.row_group_scan_state, scan_chunk);
-			if (scan_chunk.size() == 0) {
-				break;
-			}
-			// Check constraint
-			if (VectorOperations::HasNull(scan_chunk.data[0], scan_chunk.size())) {
-				throw ConstraintException("NOT NULL constraint failed: %s.%s", info->table,
-				                          column_definitions[not_null_constraint.index].GetName());
-			}
-		}
-		current_row_group = (RowGroup *)current_row_group->next.get();
-	}
 
 	// For local storage
 	transaction.storage.InitializeScan(&parent, scan_state.local_state, nullptr);

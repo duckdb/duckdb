@@ -87,7 +87,7 @@ statement ok
 INSERT INTO t VALUES(2, 2)
 
 statement ok
-ALTER TABLE t ALTER COLUMN j DROP NOT NULL 
+ALTER TABLE t ALTER COLUMN j DROP NOT NULL
 
 statement ok
 INSERT INTO t values(3, NULL)
@@ -221,3 +221,41 @@ COMMIT
 statement ok
 INSERT INTO t VALUES(NULL)
 
+mode skip
+# Scenario #5, Insert null, delete null locally, then alter
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t SELECT 1,1 FROM RANGE(1024) 
+
+# Insert null
+statement ok
+INSERT INTO t VALUES(2,NULL)
+
+statement ok
+BEGIN TRANSACTION
+
+# Delete null locally
+statement ok
+DELETE FROM t WHERE i = 2
+
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+statement error
+INSERT INTO t VALUES(3, NULL)
+
+# NO null values
+query I
+SELECT COUNT(*) FROM t WHERE j IS NULL
+----
+0
+
+mode unskip
