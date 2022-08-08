@@ -55,6 +55,7 @@ Suggests:
     DBItest,
     dplyr,
     dbplyr,
+    rlang,
     testthat,
     tibble,
     vctrs,
