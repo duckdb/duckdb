@@ -23,7 +23,7 @@ BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr
 }
 
 string ConstantBinder::UnsupportedAggregateMessage() {
-	return clause + "cannot contain aggregates!";
+	return clause + " cannot contain aggregates!";
 }
 
 } // namespace duckdb
