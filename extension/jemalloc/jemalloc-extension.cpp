@@ -16,16 +16,16 @@ std::string JEMallocExtension::Name() {
 
 data_ptr_t JEMallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
 	return (data_ptr_t)duckdb_jemalloc::je_malloc(size);
-};
+}
 
 void JEMallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 	duckdb_jemalloc::je_free(pointer);
-};
+}
 
 data_ptr_t JEMallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                          idx_t size) {
 	return (data_ptr_t)duckdb_jemalloc::je_realloc(pointer, size);
-};
+}
 
 } // namespace duckdb
 
