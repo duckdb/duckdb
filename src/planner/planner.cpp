@@ -58,7 +58,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = parameters_resolved;
 
-	VerifyPlan(plan);
+	Planner::VerifyPlan(context, plan);
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
@@ -121,24 +121,36 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 }
 
-void Planner::VerifyPlan(unique_ptr<LogicalOperator> &op) {
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op) {
 	if (!op || !ClientConfig::GetConfig(context).query_verification_enabled) {
 		return;
 	}
 	//! SELECT only for now
-	if (!properties.read_only) {
-		return;
-	}
 	switch(op->type) {
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_PREPARE:
 	case LogicalOperatorType::LOGICAL_EXECUTE:
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+	case LogicalOperatorType::LOGICAL_DROP:
+	case LogicalOperatorType::LOGICAL_PRAGMA:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
 		// unsupported (for now)
 		return;
 	default:
 		break;
 	}
 	BufferedSerializer serializer;
-	plan->Serialize(serializer);
+	op->Serialize(serializer);
 
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);

@@ -25,8 +25,6 @@ class Planner {
 public:
 	explicit Planner(ClientContext &context);
 
-	void CreatePlan(unique_ptr<SQLStatement> statement);
-
 	unique_ptr<LogicalOperator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
@@ -38,9 +36,12 @@ public:
 
 	StatementProperties properties;
 
+public:
+	void CreatePlan(unique_ptr<SQLStatement> statement);
+	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op);
+
 private:
 	void CreatePlan(SQLStatement &statement);
 	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
-	void VerifyPlan(unique_ptr<LogicalOperator> &op);
 };
 } // namespace duckdb
