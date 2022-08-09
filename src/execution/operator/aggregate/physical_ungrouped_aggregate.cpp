@@ -142,31 +142,45 @@ struct AggregateExecutionData {
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
-	SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates,
+	SimpleAggregateGlobalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
 	                           const DistinctAggregateData &distinct_data, ClientContext &client)
 	    : state(aggregates), finished(false) {
 		auto &distinct_indices = distinct_data.Indices();
 		if (distinct_indices.empty()) {
 			return;
 		}
+
 		auto aggregate_cnt = aggregates.size();
 		distinct_output_chunks.resize(aggregate_cnt);
 		radix_states.resize(aggregate_cnt);
 
-		for (auto &idx : distinct_indices) {
-			auto &radix_table = *distinct_data.radix_tables[idx];
-			radix_states[idx] = radix_table.GetGlobalSinkState(client);
+		execution_data = make_unique<AggregateExecutionData>(allocator);
+		vector<LogicalType> payload_types;
+		for (idx_t i = 0; i < aggregates.size(); i++) {
+			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
 
-			auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
+			// Initialize the child executor and get the payload types for every aggregate
+			for (auto &child : aggregate.children) {
+				payload_types.push_back(child->return_type);
+				execution_data->child_executor.AddExpression(*child);
+			}
+			if (!aggregate.distinct) {
+				continue;
+			}
+
+			auto &radix_table = *distinct_data.radix_tables[i];
+			radix_states[i] = radix_table.GetGlobalSinkState(client);
+
 			vector<LogicalType> chunk_types;
 			for (auto &child_p : aggregate.children) {
 				chunk_types.push_back(child_p->return_type);
 			}
 
 			// This is used in Finalize to get the data from the radix table
-			distinct_output_chunks[idx] = make_unique<DataChunk>();
-			distinct_output_chunks[idx]->Initialize(client, chunk_types);
+			distinct_output_chunks[i] = make_unique<DataChunk>();
+			distinct_output_chunks[i]->Initialize(client, chunk_types);
 		}
+		execution_data->payload_chunk.Initialize(allocator, payload_types);
 	}
 
 	//! The lock for updating the global aggregate state
@@ -246,7 +260,8 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SimpleAggregateGlobalState>(aggregates, distinct_aggregate_data, context);
+	return make_unique<SimpleAggregateGlobalState>(Allocator::Get(context), aggregates, distinct_aggregate_data,
+	                                               context);
 }
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
@@ -398,18 +413,11 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &source.execution_data->child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
-
-	if (distinct_aggregate_data.AnyDistinct() && !gstate.execution_data) {
-		// there are distinct aggregates, and we have not stolen execution_data from a thread yet
-		// which we'll need to perform the aggregations in Finalize
-		gstate.execution_data = move(source.execution_data);
-	}
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
                                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
-	//! Verify that we have stolen execution data, because we'll need it here
 	D_ASSERT(gstate.execution_data);
 	auto &payload_chunk = gstate.execution_data->payload_chunk;
 
@@ -418,11 +426,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
-
-	// TODO:
-	//  Create a selection vector to Slice the intermediary chunk into only the part we need
-	//  Or create multiple intermediary chunks
-	//  Or create the chunks in such a way that it corresponds to the radixHT's localstate scan_chunk
 
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &radix_table_p = distinct_aggregate_data.radix_tables[i];
@@ -470,9 +473,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 			// resolve the child expressions of the aggregate (if any)
 			if (!aggregate.children.empty()) {
 				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); ++child_idx) {
-					// TODO: change 'distinct_output_chunks' to a single chunk, or change the expression executor's
-					// internal list of expressions the Vector in the chunk that is loaded into the expression_executor
-					// has to match the expression_idx that is provided here
 					gstate.execution_data->child_executor.ExecuteExpression(
 					    payload_idx + payload_cnt, payload_chunk.data[payload_idx + payload_cnt]);
 					payload_cnt++;
