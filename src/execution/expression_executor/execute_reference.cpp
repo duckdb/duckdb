@@ -14,7 +14,7 @@ void ExpressionExecutor::Execute(const BoundReferenceExpression &expr, Expressio
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	D_ASSERT(expr.index != DConstants::INVALID_INDEX);
 	D_ASSERT(expr.index < chunk->ColumnCount());
-	//Input Vector and result Vector should not be the same
+	// Input Vector and result Vector should not be the same
 	D_ASSERT(chunk->data[expr.index].GetAuxiliary() != result.GetAuxiliary());
 	D_ASSERT(chunk->data[expr.index].GetBuffer() != result.GetBuffer());
 	if (sel) {
