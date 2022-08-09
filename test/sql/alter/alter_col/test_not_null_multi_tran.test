@@ -1,0 +1,243 @@
+# name: test/sql/alter/alter_col/test_not_null_multi_tran.test
+# description: Test Set/Drop NOT NULL in multiple transactions
+# group: [alter_col]
+
+statement ok
+PRAGMA enable_verification
+
+# Scenario #1, tran1 set not null, tran2 not able to insert
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement error con2
+INSERT INTO t VALUES(7777, NULL)
+
+statement ok con1
+INSERT INTO t VALUES(7, 7)
+
+statement ok con2
+ROLLBACK
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT i FROM t
+----
+7
+
+# Scenario #2, tran1 set not null, tran2 failed to commit
+statement ok con1
+DROP TABLE IF EXISTS t
+
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO t VALUES(7777, NULL)
+
+statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+
+statement error con1
+INSERT INTO t VALUES(7777, NULL)
+
+query I con1
+SELECT COUNT(*) FROM  t
+----
+0
+
+# Scenario #3, cannot insert if one connection alter column
+statement ok con1
+DROP TABLE IF EXISTS t
+
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement error con2
+INSERT INTO t VALUES(1, 1)
+
+statement ok con1
+COMMIT
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT count(*) from t
+----
+0
+
+# For following tests:
+# begin t1 and begin t2
+# a1 = alter in t1;
+# c1 = commint t1;
+# i2 = insert in t1;
+# c2 = commit t2
+#
+# Scenario #4, a1+c1+i2+c2
+# i2 failed with following error:
+# Transaction conflict: adding entries to a table that has been altered!
+statement ok con1
+DROP TABLE IF EXISTS t
+
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con1
+COMMIT
+
+statement error con2
+INSERT INTO t VALUES(1, NULL)
+
+statement ok con2
+COMMIT
+
+query I con1
+SELECT count(*) from t
+----
+0
+
+# Scenario #5, i2+a1+c1+c2
+# c2 failed with following error
+# Transaction conflict: adding entries to a table that has been altered!
+statement ok con1
+DROP TABLE IF EXISTS t
+
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO t VALUES(1, NULL)
+
+statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con1
+COMMIT
+
+#Failed to commit
+statement error con2
+COMMIT
+
+statement error con2
+INSERT INTO t VALUES(2, NULL)
+
+query I con1
+SELECT count(*) from t
+----
+0
+
+# Scenario #6, i2+a1+c2+c1
+# c2 failed with following error
+# Transaction conflict: adding entries to a table that has been altered!
+statement ok con1
+DROP TABLE IF EXISTS t
+
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO t VALUES(1, NULL)
+
+statement ok con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+# Failed to commit
+statement error con2
+COMMIT
+
+statement ok con1
+COMMIT
+
+# Failed to insert null
+statement error con2
+INSERT INTO t VALUES(2, NULL)
+
+query I con1
+SELECT count(*) from t
+----
+0
+
+# Scenario #7, i2+c2+a1+c1
+# a1 should failed!
+statement ok con1
+DROP TABLE IF EXISTS t
+
+statement ok con1
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+INSERT INTO t VALUES(1, NULL)
+
+statement ok con2
+COMMIT
+
+statement error con1
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok con1
+COMMIT
+
+query I con1
+SELECT count(*) from t
+----
+1
+
