@@ -19,7 +19,7 @@ struct ReadHead {
 	uint64_t size;
 
 	// Current info
-	unique_ptr<AllocatedData> data;
+	AllocatedData data;
 	bool data_isset = false;
 
 	idx_t GetEnd() const {
@@ -114,7 +114,7 @@ struct ReadAheadBuffer {
 				throw std::runtime_error("Prefetch registered requested for bytes outside file");
 			}
 
-			handle.Read(read_head.data->get(), read_head.size, read_head.location);
+			handle.Read(read_head.data.get(), read_head.size, read_head.location);
 			read_head.data_isset = true;
 		}
 	}
@@ -136,16 +136,16 @@ public:
 
 			if (!prefetch_buffer->data_isset) {
 				prefetch_buffer->Allocate(allocator);
-				handle.Read(prefetch_buffer->data->get(), prefetch_buffer->size, prefetch_buffer->location);
+				handle.Read(prefetch_buffer->data.get(), prefetch_buffer->size, prefetch_buffer->location);
 				prefetch_buffer->data_isset = true;
 			}
-			memcpy(buf, prefetch_buffer->data->get() + location - prefetch_buffer->location, len);
+			memcpy(buf, prefetch_buffer->data.get() + location - prefetch_buffer->location, len);
 		} else {
 			if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
 				Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, handle.GetFileSize() - location));
 				auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 				D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
-				memcpy(buf, prefetch_buffer_fallback->data->get() + location - prefetch_buffer_fallback->location, len);
+				memcpy(buf, prefetch_buffer_fallback->data.get() + location - prefetch_buffer_fallback->location, len);
 			} else {
 				handle.Read(buf, len, location);
 			}

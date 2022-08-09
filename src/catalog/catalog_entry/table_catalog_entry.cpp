@@ -195,7 +195,11 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	}
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 		auto foreign_key_constraint_info = (AlterForeignKeyInfo *)table_info;
-		return SetForeignKeyConstraint(context, *foreign_key_constraint_info);
+		if (foreign_key_constraint_info->type == AlterForeignKeyType::AFT_ADD) {
+			return AddForeignKeyConstraint(context, *foreign_key_constraint_info);
+		} else {
+			return DropForeignKeyConstraint(context, *foreign_key_constraint_info);
+		}
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
@@ -533,7 +537,35 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	return move(result);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
+	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
+
+	for (idx_t i = 0; i < columns.size(); i++) {
+		create_info->columns.push_back(columns[i].Copy());
+	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		create_info->constraints.push_back(constraints[i]->Copy());
+	}
+	ForeignKeyInfo fk_info;
+	fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
+	fk_info.schema = info.schema;
+	fk_info.table = info.fk_table;
+	fk_info.pk_keys = info.pk_keys;
+	fk_info.fk_keys = info.fk_keys;
+	create_info->constraints.push_back(
+	    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, move(fk_info)));
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::DropForeignKeyConstraint(ClientContext &context,
+                                                                     AlterForeignKeyInfo &info) {
+	D_ASSERT(info.type == AlterForeignKeyType::AFT_DELETE);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
@@ -549,16 +581,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 			}
 		}
 		create_info->constraints.push_back(move(constraint));
-	}
-	if (info.type == AlterForeignKeyType::AFT_ADD) {
-		ForeignKeyInfo fk_info;
-		fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-		fk_info.schema = info.schema;
-		fk_info.table = info.fk_table;
-		fk_info.pk_keys = info.pk_keys;
-		fk_info.fk_keys = info.fk_keys;
-		create_info->constraints.push_back(
-		    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, move(fk_info)));
 	}
 
 	auto binder = Binder::CreateBinder(context);

@@ -207,7 +207,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrow(py::object &arrow_objec
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	auto projected_relation = make_unique<DuckDBPyRelation>(rel->Project(expr));
 	projected_relation->rel->extra_dependencies = this->rel->extra_dependencies;
-	return move(projected_relation);
+	return projected_relation;
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(const data_frame &df, const string &expr,

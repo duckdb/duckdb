@@ -147,6 +147,8 @@ public:
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
+	DUCKDB_API static const DBConfig &GetConfig(const ClientContext &context);
+	DUCKDB_API static const DBConfig &GetConfig(const DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
 	DUCKDB_API static idx_t GetOptionCount();
 

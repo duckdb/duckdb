@@ -190,7 +190,7 @@ struct string_t;
 
 template <class T>
 using child_list_t = std::vector<std::pair<std::string, T>>;
-// we should be using single_thread_ptr here but cross-thread access to ChunkCollections currently prohibits this.
+//! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;
 
@@ -437,7 +437,8 @@ struct LogicalType {
 	DUCKDB_API bool IsIntegral() const;
 	DUCKDB_API bool IsNumeric() const;
 	DUCKDB_API hash_t Hash() const;
-	DUCKDB_API void SetAlias(string &alias);
+	DUCKDB_API void SetAlias(string alias);
+	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);

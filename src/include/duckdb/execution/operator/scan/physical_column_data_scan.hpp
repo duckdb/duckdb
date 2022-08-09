@@ -1,29 +1,29 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/scan/physical_chunk_scan.hpp
+// duckdb/execution/operator/scan/physical_column_data_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 
-//! The PhysicalChunkCollectionScan scans a Chunk Collection
-class PhysicalChunkScan : public PhysicalOperator {
+//! The PhysicalColumnDataScan scans a ColumnDataCollection
+class PhysicalColumnDataScan : public PhysicalOperator {
 public:
-	PhysicalChunkScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality)
+	PhysicalColumnDataScan(vector<LogicalType> types, PhysicalOperatorType op_type, idx_t estimated_cardinality)
 	    : PhysicalOperator(op_type, move(types), estimated_cardinality), collection(nullptr) {
 	}
 
-	// the chunk collection to scan
-	ChunkCollection *collection;
-	//! Owned chunk collection, if any
-	unique_ptr<ChunkCollection> owned_collection;
+	// the column data collection to scan
+	ColumnDataCollection *collection;
+	//! Owned column data collection, if any
+	unique_ptr<ColumnDataCollection> owned_collection;
 
 public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

@@ -83,6 +83,14 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
+	return db.config;
+}
+
+const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
+	return context.config;
+}
+
 TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }
@@ -244,6 +252,10 @@ DBConfig &DBConfig::GetConfig(ClientContext &context) {
 	return context.db->config;
 }
 
+const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
+	return context.db->config;
+}
+
 idx_t DatabaseInstance::NumberOfThreads() {
 	return scheduler->NumberOfThreads();
 }
@@ -277,11 +289,12 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	return true;
 }
 
-string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
-	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
+string ClientConfig::ExtractTimezone() const {
+	auto entry = set_variables.find("TimeZone");
+	if (entry == set_variables.end()) {
 		return "UTC";
 	} else {
-		return config.set_variables["TimeZone"].GetValue<std::string>();
+		return entry->second.GetValue<std::string>();
 	}
 }
 

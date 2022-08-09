@@ -1287,6 +1287,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		ExpressionExecutor executor(allocator, expressions);
 		while (true) {
 			intermediate.Reset();
+			result.Reset();
 			// scan a new chunk from the table to index
 			ScanCreateIndex(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 			if (intermediate.size() == 0) {

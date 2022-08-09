@@ -1,7 +1,7 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -14,14 +14,13 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class InsertGlobalState : public GlobalSinkState {
 public:
-	explicit InsertGlobalState(Allocator &allocator)
-	    : insert_count(0), return_chunk_collection(allocator), returned_chunk_count(0) {
+	explicit InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types)
+	    : insert_count(0), return_collection(context, return_types) {
 	}
 
 	mutex lock;
 	idx_t insert_count;
-	ChunkCollection return_chunk_collection;
-	idx_t returned_chunk_count;
+	ColumnDataCollection return_collection;
 };
 
 class InsertLocalState : public LocalSinkState {
@@ -85,7 +84,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 	table->storage->Append(*table, context.client, istate.insert_chunk);
 
 	if (return_chunk) {
-		gstate.return_chunk_collection.Append(istate.insert_chunk);
+		gstate.return_collection.Append(istate.insert_chunk);
 	}
 
 	gstate.insert_count += chunk.size();
@@ -93,7 +92,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<InsertGlobalState>(Allocator::Get(context));
+	return make_unique<InsertGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
@@ -112,14 +111,20 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class InsertSourceState : public GlobalSourceState {
 public:
-	InsertSourceState() : finished(false) {
+	explicit InsertSourceState(const PhysicalInsert &op) : finished(false) {
+		if (op.return_chunk) {
+			D_ASSERT(op.sink_state);
+			auto &g = (InsertGlobalState &)*op.sink_state;
+			g.return_collection.InitializeScan(scan_state);
+		}
 	}
 
+	ColumnDataScanState scan_state;
 	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<InsertSourceState>();
+	return make_unique<InsertSourceState>(*this);
 }
 
 void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
@@ -133,19 +138,10 @@ void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
 		state.finished = true;
-	}
-
-	idx_t chunk_return = insert_gstate.returned_chunk_count;
-	if (chunk_return >= insert_gstate.return_chunk_collection.Chunks().size()) {
 		return;
 	}
 
-	chunk.Reference(insert_gstate.return_chunk_collection.GetChunk(chunk_return));
-	chunk.SetCardinality((insert_gstate.return_chunk_collection.GetChunk(chunk_return)).size());
-	insert_gstate.returned_chunk_count += 1;
-	if (insert_gstate.returned_chunk_count >= insert_gstate.return_chunk_collection.Chunks().size()) {
-		state.finished = true;
-	}
+	insert_gstate.return_collection.Scan(state.scan_state, chunk);
 }
 
 } // namespace duckdb
