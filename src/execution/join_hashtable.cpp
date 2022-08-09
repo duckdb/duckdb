@@ -280,31 +280,47 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	                       added_count);
 }
 
-void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
+template <bool PARALLEL>
+static inline void InsertHashesLoop(atomic<data_ptr_t> pointers[], const hash_t indices[], const idx_t count,
+                                    const data_ptr_t key_locations[], const idx_t pointer_offset) {
+	for (idx_t i = 0; i < count; i++) {
+		auto index = indices[i];
+		if (PARALLEL) {
+			data_ptr_t head;
+			do {
+				head = pointers[index];
+				Store<data_ptr_t>(head, key_locations[i] + pointer_offset);
+			} while (!std::atomic_compare_exchange_weak(&pointers[index], &head, key_locations[i]));
+		} else {
+			// set prev in current key to the value (NOTE: this will be nullptr if there is none)
+			Store<data_ptr_t>(pointers[index], key_locations[i] + pointer_offset);
+
+			// set pointer to current tuple
+			pointers[index] = key_locations[i];
+		}
+	}
+}
+
+void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel) {
 	D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
 
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
 
 	hashes.Flatten(count);
-
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto pointers = (data_ptr_t *)hash_map.Ptr();
-	auto indices = FlatVector::GetData<hash_t>(hashes);
-	for (idx_t i = 0; i < count; i++) {
-		auto index = indices[i];
-		// set prev in current key to the value (NOTE: this will be nullptr if
-		// there is none)
-		Store<data_ptr_t>(pointers[index], key_locations[i] + pointer_offset);
 
-		// set pointer to current tuple
-		pointers[index] = key_locations[i];
+	auto pointers = (atomic<data_ptr_t> *)hash_map.Ptr();
+	auto indices = FlatVector::GetData<hash_t>(hashes);
+
+	if (parallel) {
+		InsertHashesLoop<true>(pointers, indices, count, key_locations, pointer_offset);
+	} else {
+		InsertHashesLoop<false>(pointers, indices, count, key_locations, pointer_offset);
 	}
 }
 
-void JoinHashTable::Finalize() {
-	// the build has finished, now iterate over all the nodes and construct the final hash table
-	// select a HT that has at least 50% empty space
+void JoinHashTable::InitializePointerTable() {
 	idx_t count = external ? MaxValue<idx_t>(tuples_per_round, Count()) : Count();
 	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
@@ -318,6 +334,11 @@ void JoinHashTable::Finalize() {
 
 	// initialize HT with all-zero entries
 	memset(hash_map.Ptr(), 0, capacity * sizeof(data_ptr_t));
+}
+
+void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel) {
+	// Pointer table should be allocated
+	D_ASSERT(hash_map.IsValid());
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
@@ -325,7 +346,8 @@ void JoinHashTable::Finalize() {
 	// now construct the actual hash table; scan the nodes
 	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
-	for (auto &block : block_collection->blocks) {
+	for (idx_t block_idx = block_idx_start; block_idx < block_idx_end; block_idx++) {
+		auto &block = block_collection->blocks[block_idx];
 		auto handle = buffer_manager.Pin(block->block);
 		data_ptr_t dataptr = handle.Ptr();
 		idx_t entry = 0;
@@ -338,14 +360,13 @@ void JoinHashTable::Finalize() {
 				dataptr += entry_size;
 			}
 			// now insert into the hash table
-			InsertHashes(hashes, next, key_locations);
+			InsertHashes(hashes, next, key_locations, parallel);
 
 			entry += next;
 		}
+		lock_guard<mutex> lock(pinned_handles_lock);
 		pinned_handles.push_back(move(handle));
 	}
-
-	finalized = true;
 }
 
 unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys, const SelectionVector *&current_sel) {
@@ -991,7 +1012,7 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 	external = true;
 
 	// First set the number of tuples in the HT per partitioned round
-	idx_t total_count = 0;
+	total_count = 0;
 	idx_t total_size = 0;
 	for (auto &ht : local_hts) {
 		// TODO: SizeInBytes / SwizzledSize overestimates size by a lot because we make extra references of heap blocks
@@ -1050,7 +1071,7 @@ void JoinHashTable::UnFinalize() {
 	finalized = false;
 }
 
-void JoinHashTable::FinalizeExternal() {
+void JoinHashTable::PrepareExternalFinalize() {
 	if (partition_block_collections.empty()) {
 		// Empty HT!
 		return;
@@ -1107,9 +1128,6 @@ void JoinHashTable::FinalizeExternal() {
 	D_ASSERT(Count() == 0);
 	UnswizzleBlocks();
 	D_ASSERT(count == Count());
-
-	// Build pointer table
-	Finalize();
 }
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,

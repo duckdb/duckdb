@@ -133,10 +133,12 @@ public:
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
+	//! Allocate the pointer table for TODO
+	void InitializePointerTable();
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	void Finalize();
+	void Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 	//! Scan the HT to find the rows for the full outer join and return the number of found entries
@@ -214,7 +216,7 @@ private:
 private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
-	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
+	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel);
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
@@ -224,6 +226,7 @@ private:
 	//! The stringheap of the JoinHashTable
 	unique_ptr<RowDataCollection> string_heap;
 	//! Pinned handles, these are pinned during finalization only
+	mutex pinned_handles_lock;
 	vector<BufferHandle> pinned_handles;
 	//! The hash map of the HT, created after finalization
 	BufferHandle hash_map;
@@ -241,6 +244,10 @@ public:
 	bool external;
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
+	//! Total count
+	idx_t total_count;
+	//! Number of tuples for the build-side HT per partitioned round
+	idx_t tuples_per_round;
 
 	//! The number of tuples that are swizzled
 	idx_t SwizzledCount() {
@@ -272,7 +279,7 @@ public:
 	//! Delete blocks that belong to the current partitioned HT
 	void UnFinalize();
 	//! Build HT for the next partitioned probe round
-	void FinalizeExternal();
+	void PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);
@@ -284,8 +291,6 @@ public:
 	                       idx_t &entry_idx, idx_t &block_idx_deleted, const idx_t &block_idx_end);
 
 private:
-	//! Number of tuples for the build-side HT per partitioned round
-	idx_t tuples_per_round;
 	//! First and last partition of the current partitioned round
 	idx_t partitions_start;
 	idx_t partitions_end;
