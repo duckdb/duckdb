@@ -13,6 +13,10 @@
 namespace duckdb {
 
 class LogicalSetOperation : public LogicalOperator {
+	LogicalSetOperation(idx_t table_index, idx_t column_count, LogicalOperatorType type)
+	    : LogicalOperator(type), table_index(table_index), column_count(column_count) {
+	}
+
 public:
 	LogicalSetOperation(idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> top,
 	                    unique_ptr<LogicalOperator> bottom, LogicalOperatorType type)
