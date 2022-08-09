@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS test;
 PRAGMA force_compression='fsst';
 CREATE TABLE test AS SELECT i as id, (100 + (i%2))::VARCHAR AS value FROM range(0, 200000000) tbl(i);
 checkpoint;
+SET enable_fsst_vectors=false;
 
 run
 select avg(value::INT) from test where id%10=0;

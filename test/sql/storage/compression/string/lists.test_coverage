@@ -7,6 +7,11 @@ load __TEST_DIR__/test_string_compression.db
 
 foreach compression fsst dictionary
 
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
 statement ok
 pragma threads=1
 
@@ -60,5 +65,7 @@ DROP TABLE test_large_list
 
 statement ok
 DROP TABLE test
+
+endloop
 
 endloop

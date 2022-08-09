@@ -634,19 +634,15 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::FSST_VECTOR: {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = ((string_t *)data)[i];
-			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-			auto decompressed_string_size = duckdb_fsst_decompress(
-			    (duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(
-			        const_cast<Vector &>(*this)),                   /* IN: use this symbol table for compression. */
-			    compressed_string.GetSize(),                        /* IN: byte-length of compressed string. */
-			    (unsigned char *)compressed_string.GetDataUnsafe(), /* IN: compressed string. */
-			    StringUncompressed::STRING_BLOCK_LIMIT + 1,         /* IN: byte-length of output buffer. */
-			    &decompress_buffer[0] /* OUT: memory buffer to put the decompressed string in. */
-			);
 
-			if (decompressed_string_size > StringUncompressed::STRING_BLOCK_LIMIT) {
-				throw InternalException("Failed to decompress entire FSST string");
-			}
+			// Decompress string
+			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
+			auto decompressed_string_size =
+			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
+			                           compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
+			                           StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
+			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
+
 			retval += string((const char *)decompress_buffer, decompressed_string_size) + (i == count - 1 ? "" : ", ");
 		}
 	} break;

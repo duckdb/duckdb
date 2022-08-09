@@ -7,6 +7,11 @@ load __TEST_DIR__/test_dictionary.db
 
 foreach compression fsst dictionary
 
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
 statement ok
 PRAGMA force_compression='${compression}'
 
@@ -54,5 +59,7 @@ DROP TABLE test_empty
 
 statement ok
 DROP TABLE test_empty_large
+
+endloop
 
 endloop

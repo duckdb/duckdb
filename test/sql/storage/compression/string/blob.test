@@ -1,8 +1,13 @@
 # name: test/sql/storage/compression/string/blob.test
 # description: blob tests
-# group: [blob]
+# group: [string]
 
 load __TEST_DIR__/test_dictionary.db
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
 
 foreach compression fsst dictionary
 
@@ -106,5 +111,7 @@ DROP TABLE blobs;
 
 statement ok
 DROP TABLE blob_empty;
+
+endloop
 
 endloop
