@@ -580,8 +580,15 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
         task_val = @spawn execute_tasks(task_state)
         push!(tasks, task_val)
     end
-    # now start executing tasks of the pending result in a loop
-    success = pending_execute_tasks(pending)
+    success = true
+    try
+        # now start executing tasks of the pending result in a loop
+        success = pending_execute_tasks(pending)
+    catch ex
+        cleanup_tasks(tasks, task_state)
+        throw(ex)
+    end
+
     # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)
     # check if an error was thrown

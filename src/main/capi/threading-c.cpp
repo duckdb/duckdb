@@ -68,7 +68,7 @@ bool duckdb_task_state_is_finished(duckdb_task_state state_p) {
 		return false;
 	}
 	auto state = (CAPITaskState *)state_p;
-	return !*state->marker;
+	return !(*state->marker);
 }
 
 void duckdb_destroy_task_state(duckdb_task_state state_p) {

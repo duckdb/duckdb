@@ -59,7 +59,14 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	if (!wrapper->statement->success) {
 		return DUCKDB_PENDING_ERROR;
 	}
-	auto return_value = wrapper->statement->ExecuteTask();
+	PendingExecutionResult return_value;
+	try {
+		return_value = wrapper->statement->ExecuteTask();
+	} catch (std::exception &ex) {
+		wrapper->statement->success = false;
+		wrapper->statement->error = ex.what();
+		return DUCKDB_PENDING_ERROR;
+	}
 	switch (return_value) {
 	case PendingExecutionResult::RESULT_READY:
 		return DUCKDB_PENDING_RESULT_READY;
