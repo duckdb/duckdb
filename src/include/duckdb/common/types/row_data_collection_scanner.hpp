@@ -43,7 +43,7 @@ public:
 	                          RowDataCollection &block_collection, RowDataCollection &string_heap,
 	                          const RowLayout &layout);
 
-	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout,
+	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout, bool external,
 	                         bool flush = true);
 
 	//! The type layout of the payload
@@ -78,6 +78,8 @@ private:
 	idx_t total_scanned;
 	//! Addresses used to gather from the sorted data
 	Vector addresses = Vector(LogicalType::POINTER);
+	//! Whether the blocks can be flushed to disk
+	const bool external;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
 };

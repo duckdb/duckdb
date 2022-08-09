@@ -106,7 +106,7 @@ void RowDataCollectionScanner::ScanState::PinData() {
 	if (!data_handle.IsValid() || data_handle.GetBlockId() != data_block.block->BlockId()) {
 		data_handle = rows.buffer_manager.Pin(data_block.block);
 	}
-	if (scanner.layout.AllConstant()) {
+	if (scanner.layout.AllConstant() || !scanner.external) {
 		return;
 	}
 
@@ -119,11 +119,11 @@ void RowDataCollectionScanner::ScanState::PinData() {
 }
 
 RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, RowDataCollection &heap_p,
-                                                   const RowLayout &layout_p, bool flush_p)
+                                                   const RowLayout &layout_p, bool external_p, bool flush_p)
     : rows(rows_p), heap(heap_p), layout(layout_p), read_state(*this), total_count(rows.count), total_scanned(0),
-      flush(flush_p) {
+      external(external_p), flush(flush_p) {
 
-	if (!layout.AllConstant()) {
+	if (!layout.AllConstant() && external) {
 		D_ASSERT(rows.blocks.size() == heap.blocks.size());
 	}
 }
@@ -138,7 +138,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	if (flush) {
 		for (idx_t i = 0; i < read_state.block_idx; ++i) {
 			rows.blocks[i].block = nullptr;
-			if (!layout.AllConstant()) {
+			if (!layout.AllConstant() && external) {
 				heap.blocks[i].block = nullptr;
 			}
 		}
@@ -159,7 +159,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 			row_ptr += row_width;
 		}
 		// Unswizzle the offsets back to pointers (if needed)
-		if (!layout.AllConstant()) {
+		if (!layout.AllConstant() && external) {
 			RowOperations::UnswizzlePointers(layout, data_ptr, read_state.heap_handle.Ptr(), next);
 		}
 		// Update state indices
