@@ -540,6 +540,14 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	auto &scan_state = (FSSTScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
+	bool enable_fsst_vectors;
+	if (ALLOW_FSST_VECTORS) {
+		auto& config = DBConfig::GetConfig(segment.db);
+		enable_fsst_vectors = config.options.enable_fsst_vectors;
+	} else {
+		enable_fsst_vectors = false;
+	}
+
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);
 	auto base_data = (data_ptr_t)(baseptr + sizeof(fsst_compression_header_t));
@@ -549,7 +557,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		return;
 	}
 
-	if (ALLOW_FSST_VECTORS) {
+	if (enable_fsst_vectors) {
 		D_ASSERT(result_offset == 0);
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
@@ -578,7 +586,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
 	                   offsets.total_delta_decode_count, scan_state.last_known_index);
 
-	if (ALLOW_FSST_VECTORS) {
+	if (enable_fsst_vectors) {
 		// Lookup decompressed offsets in dict
 		for (idx_t i = 0; i < scan_count; i++) {
 			uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
