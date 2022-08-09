@@ -26,8 +26,12 @@ public:
 	vector<unique_ptr<RadixPartitionedHashTable>> radix_tables;
 	//! The groups (arguments)
 	vector<GroupingSet> grouping_sets;
+	//! Indices of the distinct aggregates
+	vector<idx_t> indices;
 
 public:
+	bool IsDistinct(idx_t index) const;
+	const vector<idx_t> &Indices() const;
 	void Initialize(vector<unique_ptr<Expression>> &aggregates, const vector<idx_t> &indices);
 	bool AnyDistinct() const;
 };
@@ -70,6 +74,16 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+private:
+	//! Finalize the distinct aggregates
+	SinkFinalizeType FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
+	                                  GlobalSinkState &gstate) const;
+	//! Combine the distinct aggregates
+	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
+	//! Sink the distinct aggregates
+	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                  DataChunk &input) const;
 };
 
 } // namespace duckdb
