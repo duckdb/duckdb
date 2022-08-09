@@ -25,7 +25,7 @@ class ParserExtension;
 struct ParserOptions {
 	bool preserve_identifier_case = true;
 	idx_t max_expression_depth = 1000;
-	vector<ParserExtension> *extensions = nullptr;
+	const vector<ParserExtension> *extensions = nullptr;
 };
 
 //! The parser is responsible for parsing the query and converting it into a set

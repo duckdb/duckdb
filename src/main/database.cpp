@@ -83,6 +83,14 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
+	return db.config;
+}
+
+const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
+	return context.config;
+}
+
 TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }
@@ -244,6 +252,10 @@ DBConfig &DBConfig::GetConfig(ClientContext &context) {
 	return context.db->config;
 }
 
+const DBConfig &DBConfig::GetConfig(const ClientContext &context) {
+	return context.db->config;
+}
+
 idx_t DatabaseInstance::NumberOfThreads() {
 	return scheduler->NumberOfThreads();
 }
@@ -263,11 +275,26 @@ void DuckDB::SetExtensionLoaded(const std::string &name) {
 	instance->loaded_extensions.insert(name);
 }
 
-string ClientConfig::ExtractTimezoneFromConfig(ClientConfig &config) {
-	if (config.set_variables.find("TimeZone") == config.set_variables.end()) {
+bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {
+	// check the session values
+	auto &db_config = DBConfig::GetConfig(*this);
+	const auto &global_config_map = db_config.options.set_variables;
+
+	auto global_value = global_config_map.find(key);
+	bool found_global_value = global_value != global_config_map.end();
+	if (!found_global_value) {
+		return false;
+	}
+	result = global_value->second;
+	return true;
+}
+
+string ClientConfig::ExtractTimezone() const {
+	auto entry = set_variables.find("TimeZone");
+	if (entry == set_variables.end()) {
 		return "UTC";
 	} else {
-		return config.set_variables["TimeZone"].GetValue<std::string>();
+		return entry->second.GetValue<std::string>();
 	}
 }
 
