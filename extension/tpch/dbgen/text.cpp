@@ -23,7 +23,7 @@
 
 #include <stdlib.h>
 #ifndef WIN32
-/* Change for Windows NT */
+ /* Change for Windows NT */
 #include <unistd.h>
 #endif /* WIN32 */
 #include <ctype.h>
@@ -64,7 +64,6 @@
 
 #include "dbgen/dss.h"
 #include "dbgen/dsstypes.h"
-#include <new>
 
 /*
  * txt_vp() --
@@ -246,11 +245,11 @@ static char *gen_text(char *dest, seed_t *seed, distribution *s) {
 	return dest + ind + 1;
 }
 
-#define NOUN_MAX_WEIGHT         340
-#define ADJECTIVES_MAX_WEIGHT   289
-#define ADVERBS_MAX_WEIGHT      262
-#define AUXILLARIES_MAX_WEIGHT  18
-#define VERBS_MAX_WEIGHT        174
+#define NOUN_MAX_WEIGHT 340
+#define ADJECTIVES_MAX_WEIGHT 289
+#define ADVERBS_MAX_WEIGHT 262
+#define AUXILLARIES_MAX_WEIGHT 18
+#define VERBS_MAX_WEIGHT 174
 #define PREPOSITIONS_MAX_WEIGHT 456
 
 static char *noun_index[NOUN_MAX_WEIGHT + 1];
@@ -260,7 +259,7 @@ static char *auxillaries_index[AUXILLARIES_MAX_WEIGHT + 1];
 static char *verbs_index[VERBS_MAX_WEIGHT + 1];
 static char *prepositions_index[PREPOSITIONS_MAX_WEIGHT + 1];
 
-static char *szTextPool;
+static char *szTextPool = NULL;
 static long txtBufferSize = 0;
 
 // generate a lookup table for weight -> str
@@ -409,19 +408,9 @@ void init_text_pool(long bSize, DBGenContext *ctx) {
 	gen_index(auxillaries_index, &auxillaries);
 	gen_index(verbs_index, &verbs);
 	gen_index(prepositions_index, &prepositions);
-	if (szTextPool && bSize == txtBufferSize) {
-		return;
-	}
-	if (szTextPool) {
-		free_text_pool();
-	}
 
-	txtBufferSize = bSize;
-	szTextPool = (char *)malloc(bSize + 1 + 100);
-	if (!szTextPool) {
-		txtBufferSize = 0;
-		throw std::bad_alloc();
-	}
+  txtBufferSize = bSize;
+  szTextPool = (char*)malloc(bSize + 1 + 100);
 
 	char *ptr = szTextPool;
 	char *endptr = szTextPool + bSize + 1;
@@ -432,7 +421,7 @@ void init_text_pool(long bSize, DBGenContext *ctx) {
 }
 
 void free_text_pool() {
-	free(szTextPool);
+  free(szTextPool);
 }
 
 /*
