@@ -76,6 +76,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	LogicalOperatorType logical_type;
 	switch (node.setop_type) {
 	case SetOperationType::UNION:
+	case SetOperationType::UNION_BY_NAME:
 		logical_type = LogicalOperatorType::LOGICAL_UNION;
 		break;
 	case SetOperationType::EXCEPT:

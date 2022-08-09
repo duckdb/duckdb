@@ -5,9 +5,10 @@
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 
 namespace duckdb {
 
@@ -98,20 +99,82 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	MoveCorrelatedExpressions(*result->right_binder);
 
 	// now both sides have been bound we can resolve types
-	if (result->left->types.size() != result->right->types.size()) {
+	if (result->setop_type != SetOperationType::UNION_BY_NAME &&
+	    result->left->types.size() != result->right->types.size()) {
 		throw BinderException("Set operations can only apply to expressions with the "
 		                      "same number of result columns");
 	}
 
-	// figure out the types of the setop result by picking the max of both
-	for (idx_t i = 0; i < result->left->types.size(); i++) {
-		auto result_type = LogicalType::MaxLogicalType(result->left->types[i], result->right->types[i]);
-		if (!can_contain_nulls) {
-			if (ExpressionBinder::ContainsNullType(result_type)) {
-				result_type = ExpressionBinder::ExchangeNullType(result_type);
+	if (result->setop_type == SetOperationType::UNION_BY_NAME) {
+		case_insensitive_map_t<idx_t> left_names_map;
+		case_insensitive_map_t<idx_t> right_names_map;
+
+		BoundSelectNode *left_node = dynamic_cast<BoundSelectNode *>(result->left.get());
+		BoundSelectNode *right_node = dynamic_cast<BoundSelectNode *>(result->right.get());
+		D_ASSERT(left_node != nullptr && right_node != nullptr);
+
+		for (idx_t i = 0; i < left_node->names.size(); ++i) {
+			left_names_map[left_node->names[i]] = i;
+		}
+
+		for (idx_t i = 0; i < right_node->names.size(); ++i) {
+			if (left_names_map.find(right_node->names[i]) == left_names_map.end()) {
+				auto constant_null_expr =
+				    make_unique<BoundConstantExpression>(Value(right_node->types[i])); // TODO(lokax): SET ALIAS?
+				// constant_null_expr->alias = right_node->names[i];
+				left_node->select_list.push_back(std::move(constant_null_expr));
+				left_node->names.push_back(right_node->names[i]);
+				left_node->types.push_back(right_node->types[i]);
+				left_node->column_count++;
+				result->names.push_back(right_node->names[i]);
+			}
+			right_names_map[right_node->names[i]] = i;
+		}
+
+		idx_t new_size = left_node->names.size();
+		std::vector<std::unique_ptr<Expression>> new_right_node_exprs(new_size);
+		std::vector<LogicalType> new_types(new_size);
+		std::vector<string> new_names(new_size);
+		for (idx_t i = 0; i < new_size; ++i) {
+			auto iter = right_names_map.find(left_node->names[i]);
+			if (iter != right_names_map.end()) {
+				new_right_node_exprs[i] = std::move(right_node->select_list[iter->second]);
+				new_types[i] = std::move(right_node->types[iter->second]);
+				new_names[i] = std::move(right_node->names[iter->second]);
+			} else {
+				auto constant_null_expr = make_unique<BoundConstantExpression>(Value(left_node->types[i]));
+				// TODO(lokax): alias?
+				new_right_node_exprs[i] = std::move(constant_null_expr);
+				new_names[i] = left_node->names[i];
+				new_types[i] = left_node->types[i];
 			}
 		}
-		result->types.push_back(result_type);
+
+		right_node->column_count = new_size;
+		right_node->names = std::move(new_names);
+		right_node->types = std::move(new_types);
+		right_node->select_list = std::move(new_right_node_exprs);
+
+		for (idx_t i = 0; i < new_size; ++i) {
+			auto result_type = LogicalType::MaxLogicalType(left_node->types[i], right_node->types[i]);
+			if (!can_contain_nulls) {
+				if (ExpressionBinder::ContainsNullType(result_type)) {
+					result_type = ExpressionBinder::ExchangeNullType(result_type);
+				}
+			}
+			result->types.push_back(result_type);
+		}
+	} else {
+		// figure out the types of the setop result by picking the max of both
+		for (idx_t i = 0; i < result->left->types.size(); i++) {
+			auto result_type = LogicalType::MaxLogicalType(result->left->types[i], result->right->types[i]);
+			if (!can_contain_nulls) {
+				if (ExpressionBinder::ContainsNullType(result_type)) {
+					result_type = ExpressionBinder::ExchangeNullType(result_type);
+				}
+			}
+			result->types.push_back(result_type);
+		}
 	}
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions
