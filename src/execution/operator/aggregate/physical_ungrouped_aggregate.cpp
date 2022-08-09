@@ -352,7 +352,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 
 void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, GlobalSinkState &state,
                                                  LocalSinkState &lstate) const {
-	auto &gstate = (SimpleAggregateGlobalState &)state;
+	auto &global_sink = (SimpleAggregateGlobalState &)state;
 	auto &source = (SimpleAggregateLocalState &)lstate;
 
 	auto &distinct_indices = distinct_aggregate_data.Indices();
@@ -362,7 +362,6 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Glob
 	for (auto &idx : distinct_indices) {
 		//! aggregate is distinct, can't be calculated yet
 		D_ASSERT(this->distinct_aggregate_data.radix_tables[idx]);
-		auto &global_sink = (SimpleAggregateGlobalState &)state;
 		auto &radix_table = *distinct_aggregate_data.radix_tables[idx];
 		auto &radix_global_sink = *global_sink.radix_states[idx];
 		auto &radix_local_sink = *source.radix_states[idx];
