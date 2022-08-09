@@ -415,6 +415,13 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
 
+	//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
+	//! We can not directly use the payload chunk because the input and the output to the expression executor can not be
+	//! the same Vector
+	DataChunk expression_executor_input;
+	expression_executor_input.InitializeEmpty(payload_chunk.GetTypes());
+	expression_executor_input.SetCardinality(0);
+
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &radix_table_p = distinct_aggregate_data.radix_tables[i];
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
@@ -428,7 +435,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 			continue;
 		}
 
-		auto &intermediate_chunk = *gstate.distinct_output_chunks[i];
+		auto &output_chunk = *gstate.distinct_output_chunks[i];
 		//! Finalize the hash table
 		auto &radix_state = *gstate.radix_states[i];
 		radix_table_p->Finalize(context, radix_state);
@@ -439,19 +446,22 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 
 		//! Retrieve the stored data from the hashtable
 		while (true) {
-			radix_table_p->GetData(temp_exec_context, intermediate_chunk, *gstate.radix_states[i], *global_source_state,
+			payload_chunk.Reset();
+			output_chunk.Reset();
+			radix_table_p->GetData(temp_exec_context, output_chunk, *gstate.radix_states[i], *global_source_state,
 			                       *local_source_state);
-			if (intermediate_chunk.size() == 0) {
+			if (output_chunk.size() == 0) {
 				break;
 			}
 
 			for (idx_t child_idx = 0; child_idx < aggregate.children.size(); child_idx++) {
-				payload_chunk.data[payload_idx + child_idx].Reference(intermediate_chunk.data[child_idx]);
+				expression_executor_input.data[payload_idx + child_idx].Reference(output_chunk.data[child_idx]);
 			}
-			payload_chunk.SetCardinality(intermediate_chunk);
-
+			expression_executor_input.SetCardinality(output_chunk);
 			// We dont need to resolve the filter, we already did this in Sink
-			gstate.child_executor.SetChunk(payload_chunk);
+			gstate.child_executor.SetChunk(expression_executor_input);
+
+			payload_chunk.SetCardinality(output_chunk);
 
 #ifdef DEBUG
 			gstate.state.counts[i] += payload_chunk.size();
@@ -461,7 +471,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 			idx_t payload_cnt = 0;
 			for (auto &child : aggregate.children) {
 				//! Before executing, remap the indices to point to the payload_chunk
-				//! Originally these indices correspond to the input_chunk
+				//! Originally these indices correspond to the 'input' chunk
 				//! So we need to filter out the data that was used for filters (if any)
 				auto &child_ref = (BoundReferenceExpression &)*child;
 				child_ref.index = payload_idx + payload_cnt;
@@ -477,9 +487,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 			AggregateInputData aggr_input_data(aggregate.bind_info.get());
 			aggregate.function.simple_update(start_of_input, aggr_input_data, payload_cnt,
 			                                 gstate.state.aggregates[i].get(), payload_chunk.size());
-
-			payload_chunk.Reset();
-			intermediate_chunk.Reset();
 		}
 	}
 	D_ASSERT(!gstate.finished);
