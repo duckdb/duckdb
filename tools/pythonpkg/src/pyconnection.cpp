@@ -463,11 +463,11 @@ void DuckDBPyConnection::Close() {
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
-	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
+	ExtensionHelper::InstallExtension(*connection->context, extension, force_install);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
-	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
+	ExtensionHelper::LoadExternalExtension(*connection->context, extension);
 }
 
 // cursor() is stupid

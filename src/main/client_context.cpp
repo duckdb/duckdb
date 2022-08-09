@@ -1317,20 +1317,17 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 		return true;
 	}
 
-	// then check the session values
+	// check the client session values
 	const auto &session_config_map = config.set_variables;
-	const auto &global_config_map = db_config.options.set_variables;
 
 	auto session_value = session_config_map.find(key);
 	bool found_session_value = session_value != session_config_map.end();
-	auto global_value = global_config_map.find(key);
-	bool found_global_value = global_value != global_config_map.end();
-	if (!found_session_value && !found_global_value) {
-		return false;
+	if (found_session_value) {
+		result = session_value->second;
+		return true;
 	}
-
-	result = found_session_value ? session_value->second : global_value->second;
-	return true;
+	// finally check the global session values
+	return db->TryGetCurrentSetting(key, result);
 }
 
 ParserOptions ClientContext::GetParserOptions() const {

@@ -48,6 +48,8 @@ public:
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
 
+	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
+
 private:
 	void Initialize(const char *path, DBConfig *config);
 
