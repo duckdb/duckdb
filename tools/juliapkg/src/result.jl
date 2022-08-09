@@ -536,25 +536,22 @@ function get_error(stmt::Stmt, pending::PendingQueryResult)
 end
 
 # execute tasks from a pending query result in a loop
-# function pending_execute_tasks(pending::PendingQueryResult)::Bool
-#     ret = DUCKDB_PENDING_RESULT_NOT_READY
-#     while ret == DUCKDB_PENDING_RESULT_NOT_READY
-#     	GC.safepoint()
-#         ret = duckdb_pending_execute_task(pending.handle)
-#     end
-#     return ret != DUCKDB_PENDING_ERROR
-# end
+function pending_execute_tasks(pending::PendingQueryResult)::Bool
+    ret = DUCKDB_PENDING_RESULT_NOT_READY
+    while ret == DUCKDB_PENDING_RESULT_NOT_READY
+        GC.safepoint()
+        ret = duckdb_pending_execute_task(pending.handle)
+    end
+    return ret != DUCKDB_PENDING_ERROR
+end
 
-# execute background tasks, until task execution is finished
+# execute background tasks in a loop, until task execution is finished
 function execute_tasks(state::duckdb_task_state)
-	while !duckdb_task_state_is_finished(state)
-		GC.safepoint()
-		count = duckdb_execute_n_tasks_state(state, 1)
-		if count == 0
-			break
-		end
-	end
-	return
+    while !duckdb_task_state_is_finished(state)
+        GC.safepoint()
+        duckdb_execute_n_tasks_state(state, 1)
+    end
+    return
 end
 
 # cleanup background tasks
@@ -584,12 +581,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
         push!(tasks, task_val)
     end
     # now start executing tasks of the pending result in a loop
-    ret = DUCKDB_PENDING_RESULT_NOT_READY
-    while ret == DUCKDB_PENDING_RESULT_NOT_READY
-    	GC.safepoint()
-        ret = duckdb_pending_execute_task(pending.handle)
-    end
-    success = ret != DUCKDB_PENDING_ERROR
+    success = pending_execute_tasks(pending)
     # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)
     # check if an error was thrown
