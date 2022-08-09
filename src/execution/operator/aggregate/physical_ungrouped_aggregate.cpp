@@ -168,7 +168,9 @@ public:
 			distinct_output_chunks[i] = make_unique<DataChunk>();
 			distinct_output_chunks[i]->Initialize(client, chunk_types);
 		}
-		payload_chunk.Initialize(allocator, payload_types);
+		if (!payload_types.empty()) {
+			payload_chunk.Initialize(allocator, payload_types);
+		}
 	}
 
 	//! The lock for updating the global aggregate state
@@ -202,11 +204,9 @@ public:
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
 			// initialize the payload chunk
-			if (!aggr.children.empty()) {
-				for (auto &child : aggr.children) {
-					payload_types.push_back(child->return_type);
-					child_executor.AddExpression(*child);
-				}
+			for (auto &child : aggr.children) {
+				payload_types.push_back(child->return_type);
+				child_executor.AddExpression(*child);
 			}
 			aggregate_objects.emplace_back(&aggr);
 		}
@@ -263,6 +263,7 @@ unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(Executi
 void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                               DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
+	auto &global_sink = (SimpleAggregateGlobalState &)state;
 	auto &distinct_indices = distinct_aggregate_data.Indices();
 	if (distinct_indices.empty()) {
 		return;
@@ -271,7 +272,6 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[idx];
 
 		D_ASSERT(this->distinct_aggregate_data.radix_tables[idx]);
-		auto &global_sink = (SimpleAggregateGlobalState &)state;
 		auto &radix_table = *distinct_aggregate_data.radix_tables[idx];
 		auto &radix_global_sink = *global_sink.radix_states[idx];
 		auto &radix_local_sink = *sink.radix_states[idx];
@@ -279,7 +279,8 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 		if (aggregate.filter) {
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
-			(void)filtered_data.ApplyFilter(input);
+			idx_t count = filtered_data.ApplyFilter(input);
+			filtered_data.filtered_payload.SetCardinality(count);
 
 			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
 			                 filtered_data.filtered_payload);
@@ -330,12 +331,10 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 #endif
 
 		// resolve the child expressions of the aggregate (if any)
-		if (!aggregate.children.empty()) {
-			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-				sink.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-				                                      payload_chunk.data[payload_idx + payload_cnt]);
-				payload_cnt++;
-			}
+		for (idx_t i = 0; i < aggregate.children.size(); ++i) {
+			sink.child_executor.ExecuteExpression(payload_idx + payload_cnt,
+			                                      payload_chunk.data[payload_idx + payload_cnt]);
+			payload_cnt++;
 		}
 
 		auto start_of_input = payload_cnt == 0 ? nullptr : &payload_chunk.data[payload_idx];
@@ -451,7 +450,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 			}
 			payload_chunk.SetCardinality(intermediate_chunk);
 
-			idx_t payload_cnt = 0;
 			// We dont need to resolve the filter, we already did this in Sink
 			gstate.child_executor.SetChunk(payload_chunk);
 
@@ -460,12 +458,18 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 #endif
 
 			// resolve the child expressions of the aggregate (if any)
-			if (!aggregate.children.empty()) {
-				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); ++child_idx) {
-					gstate.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-					                                        payload_chunk.data[payload_idx + payload_cnt]);
-					payload_cnt++;
-				}
+			idx_t payload_cnt = 0;
+			for (auto &child : aggregate.children) {
+				//! Before executing, remap the indices to point to the payload_chunk
+				//! Originally these indices correspond to the input_chunk
+				//! So we need to filter out the data that was used for filters (if any)
+				auto &child_ref = (BoundReferenceExpression &)*child;
+				child_ref.index = payload_idx + payload_cnt;
+
+				//! The child_executor contains a pointer to the expression we altered above
+				gstate.child_executor.ExecuteExpression(payload_idx + payload_cnt,
+				                                        payload_chunk.data[payload_idx + payload_cnt]);
+				payload_cnt++;
 			}
 
 			auto start_of_input = payload_cnt ? &payload_chunk.data[payload_idx] : nullptr;
