@@ -12,7 +12,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
-#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -24,53 +23,18 @@ public:
 
 	//! The name of the function set
 	string name;
-
-	//! The set of functions. Each function has
-	map<idx_t, T> functions;
+	//! The set of functions.
+	vector<T> functions;
 
 public:
 	void AddFunction(T function) {
-		if (function.function_set_key == DConstants::INVALID_INDEX) {
-			auto new_key = functions.size();
-#ifdef DEBUG
-			new_key += 42; // artifically introduce a large gap in the key space to catch problems where the index
-			               // should be used instead of an offset
-#endif
-			function.function_set_key = new_key;
-		}
-		AddFunction(move(function), function.function_set_key);
-	}
-	T GetFunction(idx_t key) {
-		if (key == DConstants::INVALID_INDEX) {
-			throw InternalException("Invalid function key for %s", name);
-		}
-		if (functions.find(key) == functions.end()) {
-			throw InternalException("Function key %llu not in use for %s", key, name);
-		}
-		return functions.at(key);
+		functions.push_back(move(function));
 	}
 	idx_t Size() {
 		return functions.size();
 	}
 	T GetFunctionByOffset(idx_t offset) {
-		idx_t current_offset = 0;
-		for (auto &entry : functions) {
-			if (offset == current_offset) {
-				return entry.second;
-			}
-			current_offset++;
-		}
-		throw InternalException("Function index %llu too big, only have %llu functions for %s", offset,
-		                        functions.size(), name);
-	}
-
-	void AddFunction(T function, idx_t key) {
-		if (functions.find(key) != functions.end()) {
-			throw InternalException("Function index %llu already in use in %s", key, name);
-		}
-		function.name = name;
-		function.function_set_key = key;
-		functions.insert(std::pair<idx_t, T>(key, move(function)));
+		return functions[offset];
 	}
 };
 
@@ -78,17 +42,44 @@ class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
 	explicit ScalarFunctionSet(string name) : FunctionSet(move(name)) {
 	}
+
+	ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments) {
+		string error;
+		idx_t index = Function::BindFunction(name, *this, arguments, error);
+		if (index == DConstants::INVALID_INDEX) {
+			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","), error);
+		}
+		return GetFunctionByOffset(index);
+	}
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
 	explicit AggregateFunctionSet(string name) : FunctionSet(move(name)) {
 	}
+
+	AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments) {
+		string error;
+		idx_t index = Function::BindFunction(name, *this, arguments, error);
+		if (index == DConstants::INVALID_INDEX) {
+			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","), error);
+		}
+		return GetFunctionByOffset(index);
+	}
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
 	explicit TableFunctionSet(string name) : FunctionSet(move(name)) {
+	}
+
+	TableFunction GetFunctionByArguments(const vector<LogicalType> &arguments) {
+		string error;
+		idx_t index = Function::BindFunction(name, *this, arguments, error);
+		if (index == DConstants::INVALID_INDEX) {
+			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","), error);
+		}
+		return GetFunctionByOffset(index);
 	}
 };
 

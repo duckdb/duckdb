@@ -82,10 +82,6 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
-	if (function.function_set_key == DConstants::INVALID_INDEX) {
-		throw SerializationException("Invalid function serialization key for %s", function.name);
-	}
-	writer.WriteField(function.function_set_key);
 	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);
 	writer.WriteOptional(filter);
@@ -105,8 +101,6 @@ void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &context, ExpressionType type,
                                                              FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
-	auto function_set_key = reader.ReadRequired<idx_t>();
-	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
 	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 	auto distinct = reader.ReadRequired<bool>();
 
@@ -124,7 +118,7 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 	}
 
 	auto functions = (AggregateFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunction(function_set_key);
+	auto function = functions->functions.GetFunctionByArguments(arguments);
 	unique_ptr<FunctionData> bind_info;
 
 	// sometimes the bind changes those, not sure if we should generically set those

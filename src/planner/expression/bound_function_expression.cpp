@@ -74,12 +74,6 @@ void BoundFunctionExpression::Verify() const {
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
-	if (function.function_set_key == DConstants::INVALID_INDEX) {
-		throw SerializationException("Invalid function serialization key for %s", function.name);
-	}
-	// TODO need to serialize function arguments too cause e.g. sum changes those
-	writer.WriteField(function.function_set_key);
-
 	writer.WriteField(is_operator);
 	writer.WriteSerializable(return_type);
 	writer.WriteRegularSerializableList(function.arguments);
@@ -98,9 +92,6 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
                                                             FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
-	auto function_set_key = reader.ReadRequired<idx_t>();
-	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
-
 	auto is_operator = reader.ReadRequired<bool>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
@@ -116,7 +107,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 	}
 
 	auto functions = (ScalarFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunction(function_set_key);
+	auto function = functions->functions.GetFunctionByArguments(arguments);
 	unique_ptr<FunctionData> bind_info;
 
 	// sometimes the bind changes those, not sure if we should generically set those
