@@ -129,22 +129,11 @@ struct AggregateState {
 	vector<idx_t> counts;
 };
 
-struct AggregateExecutionData {
-	AggregateExecutionData(Allocator &allocator) : child_executor(allocator), payload_chunk() {
-	}
-	//! The executor
-	ExpressionExecutor child_executor;
-	//! The payload chunk, containing all the Vectors for the aggregates
-	DataChunk payload_chunk;
-	//! Aggregate filter data set
-	AggregateFilterDataSet filter_set;
-};
-
 class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
 	SimpleAggregateGlobalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
 	                           const DistinctAggregateData &distinct_data, ClientContext &client)
-	    : state(aggregates), finished(false) {
+	    : state(aggregates), finished(false), child_executor(allocator), payload_chunk() {
 		auto &distinct_indices = distinct_data.Indices();
 		if (distinct_indices.empty()) {
 			return;
@@ -154,7 +143,6 @@ public:
 		distinct_output_chunks.resize(aggregate_cnt);
 		radix_states.resize(aggregate_cnt);
 
-		execution_data = make_unique<AggregateExecutionData>(allocator);
 		vector<LogicalType> payload_types;
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
@@ -162,7 +150,7 @@ public:
 			// Initialize the child executor and get the payload types for every aggregate
 			for (auto &child : aggregate.children) {
 				payload_types.push_back(child->return_type);
-				execution_data->child_executor.AddExpression(*child);
+				child_executor.AddExpression(*child);
 			}
 			if (!aggregate.distinct) {
 				continue;
@@ -180,7 +168,7 @@ public:
 			distinct_output_chunks[i] = make_unique<DataChunk>();
 			distinct_output_chunks[i]->Initialize(client, chunk_types);
 		}
-		execution_data->payload_chunk.Initialize(allocator, payload_types);
+		payload_chunk.Initialize(allocator, payload_types);
 	}
 
 	//! The lock for updating the global aggregate state
@@ -191,8 +179,10 @@ public:
 	bool finished;
 	//! The global sink states of the hash tables
 	vector<unique_ptr<GlobalSinkState>> radix_states;
-	//! The execution data, if there are distinct aggregates
-	unique_ptr<AggregateExecutionData> execution_data;
+	//! The executor (unused if no distinct aggregates)
+	ExpressionExecutor child_executor;
+	//! The payload chunk (unused if no distinct aggregates)
+	DataChunk payload_chunk;
 	//! Output chunks to receive distinct data from hashtables
 	vector<unique_ptr<DataChunk>> distinct_output_chunks;
 };
@@ -202,12 +192,9 @@ public:
 	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
 	                          const vector<LogicalType> &child_types,
 	                          const DistinctAggregateData &distinct_aggregate_data, ExecutionContext &context)
-	    : state(aggregates), execution_data(make_unique<AggregateExecutionData>(allocator)) {
+	    : state(aggregates), child_executor(allocator), payload_chunk(), filter_set() {
 
 		InitializeDistinctAggregates(distinct_aggregate_data, context);
-
-		auto &child_executor = execution_data->child_executor;
-		auto &filter_set = execution_data->filter_set;
 
 		vector<LogicalType> payload_types;
 		vector<AggregateObject> aggregate_objects;
@@ -224,21 +211,25 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			execution_data->payload_chunk.Initialize(allocator, payload_types);
+			payload_chunk.Initialize(allocator, payload_types);
 		}
 		filter_set.Initialize(allocator, aggregate_objects, child_types);
 	}
 
 	//! The local aggregate state
 	AggregateState state;
-	//! Used to store the data needed to perform aggregations
-	unique_ptr<AggregateExecutionData> execution_data;
+	//! The executor
+	ExpressionExecutor child_executor;
+	//! The payload chunk, containing all the Vectors for the aggregates
+	DataChunk payload_chunk;
+	//! Aggregate filter data set
+	AggregateFilterDataSet filter_set;
 	//! The local sink states of the distinct aggregates hash tables
 	vector<unique_ptr<LocalSinkState>> radix_states;
 
 public:
 	void Reset() {
-		execution_data->payload_chunk.Reset();
+		payload_chunk.Reset();
 	}
 	void InitializeDistinctAggregates(const DistinctAggregateData &data, ExecutionContext &context) {
 
@@ -287,7 +278,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 
 		if (aggregate.filter) {
 			// Apply the filter before inserting into the hashtable
-			auto &filtered_data = sink.execution_data->filter_set.GetFilterData(idx);
+			auto &filtered_data = sink.filter_set.GetFilterData(idx);
 			(void)filtered_data.ApplyFilter(input);
 
 			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload,
@@ -306,7 +297,7 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 
 	SinkDistinct(context, state, lstate, input);
 
-	DataChunk &payload_chunk = sink.execution_data->payload_chunk;
+	DataChunk &payload_chunk = sink.payload_chunk;
 
 	idx_t payload_idx = 0;
 	idx_t next_payload_idx = 0;
@@ -324,13 +315,13 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		idx_t payload_cnt = 0;
 		// resolve the filter (if any)
 		if (aggregate.filter) {
-			auto &filtered_data = sink.execution_data->filter_set.GetFilterData(aggr_idx);
+			auto &filtered_data = sink.filter_set.GetFilterData(aggr_idx);
 			auto count = filtered_data.ApplyFilter(input);
 
-			sink.execution_data->child_executor.SetChunk(filtered_data.filtered_payload);
+			sink.child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
-			sink.execution_data->child_executor.SetChunk(input);
+			sink.child_executor.SetChunk(input);
 			payload_chunk.SetCardinality(input);
 		}
 
@@ -341,8 +332,8 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		// resolve the child expressions of the aggregate (if any)
 		if (!aggregate.children.empty()) {
 			for (idx_t i = 0; i < aggregate.children.size(); ++i) {
-				sink.execution_data->child_executor.ExecuteExpression(payload_idx + payload_cnt,
-				                                                      payload_chunk.data[payload_idx + payload_cnt]);
+				sink.child_executor.ExecuteExpression(payload_idx + payload_cnt,
+				                                      payload_chunk.data[payload_idx + payload_cnt]);
 				payload_cnt++;
 			}
 		}
@@ -411,15 +402,14 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	}
 
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &source.execution_data->child_executor, "child_executor", 0);
+	context.thread.profiler.Flush(this, &source.child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
                                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
-	D_ASSERT(gstate.execution_data);
-	auto &payload_chunk = gstate.execution_data->payload_chunk;
+	auto &payload_chunk = gstate.payload_chunk;
 
 	ThreadContext temp_thread_context(context);
 	ExecutionContext temp_exec_context(context, temp_thread_context);
@@ -464,7 +454,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 
 			idx_t payload_cnt = 0;
 			// We dont need to resolve the filter, we already did this in Sink
-			gstate.execution_data->child_executor.SetChunk(payload_chunk);
+			gstate.child_executor.SetChunk(payload_chunk);
 
 #ifdef DEBUG
 			gstate.state.counts[i] += payload_chunk.size();
@@ -473,8 +463,8 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 			// resolve the child expressions of the aggregate (if any)
 			if (!aggregate.children.empty()) {
 				for (idx_t child_idx = 0; child_idx < aggregate.children.size(); ++child_idx) {
-					gstate.execution_data->child_executor.ExecuteExpression(
-					    payload_idx + payload_cnt, payload_chunk.data[payload_idx + payload_cnt]);
+					gstate.child_executor.ExecuteExpression(payload_idx + payload_cnt,
+					                                        payload_chunk.data[payload_idx + payload_cnt]);
 					payload_cnt++;
 				}
 			}
