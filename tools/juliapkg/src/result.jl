@@ -14,7 +14,8 @@ mutable struct QueryResult
 end
 
 function _close_result(result::QueryResult)
-    return duckdb_destroy_result(result.handle)
+    duckdb_destroy_result(result.handle)
+    return
 end
 
 mutable struct ColumnConversionData
@@ -497,48 +498,101 @@ function toDataFrame(result::Ref{duckdb_result})::DataFrame
     return df
 end
 
-function execute_tasks(state::duckdb_task_state)
-    duckdb_execute_tasks_state(state)
+mutable struct PendingQueryResult
+    handle::duckdb_pending_result
+    success::Bool
+
+    function PendingQueryResult(stmt::Stmt)
+        pending_handle = Ref{duckdb_pending_result}()
+        ret = duckdb_pending_prepared(stmt.handle, pending_handle)
+        result = new(pending_handle[], ret == DuckDBSuccess)
+        finalizer(_close_pending_result, result)
+        return result
+    end
+end
+
+function _close_pending_result(pending::PendingQueryResult)
+    if pending.handle == C_NULL
+        return
+    end
+    duckdb_destroy_pending(pending.handle)
+    pending.handle = C_NULL
     return
 end
 
+function fetch_error(stmt::Stmt, error_ptr)
+    if error_ptr == C_NULL
+        return string("Execute of query \"", stmt.sql, "\" failed: unknown error")
+    else
+        return string("Execute of query \"", stmt.sql, "\" failed: ", unsafe_string(error_ptr))
+    end
+end
+
+function get_error(stmt::Stmt, pending::PendingQueryResult)
+    error_ptr = duckdb_pending_error(pending.handle)
+    error_message = fetch_error(stmt, error_ptr)
+    _close_pending_result(pending)
+    return error_message
+end
+
+# execute tasks from a pending query result in a loop
+function pending_execute_tasks(pending::PendingQueryResult)::Bool
+    ret = DUCKDB_PENDING_RESULT_NOT_READY
+    while ret == DUCKDB_PENDING_RESULT_NOT_READY
+        GC.safepoint()
+        ret = duckdb_pending_execute_task(pending.handle)
+    end
+    return ret != DUCKDB_PENDING_ERROR
+end
+
+# execute background tasks in a loop, until task execution is finished
+function execute_tasks(state::duckdb_task_state)
+    while !duckdb_task_state_is_finished(state)
+        GC.safepoint()
+        duckdb_execute_n_tasks_state(state, 1)
+    end
+    return
+end
+
+# cleanup background tasks
 function cleanup_tasks(tasks, state)
     duckdb_finish_execution(state)
     for task in tasks
         Base.wait(task)
     end
     duckdb_destroy_task_state(state)
-    GC.enable(true)
     return
 end
 
+# this function is responsible for executing a statement and returning a result
 function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     bind_parameters(stmt, params)
 
-    handle = Ref{duckdb_result}()
-    GC.enable(false)
-    # if multi-threading is enabled, launch tasks
+    # first create a pending query result
+    pending = PendingQueryResult(stmt)
+    if !pending.success
+        throw(QueryException(get_error(stmt, pending)))
+    end
+    # if multi-threading is enabled, launch background tasks
     task_state = duckdb_create_task_state(stmt.con.db.handle)
     tasks = []
     for i in 2:Threads.nthreads()
         task_val = @spawn execute_tasks(task_state)
         push!(tasks, task_val)
     end
-    ret = DuckDBSuccess
-    try
-        ret = duckdb_execute_prepared(stmt.handle, handle)
-    catch ex
-        cleanup_tasks(tasks, task_state)
-        throw(ex)
-    end
+    # now start executing tasks of the pending result in a loop
+    success = pending_execute_tasks(pending)
+    # we finished execution of all tasks, cleanup the tasks
     cleanup_tasks(tasks, task_state)
+    # check if an error was thrown
+    if !success
+        throw(QueryException(get_error(stmt, pending)))
+    end
+    handle = Ref{duckdb_result}()
+    ret = duckdb_execute_pending(pending.handle, handle)
     if ret != DuckDBSuccess
         error_ptr = duckdb_result_error(handle)
-        if error_ptr == C_NULL
-            error_message = string("Execute of query \"", stmt.sql, "\" failed: unknown error")
-        else
-            error_message = string("Execute of query \"", stmt.sql, "\" failed: ", unsafe_string(error_ptr))
-        end
+        error_message = fetch_error(stmt, error_ptr)
         duckdb_destroy_result(handle)
         throw(QueryException(error_message))
     end

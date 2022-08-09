@@ -33,6 +33,10 @@ struct PreparedStatementWrapper {
 	vector<Value> values;
 };
 
+struct PendingStatementWrapper {
+	unique_ptr<PendingQueryResult> statement;
+};
+
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
