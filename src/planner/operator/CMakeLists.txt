@@ -3,7 +3,7 @@ add_library_unity(
   OBJECT
   logical_aggregate.cpp
   logical_any_join.cpp
-  logical_chunk_get.cpp
+  logical_column_data_get.cpp
   logical_comparison_join.cpp
   logical_copy_to_file.cpp
   logical_create.cpp

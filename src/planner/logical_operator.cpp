@@ -202,7 +202,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalGet::Deserialize(context, type, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
-		result = LogicalChunkGet::Deserialize(context, type, reader);
+		result = LogicalColumnDataGet::Deserialize(context, type, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		result = LogicalDelimGet::Deserialize(context, type, reader);
