@@ -1,4 +1,4 @@
-# name: benchmark/micro/aggregate/simple_aggregate.benchmark
+# name: benchmark/micro/aggregate/simple_distinct.benchmark
 # description: SUM(i) over a bunch of integers
 # group: [aggregate]
 
