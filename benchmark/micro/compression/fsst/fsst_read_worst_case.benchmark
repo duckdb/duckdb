@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/fsst/fsst_read_worst_case.benchmark
+# description: Scanning data that is not with fsst encoding, note that compresssion ratio is still 1.9x due to bitpacking
+# group: [fsst]
+
+name fsst Compression Scan
+group aggregate
+storage persistent
+
+load
+DROP TABLE IF EXISTS test;
+PRAGMA force_compression='fsst';
+CREATE TABLE test AS SELECT gen_random_uuid()::VARCHAR AS i FROM range(0, 20000000) tbl(i);
+checkpoint;
+
+run
+select max(i[2]) from test;
