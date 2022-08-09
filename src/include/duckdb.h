@@ -2032,79 +2032,29 @@ Closes the result and de-allocates all memory allocated for the arrow result.
 DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 
 //===--------------------------------------------------------------------===//
-// Threading Information
+// Task Scheduling Information
 //===--------------------------------------------------------------------===//
-typedef void *duckdb_task_state;
+typedef void *duckdb_task;
 
 /*!
-Execute DuckDB tasks on this thread.
+Fetches a task from the task scheduler in the database.
 
-Will return after `max_tasks` have been executed, or if there are no more tasks present.
+duckdb_execute_task must be called on the task, which also frees the task.
 
-* database: The database object to execute tasks for
-* max_tasks: The maximum amount of tasks to execute
+* result: The task, or NULL if no tasks are available.
 */
-DUCKDB_API void duckdb_execute_tasks(duckdb_database database, idx_t max_tasks);
+DUCKDB_API duckdb_task duckdb_get_task(duckdb_database database);
 
 /*!
-Creates a task state that can be used with duckdb_execute_tasks_state to execute tasks until
- duckdb_finish_execution is called on the state.
+Executes a task obtained from duckdb_get_task
 
-duckdb_destroy_state should be called on the result in order to free memory.
+* task: The task to execute
+ */
+DUCKDB_API void duckdb_execute_task(duckdb_task task);
 
-* database: The database object to create the task state for
-* returns: The task state that can be used with duckdb_execute_tasks_state.
-*/
-DUCKDB_API duckdb_task_state duckdb_create_task_state(duckdb_database database);
 
-/*!
-Execute DuckDB tasks on this thread.
 
-The thread will keep on executing tasks forever, until duckdb_finish_execution is called on the state.
-Multiple threads can share the same duckdb_task_state.
 
-* state: The task state of the executor
-*/
-DUCKDB_API void duckdb_execute_tasks_state(duckdb_task_state state);
-
-/*!
-Execute DuckDB tasks on this thread.
-
-The thread will keep on executing tasks until either duckdb_finish_execution is called on the state,
-max_tasks tasks have been executed or there are no more tasks to be executed.
-
-Multiple threads can share the same duckdb_task_state.
-
-* state: The task state of the executor
-* max_tasks: The maximum amount of tasks to execute
-* returns: The amount of tasks that have actually been executed
-*/
-DUCKDB_API idx_t duckdb_execute_n_tasks_state(duckdb_task_state state, idx_t max_tasks);
-
-/*!
-Finish execution on a specific task.
-
-* state: The task state to finish execution
-*/
-DUCKDB_API void duckdb_finish_execution(duckdb_task_state state);
-
-/*!
-Check if the provided duckdb_task_state has finished execution
-
-* state: The task state to inspect
-* returns: Whether or not duckdb_finish_execution has been called on the task state
-*/
-DUCKDB_API bool duckdb_task_state_is_finished(duckdb_task_state state);
-
-/*!
-Destroys the task state returned from duckdb_create_task_state.
-
-Note that this should not be called while there is an active duckdb_execute_tasks_state running
-on the task state.
-
-* state: The task state to clean up
-*/
-DUCKDB_API void duckdb_destroy_task_state(duckdb_task_state state);
 
 #ifdef __cplusplus
 }

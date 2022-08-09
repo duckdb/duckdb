@@ -535,35 +535,16 @@ function get_error(stmt::Stmt, pending::PendingQueryResult)
     return error_message
 end
 
-# execute tasks from a pending query result in a loop
-# function pending_execute_tasks(pending::PendingQueryResult)::Bool
-#     ret = DUCKDB_PENDING_RESULT_NOT_READY
-#     while ret == DUCKDB_PENDING_RESULT_NOT_READY
-#     	GC.safepoint()
-#         ret = duckdb_pending_execute_task(pending.handle)
-#     end
-#     return ret != DUCKDB_PENDING_ERROR
-# end
-
 # execute background tasks, until task execution is finished
-function execute_tasks(state::duckdb_task_state)
-	while !duckdb_task_state_is_finished(state)
-		GC.safepoint()
-		count = duckdb_execute_n_tasks_state(state, 1)
-		if count == 0
-			break
-		end
-	end
-	return
+function execute_task(task::duckdb_task)
+	duckdb_execute_task(task)
 end
 
 # cleanup background tasks
-function cleanup_tasks(tasks, state)
-    duckdb_finish_execution(state)
+function cleanup_tasks(tasks)
     for task in tasks
         Base.wait(task)
     end
-    duckdb_destroy_task_state(state)
     return
 end
 
@@ -576,22 +557,26 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     if !pending.success
         throw(QueryException(get_error(stmt, pending)))
     end
-    # if multi-threading is enabled, launch background tasks
-    task_state = duckdb_create_task_state(stmt.con.db.handle)
-    tasks = []
-    for i in 2:Threads.nthreads()
-        task_val = @spawn execute_tasks(task_state)
-        push!(tasks, task_val)
-    end
+    multi_threading = Threads.nthreads() > 1
     # now start executing tasks of the pending result in a loop
+    tasks = []
     ret = DUCKDB_PENDING_RESULT_NOT_READY
     while ret == DUCKDB_PENDING_RESULT_NOT_READY
+    	# if multi-threading is enabled, launch background tasks
     	GC.safepoint()
+    	while true
+    		task = duckdb_get_task(stmt.con.db.handle)
+    		if task == C_NULL
+    			break
+    		end
+    		task_thread = @spawn execute_task(task)
+    		push!(tasks, task_thread)
+    	end
         ret = duckdb_pending_execute_task(pending.handle)
     end
     success = ret != DUCKDB_PENDING_ERROR
     # we finished execution of all tasks, cleanup the tasks
-    cleanup_tasks(tasks, task_state)
+    cleanup_tasks(tasks)
     # check if an error was thrown
     if !success
         throw(QueryException(get_error(stmt, pending)))
