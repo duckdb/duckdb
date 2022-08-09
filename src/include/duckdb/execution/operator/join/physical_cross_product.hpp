@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
+
 //! PhysicalCrossProduct represents a cross product between two tables
 class PhysicalCrossProduct : public PhysicalOperator {
 public:
@@ -48,6 +49,38 @@ public:
 public:
 	void BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) override;
 	vector<const PhysicalOperator *> GetSources() const override;
+};
+
+class CrossProductExecutor {
+public:
+	CrossProductExecutor(ColumnDataCollection &rhs);
+
+	OperatorResultType Execute(DataChunk &input, DataChunk &output);
+
+	bool ScanLHS() {
+		return scan_input_chunk;
+	}
+
+	idx_t PositionInChunk() {
+		return position_in_chunk;
+	}
+
+	idx_t ScanPosition() {
+		return scan_state.current_row_index;
+	}
+
+private:
+	void Reset(DataChunk &input, DataChunk &output);
+	bool NextValue(DataChunk &input, DataChunk &output);
+
+private:
+	ColumnDataCollection &rhs;
+	ColumnDataScanState scan_state;
+	DataChunk scan_chunk;
+	idx_t position_in_chunk;
+	bool initialized;
+	bool finished;
+	bool scan_input_chunk;
 };
 
 } // namespace duckdb

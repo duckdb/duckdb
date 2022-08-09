@@ -436,6 +436,17 @@ void LocalStorage::Commit(LocalStorage::CommitState &commit_state, Transaction &
 	table_storage.clear();
 }
 
+void LocalStorage::MoveStorage(DataTable *old_dt, DataTable *new_dt) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
+	// take over the storage from the old entry
+	auto new_storage = move(entry->second);
+	table_storage.erase(entry);
+	table_storage[new_dt] = move(new_storage);
+}
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
                              Expression *default_value) {
 	// check if there are any pending appends for the old version of the table

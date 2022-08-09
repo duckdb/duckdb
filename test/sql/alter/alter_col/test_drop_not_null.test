@@ -1,0 +1,51 @@
+# name: test/sql/alter/alter_col/test_drop_not_null.test
+# description: Test ALTER TABLE ALTER COLUMN column_name DROP NOT NULL
+# group: [alter_col]
+
+# Happy path
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER NOT NULL)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement error
+INSERT INTO test VALUES (3, NULL)
+
+query II
+SELECT * FROM test
+----
+1	1
+2	2
+
+statement ok
+ALTER TABLE test ALTER COLUMN j DROP NOT NULL
+
+statement ok 
+INSERT INTO test VALUES (3, NULL)
+
+query II
+SELECT * FROM test
+----
+1	1
+2	2
+3	NULL
+
+# Negative path
+
+statement ok
+CREATE TABLE test2(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test2 VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test2 ALTER COLUMN j DROP NOT NULL
+
+statement ok 
+INSERT INTO test VALUES (3, NULL)
+

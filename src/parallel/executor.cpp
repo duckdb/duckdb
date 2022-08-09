@@ -217,6 +217,7 @@ bool Executor::NextExecutor() {
 	if (root_pipeline_idx >= root_pipelines.size()) {
 		return false;
 	}
+	root_pipelines[root_pipeline_idx]->Reset();
 	root_executor = make_unique<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
 	root_pipeline_idx++;
 	return true;

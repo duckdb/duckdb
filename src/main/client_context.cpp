@@ -39,6 +39,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/prepare_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -244,8 +245,15 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 		CleanupInternal(lock, result.get(), false);
 	} else {
 		// no result collector - create a materialized result by continuously fetching
+		auto result_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), pending.types);
+		D_ASSERT(!result_collection->Types().empty());
 		auto materialized_result = make_unique<MaterializedQueryResult>(
-		    pending.statement_type, pending.properties, pending.types, pending.names, shared_from_this());
+		    pending.statement_type, pending.properties, pending.names, move(result_collection), GetClientProperties());
+
+		auto &collection = materialized_result->Collection();
+		D_ASSERT(!collection.Types().empty());
+		ColumnDataAppendState append_state;
+		collection.InitializeAppend(append_state);
 		while (true) {
 			auto chunk = FetchInternal(lock, GetExecutor(), *materialized_result);
 			if (!chunk || chunk->size() == 0) {
@@ -258,11 +266,22 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 				}
 			}
 #endif
-			materialized_result->collection.Append(*chunk);
+			collection.Append(append_state, *chunk);
 		}
 		result = move(materialized_result);
 	}
 	return result;
+}
+
+static bool IsExplainAnalyze(SQLStatement *statement) {
+	if (!statement) {
+		return false;
+	}
+	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
+		return false;
+	}
+	auto &explain = (ExplainStatement &)*statement;
+	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
@@ -272,6 +291,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
 	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
 	if (values) {
@@ -563,17 +583,6 @@ bool ClientContext::IsActiveResult(ClientContextLock &lock, BaseQueryResult *res
 	return active_query->open_result == result;
 }
 
-static bool IsExplainAnalyze(SQLStatement *statement) {
-	if (!statement) {
-		return false;
-	}
-	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
-		return false;
-	}
-	auto &explain = (ExplainStatement &)*statement;
-	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
-}
-
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatementInternal(
     ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
     shared_ptr<PreparedStatementData> &prepared, PendingQueryParameters parameters) {
@@ -716,8 +725,9 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		StatementProperties properties;
 		vector<LogicalType> types;
 		vector<string> names;
-		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(types),
-		                                            move(names), shared_from_this());
+		auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), move(types));
+		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT, properties, move(names),
+		                                            move(collection), GetClientProperties());
 	}
 
 	unique_ptr<QueryResult> result;
@@ -918,7 +928,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return result;
 }
 
-void ClientContext::Append(TableDescription &description, ChunkCollection &collection) {
+void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
 		auto table_entry = catalog.GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
@@ -932,7 +942,7 @@ void ClientContext::Append(TableDescription &description, ChunkCollection &colle
 			}
 		}
 		for (auto &chunk : collection.Chunks()) {
-			table_entry->storage->Append(*table_entry, *this, *chunk);
+			table_entry->storage->Append(*table_entry, *this, chunk);
 		}
 	});
 }
@@ -1036,28 +1046,31 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 		return true;
 	}
 
-	// then check the session values
+	// check the client session values
 	const auto &session_config_map = config.set_variables;
-	const auto &global_config_map = db_config.options.set_variables;
 
 	auto session_value = session_config_map.find(key);
 	bool found_session_value = session_value != session_config_map.end();
-	auto global_value = global_config_map.find(key);
-	bool found_global_value = global_value != global_config_map.end();
-	if (!found_session_value && !found_global_value) {
-		return false;
+	if (found_session_value) {
+		result = session_value->second;
+		return true;
 	}
-
-	result = found_session_value ? session_value->second : global_value->second;
-	return true;
+	// finally check the global session values
+	return db->TryGetCurrentSetting(key, result);
 }
 
-ParserOptions ClientContext::GetParserOptions() {
+ParserOptions ClientContext::GetParserOptions() const {
 	ParserOptions options;
 	options.preserve_identifier_case = ClientConfig::GetConfig(*this).preserve_identifier_case;
 	options.max_expression_depth = ClientConfig::GetConfig(*this).max_expression_depth;
 	options.extensions = &DBConfig::GetConfig(*this).parser_extensions;
 	return options;
+}
+
+ClientProperties ClientContext::GetClientProperties() const {
+	ClientProperties properties;
+	properties.timezone = ClientConfig::GetConfig(*this).ExtractTimezone();
+	return properties;
 }
 
 } // namespace duckdb

@@ -1,6 +1,7 @@
 #pragma once
 #include "arrow/record_batch.h"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "arrow/array.h"
 #include "catch.hpp"
 
@@ -18,7 +19,8 @@ struct SimpleFactory {
 	    : batches(std::move(batches)), schema(std::move(schema)) {
 	}
 
-	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr) {
+	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
+	                                                                     duckdb::ArrowStreamParameters &parameters) {
 		//! Create a new batch reader
 		auto &factory = *reinterpret_cast<SimpleFactory *>(this_ptr); //! NOLINT
 		REQUIRE_RESULT(auto reader, arrow::RecordBatchReader::Make(factory.batches, factory.schema));

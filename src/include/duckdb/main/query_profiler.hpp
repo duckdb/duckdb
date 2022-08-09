@@ -149,11 +149,12 @@ public:
 	DUCKDB_API bool IsEnabled() const;
 	DUCKDB_API bool IsDetailedEnabled() const;
 	DUCKDB_API ProfilerPrintFormat GetPrintFormat() const;
+	DUCKDB_API bool PrintOptimizerOutput() const;
 	DUCKDB_API string GetSaveLocation() const;
 
 	DUCKDB_API static QueryProfiler &Get(ClientContext &context);
 
-	DUCKDB_API void StartQuery(string query, bool is_explain_analyze = false);
+	DUCKDB_API void StartQuery(string query, bool is_explain_analyze = false, bool start_at_optimizer = false);
 	DUCKDB_API void EndQuery();
 
 	DUCKDB_API void StartExplainAnalyze();
@@ -166,8 +167,8 @@ public:
 
 	DUCKDB_API void Initialize(PhysicalOperator *root);
 
-	DUCKDB_API string QueryTreeToString(bool print_optimizer_output = false) const;
-	DUCKDB_API void QueryTreeToStream(std::ostream &str, bool print_optimizer_output = false) const;
+	DUCKDB_API string QueryTreeToString() const;
+	DUCKDB_API void QueryTreeToStream(std::ostream &str) const;
 	DUCKDB_API void Print();
 
 	//! return the printed as a string. Unlike ToString, which is always formatted as a string,

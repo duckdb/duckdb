@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/function/table/arrow.hpp"
 #include <parquet/arrow/reader.h>
 #include "arrow/io/file.h"
 #include <arrow/type_traits.h>

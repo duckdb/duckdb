@@ -1,5 +1,6 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
@@ -124,16 +125,19 @@ bool StatementVerifier::Run(
 
 string StatementVerifier::CompareResults(const StatementVerifier &other) {
 	D_ASSERT(type == VerificationType::ORIGINAL);
+	string error;
 	if (materialized_result->success != other.materialized_result->success) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();
 		result += other.name + ":\n" + other.materialized_result->ToString();
 		return result;
-	}                                                                                     // LCOV_EXCL_STOP
-	if (!materialized_result->collection.Equals(other.materialized_result->collection)) { // LCOV_EXCL_START
+	} // LCOV_EXCL_STOP
+	if (!ColumnDataCollection::ResultEquals(materialized_result->Collection(), other.materialized_result->Collection(),
+	                                        error)) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";
 		result += "Original Result:\n" + materialized_result->ToString();
 		result += other.name + ":\n" + other.materialized_result->ToString();
+		result += "\n\n---------------------------------\n" + error;
 		return result;
 	} // LCOV_EXCL_STOP
 
