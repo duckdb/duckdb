@@ -1,0 +1,100 @@
+# name: test/sql/limit/test_parallel_limit_nulls.test_slow
+# description: Test parallel limit execution with NULLs
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=8
+
+statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 948247 UNION ALL SELECT 1779793 UNION ALL SELECT 4779793;
+
+foreach table_type TABLE VIEW
+
+statement ok
+CREATE ${table_type} integers AS SELECT i, CASE WHEN i%2=0 THEN NULL ELSE i END AS k FROM range(10000000) tbl(i);
+
+query I
+SELECT k FROM integers LIMIT 5
+----
+NULL
+1
+NULL
+3
+NULL
+
+query I
+SELECT k FROM integers WHERE i>1978321 OR i=334 LIMIT 5
+----
+NULL
+NULL
+1978323
+NULL
+1978325
+
+query I
+SELECT k FROM integers WHERE i>1978321 LIMIT 5
+----
+NULL
+1978323
+NULL
+1978325
+NULL
+
+query I
+SELECT k FROM integers WHERE i>4978321 LIMIT 5
+----
+NULL
+4978323
+NULL
+4978325
+NULL
+
+# large offset
+query I
+SELECT k FROM integers WHERE i>4978321 LIMIT 5 OFFSET 100000;
+----
+NULL
+5078323
+NULL
+5078325
+NULL
+
+query I
+SELECT k FROM integers WHERE i>4978321 LIMIT 5 OFFSET 1000000;
+----
+NULL
+5978323
+NULL
+5978325
+NULL
+
+# IN-clause (semi join)
+query I
+SELECT k FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+337
+948247
+1779793
+4779793
+
+query I
+(SELECT k FROM integers WHERE i>1978321 LIMIT 5) UNION ALL (SELECT k FROM integers WHERE i>4978321 LIMIT 5)
+----
+NULL
+1978323
+NULL
+1978325
+NULL
+NULL
+4978323
+NULL
+4978325
+NULL
+
+statement ok
+DROP ${table_type} integers
+
+endloop

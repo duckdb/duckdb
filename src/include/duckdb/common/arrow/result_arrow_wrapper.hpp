@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/result_arrow_wrapper.hpp
+// duckdb/common/arrow/result_arrow_wrapper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 
 namespace duckdb {
 class ResultArrowArrayStreamWrapper {

@@ -8,10 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/config.hpp"
 #include "pybind_wrapper.hpp"
@@ -26,9 +27,7 @@ public:
 	    : arrow_object(arrow_table), config(config) {};
 
 	//! Produces an Arrow Scanner, should be only called once when initializing Scan States
-	static unique_ptr<ArrowArrayStreamWrapper>
-	Produce(uintptr_t factory, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-	        TableFilterSet *filters = nullptr);
+	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory, ArrowStreamParameters &parameters);
 
 	//! Get the schema of the arrow object
 	static void GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema);
@@ -44,7 +43,6 @@ private:
 	                                  ClientConfig &config);
 
 	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
-	                                 std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
-	                                 TableFilterSet *filters, ClientConfig &config);
+	                                 ArrowStreamParameters &parameters, ClientConfig &config);
 };
 } // namespace duckdb

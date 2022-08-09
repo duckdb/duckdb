@@ -56,6 +56,9 @@ public:
 	// move assignment
 	DUCKDB_API Value &operator=(Value &&other) noexcept;
 
+	inline LogicalType &type() {
+		return type_;
+	}
 	inline const LogicalType &type() const {
 		return type_;
 	}

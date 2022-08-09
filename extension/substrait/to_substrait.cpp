@@ -1,19 +1,20 @@
 #include "to_substrait.hpp"
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/expression/list.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
-
-#include "substrait/plan.pb.h"
-#include "substrait/algebra.pb.h"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 #include "google/protobuf/util/json_util.h"
+#include "substrait/algebra.pb.h"
+#include "substrait/plan.pb.h"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 namespace duckdb {
 
@@ -397,7 +398,13 @@ uint64_t DuckDBToSubstrait::RegisterFunction(const string &name) {
 }
 
 void DuckDBToSubstrait::CreateFieldRef(substrait::Expression *expr, uint64_t col_idx) {
-	expr->mutable_selection()->mutable_direct_reference()->mutable_struct_field()->set_field((int32_t)col_idx);
+	auto selection = new ::substrait::Expression_FieldReference();
+	selection->mutable_direct_reference()->mutable_struct_field()->set_field((int32_t)col_idx);
+	auto root_reference = new ::substrait::Expression_FieldReference_RootReference();
+	selection->set_allocated_root_reference(root_reference);
+	D_ASSERT(selection->root_type_case() == substrait::Expression_FieldReference::RootTypeCase::kRootReference);
+	expr->set_allocated_selection(selection);
+	D_ASSERT(expr->has_selection());
 }
 
 substrait::Expression *DuckDBToSubstrait::TransformIsNotNullFilter(uint64_t col_idx, TableFilter &dfilter) {
@@ -703,6 +710,109 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(LogicalOperator &dop)
 	return res;
 }
 
+void DuckDBToSubstrait::TransformTypeInfo(substrait::Type_Struct *type_schema, LogicalType &type,
+                                          BaseStatistics &column_statistics, bool not_null) {
+
+	substrait::Type_Nullability type_nullability;
+	if (not_null) {
+		type_nullability = substrait::Type_Nullability::Type_Nullability_NULLABILITY_REQUIRED;
+	} else {
+		type_nullability = substrait::Type_Nullability::Type_Nullability_NULLABILITY_NULLABLE;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN: {
+		auto bool_type = new substrait::Type_Boolean;
+		bool_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_bool_(bool_type);
+		break;
+	}
+	case LogicalTypeId::TINYINT: {
+		auto integral_type = new substrait::Type_I8;
+		integral_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_i8(integral_type);
+		break;
+	}
+	case LogicalTypeId::SMALLINT: {
+		auto integral_type = new substrait::Type_I16;
+		integral_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_i16(integral_type);
+		break;
+	}
+	case LogicalTypeId::INTEGER: {
+		auto integral_type = new substrait::Type_I32;
+		integral_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_i32(integral_type);
+		break;
+	}
+	case LogicalTypeId::BIGINT: {
+		auto integral_type = new substrait::Type_I64;
+		integral_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_i64(integral_type);
+		break;
+	}
+	case LogicalTypeId::DATE: {
+		auto date_type = new substrait::Type_Date;
+		date_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_date(date_type);
+		break;
+	}
+	case LogicalTypeId::TIME: {
+		auto time_type = new substrait::Type_Time;
+		time_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_time(time_type);
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP: {
+		// FIXME: Shouldn't this have a precision?
+		auto timestamp_type = new substrait::Type_Timestamp;
+		timestamp_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_timestamp(timestamp_type);
+		break;
+	}
+	case LogicalTypeId::FLOAT: {
+		auto float_type = new substrait::Type_FP32;
+		float_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_fp32(float_type);
+		break;
+	}
+	case LogicalTypeId::DOUBLE: {
+		auto double_type = new substrait::Type_FP64;
+		double_type->set_nullability(type_nullability);
+		type_schema->add_types()->set_allocated_fp64(double_type);
+		break;
+	}
+	case LogicalTypeId::DECIMAL: {
+		auto decimal_type = new substrait::Type_Decimal;
+		decimal_type->set_nullability(type_nullability);
+		decimal_type->set_precision(DecimalType::GetWidth(type));
+		decimal_type->set_scale(DecimalType::GetScale(type));
+		type_schema->add_types()->set_allocated_decimal(decimal_type);
+		break;
+	}
+	case LogicalTypeId::VARCHAR: {
+		auto varchar_type = new substrait::Type_VarChar;
+		varchar_type->set_nullability(type_nullability);
+		auto &string_statistics = (StringStatistics &)column_statistics;
+		varchar_type->set_length(string_statistics.max_string_length);
+		type_schema->add_types()->set_allocated_varchar(varchar_type);
+		break;
+	}
+	default:
+		throw NotImplementedException("Logical Type " + type.ToString() +
+		                              " not implemented as Substrait Schema Result.");
+	}
+}
+
+set<idx_t> GetNotNullConstraintCol(TableCatalogEntry &tbl) {
+	set<idx_t> not_null;
+	for (auto &constraint : tbl.constraints) {
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			not_null.insert(((NotNullConstraint *)constraint.get())->index);
+		}
+	}
+	return not_null;
+}
+
 substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 	auto get_rel = new substrait::Rel();
 	substrait::Rel *rel = get_rel;
@@ -737,12 +847,20 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 	// Add Table Schema
 	sget->mutable_named_table()->add_names(table_scan_bind_data.table->name);
 	auto base_schema = new ::substrait::NamedStruct();
+	auto type_info = new substrait::Type_Struct();
+	type_info->set_nullability(substrait::Type_Nullability_NULLABILITY_REQUIRED);
+	auto not_null_constraint = GetNotNullConstraintCol(*table_scan_bind_data.table);
 	for (idx_t i = 0; i < dget.names.size(); i++) {
-		if (dget.returned_types[i].id() == LogicalTypeId::STRUCT) {
+		auto cur_type = dget.returned_types[i];
+		if (cur_type.id() == LogicalTypeId::STRUCT) {
 			throw std::runtime_error("Structs are not yet accepted in table scans");
 		}
 		base_schema->add_names(dget.names[i]);
+		auto column_statistics = dget.function.statistics(context, &table_scan_bind_data, i);
+		bool not_null = not_null_constraint.find(i) != not_null_constraint.end();
+		TransformTypeInfo(type_info, cur_type, *column_statistics, not_null);
 	}
+	base_schema->set_allocated_struct_(type_info);
 	sget->set_allocated_base_schema(base_schema);
 	return rel;
 }

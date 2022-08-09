@@ -1,18 +1,20 @@
 #include "duckdb/main/connection.hpp"
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
+
+#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
+#include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -121,12 +123,15 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	ChunkCollection collection(*context);
+	if (chunk.size() == 0) {
+		return;
+	}
+	ColumnDataCollection collection(Allocator::Get(*context), chunk.GetTypes());
 	collection.Append(chunk);
 	Append(description, collection);
 }
 
-void Connection::Append(TableDescription &description, ChunkCollection &collection) {
+void Connection::Append(TableDescription &description, ColumnDataCollection &collection) {
 	context->Append(description, collection);
 }
 

@@ -6,6 +6,9 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	auto plan = CreatePlan(*op.children[0]);
+	auto &fs = FileSystem::GetFileSystem(context);
+	op.file_path = fs.ExpandPath(op.file_path, FileSystem::GetFileOpener(context));
+
 	bool use_tmp_file = op.is_file_and_exists && op.use_tmp_file;
 	if (use_tmp_file) {
 		op.file_path += ".tmp";
