@@ -18,12 +18,13 @@
 namespace duckdb {
 
 struct DuckDBConstraintsData : public GlobalTableFunctionState {
-	DuckDBConstraintsData() : offset(0), constraint_offset(0) {
+	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
 
 	vector<CatalogEntry *> entries;
 	idx_t offset;
 	idx_t constraint_offset;
+	idx_t unique_constraint_offset;
 };
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
@@ -96,7 +97,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 		auto &table = (TableCatalogEntry &)*entry;
 		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
-		     data.constraint_offset++) {
+		     data.constraint_offset++, data.unique_constraint_offset++) {
 			auto &constraint = table.constraints[data.constraint_offset];
 			// return values:
 			// schema_name, LogicalType::VARCHAR
@@ -109,7 +110,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(3, count, Value::BIGINT(table.oid));
 
 			// constraint_index, BIGINT
-			output.SetValue(4, count, Value::BIGINT(data.constraint_offset));
+			output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset));
 
 			// constraint_type, VARCHAR
 			string constraint_type;
