@@ -41,5 +41,6 @@ public:
 private:
 	void CreatePlan(SQLStatement &statement);
 	shared_ptr<PreparedStatementData> PrepareSQLStatement(unique_ptr<SQLStatement> statement);
+	void VerifyPlan(unique_ptr<LogicalOperator> &op);
 };
 } // namespace duckdb
