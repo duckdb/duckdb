@@ -1181,11 +1181,19 @@ void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanS
 	block_collection->Clear();
 	string_heap->Clear();
 
-	// Move partition data for this probe phase to block/string collection
-	for (idx_t p = build_ht.partitions_start; p < build_ht.partitions_end; p++) {
-		block_collection->Merge(*partition_block_collections[p]);
+	if (swizzled_string_heap->count != 0) {
+		// We didn't partition the probe side
+		block_collection->Merge(*swizzled_block_collection);
 		if (!layout.AllConstant()) {
-			string_heap->Merge(*partition_string_heaps[p]);
+			string_heap->Merge(*swizzled_string_heap);
+		}
+	} else {
+		// Move partition data for this probe phase to block/string collection
+		for (idx_t p = build_ht.partitions_start; p < build_ht.partitions_end; p++) {
+			block_collection->Merge(*partition_block_collections[p]);
+			if (!layout.AllConstant()) {
+				string_heap->Merge(*partition_string_heaps[p]);
+			}
 		}
 	}
 
