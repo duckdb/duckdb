@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-LogicalOperator::LogicalOperator(LogicalOperatorType type) : type(type) {
+LogicalOperator::LogicalOperator(LogicalOperatorType type) : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
 }
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
@@ -138,6 +138,7 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 	for (auto &child : children) {
 		max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
 	}
+	has_estimated_cardinality = true;
 	return max_cardinality;
 }
 
