@@ -1071,10 +1071,10 @@ void JoinHashTable::UnFinalize() {
 	finalized = false;
 }
 
-void JoinHashTable::PrepareExternalFinalize() {
+bool JoinHashTable::PrepareExternalFinalize() {
 	if (partition_block_collections.empty()) {
 		// Empty HT!
-		return;
+		return false;
 	}
 
 	if (finalized) {
@@ -1084,7 +1084,7 @@ void JoinHashTable::PrepareExternalFinalize() {
 	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	partitions_start = partitions_end;
 	if (partitions_start == num_partitions) {
-		return;
+		return false;
 	}
 
 	// Determine how many partitions we can do next (at least one)
@@ -1101,11 +1101,6 @@ void JoinHashTable::PrepareExternalFinalize() {
 		count += partition_count;
 	}
 	partitions_end += next;
-
-	if (count == 0) {
-		// Last couple partitions were empty
-		return;
-	}
 
 	// Move specific partitions to the swizzled_... collections so they can be unswizzled
 	D_ASSERT(SwizzledCount() == 0);
@@ -1128,6 +1123,8 @@ void JoinHashTable::PrepareExternalFinalize() {
 	D_ASSERT(Count() == 0);
 	UnswizzleBlocks();
 	D_ASSERT(count == Count());
+
+	return true;
 }
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,

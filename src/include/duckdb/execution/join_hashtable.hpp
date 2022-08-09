@@ -279,7 +279,7 @@ public:
 	//! Delete blocks that belong to the current partitioned HT
 	void UnFinalize();
 	//! Build HT for the next partitioned probe round
-	void PrepareExternalFinalize();
+	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
 	                                        DataChunk &sink_keys, DataChunk &sink_payload);

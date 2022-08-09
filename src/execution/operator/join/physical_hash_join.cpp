@@ -243,13 +243,12 @@ private:
 
 class HashJoinPartitionEvent : public Event {
 public:
-	HashJoinPartitionEvent(Pipeline &pipeline_p, Event &event_p, HashJoinGlobalSinkState &sink,
+	HashJoinPartitionEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink,
 	                       vector<unique_ptr<JoinHashTable>> &local_hts)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), event(event_p), sink(sink), local_hts(local_hts) {
+	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink), local_hts(local_hts) {
 	}
 
 	Pipeline &pipeline;
-	Event &event;
 	HashJoinGlobalSinkState &sink;
 	vector<unique_ptr<JoinHashTable>> &local_hts;
 
@@ -268,7 +267,7 @@ public:
 	void FinishEvent() override {
 		local_hts.clear();
 		sink.hash_table->PrepareExternalFinalize();
-		ScheduleFinalize(pipeline, event, sink);
+		ScheduleFinalize(pipeline, *this, sink);
 	}
 };
 
@@ -296,12 +295,11 @@ private:
 
 class HashJoinFinalizeEvent : public Event {
 public:
-	HashJoinFinalizeEvent(Pipeline &pipeline_p, Event &event_p, HashJoinGlobalSinkState &sink)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), event(event_p), sink(sink) {
+	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
+	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink) {
 	}
 
 	Pipeline &pipeline;
-	Event &event;
 	HashJoinGlobalSinkState &sink;
 
 public:
@@ -349,7 +347,7 @@ public:
 
 void ScheduleFinalize(Pipeline &pipeline, Event &event, HashJoinGlobalSinkState &sink) {
 	sink.hash_table->InitializePointerTable();
-	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, event, sink);
+	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, sink);
 	event.InsertEvent(move(new_event));
 }
 
@@ -362,7 +360,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		// External join - partition HT
 		sink.perfect_join_executor.reset();
 		sink.hash_table->ComputePartitionSizes(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
-		auto new_event = make_shared<HashJoinPartitionEvent>(pipeline, event, sink, sink.local_hash_tables);
+		auto new_event = make_shared<HashJoinPartitionEvent>(pipeline, sink, sink.local_hash_tables);
 		event.InsertEvent(move(new_event));
 		sink.finalized = true;
 		return SinkFinalizeType::READY;
@@ -652,18 +650,21 @@ bool PhysicalHashJoin::PreparePartitionedRound(HashJoinGlobalSourceState &gstate
 
 	// Prepare the build side
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
-	sink.hash_table->PrepareExternalFinalize();
-	if (!sink.hash_table->finalized) {
+	auto &ht = *sink.hash_table;
+	if (!ht.PrepareExternalFinalize()) {
 		// Done
 		return false;
 	}
+	ht.InitializePointerTable();
+	ht.Finalize(0, ht.GetBlockCollection().blocks.size(), false);
+	ht.finalized = true;
 
 	// Prepare the probe side
-	gstate.probe_ht->PreparePartitionedProbe(*sink.hash_table, probe_ss);
+	gstate.probe_ht->PreparePartitionedProbe(ht, probe_ss);
 	// Reset full outer scan state (if necessary)
 	if (IsRightOuterJoin(join_type)) {
 		gstate.full_outer_scan_state.Reset();
-		gstate.full_outer_scan_state.total = sink.hash_table->Count();
+		gstate.full_outer_scan_state.total = ht.Count();
 	}
 
 	return true;
