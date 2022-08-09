@@ -3,7 +3,7 @@
 #include "catch.hpp"
 #include "duckdb.h"
 #include "test_helpers.hpp"
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {

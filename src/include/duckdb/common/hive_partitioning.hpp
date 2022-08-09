@@ -8,25 +8,25 @@
 
 #pragma once
 
+#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/optimizer/filter_combiner.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "re2/re2.h"
 
 namespace duckdb {
-// matches hive partitions in file name. For example:
-// 	- s3://bucket/var1=value1/bla/bla/var2=value2
-//  - http(s)://domain(:port)/lala/kasdl/var1=value1/?not-a-var=not-a-value
-//  - folder/folder/folder/../var1=value1/etc/.//var2=value2
-inline std::map<string, string> ParseHivePartitions(string filename) {
-	std::map<string, string> result;
 
-	string regex = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
-	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
-
-	string var;
-	string value;
-	while (RE2::FindAndConsume(&input, regex, &var, &value)) {
-		result.insert(std::pair<string, string>(var, value));
-	}
-	return result;
-}
+class HivePartitioning {
+public:
+	//! Parse a filename that follows the hive partitioning scheme
+	static std::map<string, string> Parse(string &filename);
+	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
+	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
+	//! evaluate to true.
+	static void ApplyFiltersToFileList(vector<string> &files, vector<unique_ptr<Expression>> &filters,
+	                                   unordered_map<string, column_t> &column_map, idx_t table_index,
+	                                   bool hive_enabled, bool filename_enabled);
+};
 
 } // namespace duckdb

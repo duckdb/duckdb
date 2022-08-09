@@ -185,6 +185,14 @@ struct ForceCompressionSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct HomeDirectorySetting {
+	static constexpr const char *Name = "home_directory";
+	static constexpr const char *Description = "Sets the home directory used by the system";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct LogQueryPathSetting {
 	static constexpr const char *Name = "log_query_path";
 	static constexpr const char *Description =

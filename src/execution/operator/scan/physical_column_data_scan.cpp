@@ -1,42 +1,41 @@
-#include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 
 namespace duckdb {
 
-class PhysicalChunkScanState : public GlobalSourceState {
+class PhysicalColumnDataScanState : public GlobalSourceState {
 public:
-	explicit PhysicalChunkScanState() : chunk_index(0) {
+	explicit PhysicalColumnDataScanState() : initialized(false) {
 	}
 
 	//! The current position in the scan
-	idx_t chunk_index;
+	ColumnDataScanState scan_state;
+	bool initialized;
 };
 
-unique_ptr<GlobalSourceState> PhysicalChunkScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalChunkScanState>();
+unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<PhysicalColumnDataScanState>();
 }
 
-void PhysicalChunkScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                LocalSourceState &lstate) const {
-	auto &state = (PhysicalChunkScanState &)gstate;
+void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
+	auto &state = (PhysicalColumnDataScanState &)gstate;
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;
 	}
-	D_ASSERT(chunk.GetTypes() == collection->Types());
-	if (state.chunk_index >= collection->ChunkCount()) {
-		return;
+	if (!state.initialized) {
+		collection->InitializeScan(state.scan_state);
+		state.initialized = true;
 	}
-	auto &collection_chunk = collection->GetChunk(state.chunk_index);
-	chunk.Reference(collection_chunk);
-	state.chunk_index++;
+	collection->Scan(state.scan_state, chunk);
 }
 
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalChunkScan::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
+void PhysicalColumnDataScan::BuildPipelines(Executor &executor, Pipeline &current, PipelineBuildState &state) {
 	// check if there is any additional action we need to do depending on the type
 	switch (type) {
 	case PhysicalOperatorType::DELIM_SCAN: {

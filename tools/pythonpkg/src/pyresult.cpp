@@ -3,9 +3,10 @@
 #include "duckdb_python/pyresult.hpp"
 
 #include "datetime.h" // from Python
-#include "duckdb/common/arrow.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb/common/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -256,17 +257,17 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
 		auto &materialized = (MaterializedQueryResult &)*result;
-		initial_capacity = materialized.collection.Count();
+		initial_capacity = materialized.RowCount();
 	}
 
 	NumpyResultConversion conversion(result->types, initial_capacity);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
-		for (auto &chunk : materialized.collection.Chunks()) {
-			conversion.Append(*chunk);
+		for (auto &chunk : materialized.Collection().Chunks()) {
+			conversion.Append(chunk);
 		}
 		InsertCategory(materialized, categories);
-		materialized.collection.Reset();
+		materialized.Collection().Reset();
 	} else {
 		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
 		if (!stream) {
@@ -340,23 +341,22 @@ data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 	return FrameFromNumpy(FetchNumpyInternal(true, num_of_vectors));
 }
 
-void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, DataChunk &duck_chunk, py::list &batches) {
+void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
-	ArrowArray data;
-	duck_chunk.ToArrowArray(&data);
 	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
 bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size) {
-	auto data_chunk = ArrowUtil::FetchChunk(result, chunk_size);
-	if (!data_chunk || data_chunk->size() == 0) {
+	ArrowArray data;
+	auto count = ArrowUtil::FetchChunk(result, chunk_size, &data);
+	if (count == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
 	timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
-	TransformDuckToArrowChunk(arrow_schema, *data_chunk, batches);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
 
@@ -368,9 +368,6 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 
 	py::list batches;
 
-	if (result->type == QueryResultType::STREAM_RESULT) {
-		result = ((StreamQueryResult *)result.get())->Materialize();
-	}
 	while (FetchArrowChunk(result.get(), batches, chunk_size)) {
 	}
 	return std::move(batches);
@@ -389,7 +386,8 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	ArrowSchema schema;
 
 	timezone_config = QueryResult::GetConfigTimezone(*result);
-	QueryResult::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
+
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches = FetchAllArrowChunks(chunk_size);

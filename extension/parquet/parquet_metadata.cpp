@@ -6,6 +6,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #endif
 
 namespace duckdb {
@@ -22,12 +23,15 @@ public:
 };
 
 struct ParquetMetaDataOperatorData : public GlobalTableFunctionState {
-	explicit ParquetMetaDataOperatorData(Allocator &allocator) : collection(allocator) {
+	explicit ParquetMetaDataOperatorData(ClientContext &context, const vector<LogicalType> &types)
+	    : collection(context, types) {
 	}
 
 	idx_t file_index;
-	ChunkCollection collection;
+	ColumnDataCollection collection;
+	ColumnDataScanState scan_state;
 
+public:
 	static void BindMetaData(vector<LogicalType> &return_types, vector<string> &names);
 	static void BindSchema(vector<LogicalType> &return_types, vector<string> &names);
 
@@ -253,6 +257,8 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	}
 	current_chunk.SetCardinality(count);
 	collection.Append(current_chunk);
+
+	collection.InitializeScan(scan_state);
 }
 
 void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, vector<string> &names) {
@@ -390,6 +396,8 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 	}
 	current_chunk.SetCardinality(count);
 	collection.Append(current_chunk);
+
+	collection.InitializeScan(scan_state);
 }
 
 template <bool SCHEMA>
@@ -422,7 +430,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
 	D_ASSERT(!bind_data.files.empty());
 
-	auto result = make_unique<ParquetMetaDataOperatorData>(Allocator::Get(context));
+	auto result = make_unique<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 	if (SCHEMA) {
 		result->LoadSchemaData(context, bind_data.return_types, bind_data.files[0]);
 	} else {
@@ -436,9 +444,9 @@ template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = (ParquetMetaDataOperatorData &)*data_p.global_state;
 	auto &bind_data = (ParquetMetaDataBindData &)*data_p.bind_data;
+
 	while (true) {
-		auto chunk = data.collection.Fetch();
-		if (!chunk) {
+		if (!data.collection.Scan(data.scan_state, output)) {
 			if (data.file_index + 1 < bind_data.files.size()) {
 				// load the metadata for the next file
 				data.file_index++;
@@ -453,7 +461,6 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 				return;
 			}
 		}
-		output.Move(*chunk);
 		if (output.size() != 0) {
 			return;
 		}

@@ -43,13 +43,14 @@ public:
 		result.validity.Reset();
 		switch (internal_type) {
 		case PhysicalType::LIST: {
-			result.data = owned_data->get();
+			result.data = owned_data.get();
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
 			auto &list_buffer = (VectorListBuffer &)*result.auxiliary;
 			list_buffer.capacity = STANDARD_VECTOR_SIZE;
 			list_buffer.size = 0;
+			list_buffer.SetAuxiliaryData(nullptr);
 
 			auto &list_child = list_buffer.GetChild();
 			auto &child_cache = (VectorCacheBuffer &)*child_caches[0];
@@ -60,6 +61,7 @@ public:
 			// struct does not have data
 			result.data = nullptr;
 			// reinitialize the VectorStructBuffer
+			auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through children
 			auto &children = ((VectorStructBuffer &)*result.auxiliary).GetChildren();
@@ -71,7 +73,7 @@ public:
 		}
 		default:
 			// regular type: no aux data and reset data to cached data
-			result.data = owned_data->get();
+			result.data = owned_data.get();
 			result.auxiliary.reset();
 			break;
 		}
@@ -85,7 +87,7 @@ private:
 	//! The type of the vector cache
 	LogicalType type;
 	//! Owned data
-	unique_ptr<AllocatedData> owned_data;
+	AllocatedData owned_data;
 	//! Child caches (if any). Used for nested types.
 	vector<buffer_ptr<VectorBuffer>> child_caches;
 	//! Aux data for the vector (if any)

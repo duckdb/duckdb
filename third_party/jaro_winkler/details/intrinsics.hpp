@@ -95,10 +95,10 @@ static inline int tzcnt(uint64_t x)
 #    endif
 
 #else /*  gcc / clang */
-static inline int tzcnt(uint32_t x)
-{
-    return __builtin_ctz(x);
-}
+//static inline int tzcnt(uint32_t x)
+//{
+//    return __builtin_ctz(x);
+//}
 
 static inline int tzcnt(uint64_t x)
 {

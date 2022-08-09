@@ -1,13 +1,13 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/arrow_wrapper.hpp
+// duckdb/common/arrow/arrow_wrapper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/helper.hpp"
 
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
@@ -39,6 +39,8 @@ class ArrowArrayStreamWrapper {
 public:
 	ArrowArrayStream arrow_array_stream;
 	int64_t number_of_rows;
+
+public:
 	void GetSchema(ArrowSchemaWrapper &schema);
 
 	shared_ptr<ArrowArrayWrapper> GetNextChunk();
@@ -53,9 +55,11 @@ public:
 
 class ArrowUtil {
 public:
-	static unique_ptr<DataChunk> FetchChunk(QueryResult *result, idx_t chunk_size);
+	static bool TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &result_count,
+	                          string &error);
+	static idx_t FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out);
 
 private:
-	static unique_ptr<DataChunk> FetchNext(QueryResult &result);
+	static bool TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &out, string &error);
 };
 } // namespace duckdb
