@@ -47,8 +47,8 @@ test_that("various error cases for duckdb_register()", {
   expect_error(duckdb::duckdb_unregister(1, "my_df1"))
   expect_error(duckdb::duckdb_unregister(con, ""))
   dbDisconnect(con, shutdown = TRUE)
-
-  expect_error(duckdb::duckdb_unregister(con, "my_df1"))
+  # this is fine
+  duckdb::duckdb_unregister(con, "my_df1")
 })
 
 

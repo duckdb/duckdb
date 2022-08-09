@@ -5,7 +5,7 @@
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
 
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -463,11 +463,11 @@ void DuckDBPyConnection::Close() {
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
-	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
+	ExtensionHelper::InstallExtension(*connection->context, extension, force_install);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
-	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
+	ExtensionHelper::LoadExternalExtension(*connection->context, extension);
 }
 
 // cursor() is stupid

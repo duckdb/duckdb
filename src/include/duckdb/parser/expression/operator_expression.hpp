@@ -57,7 +57,15 @@ public:
 			child_list += ")";
 			return "(" + in_child + op_type + child_list + ")";
 		}
-		case ExpressionType::OPERATOR_NOT:
+		case ExpressionType::OPERATOR_NOT: {
+			string result = "(";
+			result += ExpressionTypeToString(entry.type);
+			result += " ";
+			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+			result += ")";
+			return result;
+		}
 		case ExpressionType::GROUPING_FUNCTION:
 		case ExpressionType::OPERATOR_COALESCE: {
 			string result = ExpressionTypeToString(entry.type);

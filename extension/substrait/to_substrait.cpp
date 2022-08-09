@@ -398,7 +398,13 @@ uint64_t DuckDBToSubstrait::RegisterFunction(const string &name) {
 }
 
 void DuckDBToSubstrait::CreateFieldRef(substrait::Expression *expr, uint64_t col_idx) {
-	expr->mutable_selection()->mutable_direct_reference()->mutable_struct_field()->set_field((int32_t)col_idx);
+	auto selection = new ::substrait::Expression_FieldReference();
+	selection->mutable_direct_reference()->mutable_struct_field()->set_field((int32_t)col_idx);
+	auto root_reference = new ::substrait::Expression_FieldReference_RootReference();
+	selection->set_allocated_root_reference(root_reference);
+	D_ASSERT(selection->root_type_case() == substrait::Expression_FieldReference::RootTypeCase::kRootReference);
+	expr->set_allocated_selection(selection);
+	D_ASSERT(expr->has_selection());
 }
 
 substrait::Expression *DuckDBToSubstrait::TransformIsNotNullFilter(uint64_t col_idx, TableFilter &dfilter) {

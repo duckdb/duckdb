@@ -14,6 +14,8 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -195,7 +197,19 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 	}
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT: {
 		auto foreign_key_constraint_info = (AlterForeignKeyInfo *)table_info;
-		return SetForeignKeyConstraint(context, *foreign_key_constraint_info);
+		if (foreign_key_constraint_info->type == AlterForeignKeyType::AFT_ADD) {
+			return AddForeignKeyConstraint(context, *foreign_key_constraint_info);
+		} else {
+			return DropForeignKeyConstraint(context, *foreign_key_constraint_info);
+		}
+	}
+	case AlterTableType::SET_NOT_NULL: {
+		auto set_not_null_info = (SetNotNullInfo *)table_info;
+		return SetNotNull(context, *set_not_null_info);
+	}
+	case AlterTableType::DROP_NOT_NULL: {
+		auto drop_not_null_info = (DropNotNullInfo *)table_info;
+		return DropNotNull(context, *drop_not_null_info);
 	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
@@ -446,6 +460,69 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
 }
 
+unique_ptr<CatalogEntry> TableCatalogEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
+
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+	}
+
+	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	bool has_not_null = false;
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			auto &not_null = (NotNullConstraint &)*constraint;
+			if (not_null.index == not_null_idx) {
+				has_not_null = true;
+			}
+		}
+		create_info->constraints.push_back(move(constraint));
+	}
+	if (!has_not_null) {
+		create_info->constraints.push_back(make_unique<NotNullConstraint>(not_null_idx));
+	}
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+
+	// Early return
+	if (has_not_null) {
+		return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+		                                      storage);
+	}
+
+	// Return with new storage info
+	auto new_storage = make_shared<DataTable>(context, *storage, make_unique<NotNullConstraint>(not_null_idx));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(),
+	                                      new_storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	for (idx_t i = 0; i < columns.size(); i++) {
+		auto copy = columns[i].Copy();
+		create_info->columns.push_back(move(copy));
+	}
+
+	idx_t not_null_idx = GetColumnIndex(info.column_name);
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		auto constraint = constraints[i]->Copy();
+		// Skip/drop not_null
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			auto &not_null = (NotNullConstraint &)*constraint;
+			if (not_null.index == not_null_idx) {
+				continue;
+			}
+		}
+		create_info->constraints.push_back(move(constraint));
+	}
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	if (info.target_type.id() == LogicalTypeId::USER) {
 		auto &catalog = Catalog::GetCatalog(context);
@@ -533,7 +610,35 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	return move(result);
 }
 
-unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
+unique_ptr<CatalogEntry> TableCatalogEntry::AddForeignKeyConstraint(ClientContext &context, AlterForeignKeyInfo &info) {
+	D_ASSERT(info.type == AlterForeignKeyType::AFT_ADD);
+	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
+	create_info->temporary = temporary;
+
+	for (idx_t i = 0; i < columns.size(); i++) {
+		create_info->columns.push_back(columns[i].Copy());
+	}
+	for (idx_t i = 0; i < constraints.size(); i++) {
+		create_info->constraints.push_back(constraints[i]->Copy());
+	}
+	ForeignKeyInfo fk_info;
+	fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
+	fk_info.schema = info.schema;
+	fk_info.table = info.fk_table;
+	fk_info.pk_keys = info.pk_keys;
+	fk_info.fk_keys = info.fk_keys;
+	create_info->constraints.push_back(
+	    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, move(fk_info)));
+
+	auto binder = Binder::CreateBinder(context);
+	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
+
+	return make_unique<TableCatalogEntry>(catalog, schema, (BoundCreateTableInfo *)bound_create_info.get(), storage);
+}
+
+unique_ptr<CatalogEntry> TableCatalogEntry::DropForeignKeyConstraint(ClientContext &context,
+                                                                     AlterForeignKeyInfo &info) {
+	D_ASSERT(info.type == AlterForeignKeyType::AFT_DELETE);
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
 
@@ -549,16 +654,6 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetForeignKeyConstraint(ClientContex
 			}
 		}
 		create_info->constraints.push_back(move(constraint));
-	}
-	if (info.type == AlterForeignKeyType::AFT_ADD) {
-		ForeignKeyInfo fk_info;
-		fk_info.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-		fk_info.schema = info.schema;
-		fk_info.table = info.fk_table;
-		fk_info.pk_keys = info.pk_keys;
-		fk_info.fk_keys = info.fk_keys;
-		create_info->constraints.push_back(
-		    make_unique<ForeignKeyConstraint>(info.pk_columns, info.fk_columns, move(fk_info)));
 	}
 
 	auto binder = Binder::CreateBinder(context);

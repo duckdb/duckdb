@@ -77,35 +77,4 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 	}
 }
-
-void PhysicalComparisonJoin::ConstructFullOuterJoinResult(bool *found_match, ChunkCollection &input, DataChunk &result,
-                                                          idx_t &scan_position) {
-	// fill in NULL values for the LHS
-	SelectionVector rsel(STANDARD_VECTOR_SIZE);
-	while (scan_position < input.Count()) {
-		auto &rhs_chunk = input.GetChunk(scan_position / STANDARD_VECTOR_SIZE);
-		idx_t result_count = 0;
-		// figure out which tuples didn't find a match in the RHS
-		for (idx_t i = 0; i < rhs_chunk.size(); i++) {
-			if (!found_match[scan_position + i]) {
-				rsel.set_index(result_count++, i);
-			}
-		}
-		scan_position += STANDARD_VECTOR_SIZE;
-		if (result_count > 0) {
-			// if there were any tuples that didn't find a match, output them
-			idx_t left_column_count = result.ColumnCount() - input.ColumnCount();
-			for (idx_t i = 0; i < left_column_count; i++) {
-				result.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result.data[i], true);
-			}
-			for (idx_t col_idx = 0; col_idx < rhs_chunk.ColumnCount(); col_idx++) {
-				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
-			}
-			result.SetCardinality(result_count);
-			return;
-		}
-	}
-}
-
 } // namespace duckdb

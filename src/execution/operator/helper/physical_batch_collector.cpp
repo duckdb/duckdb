@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
-#include "duckdb/common/types/batched_chunk_collection.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 
@@ -13,20 +13,20 @@ PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : Ph
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	explicit BatchCollectorGlobalState(Allocator &allocator) : data(allocator) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
 	}
 
 	mutex glock;
-	BatchedChunkCollection data;
+	BatchedDataCollection data;
 	unique_ptr<MaterializedQueryResult> result;
 };
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	explicit BatchCollectorLocalState(Allocator &allocator) : data(allocator) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
 	}
 
-	BatchedChunkCollection data;
+	BatchedDataCollection data;
 };
 
 SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate,
@@ -48,32 +48,20 @@ void PhysicalBatchCollector::Combine(ExecutionContext &context, GlobalSinkState 
 SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   GlobalSinkState &gstate_p) const {
 	auto &gstate = (BatchCollectorGlobalState &)gstate_p;
-	auto result =
-	    make_unique<MaterializedQueryResult>(statement_type, properties, types, names, context.shared_from_this());
-	DataChunk output;
-	output.Initialize(BufferAllocator::Get(context), types);
-
-	BatchedChunkScanState state;
-	gstate.data.InitializeScan(state);
-	while (true) {
-		output.Reset();
-		gstate.data.Scan(state, output);
-		if (output.size() == 0) {
-			break;
-		}
-		result->collection.Append(output);
-	}
-
+	auto collection = gstate.data.FetchCollection();
+	D_ASSERT(collection);
+	auto result = make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection),
+	                                                   context.GetClientProperties());
 	gstate.result = move(result);
 	return SinkFinalizeType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchCollector::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BatchCollectorLocalState>(Allocator::DefaultAllocator());
+	return make_unique<BatchCollectorLocalState>(context.client, *this);
 }
 
 unique_ptr<GlobalSinkState> PhysicalBatchCollector::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<BatchCollectorGlobalState>(Allocator::DefaultAllocator());
+	return make_unique<BatchCollectorGlobalState>(context, *this);
 }
 
 unique_ptr<QueryResult> PhysicalBatchCollector::GetResult(GlobalSinkState &state) {
