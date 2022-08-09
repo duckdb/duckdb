@@ -177,6 +177,20 @@ TEST_CASE("Test logical_create_view", "[serialization]") {
 	test_helper("CREATE VIEW test_view AS (SELECT 42)");
 }
 
+TEST_CASE("Test logical_top_n", "[serialization]") {
+	test_helper("SELECT * FROM tbl ORDER BY foo LIMIT 1", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_update", "[serialization]") {
+	test_helper("UPDATE tbl SET foo=42", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+// TODO(stephwang): revisit this later since it doesn't work yet
 TEST_CASE("Test logical_copy_to_file", "[serialization]") {
 	test_helper("COPY tbl TO 'test_table.csv' ( DELIMITER '|', HEADER )", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+// TODO(stephwang): revisit this later since it doesn't work yet
+TEST_CASE("Test logical_prepare", "[serialization]") {
+	test_helper("PREPARE v1 AS SELECT 42");
 }
