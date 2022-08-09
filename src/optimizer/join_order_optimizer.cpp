@@ -253,50 +253,27 @@ unique_ptr<JoinNode> JoinOrderOptimizer::CreateJoinTree(JoinRelationSet *set,
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	double expected_cardinality;
 	NeighborInfo *best_connection = nullptr;
+	auto plan = plans.find(set);
+	// if we have already calculated an expected cardinality for this set,
+	// just re-use that cardinality
 	if (left->GetCardinality() < right->GetCardinality()) {
 		return CreateJoinTree(set, possible_connections, right, left);
 	}
-	cardinality_estimator.ResetCard();
-	if (possible_connections.empty()) {
+	if (plan != plans.end()) {
+		expected_cardinality = plan->second->GetCardinality();
+		best_connection = possible_connections.back();
+	} else if (possible_connections.empty()) {
 		// cross product
 		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
 	} else {
 		// normal join, expect foreign key join
-		JoinRelationSet *left_join_relations = left->set;
-		JoinRelationSet *right_join_relations = right->set;
-
-		ColumnBinding right_binding, left_binding;
-		auto left_card = left->GetCardinality();
-		auto right_card = right->GetCardinality();
-		for (auto &info : possible_connections) {
-			if (!best_connection) {
-				best_connection = info;
-			}
-			for (auto &filter : info->filters) {
-				if (JoinRelationSet::IsSubset(right_join_relations, filter->left_set) &&
-				    JoinRelationSet::IsSubset(left_join_relations, filter->right_set)) {
-					right_binding = filter->left_binding;
-					left_binding = filter->right_binding;
-				} else if (JoinRelationSet::IsSubset(left_join_relations, filter->left_set) &&
-				           JoinRelationSet::IsSubset(right_join_relations, filter->right_set)) {
-					right_binding = filter->right_binding;
-					left_binding = filter->left_binding;
-				}
-
-				// predict cardinality using most selective filter
-				expected_cardinality =
-				    cardinality_estimator.EstimateCardinality(left_card, right_card, left_binding, right_binding);
-				if (expected_cardinality < cardinality_estimator.lowest_card) {
-					best_connection = info;
-				}
-				cardinality_estimator.UpdateLowestcard(expected_cardinality);
-			}
-		}
+		expected_cardinality = cardinality_estimator.EstimateCardinalityWithSet(set);
+		best_connection = possible_connections.back();
 	}
 
-	auto cost = CardinalityEstimator::ComputeCost(left, right, cardinality_estimator.lowest_card);
-	D_ASSERT(cost >= cardinality_estimator.lowest_card);
-	auto result = make_unique<JoinNode>(set, best_connection, left, right, cardinality_estimator.lowest_card, cost);
+	auto cost = CardinalityEstimator::ComputeCost(left, right, expected_cardinality);
+	auto result = make_unique<JoinNode>(set, best_connection, left, right, expected_cardinality, cost);
+	D_ASSERT(cost >= expected_cardinality);
 	return result;
 }
 
@@ -324,7 +301,6 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 	auto new_plan = CreateJoinTree(new_set, info, left_plan.get(), right_plan.get());
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set);
-
 	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
 		// the plan is the optimal plan, move it into the dynamic programming tree
 		auto result = new_plan.get();
@@ -395,9 +371,9 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet *node) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto neighbor_relation = set_manager.GetJoinRelation(neighbor);
-		auto connection = query_graph.GetConnections(node, neighbor_relation);
-		if (!connection.empty()) {
-			if (!TryEmitPair(node, neighbor_relation, connection)) {
+		auto connections = query_graph.GetConnections(node, neighbor_relation);
+		if (!connections.empty()) {
+			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
 			}
 		}
@@ -765,6 +741,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 			result_operator = move(join);
 		}
 		left_node = left.first;
+		right_node = right.first;
 		right_node = right.first;
 		result_relation = set_manager.Union(left_node, right_node);
 	} else {

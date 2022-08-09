@@ -21,6 +21,23 @@ struct RelationAttributes {
 	// the relation columns used in join filters
 	// Needed when iterating over columns and initializing total domain values.
 	unordered_set<idx_t> columns;
+	double cardinality;
+};
+
+struct RelationsToTDom {
+	//! column binding sets that are equivalent in a join plan.
+	//! if you have A.x = B.y and B.y = C.z, then one set is {A.x, B.y, C.z}.
+	column_binding_set_t equivalent_relations;
+	//!	the estimated total domains of the equivalent relations determined using HLL
+	idx_t tdom_hll;
+	//! the estimated total domains of each relation without using HLL
+	idx_t tdom_no_hll;
+	bool has_tdom_hll;
+	vector<FilterInfo *> filters;
+
+	RelationsToTDom(column_binding_set_t column_binding_set)
+	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
+	      has_tdom_hll(false) {};
 };
 
 struct NodeOp {
@@ -28,6 +45,13 @@ struct NodeOp {
 	LogicalOperator *op;
 
 	NodeOp(unique_ptr<JoinNode> node, LogicalOperator *op) : node(move(node)), op(op) {};
+};
+
+struct Subgraph2Denominator {
+	unordered_set<idx_t> relations;
+	double denom;
+
+	Subgraph2Denominator() : relations(), denom(1) {};
 };
 
 class CardinalityEstimator {
@@ -46,15 +70,8 @@ private:
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
-	//! vector of column binding sets that are equivalent in a join plan.
-	//! if you have A.x = B.y and B.y = C.z, then one set is {A.x, B.y, C.z}.
-	vector<column_binding_set_t> equivalent_relations;
-	//! vector of the same length as equivalent_relations with the total domains of each relation
-	//! These total domains are determined using hll
-	vector<idx_t> equivalent_relations_tdom_no_hll;
-	//! vector of the same length as equivalent_relations with the total domains of each relation
-	//! These total domains are determined without using
-	vector<idx_t> equivalent_relations_tdom_hll;
+
+	vector<RelationsToTDom> relations_to_tdoms;
 
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
@@ -80,13 +97,10 @@ public:
 	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> *filter_infos);
 
 	void InitCardinalityEstimatorProps(vector<struct NodeOp> *node_ops, vector<unique_ptr<FilterInfo>> *filter_infos);
-	double EstimateCardinality(double left_card, double right_card, ColumnBinding left_binding,
-	                           ColumnBinding right_binding);
+	double EstimateCardinalityWithSet(JoinRelationSet *new_set);
 	void EstimateBaseTableCardinality(JoinNode *node, LogicalOperator *op);
 	double EstimateCrossProduct(const JoinNode *left, const JoinNode *right);
-	void ResetCard();
 	static double ComputeCost(JoinNode *left, JoinNode *right, double expected_cardinality);
-	void UpdateLowestcard(double old_card);
 
 private:
 	bool SingleColumnFilter(FilterInfo *filter_info);
@@ -99,7 +113,6 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	idx_t GetTDom(ColumnBinding binding);
 	TableFilterSet *GetTableFilters(LogicalOperator *op);
 
 	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *fil,
