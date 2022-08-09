@@ -44,14 +44,17 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 }
 
 void LogicalFilter::Serialize(FieldWriter &writer) const {
+	writer.WriteSerializableList<Expression>(expressions);
 	writer.WriteList<idx_t>(projection_map);
 }
 
 unique_ptr<LogicalOperator> LogicalFilter::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
+	auto expressions = reader.ReadRequiredSerializableList<Expression>(context);
 	auto projection_map = reader.ReadRequiredList<idx_t>();
 	auto result = make_unique<LogicalFilter>();
-	result->projection_map = projection_map;
+	result->expressions = move(expressions);
+	result->projection_map = move(projection_map);
 	return result;
 }
 

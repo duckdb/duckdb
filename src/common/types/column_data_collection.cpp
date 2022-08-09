@@ -238,6 +238,13 @@ void ColumnDataRowIterationHelper::ColumnDataRowIterator::Next() {
 	}
 }
 
+ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::begin() {
+	return ColumnDataRowIterationHelper::ColumnDataRowIterator(collection.Count() == 0 ? nullptr : &collection);
+}
+ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::end() {
+	return ColumnDataRowIterationHelper::ColumnDataRowIterator(nullptr);
+}
+
 ColumnDataRowIterationHelper::ColumnDataRowIterator &ColumnDataRowIterationHelper::ColumnDataRowIterator::operator++() {
 	Next();
 	return *this;

@@ -129,6 +129,14 @@ void Planner::VerifyPlan(unique_ptr<LogicalOperator> &op) {
 	if (!properties.read_only) {
 		return;
 	}
+	switch(op->type) {
+	case LogicalOperatorType::LOGICAL_PREPARE:
+	case LogicalOperatorType::LOGICAL_EXECUTE:
+		// unsupported (for now)
+		return;
+	default:
+		break;
+	}
 	BufferedSerializer serializer;
 	plan->Serialize(serializer);
 
