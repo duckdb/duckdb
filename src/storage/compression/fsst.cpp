@@ -132,7 +132,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
 
 		// TODO: do we really need to encode to get a size estimate?
-		auto compressed_ptrs = std::vector<unsigned char *>(string_count, 0);
+		auto compressed_ptrs = std::vector<unsigned char *>(string_count, nullptr);
 		auto compressed_sizes = std::vector<size_t>(string_count, 0);
 		auto compressed_buffer = std::vector<unsigned char>(output_buffer_size, 0);
 

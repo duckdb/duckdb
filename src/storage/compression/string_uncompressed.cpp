@@ -1,6 +1,7 @@
 #include "duckdb/storage/string_uncompressed.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "miniz_wrapper.hpp"
 
 namespace duckdb {
