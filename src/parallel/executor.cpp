@@ -31,6 +31,14 @@ void Executor::AddEvent(shared_ptr<Event> event) {
 	events.push_back(move(event));
 }
 
+struct PipelineEventStack {
+	Event *pipeline_event;
+	Event *pipeline_finish_event;
+	Event *pipeline_complete_event;
+};
+
+using event_map_t = unordered_map<const Pipeline *, PipelineEventStack>;
+
 struct ScheduleEventData {
 	ScheduleEventData(const vector<shared_ptr<Pipeline>> &pipelines,
 	                  unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
@@ -49,12 +57,6 @@ struct ScheduleEventData {
 	vector<shared_ptr<Event>> &events;
 	bool initial_schedule;
 	event_map_t event_map;
-};
-
-struct PipelineEventStack {
-	Event *pipeline_event;
-	Event *pipeline_finish_event;
-	Event *pipeline_complete_event;
 };
 
 void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,

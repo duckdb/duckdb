@@ -29,8 +29,6 @@ struct PipelineEventStack;
 struct ProducerToken;
 struct ScheduleEventData;
 
-using event_map_t = unordered_map<const Pipeline *, PipelineEventStack>;
-
 class Executor {
 	friend class Pipeline;
 	friend class PipelineTask;
