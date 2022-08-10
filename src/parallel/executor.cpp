@@ -117,7 +117,6 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
                                      ScheduleEventData &event_data) {
 	auto &events = event_data.events;
 	auto &child_dependencies = event_data.child_dependencies;
-	auto &union_pipelines = event_data.union_pipelines;
 	pipeline->Ready();
 
 	auto child_ptr = pipeline.get();
