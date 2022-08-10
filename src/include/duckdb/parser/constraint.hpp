@@ -89,6 +89,7 @@ public:
 	//! Deserializes a blob back into a Constraint
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
 };
+
 } // namespace duckdb
 
 namespace std {
@@ -103,9 +104,9 @@ struct hash<duckdb::ForeignKeyInfo> {
 	size_t operator()(const duckdb::ForeignKeyInfo &j) const {
 		D_ASSERT(j.pk_keys.size() > 0);
 		D_ASSERT(j.fk_keys.size() > 0);
-		return (size_t)j.type + compute_hash(j.schema) + compute_hash(j.table) + compute_hash(j.pk_keys[0]) +
-		       compute_hash(j.fk_keys[0]);
+		return compute_hash((size_t)j.type) + compute_hash(j.schema) + compute_hash(j.table) +
+		       compute_hash(j.pk_keys[0]) + compute_hash(j.fk_keys[0]);
 	}
 };
 
-}; // namespace std
+} // namespace std

@@ -154,7 +154,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 					output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset));
 					data.unique_constraint_offset++;
 				} else {
-					output.SetValue(4, count, Value::BIGINT((int64_t)known_unique_constraint_offset->second));
+					output.SetValue(4, count, Value::BIGINT(known_unique_constraint_offset->second));
 				}
 			}
 
