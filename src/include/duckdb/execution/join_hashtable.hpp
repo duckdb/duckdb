@@ -141,7 +141,7 @@ public:
 	//! ever called.
 	void Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	unique_ptr<ScanStructure> Probe(DataChunk &keys);
+	unique_ptr<ScanStructure> Probe(DataChunk &keys, Vector *precomputed_hashes = nullptr);
 	//! Scan the HT to find the rows for the full outer join and return the number of found entries
 	idx_t ScanFullOuter(JoinHTScanState &state, Vector &addresses);
 	//! Construct the full outer join result given the addresses and number of found entries
@@ -262,7 +262,7 @@ public:
 	idx_t SwizzledSize() {
 		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
 	}
-	idx_t PointerTableSize(idx_t count) {
+	idx_t PointerTableCapacity(idx_t count) {
 		return NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	}
 

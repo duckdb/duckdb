@@ -322,7 +322,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 
 void JoinHashTable::InitializePointerTable() {
 	idx_t count = external ? MaxValue<idx_t>(tuples_per_round, Count()) : Count();
-	idx_t capacity = PointerTableSize(count);
+	idx_t capacity = PointerTableCapacity(count);
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -339,6 +339,8 @@ void JoinHashTable::InitializePointerTable() {
 void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool parallel) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.IsValid());
+
+	vector<BufferHandle> local_pinned_handles;
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
@@ -364,8 +366,12 @@ void JoinHashTable::Finalize(idx_t block_idx_start, idx_t block_idx_end, bool pa
 
 			entry += next;
 		}
-		lock_guard<mutex> lock(pinned_handles_lock);
-		pinned_handles.push_back(move(handle));
+		local_pinned_handles.push_back(move(handle));
+	}
+
+	lock_guard<mutex> lock(pinned_handles_lock);
+	for (auto &local_pinned_handle : local_pinned_handles) {
+		pinned_handles.push_back(move(local_pinned_handle));
 	}
 }
 
@@ -386,19 +392,23 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 	return ss;
 }
 
-unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
+unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys, Vector *precomputed_hashes) {
 	const SelectionVector *current_sel;
 	auto ss = InitializeScanStructure(keys, current_sel);
 	if (ss->count == 0) {
 		return ss;
 	}
 
-	// hash all the keys
-	Vector hashes(LogicalType::HASH);
-	Hash(keys, *current_sel, ss->count, hashes);
+	if (precomputed_hashes) {
+		ApplyBitmask(*precomputed_hashes, *current_sel, ss->count, ss->pointers);
+	} else {
+		// hash all the keys
+		Vector hashes(LogicalType::HASH);
+		Hash(keys, *current_sel, ss->count, hashes);
 
-	// now initialize the pointers of the scan structure based on the hashes
-	ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
+		// now initialize the pointers of the scan structure based on the hashes
+		ApplyBitmask(hashes, *current_sel, ss->count, ss->pointers);
+	}
 
 	// create the selection vector linking to only non-empty entries
 	ss->InitializeSelectionVector(current_sel);
@@ -1025,7 +1035,7 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 		return;
 	}
 
-	total_size += PointerTableSize(total_count);
+	total_size += PointerTableCapacity(total_count) * sizeof(data_ptr_t);
 	idx_t avg_tuple_size = total_size / total_count;
 	tuples_per_round = max_ht_size / avg_tuple_size;
 

@@ -64,7 +64,6 @@ public:
 	//! Memory usage per thread during the Sink and Execute phases
 	idx_t max_ht_size;
 	idx_t sink_memory_per_thread;
-	idx_t execute_memory_per_thread;
 
 	//! Hash tables built by each thread
 	mutex lock;
@@ -155,13 +154,9 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	// memory usage per thread scales with max mem / num threads
 	double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	// during the Sink phase we spill at 60%
+	// HT may not exceed 60% of memory
 	state->max_ht_size = max_memory * 0.6;
 	state->sink_memory_per_thread = state->max_ht_size / num_threads;
-	// during the Execute phase we are probing and sinking at the same time
-	// at this point we're already doing an external join, and we need to spill the new sink data
-	// we can spill at a much lower percentage, 10%
-	state->execute_memory_per_thread = max_memory / num_threads * 0.1;
 	// Set probe types
 	auto &probe_types = state->probe_types;
 	const auto &payload_types = children[0]->types;
@@ -208,7 +203,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	// swizzle if we reach memory limit
-	if (!recursive_cte && ht.SizeInBytes() + ht.PointerTableSize(ht.Count()) >= gstate.sink_memory_per_thread) {
+	if (!recursive_cte &&
+	    ht.SizeInBytes() + ht.PointerTableCapacity(ht.Count()) * sizeof(data_ptr_t) >= gstate.sink_memory_per_thread) {
 		lstate.hash_table->SwizzleBlocks();
 		gstate.external = true;
 	}
@@ -231,7 +227,85 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void ScheduleFinalize(Pipeline &pipeline, Event &event, HashJoinGlobalSinkState &sink);
+class HashJoinFinalizeTask : public ExecutorTask {
+public:
+	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink,
+	                     idx_t block_idx_start, idx_t block_idx_end, bool parallel)
+	    : ExecutorTask(context), event(move(event_p)), sink(sink), block_idx_start(block_idx_start),
+	      block_idx_end(block_idx_end), parallel(parallel) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		sink.hash_table->Finalize(block_idx_start, block_idx_end, parallel);
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+	HashJoinGlobalSinkState &sink;
+	idx_t block_idx_start;
+	idx_t block_idx_end;
+	bool parallel;
+};
+
+class HashJoinFinalizeEvent : public Event {
+public:
+	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
+	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink) {
+	}
+
+	Pipeline &pipeline;
+	HashJoinGlobalSinkState &sink;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline.GetClientContext();
+		auto parallel_construct_count =
+		    context.config.verify_parallelism ? STANDARD_VECTOR_SIZE : PARALLEL_CONSTRUCT_COUNT;
+
+		vector<unique_ptr<Task>> finalize_tasks;
+		auto &ht = *sink.hash_table;
+		const auto &block_collection = ht.GetBlockCollection();
+		const auto &blocks = block_collection.blocks;
+		const auto num_blocks = blocks.size();
+		if (block_collection.count < parallel_construct_count) {
+			// Single-threaded finalize
+			finalize_tasks.push_back(
+			    make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0, num_blocks, false));
+		} else {
+			// Parallel finalize
+			idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+			auto blocks_per_thread = MaxValue<idx_t>((num_blocks + num_threads - 1) / num_threads, 1);
+
+			idx_t block_idx = 0;
+			for (idx_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
+				auto block_idx_start = block_idx;
+				auto block_idx_end = MinValue<idx_t>(block_idx_start + blocks_per_thread, num_blocks);
+				finalize_tasks.push_back(make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink,
+				                                                           block_idx_start, block_idx_end, true));
+				block_idx = block_idx_end;
+				if (block_idx == num_blocks) {
+					break;
+				}
+			}
+		}
+		SetTasks(move(finalize_tasks));
+	}
+
+	void FinishEvent() override {
+		sink.hash_table->finalized = true;
+	}
+
+	// 1 << 18 TODO: tweak experimentally
+	static constexpr const idx_t PARALLEL_CONSTRUCT_COUNT = 262144;
+};
+
+void ScheduleFinalize(Pipeline &pipeline, Event &event, HashJoinGlobalSinkState &sink) {
+	sink.hash_table->InitializePointerTable();
+	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, sink);
+	event.InsertEvent(move(new_event));
+}
 
 class HashJoinPartitionTask : public ExecutorTask {
 public:
@@ -282,86 +356,6 @@ public:
 		ScheduleFinalize(pipeline, *this, sink);
 	}
 };
-
-class HashJoinFinalizeTask : public ExecutorTask {
-public:
-	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink,
-	                     idx_t block_idx_start, idx_t block_idx_end, bool parallel)
-	    : ExecutorTask(context), event(move(event_p)), sink(sink), block_idx_start(block_idx_start),
-	      block_idx_end(block_idx_end), parallel(parallel) {
-	}
-
-	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(block_idx_start, block_idx_end, parallel);
-		event->FinishTask();
-		return TaskExecutionResult::TASK_FINISHED;
-	}
-
-private:
-	shared_ptr<Event> event;
-	HashJoinGlobalSinkState &sink;
-	idx_t block_idx_start;
-	idx_t block_idx_end;
-	bool parallel;
-};
-
-class HashJoinFinalizeEvent : public Event {
-public:
-	HashJoinFinalizeEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
-	    : Event(pipeline_p.executor), pipeline(pipeline_p), sink(sink) {
-	}
-
-	Pipeline &pipeline;
-	HashJoinGlobalSinkState &sink;
-
-public:
-	void Schedule() override {
-		auto &context = pipeline.GetClientContext();
-		auto hashes_per_thread = context.config.verify_parallelism ? STANDARD_VECTOR_SIZE : PARALLEL_HASHES_PER_THREAD;
-
-		vector<unique_ptr<Task>> finalize_tasks;
-		auto &ht = *sink.hash_table;
-		const auto &block_collection = ht.GetBlockCollection();
-		const auto &blocks = block_collection.blocks;
-		const auto num_blocks = blocks.size();
-		if (block_collection.count < hashes_per_thread) {
-			// No need to parallelize
-			finalize_tasks.push_back(
-			    make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0, num_blocks, false));
-		} else {
-			// Fixed amount of work per task
-			idx_t block_idx;
-			for (block_idx = 0; block_idx < num_blocks;) {
-				auto block_idx_start = block_idx;
-				idx_t count = 0;
-				for (; block_idx < num_blocks; block_idx++) {
-					count += blocks[block_idx]->count;
-					if (count >= hashes_per_thread) {
-						block_idx++;
-						break;
-					}
-				}
-				auto block_idx_end = block_idx;
-				finalize_tasks.push_back(make_unique<HashJoinFinalizeTask>(shared_from_this(), context, sink,
-				                                                           block_idx_start, block_idx_end, true));
-			}
-		}
-		SetTasks(move(finalize_tasks));
-	}
-
-	void FinishEvent() override {
-		sink.hash_table->finalized = true;
-	}
-
-	// 1 << 16
-	static constexpr const idx_t PARALLEL_HASHES_PER_THREAD = 262144;
-};
-
-void ScheduleFinalize(Pipeline &pipeline, Event &event, HashJoinGlobalSinkState &sink) {
-	sink.hash_table->InitializePointerTable();
-	auto new_event = make_shared<HashJoinFinalizeEvent>(pipeline, sink);
-	event.InsertEvent(move(new_event));
-}
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             GlobalSinkState &gstate) const {
@@ -601,9 +595,6 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 }
 
 void PartitionProbeSide(HashJoinGlobalSourceState &gstate, HashJoinGlobalSinkState &sink) {
-	if (sink.spill_collections.empty()) {
-		return;
-	}
 	lock_guard<mutex> lock(gstate.source_lock);
 	if (sink.spill_collections.empty()) {
 		return;
@@ -614,7 +605,7 @@ void PartitionProbeSide(HashJoinGlobalSourceState &gstate, HashJoinGlobalSinkSta
 	}
 	gstate.chunk_count = gstate.probe_collection->ChunkCount();
 
-	// TODO: explain this
+	// Because we don't actually partition, we have to mark the current probe phase as done TODO
 	D_ASSERT(gstate.chunk_idx == 0 && gstate.chunk_done == 0);
 	gstate.chunk_idx += gstate.chunk_count;
 	gstate.chunk_done += gstate.chunk_count;
@@ -670,9 +661,8 @@ void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gst
 	}
 	lstate.payload.SetCardinality(lstate.probe_chunk.size());
 
-	// Perform the probe
-	// TODO optimization: we already have the hashes
-	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys);
+	// Perform the probe (we already have the hashes)
+	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys, &lstate.probe_chunk.data.back());
 	lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
 }
 
