@@ -75,7 +75,8 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	duckdb_fsst_encoder_t *fsst_encoder = nullptr;
 	idx_t count;
 
-	std::vector<string> fsst_strings;
+	StringHeap fsst_string_heap;
+	std::vector<string_t> fsst_strings;
 	size_t fsst_string_total_size;
 
 	idx_t empty_strings;
@@ -102,7 +103,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 			}
 
 			if (string_size > 0) {
-				state.fsst_strings.emplace_back(data[idx].GetString());
+				state.fsst_strings.emplace_back(state.fsst_string_heap.AddString(data[idx]));
 				state.fsst_string_total_size += string_size;
 			} else {
 				state.empty_strings++;
@@ -125,8 +126,8 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		std::vector<size_t> fsst_string_sizes;
 		std::vector<unsigned char *> fsst_string_ptrs;
 		for (auto &str : state.fsst_strings) {
-			fsst_string_sizes.push_back(str.size());
-			fsst_string_ptrs.push_back((unsigned char *)str.c_str());
+			fsst_string_sizes.push_back(str.GetSize());
+			fsst_string_ptrs.push_back((unsigned char *)str.GetDataUnsafe());
 		}
 
 		state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
