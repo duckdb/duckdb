@@ -26,11 +26,11 @@
 #include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
+class CastFunctionSet;
 class ClientContext;
-class TableFunctionRef;
 class CompressionFunction;
+class TableFunctionRef;
 
-struct CastFunctionSet;
 struct CompressionFunctionSet;
 struct DBConfig;
 

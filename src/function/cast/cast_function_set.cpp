@@ -21,6 +21,9 @@ CastFunctionSet &CastFunctionSet::Get(DatabaseInstance &db) {
 }
 
 BoundCastInfo CastFunctionSet::GetCastFunction(const LogicalType &source, const LogicalType &target) {
+	if (source == target) {
+		return DefaultCasts::NopCast;
+	}
 	// the first function is the default
 	// we iterate the set of bind functions backwards
 	for(idx_t i = bind_functions.size(); i > 0; i--) {

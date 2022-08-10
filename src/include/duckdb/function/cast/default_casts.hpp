@@ -27,12 +27,16 @@ struct BoundCastData {
 };
 
 struct CastParameters {
+	CastParameters() {}
+	CastParameters(CastParameters &parent, BoundCastData *cast_data = nullptr) :
+		cast_data(cast_data), strict(parent.strict), error_message(parent.error_message) {}
+
+	//! The bound cast data (if any)
+	BoundCastData *cast_data = nullptr;
 	//! whether or not to enable strict casting
 	bool strict = false;
 	// out: error message in case cast has failed
 	string *error_message = nullptr;
-	//! The bound cast data (if any)
-	BoundCastData *cast_data = nullptr;
 };
 
 typedef bool (*cast_function_t)(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
@@ -44,7 +48,7 @@ struct BoundCastInfo {
 	unique_ptr<BoundCastData> cast_data;
 
 public:
-	BoundCastInfo Copy();
+	BoundCastInfo Copy() const;
 };
 
 struct BindCastInput {
@@ -57,11 +61,13 @@ struct BindCastInput {
 struct DefaultCasts {
 	static BoundCastInfo GetDefaultCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 
+	static bool NopCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 	static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 private:
 	static BoundCastInfo NumericCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 	static BoundCastInfo StructCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo UUIDCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 };
 
 
