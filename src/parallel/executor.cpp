@@ -56,77 +56,58 @@ struct PipelineEventStack {
 	Event *pipeline_complete_event;
 };
 
-Pipeline *Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, const Pipeline *parent,
-                                          ScheduleEventData &event_data) {
-	pipeline->Ready();
-
+Pipeline *Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
+                                     const Pipeline *parent) {
 	D_ASSERT(pipeline);
-	auto &events = event_data.events;
-	auto &union_pipelines = event_data.union_pipelines;
-	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
 	auto &event_map = event_data.event_map;
-	auto parent_stack_entry = event_map.find(parent);
-	D_ASSERT(parent_stack_entry != event_map.end());
+	auto &events = event_data.events;
+	auto &union_pipelines = event_data.union_pipelines;
+	pipeline->Ready();
 
-	auto &parent_stack = parent_stack_entry->second;
+	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
-	stack.pipeline_finish_event = parent_stack.pipeline_finish_event;
-	stack.pipeline_complete_event = parent_stack.pipeline_complete_event;
+	if (parent) {
+		// this pipeline has a parent pipeline - i.e. it is scheduled as part of a `UNION`
+		// set up the events
+		auto parent_stack_entry = event_map.find(parent);
+		D_ASSERT(parent_stack_entry != event_map.end());
 
-	stack.pipeline_event->AddDependency(*parent_stack.pipeline_event);
-	parent_stack.pipeline_finish_event->AddDependency(*pipeline_event);
+		auto &parent_stack = parent_stack_entry->second;
+		stack.pipeline_finish_event = parent_stack.pipeline_finish_event;
+		stack.pipeline_complete_event = parent_stack.pipeline_complete_event;
+
+		stack.pipeline_event->AddDependency(*parent_stack.pipeline_event);
+		parent_stack.pipeline_finish_event->AddDependency(*pipeline_event);
+	} else {
+		// stand-alone pipeline
+		auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
+		auto pipeline_complete_event =
+		    make_shared<PipelineCompleteEvent>(pipeline->executor, event_data.initial_schedule);
+
+		pipeline_finish_event->AddDependency(*pipeline_event);
+		pipeline_complete_event->AddDependency(*pipeline_finish_event);
+
+		stack.pipeline_finish_event = pipeline_finish_event.get();
+		stack.pipeline_complete_event = pipeline_complete_event.get();
+
+		events.push_back(move(pipeline_finish_event));
+		events.push_back(move(pipeline_complete_event));
+	}
 
 	events.push_back(move(pipeline_event));
 	event_map.insert(make_pair(pipeline.get(), stack));
 
 	auto parent_pipeline = pipeline.get();
-
 	auto union_entry = union_pipelines.find(pipeline.get());
 	if (union_entry != union_pipelines.end()) {
 		for (auto &entry : union_entry->second) {
-			parent_pipeline = ScheduleUnionPipeline(entry, parent_pipeline, event_data);
+			parent_pipeline = SchedulePipeline(entry, event_data, parent_pipeline);
 		}
 	}
-
 	return parent_pipeline;
-}
-
-void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data) {
-	D_ASSERT(pipeline);
-
-	auto &event_map = event_data.event_map;
-	auto &events = event_data.events;
-	auto &union_pipelines = event_data.union_pipelines;
-	pipeline->Ready();
-
-	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
-	auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
-	auto pipeline_complete_event = make_shared<PipelineCompleteEvent>(pipeline->executor, event_data.initial_schedule);
-
-	PipelineEventStack stack;
-	stack.pipeline_event = pipeline_event.get();
-	stack.pipeline_finish_event = pipeline_finish_event.get();
-	stack.pipeline_complete_event = pipeline_complete_event.get();
-
-	pipeline_finish_event->AddDependency(*pipeline_event);
-	pipeline_complete_event->AddDependency(*pipeline_finish_event);
-
-	events.push_back(move(pipeline_event));
-	events.push_back(move(pipeline_finish_event));
-	events.push_back(move(pipeline_complete_event));
-
-	event_map.insert(make_pair(pipeline.get(), stack));
-
-	auto union_entry = union_pipelines.find(pipeline.get());
-	if (union_entry != union_pipelines.end()) {
-		auto parent_pipeline = pipeline.get();
-		for (auto &entry : union_entry->second) {
-			parent_pipeline = ScheduleUnionPipeline(entry, parent_pipeline, event_data);
-		}
-	}
 }
 
 void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
