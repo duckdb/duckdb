@@ -95,8 +95,8 @@ private:
 	void ScheduleEvents();
 	static void ScheduleEventsInternal(ScheduleEventData &event_data);
 
-	static Pipeline *SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
-	                                  const Pipeline *parent = nullptr);
+	static void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
+	                             vector<Pipeline *> &scheduled_pipelines);
 	static void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
 	                                  ScheduleEventData &event_data);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);

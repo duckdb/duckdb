@@ -45,6 +45,7 @@ struct ScheduleEventData {
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines;
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &union_pipelines;
 	unordered_map<Pipeline *, vector<Pipeline *>> &child_dependencies;
+	unordered_map<Pipeline *, vector<Pipeline *>> scheduled_pipelines;
 	vector<shared_ptr<Event>> &events;
 	bool initial_schedule;
 	event_map_t event_map;
@@ -56,8 +57,8 @@ struct PipelineEventStack {
 	Event *pipeline_complete_event;
 };
 
-Pipeline *Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
-                                     const Pipeline *parent) {
+void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data,
+                                vector<Pipeline *> &scheduled_pipelines) {
 	D_ASSERT(pipeline);
 
 	auto &event_map = event_data.event_map;
@@ -69,9 +70,10 @@ Pipeline *Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, Sched
 
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
-	if (parent) {
+	if (!scheduled_pipelines.empty()) {
 		// this pipeline has a parent pipeline - i.e. it is scheduled as part of a `UNION`
 		// set up the events
+		auto parent = scheduled_pipelines.back();
 		auto parent_stack_entry = event_map.find(parent);
 		D_ASSERT(parent_stack_entry != event_map.end());
 
@@ -100,14 +102,13 @@ Pipeline *Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, Sched
 	events.push_back(move(pipeline_event));
 	event_map.insert(make_pair(pipeline.get(), stack));
 
-	auto parent_pipeline = pipeline.get();
+	scheduled_pipelines.push_back(pipeline.get());
 	auto union_entry = union_pipelines.find(pipeline.get());
 	if (union_entry != union_pipelines.end()) {
 		for (auto &entry : union_entry->second) {
-			parent_pipeline = SchedulePipeline(entry, event_data, parent_pipeline);
+			SchedulePipeline(entry, event_data, scheduled_pipelines);
 		}
 	}
-	return parent_pipeline;
 }
 
 void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
@@ -133,17 +134,26 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 
 	// set up the dependencies for this child pipeline
 	unordered_set<Event *> finish_events;
-	for (auto &dep : dependencies->second) {
-		auto dep_entry = event_map.find(dep);
-		D_ASSERT(dep_entry != event_map.end());
-		D_ASSERT(dep_entry->second.pipeline_event);
-		D_ASSERT(dep_entry->second.pipeline_finish_event);
+	for (auto &main_dep : dependencies->second) {
+		vector<Pipeline *> pipeline_dependencies;
+		auto dep_scheduled = event_data.scheduled_pipelines.find(main_dep);
+		if (dep_scheduled == event_data.scheduled_pipelines.end()) {
+			pipeline_dependencies.push_back(main_dep);
+		} else {
+			pipeline_dependencies = dep_scheduled->second;
+		}
+		for (auto &dep : pipeline_dependencies) {
+			auto dep_entry = event_map.find(dep);
+			D_ASSERT(dep_entry != event_map.end());
+			D_ASSERT(dep_entry->second.pipeline_event);
+			D_ASSERT(dep_entry->second.pipeline_finish_event);
 
-		auto finish_event = dep_entry->second.pipeline_finish_event;
-		stack.pipeline_event->AddDependency(*dep_entry->second.pipeline_event);
-		if (finish_events.find(finish_event) == finish_events.end()) {
-			finish_event->AddDependency(*stack.pipeline_event);
-			finish_events.insert(finish_event);
+			auto finish_event = dep_entry->second.pipeline_finish_event;
+			stack.pipeline_event->AddDependency(*dep_entry->second.pipeline_event);
+			if (finish_events.find(finish_event) == finish_events.end()) {
+				finish_event->AddDependency(*stack.pipeline_event);
+				finish_events.insert(finish_event);
+			}
 		}
 	}
 
@@ -157,7 +167,10 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	// create all the required pipeline events
 	auto &event_map = event_data.event_map;
 	for (auto &pipeline : event_data.pipelines) {
-		SchedulePipeline(pipeline, event_data);
+		vector<Pipeline *> scheduled_pipelines;
+		SchedulePipeline(pipeline, event_data, scheduled_pipelines);
+
+		event_data.scheduled_pipelines[pipeline.get()] = move(scheduled_pipelines);
 	}
 	// schedule child pipelines
 	for (auto &entry : event_data.child_pipelines) {
