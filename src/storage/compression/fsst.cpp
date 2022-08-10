@@ -4,6 +4,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "miniz_wrapper.hpp"
 #include "fsst.h"
 
@@ -32,6 +33,7 @@ typedef struct BPDeltaDecodeOffsets {
 struct FSSTStorage {
 	static constexpr size_t COMPACTION_FLUSH_LIMIT = (size_t)Storage::BLOCK_SIZE / 5 * 4;
 	static constexpr double MINIMUM_COMPRESSION_RATIO = 1.2;
+	static constexpr double ANALYSIS_SAMPLE_SIZE = 0.25;
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
@@ -79,6 +81,8 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	std::vector<string_t> fsst_strings;
 	size_t fsst_string_total_size;
 
+	RandomEngine random_engine;
+
 	idx_t empty_strings;
 };
 
@@ -93,20 +97,23 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 
 	state.count += count;
 	auto data = (string_t *)vdata.data;
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx)) {
-			auto string_size = data[idx].GetSize();
 
-			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
-				return false;
-			}
+	if (ANALYSIS_SAMPLE_SIZE == 1.0 || state.random_engine.NextRandom() < ANALYSIS_SAMPLE_SIZE) {
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			if (vdata.validity.RowIsValid(idx)) {
+				auto string_size = data[idx].GetSize();
 
-			if (string_size > 0) {
-				state.fsst_strings.emplace_back(state.fsst_string_heap.AddString(data[idx]));
-				state.fsst_string_total_size += string_size;
-			} else {
-				state.empty_strings++;
+				if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+					return false;
+				}
+
+				if (string_size > 0) {
+					state.fsst_strings.emplace_back(state.fsst_string_heap.AddString(data[idx]));
+					state.fsst_string_total_size += string_size;
+				} else {
+					state.empty_strings++;
+				}
 			}
 		}
 	}
@@ -135,11 +142,11 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		// TODO: do we really need to encode to get a size estimate?
 		auto compressed_ptrs = std::vector<unsigned char *>(string_count, nullptr);
 		auto compressed_sizes = std::vector<size_t>(string_count, 0);
-		auto compressed_buffer = std::vector<unsigned char>(output_buffer_size, 0);
+		unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
 
 		auto res =
 		    duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
-		                         output_buffer_size, &compressed_buffer[0], &compressed_sizes[0], &compressed_ptrs[0]);
+		                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
 
 		if (string_count != res) {
 			throw std::runtime_error("FSST output buffer is too small unexpectedly");
@@ -163,7 +170,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	auto estimated_size = estimated_base_size + symtable_size;
 
-	return estimated_size * MINIMUM_COMPRESSION_RATIO;
+	return estimated_size * MINIMUM_COMPRESSION_RATIO * (1/ANALYSIS_SAMPLE_SIZE);
 }
 
 //===--------------------------------------------------------------------===//
