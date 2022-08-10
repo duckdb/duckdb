@@ -121,7 +121,7 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 
 	auto child_ptr = pipeline.get();
 	auto dependencies = child_dependencies.find(child_ptr);
-	D_ASSERT(union_pipelines.find(child_ptr) == union_pipelines.end());
+	D_ASSERT(event_data.union_pipelines.find(child_ptr) == event_data.union_pipelines.end());
 	D_ASSERT(dependencies != child_dependencies.end());
 	// create the pipeline event and the event stack
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
