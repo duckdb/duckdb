@@ -662,7 +662,8 @@ void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gst
 	lstate.payload.SetCardinality(lstate.probe_chunk.size());
 
 	// Perform the probe (we already have the hashes)
-	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys, &lstate.probe_chunk.data.back());
+	auto precomputed_hashes = &lstate.probe_chunk.data.back();
+	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys, precomputed_hashes);
 	lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
 }
 
