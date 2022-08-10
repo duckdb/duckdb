@@ -207,7 +207,7 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name, error);
 	}
-	auto bound_aggr = aggr->functions.GetFunction(best_function);
+	auto bound_aggr = aggr->functions.GetFunctionByOffset(best_function);
 	if (bound_aggr.return_type != state_type.return_type || bound_aggr.arguments != state_type.bound_argument_types) {
 		throw InternalException("Type mismatch for exported aggregate %s", state_type.function_name);
 	}

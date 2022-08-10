@@ -141,7 +141,7 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 
 		// Tail patch the old binder
-		auto bound_function = func.functions.GetFunction(best_function);
+		auto bound_function = func.functions.GetFunctionByOffset(best_function);
 		bind = bound_function.bind;
 		bound_function.bind = StrpTimeBindFunction;
 	}

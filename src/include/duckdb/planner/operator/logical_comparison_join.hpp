@@ -31,6 +31,8 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
 	                                               FieldReader &reader);
+	static void Deserialize(LogicalComparisonJoin &comparison_join, ClientContext &context, LogicalOperatorType type,
+	                        FieldReader &reader);
 
 public:
 	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, unique_ptr<LogicalOperator> left_child,

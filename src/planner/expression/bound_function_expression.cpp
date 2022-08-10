@@ -73,24 +73,17 @@ void BoundFunctionExpression::Verify() const {
 
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
+	D_ASSERT(return_type == function.return_type);
 	writer.WriteString(function.name);
-	if (function.function_set_key == DConstants::INVALID_INDEX) {
-		throw SerializationException("Invalid function serialization key for %s", function.name);
-	}
-	// TODO need to serialize function arguments too cause e.g. sum changes those
-	writer.WriteField(function.function_set_key);
-
 	writer.WriteField(is_operator);
 	writer.WriteSerializable(return_type);
 	writer.WriteRegularSerializableList(function.arguments);
 
 	writer.WriteSerializableList(children);
 
-	writer.WriteField(bind_info != nullptr);
-	if (bind_info) {
-		if (!function.serialize) {
-			throw SerializationException("Have bind info but no serialization function for %s", function.name);
-		}
+	bool serialize = function.serialize;
+	writer.WriteField(serialize);
+	if (serialize) {
 		function.serialize(writer, bind_info.get(), function);
 	}
 }
@@ -98,9 +91,6 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
                                                             FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
-	auto function_set_key = reader.ReadRequired<idx_t>();
-	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
-
 	auto is_operator = reader.ReadRequired<bool>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
@@ -116,22 +106,25 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 	}
 
 	auto functions = (ScalarFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunction(function_set_key);
+	auto function = functions->functions.GetFunctionByArguments(arguments);
 	unique_ptr<FunctionData> bind_info;
 
 	// sometimes the bind changes those, not sure if we should generically set those
-	function.return_type = return_type;
+	function.return_type = move(return_type);
 	function.arguments = move(arguments);
-
-	auto has_bind_info = reader.ReadRequired<bool>();
-
-	if (has_bind_info) {
+	auto has_deserialize = reader.ReadRequired<bool>();
+	if (has_deserialize) {
 		if (!function.deserialize) {
-			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+			throw SerializationException("Function requires deserialization but no deserialization function for %s",
+			                             function.name);
 		}
 		bind_info = function.deserialize(context, reader, function);
+	} else if (function.bind) {
+		bind_info = function.bind(context, function, children);
 	}
+	return_type = function.return_type;
 
-	return make_unique<BoundFunctionExpression>(return_type, function, move(children), move(bind_info), is_operator);
+	return make_unique<BoundFunctionExpression>(move(return_type), move(function), move(children), move(bind_info),
+	                                            is_operator);
 }
 } // namespace duckdb

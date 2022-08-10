@@ -82,22 +82,15 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
-	if (function.function_set_key == DConstants::INVALID_INDEX) {
-		throw SerializationException("Invalid function serialization key for %s", function.name);
-	}
-	writer.WriteField(function.function_set_key);
 	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);
 	writer.WriteOptional(filter);
 	writer.WriteSerializable(return_type);
 	writer.WriteRegularSerializableList(function.arguments);
 
-	writer.WriteField(bind_info != nullptr);
-	if (bind_info) {
-		if (!function.serialize) {
-			throw SerializationException("Have bind info but no serialization function for %s", function.name);
-		}
-		D_ASSERT(function.serialize);
+	bool serialize = function.serialize;
+	writer.WriteField(serialize);
+	if (serialize) {
 		function.serialize(writer, bind_info.get(), function);
 	}
 }
@@ -105,8 +98,6 @@ void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &context, ExpressionType type,
                                                              FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
-	auto function_set_key = reader.ReadRequired<idx_t>();
-	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
 	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 	auto distinct = reader.ReadRequired<bool>();
 
@@ -124,21 +115,22 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 	}
 
 	auto functions = (AggregateFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunction(function_set_key);
+	auto function = functions->functions.GetFunctionByArguments(arguments);
 	unique_ptr<FunctionData> bind_info;
 
 	// sometimes the bind changes those, not sure if we should generically set those
 	function.return_type = return_type;
 	function.arguments = move(arguments);
 
-
-	auto has_bind_info = reader.ReadRequired<bool>();
-
-	if (has_bind_info) {
+	auto has_deserialize = reader.ReadRequired<bool>();
+	if (has_deserialize) {
 		if (!function.deserialize) {
-			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+			throw SerializationException("Function requires deserialization but no deserialization function for %s",
+			                             function.name);
 		}
 		bind_info = function.deserialize(context, reader, function);
+	} else if (function.bind) {
+		bind_info = function.bind(context, function, children);
 	}
 
 	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);

@@ -217,7 +217,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
-	auto table_function = function->functions.GetFunction(best_function_idx);
+	auto table_function = function->functions.GetFunctionByOffset(best_function_idx);
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

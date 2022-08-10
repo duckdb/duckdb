@@ -276,7 +276,9 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, Fi
 	bound_function.return_type = return_type;
 	bound_function.arguments = arguments;
 
-	return nullptr;
+	auto bind_data = make_unique<DecimalArithmeticBindData>();
+	bind_data->check_overflow = check_overflow;
+	return move(bind_data);
 }
 
 unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,
@@ -548,29 +550,15 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, F
 	return move(stats);
 }
 
-// TODO somewhat ugly
-static ScalarFunction KeyFromArguments(ScalarFunction function) {
-	idx_t key = 0;
-	for (auto &arg : function.arguments) {
-		key += (idx_t)arg.id();
-		key *= 1000;
-	}
-	function.function_set_key = key;
-	return function;
-}
-
 ScalarFunction SubtractFun::GetFunction(const LogicalType &type) {
 	if (type.id() == LogicalTypeId::INTERVAL) {
-		return KeyFromArguments(
-		    ScalarFunction("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>));
+		return ScalarFunction("-", {type}, type, ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>);
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
-		return KeyFromArguments(
-		    ScalarFunction("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics));
+		return ScalarFunction("-", {type}, type, nullptr, DecimalNegateBind, nullptr, NegateBindStatistics);
 	} else {
 		D_ASSERT(type.IsNumeric());
-		return KeyFromArguments(ScalarFunction("-", {type}, type,
-		                                       ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
-		                                       nullptr, NegateBindStatistics));
+		return ScalarFunction("-", {type}, type, ScalarFunction::GetScalarUnaryFunction<NegateOperator>(type), nullptr,
+		                      nullptr, NegateBindStatistics);
 	}
 }
 
@@ -582,60 +570,54 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			                   BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck, true>);
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
-			return KeyFromArguments(function);
+			return function;
 		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
-			return KeyFromArguments(ScalarFunction(
+			return ScalarFunction(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
-			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>));
+			    PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 
 		} else {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, left_type,
-			                   GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType())));
+			return ScalarFunction("-", {left_type, right_type}, left_type,
+			                      GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
 		}
 	}
 
 	switch (left_type.id()) {
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::DATE) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::BIGINT,
-			                   ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>));
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::BIGINT,
+			                      ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
 
 		} else if (right_type.id() == LogicalTypeId::INTEGER) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
-			                   ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>));
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
+			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
-			                   ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>));
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::DATE,
+			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		if (right_type.id() == LogicalTypeId::TIMESTAMP) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::INTERVAL,
-			                   ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>));
+			return ScalarFunction(
+			    "-", {left_type, right_type}, LogicalType::INTERVAL,
+			    ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::TIMESTAMP,
-			                   ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>));
+			return ScalarFunction(
+			    "-", {left_type, right_type}, LogicalType::TIMESTAMP,
+			    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
 		}
 		break;
 	case LogicalTypeId::INTERVAL:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::INTERVAL,
-			                   ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>));
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::INTERVAL,
+			                      ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
 		}
 		break;
 	case LogicalTypeId::TIME:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
-			return KeyFromArguments(
-			    ScalarFunction("-", {left_type, right_type}, LogicalType::TIME,
-			                   ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>));
+			return ScalarFunction("-", {left_type, right_type}, LogicalType::TIME,
+			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
 		}
 		break;
 	default:

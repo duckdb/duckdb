@@ -406,7 +406,6 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.filter_pushdown = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
-	scan_function.function_set_key = 0;
 	return scan_function;
 }
 
@@ -420,7 +419,7 @@ TableCatalogEntry *TableScanFunction::GetTableEntry(const TableFunction &functio
 
 void TableScanFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet table_scan_set("seq_scan");
-	table_scan_set.AddFunction(GetFunction(), 0);
+	table_scan_set.AddFunction(GetFunction());
 	set.AddFunction(move(table_scan_set));
 }
 

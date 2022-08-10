@@ -220,8 +220,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		result = LogicalCTERef::Deserialize(context, type, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_JOIN:
-		result = LogicalJoin::Deserialize(context, type, reader);
-		break;
+		throw InternalException("LogicalJoin deserialize not supported");
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = LogicalDelimJoin::Deserialize(context, type, reader);
 		break;

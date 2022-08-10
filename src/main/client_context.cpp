@@ -667,7 +667,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 	} catch (FatalException &ex) {
 		// fatal exceptions invalidate the entire database
 		auto &db = DatabaseInstance::GetDatabase(*this);
-		db.Invalidate();
+		if (!config.query_verification_enabled) {
+			db.Invalidate();
+		}
 		result = make_unique<PendingQueryResult>(ex.what());
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
@@ -1085,6 +1087,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 			result += name + ":\n" + results[i]->ToString();
 			return result;
 		} // LCOV_EXCL_STOP
+		if (!results[0]->success) {
+			continue;
+		}
 		string error;
 		if (!ColumnDataCollection::ResultEquals(results[0]->Collection(), results[i]->Collection(),
 		                                        error)) { // LCOV_EXCL_START
