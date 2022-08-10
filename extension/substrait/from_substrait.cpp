@@ -87,9 +87,6 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformScalarFunctionExpr(cons
 	for (auto &sarg : sexpr.scalar_function().arguments()) {
 		children.push_back(TransformExpr(sarg.value()));
 	}
-	for (auto &sarg : sexpr.scalar_function().args()) {
-		children.push_back(TransformExpr(sarg));
-	}
 	// string compare galore
 	// TODO simplify this
 	if (function_name == "and") {
@@ -270,10 +267,9 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformJoinOp(const substrait::Rel &so
 	default:
 		throw InternalException("Unsupported join type");
 	}
-	vector<unique_ptr<ParsedExpression>> expressions;
+	unique_ptr<ParsedExpression> join_condition = TransformExpr(sjoin.expression());
 	return make_shared<JoinRelation>(TransformOp(sjoin.left())->Alias("left"),
-	                                 TransformOp(sjoin.right())->Alias("right"), TransformExpr(sjoin.expression()),
-	                                 djointype);
+	                                 TransformOp(sjoin.right())->Alias("right"), move(join_condition), djointype);
 }
 
 shared_ptr<Relation> SubstraitToDuckDB::TransformCrossProductOp(const substrait::Rel &sop) {
@@ -322,9 +318,6 @@ shared_ptr<Relation> SubstraitToDuckDB::TransformAggregateOp(const substrait::Re
 		vector<unique_ptr<ParsedExpression>> children;
 		for (auto &sarg : smeas.measure().arguments()) {
 			children.push_back(TransformExpr(sarg.value()));
-		}
-		for (auto &sarg : smeas.measure().args()) {
-			children.push_back(TransformExpr(sarg));
 		}
 		auto function_name = FindFunction(smeas.measure().function_reference());
 		if (function_name == "count" && children.empty()) {
