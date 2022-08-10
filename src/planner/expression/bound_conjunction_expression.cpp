@@ -44,7 +44,8 @@ void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(children);
 }
 
-unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader) {
+unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
+                                                               FieldReader &reader) {
 	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 	auto res = make_unique<BoundConjunctionExpression>(type);
 	res->children = move(children);

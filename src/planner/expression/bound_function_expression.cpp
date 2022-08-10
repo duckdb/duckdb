@@ -79,14 +79,14 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(function.arguments);
 
 	writer.WriteSerializableList(children);
-
-	writer.WriteField(bind_info != nullptr);
-	if (bind_info) {
-		if (!function.serialize) {
-			throw SerializationException("Have bind info but no serialization function for %s", function.name);
-		}
-		function.serialize(writer, bind_info.get(), function);
-	}
+	//
+	//	writer.WriteField(bind_info != nullptr);
+	//	if (bind_info) {
+	//		if (!function.serialize) {
+	//			throw SerializationException("Have bind info but no serialization function for %s", function.name);
+	//		}
+	//		function.serialize(writer, bind_info.get(), function);
+	//	}
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
@@ -111,18 +111,21 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 	unique_ptr<FunctionData> bind_info;
 
 	// sometimes the bind changes those, not sure if we should generically set those
-	function.return_type = return_type;
+	function.return_type = move(return_type);
 	function.arguments = move(arguments);
-
-	auto has_bind_info = reader.ReadRequired<bool>();
-
-	if (has_bind_info) {
-		if (!function.deserialize) {
-			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
-		}
-		bind_info = function.deserialize(context, reader, function);
+	if (function.bind) {
+		bind_info = function.bind(context, function, children);
 	}
+	//	auto has_bind_info = reader.ReadRequired<bool>();
+	//
+	//	if (has_bind_info) {
+	//		if (!function.deserialize) {
+	//			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+	//		}
+	//		bind_info = function.deserialize(context, reader, function);
+	//	}
 
-	return make_unique<BoundFunctionExpression>(return_type, function, move(children), move(bind_info), is_operator);
+	return make_unique<BoundFunctionExpression>(return_type, move(function), move(children), move(bind_info),
+	                                            is_operator);
 }
 } // namespace duckdb

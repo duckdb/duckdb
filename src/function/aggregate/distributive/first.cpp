@@ -257,7 +257,7 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB: {
 		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-		                                                       FirstFunctionString<LAST>>(type, type);
+		                                                   FirstFunctionString<LAST>>(type, type);
 	}
 	case LogicalTypeId::DECIMAL: {
 		type.Verify();

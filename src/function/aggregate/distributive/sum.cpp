@@ -179,7 +179,7 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
-	                    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(sum);
 

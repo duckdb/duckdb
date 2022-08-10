@@ -61,10 +61,10 @@ public:
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
 
-	template<class T>
+	template <class T>
 	static string ToString(const vector<T> &input, const string &separator) {
 		vector<string> input_list;
-		for(auto &i : input) {
+		for (auto &i : input) {
 			input_list.push_back(i.ToString());
 		}
 		return StringUtil::Join(input_list, separator);

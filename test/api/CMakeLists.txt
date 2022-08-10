@@ -25,7 +25,7 @@ endif()
 if(${BUILD_TPCH_EXTENSION} AND NOT ${DISABLE_BUILTIN_EXTENSIONS})
   include_directories(../../extension/tpch/include)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_tpch_with_relations.cpp
-          test_tpch_plan_serialization.cpp)
+                       test_tpch_plan_serialization.cpp)
 endif()
 
 if(${BUILD_TPCDS_EXTENSION} AND NOT ${DISABLE_BUILTIN_EXTENSIONS})

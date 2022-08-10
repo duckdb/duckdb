@@ -53,8 +53,7 @@ Function::~Function() {
 }
 
 SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType varargs_p)
-    : Function(move(name_p)), arguments(move(arguments_p)),
-      varargs(move(varargs_p)) {
+    : Function(move(name_p)), arguments(move(arguments_p)), varargs(move(varargs_p)) {
 }
 
 SimpleFunction::~SimpleFunction() {
@@ -287,7 +286,7 @@ static vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<
 	idx_t best_function = DConstants::INVALID_INDEX;
 	int64_t lowest_cost = NumericLimits<int64_t>::Maximum();
 	vector<idx_t> candidate_functions;
-	for(idx_t f_idx = 0; f_idx < functions.functions.size(); f_idx++) {
+	for (idx_t f_idx = 0; f_idx < functions.functions.size(); f_idx++) {
 		auto &func = functions.functions[f_idx];
 		// check the arguments of the function
 		int64_t cost = BindFunctionCost(func, arguments);
@@ -342,8 +341,8 @@ static idx_t MultipleCandidateException(const string &name, FunctionSet<T> &func
 }
 
 template <class T>
-static idx_t BindFunctionFromArguments(const string &name, FunctionSet<T> &functions, const vector<LogicalType> &arguments,
-                                       string &error) {
+static idx_t BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
+                                       const vector<LogicalType> &arguments, string &error) {
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
 		// no candidates

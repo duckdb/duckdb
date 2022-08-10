@@ -47,7 +47,8 @@ public:
 		string error;
 		idx_t index = Function::BindFunction(name, *this, arguments, error);
 		if (index == DConstants::INVALID_INDEX) {
-			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","), error);
+			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+			                        error);
 		}
 		return GetFunctionByOffset(index);
 	}
@@ -62,7 +63,8 @@ public:
 		string error;
 		idx_t index = Function::BindFunction(name, *this, arguments, error);
 		if (index == DConstants::INVALID_INDEX) {
-			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","), error);
+			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+			                        error);
 		}
 		return GetFunctionByOffset(index);
 	}
@@ -77,7 +79,8 @@ public:
 		string error;
 		idx_t index = Function::BindFunction(name, *this, arguments, error);
 		if (index == DConstants::INVALID_INDEX) {
-			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","), error);
+			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
+			                        error);
 		}
 		return GetFunctionByOffset(index);
 	}

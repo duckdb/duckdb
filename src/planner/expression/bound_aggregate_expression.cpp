@@ -125,7 +125,6 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 	function.return_type = return_type;
 	function.arguments = move(arguments);
 
-
 	auto has_bind_info = reader.ReadRequired<bool>();
 
 	if (has_bind_info) {

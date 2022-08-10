@@ -169,15 +169,15 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	}
 	case PhysicalType::INT32: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::INTEGER, LogicalType::DOUBLE);
+		    LogicalType::INTEGER, LogicalType::DOUBLE);
 	}
 	case PhysicalType::INT64: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::BIGINT, LogicalType::DOUBLE);
+		    LogicalType::BIGINT, LogicalType::DOUBLE);
 	}
 	case PhysicalType::INT128: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
-		        LogicalType::HUGEINT, LogicalType::DOUBLE);
+		    LogicalType::HUGEINT, LogicalType::DOUBLE);
 	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
@@ -208,7 +208,7 @@ void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	                    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 
 	avg.name = "mean";
