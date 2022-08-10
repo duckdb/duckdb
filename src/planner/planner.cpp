@@ -58,7 +58,9 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = parameters_resolved;
 
-	Planner::VerifyPlan(context, plan);
+	if (bound_parameters.parameters.empty()) {
+		Planner::VerifyPlan(context, plan);
+	}
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
