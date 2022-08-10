@@ -82,6 +82,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 	size_t fsst_string_total_size;
 
 	RandomEngine random_engine;
+	bool have_valid_row = false;
 
 	idx_t empty_strings;
 };
@@ -98,18 +99,27 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 	state.count += count;
 	auto data = (string_t *)vdata.data;
 
-	if (ANALYSIS_SAMPLE_SIZE == 1.0 || state.random_engine.NextRandom() < ANALYSIS_SAMPLE_SIZE) {
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (vdata.validity.RowIsValid(idx)) {
-				auto string_size = data[idx].GetSize();
+	// Note that we ignore the sampling in case we have not found any valid strings yet, this solves the issue of
+	// not having seen any valid strings here leading to an empty fsst symbol table.
+	bool sample_selected = !state.have_valid_row || state.random_engine.NextRandom() < ANALYSIS_SAMPLE_SIZE;
 
-				if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
-					return false;
-				}
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (vdata.validity.RowIsValid(idx)) {
+			auto string_size = data[idx].GetSize();
 
+			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+				return false;
+			}
+
+			if (sample_selected) {
 				if (string_size > 0) {
-					state.fsst_strings.emplace_back(state.fsst_string_heap.AddString(data[idx]));
+					state.have_valid_row = true;
+					if (data[idx].IsInlined()) {
+						state.fsst_strings.push_back(data[idx]);
+					} else {
+						state.fsst_strings.emplace_back(state.fsst_string_heap.AddString(data[idx]));
+					}
 					state.fsst_string_total_size += string_size;
 				} else {
 					state.empty_strings++;
