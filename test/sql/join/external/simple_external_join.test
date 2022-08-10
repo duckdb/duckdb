@@ -2,11 +2,8 @@
 # description: Test simple external join
 # group: [external]
 
-#statement ok
-#pragma verify_external
-
 statement ok
-pragma debug_force_external=true
+pragma verify_external
 
 statement ok
 pragma verify_parallelism

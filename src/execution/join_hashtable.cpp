@@ -322,7 +322,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 
 void JoinHashTable::InitializePointerTable() {
 	idx_t count = external ? MaxValue<idx_t>(tuples_per_round, Count()) : Count();
-	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = PointerTableSize(count);
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -1127,8 +1127,8 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	return true;
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
-                                                       DataChunk &sink_keys, DataChunk &sink_payload) {
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload,
+                                                       ColumnDataCollection &spill_collection, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *FlatVector::IncrementalSelectionVector(), payload.size(), hashes);
@@ -1142,21 +1142,23 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	                                            radix_bits, partitions_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	// slice the stuff we can't probe right now
-	sink_keys.Reset();
-	sink_keys.Reference(keys);
-	sink_keys.Slice(false_sel, false_count);
-	sink_keys.Verify();
+	// Set up the spill chunk with stuff we CAN'T match right now
+	spill_chunk.Reset();
+	idx_t spill_col_idx = 0;
+	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+		spill_chunk.data[col_idx].Reference(keys.data[col_idx]);
+	}
+	spill_col_idx += keys.ColumnCount();
+	for (idx_t col_idx = 0; col_idx < payload.data.size(); col_idx++) {
+		spill_chunk.data[spill_col_idx + col_idx].Reference(payload.data[col_idx]);
+	}
+	spill_col_idx += payload.ColumnCount();
+	spill_chunk.data[spill_col_idx].Reference(hashes);
+	spill_chunk.Slice(false_sel, false_count);
+	spill_chunk.SetCardinality(false_count);
+	spill_collection.Append(spill_chunk);
 
-	sink_payload.Reset();
-	sink_payload.Reference(payload);
-	sink_payload.Slice(false_sel, false_count);
-	sink_payload.Verify();
-
-	// sink it into the local ht for later
-	local_ht.Build(sink_keys, sink_payload); // TODO optimization: we already have the hashes
-
-	// slice the stuff that we can probe right now
+	// slice the stuff that we CAN probe right now
 	hashes.Slice(true_sel, true_count);
 	keys.Slice(true_sel, true_count);
 	payload.Slice(true_sel, true_count);
@@ -1174,100 +1176,6 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	ss->InitializeSelectionVector(current_sel);
 
 	return ss;
-}
-
-void JoinHashTable::PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state) {
-	// Remove previous probe data
-	block_collection->Clear();
-	string_heap->Clear();
-
-	if (swizzled_string_heap->count != 0) {
-		// We didn't partition the probe side
-		block_collection->Merge(*swizzled_block_collection);
-		if (!layout.AllConstant()) {
-			string_heap->Merge(*swizzled_string_heap);
-		}
-	} else {
-		// Move partition data for this probe phase to block/string collection
-		for (idx_t p = build_ht.partitions_start; p < build_ht.partitions_end; p++) {
-			block_collection->Merge(*partition_block_collections[p]);
-			if (!layout.AllConstant()) {
-				string_heap->Merge(*partition_string_heaps[p]);
-			}
-		}
-	}
-
-	// Reset scan state and set how much we need to scan in this round
-	probe_scan_state.Reset();
-	probe_scan_state.total = block_collection->count;
-}
-
-void JoinHashTable::GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t &block_idx,
-                                      idx_t &entry_idx, idx_t &block_idx_deleted, const idx_t &block_idx_end) {
-	D_ASSERT(block_idx < block_idx_end);
-
-	// Delete references to blocks that we've passed, to make sure they aren't written back to disk
-	for (; block_idx_deleted < block_idx; block_idx_deleted++) {
-		block_collection->blocks[block_idx_deleted] = nullptr;
-		if (!layout.AllConstant()) {
-			string_heap->blocks[block_idx_deleted] = nullptr;
-		}
-	}
-
-	vector<BufferHandle> handles;
-	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
-
-	idx_t count = 0;
-	while (count != STANDARD_VECTOR_SIZE && block_idx < block_idx_end) {
-		auto &block = *block_collection->blocks[block_idx];
-		auto next = MinValue<idx_t>(block.count - entry_idx, STANDARD_VECTOR_SIZE - count);
-
-		auto block_handle = buffer_manager.Pin(block.block);
-		auto row_ptr = block_handle.Ptr() + entry_idx * layout.GetRowWidth();
-		if (!layout.AllConstant()) {
-			// Unswizzle if necessary
-			auto &heap_block = *string_heap->blocks[block_idx];
-			auto heap_handle = buffer_manager.Pin(heap_block.block);
-			RowOperations::UnswizzlePointers(layout, row_ptr, heap_handle.Ptr(), next);
-			handles.push_back(move(heap_handle));
-		}
-		handles.push_back(move(block_handle));
-
-		// Set up pointers
-		for (idx_t i = count; i < count + next; i++) {
-			key_locations[i] = row_ptr;
-			row_ptr += layout.GetRowWidth();
-		}
-
-		entry_idx += next;
-		if (entry_idx == block.count) {
-			block_idx++;
-			entry_idx = 0;
-		}
-		count += next;
-	}
-	D_ASSERT(count != 0);
-
-	// Gather join keys
-	join_keys.Reset();
-	for (idx_t col_idx = 0; col_idx < join_keys.ColumnCount(); col_idx++) {
-		auto col_offset = layout.GetOffsets()[col_idx];
-		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), join_keys.data[col_idx],
-		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, col_idx);
-	}
-	join_keys.SetCardinality(count);
-	join_keys.Verify();
-
-	// And the payload
-	payload.Reset();
-	for (idx_t col_idx = 0; col_idx < payload.ColumnCount(); col_idx++) {
-		auto col_in_ht = col_idx + join_keys.ColumnCount();
-		auto col_offset = layout.GetOffsets()[col_in_ht];
-		RowOperations::Gather(addresses, *FlatVector::IncrementalSelectionVector(), payload.data[col_idx],
-		                      *FlatVector::IncrementalSelectionVector(), count, col_offset, col_in_ht);
-	}
-	payload.SetCardinality(count);
-	payload.Verify();
 }
 
 } // namespace duckdb

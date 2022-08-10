@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -68,6 +69,10 @@ public:
 	//! Hash tables built by each thread
 	mutex lock;
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
+
+	//! Excess probe data gathered during Sink
+	vector<LogicalType> probe_types;
+	vector<unique_ptr<ColumnDataCollection>> spill_collections;
 };
 
 class HashJoinLocalSinkState : public LocalSinkState {
@@ -157,6 +162,13 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	// at this point we're already doing an external join, and we need to spill the new sink data
 	// we can spill at a much lower percentage, 10%
 	state->execute_memory_per_thread = max_memory / num_threads * 0.1;
+	// Set probe types
+	auto &probe_types = state->probe_types;
+	const auto &payload_types = children[0]->types;
+	probe_types.insert(probe_types.end(), condition_types.begin(), condition_types.end());
+	probe_types.insert(probe_types.end(), payload_types.begin(), payload_types.end());
+	probe_types.emplace_back(LogicalType::HASH);
+
 	return move(state);
 }
 
@@ -395,7 +407,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
-	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator), local_sink_ht(nullptr) {
+	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator), spill_collection(nullptr) {
 	}
 
 	DataChunk join_keys;
@@ -403,12 +415,10 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
-	//! DataChunks for sinking data into local_sink_ht for external join
-	DataChunk sink_keys;
-	DataChunk sink_payload;
-
-	//! Local ht to sink data into for external join
-	JoinHashTable *local_sink_ht;
+	//! Collection and chunk to sink data into for external join
+	ColumnDataCollection *spill_collection;
+	ColumnDataAppendState spill_append_state;
+	DataChunk spill_chunk;
 
 public:
 	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
@@ -429,14 +439,12 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		}
 	}
 	if (sink.external) {
-		const auto &payload_types = children[0]->types;
-		state->sink_keys.Initialize(allocator, condition_types);
-		state->sink_payload.Initialize(allocator, payload_types);
-
+		state->spill_chunk.Initialize(allocator, sink.probe_types);
 		lock_guard<mutex> local_ht_lock(sink.lock);
-		sink.local_hash_tables.push_back(
-		    make_unique<JoinHashTable>(sink.hash_table->buffer_manager, conditions, payload_types, join_type));
-		state->local_sink_ht = sink.local_hash_tables.back().get();
+		sink.spill_collections.push_back(
+		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), sink.probe_types));
+		state->spill_collection = sink.spill_collections.back().get();
+		state->spill_collection->InitializeAppend(state->spill_append_state);
 	}
 
 	return move(state);
@@ -479,12 +487,8 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
-		if (state.local_sink_ht->SizeInBytes() >= sink.execute_memory_per_thread) {
-			// Swizzle data collected so far (if needed)
-			state.local_sink_ht->SwizzleBlocks();
-		}
-		state.scan_structure = sink.hash_table->ProbeAndBuild(state.join_keys, input, *state.local_sink_ht,
-		                                                      state.sink_keys, state.sink_payload);
+		state.scan_structure =
+		    sink.hash_table->ProbeAndBuild(state.join_keys, input, *state.spill_collection, state.spill_chunk);
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
@@ -500,28 +504,24 @@ class HashJoinLocalSourceState;
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
 	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
-	    : op(op), probe_ht(make_unique<JoinHashTable>(BufferManager::GetBufferManager(context), op.conditions,
-	                                                  op.children[0]->types, op.join_type)),
-	      probe_count(op.children[0]->estimated_cardinality),
-	      parallel_scan_vector_count(context.config.verify_parallelism ? 1 : 120), initialized(false),
-	      local_hts_done(0) {
+	    : op(op), initialized(false), parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120),
+	      chunk_idx(0), chunk_count(0), chunk_done(0), probe_count(op.children[0]->estimated_cardinality) {
 	}
 
 	const PhysicalHashJoin &op;
+
+	mutex source_lock;
+	atomic<bool> initialized;
 
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState full_outer_scan_state;
 
 	//! Only used for external join: Materialized probe-side data and scan structure
-	unique_ptr<JoinHashTable> probe_ht;
-	idx_t probe_count;
-	idx_t parallel_scan_vector_count;
-	JoinHTScanState probe_ss;
-
-	mutex source_lock;
-	atomic<bool> initialized;
-	idx_t local_ht_count;
-	idx_t local_hts_done;
+	unique_ptr<ColumnDataCollection> probe_collection;
+	idx_t parallel_scan_chunk_count;
+	idx_t chunk_idx;
+	atomic<idx_t> chunk_count;
+	atomic<idx_t> chunk_done;
 
 	void Initialize(HashJoinGlobalSinkState &sink) {
 		if (initialized) {
@@ -533,66 +533,62 @@ public:
 			return;
 		}
 		full_outer_scan_state.total = sink.hash_table->Count();
-		probe_ht->radix_bits = sink.hash_table->radix_bits;
-		local_ht_count = sink.local_hash_tables.size();
+		probe_collection = make_unique<ColumnDataCollection>(sink.hash_table->buffer_manager, sink.probe_types);
 		initialized = true;
 	}
 
-	void AssignProbeBlocks(HashJoinLocalSourceState &lstate);
+	void AssignProbeChunks(HashJoinLocalSourceState &lstate);
 
+	idx_t probe_count;
 	idx_t MaxThreads() override {
-		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_vector_count);
+		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
 };
 
-//! Only used for external join
+//! Only used for external hash join
 class HashJoinLocalSourceState : public LocalSourceState {
 public:
 	HashJoinLocalSourceState(const PhysicalHashJoin &op, Allocator &allocator)
-	    : addresses(LogicalType::POINTER), block_idx(0), entry_idx(0), block_idx_deleted(0), block_idx_end(0),
-	      full_outer_in_progress(0) {
+	    : addresses(LogicalType::POINTER), chunk_idx(0), chunk_idx_end(0), full_outer_in_progress(0) {
+		auto &sink = (HashJoinGlobalSinkState &)*op.sink_state;
+		probe_chunk.Initialize(allocator, sink.probe_types);
 		join_keys.Initialize(allocator, op.condition_types);
 		payload.Initialize(allocator, op.children[0]->types);
 	}
 
 public:
-	//! Same as the input chunk in PhysicalHashJoin::Execute
+	//! Stores chunks from the probe collection
+	DataChunk probe_chunk;
+	//! Stores the probe keys
 	DataChunk join_keys;
+	//! Stores the other probe columns
 	DataChunk payload;
+	//! Scan structure for the external probe
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 
 	//! Vector with pointers here so we don't have to re-initialize
 	Vector addresses;
 
 public:
-	idx_t block_idx;
-	idx_t entry_idx;
-	idx_t block_idx_deleted;
-	idx_t block_idx_end;
+	idx_t chunk_idx;
+	idx_t chunk_idx_end;
 
 	//! Current number of tuples from a full/outer scan that are 'in-flight'
 	idx_t full_outer_in_progress;
 };
 
-void HashJoinGlobalSourceState::AssignProbeBlocks(duckdb::HashJoinLocalSourceState &lstate) {
+void HashJoinGlobalSourceState::AssignProbeChunks(HashJoinLocalSourceState &lstate) {
 	lock_guard<mutex> lock(source_lock);
-	const auto &block_collection = probe_ht->GetBlockCollection();
-
-	lstate.block_idx_deleted = probe_ss.block_position;
-	lstate.block_idx = probe_ss.block_position;
-	idx_t total = 0;
-	for (; probe_ss.block_position < block_collection.blocks.size(); probe_ss.block_position++) {
-		auto &block = *block_collection.blocks[probe_ss.block_position];
-		if (block.count == 0) {
-			// Skip over empty blocks just in case
-			continue;
-		}
-		total += block.count;
-		if (total >= idx_t(parallel_scan_vector_count * STANDARD_VECTOR_SIZE)) {
-			break;
-		}
+	if (chunk_idx == chunk_count) {
+		return;
 	}
-	lstate.block_idx_end = probe_ss.block_position;
+
+	auto chunk_idx_end = MinValue<idx_t>(chunk_idx + parallel_scan_chunk_count, chunk_count);
+
+	lstate.chunk_idx = chunk_idx;
+	lstate.chunk_idx_end = chunk_idx_end;
+
+	chunk_idx = chunk_idx_end;
 }
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
@@ -604,50 +600,29 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 	return make_unique<HashJoinLocalSourceState>(*this, Allocator::Get(context.client));
 }
 
-void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) {
-	{
-		lock_guard<mutex> local_ht_lock(sink.lock);
-		if (gstate.local_hts_done == gstate.local_ht_count) {
-			return;
-		}
-
-		auto &build_ht = *sink.hash_table;
-		if (build_ht.total_count - build_ht.Count() <= build_ht.tuples_per_round) {
-			// If there will only be one more probe round, we don't need to partition the probe side
-			for (auto &local_ht : sink.local_hash_tables) {
-				gstate.probe_ht->Merge(*local_ht);
-			}
-
-			sink.local_hash_tables.clear();
-			gstate.local_hts_done = gstate.local_ht_count;
-			return;
-		}
+void PartitionProbeSide(HashJoinGlobalSourceState &gstate, HashJoinGlobalSinkState &sink) {
+	if (sink.spill_collections.empty()) {
+		return;
 	}
-	while (true) {
-		unique_ptr<JoinHashTable> local_ht;
-		{
-			// Partition/spinlock until all partitioning is done
-			lock_guard<mutex> local_ht_lock(sink.lock);
-			if (gstate.local_hts_done == gstate.local_ht_count) {
-				break;
-			}
-			if (sink.local_hash_tables.empty()) {
-				continue;
-			}
-			local_ht = move(sink.local_hash_tables.back());
-			sink.local_hash_tables.pop_back();
-		}
-		// Partition after releasing the lock, grab lock again to update state
-		local_ht->Partition(*gstate.probe_ht);
-		lock_guard<mutex> local_ht_lock(sink.lock);
-		gstate.local_hts_done++;
+	lock_guard<mutex> lock(gstate.source_lock);
+	if (sink.spill_collections.empty()) {
+		return;
 	}
+	// For now we actually don't partition the probe side TODO
+	for (auto &spill_collection : sink.spill_collections) {
+		gstate.probe_collection->Combine(*spill_collection);
+	}
+	gstate.chunk_count = gstate.probe_collection->ChunkCount();
+
+	// TODO: explain this
+	D_ASSERT(gstate.chunk_idx == 0 && gstate.chunk_done == 0);
+	gstate.chunk_idx += gstate.chunk_count;
+	gstate.chunk_done += gstate.chunk_count;
+
+	sink.spill_collections.clear();
 }
 
 bool PhysicalHashJoin::PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const {
-	auto &probe_ss = gstate.probe_ss;
-	D_ASSERT(probe_ss.scanned == probe_ss.total);
-
 	// Prepare the build side
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	auto &ht = *sink.hash_table;
@@ -656,11 +631,14 @@ bool PhysicalHashJoin::PreparePartitionedRound(HashJoinGlobalSourceState &gstate
 		return false;
 	}
 	ht.InitializePointerTable();
+	// TODO: parallelize the finalize!
 	ht.Finalize(0, ht.GetBlockCollection().blocks.size(), false);
 	ht.finalized = true;
 
-	// Prepare the probe side
-	gstate.probe_ht->PreparePartitionedProbe(ht, probe_ss);
+	// Prepare the probe side TODO
+	gstate.chunk_idx = 0;
+	gstate.chunk_done = 0;
+
 	// Reset full outer scan state (if necessary)
 	if (IsRightOuterJoin(join_type)) {
 		gstate.full_outer_scan_state.Reset();
@@ -676,15 +654,24 @@ void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gst
 	D_ASSERT(sink.hash_table->finalized);
 
 	// Construct input Chunk for next probe
-	gstate.probe_ht->GatherProbeTuples(lstate.join_keys, lstate.payload, lstate.addresses, lstate.block_idx,
-	                                   lstate.entry_idx, lstate.block_idx_deleted, lstate.block_idx_end);
+	lstate.probe_chunk.Reset();
+	gstate.probe_collection->FetchChunk(lstate.chunk_idx++, lstate.probe_chunk);
+	// Get keys
+	const auto key_count = lstate.join_keys.ColumnCount();
+	lstate.join_keys.Reset();
+	for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
+		lstate.join_keys.data[col_idx].Reference(lstate.probe_chunk.data[col_idx]);
+	}
+	lstate.join_keys.SetCardinality(lstate.probe_chunk.size());
+	// Get payload
+	lstate.payload.Reset();
+	for (idx_t col_idx = 0; col_idx < lstate.payload.ColumnCount(); col_idx++) {
+		lstate.payload.data[col_idx].Reference(lstate.probe_chunk.data[key_count + col_idx]);
+	}
+	lstate.payload.SetCardinality(lstate.probe_chunk.size());
 
 	// Perform the probe
 	// TODO optimization: we already have the hashes
-	// TODO optimization: collect hashes first, match them
-	//  then, we collect the key columns only of rows that had a matching hash, and try to match them
-	//  finally, we collect only the payload columns of the rows that had matching key columns
-	//  this saves a ton of memcpy's, especially if we have many payload columns
 	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys);
 	lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
 }
@@ -710,18 +697,14 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		return;
 	}
 
-	// This is an external hash join
-	D_ASSERT(gstate.probe_ht);
-
 	// Initialize global source state (if not yet done)
 	gstate.Initialize(sink);
 
-	// Partition probe-side data (if not yet done)
-	PartitionProbeSide(sink, gstate);
+	// Partition probe side (if not yet done)
+	PartitionProbeSide(gstate, sink);
 
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
-	auto &probe_ss = gstate.probe_ss;
 	while (chunk.size() == 0) {
 		if (lstate.scan_structure) {
 			// Still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
@@ -731,26 +714,26 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			}
 			// This scan structure is done, reset it and increment scan progress
 			lstate.scan_structure = nullptr;
-			probe_ss.scanned += lstate.join_keys.size();
+			gstate.chunk_done++;
 		}
 
-		if (lstate.block_idx != lstate.block_idx_end) {
+		if (lstate.chunk_idx != lstate.chunk_idx_end) {
 			// Probe using the current blocks assigned to this thread
 			ExternalProbe(sink, gstate, lstate, chunk);
 			continue;
 		}
 
 		// This thread completed its blocks, try to assign new ones
-		if (lstate.block_idx == lstate.block_idx_end) {
-			gstate.AssignProbeBlocks(lstate);
-			if (lstate.block_idx != lstate.block_idx_end) {
+		if (lstate.chunk_idx == lstate.chunk_idx_end) {
+			gstate.AssignProbeChunks(lstate);
+			if (lstate.chunk_idx != lstate.chunk_idx_end) {
 				// We assigned new blocks to this thread
 				continue;
 			}
 		}
 
 		// If we arrived here, we've run out of blocks to assign to threads
-		if (probe_ss.scanned != probe_ss.total) {
+		if (gstate.chunk_done != gstate.chunk_count) {
 			// At least one thread is still probing, try again next iteration
 			continue;
 		}
@@ -766,7 +749,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		idx_t found_entries;
 		do { // 'do' just so we can 'break' to release the lock
 			lock_guard<mutex> lock(gstate.source_lock);
-			if (probe_ss.scanned != probe_ss.total) {
+			if (gstate.chunk_done != gstate.chunk_count) {
 				// Another thread prepared the next probe round while we waited for the lock
 				break;
 			}

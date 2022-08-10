@@ -22,6 +22,7 @@
 namespace duckdb {
 class BufferManager;
 class BufferHandle;
+class ColumnDataCollection;
 class Pipeline;
 class Event;
 
@@ -262,7 +263,7 @@ public:
 		return swizzled_block_collection->SizeInBytes() + swizzled_string_heap->SizeInBytes();
 	}
 	idx_t PointerTableSize(idx_t count) {
-		return count * 3 * sizeof(data_ptr_t);
+		return NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	}
 
 	//! Swizzle the blocks in this HT (moves from block_collection and string_heap to swizzled_...)
@@ -281,14 +282,8 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, JoinHashTable &local_ht,
-	                                        DataChunk &sink_keys, DataChunk &sink_payload);
-
-	//! If this is the probe-side HT, prepare the next partitioned probe round
-	void PreparePartitionedProbe(JoinHashTable &build_ht, JoinHTScanState &probe_scan_state);
-	//! If this is the probe-side HT, gather the next tuples given the assignment
-	void GatherProbeTuples(DataChunk &join_keys, DataChunk &payload, Vector &addresses, idx_t &block_idx,
-	                       idx_t &entry_idx, idx_t &block_idx_deleted, const idx_t &block_idx_end);
+	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, ColumnDataCollection &spill_collection,
+	                                        DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current partitioned round
