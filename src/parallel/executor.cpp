@@ -33,8 +33,10 @@ void Executor::AddEvent(shared_ptr<Event> event) {
 
 struct ScheduleEventData {
 	ScheduleEventData(const vector<shared_ptr<Pipeline>> &pipelines,
-	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
-	vector<shared_ptr<Event>> &events, bool initial_schedule) : pipelines(pipelines), child_pipelines(child_pipelines), events(events), initial_schedule(initial_schedule) {}
+	                  unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
+	                  vector<shared_ptr<Event>> &events, bool initial_schedule)
+	    : pipelines(pipelines), child_pipelines(child_pipelines), events(events), initial_schedule(initial_schedule) {
+	}
 
 	const vector<shared_ptr<Pipeline>> &pipelines;
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines;
@@ -85,7 +87,7 @@ Pipeline *Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, 
 	return parent_pipeline;
 }
 
-void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data, bool complete_pipeline) {
+void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data) {
 	D_ASSERT(pipeline);
 
 	auto &event_map = event_data.event_map;
@@ -93,7 +95,7 @@ void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEv
 
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 	auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
-	auto pipeline_complete_event = make_shared<PipelineCompleteEvent>(pipeline->executor, complete_pipeline);
+	auto pipeline_complete_event = make_shared<PipelineCompleteEvent>(pipeline->executor, event_data.initial_schedule);
 
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
@@ -118,7 +120,8 @@ void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEv
 	}
 }
 
-void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, ScheduleEventData &event_data) {
+void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
+                                     ScheduleEventData &event_data) {
 	pipeline->Ready();
 
 	auto child_ptr = pipeline.get();
@@ -155,13 +158,12 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 	event_map.insert(make_pair(child_ptr, stack));
 }
 
-
-void Executor::ScheduleEventsInternal(ScheduleEventData &event_data, bool main_schedule) {
+void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 	D_ASSERT(events.empty());
 	// create all the required pipeline events
 	auto &event_map = event_data.event_map;
 	for (auto &pipeline : pipelines) {
-		SchedulePipeline(pipeline, event_data, main_schedule);
+		SchedulePipeline(pipeline, event_data);
 	}
 	// schedule child pipelines
 	for (auto &entry : child_pipelines) {
