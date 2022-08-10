@@ -3,12 +3,32 @@
 namespace duckdb {
 
 void LogicalUpdate::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	table->Serialize(writer.GetSerializer());
+	writer.WriteField(table_index);
+	writer.WriteField(return_chunk);
+	writer.WriteList<column_t>(columns);
+	writer.WriteSerializableList(bound_defaults);
+	writer.WriteField(update_is_del_and_insert);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(ClientContext &context, LogicalOperatorType type,
                                                        FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
+	auto &catalog = Catalog::GetCatalog(context);
+
+	TableCatalogEntry *table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
+
+	if (!table_catalog_entry) {
+		throw InternalException("Cant find catalog entry for table %s", info->table);
+	}
+
+	auto result = make_unique<LogicalUpdate>(table_catalog_entry);
+	result->table_index = reader.ReadRequired<idx_t>();
+	result->return_chunk = reader.ReadRequired<bool>();
+	result->columns = reader.ReadRequiredList<column_t>();
+	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);
+	result->update_is_del_and_insert = reader.ReadRequired<bool>();
+	return result;
 }
 
 } // namespace duckdb

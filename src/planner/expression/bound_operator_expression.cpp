@@ -34,7 +34,15 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 }
 
 void BoundOperatorExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	writer.WriteField<ExpressionType>(type);
+	writer.WriteSerializable(return_type);
+}
+
+unique_ptr<Expression> BoundOperatorExpression::Deserialize(ClientContext &context, ExpressionType type,
+                                                            FieldReader &reader) {
+	auto expression_type = reader.ReadRequired<ExpressionType>();
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	return make_unique<BoundOperatorExpression>(expression_type, return_type);
 }
 
 } // namespace duckdb
