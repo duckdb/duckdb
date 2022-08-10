@@ -101,6 +101,7 @@ hash_t Expression::Hash() const {
 
 void Expression::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
+	writer.WriteField<ExpressionClass>(expression_class);
 	writer.WriteField<ExpressionType>(type);
 	Serialize(writer);
 	writer.Finalize();
@@ -108,48 +109,40 @@ void Expression::Serialize(Serializer &serializer) const {
 
 unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientContext &context) {
 	FieldReader reader(source);
+	auto expression_class = reader.ReadRequired<ExpressionClass>();
 	auto type = reader.ReadRequired<ExpressionType>();
 
 	unique_ptr<Expression> result;
-	switch (type) {
-	case ExpressionType::BOUND_REF:
+	switch (expression_class) {
+	case ExpressionClass::BOUND_REF:
 		result = BoundReferenceExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::BOUND_COLUMN_REF:
+	case ExpressionClass::BOUND_COLUMN_REF:
 		result = BoundColumnRefExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::BOUND_AGGREGATE:
+	case ExpressionClass::BOUND_AGGREGATE:
 		result = BoundAggregateExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::VALUE_CONSTANT:
+	case ExpressionClass::BOUND_CONSTANT:
 		result = BoundConstantExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::BOUND_FUNCTION:
+	case ExpressionClass::BOUND_FUNCTION:
 		result = BoundFunctionExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::OPERATOR_CAST:
+	case ExpressionClass::BOUND_CAST:
 		result = BoundCastExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::CASE_EXPR:
+	case ExpressionClass::BOUND_CASE:
 		result = BoundCaseExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::CONJUNCTION_AND:
-	case ExpressionType::CONJUNCTION_OR:
+	case ExpressionClass::BOUND_CONJUNCTION:
 		result = BoundConjunctionExpression::Deserialize(context, type, reader);
 		break;
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_IN:
-	case ExpressionType::COMPARE_NOT_IN:
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-	case ExpressionType::COMPARE_BETWEEN:
-	case ExpressionType::COMPARE_NOT_BETWEEN:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+	case ExpressionClass::BOUND_COMPARISON:
 		result = BoundComparisonExpression::Deserialize(context, type, reader);
+		break;
+	case ExpressionClass::BOUND_OPERATOR:
+		result = BoundOperatorExpression::Deserialize(context, type, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization %s",

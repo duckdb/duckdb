@@ -149,18 +149,6 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 	}
 };
 
-static void SerializeDecimalAvg(FieldWriter &writer, const FunctionData *bind_data_p,
-                                const AggregateFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (AverageDecimalBindData *)bind_data_p;
-	writer.WriteField(bind_data->scale);
-}
-
-static unique_ptr<FunctionData> DeserializeDecimalAvg(ClientContext &context, FieldReader &reader,
-                                                      AggregateFunction &function) {
-	return make_unique<AverageDecimalBindData>(reader.ReadRequired<double>());
-}
-
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
@@ -188,8 +176,6 @@ unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunctio
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetAverageAggregate(decimal_type.InternalType());
-	function.serialize = SerializeDecimalAvg;
-	function.deserialize = DeserializeDecimalAvg;
 	function.name = "avg";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DOUBLE;
