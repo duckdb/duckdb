@@ -276,7 +276,9 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, Fi
 	bound_function.return_type = return_type;
 	bound_function.arguments = arguments;
 
-	return nullptr;
+	auto bind_data = make_unique<DecimalArithmeticBindData>();
+	bind_data->check_overflow = check_overflow;
+	return move(bind_data);
 }
 
 unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,

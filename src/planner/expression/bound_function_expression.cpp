@@ -121,8 +121,9 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 	} else if (function.bind) {
 		bind_info = function.bind(context, function, children);
 	}
+	return_type = function.return_type;
 
-	return make_unique<BoundFunctionExpression>(function.return_type, move(function), move(children), move(bind_info),
+	return make_unique<BoundFunctionExpression>(move(return_type), move(function), move(children), move(bind_info),
 	                                            is_operator);
 }
 } // namespace duckdb
