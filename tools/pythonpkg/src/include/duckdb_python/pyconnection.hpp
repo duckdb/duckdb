@@ -46,9 +46,7 @@ public:
 	static void Initialize(py::handle &m);
 	static void Cleanup();
 
-	static shared_ptr<DuckDBPyConnection> Enter(DuckDBPyConnection &self,
-	                                            const string &database = ":memory:", bool read_only = false,
-	                                            const py::dict &config = py::dict());
+	DuckDBPyConnection *Enter();
 
 	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
