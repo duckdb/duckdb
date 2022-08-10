@@ -39,9 +39,9 @@ public:
 	};
 
 	//! Ensure that heap blocks correspond to row blocks
-	static void SwizzleBlocks(RowDataCollection &swizzled_block_collection, RowDataCollection &swizzled_string_heap,
-	                          RowDataCollection &block_collection, RowDataCollection &string_heap,
-	                          const RowLayout &layout);
+	static void AlignHeapBlocks(RowDataCollection &swizzled_block_collection, RowDataCollection &swizzled_string_heap,
+	                            RowDataCollection &block_collection, RowDataCollection &string_heap,
+	                            const RowLayout &layout);
 
 	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout, bool external,
 	                         bool flush = true);
@@ -60,6 +60,12 @@ public:
 	inline idx_t Remaining() const {
 		return total_count - total_scanned;
 	}
+
+	//! Swizzle the blocks for external scanning
+	//! Swizzling is all or nothing, so if we have scanned previously,
+	//! we need to re-swizzle.
+	void ReSwizzle();
+
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
 

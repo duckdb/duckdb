@@ -432,7 +432,7 @@ void WindowLocalSinkState::Group(WindowGlobalSinkState &gstate) {
 	auto &payload_heap = *ungrouped->local_sort->payload_heap;
 	auto heap = payload_heap.CloneEmpty();
 
-	RowDataCollectionScanner::SwizzleBlocks(*rows, *heap, payload_data, payload_heap, payload_layout);
+	RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, payload_data, payload_heap, payload_layout);
 	RowDataCollectionScanner scanner(*rows, *heap, payload_layout, true);
 	while (scanner.Remaining()) {
 		payload_chunk.Reset();
@@ -1742,7 +1742,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		//	No partition - align the heap blocks with the row blocks
 		rows = gstate.rows->CloneEmpty();
 		heap = gstate.strings->CloneEmpty();
-		RowDataCollectionScanner::SwizzleBlocks(*rows, *heap, *gstate.rows, *gstate.strings, layout);
+		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gstate.rows, *gstate.strings, layout);
 		external = true;
 	} else if (hash_bin < gstate.hash_groups.size() && gstate.hash_groups[hash_bin]) {
 		// Overwrite the collections with the sorted data
@@ -1775,6 +1775,9 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (auto &wexec : window_execs) {
 		wexec->Finalize(gstate.mode);
 	}
+
+	// External scanning assumes all blocks are swizzled.
+	scanner->ReSwizzle();
 
 	//	Second pass can flush
 	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, external, true);
