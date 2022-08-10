@@ -386,8 +386,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);
 
-		// TODO: Go through table filters and find if there is a direct filter
-		//  on a column used in a join
 		if (catalog_table) {
 			relation_attributes[relation_id].original_name = catalog_table->name;
 			// Get HLL stats here
@@ -424,26 +422,27 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode *node, LogicalOperator *o
 
 		for (auto &relation_to_tdom : relations_to_tdoms) {
 			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
-			if (i_set.count(key) == 1) {
-				if (catalog_table) {
-					if (relation_to_tdom.tdom_hll < count) {
-						relation_to_tdom.tdom_hll = count;
-						relation_to_tdom.has_tdom_hll = true;
-					}
-					if (relation_to_tdom.tdom_no_hll > count) {
-						relation_to_tdom.tdom_no_hll = count;
-					}
-				} else {
-					// Here we don't have catalog statistics, and the following is how we determine
-					// the tdom
-					// 1. If there is any hll data in the equivalence set, use that
-					// 2. Otherwise, use the table with the smallest cardinality
-					if (relation_to_tdom.tdom_no_hll > count && !relation_to_tdom.has_tdom_hll) {
-						relation_to_tdom.tdom_no_hll = count;
-					}
-				}
-				break;
+			if (i_set.count(key) != 1) {
+				continue;
 			}
+			if (catalog_table) {
+				if (relation_to_tdom.tdom_hll < count) {
+					relation_to_tdom.tdom_hll = count;
+					relation_to_tdom.has_tdom_hll = true;
+				}
+				if (relation_to_tdom.tdom_no_hll > count) {
+					relation_to_tdom.tdom_no_hll = count;
+				}
+			} else {
+				// Here we don't have catalog statistics, and the following is how we determine
+				// the tdom
+				// 1. If there is any hll data in the equivalence set, use that
+				// 2. Otherwise, use the table with the smallest cardinality
+				if (relation_to_tdom.tdom_no_hll > count && !relation_to_tdom.has_tdom_hll) {
+					relation_to_tdom.tdom_no_hll = count;
+				}
+			}
+			break;
 		}
 	}
 }

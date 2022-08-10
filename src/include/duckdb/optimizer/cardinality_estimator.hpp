@@ -59,10 +59,6 @@ public:
 	explicit CardinalityEstimator(ClientContext &context) : context(context) {
 	}
 
-	//! When calculating the cost of a join. Multiple filters may be present.
-	//! These values keep track of the lowest cost join
-	double lowest_card;
-
 private:
 	ClientContext &context;
 
