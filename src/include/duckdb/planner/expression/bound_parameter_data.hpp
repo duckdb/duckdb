@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,23 @@ struct BoundParameterData {
 
 	Value value;
 	LogicalType return_type;
+
+public:
+	void Serialize(Serializer &serializer) const {
+		FieldWriter writer(serializer);
+		value.Serialize(writer.GetSerializer());
+		writer.WriteSerializable(return_type);
+		writer.Finalize();
+	}
+
+	static unique_ptr<BoundParameterData> Deserialize(Deserializer &source) {
+		FieldReader reader(source);
+		auto value = Value::Deserialize(reader.GetSource());
+		auto result = make_unique<BoundParameterData>(value);
+		result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		reader.Finalize();
+		return result;
+	}
 };
 
 using bound_parameter_map_t = unordered_map<idx_t, shared_ptr<BoundParameterData>>;
