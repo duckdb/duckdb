@@ -73,6 +73,7 @@ void BoundFunctionExpression::Verify() const {
 
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
+	D_ASSERT(return_type == function.return_type);
 	writer.WriteString(function.name);
 	writer.WriteField(is_operator);
 	writer.WriteSerializable(return_type);
@@ -80,9 +81,9 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 
 	writer.WriteSerializableList(children);
 
-	bool serialize_bind_info = bind_info && function.serialize;
-	writer.WriteField(serialize_bind_info);
-	if (serialize_bind_info) {
+	bool serialize = function.serialize;
+	writer.WriteField(serialize);
+	if (serialize) {
 		function.serialize(writer, bind_info.get(), function);
 	}
 }

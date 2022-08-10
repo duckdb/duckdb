@@ -88,12 +88,9 @@ void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(return_type);
 	writer.WriteRegularSerializableList(function.arguments);
 
-	writer.WriteField(bind_info != nullptr);
-	if (bind_info) {
-		if (!function.serialize) {
-			throw SerializationException("Have bind info but no serialization function for %s", function.name);
-		}
-		D_ASSERT(function.serialize);
+	bool serialize = function.serialize;
+	writer.WriteField(serialize);
+	if (serialize) {
 		function.serialize(writer, bind_info.get(), function);
 	}
 }
@@ -125,13 +122,15 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &cont
 	function.return_type = return_type;
 	function.arguments = move(arguments);
 
-	auto has_bind_info = reader.ReadRequired<bool>();
-
-	if (has_bind_info) {
+	auto has_deserialize = reader.ReadRequired<bool>();
+	if (has_deserialize) {
 		if (!function.deserialize) {
-			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
+			throw SerializationException("Function requires deserialization but no deserialization function for %s",
+			                             function.name);
 		}
 		bind_info = function.deserialize(context, reader, function);
+	} else if (function.bind) {
+		bind_info = function.bind(context, function, children);
 	}
 
 	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
