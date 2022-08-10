@@ -118,7 +118,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 					if (data[idx].IsInlined()) {
 						state.fsst_strings.push_back(data[idx]);
 					} else {
-						state.fsst_strings.emplace_back(state.fsst_string_heap.AddString(data[idx]));
+						state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
 					}
 					state.fsst_string_total_size += string_size;
 				} else {
