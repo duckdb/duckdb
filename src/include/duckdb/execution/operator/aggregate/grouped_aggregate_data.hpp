@@ -90,25 +90,17 @@ public:
 	void InitializeDistinct(unique_ptr<Expression> &aggregate) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		D_ASSERT(aggr.distinct);
-		any_distinct = true;
+		any_distinct = false; //! This is done to stop the radixHT from enforcing ForceSingleHT
 
 		vector<LogicalType> payload_types_filters;
 		aggregate_return_types.push_back(aggr.return_type);
 		for (idx_t i = 0; i < aggr.children.size(); i++) {
 			auto &child = aggr.children[i];
 			group_types.push_back(child->return_type);
-			payload_types.push_back(child->return_type);
 			groups.push_back(child->Copy());
-		}
-		if (aggr.filter) {
-			payload_types_filters.push_back(aggr.filter->return_type);
 		}
 		if (!aggr.function.combine) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
-		}
-
-		for (const auto &pay_filters : payload_types_filters) {
-			payload_types.push_back(pay_filters);
 		}
 	}
 
