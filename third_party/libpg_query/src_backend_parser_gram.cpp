@@ -22133,7 +22133,7 @@ yyreduce:
 
   case 863:
 #line 225 "third_party/libpg_query/grammar/statements/create.y"
-                                            { (yyval.constr) = (yyvsp[0].constr) }
+                                            { (yyval.constr) = (yyvsp[0].constr); }
 #line 22138 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 

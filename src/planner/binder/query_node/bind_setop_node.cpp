@@ -119,9 +119,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 		for (idx_t i = 0; i < right_node->names.size(); ++i) {
 			if (left_names_map.find(right_node->names[i]) == left_names_map.end()) {
-				auto constant_null_expr =
-				    make_unique<BoundConstantExpression>(Value(right_node->types[i])); // TODO(lokax): SET ALIAS?
-				// constant_null_expr->alias = right_node->names[i];
+				auto constant_null_expr = make_unique<BoundConstantExpression>(Value(right_node->types[i]));
 				left_node->select_list.push_back(std::move(constant_null_expr));
 				left_node->names.push_back(right_node->names[i]);
 				left_node->types.push_back(right_node->types[i]);
@@ -143,7 +141,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 				new_names[i] = std::move(right_node->names[iter->second]);
 			} else {
 				auto constant_null_expr = make_unique<BoundConstantExpression>(Value(left_node->types[i]));
-				// TODO(lokax): alias?
 				new_right_node_exprs[i] = std::move(constant_null_expr);
 				new_names[i] = left_node->names[i];
 				new_types[i] = left_node->types[i];
