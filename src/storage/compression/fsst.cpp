@@ -144,9 +144,9 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 		auto compressed_sizes = std::vector<size_t>(string_count, 0);
 		unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
 
-		auto res =
-		    duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
-		                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
+		auto res = duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
+		                                output_buffer_size, compressed_buffer.get(), &compressed_sizes[0],
+		                                &compressed_ptrs[0]);
 
 		if (string_count != res) {
 			throw std::runtime_error("FSST output buffer is too small unexpectedly");
@@ -164,13 +164,13 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto bitpacked_offsets_size =
 	    BitpackingPrimitives::GetRequiredSize(string_count + state.empty_strings, minimum_width);
 
-	auto estimated_base_size = bitpacked_offsets_size + compressed_dict_size;
+	auto estimated_base_size = bitpacked_offsets_size + compressed_dict_size * (1 / ANALYSIS_SAMPLE_SIZE);
 	auto num_blocks = estimated_base_size / (Storage::BLOCK_SIZE - sizeof(duckdb_fsst_decoder_t));
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 
 	auto estimated_size = estimated_base_size + symtable_size;
 
-	return estimated_size * MINIMUM_COMPRESSION_RATIO * (1/ANALYSIS_SAMPLE_SIZE);
+	return estimated_size * MINIMUM_COMPRESSION_RATIO;
 }
 
 //===--------------------------------------------------------------------===//
