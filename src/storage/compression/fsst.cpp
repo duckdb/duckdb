@@ -154,7 +154,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 	auto minimum_width = BitpackingPrimitives::MinimumBitWidth(max_compressed_string_length);
 	auto bitpacked_offsets_size =
-	    BitpackingPrimitives::GetRequiredSize<idx_t>(string_count + state.empty_strings, minimum_width);
+	    BitpackingPrimitives::GetRequiredSize(string_count + state.empty_strings, minimum_width);
 
 	auto estimated_base_size = bitpacked_offsets_size + compressed_dict_size;
 	auto num_blocks = estimated_base_size / (Storage::BLOCK_SIZE - sizeof(duckdb_fsst_decoder_t));
@@ -250,7 +250,7 @@ public:
 		idx_t current_string_count = index_buffer.size();
 
 		size_t dict_offsets_size =
-		    BitpackingPrimitives::GetRequiredSize<idx_t>(current_string_count + 1, required_minimum_width);
+		    BitpackingPrimitives::GetRequiredSize(current_string_count + 1, required_minimum_width);
 
 		// TODO switch to a symbol table per RowGroup, saves a bit of space
 		idx_t required_space = sizeof(fsst_compression_header_t) + current_dict_size + dict_offsets_size + string_len +
@@ -278,7 +278,7 @@ public:
 
 		// calculate sizes
 		auto compressed_index_buffer_size =
-		    BitpackingPrimitives::GetRequiredSize<sel_t>(current_segment->count, current_width);
+		    BitpackingPrimitives::GetRequiredSize(current_segment->count, current_width);
 		auto total_size = sizeof(fsst_compression_header_t) + compressed_index_buffer_size + current_dictionary.size +
 		                  fsst_serialized_symbol_table_size;
 

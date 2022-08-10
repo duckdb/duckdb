@@ -96,13 +96,11 @@ public:
 		return FindMinimumBitWidth<T, BYTE_ALIGNED>(minimum, maximum);
 	}
 
-	template <class T>
 	inline static idx_t GetRequiredSize(idx_t count, bitpacking_width_t width) {
 		count = RoundUpToAlgorithmGroupSize(count);
 		return ((count * width) / 8);
 	}
 
-	// TODO is not a template??
 	template <class T>
 	inline static T RoundUpToAlgorithmGroupSize(T num_to_round) {
 		int remainder = num_to_round % BITPACKING_ALGORITHM_GROUP_SIZE;
