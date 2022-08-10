@@ -25,7 +25,25 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
+	unordered_map<ForeignKeyInfo, idx_t> known_fk_unique_constraint_offsets;
 };
+
+static ForeignKeyInfo GetForeignKeyCounterpart(ForeignKeyInfo out, string other_schema, string other_table) {
+	out.schema = other_schema;
+	out.table = other_table;
+	switch (out.type) {
+	case ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE:
+		out.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
+		break;
+	case ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE:
+		out.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
+		break;
+	case ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE:
+		break;
+	}
+
+	return move(out);
+}
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
@@ -97,7 +115,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 		auto &table = (TableCatalogEntry &)*entry;
 		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
-		     data.constraint_offset++, data.unique_constraint_offset++) {
+		     data.constraint_offset++) {
 			auto &constraint = table.constraints[data.constraint_offset];
 			// return values:
 			// schema_name, LogicalType::VARCHAR
@@ -110,7 +128,35 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(3, count, Value::BIGINT(table.oid));
 
 			// constraint_index, BIGINT
-			output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset));
+			if (constraint->type != ConstraintType::FOREIGN_KEY) {
+				output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset++));
+			} else {
+				auto &bound_constraint =
+				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
+				auto info = bound_constraint.info;
+				if (info.schema.empty()) {
+					// FIXME: Can we somehow make use of Binder::BindSchema() here?
+					// From experiments, an omitted schema in REFERENCES ... means "main" or "temp", even if the table
+					// resides in a different schema. Is this guaranteed to be stable?
+					if (entry->temporary) {
+						info.schema = "temp";
+					} else {
+						info.schema = "main";
+					}
+				}
+
+				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(info);
+				if (known_unique_constraint_offset == data.known_fk_unique_constraint_offsets.end()) {
+					auto counterpart_info =
+					    GetForeignKeyCounterpart(bound_constraint.info, table.schema->name, table.name);
+					data.known_fk_unique_constraint_offsets.insert(
+					    make_pair(counterpart_info, data.unique_constraint_offset));
+					output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset));
+					data.unique_constraint_offset++;
+				} else {
+					output.SetValue(4, count, Value::BIGINT((int64_t)known_unique_constraint_offset->second));
+				}
+			}
 
 			// constraint_type, VARCHAR
 			string constraint_type;
