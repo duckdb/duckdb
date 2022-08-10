@@ -79,14 +79,12 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(function.arguments);
 
 	writer.WriteSerializableList(children);
-	//
-	//	writer.WriteField(bind_info != nullptr);
-	//	if (bind_info) {
-	//		if (!function.serialize) {
-	//			throw SerializationException("Have bind info but no serialization function for %s", function.name);
-	//		}
-	//		function.serialize(writer, bind_info.get(), function);
-	//	}
+
+	bool serialize_bind_info = bind_info && function.serialize;
+	writer.WriteField(serialize_bind_info);
+	if (serialize_bind_info) {
+		function.serialize(writer, bind_info.get(), function);
+	}
 }
 
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
@@ -113,19 +111,18 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &conte
 	// sometimes the bind changes those, not sure if we should generically set those
 	function.return_type = move(return_type);
 	function.arguments = move(arguments);
-	if (function.bind) {
+	auto has_deserialize = reader.ReadRequired<bool>();
+	if (has_deserialize) {
+		if (!function.deserialize) {
+			throw SerializationException("Function requires deserialization but no deserialization function for %s",
+			                             function.name);
+		}
+		bind_info = function.deserialize(context, reader, function);
+	} else if (function.bind) {
 		bind_info = function.bind(context, function, children);
 	}
-	//	auto has_bind_info = reader.ReadRequired<bool>();
-	//
-	//	if (has_bind_info) {
-	//		if (!function.deserialize) {
-	//			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
-	//		}
-	//		bind_info = function.deserialize(context, reader, function);
-	//	}
 
-	return make_unique<BoundFunctionExpression>(return_type, move(function), move(children), move(bind_info),
+	return make_unique<BoundFunctionExpression>(function.return_type, move(function), move(children), move(bind_info),
 	                                            is_operator);
 }
 } // namespace duckdb
