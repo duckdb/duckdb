@@ -43,11 +43,13 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 		printf("[%d] Optimized plan\n", i);
 
 		BufferedSerializer serializer;
+		serializer.SetVersion(PLAN_SERIALIZATION_VERSION);
 		plan->Serialize(serializer);
 		printf("[%d] Serialized plan\n", i);
 
 		auto data = serializer.GetData();
 		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+		deserializer.SetVersion(serializer.GetVersion());
 		auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
 		printf("[%d] Deserialized plan\n", i);
 

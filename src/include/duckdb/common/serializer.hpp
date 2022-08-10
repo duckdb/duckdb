@@ -15,10 +15,31 @@
 
 namespace duckdb {
 
+
 //! The Serialize class is a base class that can be used to serializing objects into a binary buffer
 class Serializer {
+private:
+	// nocommit: what should the default be? check the discussion comment in test_plan_serialization.cpp
+	// nocommit: we can also keep Serializer stateless and implement versioning on the various subclasses
+	//			 the current approach means we don't have to implement the getter and setter everywhere
+	//           but it comes at price of not forgetting to pass the version on various wrappers.
+	uint64_t version = 0L;
 public:
 	virtual ~Serializer() {
+	}
+
+	//! Sets the version of the serialization that writers are expected to use
+	//! The version is mostly the most recent one, unless modifying old data or streaming to
+	//! an older version
+	void SetVersion(uint64_t v) {
+		D_ASSERT(v > 0);
+		D_ASSERT(this->version == 0); // version can only be set once
+		this->version = v;
+	}
+
+	//! Returns the version of serialization that writers are expected to use
+	uint64_t GetVersion() {
+		return version;
 	}
 
 	virtual void WriteData(const_data_ptr_t buffer, idx_t write_size) = 0;
@@ -72,8 +93,24 @@ public:
 //! The Deserializer class assists in deserializing a binary blob back into an
 //! object
 class Deserializer {
+private:
+	uint64_t version = 0L;
 public:
 	virtual ~Deserializer() {
+	}
+
+	//! Sets the version of the serialization that readers are expected to use
+	//! The version is mostly the most recent one, unless reading old data or streaming from
+	//! an older version
+	void SetVersion(uint64_t v) {
+		D_ASSERT(v > 0);
+		D_ASSERT(this->version == 0); // version can only be set once
+		this->version = v;
+	}
+
+	//! Returns the version of serialization that readers are expected to use
+	uint32_t GetVersion() {
+		return version;
 	}
 
 	//! Reads [read_size] bytes into the buffer
