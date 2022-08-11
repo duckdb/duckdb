@@ -7,7 +7,6 @@ void LogicalCreateTable::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto &context = state.gstate.context;
 	auto info = reader.ReadRequiredSerializable<BoundCreateTableInfo>(state.gstate);
 	auto schema = info->schema;
 	return make_unique<LogicalCreateTable>(schema, move(info));
