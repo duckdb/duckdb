@@ -24,10 +24,10 @@ query IIII
 SELECT table_name, constraint_index, constraint_type, UNNEST(constraint_column_names) col_name FROM duckdb_constraints ORDER BY table_name, constraint_index, col_name
 ----
 fk_integers	0	FOREIGN KEY	j
-integers	0	PRIMARY KEY	i
-integers	1	CHECK	i
-integers	2	NOT NULL	i
-integers	3	FOREIGN KEY	i
-test	0	UNIQUE	i
-test	1	CHECK	i
-test	1	CHECK	k
+integers	0	REFERENCED KEY	i
+integers	3	PRIMARY KEY	i
+integers	4	CHECK	i
+integers	5	NOT NULL	i
+test	1	UNIQUE	i
+test	2	CHECK	i
+test	2	CHECK	k
