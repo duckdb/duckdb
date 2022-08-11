@@ -405,20 +405,14 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	client_profiler.Flush(context.thread.profiler);
 }
 
-// TODO: Create tasks and run these in parallel instead of doing this all in Schedule, single threaded
-class DistinctAggregateFinalizeEvent : public Event {
+class DistinctAggregateFinalizeTask : public ExecutorTask {
 public:
-	DistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p, SimpleAggregateGlobalState &gstate_p,
-	                               Pipeline *pipeline_p, ClientContext &context)
-	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p), context(context) {
+	DistinctAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, SimpleAggregateGlobalState &state_p,
+	                              ClientContext &context, const PhysicalUngroupedAggregate &op)
+	    : ExecutorTask(executor), event(move(event_p)), gstate(state_p), context(context), op(op) {
 	}
-	const PhysicalUngroupedAggregate &op;
-	SimpleAggregateGlobalState &gstate;
-	Pipeline *pipeline;
-	ClientContext &context;
 
-public:
-	void Schedule() override {
+	void AggregateDistinct() {
 		auto &aggregates = op.aggregates;
 		auto &distinct_aggregate_data = op.distinct_aggregate_data;
 		auto &payload_chunk = gstate.payload_chunk;
@@ -502,7 +496,40 @@ public:
 		}
 		D_ASSERT(!gstate.finished);
 		gstate.finished = true;
-		Finish();
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		AggregateDistinct();
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+	SimpleAggregateGlobalState &gstate;
+	ClientContext &context;
+	const PhysicalUngroupedAggregate &op;
+};
+
+// TODO: Create tasks and run these in parallel instead of doing this all in Schedule, single threaded
+class DistinctAggregateFinalizeEvent : public Event {
+public:
+	DistinctAggregateFinalizeEvent(const PhysicalUngroupedAggregate &op_p, SimpleAggregateGlobalState &gstate_p,
+	                               Pipeline *pipeline_p, ClientContext &context)
+	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p), context(context) {
+	}
+	const PhysicalUngroupedAggregate &op;
+	SimpleAggregateGlobalState &gstate;
+	Pipeline *pipeline;
+	ClientContext &context;
+
+public:
+	void Schedule() override {
+		vector<unique_ptr<Task>> tasks;
+		tasks.push_back(
+		    make_unique<DistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(), gstate, context, op));
+		D_ASSERT(!tasks.empty());
+		SetTasks(move(tasks));
 	}
 };
 
