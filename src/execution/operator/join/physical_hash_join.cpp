@@ -551,18 +551,29 @@ public:
 		probe_chunk.Initialize(allocator, sink.probe_types);
 		join_keys.Initialize(allocator, op.condition_types);
 		payload.Initialize(allocator, op.children[0]->types);
+
+		// Initialize vectors to store column indices
+		idx_t col_idx = 0;
+		for (; col_idx < op.condition_types.size(); col_idx++) {
+			join_key_indices.push_back(col_idx);
+		}
+		for (; col_idx < sink.probe_types.size() - 1; col_idx++) {
+			payload_indices.push_back(col_idx);
+		}
 	}
 
 public:
 	//! Local scan state for probe collection
 	ColumnDataLocalScanState probe_local_scan_state;
 
-	//! Stores chunks from the probe collection
+	//! Chunks for scanning the probe collection
 	DataChunk probe_chunk;
-	//! Stores the probe keys
 	DataChunk join_keys;
-	//! Stores the other probe columns
 	DataChunk payload;
+	//! Column indices to reference the join keys/payload in probe_chunk
+	vector<idx_t> join_key_indices;
+	vector<idx_t> payload_indices;
+
 	//! Scan structure for the external probe
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 
@@ -638,22 +649,9 @@ void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gst
 		return;
 	}
 
-	// Get they keys
-	const auto key_count = lstate.join_keys.ColumnCount();
-	lstate.join_keys.Reset();
-	for (idx_t col_idx = 0; col_idx < key_count; col_idx++) {
-		lstate.join_keys.data[col_idx].Reference(lstate.probe_chunk.data[col_idx]);
-	}
-	lstate.join_keys.SetCardinality(lstate.probe_chunk.size());
-
-	// Get the payload
-	lstate.payload.Reset();
-	for (idx_t col_idx = 0; col_idx < lstate.payload.ColumnCount(); col_idx++) {
-		lstate.payload.data[col_idx].Reference(lstate.probe_chunk.data[key_count + col_idx]);
-	}
-	lstate.payload.SetCardinality(lstate.probe_chunk.size());
-
-	// Get the hashes
+	// Get the probe chunk columns/hashes
+	lstate.join_keys.ReferenceColumns(lstate.probe_chunk, lstate.join_key_indices);
+	lstate.payload.ReferenceColumns(lstate.probe_chunk, lstate.payload_indices);
 	auto precomputed_hashes = &lstate.probe_chunk.data.back();
 
 	// Perform the probe

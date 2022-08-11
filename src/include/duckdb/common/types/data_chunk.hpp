@@ -103,6 +103,9 @@ public:
 	//! Fuses a DataChunk onto the right of this one, and destroys the other. Inverse of Split.
 	DUCKDB_API void Fuse(DataChunk &other);
 
+	//! Makes this DataChunk reference the specified columns in the other DataChunk
+	DUCKDB_API void ReferenceColumns(DataChunk &other, vector<column_t> column_ids);
+
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Flatten();
 
