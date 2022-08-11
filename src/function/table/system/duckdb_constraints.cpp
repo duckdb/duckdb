@@ -84,15 +84,21 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, Ta
 unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &context, TableFunctionInitInput &input) {
 	auto result = make_unique<DuckDBConstraintsData>();
 
-	// scan all the schemas for tables and collect themand collect them
+	// scan all the schemas for tables and collect them
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
-	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	};
 
 	// check the temp schema as well
-	ClientData::Get(context).temporary_objects->Scan(context, CatalogType::TABLE_ENTRY,
-	                                                 [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+	auto &temp_schema = ClientData::Get(context).temporary_objects;
+	schemas.push_back(temp_schema.get());
+
+	for (auto &schema : schemas) {
+		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
+			if (entry->type == CatalogType::TABLE_ENTRY) {
+				result->entries.push_back(entry);
+			}
+		});
+	};
+
 	return move(result);
 }
 
@@ -107,11 +113,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset];
-
-		if (entry->type != CatalogType::TABLE_ENTRY) {
-			data.offset++;
-			continue;
-		}
+		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 
 		auto &table = (TableCatalogEntry &)*entry;
 		for (; data.constraint_offset < table.constraints.size() && count < STANDARD_VECTOR_SIZE;
