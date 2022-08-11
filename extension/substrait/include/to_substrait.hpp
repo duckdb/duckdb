@@ -76,19 +76,20 @@ private:
 	                       bool not_null);
 
 	//! Transforms a DuckDB Logical Type into a Substrait Type
-	::substrait::Type DuckToSubstraitType(LogicalType &d_type);
+	::substrait::Type DuckToSubstraitType(LogicalType &d_type, bool nullable = false);
 	//! Methods to transform DuckDB Filters to Substrait Expression
-	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
-	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
-	substrait::Expression *TransformConjuctionAndFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
-	substrait::Expression *TransformConstantComparisonFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
+	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType &return_type);
+	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter,
+	                                                LogicalType &return_type);
+	substrait::Expression *TransformConjuctionAndFilter(uint64_t col_idx, duckdb::TableFilter &dfilter,
+	                                                    LogicalType &return_type);
+	substrait::Expression *TransformConstantComparisonFilter(uint64_t col_idx, duckdb::TableFilter &dfilter,
+	                                                         LogicalType &return_type);
 
 	//! Transforms DuckDB Join Conditions to Substrait Expression
 	substrait::Expression *TransformJoinCond(duckdb::JoinCondition &dcond, uint64_t left_ncol);
 	//! Transforms DuckDB Sort Order to Substrait Sort Order
 	void TransformOrder(duckdb::BoundOrderByNode &dordf, substrait::SortField &sordf);
-
-	string GetDecimalInternalString(duckdb::Value &value);
 
 	void AllocateFunctionArgument(substrait::Expression_ScalarFunction *scalar_fun, substrait::Expression *value);
 
@@ -116,7 +117,7 @@ private:
 
 	//! Variables used to register functions
 	std::unordered_map<std::string, uint64_t> functions_map;
-	uint64_t last_function_id = 0;
+	uint64_t last_function_id = 1;
 
 	//! The substrait Plan
 	substrait::Plan plan;

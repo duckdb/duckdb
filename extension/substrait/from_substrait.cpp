@@ -45,9 +45,32 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformLiteralExpr(const subst
 		break;
 	case substrait::Expression_Literal::LiteralTypeCase::kDecimal: {
 		const auto &substrait_decimal = slit.decimal();
-		// TODO: Support hugeint?
-		int64_t substrait_value = stoll(substrait_decimal.value());
-		dval = Value::DECIMAL(substrait_value, substrait_decimal.precision(), substrait_decimal.scale());
+		auto raw_value = (uint64_t *)substrait_decimal.value().c_str();
+		hugeint_t substrait_value;
+		substrait_value.upper = raw_value[0];
+		substrait_value.lower = raw_value[1];
+		Value val = Value::HUGEINT(substrait_value);
+		auto decimal_type = LogicalType::DECIMAL(substrait_decimal.precision(), substrait_decimal.scale());
+		// cast to correct value
+		switch (decimal_type.InternalType()) {
+		case PhysicalType::INT8:
+			dval = Value::DECIMAL(val.GetValue<int8_t>(), substrait_decimal.precision(), substrait_decimal.scale());
+			break;
+		case PhysicalType::INT16:
+			dval = Value::DECIMAL(val.GetValue<int16_t>(), substrait_decimal.precision(), substrait_decimal.scale());
+			break;
+		case PhysicalType::INT32:
+			dval = Value::DECIMAL(val.GetValue<int32_t>(), substrait_decimal.precision(), substrait_decimal.scale());
+			break;
+		case PhysicalType::INT64:
+			dval = Value::DECIMAL(val.GetValue<int64_t>(), substrait_decimal.precision(), substrait_decimal.scale());
+			break;
+		case PhysicalType::INT128:
+			dval = Value::DECIMAL(substrait_value, substrait_decimal.precision(), substrait_decimal.scale());
+			break;
+		default:
+			throw InternalException("Not accepted internal type for decimal");
+		}
 		break;
 	}
 	case substrait::Expression_Literal::LiteralTypeCase::kBoolean: {

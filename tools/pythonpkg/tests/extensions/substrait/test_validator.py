@@ -10,19 +10,17 @@ def run_substrait_validator(con, query):
     except:
         con.execute(f"CALL dbgen(sf=0.01)")
     c = Config()
-    # extension URI
+    # # Function Anchor to YAML file, no clue what is that
     c.override_diagnostic_level(3001, "error", "info")
-    # function def unavailable, cannot check validity of call
-    # c.override_diagnostic_level(6003, "warning", "info")
-    # # failed to resolve YAML: unknown url type
-    # c.override_diagnostic_level(2002, "warning", "info")  # too few field names
-    # # typecast validation rules are net yet implemented
-    # c.override_diagnostic_level(1, "warning", "info")  # too few field names
+    # function definition unavailable: cannot check validity of call
+    c.override_diagnostic_level(6003, "warning", "info")
+    # too few field names
+    c.override_diagnostic_level(4003, "error", "info")
     try:
         proto = con.get_substrait(query).fetchone()[0]
     except Exception as err:
         raise ValueError("DuckDB Compilation: " + str(err))
-    assert substrait_validator.check_plan_valid(proto, config=c)
+    substrait_validator.check_plan_valid(proto, config=c)
     
 def run_tpch_validator(require, query_number):
     con = require('substrait', 'test.db')
