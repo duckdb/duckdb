@@ -18,8 +18,8 @@ namespace duckdb {
 
 struct DistinctAggregateData {
 public:
-	DistinctAggregateData(Allocator& allocator, const vector<unique_ptr<Expression>> &aggregates,
-		vector<idx_t> indices, ClientContext& client);
+	DistinctAggregateData(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates, vector<idx_t> indices,
+	                      ClientContext &client);
 	//! The executor
 	ExpressionExecutor child_executor;
 	//! The payload chunk

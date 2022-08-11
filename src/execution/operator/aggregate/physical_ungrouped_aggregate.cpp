@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-DistinctAggregateData::DistinctAggregateData(Allocator& allocator, const vector<unique_ptr<Expression>> &aggregates,
-		vector<idx_t> indices, ClientContext& client)
-		: child_executor(allocator), payload_chunk(), indices(move(indices)) {
+DistinctAggregateData::DistinctAggregateData(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
+                                             vector<idx_t> indices, ClientContext &client)
+    : child_executor(allocator), payload_chunk(), indices(move(indices)) {
 	const idx_t aggregate_count = aggregates.size();
 
 	grouped_aggregate_data.resize(aggregate_count);
@@ -42,8 +42,7 @@ DistinctAggregateData::DistinctAggregateData(Allocator& allocator, const vector<
 		// Create the hashtable for the aggregate
 		grouped_aggregate_data[i] = make_unique<GroupedAggregateData>();
 		grouped_aggregate_data[i]->InitializeDistinct(aggregates[i]);
-		radix_tables[i] =
-		    make_unique<RadixPartitionedHashTable>(grouping_sets[i], *grouped_aggregate_data[i]);
+		radix_tables[i] = make_unique<RadixPartitionedHashTable>(grouping_sets[i], *grouped_aggregate_data[i]);
 
 		auto &radix_table = *radix_tables[i];
 		radix_states[i] = radix_table.GetGlobalSinkState(client);
@@ -144,7 +143,7 @@ public:
 	    : state(aggregates), finished(false) {
 
 		vector<idx_t> indices;
-		//Determine if there are distinct aggregates
+		// Determine if there are distinct aggregates
 		for (idx_t i = 0; i < aggregates.size(); i++) {
 			auto &aggr = (BoundAggregateExpression &)*(aggregates[i]);
 			if (!aggr.distinct) {
@@ -218,7 +217,7 @@ public:
 		if (!gstate.distinct_data) {
 			return;
 		}
-		auto& data = *gstate.distinct_data;
+		auto &data = *gstate.distinct_data;
 		auto &distinct_indices = data.Indices();
 		if (distinct_indices.empty()) {
 			// No distinct aggregates
@@ -444,8 +443,8 @@ public:
 			while (true) {
 				payload_chunk.Reset();
 				output_chunk.Reset();
-				radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_aggregate_data.radix_states[i], *global_source_state,
-				                       *local_source_state);
+				radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_aggregate_data.radix_states[i],
+				                       *global_source_state, *local_source_state);
 				if (output_chunk.size() == 0) {
 					break;
 				}
@@ -473,8 +472,8 @@ public:
 					child_ref.index = payload_idx + payload_cnt;
 
 					//! The child_executor contains a pointer to the expression we altered above
-					distinct_aggregate_data.child_executor.ExecuteExpression(payload_idx + payload_cnt,
-					                                        payload_chunk.data[payload_idx + payload_cnt]);
+					distinct_aggregate_data.child_executor.ExecuteExpression(
+					    payload_idx + payload_cnt, payload_chunk.data[payload_idx + payload_cnt]);
 					payload_cnt++;
 				}
 
@@ -538,7 +537,7 @@ public:
 
 public:
 	void Schedule() override {
-		auto& distinct_data = *gstate.distinct_data;
+		auto &distinct_data = *gstate.distinct_data;
 
 		vector<unique_ptr<Task>> tasks;
 		for (idx_t i = 0; i < distinct_data.radix_tables.size(); i++) {
@@ -546,7 +545,7 @@ public:
 				continue;
 			}
 			distinct_data.radix_tables[i]->ScheduleTasks(pipeline->executor, shared_from_this(),
-			                                                    *distinct_data.radix_states[i], tasks);
+			                                             *distinct_data.radix_states[i], tasks);
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
