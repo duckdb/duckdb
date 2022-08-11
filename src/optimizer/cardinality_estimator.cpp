@@ -514,7 +514,6 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
 	idx_t cardinality_after_filters = cardinality;
-	auto catalog_table = GetCatalogTableEntry(op);
 	auto get = GetLogicalGet(op);
 
 	for (auto &it : table_filters->filters) {

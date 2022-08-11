@@ -51,6 +51,10 @@ public:
 		estimated_props = make_unique<EstimatedProperties>(base_cardinality, cost);
 	}
 
+	bool operator==(const JoinNode &other) {
+		return other.set->ToString().compare(set->ToString()) == 0;
+	}
+
 private:
 	double base_cardinality;
 

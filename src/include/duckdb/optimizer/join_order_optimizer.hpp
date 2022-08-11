@@ -20,6 +20,13 @@
 
 #include <functional>
 
+template <>
+struct std::hash<duckdb::JoinNode> {
+	std::string operator()(duckdb::JoinNode const &join_node) const noexcept {
+		return join_node.set->ToString();
+	}
+};
+
 namespace duckdb {
 
 class JoinOrderOptimizer {
@@ -62,7 +69,7 @@ private:
 
 	bool full_plan_found;
 	bool must_update_full_plan;
-	unordered_set<string> join_nodes_in_full_plan;
+	unordered_set<JoinNode *> join_nodes_in_full_plan;
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);

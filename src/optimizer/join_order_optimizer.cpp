@@ -7,6 +7,7 @@
 #include "duckdb/planner/operator/list.hpp"
 
 #include <algorithm>
+
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise
@@ -285,7 +286,7 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode *node) {
 		join_nodes_in_full_plan.clear();
 	}
 	if (node->set->count < relations.size()) {
-		join_nodes_in_full_plan.insert(node->set->ToString());
+		join_nodes_in_full_plan.insert(node);
 	}
 	UpdateJoinNodesInFullPlan(node->left);
 	UpdateJoinNodesInFullPlan(node->right);
@@ -309,7 +310,7 @@ JoinNode *JoinOrderOptimizer::EmitPair(JoinRelationSet *left, JoinRelationSet *r
 			cardinality_estimator.VerifySymmetry(result, entry->second.get());
 		}
 
-		if (full_plan_found && join_nodes_in_full_plan.count(new_set->ToString()) > 0) {
+		if (full_plan_found && join_nodes_in_full_plan.count(new_plan.get()) > 0) {
 			must_update_full_plan = true;
 		}
 		if (new_set->count == relations.size()) {
