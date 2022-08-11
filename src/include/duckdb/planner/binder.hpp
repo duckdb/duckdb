@@ -8,18 +8,18 @@
 
 #pragma once
 
-#include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/query_node.hpp"
-#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/planner/bind_context.hpp"
-#include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/bound_statement.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -165,9 +165,6 @@ public:
 
 	void SetCanContainNulls(bool can_contain_nulls);
 
-	void PushProjection(BoundQueryNode &node, case_insensitive_map_t<idx_t> &node_names_map,
-	                    vector<string> &result_names, vector<LogicalType> &result_types);
-
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -278,6 +275,9 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt);
 	BoundStatement BindCopyFrom(CopyStatement &stmt);
 
+	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
+	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
+
 	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod);
 	unique_ptr<BoundResultModifier> BindLimitPercent(OrderBinder &order_binder, LimitPercentModifier &limit_mod);
@@ -300,9 +300,6 @@ private:
 	                            const string &join_side, UsingColumnSet *new_set);
 
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
-
-	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
-	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

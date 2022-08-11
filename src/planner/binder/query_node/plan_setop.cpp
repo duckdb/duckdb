@@ -68,6 +68,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	has_unplanned_subqueries =
 	    node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
 
+	// If reorder_exprs is not empty, we add a projection and convert the type of the
+	// projection expression. So we skip this place.
 	if (node.reorder_exprs.empty()) {
 		// for both the left and right sides, cast them to the same types
 		left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
@@ -92,7 +94,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),
 	                                        logical_type);
 
-    root = VisitQueryNode(node, move(root));
+	root = VisitQueryNode(node, move(root));
 	// need additional projection
 	if (!node.reorder_exprs.empty()) {
 		vector<LogicalType> source_types;
@@ -108,8 +110,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		root = std::move(projection);
 	}
 
-    return root;
-	// return VisitQueryNode(node, move(root));
+	return root;
 }
 
 } // namespace duckdb

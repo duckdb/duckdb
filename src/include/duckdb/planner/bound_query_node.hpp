@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "duckdb/parser/query_node.hpp"
-#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 

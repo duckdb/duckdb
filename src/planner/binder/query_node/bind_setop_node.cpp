@@ -58,8 +58,8 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 	}
 }
 
-void Binder::PushProjection(BoundQueryNode &node, case_insensitive_map_t<idx_t> &node_names_map,
-                            vector<string> &result_names, vector<LogicalType> &result_types) {
+static void PushProjection(BoundQueryNode &node, case_insensitive_map_t<idx_t> &node_names_map,
+                           vector<string> &result_names, vector<LogicalType> &result_types) {
 
 	bool need_reorder = false;
 	idx_t result_size = result_names.size();

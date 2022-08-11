@@ -33,12 +33,9 @@ public:
 	shared_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation
 	shared_ptr<Binder> right_binder;
-	//!
-	// bool need_reorder = false;
-	//! TODO(lokax):
+	//! Index of reorder node
 	idx_t reorder_index;
 	vector<unique_ptr<Expression>> reorder_exprs;
-	// vector<idx_t> reorder_map;
 
 public:
 	idx_t GetRootIndex() override {
