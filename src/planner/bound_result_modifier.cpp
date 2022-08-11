@@ -60,11 +60,11 @@ void BoundOrderByNode::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, ClientContext &context) {
+BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeserializationState &state) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<OrderType>();
 	auto null_order = reader.ReadRequired<OrderByNullType>();
-	auto expression = reader.ReadRequiredSerializable<Expression>(context);
+	auto expression = reader.ReadRequiredSerializable<Expression>(state);
 	reader.Finalize();
 	return BoundOrderByNode(type, null_order, move(expression));
 }

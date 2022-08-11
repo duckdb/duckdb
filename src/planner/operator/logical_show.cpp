@@ -8,8 +8,7 @@ void LogicalShow::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(aliases);
 }
 
-unique_ptr<LogicalOperator> LogicalShow::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                     FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalShow::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto types_select = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto aliases = reader.ReadRequiredList<string>();
 

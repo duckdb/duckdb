@@ -39,14 +39,12 @@ void JoinCondition::Serialize(Serializer &serializer) const {
 }
 
 //! Deserializes a blob back into a JoinCondition
-JoinCondition JoinCondition::Deserialize(Deserializer &source, ClientContext &context) {
+JoinCondition JoinCondition::Deserialize(Deserializer &source, PlanDeserializationState &state) {
 	auto result = JoinCondition();
 
 	FieldReader reader(source);
-	unique_ptr<Expression> left;
-	left = reader.ReadOptional<Expression>(move(left), context);
-	unique_ptr<Expression> right;
-	right = reader.ReadOptional<Expression>(move(right), context);
+	auto left = reader.ReadOptional<Expression>(nullptr, state);
+	auto right = reader.ReadOptional<Expression>(nullptr, state);
 	result.left = move(left);
 	result.right = move(right);
 	result.comparison = reader.ReadRequired<ExpressionType>();

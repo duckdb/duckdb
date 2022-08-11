@@ -17,11 +17,10 @@ void LogicalDelimJoin::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(duplicate_eliminated_columns);
 }
 
-unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                          FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto result = make_unique<LogicalDelimJoin>(JoinType::INVALID);
-	LogicalComparisonJoin::Deserialize(*result, context, type, reader);
-	result->duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(context);
+	LogicalComparisonJoin::Deserialize(*result, state, reader);
+	result->duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	return result;
 }
 

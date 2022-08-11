@@ -24,12 +24,11 @@ void LogicalColumnDataGet::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                              FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto chunk_count = reader.ReadRequired<idx_t>();
-	auto collection = make_unique<ColumnDataCollection>(context, chunk_types);
+	auto collection = make_unique<ColumnDataCollection>(state.gstate.context, chunk_types);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		DataChunk chunk;
 		chunk.Deserialize(reader.GetSource());

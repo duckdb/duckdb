@@ -7,9 +7,9 @@ void LogicalOrder::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(orders);
 }
 
-unique_ptr<LogicalOperator> LogicalOrder::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                      FieldReader &reader) {
-	auto orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(context);
+unique_ptr<LogicalOperator> LogicalOrder::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto &context = state.gstate.context;
+	auto orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
 	return make_unique<LogicalOrder>(move(orders));
 }
 

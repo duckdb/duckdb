@@ -41,7 +41,7 @@ public:
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const;
-	static BoundOrderByNode Deserialize(Deserializer &source, ClientContext &context);
+	static BoundOrderByNode Deserialize(Deserializer &source, PlanDeserializationState &state);
 };
 
 class BoundLimitModifier : public BoundResultModifier {

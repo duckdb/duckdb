@@ -88,16 +88,17 @@ void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
+unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializationState &state,
                                                             FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
 	auto is_operator = reader.ReadRequired<bool>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto children = reader.ReadRequiredSerializableList<Expression>(context);
+	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	// TODO this is duplicated in logical_get and bound_aggregate_expression more or less, make it a template or so
 
+	auto &context = state.gstate.context;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto func_catalog = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 

@@ -79,8 +79,7 @@ void LogicalJoin::Serialize(FieldWriter &writer) const {
 //	vector<unique_ptr<BaseStatistics>> join_stats;
 //
 
-void LogicalJoin::Deserialize(LogicalJoin &join, ClientContext &context, LogicalOperatorType type,
-                              FieldReader &reader) {
+void LogicalJoin::Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader) {
 	join.join_type = reader.ReadRequired<JoinType>();
 	join.mark_index = reader.ReadRequired<idx_t>();
 	join.left_projection_map = reader.ReadRequiredList<idx_t>();

@@ -17,9 +17,8 @@ void LogicalDistinct::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(distinct_targets);
 }
 
-unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                         FieldReader &reader) {
-	auto distinct_targets = reader.ReadRequiredSerializableList<Expression>(context);
+unique_ptr<LogicalOperator> LogicalDistinct::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto distinct_targets = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	return make_unique<LogicalDistinct>(move(distinct_targets));
 }
 

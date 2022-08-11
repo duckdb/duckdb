@@ -22,8 +22,7 @@ void LogicalUnnest::Serialize(FieldWriter &writer) const {
 	writer.WriteField(unnest_index);
 }
 
-unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto unnest_index = reader.ReadRequired<idx_t>();
 	return make_unique<LogicalUnnest>(unnest_index);
 }

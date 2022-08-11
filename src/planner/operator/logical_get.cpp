@@ -92,8 +92,7 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	function.serialize(writer, *bind_data, function);
 }
 
-unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                    FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto returned_names = reader.ReadRequiredList<string>();
@@ -104,6 +103,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, Logi
 
 	auto has_bind_data = reader.ReadRequired<bool>();
 
+	auto &context = state.gstate.context;
 	auto &catalog = Catalog::GetCatalog(context);
 
 	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);

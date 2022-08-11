@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/plan_serialization.hpp"
 
 #include <functional>
 #include <algorithm>
@@ -67,7 +68,7 @@ public:
 	//! Serializes an LogicalOperator to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const = 0;
 
-	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, ClientContext &context);
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
 protected:
 	//! Resolve types for this specific operator

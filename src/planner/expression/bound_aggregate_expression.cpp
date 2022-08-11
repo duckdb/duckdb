@@ -95,18 +95,18 @@ void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &context, ExpressionType type,
+unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeserializationState &state,
                                                              FieldReader &reader) {
 	auto name = reader.ReadRequired<string>();
-	auto children = reader.ReadRequiredSerializableList<Expression>(context);
+	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto distinct = reader.ReadRequired<bool>();
 
-	unique_ptr<Expression> filter;
-	filter = reader.ReadOptional<Expression>(move(filter), context);
+	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
 	// TODO this is duplicated in logical_get more or less, make it a template or so
+	auto &context = state.gstate.context;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto func_catalog = catalog.GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 
