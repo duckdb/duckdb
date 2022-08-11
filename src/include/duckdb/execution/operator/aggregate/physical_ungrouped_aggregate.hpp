@@ -18,21 +18,28 @@ namespace duckdb {
 
 struct DistinctAggregateData {
 public:
-	DistinctAggregateData() {
-	}
+	DistinctAggregateData(Allocator& allocator, const vector<unique_ptr<Expression>> &aggregates,
+		vector<idx_t> indices, ClientContext& client);
+	//! The executor
+	ExpressionExecutor child_executor;
+	//! The payload chunk
+	DataChunk payload_chunk;
+	//! Indices of the distinct aggregates
+	vector<idx_t> indices;
 	//! The data used by the hashtables
 	vector<unique_ptr<GroupedAggregateData>> grouped_aggregate_data;
 	//! The hashtables
 	vector<unique_ptr<RadixPartitionedHashTable>> radix_tables;
 	//! The groups (arguments)
 	vector<GroupingSet> grouping_sets;
-	//! Indices of the distinct aggregates
-	vector<idx_t> indices;
+	//! The global sink states of the hash tables
+	vector<unique_ptr<GlobalSinkState>> radix_states;
+	//! Output chunks to receive distinct data from hashtables
+	vector<unique_ptr<DataChunk>> distinct_output_chunks;
 
 public:
 	bool IsDistinct(idx_t index) const;
 	const vector<idx_t> &Indices() const;
-	void Initialize(const vector<unique_ptr<Expression>> &aggregates);
 	bool AnyDistinct() const;
 };
 
