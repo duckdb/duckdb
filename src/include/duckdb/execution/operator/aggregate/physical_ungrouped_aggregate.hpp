@@ -32,7 +32,7 @@ public:
 public:
 	bool IsDistinct(idx_t index) const;
 	const vector<idx_t> &Indices() const;
-	void Initialize(vector<unique_ptr<Expression>> &aggregates, const vector<idx_t> &indices);
+	void Initialize(const vector<unique_ptr<Expression>> &aggregates);
 	bool AnyDistinct() const;
 };
 
@@ -45,8 +45,6 @@ public:
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
-	//! The data used for the distinct aggregates (if any)
-	DistinctAggregateData distinct_aggregate_data;
 
 public:
 	// Source interface

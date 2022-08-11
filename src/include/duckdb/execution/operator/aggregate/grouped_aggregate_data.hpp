@@ -87,7 +87,7 @@ public:
 		}
 	}
 	//! Initialize a GroupedAggregateData object for use with distinct aggregates
-	void InitializeDistinct(unique_ptr<Expression> &aggregate) {
+	void InitializeDistinct(const unique_ptr<Expression> &aggregate) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
 		D_ASSERT(aggr.distinct);
 		any_distinct = false; //! This is done to stop the radixHT from enforcing ForceSingleHT
