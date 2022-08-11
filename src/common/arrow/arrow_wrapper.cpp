@@ -1,13 +1,15 @@
-#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 
 #include "duckdb/main/stream_query_result.hpp"
 
-#include "duckdb/common/result_arrow_wrapper.hpp"
-
+#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
+
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
@@ -77,7 +79,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	if (!my_stream->column_types.empty()) {
-		QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
+		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+		                              my_stream->timezone_config);
 		return 0;
 	}
 
@@ -97,7 +100,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	QueryResult::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
+	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
 	return 0;
 }
 
@@ -123,29 +126,17 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	unique_ptr<DataChunk> chunk_result = result.Fetch();
-	if (!chunk_result) {
-		if (!result.success) {
-			my_stream->last_error = result.GetError();
-			return -1;
-		}
+	idx_t result_count;
+	string error;
+	if (!ArrowUtil::TryFetchChunk(&result, my_stream->batch_size, out, result_count, error)) {
+		D_ASSERT(!error.empty());
+		my_stream->last_error = error;
+		return -1;
+	}
+	if (result_count == 0) {
 		// Nothing to output
 		out->release = nullptr;
-		return 0;
 	}
-	unique_ptr<DataChunk> agg_chunk_result = make_unique<DataChunk>();
-	agg_chunk_result->Initialize(Allocator::DefaultAllocator(), chunk_result->GetTypes());
-	agg_chunk_result->Append(*chunk_result, true);
-
-	while (agg_chunk_result->size() < my_stream->batch_size) {
-		auto new_chunk = result.Fetch();
-		if (!new_chunk) {
-			break;
-		} else {
-			agg_chunk_result->Append(*new_chunk, true);
-		}
-	}
-	agg_chunk_result->ToArrowArray(out);
 	return 0;
 }
 
@@ -165,6 +156,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	return my_stream->last_error.c_str();
 }
+
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
     : result(move(result_p)) {
 	//! We first initialize the private data of the stream
@@ -181,27 +173,46 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 }
 
-unique_ptr<DataChunk> ArrowUtil::FetchNext(QueryResult &result) {
-	auto chunk = result.Fetch();
-	if (!result.success) {
-		throw std::runtime_error(result.error);
+bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, string &error) {
+	if (result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = (StreamQueryResult &)result;
+		if (!stream_result.IsOpen()) {
+			return true;
+		}
 	}
-	return chunk;
+	return result.TryFetch(chunk, error);
 }
 
-unique_ptr<DataChunk> ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size) {
-	auto data_chunk = FetchNext(*result);
-	if (!data_chunk) {
-		return data_chunk;
-	}
-	while (data_chunk->size() < chunk_size) {
-		auto next_chunk = FetchNext(*result);
-		if (!next_chunk || next_chunk->size() == 0) {
+bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count, string &error) {
+	count = 0;
+	ArrowAppender appender(result->types, chunk_size);
+	while (count < chunk_size) {
+		unique_ptr<DataChunk> data_chunk;
+		if (!TryFetchNext(*result, data_chunk, error)) {
+			if (!result->success) {
+				error = result->error;
+			}
+			return false;
+		}
+		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
-		data_chunk->Append(*next_chunk, true);
+		count += data_chunk->size();
+		appender.Append(*data_chunk);
 	}
-	return data_chunk;
+	if (count > 0) {
+		*out = appender.Finalize();
+	}
+	return true;
+}
+
+idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out) {
+	string error;
+	idx_t result_count;
+	if (!TryFetchChunk(result, chunk_size, out, result_count, error)) {
+		throw std::runtime_error(error);
+	}
+	return result_count;
 }
 
 } // namespace duckdb

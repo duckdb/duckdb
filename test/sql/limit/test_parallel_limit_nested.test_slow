@@ -1,0 +1,95 @@
+# name: test/sql/limit/test_parallel_limit_nested.test_slow
+# description: Test parallel limit execution with basic nested types
+# group: [limit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=8
+
+statement ok
+CREATE TABLE other_table AS SELECT 337 i UNION ALL SELECT 94824 UNION ALL SELECT 177979 UNION ALL SELECT 477979;
+
+foreach table_type TABLE VIEW
+
+statement ok
+CREATE ${table_type} integers AS SELECT i, [i, i + 1, i + 2] AS k, {'i': i} AS l FROM range(1000000) tbl(i);
+
+query II
+SELECT k, l FROM integers LIMIT 5
+----
+[0, 1, 2]	{'i': 0}
+[1, 2, 3]	{'i': 1}
+[2, 3, 4]	{'i': 2}
+[3, 4, 5]	{'i': 3}
+[4, 5, 6]	{'i': 4}
+
+query II
+SELECT k, l FROM integers WHERE i>197832 OR i=334 LIMIT 5
+----
+[334, 335, 336]	{'i': 334}
+[197833, 197834, 197835]	{'i': 197833}
+[197834, 197835, 197836]	{'i': 197834}
+[197835, 197836, 197837]	{'i': 197835}
+[197836, 197837, 197838]	{'i': 197836}
+
+query II
+SELECT k, l FROM integers WHERE i>197832 LIMIT 5
+----
+[197833, 197834, 197835]	{'i': 197833}
+[197834, 197835, 197836]	{'i': 197834}
+[197835, 197836, 197837]	{'i': 197835}
+[197836, 197837, 197838]	{'i': 197836}
+[197837, 197838, 197839]	{'i': 197837}
+
+query II
+SELECT k, l FROM integers WHERE i>497832 LIMIT 5
+----
+[497833, 497834, 497835]	{'i': 497833}
+[497834, 497835, 497836]	{'i': 497834}
+[497835, 497836, 497837]	{'i': 497835}
+[497836, 497837, 497838]	{'i': 497836}
+[497837, 497838, 497839]	{'i': 497837}
+
+# large offset
+query II
+SELECT k, l FROM integers WHERE i>497832 LIMIT 5 OFFSET 100000;
+----
+[597833, 597834, 597835]	{'i': 597833}
+[597834, 597835, 597836]	{'i': 597834}
+[597835, 597836, 597837]	{'i': 597835}
+[597836, 597837, 597838]	{'i': 597836}
+[597837, 597838, 597839]	{'i': 597837}
+
+query II
+SELECT k, l FROM integers WHERE i>497832 LIMIT 5 OFFSET 1000000;
+----
+
+# IN-clause (semi join)
+query II
+SELECT k, l FROM integers WHERE i IN (SELECT * FROM other_table)
+----
+[337, 338, 339]	{'i': 337}
+[94824, 94825, 94826]	{'i': 94824}
+[177979, 177980, 177981]	{'i': 177979}
+[477979, 477980, 477981]	{'i': 477979}
+
+query II
+(SELECT k, l FROM integers WHERE i>197832 LIMIT 5) UNION ALL (SELECT k, l FROM integers WHERE i>497832 LIMIT 5)
+----
+[197833, 197834, 197835]	{'i': 197833}
+[197834, 197835, 197836]	{'i': 197834}
+[197835, 197836, 197837]	{'i': 197835}
+[197836, 197837, 197838]	{'i': 197836}
+[197837, 197838, 197839]	{'i': 197837}
+[497833, 497834, 497835]	{'i': 497833}
+[497834, 497835, 497836]	{'i': 497834}
+[497835, 497836, 497837]	{'i': 497835}
+[497836, 497837, 497838]	{'i': 497836}
+[497837, 497838, 497839]	{'i': 497837}
+
+statement ok
+DROP ${table_type} integers
+
+endloop

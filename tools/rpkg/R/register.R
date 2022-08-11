@@ -50,7 +50,6 @@ duckdb_register <- function(conn, name, df) {
 #' @rdname duckdb_register
 #' @export
 duckdb_unregister <- function(conn, name) {
-  stopifnot(dbIsValid(conn))
   rapi_unregister_df(conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }

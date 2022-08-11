@@ -4,6 +4,7 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,12 @@ protected:
 private:
 	unordered_set<CatalogEntry *> &dependencies;
 };
+
+PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
+}
+
+PhysicalPlanGenerator::~PhysicalPlanGenerator() {
+}
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
@@ -100,7 +107,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_DELETE:
 		return CreatePlan((LogicalDelete &)op);
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
-		return CreatePlan((LogicalChunkGet &)op);
+		return CreatePlan((LogicalColumnDataGet &)op);
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		return CreatePlan((LogicalDelimGet &)op);
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:

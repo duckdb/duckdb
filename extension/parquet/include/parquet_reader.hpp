@@ -36,7 +36,6 @@ class FileMetaData;
 namespace duckdb {
 class Allocator;
 class ClientContext;
-class ChunkCollection;
 class BaseStatistics;
 class TableFilterSet;
 
