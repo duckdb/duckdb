@@ -2,11 +2,11 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
 
@@ -114,14 +114,23 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 	root = VisitQueryNode(statement, move(root));
 
 	// add a prune node if necessary
-	if (statement.need_prune) {
+	if (statement.need_prune || !statement.reorder_exprs.empty()) {
 		D_ASSERT(root);
+		if (statement.reorder_exprs.empty()) {
+			for (idx_t i = 0; i < statement.column_count; i++) {
+				statement.reorder_exprs.push_back(make_unique<BoundColumnRefExpression>(
+				    projection.expressions[i]->return_type, ColumnBinding(statement.projection_index, i)));
+			}
+		}
+
+		/*
 		vector<unique_ptr<Expression>> prune_expressions;
 		for (idx_t i = 0; i < statement.column_count; i++) {
-			prune_expressions.push_back(make_unique<BoundColumnRefExpression>(
-			    projection.expressions[i]->return_type, ColumnBinding(statement.projection_index, i)));
+		    prune_expressions.push_back(make_unique<BoundColumnRefExpression>(
+		        projection.expressions[i]->return_type, ColumnBinding(statement.projection_index, i)));
 		}
-		auto prune = make_unique<LogicalProjection>(statement.prune_index, move(prune_expressions));
+		*/
+		auto prune = make_unique<LogicalProjection>(statement.prune_index, move(statement.reorder_exprs));
 		prune->AddChild(move(root));
 		root = move(prune);
 	}

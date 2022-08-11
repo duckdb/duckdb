@@ -12,14 +12,13 @@
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/parser/tokens.hpp"
-#include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/query_node.hpp"
-
-#include "pg_definitions.hpp"
+#include "duckdb/parser/tokens.hpp"
 #include "nodes/parsenodes.hpp"
+#include "pg_definitions.hpp"
 
 namespace duckdb {
 
