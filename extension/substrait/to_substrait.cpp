@@ -242,6 +242,8 @@ void DuckDBToSubstrait::TransformFunctionExpression(Expression &dexpr, substrait
 		auto sarg = sfun->add_arguments();
 		TransformExpr(*darg, *sarg->mutable_value(), col_offset);
 	}
+
+	*sfun->mutable_output_type() = DuckToSubstraitType(dfun.return_type);
 }
 
 void DuckDBToSubstrait::TransformConstantExpression(Expression &dexpr, substrait::Expression &sexpr) {
@@ -282,6 +284,7 @@ void DuckDBToSubstrait::TransformComparisonExpression(Expression &dexpr, substra
 	TransformExpr(*dcomp.left, *sarg->mutable_value(), 0);
 	sarg = scalar_fun->add_arguments();
 	TransformExpr(*dcomp.right, *sarg->mutable_value(), 0);
+	*scalar_fun->mutable_output_type() = DuckToSubstraitType(dcomp.return_type);
 }
 
 void DuckDBToSubstrait::TransformConjunctionExpression(Expression &dexpr, substrait::Expression &sexpr,
@@ -305,6 +308,7 @@ void DuckDBToSubstrait::TransformConjunctionExpression(Expression &dexpr, substr
 		auto s_arg = scalar_fun->add_arguments();
 		TransformExpr(*child, *s_arg->mutable_value(), col_offset);
 	}
+	*scalar_fun->mutable_output_type() = DuckToSubstraitType(dconj.return_type);
 }
 
 void DuckDBToSubstrait::TransformNotNullExpression(Expression &dexpr, substrait::Expression &sexpr,
@@ -314,6 +318,7 @@ void DuckDBToSubstrait::TransformNotNullExpression(Expression &dexpr, substrait:
 	scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
 	auto s_arg = scalar_fun->add_arguments();
 	TransformExpr(*dop.children[0], *s_arg->mutable_value(), col_offset);
+	*scalar_fun->mutable_output_type() = DuckToSubstraitType(dop.return_type);
 }
 
 void DuckDBToSubstrait::TransformCaseExpression(Expression &dexpr, substrait::Expression &sexpr) {
@@ -402,30 +407,33 @@ void DuckDBToSubstrait::CreateFieldRef(substrait::Expression *expr, uint64_t col
 	selection->mutable_direct_reference()->mutable_struct_field()->set_field((int32_t)col_idx);
 	auto root_reference = new ::substrait::Expression_FieldReference_RootReference();
 	selection->set_allocated_root_reference(root_reference);
+
 	D_ASSERT(selection->root_type_case() == substrait::Expression_FieldReference::RootTypeCase::kRootReference);
 	expr->set_allocated_selection(selection);
 	D_ASSERT(expr->has_selection());
 }
 
-substrait::Expression *DuckDBToSubstrait::TransformIsNotNullFilter(uint64_t col_idx, TableFilter &dfilter) {
+substrait::Expression *DuckDBToSubstrait::TransformIsNotNullFilter(uint64_t col_idx, TableFilter &dfilter, LogicalType& return_type) {
 	auto s_expr = new substrait::Expression();
 	auto scalar_fun = s_expr->mutable_scalar_function();
 	scalar_fun->set_function_reference(RegisterFunction("is_not_null"));
 	auto s_arg = scalar_fun->add_arguments();
 	CreateFieldRef(s_arg->mutable_value(), col_idx);
+	*scalar_fun->mutable_output_type() = DuckToSubstraitType(return_type);
 	return s_expr;
 }
 
-substrait::Expression *DuckDBToSubstrait::TransformConjuctionAndFilter(uint64_t col_idx, TableFilter &dfilter) {
+substrait::Expression *DuckDBToSubstrait::TransformConjuctionAndFilter(uint64_t col_idx, TableFilter &dfilter, LogicalType& return_type) {
 	auto &conjunction_filter = (ConjunctionAndFilter &)dfilter;
 	return CreateConjunction(conjunction_filter.child_filters,
-	                         [&](unique_ptr<TableFilter> &in) { return TransformFilter(col_idx, *in); });
+	                         [&](unique_ptr<TableFilter> &in) { return TransformFilter(col_idx, *in, return_type); });
 }
 
-substrait::Expression *DuckDBToSubstrait::TransformConstantComparisonFilter(uint64_t col_idx, TableFilter &dfilter) {
+substrait::Expression *DuckDBToSubstrait::TransformConstantComparisonFilter(uint64_t col_idx, TableFilter &dfilter, LogicalType& return_type) {
 	auto s_expr = new substrait::Expression();
 	auto s_scalar = s_expr->mutable_scalar_function();
 	auto &constant_filter = (ConstantFilter &)dfilter;
+	*s_scalar->mutable_output_type() = DuckToSubstraitType(return_type);
 	auto s_arg = s_scalar->add_arguments();
 	CreateFieldRef(s_arg->mutable_value(), col_idx);
 	s_arg = s_scalar->add_arguments();
@@ -454,14 +462,14 @@ substrait::Expression *DuckDBToSubstrait::TransformConstantComparisonFilter(uint
 	return s_expr;
 }
 
-substrait::Expression *DuckDBToSubstrait::TransformFilter(uint64_t col_idx, TableFilter &dfilter) {
+substrait::Expression *DuckDBToSubstrait::TransformFilter(uint64_t col_idx, TableFilter &dfilter, LogicalType& return_type) {
 	switch (dfilter.filter_type) {
 	case TableFilterType::IS_NOT_NULL:
-		return TransformIsNotNullFilter(col_idx, dfilter);
+		return TransformIsNotNullFilter(col_idx, dfilter, return_type);
 	case TableFilterType::CONJUNCTION_AND:
-		return TransformConjuctionAndFilter(col_idx, dfilter);
+		return TransformConjuctionAndFilter(col_idx, dfilter, return_type);
 	case TableFilterType::CONSTANT_COMPARISON:
-		return TransformConstantComparisonFilter(col_idx, dfilter);
+		return TransformConstantComparisonFilter(col_idx, dfilter, return_type);
 	default:
 		throw InternalException("Unsupported table filter type");
 	}
@@ -495,6 +503,7 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 	TransformExpr(*dcond.left, *s_arg->mutable_value());
 	s_arg = scalar_fun->add_arguments();
 	TransformExpr(*dcond.right, *s_arg->mutable_value(), left_ncol);
+	*scalar_fun->mutable_output_type() = DuckToSubstraitType(dcond.left->return_type);
 	return expr;
 }
 
@@ -828,8 +837,9 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 		filter->mutable_filter()->set_allocated_condition(
 		    CreateConjunction(dget.table_filters.filters, [&](std::pair<const idx_t, unique_ptr<TableFilter>> &in) {
 			    auto col_idx = in.first;
+			    auto return_type = dget.returned_types[col_idx];
 			    auto &filter = *in.second;
-			    return TransformFilter(col_idx, filter);
+			    return TransformFilter(col_idx, filter, return_type);
 		    }));
 		rel = filter;
 	}
@@ -935,6 +945,9 @@ substrait::RelRoot *DuckDBToSubstrait::TransformRootOp(LogicalOperator &dop) {
 }
 
 void DuckDBToSubstrait::TransformPlan(LogicalOperator &dop) {
+	plan.clear_extensions();
+	plan.clear_advanced_extensions();
+	plan.clear_extension_uris();
 	plan.add_relations()->set_allocated_root(TransformRootOp(dop));
 }
 } // namespace duckdb

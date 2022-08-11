@@ -78,10 +78,10 @@ private:
 	//! Transforms a DuckDB Logical Type into a Substrait Type
 	::substrait::Type DuckToSubstraitType(LogicalType &d_type);
 	//! Methods to transform DuckDB Filters to Substrait Expression
-	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);
-	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);
-	substrait::Expression *TransformConjuctionAndFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);
-	substrait::Expression *TransformConstantComparisonFilter(uint64_t col_idx, duckdb::TableFilter &dfilter);
+	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
+	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
+	substrait::Expression *TransformConjuctionAndFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
+	substrait::Expression *TransformConstantComparisonFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType& return_type);
 
 	//! Transforms DuckDB Join Conditions to Substrait Expression
 	substrait::Expression *TransformJoinCond(duckdb::JoinCondition &dcond, uint64_t left_ncol);
@@ -104,6 +104,8 @@ private:
 				auto temp_expr = new substrait::Expression();
 				auto scalar_fun = temp_expr->mutable_scalar_function();
 				scalar_fun->set_function_reference(RegisterFunction("and"));
+				LogicalType boolean_type(LogicalTypeId::BOOLEAN);
+				*scalar_fun->mutable_output_type() = DuckToSubstraitType(boolean_type);
 				AllocateFunctionArgument(scalar_fun, res);
 				AllocateFunctionArgument(scalar_fun, child_expression);
 				res = temp_expr;
