@@ -46,14 +46,15 @@ void DuckDBToSubstrait::AllocateFunctionArgument(substrait::Expression_ScalarFun
 string GetRawValue(hugeint_t value) {
 	std::string str;
 	str.reserve(16);
-	uint8_t *byte = (uint8_t *)&value.upper;
+	uint8_t *byte = (uint8_t *)&value.lower;
 	for (idx_t i = 0; i < 8; i++) {
 		str.push_back(byte[i]);
 	}
-	byte = (uint8_t *)&value.lower;
+	byte = (uint8_t *)&value.upper;
 	for (idx_t i = 0; i < 8; i++) {
 		str.push_back(byte[i]);
 	}
+
 	return str;
 }
 
@@ -97,6 +98,7 @@ void DuckDBToSubstrait::TransformDecimal(Value &dval, substrait::Expression &sex
 	auto raw_value = GetRawValue(hugeint_value);
 
 	dval.type().GetDecimalProperties(width, scale);
+
 	allocated_decimal->set_scale(scale);
 	allocated_decimal->set_precision(width);
 	auto *decimal_value = new string();
@@ -143,8 +145,8 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 	case LogicalTypeId::HUGEINT: {
 		// FIXME: Support for hugeint types?
 		auto s_decimal = new substrait::Type_Decimal();
-		s_decimal->set_scale(38);
-		s_decimal->set_precision(0);
+		s_decimal->set_scale(0);
+		s_decimal->set_precision(38);
 		s_decimal->set_nullability(type_nullability);
 		s_type.set_allocated_decimal(s_decimal);
 		break;
@@ -227,12 +229,13 @@ void DuckDBToSubstrait::TransformBoolean(Value &dval, substrait::Expression &sex
 void DuckDBToSubstrait::TransformHugeInt(Value &dval, substrait::Expression &sexpr) {
 	auto &sval = *sexpr.mutable_literal();
 	auto *allocated_decimal = new ::substrait::Expression_Literal_Decimal();
-	auto hugeint_str = dval.ToString();
+	auto hugeint = dval.GetValueUnsafe<hugeint_t>();
+	auto raw_value = GetRawValue(hugeint);
 	allocated_decimal->set_scale(0);
-	allocated_decimal->set_precision((int32_t)hugeint_str.size());
+	allocated_decimal->set_precision(38);
 
 	auto *decimal_value = new string();
-	*decimal_value = hugeint_str;
+	*decimal_value = raw_value;
 	allocated_decimal->set_allocated_value(decimal_value);
 	sval.set_allocated_decimal(allocated_decimal);
 }
@@ -560,7 +563,8 @@ substrait::Expression *DuckDBToSubstrait::TransformJoinCond(JoinCondition &dcond
 	TransformExpr(*dcond.left, *s_arg->mutable_value());
 	s_arg = scalar_fun->add_arguments();
 	TransformExpr(*dcond.right, *s_arg->mutable_value(), left_ncol);
-	*scalar_fun->mutable_output_type() = DuckToSubstraitType(dcond.left->return_type);
+	LogicalType bool_type = LogicalType::BOOLEAN;
+	*scalar_fun->mutable_output_type() = DuckToSubstraitType(bool_type);
 	return expr;
 }
 
@@ -767,6 +771,7 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(LogicalOperator &dop)
 		}
 		auto &daexpr = (BoundAggregateExpression &)*dmeas;
 		smeas->set_function_reference(RegisterFunction(daexpr.function.name));
+
 		*smeas->mutable_output_type() = DuckToSubstraitType(daexpr.return_type);
 		for (auto &darg : daexpr.children) {
 			auto s_arg = smeas->add_arguments();

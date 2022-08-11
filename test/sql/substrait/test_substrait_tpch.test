@@ -12,10 +12,10 @@ PRAGMA enable_verification
 statement ok
 CALL dbgen(sf=0.01)
 
-##Q 01
-#statement ok
-#CALL get_substrait('SELECT l_returnflag, l_linestatus, sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price, sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price, avg(l_discount) AS avg_disc, count(*) AS count_order FROM lineitem WHERE l_shipdate <= CAST(''1998-09-02'' AS date) GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus;')
-#
+#Q 01
+statement ok
+CALL get_substrait('SELECT l_returnflag, l_linestatus, sum(l_quantity) AS sum_qty, sum(l_extendedprice) AS sum_base_price, sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge, avg(l_quantity) AS avg_qty, avg(l_extendedprice) AS avg_price, avg(l_discount) AS avg_disc, count(*) AS count_order FROM lineitem WHERE l_shipdate <= CAST(''1998-09-02'' AS date) GROUP BY l_returnflag, l_linestatus ORDER BY l_returnflag, l_linestatus;')
+
 ##Q 02
 #statement ok
 #CALL get_substrait('SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, supplier, partsupp, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND p_size = 15 AND p_type LIKE ''%BRASS'' AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = ''EUROPE'' AND ps_supplycost = ( SELECT min(ps_supplycost) FROM partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_nationkey = n_nationkey AND n_regionkey = r_regionkey AND r_name = ''EUROPE'') ORDER BY s_acctbal DESC, n_name, s_name, p_partkey LIMIT 100;')

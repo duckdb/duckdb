@@ -47,8 +47,8 @@ unique_ptr<ParsedExpression> SubstraitToDuckDB::TransformLiteralExpr(const subst
 		const auto &substrait_decimal = slit.decimal();
 		auto raw_value = (uint64_t *)substrait_decimal.value().c_str();
 		hugeint_t substrait_value;
-		substrait_value.upper = raw_value[0];
-		substrait_value.lower = raw_value[1];
+		substrait_value.lower = raw_value[0];
+		substrait_value.upper = raw_value[1];
 		Value val = Value::HUGEINT(substrait_value);
 		auto decimal_type = LogicalType::DECIMAL(substrait_decimal.precision(), substrait_decimal.scale());
 		// cast to correct value

@@ -30,9 +30,9 @@ def run_tpch_validator(require, query_number):
 
     run_substrait_validator(con,query)
 
-# @pytest.mark.parametrize('query_number', [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20])
-# def test_substrait_tpch_validator(require,query_number):
-#     run_tpch_validator(require,query_number)
+@pytest.mark.parametrize('query_number', [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20])
+def test_substrait_tpch_validator(require,query_number):
+    run_tpch_validator(require,query_number)
 
 # @pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: CHUNK_GET")
 # def test_substrait_tpch_validator_16(require):
@@ -46,5 +46,5 @@ def run_tpch_validator(require, query_number):
 # def test_substrait_tpch_validator_22(require):
 #     run_tpch_validator(require,22)
 
-def test_substrait_tpch_validator(require):
-    run_tpch_validator(require,6)
+def test_substrait_tpch_validator_q(require):
+    run_tpch_validator(require,2)
