@@ -174,7 +174,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto bitpacked_offsets_size =
 	    BitpackingPrimitives::GetRequiredSize(string_count + state.empty_strings, minimum_width);
 
-	auto estimated_base_size = bitpacked_offsets_size + compressed_dict_size * (1 / ANALYSIS_SAMPLE_SIZE);
+	auto estimated_base_size = (bitpacked_offsets_size + compressed_dict_size) * (1 / ANALYSIS_SAMPLE_SIZE);
 	auto num_blocks = estimated_base_size / (Storage::BLOCK_SIZE - sizeof(duckdb_fsst_decoder_t));
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 
@@ -409,7 +409,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 			} else if (data[idx].GetSize() == 0) {
 				state.AddEmptyString();
 			} else {
-				D_ASSERT(0);
+				throw FatalException("FSST: no encoder found even though there are values to encode");
 			}
 		}
 		return;
