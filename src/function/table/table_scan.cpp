@@ -366,8 +366,8 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
-static void TableScanSerialize(FieldWriter &writer, const FunctionData &bind_data_p, const TableFunction &function) {
-	auto &bind_data = (TableScanBindData &)bind_data_p;
+static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
 
 	D_ASSERT(bind_data.chunk_count == 0);
 	D_ASSERT(!bind_data.is_index_scan);

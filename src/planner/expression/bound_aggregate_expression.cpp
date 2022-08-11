@@ -88,7 +88,8 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeseriali
 	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	vector<unique_ptr<Expression>> children;
 	unique_ptr<FunctionData> bind_info;
-	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
+	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
 
 	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
 }

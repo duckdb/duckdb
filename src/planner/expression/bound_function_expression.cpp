@@ -84,7 +84,8 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializ
 	auto is_operator = reader.ReadRequired<bool>();
 	vector<unique_ptr<Expression>> children;
 	unique_ptr<FunctionData> bind_info;
-	auto function = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
+	auto function = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
+	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
 
 	auto return_type = function.return_type;
 	return make_unique<BoundFunctionExpression>(move(return_type), move(function), move(children), move(bind_info),

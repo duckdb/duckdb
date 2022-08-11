@@ -382,9 +382,9 @@ public:
 		return data.batch_index;
 	}
 
-	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData &bind_data_p,
+	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
 	                                 const TableFunction &function) {
-		auto &bind_data = (ParquetReadBindData &)bind_data_p;
+		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		writer.WriteList<string>(bind_data.files);
 		writer.WriteRegularSerializableList(bind_data.types);
 		writer.WriteList<string>(bind_data.names);

@@ -3,6 +3,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -122,62 +123,56 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	return move(new_window);
 }
 
-//	//! The bound aggregate function
-//	unique_ptr<AggregateFunction> aggregate;
-//	//! The bound function info
-//	unique_ptr<FunctionData> bind_info;
-//	//! The child expressions of the main window function
-//	vector<unique_ptr<Expression>> children;
-//	//! The set of expressions to partition by
-//	vector<unique_ptr<Expression>> partitions;
-//	//! Statistics belonging to the partitions expressions
-//	vector<unique_ptr<BaseStatistics>> partitions_stats;
-//	//! The set of ordering clauses
-//	vector<BoundOrderByNode> orders;
-//	//! Expression representing a filter, only used for aggregates
-//	unique_ptr<Expression> filter_expr;
-//	//! True to ignore NULL values
-//	bool ignore_nulls;
-//	//! The window boundaries
-//	WindowBoundary start = WindowBoundary::INVALID;
-//	WindowBoundary end = WindowBoundary::INVALID;
-//
-//	unique_ptr<Expression> start_expr;
-//	unique_ptr<Expression> end_expr;
-//	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-//	unique_ptr<Expression> offset_expr;
-//	unique_ptr<Expression> default_expr;
-//
-
 void BoundWindowExpression::Serialize(FieldWriter &writer) const {
+	writer.WriteField<bool>(aggregate.get());
 	if (aggregate) {
-		throw NotImplementedException("FIXME: serialize aggregate function");
+		FunctionSerializer::Serialize<AggregateFunction>(writer, *aggregate, return_type, children, bind_info.get());
+	} else {
+		// children and return_type are written as part of the aggregate function otherwise
+		writer.WriteSerializableList(children);
+		writer.WriteSerializable(return_type);
 	}
-	//	// FIXME: aggregate
-	//	writer.WriteSerializableList(children);
-	//	writer.WriteSerializableList(partitions);
-	//	writer.WriteRegularSerializableList(orders);
-	//	// FIXME: partitions_stats
-	//	writer.WriteOptional(filter_expr);
-	//	writer.WriteField<bool>(ignore_nulls);
-	//	writer.WriteField<WindowBoundary>(start);
-	//	writer.WriteField<WindowBoundary>(end);
-	//	writer.WriteOptional(start_expr);
-	//	writer.WriteOptional(end_expr);
-	//	writer.WriteOptional(offset_expr);
-	//	writer.WriteOptional(default_expr);
-	throw NotImplementedException("FIXME: serialize window function");
+	writer.WriteSerializableList(partitions);
+	writer.WriteRegularSerializableList(orders);
+	// FIXME: partitions_stats
+	writer.WriteOptional(filter_expr);
+	writer.WriteField<bool>(ignore_nulls);
+	writer.WriteField<WindowBoundary>(start);
+	writer.WriteField<WindowBoundary>(end);
+	writer.WriteOptional(start_expr);
+	writer.WriteOptional(end_expr);
+	writer.WriteOptional(offset_expr);
+	writer.WriteOptional(default_expr);
 }
 
 unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
-	throw NotImplementedException("FIXME: deserialize window function");
-	//	auto expression_type = reader.ReadRequired<ExpressionType>();
-	//	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	//	auto children = reader.ReadRequiredSerializableList<Expression>(context);
-	//
-	//	auto result = make_unique<BoundWindowExpression>(expression_type, return_type);
-	//	result->children = move(children);
-	//	return move(result);
+	auto has_aggregate = reader.ReadRequired<bool>();
+	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<FunctionData> bind_info;
+	vector<unique_ptr<Expression>> children;
+	LogicalType return_type;
+	if (has_aggregate) {
+		auto aggr_function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+		    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
+		aggregate = make_unique<AggregateFunction>(move(aggr_function));
+		return_type = aggregate->return_type;
+	} else {
+		children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+		return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	}
+	auto result = make_unique<BoundWindowExpression>(state.type, return_type, move(aggregate), move(bind_info));
+
+	result->partitions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	result->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
+	result->filter_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	result->ignore_nulls = reader.ReadRequired<bool>();
+	result->start = reader.ReadRequired<WindowBoundary>();
+	result->end = reader.ReadRequired<WindowBoundary>();
+	result->start_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	result->end_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	return move(result);
 }
 
 } // namespace duckdb
