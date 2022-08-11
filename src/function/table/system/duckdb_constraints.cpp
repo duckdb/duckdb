@@ -87,16 +87,24 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	// scan all the schemas for tables and collect them
 	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
 
+	sort(schemas.begin(), schemas.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
+
 	// check the temp schema as well
 	auto &temp_schema = ClientData::Get(context).temporary_objects;
 	schemas.push_back(temp_schema.get());
 
 	for (auto &schema : schemas) {
+		vector<CatalogEntry *> entries;
+
 		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
 			if (entry->type == CatalogType::TABLE_ENTRY) {
-				result->entries.push_back(entry);
+				entries.push_back(entry);
 			}
 		});
+
+		sort(entries.begin(), entries.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
+
+		result->entries.insert(result->entries.end(), entries.begin(), entries.end());
 	};
 
 	return move(result);

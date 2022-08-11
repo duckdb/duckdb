@@ -25,9 +25,9 @@ SELECT table_name, constraint_index, constraint_type, UNNEST(constraint_column_n
 ----
 fk_integers	0	FOREIGN KEY	j
 integers	0	REFERENCED KEY	i
-integers	3	PRIMARY KEY	i
-integers	4	CHECK	i
-integers	5	NOT NULL	i
-test	1	UNIQUE	i
-test	2	CHECK	i
-test	2	CHECK	k
+integers	1	PRIMARY KEY	i
+integers	2	CHECK	i
+integers	3	NOT NULL	i
+test	4	UNIQUE	i
+test	5	CHECK	i
+test	5	CHECK	k
