@@ -188,11 +188,11 @@ public:
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
 	SimpleAggregateLocalState(Allocator &allocator, const vector<unique_ptr<Expression>> &aggregates,
-	                          const vector<LogicalType> &child_types,
-	                          GlobalSinkState& gstate_p, ExecutionContext &context)
+	                          const vector<LogicalType> &child_types, GlobalSinkState &gstate_p,
+	                          ExecutionContext &context)
 	    : state(aggregates), child_executor(allocator), payload_chunk(), filter_set() {
-		auto& gstate = (SimpleAggregateGlobalState&)gstate_p;
-		auto& distinct_aggregate_data = gstate.distinct_data;
+		auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
+		auto &distinct_aggregate_data = gstate.distinct_data;
 
 		InitializeDistinctAggregates(distinct_aggregate_data, context);
 
@@ -249,13 +249,12 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SimpleAggregateGlobalState>(Allocator::Get(context), aggregates,
-	                                               context);
+	return make_unique<SimpleAggregateGlobalState>(Allocator::Get(context), aggregates, context);
 }
 
 unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	D_ASSERT(sink_state);
-	auto& gstate = *sink_state;
+	auto &gstate = *sink_state;
 	return make_unique<SimpleAggregateLocalState>(Allocator::Get(context.client), aggregates, children[0]->GetTypes(),
 	                                              gstate, context);
 }
@@ -264,7 +263,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
                                               DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	auto &global_sink = (SimpleAggregateGlobalState &)state;
-	auto& distinct_aggregate_data = global_sink.distinct_data;
+	auto &distinct_aggregate_data = global_sink.distinct_data;
 	auto &distinct_indices = distinct_aggregate_data.Indices();
 	if (distinct_indices.empty()) {
 		return;
@@ -294,8 +293,8 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
                                                 LocalSinkState &lstate, DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
-	auto& gstate = (SimpleAggregateGlobalState&)state;
-	auto& distinct_aggregate_data = gstate.distinct_data;
+	auto &gstate = (SimpleAggregateGlobalState &)state;
+	auto &distinct_aggregate_data = gstate.distinct_data;
 	// perform the aggregation inside the local state
 	sink.Reset();
 
@@ -356,7 +355,7 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Glob
                                                  LocalSinkState &lstate) const {
 	auto &global_sink = (SimpleAggregateGlobalState &)state;
 	auto &source = (SimpleAggregateLocalState &)lstate;
-	auto& distinct_aggregate_data = global_sink.distinct_data;
+	auto &distinct_aggregate_data = global_sink.distinct_data;
 
 	auto &distinct_indices = distinct_aggregate_data.Indices();
 	if (distinct_indices.empty()) {
@@ -556,7 +555,7 @@ public:
 				continue;
 			}
 			gstate.distinct_data.radix_tables[i]->ScheduleTasks(pipeline->executor, shared_from_this(),
-			                                                          *gstate.radix_states[i], tasks);
+			                                                    *gstate.radix_states[i], tasks);
 		}
 		D_ASSERT(!tasks.empty());
 		SetTasks(move(tasks));
@@ -571,7 +570,7 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
                                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
 	auto &payload_chunk = gstate.payload_chunk;
-	auto& distinct_aggregate_data = gstate.distinct_data;
+	auto &distinct_aggregate_data = gstate.distinct_data;
 
 	//! Copy of the payload chunk, used to store the data of the radix table for use with the expression executor
 	//! We can not directly use the payload chunk because the input and the output to the expression executor can not be
