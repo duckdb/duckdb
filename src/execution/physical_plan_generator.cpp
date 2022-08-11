@@ -197,7 +197,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	}
 
 	if (op.estimated_props) {
-		plan->estimated_cardinality = op.estimated_cardinality;
+		plan->estimated_cardinality = op.estimated_props->GetCardinality();
 		plan->estimated_props = op.estimated_props->Copy();
 	} else {
 		plan->estimated_props = make_unique<EstimatedProperties>();

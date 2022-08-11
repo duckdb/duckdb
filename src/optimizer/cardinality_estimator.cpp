@@ -6,6 +6,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -296,6 +297,9 @@ static LogicalGet *GetLogicalGet(LogicalOperator *op) {
 	case LogicalOperatorType::LOGICAL_FILTER:
 		get = GetLogicalGet(op->children.at(0).get());
 		break;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		get = GetLogicalGet(op->children.at(0).get());
+		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		LogicalComparisonJoin *join = (LogicalComparisonJoin *)op;
 		if (join->join_type == JoinType::MARK || join->join_type == JoinType::LEFT) {
@@ -457,7 +461,7 @@ TableFilterSet *CardinalityEstimator::GetTableFilters(LogicalOperator *op) {
 }
 
 idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *filter,
-                                                  TableCatalogEntry *catalog_table) {
+                                                  unique_ptr<BaseStatistics> base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
@@ -468,9 +472,9 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
 			continue;
 		}
-		auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
 		auto column_count = base_stats->GetDistinctCount();
 		auto filtered_card = cardinality;
+		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
 			// we want the ceil of cardinality/column_count. We also want to avoid compiler errors
 			filtered_card = (cardinality + column_count - 1) / column_count;
@@ -485,7 +489,7 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 }
 
 idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *filter,
-                                                 TableCatalogEntry *catalog_table) {
+                                                 unique_ptr<BaseStatistics> base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter->child_filters) {
@@ -494,7 +498,6 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 		}
 		auto comparison_filter = (ConstantFilter &)*child_filter;
 		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-			auto base_stats = catalog_table->storage->GetStatistics(context, column_index);
 			auto column_count = base_stats->GetDistinctCount();
 			auto increment = MaxValue<idx_t>(((cardinality + column_count - 1) / column_count), 1);
 			if (has_equality_filter) {
@@ -512,17 +515,20 @@ idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column
 idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters) {
 	idx_t cardinality_after_filters = cardinality;
 	auto catalog_table = GetCatalogTableEntry(op);
-	if (!catalog_table) {
-		return cardinality_after_filters;
-	}
+	auto get = GetLogicalGet(op);
+
 	for (auto &it : table_filters->filters) {
+		auto &table_scan_bind_data = (TableScanBindData &)*get->bind_data;
+		auto column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 			auto &filter = (ConjunctionAndFilter &)*it.second;
-			idx_t cardinality_with_and_filter = InspectConjunctionAND(cardinality, it.first, &filter, catalog_table);
+			idx_t cardinality_with_and_filter =
+			    InspectConjunctionAND(cardinality, it.first, &filter, move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 			auto &filter = (ConjunctionOrFilter &)*it.second;
-			idx_t cardinality_with_or_filter = InspectConjunctionOR(cardinality, it.first, &filter, catalog_table);
+			idx_t cardinality_with_or_filter =
+			    InspectConjunctionOR(cardinality, it.first, &filter, move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 		}
 	}
