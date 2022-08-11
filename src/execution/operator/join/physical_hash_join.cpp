@@ -497,34 +497,18 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class HashJoinLocalSourceState;
+enum class HashJoinSourceStage : uint8_t { BUILD = 0, PROBE = 1, SCAN_HT = 2, DONE = 3 };
 
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
 	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
-	    : initialized(false), probe_chunk_count(0), probe_chunk_done(0),
+	    : initialized(false), stage(HashJoinSourceStage::SCAN_HT), probe_side_partitioned(false),
 	      probe_count(op.children[0]->estimated_cardinality),
 	      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 	}
 
-	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
-	JoinHTScanState full_outer_scan_state;
-
-	//! Only used for external join: Synchronization stuff
-	mutex source_lock;
-	atomic<bool> initialized;
-
-	//! Only used for external join: Materialized probe-side data and global scan state
-	unique_ptr<ColumnDataCollection> probe_collection;
-	ColumnDataParallelScanState probe_global_scan_state;
-	idx_t probe_chunk_count;
-	atomic<idx_t> probe_chunk_done;
-
 	void Initialize(HashJoinGlobalSinkState &sink) {
-		if (initialized) {
-			return;
-		}
-		lock_guard<mutex> lock(sink.lock);
+		lock_guard<mutex> init_lock(lock);
 		if (initialized) {
 			// Have to check if anything changed
 			return;
@@ -534,13 +518,36 @@ public:
 		initialized = true;
 	}
 
-	//! Stuff to determine the number of threads
-	idx_t probe_count;
-	idx_t parallel_scan_chunk_count;
-
 	idx_t MaxThreads() override {
 		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
+
+public:
+	//! Probe-side data that was spilled during Execute
+	unique_ptr<ColumnDataCollection> probe_collection;
+
+	//! For synchronizing the external hash join
+	atomic<bool> initialized;
+	atomic<HashJoinSourceStage> stage;
+	mutex lock;
+
+	//! For HT build synchronization
+	idx_t build_block_idx;
+	idx_t build_block_count;
+	atomic<idx_t> build_block_done;
+
+	//! For probe synchronization
+	ColumnDataParallelScanState probe_global_scan_state;
+	idx_t probe_chunk_count;
+	atomic<idx_t> probe_chunk_done;
+	atomic<idx_t> probe_side_partitioned;
+
+	//! For full/outer synchronization
+	JoinHTScanState full_outer_scan_state;
+
+	//! Stuff to determine the number of threads
+	idx_t probe_count;
+	idx_t parallel_scan_chunk_count;
 };
 
 class HashJoinLocalSourceState : public LocalSourceState {
@@ -552,7 +559,7 @@ public:
 		join_keys.Initialize(allocator, op.condition_types);
 		payload.Initialize(allocator, op.children[0]->types);
 
-		// Initialize vectors to store column indices
+		// Store the indices of the columns so we can reference them easily
 		idx_t col_idx = 0;
 		for (; col_idx < op.condition_types.size(); col_idx++) {
 			join_key_indices.push_back(col_idx);
@@ -593,36 +600,36 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 	return make_unique<HashJoinLocalSourceState>(*this, Allocator::Get(context.client));
 }
 
-void PartitionProbeSide(HashJoinGlobalSourceState &gstate, HashJoinGlobalSinkState &sink) {
-	lock_guard<mutex> lock(gstate.source_lock);
-	if (sink.spill_collections.empty()) {
+void PhysicalHashJoin::PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const {
+	lock_guard<mutex> lock(gstate.lock);
+	if (gstate.probe_side_partitioned) {
 		return;
 	}
+
 	// For now we actually don't partition the probe side TODO
 	for (auto &spill_collection : sink.spill_collections) {
 		gstate.probe_collection->Combine(*spill_collection);
 	}
+	sink.spill_collections.clear();
+
 	gstate.probe_chunk_count = gstate.probe_collection->ChunkCount();
 
-	// Because we don't actually partition yet, we have to mark the current probe phase as done TODO
-	D_ASSERT(gstate.probe_chunk_done == 0);
-	gstate.probe_chunk_done = gstate.probe_chunk_count;
-
-	sink.spill_collections.clear();
+	gstate.probe_side_partitioned = true;
 }
 
-bool PhysicalHashJoin::PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const {
+void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const {
+	lock_guard<mutex> lock(gstate.lock);
+	if (gstate.stage == HashJoinSourceStage::BUILD) {
+		return;
+	}
+
 	// Prepare the build side
-	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	auto &ht = *sink.hash_table;
 	if (!ht.PrepareExternalFinalize()) {
-		// Done
-		return false;
+		gstate.stage = HashJoinSourceStage::DONE;
+		return;
 	}
 	ht.InitializePointerTable();
-	// TODO: parallelize the finalize!
-	ht.Finalize(0, ht.GetBlockCollection().blocks.size(), false);
-	ht.finalized = true;
 
 	// Prepare the probe side
 	gstate.probe_collection->InitializeScan(gstate.probe_global_scan_state);
@@ -634,20 +641,56 @@ bool PhysicalHashJoin::PreparePartitionedRound(HashJoinGlobalSourceState &gstate
 		gstate.full_outer_scan_state.total = ht.Count();
 	}
 
-	return true;
+	gstate.stage = HashJoinSourceStage::BUILD;
 }
 
-//! Probe the build side using the materialized and partitioned probe side
-void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, HashJoinLocalSourceState &lstate,
-                   DataChunk &chunk) {
-	D_ASSERT(sink.hash_table->finalized);
+void PhysicalHashJoin::ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+                                     HashJoinLocalSourceState &lstate) const {
+	lock_guard<mutex> lock(gstate.lock);
+	if (gstate.stage != HashJoinSourceStage::BUILD) {
+		// The other threads finished the build stage already!
+		return;
+	}
+
+	auto &ht = *sink.hash_table;
+	// TODO: parallelize the finalize! - set stage to BUILD at the end of this
+	ht.Finalize(0, ht.GetBlockCollection().blocks.size(), false);
+	ht.finalized = true;
+
+	gstate.stage = HashJoinSourceStage::PROBE;
+}
+
+void PhysicalHashJoin::ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+                                     HashJoinLocalSourceState &lstate, DataChunk &chunk) const {
+	if (lstate.scan_structure) {
+		D_ASSERT(gstate.stage == HashJoinSourceStage::PROBE);
+		D_ASSERT(sink.hash_table->finalized);
+
+		// Still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
+		lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
+		if (chunk.size() != 0) {
+			return;
+		}
+		// This scan structure is done, reset it and increment scan progress
+		lstate.scan_structure = nullptr;
+		if (++gstate.probe_chunk_done == gstate.probe_chunk_count) {
+			if (IsRightOuterJoin(join_type)) {
+				gstate.stage = HashJoinSourceStage::SCAN_HT;
+			} else {
+				PrepareProbeRound(sink, gstate);
+			}
+			return;
+		}
+	}
 
 	// Scan input Chunk for next probe
 	if (!gstate.probe_collection->Scan(gstate.probe_global_scan_state, lstate.probe_local_scan_state,
 	                                   lstate.probe_chunk)) {
-		// Scan is done
-		return;
+		return; // Scan is done
 	}
+
+	D_ASSERT(gstate.stage == HashJoinSourceStage::PROBE);
+	D_ASSERT(sink.hash_table->finalized);
 
 	// Get the probe chunk columns/hashes
 	lstate.join_keys.ReferenceColumns(lstate.probe_chunk, lstate.join_key_indices);
@@ -659,6 +702,40 @@ void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gst
 	lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
 }
 
+void ScanHT(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate, HashJoinLocalSourceState &lstate,
+            DataChunk &chunk) {
+	idx_t found_entries;
+	{
+		auto &fo_ss = gstate.full_outer_scan_state;
+		lock_guard<mutex> lock(gstate.lock);
+
+		idx_t scan_index_before = fo_ss.scan_index;
+		found_entries = sink.hash_table->ScanFullOuter(fo_ss, lstate.addresses);
+		idx_t scanned = fo_ss.scan_index - scan_index_before;
+
+		lstate.full_outer_in_progress = scanned;
+	}
+	sink.hash_table->GatherFullOuter(chunk, lstate.addresses, found_entries);
+}
+
+void PhysicalHashJoin::ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+                                    HashJoinLocalSourceState &lstate, DataChunk &chunk) const {
+	D_ASSERT(IsRightOuterJoin(join_type));
+	auto &fo_ss = gstate.full_outer_scan_state;
+
+	if (lstate.full_outer_in_progress != 0) {
+		// This thread did a full/outer scan, increment scan progress
+		auto scanned = fo_ss.scanned += lstate.full_outer_in_progress;
+		lstate.full_outer_in_progress = 0;
+		if (scanned == fo_ss.total) {
+			PrepareProbeRound(sink, gstate);
+			return;
+		}
+	}
+
+	ScanHT(sink, gstate, lstate, chunk);
+}
+
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
 	D_ASSERT(!recursive_cte);
@@ -667,87 +744,39 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	auto &lstate = (HashJoinLocalSourceState &)lstate_p;
 	sink.scanned_data = true;
 
-	auto &fo_ss = gstate.full_outer_scan_state;
 	if (!sink.external) {
 		if (IsRightOuterJoin(join_type)) {
-			// Check if we need to scan any unmatched tuples from the RHS for the full/right outer join
-			idx_t found_entries;
-			{
-				lock_guard<mutex> lock(gstate.source_lock);
-				found_entries = sink.hash_table->ScanFullOuter(fo_ss, lstate.addresses);
-			}
-			sink.hash_table->GatherFullOuter(chunk, lstate.addresses, found_entries);
+			ScanHT(sink, gstate, lstate, chunk);
 		}
 		return;
 	}
 
-	// Initialize global source state (if not yet done)
-	gstate.Initialize(sink);
+	if (!gstate.initialized) {
+		gstate.Initialize(sink);
+	}
 
-	// Partition probe side (if not yet done)
-	PartitionProbeSide(gstate, sink);
+	if (!gstate.probe_side_partitioned) {
+		PartitionProbeSide(sink, gstate);
+		PrepareProbeRound(sink, gstate);
+	}
 
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done
 	// Therefore, we loop until we've produced tuples, or until the operator is actually done
 	while (chunk.size() == 0) {
-		if (lstate.scan_structure) {
-			// Still have elements remaining from the previous probe (i.e. we got >1024 elements in the previous probe)
-			lstate.scan_structure->Next(lstate.join_keys, lstate.payload, chunk);
-			if (chunk.size() != 0) {
-				return;
-			}
-			// This scan structure is done, reset it and increment scan progress
-			lstate.scan_structure = nullptr;
-			gstate.probe_chunk_done++;
-		}
-
-		if (gstate.probe_chunk_done != gstate.probe_chunk_count) {
+		switch (gstate.stage.load()) {
+		case HashJoinSourceStage::BUILD:
+			ExternalBuild(sink, gstate, lstate);
+			break;
+		case HashJoinSourceStage::PROBE:
 			ExternalProbe(sink, gstate, lstate, chunk);
-			continue;
-		}
-
-		// If we arrived here, we've run out of blocks to assign to threads
-		if (lstate.full_outer_in_progress != 0) {
-			// This thread did a full/outer scan, increment scan progress
-			D_ASSERT(IsRightOuterJoin(join_type));
-			fo_ss.scanned += lstate.full_outer_in_progress;
-			lstate.full_outer_in_progress = 0;
-		}
-
-		// Now we either scan full/outer, or prepare the next probe round
-		idx_t found_entries;
-		do { // 'do' just so we can 'break' to release the lock
-			lock_guard<mutex> lock(gstate.source_lock);
-			if (gstate.probe_chunk_done != gstate.probe_chunk_count) {
-				// Another thread prepared the next probe round while we waited for the lock
-				break;
-			}
-
-			if (IsRightOuterJoin(join_type) && fo_ss.scanned != fo_ss.total) {
-				// We need to scan the HT for full/outer
-				idx_t scan_index_before = fo_ss.scan_index;
-				found_entries = sink.hash_table->ScanFullOuter(fo_ss, lstate.addresses);
-				idx_t scanned = fo_ss.scan_index - scan_index_before;
-
-				// Mark the assigned tuples as in-progress
-				D_ASSERT(lstate.full_outer_in_progress == 0);
-				lstate.full_outer_in_progress = scanned;
-				break;
-			}
-
-			// Probe round is done, and full/outer scan is done too, try to prepare the next probe round
-			if (PreparePartitionedRound(gstate)) {
-				break;
-			}
-
-			// We could not prepare the next partitioned probe round, all partitions must be done
+			break;
+		case HashJoinSourceStage::SCAN_HT:
+			ExternalScan(sink, gstate, lstate, chunk);
+			break;
+		case HashJoinSourceStage::DONE:
 			return;
-		} while (true);
-
-		if (lstate.full_outer_in_progress != 0) {
-			// We assigned this thread to scan the HT
-			D_ASSERT(IsRightOuterJoin(join_type));
-			sink.hash_table->GatherFullOuter(chunk, lstate.addresses, found_entries);
+		default:
+			throw InternalException("Unknown HashJoinSourceStage!");
 		}
 	}
 }

@@ -823,7 +823,7 @@ idx_t JoinHashTable::ScanFullOuter(JoinHTScanState &state, Vector &addresses) {
 	idx_t found_entries = 0;
 	for (; state.block_position < block_collection->blocks.size(); state.block_position++, state.position = 0) {
 		auto &block = block_collection->blocks[state.block_position];
-		auto &handle = pinned_handles[state.block_position];
+		auto handle = buffer_manager.Pin(block->block);
 		auto baseptr = handle.Ptr();
 		for (; state.position < block->count; state.position++, state.scan_index++) {
 			auto tuple_base = baseptr + state.position * entry_size;
@@ -1137,6 +1137,20 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	return true;
 }
 
+static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk &payload, Vector &hashes) {
+	spill_chunk.Reset();
+	idx_t spill_col_idx = 0;
+	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
+		spill_chunk.data[col_idx].Reference(keys.data[col_idx]);
+	}
+	spill_col_idx += keys.ColumnCount();
+	for (idx_t col_idx = 0; col_idx < payload.data.size(); col_idx++) {
+		spill_chunk.data[spill_col_idx + col_idx].Reference(payload.data[col_idx]);
+	}
+	spill_col_idx += payload.ColumnCount();
+	spill_chunk.data[spill_col_idx].Reference(hashes);
+}
+
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload,
                                                        ColumnDataCollection &spill_collection, DataChunk &spill_chunk) {
 	// hash all the keys
@@ -1152,18 +1166,8 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	// Set up the spill chunk with stuff we CAN'T match right now
-	spill_chunk.Reset();
-	idx_t spill_col_idx = 0;
-	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
-		spill_chunk.data[col_idx].Reference(keys.data[col_idx]);
-	}
-	spill_col_idx += keys.ColumnCount();
-	for (idx_t col_idx = 0; col_idx < payload.data.size(); col_idx++) {
-		spill_chunk.data[spill_col_idx + col_idx].Reference(payload.data[col_idx]);
-	}
-	spill_col_idx += payload.ColumnCount();
-	spill_chunk.data[spill_col_idx].Reference(hashes);
+	// slice the stuff CAN'T probe right now and append to spill collection
+	CreateSpillChunk(spill_chunk, keys, payload, hashes);
 	spill_chunk.Slice(false_sel, false_count);
 	spill_chunk.SetCardinality(false_count);
 	spill_collection.Append(spill_chunk);

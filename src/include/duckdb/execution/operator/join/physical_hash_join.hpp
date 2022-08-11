@@ -18,6 +18,9 @@
 
 namespace duckdb {
 
+class HashJoinGlobalSinkState;
+
+class HashJoinLocalSourceState;
 class HashJoinGlobalSourceState;
 
 //! PhysicalHashJoin represents a hash loop join between two tables
@@ -93,10 +96,21 @@ public:
 	}
 
 private:
-	//! Initialize HT given the info in this operator
+	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
+
+	//! Partition the probe-side data
+	void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
 	//! Prepare the next partitioned probe round, which includes finalizing the HT
-	bool PreparePartitionedRound(HashJoinGlobalSourceState &gstate) const;
+	void PrepareProbeRound(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
+
+	//! Calls to build, probe and scan during external hash join
+	void ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+	                   HashJoinLocalSourceState &lstate) const;
+	void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+	                   HashJoinLocalSourceState &lstate, DataChunk &chunk) const;
+	void ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
+	                  HashJoinLocalSourceState &lstate, DataChunk &chunk) const;
 };
 
 } // namespace duckdb
