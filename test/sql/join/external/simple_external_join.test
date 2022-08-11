@@ -2,11 +2,17 @@
 # description: Test simple external join
 # group: [external]
 
-statement ok
-pragma verify_external
+#statement ok
+#pragma verify_external
+
+#statement ok
+#pragma verify_parallelism
 
 statement ok
-pragma verify_parallelism
+pragma threads=1
+
+statement ok
+pragma debug_force_external=true
 
 # Create tables with large string values so that we have to swizzle strings
 # The tables have a single overlapping value to keep the join result small

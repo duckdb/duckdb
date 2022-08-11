@@ -28,63 +28,63 @@ def execute_substrait_ibis_to_duck(require, query_number):
         return
     duck_to_ibis(connection,query_number)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_01(require):
     execute_substrait_ibis_to_duck(require,1)
     
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_02(require):
     execute_substrait_ibis_to_duck(require,2)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_03(require):
     execute_substrait_ibis_to_duck(require,3)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_04(require):
     execute_substrait_ibis_to_duck(require,4)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_05(require):
     execute_substrait_ibis_to_duck(require,5)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_06(require):
     execute_substrait_ibis_to_duck(require,6)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_07(require):
     execute_substrait_ibis_to_duck(require,7)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="Ibis Consumption: Arguments with datatype !string and !int32 are not comparable")
 def test_query_substrait_ibis_to_duck_08(require):
     execute_substrait_ibis_to_duck(require,8)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="ValueError: Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_09(require):
     execute_substrait_ibis_to_duck(require,9)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_10(require):
     execute_substrait_ibis_to_duck(require,10)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="ValueError: Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_11(require):
     execute_substrait_ibis_to_duck(require,11)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_12(require):
     execute_substrait_ibis_to_duck(require,12)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="Ibis Consumption: '!~~'")
 def test_query_substrait_ibis_to_duck_13(require):
     execute_substrait_ibis_to_duck(require,13)
     
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_14(require):
     execute_substrait_ibis_to_duck(require,14)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_15(require):
     execute_substrait_ibis_to_duck(require,15)
 
@@ -92,19 +92,19 @@ def test_query_substrait_ibis_to_duck_15(require):
 def test_query_substrait_ibis_to_duck_16(require):
     execute_substrait_ibis_to_duck(require,16)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_17(require):
     execute_substrait_ibis_to_duck(require,17)
     
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_18(require):
     execute_substrait_ibis_to_duck(require,18)
 
-@pytest.mark.xfail(reason="getattr(): attribute name must be string")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_19(require):
     execute_substrait_ibis_to_duck(require,19)
 
-@pytest.mark.xfail(reason="pop from an empty deque")
+@pytest.mark.xfail(reason="Ibis Consumption: getattr(): attribute name must be string")
 def test_query_substrait_ibis_to_duck_20(require):
     execute_substrait_ibis_to_duck(require,20)
 

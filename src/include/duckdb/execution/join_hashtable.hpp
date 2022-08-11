@@ -215,8 +215,7 @@ private:
 	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:
-	//! Insert the given set of locations into the HT with the given set of
-	//! hashes. Caller should hold lock in parallel HT.
+	//! Insert the given set of locations into the HT with the given set of hashes
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel);
 
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
@@ -282,13 +281,13 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	unique_ptr<ScanStructure> ProbeAndBuild(DataChunk &keys, DataChunk &payload, ColumnDataCollection &spill_collection,
+	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ColumnDataCollection &spill_collection,
 	                                        DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current partitioned round
-	idx_t partitions_start;
-	idx_t partitions_end;
+	idx_t partition_start;
+	idx_t partition_end;
 
 	//! The RowDataCollection holding the swizzled main data of the hash table
 	unique_ptr<RowDataCollection> swizzled_block_collection;

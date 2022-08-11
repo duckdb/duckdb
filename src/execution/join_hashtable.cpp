@@ -16,7 +16,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false), radix_bits(7),
-      partitions_start(0), partitions_end(0) {
+      partition_start(0), partition_end(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -1092,15 +1092,15 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	}
 
 	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	partitions_start = partitions_end;
-	if (partitions_start == num_partitions) {
+	partition_start = partition_end;
+	if (partition_start == num_partitions) {
 		return false;
 	}
 
 	// Determine how many partitions we can do next (at least one)
 	idx_t next = 0;
 	idx_t count = 0;
-	for (idx_t p = partitions_start; p < num_partitions; p++) {
+	for (idx_t p = partition_start; p < num_partitions; p++) {
 		auto partition_count = partition_block_collections[p]->count;
 		if (partition_count != 0 && count != 0 && count + partition_count > tuples_per_round) {
 			// We skip over empty partitions (partition_count != 0),
@@ -1110,11 +1110,11 @@ bool JoinHashTable::PrepareExternalFinalize() {
 		next++;
 		count += partition_count;
 	}
-	partitions_end += next;
+	partition_end += next;
 
 	// Move specific partitions to the swizzled_... collections so they can be unswizzled
 	D_ASSERT(SwizzledCount() == 0);
-	for (idx_t p = partitions_start; p < partitions_end; p++) {
+	for (idx_t p = partition_start; p < partition_end; p++) {
 		auto &p_block_collection = *partition_block_collections[p];
 		if (!layout.AllConstant()) {
 			auto &p_string_heap = *partition_string_heaps[p];
@@ -1137,7 +1137,7 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	return true;
 }
 
-unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChunk &payload,
+unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload,
                                                        ColumnDataCollection &spill_collection, DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
@@ -1149,7 +1149,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndBuild(DataChunk &keys, DataChun
 	true_sel.Initialize();
 	false_sel.Initialize();
 	auto true_count = RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), payload.size(),
-	                                            radix_bits, partitions_end, &true_sel, &false_sel);
+	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
 	// Set up the spill chunk with stuff we CAN'T match right now
