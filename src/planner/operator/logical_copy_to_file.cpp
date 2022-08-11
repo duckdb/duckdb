@@ -22,8 +22,7 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	function.serialize(writer, *bind_data, function);
 }
 
-unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                           FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto file_path = reader.ReadRequired<string>();
 	auto use_tmp_file = reader.ReadRequired<bool>();
 	auto is_file_and_exists = reader.ReadRequired<bool>();
@@ -32,6 +31,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(ClientContext &contex
 
 	auto has_bind_data = reader.ReadRequired<bool>();
 
+	auto &context = state.gstate.context;
 	auto &catalog = Catalog::GetCatalog(context);
 	auto func_catalog = catalog.GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, DEFAULT_SCHEMA, copy_func_name);
 	if (!func_catalog || func_catalog->type != CatalogType::COPY_FUNCTION_ENTRY) {

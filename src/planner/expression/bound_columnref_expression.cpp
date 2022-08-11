@@ -50,7 +50,7 @@ void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField(depth);
 }
 
-unique_ptr<Expression> BoundColumnRefExpression::Deserialize(ClientContext &context, ExpressionType type,
+unique_ptr<Expression> BoundColumnRefExpression::Deserialize(ExpressionDeserializationState &state,
                                                              FieldReader &reader) {
 	auto alias = reader.ReadRequired<string>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();

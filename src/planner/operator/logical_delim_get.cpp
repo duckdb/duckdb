@@ -8,8 +8,7 @@ void LogicalDelimGet::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(chunk_types);
 }
 
-unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                         FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	return make_unique<LogicalDelimGet>(table_index, chunk_types);

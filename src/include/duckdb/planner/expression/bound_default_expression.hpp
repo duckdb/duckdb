@@ -35,6 +35,6 @@ public:
 	}
 
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader);
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
 };
 } // namespace duckdb

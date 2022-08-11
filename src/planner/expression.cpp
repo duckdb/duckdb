@@ -103,51 +103,59 @@ void Expression::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField<ExpressionClass>(expression_class);
 	writer.WriteField<ExpressionType>(type);
+	writer.WriteString(alias);
 	Serialize(writer);
 	writer.Finalize();
 }
 
-unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<Expression> Expression::Deserialize(Deserializer &source, PlanDeserializationState &gstate) {
 	FieldReader reader(source);
 	auto expression_class = reader.ReadRequired<ExpressionClass>();
 	auto type = reader.ReadRequired<ExpressionType>();
+	auto alias = reader.ReadRequired<string>();
+
+	ExpressionDeserializationState state(gstate, type);
 
 	unique_ptr<Expression> result;
 	switch (expression_class) {
 	case ExpressionClass::BOUND_REF:
-		result = BoundReferenceExpression::Deserialize(context, type, reader);
+		result = BoundReferenceExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_COLUMN_REF:
-		result = BoundColumnRefExpression::Deserialize(context, type, reader);
+		result = BoundColumnRefExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_AGGREGATE:
-		result = BoundAggregateExpression::Deserialize(context, type, reader);
+		result = BoundAggregateExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_CONSTANT:
-		result = BoundConstantExpression::Deserialize(context, type, reader);
+		result = BoundConstantExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		result = BoundFunctionExpression::Deserialize(context, type, reader);
+		result = BoundFunctionExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_CAST:
-		result = BoundCastExpression::Deserialize(context, type, reader);
+		result = BoundCastExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_CASE:
-		result = BoundCaseExpression::Deserialize(context, type, reader);
+		result = BoundCaseExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		result = BoundConjunctionExpression::Deserialize(context, type, reader);
+		result = BoundConjunctionExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
-		result = BoundComparisonExpression::Deserialize(context, type, reader);
+		result = BoundComparisonExpression::Deserialize(state, reader);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
-		result = BoundOperatorExpression::Deserialize(context, type, reader);
+		result = BoundOperatorExpression::Deserialize(state, reader);
+		break;
+	case ExpressionClass::BOUND_WINDOW:
+		result = BoundWindowExpression::Deserialize(state, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization %s",
 		                             ExpressionTypeToString(type));
 	}
+	result->alias = alias;
 	reader.Finalize();
 	return result;
 }

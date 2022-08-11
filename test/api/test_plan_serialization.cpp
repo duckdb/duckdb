@@ -48,7 +48,8 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 
 		auto data = serializer.GetData();
 		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
-		auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
+		PlanDeserializationState state(*con.context);
+		auto new_plan = LogicalOperator::Deserialize(deserializer, state);
 		printf("[%d] Deserialized plan\n", i);
 
 		printf("[%d] Original plan:\n%s\n", i, plan->ToString().c_str());

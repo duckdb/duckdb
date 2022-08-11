@@ -74,14 +74,13 @@ void LogicalAggregate::Serialize(FieldWriter &writer) const {
 	// TODO statistics
 }
 
-unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                          FieldReader &reader) {
-	auto expressions = reader.ReadRequiredSerializableList<Expression>(context);
+unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	auto group_index = reader.ReadRequired<idx_t>();
 	auto aggregate_index = reader.ReadRequired<idx_t>();
 	auto groupings_index = reader.ReadRequired<idx_t>();
-	auto groups = reader.ReadRequiredSerializableList<Expression>(context);
+	auto groups = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto grouping_sets_size = reader.ReadRequired<idx_t>();
 	vector<GroupingSet> grouping_sets;
 	for (idx_t i = 0; i < grouping_sets_size; i++) {

@@ -40,7 +40,8 @@ static void tpch_test_helper(Connection &con, idx_t q) {
 
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
-	auto new_plan = LogicalOperator::Deserialize(deserializer, *con.context);
+	PlanDeserializationState state(*con.context);
+	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
 	new_plan->ResolveOperatorTypes();
 
 	auto statement = make_unique<LogicalPlanStatement>(move(new_plan));

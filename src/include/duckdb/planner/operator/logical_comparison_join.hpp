@@ -29,9 +29,8 @@ public:
 public:
 	string ParamsToString() const override;
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
-	                                               FieldReader &reader);
-	static void Deserialize(LogicalComparisonJoin &comparison_join, ClientContext &context, LogicalOperatorType type,
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	static void Deserialize(LogicalComparisonJoin &comparison_join, LogicalDeserializationState &state,
 	                        FieldReader &reader);
 
 public:

@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/base_expression.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/planner/plan_serialization.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -60,7 +61,7 @@ public:
 
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
-	static unique_ptr<Expression> Deserialize(Deserializer &source, ClientContext &context);
+	static unique_ptr<Expression> Deserialize(Deserializer &source, PlanDeserializationState &state);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,
