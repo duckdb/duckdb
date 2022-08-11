@@ -73,10 +73,9 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Use C++11 for loops when possible: `for (const auto& item : items) {...}`
 * Use braces for indenting `if` statements and loops. Avoid single-line if statements and loops, especially nested ones.
 * **Class Layout:** Start out with a `public` block containing the constructor and public variables, followed by a `public` block containing public methods of the class. After that follow any private functions and private variables. For example:
-
     ```cpp
     class MyClass {
-      public:
+    public:
     	MyClass();
 
     	int my_public_variable;
@@ -91,7 +90,6 @@ This project and everyone participating in it is governed by a [Code of Conduct]
     	void my_private_variable;
     };
     ```
-
 * Avoid [unnamed magic numbers](https://en.wikipedia.org/wiki/Magic_number_(programming)). Instead, use named variables that are stored in a `constexpr`.
 * [Return early](https://medium.com/swlh/return-early-pattern-3d18a41bba8). Avoid deep nested branches.
 * Do not include commented out code blocks in pull requests.
