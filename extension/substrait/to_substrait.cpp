@@ -88,7 +88,8 @@ void DuckDBToSubstrait::TransformDecimal(Value &dval, substrait::Expression &sex
 		break;
 	}
 	case PhysicalType::INT128: {
-		mock_value = dval;
+		auto internal_value = dval.GetValueUnsafe<hugeint_t>();
+		mock_value = Value::HUGEINT(internal_value);
 		break;
 	}
 	default:
