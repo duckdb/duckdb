@@ -133,93 +133,6 @@ void DuckDBToSubstrait::TransformVarchar(Value &dval, substrait::Expression &sex
 	string duck_str = dval.GetValue<string>();
 	sval.set_string(dval.GetValue<string>());
 }
-::substrait::Type DuckDBToSubstrait::DuckToSubstraitType(LogicalType &d_type, bool nullable) {
-	::substrait::Type s_type;
-	substrait::Type_Nullability type_nullability;
-	if (nullable) {
-		type_nullability = substrait::Type_Nullability::Type_Nullability_NULLABILITY_NULLABLE;
-	} else {
-		type_nullability = substrait::Type_Nullability::Type_Nullability_NULLABILITY_REQUIRED;
-	}
-	switch (d_type.id()) {
-	case LogicalTypeId::HUGEINT: {
-		// FIXME: Support for hugeint types?
-		auto s_decimal = new substrait::Type_Decimal();
-		s_decimal->set_scale(0);
-		s_decimal->set_precision(38);
-		s_decimal->set_nullability(type_nullability);
-		s_type.set_allocated_decimal(s_decimal);
-		break;
-	}
-	case LogicalTypeId::DECIMAL: {
-		auto s_decimal = new substrait::Type_Decimal();
-		s_decimal->set_scale(DecimalType::GetScale(d_type));
-		s_decimal->set_precision(DecimalType::GetWidth(d_type));
-		s_decimal->set_nullability(type_nullability);
-		s_type.set_allocated_decimal(s_decimal);
-		break;
-	}
-		// Substrait ppl think unsigned types are not common, so we have to upcast these beauties
-		// Which completely borks the optimization they are created for
-	case LogicalTypeId::UTINYINT: {
-		auto s_integer = new substrait::Type_I16();
-		s_integer->set_nullability(type_nullability);
-		s_type.set_allocated_i16(s_integer);
-		break;
-	}
-	case LogicalTypeId::USMALLINT: {
-		auto s_integer = new substrait::Type_I32();
-		s_integer->set_nullability(type_nullability);
-		s_type.set_allocated_i32(s_integer);
-		break;
-	}
-	case LogicalTypeId::UINTEGER: {
-		auto s_integer = new substrait::Type_I64();
-		s_integer->set_nullability(type_nullability);
-		s_type.set_allocated_i64(s_integer);
-		break;
-	}
-	case LogicalTypeId::INTEGER: {
-		auto s_integer = new substrait::Type_I32();
-		s_integer->set_nullability(type_nullability);
-		s_type.set_allocated_i32(s_integer);
-		break;
-	}
-	case LogicalTypeId::DOUBLE: {
-		auto s_double = new substrait::Type_FP64();
-		s_double->set_nullability(type_nullability);
-		s_type.set_allocated_fp64(s_double);
-		break;
-	}
-	case LogicalTypeId::BIGINT: {
-		auto s_bigint = new substrait::Type_I64();
-		s_bigint->set_nullability(type_nullability);
-		s_type.set_allocated_i64(s_bigint);
-		break;
-	}
-	case LogicalTypeId::DATE: {
-		auto s_date = new substrait::Type_Date();
-		s_date->set_nullability(type_nullability);
-		s_type.set_allocated_date(s_date);
-		break;
-	}
-	case LogicalTypeId::VARCHAR: {
-		auto s_varchar = new substrait::Type_VarChar();
-		s_varchar->set_nullability(type_nullability);
-		s_type.set_allocated_varchar(s_varchar);
-		break;
-	}
-	case LogicalTypeId::BOOLEAN: {
-		auto s_bool = new substrait::Type_Boolean();
-		s_bool->set_nullability(type_nullability);
-		s_type.set_allocated_bool_(s_bool);
-		break;
-	}
-	default:
-		throw InternalException("Type not supported: " + d_type.ToString());
-	}
-	return s_type;
-}
 
 void DuckDBToSubstrait::TransformBoolean(Value &dval, substrait::Expression &sexpr) {
 	auto &sval = *sexpr.mutable_literal();
@@ -609,6 +522,7 @@ void DuckDBToSubstrait::TransformOrder(BoundOrderByNode &dordf, substrait::SortF
 substrait::Rel *DuckDBToSubstrait::TransformFilter(LogicalOperator &dop) {
 
 	auto &dfilter = (LogicalFilter &)dop;
+
 	auto res = TransformOp(*dop.children[0]);
 
 	if (!dfilter.expressions.empty()) {
@@ -692,9 +606,7 @@ substrait::Rel *DuckDBToSubstrait::TransformOrderBy(LogicalOperator &dop) {
 substrait::Rel *DuckDBToSubstrait::TransformComparisonJoin(LogicalOperator &dop) {
 	auto res = new substrait::Rel();
 	auto sjoin = res->mutable_join();
-	//		sjoin->set_delim_join(false);
 	auto &djoin = (LogicalComparisonJoin &)dop;
-
 	sjoin->set_allocated_left(TransformOp(*dop.children[0]));
 	sjoin->set_allocated_right(TransformOp(*dop.children[1]));
 
@@ -781,9 +693,9 @@ substrait::Rel *DuckDBToSubstrait::TransformAggregateGroup(LogicalOperator &dop)
 	return res;
 }
 
-void DuckDBToSubstrait::TransformTypeInfo(substrait::Type_Struct *type_schema, LogicalType &type,
-                                          BaseStatistics &column_statistics, bool not_null) {
-
+::substrait::Type DuckDBToSubstrait::DuckToSubstraitType(LogicalType &type, BaseStatistics *column_statistics,
+                                                         bool not_null) {
+	::substrait::Type s_type;
 	substrait::Type_Nullability type_nullability;
 	if (not_null) {
 		type_nullability = substrait::Type_Nullability::Type_Nullability_NULLABILITY_REQUIRED;
@@ -794,79 +706,103 @@ void DuckDBToSubstrait::TransformTypeInfo(substrait::Type_Struct *type_schema, L
 	case LogicalTypeId::BOOLEAN: {
 		auto bool_type = new substrait::Type_Boolean;
 		bool_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_bool_(bool_type);
-		break;
+		s_type.set_allocated_bool_(bool_type);
+		return s_type;
 	}
+
 	case LogicalTypeId::TINYINT: {
 		auto integral_type = new substrait::Type_I8;
 		integral_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_i8(integral_type);
-		break;
+		s_type.set_allocated_i8(integral_type);
+		return s_type;
 	}
+		// Substrait ppl think unsigned types are not common, so we have to upcast these beauties
+		// Which completely borks the optimization they are created for
+	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::SMALLINT: {
 		auto integral_type = new substrait::Type_I16;
 		integral_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_i16(integral_type);
-		break;
+		s_type.set_allocated_i16(integral_type);
+		return s_type;
 	}
+	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::INTEGER: {
 		auto integral_type = new substrait::Type_I32;
 		integral_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_i32(integral_type);
-		break;
+		s_type.set_allocated_i32(integral_type);
+		return s_type;
 	}
+	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::BIGINT: {
 		auto integral_type = new substrait::Type_I64;
 		integral_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_i64(integral_type);
-		break;
+		s_type.set_allocated_i64(integral_type);
+		return s_type;
+	}
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::HUGEINT: {
+		// FIXME: Support for hugeint types?
+		auto s_decimal = new substrait::Type_Decimal();
+		s_decimal->set_scale(0);
+		s_decimal->set_precision(38);
+		s_decimal->set_nullability(type_nullability);
+		s_type.set_allocated_decimal(s_decimal);
+		return s_type;
 	}
 	case LogicalTypeId::DATE: {
 		auto date_type = new substrait::Type_Date;
 		date_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_date(date_type);
-		break;
+		s_type.set_allocated_date(date_type);
+		return s_type;
 	}
 	case LogicalTypeId::TIME: {
 		auto time_type = new substrait::Type_Time;
 		time_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_time(time_type);
-		break;
+		s_type.set_allocated_time(time_type);
+		return s_type;
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		// FIXME: Shouldn't this have a precision?
 		auto timestamp_type = new substrait::Type_Timestamp;
 		timestamp_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_timestamp(timestamp_type);
-		break;
+		s_type.set_allocated_timestamp(timestamp_type);
+		return s_type;
 	}
 	case LogicalTypeId::FLOAT: {
 		auto float_type = new substrait::Type_FP32;
 		float_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_fp32(float_type);
-		break;
+		s_type.set_allocated_fp32(float_type);
+		return s_type;
 	}
 	case LogicalTypeId::DOUBLE: {
 		auto double_type = new substrait::Type_FP64;
 		double_type->set_nullability(type_nullability);
-		type_schema->add_types()->set_allocated_fp64(double_type);
-		break;
+		s_type.set_allocated_fp64(double_type);
+		return s_type;
 	}
 	case LogicalTypeId::DECIMAL: {
 		auto decimal_type = new substrait::Type_Decimal;
 		decimal_type->set_nullability(type_nullability);
 		decimal_type->set_precision(DecimalType::GetWidth(type));
 		decimal_type->set_scale(DecimalType::GetScale(type));
-		type_schema->add_types()->set_allocated_decimal(decimal_type);
-		break;
+		s_type.set_allocated_decimal(decimal_type);
+		return s_type;
 	}
 	case LogicalTypeId::VARCHAR: {
 		auto varchar_type = new substrait::Type_VarChar;
 		varchar_type->set_nullability(type_nullability);
-		auto &string_statistics = (StringStatistics &)column_statistics;
-		varchar_type->set_length(string_statistics.max_string_length);
-		type_schema->add_types()->set_allocated_varchar(varchar_type);
-		break;
+		if (column_statistics) {
+			auto string_statistics = (StringStatistics *)column_statistics;
+			if (max_string_length < string_statistics->max_string_length) {
+				max_string_length = string_statistics->max_string_length;
+			}
+			varchar_type->set_length(string_statistics->max_string_length);
+		} else {
+			// FIXME: Have to propagate the statistics to here somehow
+			varchar_type->set_length(max_string_length);
+		}
+		s_type.set_allocated_varchar(varchar_type);
+		return s_type;
 	}
 	default:
 		throw NotImplementedException("Logical Type " + type.ToString() +
@@ -931,7 +867,8 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 		base_schema->add_names(dget.names[i]);
 		auto column_statistics = dget.function.statistics(context, &table_scan_bind_data, i);
 		bool not_null = not_null_constraint.find(i) != not_null_constraint.end();
-		TransformTypeInfo(type_info, cur_type, *column_statistics, not_null);
+		auto new_type = type_info->add_types();
+		*new_type = DuckToSubstraitType(cur_type, column_statistics.get(), not_null);
 	}
 	base_schema->set_allocated_struct_(type_info);
 	sget->set_allocated_base_schema(base_schema);

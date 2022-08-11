@@ -10,7 +10,9 @@ def run_substrait_validator(con, query):
     except:
         con.execute(f"CALL dbgen(sf=0.01)")
     c = Config()
-    # # Function Anchor to YAML file, no clue what is that
+    #  not yet implemented: typecast validation rules are not yet implemented
+    c.override_diagnostic_level(1, "warning", "info")
+    # Function Anchor to YAML file, no clue what is that
     c.override_diagnostic_level(3001, "error", "info")
     # function definition unavailable: cannot check validity of call
     c.override_diagnostic_level(6003, "warning", "info")
@@ -47,4 +49,4 @@ def test_substrait_tpch_validator(require,query_number):
 #     run_tpch_validator(require,22)
 
 def test_substrait_tpch_validator_q(require):
-    run_tpch_validator(require,2)
+    run_tpch_validator(require,8)

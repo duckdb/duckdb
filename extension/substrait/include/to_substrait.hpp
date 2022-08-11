@@ -71,12 +71,10 @@ private:
 	void TransformCaseExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
 	void TransformInExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
 
-	//! Transforms DuckDB Types into Substrait Types for LogicalGet Schemas
-	void TransformTypeInfo(substrait::Type_Struct *type_schema, LogicalType &type, BaseStatistics &column_statistics,
-	                       bool not_null);
-
 	//! Transforms a DuckDB Logical Type into a Substrait Type
-	::substrait::Type DuckToSubstraitType(LogicalType &d_type, bool nullable = false);
+	::substrait::Type DuckToSubstraitType(LogicalType &type, BaseStatistics *column_statistics = nullptr,
+	                                      bool not_null = false);
+
 	//! Methods to transform DuckDB Filters to Substrait Expression
 	substrait::Expression *TransformFilter(uint64_t col_idx, duckdb::TableFilter &dfilter, LogicalType &return_type);
 	substrait::Expression *TransformIsNotNullFilter(uint64_t col_idx, duckdb::TableFilter &dfilter,
@@ -122,5 +120,7 @@ private:
 	//! The substrait Plan
 	substrait::Plan plan;
 	ClientContext &context;
+
+	uint64_t max_string_length = 1;
 };
 } // namespace duckdb
