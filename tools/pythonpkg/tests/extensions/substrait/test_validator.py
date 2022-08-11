@@ -1,6 +1,5 @@
 import duckdb
 import pytest
-from substrait_validator import Config
 
 substrait_validator = pytest.importorskip('substrait_validator')
 
@@ -9,7 +8,7 @@ def run_substrait_validator(con, query):
         con.table('lineitem')
     except:
         con.execute(f"CALL dbgen(sf=0.01)")
-    c = Config()
+    c = substrait_validator.Config()
     #  not yet implemented: typecast validation rules are not yet implemented
     c.override_diagnostic_level(1, "warning", "info")
     # function definition unavailable: cannot check validity of call
