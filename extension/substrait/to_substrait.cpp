@@ -290,13 +290,27 @@ void DuckDBToSubstrait::TransformNotNullExpression(Expression &dexpr, substrait:
 void DuckDBToSubstrait::TransformCaseExpression(Expression &dexpr, substrait::Expression &sexpr) {
 	auto &dcase = (BoundCaseExpression &)dexpr;
 	auto scase = sexpr.mutable_if_then();
-
 	for (auto &dcheck : dcase.case_checks) {
 		auto sif = scase->mutable_ifs()->Add();
 		TransformExpr(*dcheck.when_expr, *sif->mutable_if_());
-		TransformExpr(*dcheck.then_expr, *sif->mutable_then());
+		auto then_expr = new substrait::Expression();
+		TransformExpr(*dcheck.then_expr, *then_expr);
+		// Push a Cast
+		auto then = sif->mutable_then();
+		auto scast = new substrait::Expression_Cast();
+		*scast->mutable_type() = DuckToSubstraitType(dcase.return_type);
+		scast->set_allocated_input(then_expr);
+		then->set_allocated_cast(scast);
 	}
-	TransformExpr(*dcase.else_expr, *scase->mutable_else_());
+	auto else_expr = new substrait::Expression();
+	TransformExpr(*dcase.else_expr, *else_expr);
+	// Push a Cast
+	auto mutable_else = scase->mutable_else_();
+	auto scast = new substrait::Expression_Cast();
+	*scast->mutable_type() = DuckToSubstraitType(dcase.return_type);
+	scast->set_allocated_input(else_expr);
+	else_expr = (substrait::Expression *)scast;
+	mutable_else->set_allocated_cast(scast);
 }
 
 void DuckDBToSubstrait::TransformInExpression(Expression &dexpr, substrait::Expression &sexpr) {
@@ -842,8 +856,9 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 	if (!dget.column_ids.empty()) {
 		// Projection Pushdown
 		auto projection = new substrait::Expression_MaskExpression();
+		// fixme: whatever this means
+		projection->set_maintain_singular_struct(true);
 		auto select = new substrait::Expression_MaskExpression_StructSelect();
-
 		for (auto col_idx : dget.column_ids) {
 			auto struct_item = select->add_struct_items();
 			struct_item->set_field((int32_t)col_idx);

@@ -12,10 +12,10 @@ def run_substrait_validator(con, query):
     c = Config()
     #  not yet implemented: typecast validation rules are not yet implemented
     c.override_diagnostic_level(1, "warning", "info")
-    # Function Anchor to YAML file, no clue what is that
-    c.override_diagnostic_level(3001, "error", "info")
     # function definition unavailable: cannot check validity of call
     c.override_diagnostic_level(6003, "warning", "info")
+    # Function Anchor to YAML file, no clue what is that
+    c.override_diagnostic_level(3001, "error", "info")
     # too few field names
     c.override_diagnostic_level(4003, "error", "info")
     try:
@@ -36,17 +36,14 @@ def run_tpch_validator(require, query_number):
 def test_substrait_tpch_validator(require,query_number):
     run_tpch_validator(require,query_number)
 
-# @pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: CHUNK_GET")
-# def test_substrait_tpch_validator_16(require):
-#     run_tpch_validator(require,16)
+@pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: CHUNK_GET")
+def test_substrait_tpch_validator_16(require):
+    run_tpch_validator(require,16)
 
-# @pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: DELIM_JOIN")
-# def test_substrait_tpch_validator_21(require):
-#     run_tpch_validator(require,21)
+@pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: DELIM_JOIN")
+def test_substrait_tpch_validator_21(require):
+    run_tpch_validator(require,21)
 
-# @pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: CHUNK_GET")
-# def test_substrait_tpch_validator_22(require):
-#     run_tpch_validator(require,22)
-
-def test_substrait_tpch_validator_q(require):
-    run_tpch_validator(require,8)
+@pytest.mark.xfail(reason="DuckDB Compilation: INTERNAL Error: INTERNAL Error: CHUNK_GET")
+def test_substrait_tpch_validator_22(require):
+    run_tpch_validator(require,22)
