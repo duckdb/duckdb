@@ -1,6 +1,6 @@
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
@@ -68,10 +68,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 	has_unplanned_subqueries =
 	    node.left_binder->has_unplanned_subqueries || node.right_binder->has_unplanned_subqueries;
 
-	// for both the left and right sides, cast them to the same types
-	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
-	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
-
+	if (node.reorder_exprs.empty()) {
+		// for both the left and right sides, cast them to the same types
+		left_node = CastLogicalOperatorToTypes(node.left->types, node.types, move(left_node));
+		right_node = CastLogicalOperatorToTypes(node.right->types, node.types, move(right_node));
+	}
 	// create actual logical ops for setops
 	LogicalOperatorType logical_type;
 	switch (node.setop_type) {
@@ -87,10 +88,28 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
 		logical_type = LogicalOperatorType::LOGICAL_INTERSECT;
 		break;
 	}
-	auto root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),
-	                                             logical_type);
+	unique_ptr<LogicalOperator> root;
+	root = make_unique<LogicalSetOperation>(node.setop_index, node.types.size(), move(left_node), move(right_node),
+	                                        logical_type);
 
-	return VisitQueryNode(node, move(root));
+    root = VisitQueryNode(node, move(root));
+	// need additional projection
+	if (!node.reorder_exprs.empty()) {
+		vector<LogicalType> source_types;
+		for (auto &expr : node.reorder_exprs) {
+			source_types.push_back(expr->return_type);
+		}
+		unique_ptr<LogicalOperator> projection =
+		    make_unique<LogicalProjection>(node.reorder_index, std::move(node.reorder_exprs));
+
+		// now cast types
+		projection = CastLogicalOperatorToTypes(source_types, node.types, move(projection));
+		projection->AddChild(std::move(root));
+		root = std::move(projection);
+	}
+
+    return root;
+	// return VisitQueryNode(node, move(root));
 }
 
 } // namespace duckdb
