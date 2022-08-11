@@ -34,18 +34,16 @@ unique_ptr<Expression> BoundOperatorExpression::Copy() {
 }
 
 void BoundOperatorExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField<ExpressionType>(type);
 	writer.WriteSerializable(return_type);
 	writer.WriteSerializableList(children);
 }
 
-unique_ptr<Expression> BoundOperatorExpression::Deserialize(ClientContext &context, ExpressionType type,
+unique_ptr<Expression> BoundOperatorExpression::Deserialize(ExpressionDeserializationState &state,
                                                             FieldReader &reader) {
-	auto expression_type = reader.ReadRequired<ExpressionType>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto children = reader.ReadRequiredSerializableList<Expression>(context);
+	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
-	auto result = make_unique<BoundOperatorExpression>(expression_type, return_type);
+	auto result = make_unique<BoundOperatorExpression>(state.type, return_type);
 	result->children = move(children);
 	return move(result);
 }

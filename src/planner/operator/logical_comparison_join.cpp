@@ -27,17 +27,17 @@ void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
 	writer.WriteRegularSerializableList(delim_types);
 }
 
-void LogicalComparisonJoin::Deserialize(LogicalComparisonJoin &comparison_join, ClientContext &context,
-                                        LogicalOperatorType type, FieldReader &reader) {
-	LogicalJoin::Deserialize(comparison_join, context, type, reader);
-	comparison_join.conditions =
-	    reader.ReadRequiredSerializableList<JoinCondition, JoinCondition, ClientContext &>(context);
+void LogicalComparisonJoin::Deserialize(LogicalComparisonJoin &comparison_join, LogicalDeserializationState &state,
+                                        FieldReader &reader) {
+	LogicalJoin::Deserialize(comparison_join, state, reader);
+	comparison_join.conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition>(state.gstate);
 	comparison_join.delim_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 }
-unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
+
+unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(LogicalDeserializationState &state,
                                                                FieldReader &reader) {
-	auto result = make_unique<LogicalComparisonJoin>(JoinType::INVALID, type);
-	LogicalComparisonJoin::Deserialize(*result, context, type, reader);
+	auto result = make_unique<LogicalComparisonJoin>(JoinType::INVALID, state.type);
+	LogicalComparisonJoin::Deserialize(*result, state, reader);
 	return result;
 }
 

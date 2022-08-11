@@ -4,8 +4,8 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -76,62 +76,20 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	return move(copy);
 }
 
-////! The bound function expression
-// AggregateFunction function;
-
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
-	D_ASSERT(!function.name.empty());
-	writer.WriteString(function.name);
-	writer.WriteSerializableList(children);
 	writer.WriteField(distinct);
 	writer.WriteOptional(filter);
-	writer.WriteSerializable(return_type);
-	writer.WriteRegularSerializableList(function.arguments);
-
-	bool serialize = function.serialize;
-	writer.WriteField(serialize);
-	if (serialize) {
-		function.serialize(writer, bind_info.get(), function);
-	}
+	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
 }
 
-unique_ptr<Expression> BoundAggregateExpression::Deserialize(ClientContext &context, ExpressionType type,
+unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeserializationState &state,
                                                              FieldReader &reader) {
-	auto name = reader.ReadRequired<string>();
-	auto children = reader.ReadRequiredSerializableList<Expression>(context);
 	auto distinct = reader.ReadRequired<bool>();
-
-	unique_ptr<Expression> filter;
-	filter = reader.ReadOptional<Expression>(move(filter), context);
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-
-	// TODO this is duplicated in logical_get more or less, make it a template or so
-	auto &catalog = Catalog::GetCatalog(context);
-	auto func_catalog = catalog.GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-
-	if (!func_catalog || func_catalog->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-		throw InternalException("Cant find catalog entry for function %s", name);
-	}
-
-	auto functions = (AggregateFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunctionByArguments(arguments);
+	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	vector<unique_ptr<Expression>> children;
 	unique_ptr<FunctionData> bind_info;
-
-	// sometimes the bind changes those, not sure if we should generically set those
-	function.return_type = return_type;
-	function.arguments = move(arguments);
-
-	auto has_deserialize = reader.ReadRequired<bool>();
-	if (has_deserialize) {
-		if (!function.deserialize) {
-			throw SerializationException("Function requires deserialization but no deserialization function for %s",
-			                             function.name);
-		}
-		bind_info = function.deserialize(context, reader, function);
-	} else if (function.bind) {
-		bind_info = function.bind(context, function, children);
-	}
+	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
 
 	return make_unique<BoundAggregateExpression>(function, move(children), move(filter), move(bind_info), distinct);
 }

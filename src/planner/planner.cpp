@@ -156,7 +156,9 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
-	auto new_plan = LogicalOperator::Deserialize(deserializer, context);
+
+	PlanDeserializationState state(context);
+	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
 	op = move(new_plan);
 }
 

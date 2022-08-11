@@ -6,9 +6,8 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 
-#include "duckdb.hpp" // FIXME
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -82,46 +81,20 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(names);
 	writer.WriteList<column_t>(column_ids);
 	writer.WriteSerializable(table_filters);
-	D_ASSERT(!function.name.empty());
-	writer.WriteString(function.name);
-	writer.WriteRegularSerializableList(function.arguments);
-	writer.WriteField(bind_data != nullptr);
-	if (bind_data && !function.serialize) {
-		throw InvalidInputException("Can't serialize table function %s", function.name);
-	}
-	function.serialize(writer, *bind_data, function);
+
+	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
 }
 
-unique_ptr<LogicalOperator> LogicalGet::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                    FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto returned_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto returned_names = reader.ReadRequiredList<string>();
 	auto column_ids = reader.ReadRequiredList<column_t>();
 	auto table_filters = reader.ReadRequiredSerializable<TableFilterSet>();
-	auto name = reader.ReadRequired<string>();
-	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
-	auto has_bind_data = reader.ReadRequired<bool>();
-
-	auto &catalog = Catalog::GetCatalog(context);
-
-	auto func_catalog = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-
-	if (!func_catalog || func_catalog->type != CatalogType::TABLE_FUNCTION_ENTRY) {
-		throw InternalException("Cant find catalog entry for function %s", name);
-	}
-
-	auto functions = (TableFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunctionByArguments(arguments);
 	unique_ptr<FunctionData> bind_data;
-
-	if (has_bind_data) {
-		if (!function.deserialize) {
-			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
-		}
-		bind_data = function.deserialize(context, reader, function);
-	}
+	auto function = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
+	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data);
 
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = column_ids;

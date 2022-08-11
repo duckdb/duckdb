@@ -10,8 +10,7 @@ void LogicalCTERef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(bound_columns);
 }
 
-unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto cte_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();

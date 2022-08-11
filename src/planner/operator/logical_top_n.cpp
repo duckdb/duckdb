@@ -8,10 +8,8 @@ void LogicalTopN::Serialize(FieldWriter &writer) const {
 	writer.WriteField(limit);
 }
 
-unique_ptr<LogicalOperator> LogicalTopN::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                     FieldReader &reader) {
-
-	auto orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(context);
+unique_ptr<LogicalOperator> LogicalTopN::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
 	auto offset = reader.ReadRequired<idx_t>();
 	auto limit = reader.ReadRequired<idx_t>();
 	return make_unique<LogicalTopN>(move(orders), limit, offset);

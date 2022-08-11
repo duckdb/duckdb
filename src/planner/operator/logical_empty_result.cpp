@@ -20,8 +20,7 @@ void LogicalEmptyResult::Serialize(FieldWriter &writer) const {
 	writer.WriteList<ColumnBinding>(bindings);
 }
 
-unique_ptr<LogicalOperator> LogicalEmptyResult::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                            FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalEmptyResult::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto return_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto bindings = reader.ReadRequiredList<ColumnBinding>();
 	auto result = unique_ptr<LogicalEmptyResult>(new LogicalEmptyResult());

@@ -8,8 +8,8 @@ void LogicalDelete::Serialize(FieldWriter &writer) const {
 	writer.WriteField(return_chunk);
 }
 
-unique_ptr<LogicalOperator> LogicalDelete::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 
 	auto &catalog = Catalog::GetCatalog(context);
