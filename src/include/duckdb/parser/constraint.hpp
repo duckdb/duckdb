@@ -10,7 +10,6 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 
@@ -46,28 +45,6 @@ struct ForeignKeyInfo {
 	vector<storage_t> pk_keys;
 	//! The set of foreign key table's column's index
 	vector<storage_t> fk_keys;
-
-	const vector<storage_t> &GetKeys() const {
-		if (type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
-			return pk_keys;
-		} else {
-			return fk_keys;
-		}
-	}
-
-	bool operator==(const ForeignKeyInfo &other) const {
-		if (type != other.type)
-			return false;
-		if (schema != other.schema)
-			return false;
-		if (table != other.table)
-			return false;
-		if (pk_keys != other.pk_keys)
-			return false;
-		if (fk_keys != other.fk_keys)
-			return false;
-		return true;
-	}
 };
 
 //! Constraint is the base class of any type of table constraint.
@@ -90,24 +67,4 @@ public:
 	//! Deserializes a blob back into a Constraint
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
 };
-
 } // namespace duckdb
-
-namespace std {
-
-template <>
-struct hash<duckdb::ForeignKeyInfo> {
-	template <class X>
-	static size_t compute_hash(const X &x) {
-		return hash<X>()(x);
-	}
-
-	size_t operator()(const duckdb::ForeignKeyInfo &j) const {
-		D_ASSERT(j.pk_keys.size() > 0);
-		D_ASSERT(j.fk_keys.size() > 0);
-		return compute_hash((size_t)j.type) + compute_hash(j.schema) + compute_hash(j.table) +
-		       compute_hash(j.pk_keys[0]) + compute_hash(j.fk_keys[0]);
-	}
-};
-
-} // namespace std

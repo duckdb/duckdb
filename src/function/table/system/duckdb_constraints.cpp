@@ -17,6 +17,36 @@
 
 namespace duckdb {
 
+struct UniqueKeyInfo {
+	string schema, table;
+	vector<storage_t> columns;
+
+	bool operator==(const UniqueKeyInfo &other) const {
+		return (schema == other.schema) && (table == other.table) && (columns == other.columns);
+	}
+};
+
+} // namespace duckdb
+
+namespace std {
+
+template <>
+struct hash<duckdb::UniqueKeyInfo> {
+	template <class X>
+	static size_t compute_hash(const X &x) {
+		return hash<X>()(x);
+	}
+
+	size_t operator()(const duckdb::UniqueKeyInfo &j) const {
+		D_ASSERT(j.columns.size() > 0);
+		return compute_hash(j.schema) + compute_hash(j.table) + compute_hash(j.columns[0]);
+	}
+};
+
+} // namespace std
+
+namespace duckdb {
+
 struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
@@ -25,25 +55,8 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
-	unordered_map<ForeignKeyInfo, idx_t> known_fk_unique_constraint_offsets;
+	unordered_map<UniqueKeyInfo, idx_t> known_fk_unique_constraint_offsets;
 };
-
-static ForeignKeyInfo GetForeignKeyCounterpart(ForeignKeyInfo out, string other_schema, string other_table) {
-	out.schema = other_schema;
-	out.table = other_table;
-	switch (out.type) {
-	case ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE:
-		out.type = ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
-		break;
-	case ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE:
-		out.type = ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE;
-		break;
-	case ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE:
-		break;
-	}
-
-	return move(out);
-}
 
 static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
@@ -144,9 +157,9 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				constraint_type = "NOT NULL";
 				break;
 			case ConstraintType::FOREIGN_KEY: {
-				auto &bound_constraint =
+				auto &bound_foreign_key =
 				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
-				if (bound_constraint.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+				if (bound_foreign_key.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
 					// Those are already covered by PRIMARY KEY and UNIQUE entries
 					continue;
 				}
@@ -168,29 +181,41 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			output.SetValue(3, count, Value::BIGINT(table.oid));
 
 			// constraint_index, BIGINT
-			if (constraint->type != ConstraintType::FOREIGN_KEY) {
-				output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset++));
-			} else {
-				auto &bound_constraint =
-				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
-				auto info = bound_constraint.info;
-				if (info.schema.empty()) {
+			auto &bound_constraint = (BoundConstraint &)*table.bound_constraints[data.constraint_offset];
+			UniqueKeyInfo uk_info;
+			switch (bound_constraint.type) {
+			case ConstraintType::UNIQUE: {
+				auto &bound_unique = (BoundUniqueConstraint &)bound_constraint;
+				uk_info = {table.schema->name, table.name, bound_unique.keys};
+				break;
+			}
+			case ConstraintType::FOREIGN_KEY: {
+				const auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
+				const auto &info = bound_foreign_key.info;
+				uk_info = {info.schema, info.table, info.pk_keys};
+				if (uk_info.schema.empty()) {
 					// FIXME: Can we somehow make use of Binder::BindSchema() here?
 					// From experiments, an omitted schema in REFERENCES ... means "main" or "temp", even if the table
 					// resides in a different schema. Is this guaranteed to be stable?
 					if (entry->temporary) {
-						info.schema = "temp";
+						uk_info.schema = "temp";
 					} else {
-						info.schema = "main";
+						uk_info.schema = "main";
 					}
 				}
 
-				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(info);
+				break;
+			}
+			default:
+				break;
+			}
+
+			if (uk_info.columns.size() == 0) {
+				output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset++));
+			} else {
+				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(uk_info);
 				if (known_unique_constraint_offset == data.known_fk_unique_constraint_offsets.end()) {
-					auto counterpart_info =
-					    GetForeignKeyCounterpart(bound_constraint.info, table.schema->name, table.name);
-					data.known_fk_unique_constraint_offsets.insert(
-					    make_pair(counterpart_info, data.unique_constraint_offset));
+					data.known_fk_unique_constraint_offsets.insert(make_pair(uk_info, data.unique_constraint_offset));
 					output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset));
 					data.unique_constraint_offset++;
 				} else {
@@ -209,7 +234,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			output.SetValue(7, count, expression_text);
 
-			auto &bound_constraint = (BoundConstraint &)*table.bound_constraints[data.constraint_offset];
 			vector<column_t> column_index_list;
 			switch (bound_constraint.type) {
 			case ConstraintType::CHECK: {
@@ -233,7 +257,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			}
 			case ConstraintType::FOREIGN_KEY: {
 				auto &bound_foreign_key = (const BoundForeignKeyConstraint &)bound_constraint;
-				for (auto &col_idx : bound_foreign_key.info.GetKeys()) {
+				for (auto &col_idx : bound_foreign_key.info.fk_keys) {
 					column_index_list.push_back(column_t(col_idx));
 				}
 				break;
