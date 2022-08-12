@@ -516,7 +516,6 @@ public:
 			return;
 		}
 		full_outer_scan_state.total = sink.hash_table->Count();
-		probe_collection = make_unique<ColumnDataCollection>(sink.hash_table->buffer_manager, sink.probe_types);
 
 		auto block_capacity = sink.hash_table->GetBlockCollection().block_capacity;
 		build_blocks_per_thread =
@@ -531,7 +530,7 @@ public:
 
 public:
 	//! Probe-side data that was spilled during Execute
-	unique_ptr<ColumnDataCollection> probe_collection;
+	unique_ptr<ColumnDataCollection> probe_collection = nullptr;
 
 	//! For synchronizing the external hash join
 	atomic<bool> initialized;
@@ -616,7 +615,11 @@ void PhysicalHashJoin::PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoi
 
 	// For now we actually don't partition the probe side TODO
 	for (auto &spill_collection : sink.spill_collections) {
-		gstate.probe_collection->Combine(*spill_collection);
+		if (!gstate.probe_collection) {
+			gstate.probe_collection = move(spill_collection);
+		} else {
+			gstate.probe_collection->Combine(*spill_collection);
+		}
 	}
 	sink.spill_collections.clear();
 

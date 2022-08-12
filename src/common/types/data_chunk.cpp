@@ -285,13 +285,13 @@ void DataChunk::Hash(Vector &result) {
 }
 
 void DataChunk::Verify() {
-#ifdef DEBUG
+//#ifdef DEBUG
 	D_ASSERT(size() <= capacity);
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());
 	}
-#endif
+//#endif
 }
 
 void DataChunk::Print() {

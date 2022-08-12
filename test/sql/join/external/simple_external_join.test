@@ -13,11 +13,17 @@ pragma threads=8
 
 # Create tables with large string values so that we have to swizzle strings
 # The tables have some overlapping values to keep the join result small 0000000000000000
-statement ok
-create table t1 as select concat('0000000000000000', range::VARCHAR) i from range(100000) order by random()
+#statement ok
+#create table t1 as select concat('0000000000000000', range::VARCHAR) i from range(100000) order by random()
+
+#statement ok
+#create table t2 as select concat('0000000000000000', range::VARCHAR) j from range(90000, 200000) order by random()
 
 statement ok
-create table t2 as select concat('0000000000000000', range::VARCHAR) j from range(90000, 200000) order by random()
+create table t1 as select [range] i from range(100000) order by random()
+
+statement ok
+create table t2 as select [range] j from range(90000, 200000) order by random()
 
 query I
 select count(*) from t1, t2 where i = j

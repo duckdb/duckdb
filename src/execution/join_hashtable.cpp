@@ -1157,14 +1157,14 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
                                                        DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
-	Hash(keys, *FlatVector::IncrementalSelectionVector(), payload.size(), hashes);
+	Hash(keys, *FlatVector::IncrementalSelectionVector(), keys.size(), hashes);
 
 	// find out which keys we can match with the current pinned partitions
 	SelectionVector true_sel;
 	SelectionVector false_sel;
 	true_sel.Initialize();
 	false_sel.Initialize();
-	auto true_count = RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), payload.size(),
+	auto true_count = RadixPartitioning::Select(hashes, FlatVector::IncrementalSelectionVector(), keys.size(),
 	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 

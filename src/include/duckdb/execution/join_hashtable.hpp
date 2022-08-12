@@ -24,7 +24,7 @@ namespace duckdb {
 class BufferManager;
 class BufferHandle;
 class ColumnDataCollection;
-class ColumnDataAppendState;
+struct ColumnDataAppendState;
 class Pipeline;
 class Event;
 

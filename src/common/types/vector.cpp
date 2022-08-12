@@ -1023,7 +1023,7 @@ void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t cou
 }
 
 void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
-#ifdef DEBUG
+//#ifdef DEBUG
 	if (count == 0) {
 		return;
 	}
@@ -1160,7 +1160,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 			Vector::Verify(child, child_sel, child_count);
 		}
 	}
-#endif
+//#endif
 }
 
 void Vector::Verify(idx_t count) {
