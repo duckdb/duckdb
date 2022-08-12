@@ -42,6 +42,7 @@ struct ConstantOrNull {
 	static ScalarFunction GetFunction(LogicalType return_type);
 	static unique_ptr<FunctionData> Bind(Value value);
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 struct CurrentSettingFun {

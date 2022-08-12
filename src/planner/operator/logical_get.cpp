@@ -126,7 +126,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 			throw SerializationException(
 			    "Table function deserialization failure - bind returned different return types than were serialized");
 		}
-		if (returned_names != bind_names) {
+		// names can actually be different because of aliases - only the sizes cannot be different
+		if (returned_names.size() != bind_names.size()) {
 			throw SerializationException(
 			    "Table function deserialization failure - bind returned different returned names than were serialized");
 		}

@@ -40,12 +40,14 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
 	vector<unique_ptr<Expression>> children;
+	children.push_back(make_unique<BoundConstantExpression>(value));
 	children.push_back(move(child));
 	return ConstantOrNull(move(children), move(value));
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
 	auto type = value.type();
+	children.insert(children.begin(), make_unique<BoundConstantExpression>(value));
 	return make_unique<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), move(children),
 	                                            ConstantOrNull::Bind(move(value)));
 }

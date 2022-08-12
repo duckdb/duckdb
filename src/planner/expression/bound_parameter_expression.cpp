@@ -72,9 +72,9 @@ void BoundParameterExpression::Serialize(FieldWriter &writer) const {
 
 // unique_ptr<Expression> BoundParameterExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader
 // &reader) { 	auto parameter_nr = reader.ReadRequired<idx_t>(); 	auto result =
-//make_unique<BoundParameterExpression>(parameter_nr); 	result->return_type =
-//reader.ReadRequiredSerializable<LogicalType, LogicalType>(); 	result->parameter_data =
-//reader.ReadRequiredSerializable<BoundParameterData>(); 	return result;
+// make_unique<BoundParameterExpression>(parameter_nr); 	result->return_type =
+// reader.ReadRequiredSerializable<LogicalType, LogicalType>(); 	result->parameter_data =
+// reader.ReadRequiredSerializable<BoundParameterData>(); 	return result;
 //}
 
 } // namespace duckdb
