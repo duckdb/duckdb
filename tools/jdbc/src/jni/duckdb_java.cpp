@@ -342,7 +342,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	auto stmt_ref = new StatementHolder();
 	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
 	if (!stmt_ref->stmt->success) {
-		string error_msg = string(stmt_ref->stmt->error);
+		string error_msg = string(stmt_ref->stmt->error.message);
 		stmt_ref->stmt = nullptr;
 
 		// No success, so it must be deleted

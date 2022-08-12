@@ -291,7 +291,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		result = state->con.Query(init_query);
 		while (result) {
 			if (!result->success) {
-				throw Exception(result->error);
+				throw result->error.ToException();
 			}
 			result = move(result->next);
 		}
@@ -315,7 +315,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	}
 	while (result) {
 		if (!result->success) {
-			throw Exception(result->error);
+			throw result->error.ToException();
 		}
 		result = move(result->next);
 	}
@@ -346,7 +346,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 		result = state.con.Query(cleanup_query);
 		while (result) {
 			if (!result->success) {
-				throw Exception(result->error);
+				throw result->error.ToException();
 			}
 			result = move(result->next);
 		}

@@ -23,7 +23,7 @@ sqlsmith_duckdb_connection::sqlsmith_duckdb_connection(duckdb::DatabaseInstance 
 void sqlsmith_duckdb_connection::q(const char *query) {
 	auto result = connection->Query(query);
 	if (!result->success) {
-		throw runtime_error(result->error);
+		throw result->error.ToException();
 	}
 }
 
@@ -34,7 +34,7 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
 		cerr << "Loading tables...";
 	auto result = connection->Query("SELECT * FROM sqlite_master WHERE type IN ('table', 'view')");
 	if (!result->success) {
-		throw runtime_error(result->error);
+		throw result->error.ToException();
 	}
 	for (size_t i = 0; i < result->RowCount(); i++) {
 		auto type = StringValue::Get(result->GetValue(0, i));
@@ -55,7 +55,7 @@ schema_duckdb::schema_duckdb(duckdb::DatabaseInstance &database, bool no_catalog
 	for (auto t = tables.begin(); t != tables.end(); ++t) {
 		result = connection->Query("PRAGMA table_info('" + t->name + "')");
 		if (!result->success) {
-			throw runtime_error(result->error);
+			throw result->error.ToException();
 		}
 		for (size_t i = 0; i < result->RowCount(); i++) {
 			auto name = StringValue::Get(result->GetValue(1, i));
