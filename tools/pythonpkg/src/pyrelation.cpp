@@ -343,7 +343,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::STD(const string &std_columns, co
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const string &count_column, const string &groups) {
 	if (count_column.find(',') != string::npos) {
-		throw std::runtime_error("Only one column is accepted in Value_Counts method");
+		throw InvalidInputException("Only one column is accepted in Value_Counts method");
 	}
 	return GenericAggregator("count", count_column, groups, "", count_column);
 }
@@ -508,7 +508,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 	} else if (type_string == "left") {
 		dtype = JoinType::LEFT;
 	} else {
-		throw std::runtime_error("Unsupported join type " + type_string + ", try 'inner' or 'left'");
+		throw InvalidInputException("Unsupported join type %s try 'inner' or 'left'", type_string);
 	}
 	return make_unique<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }
