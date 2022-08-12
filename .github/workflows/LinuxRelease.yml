@@ -48,7 +48,7 @@ jobs:
       STATIC_LIBCPP: 1
       STATIC_ODBC: 1
       AARCH_CROSS_COMPILE: ${{ matrix.arch == 'aarch64' }}
-      CUSTOM_CMAKE_FLAGS: ${{ matrix.arch == 'aarch64' && '-DDUCKDB_JDK_PATH=/tmp/jdk1.8.0_331' || '' }}
+      CUSTOM_CMAKE_FLAGS: ${{ matrix.arch == 'aarch64' && '-DDUCKDB_JDK_PATH=/tmp/jdk1.8.0_331 -DSTATIC_LINK_UNITTEST=1' || '' }}
 
     steps:
     - uses: actions/checkout@v3
@@ -255,6 +255,9 @@ jobs:
      - name: Run tests on QEMU
        shell: bash
        run: |
+           ls /tmp
+           pwd
+           ls
            docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled"  arm64v8/ubuntu:18.04 /duckdb_crosscompiled/unittest '*' --test-dir /duckdb_dir
 
  old-gcc:
