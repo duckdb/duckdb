@@ -39,7 +39,20 @@ unique_ptr<Expression> BoundBetweenExpression::Copy() {
 }
 
 void BoundBetweenExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
+	writer.WriteOptional(input);
+	writer.WriteOptional(lower);
+	writer.WriteOptional(upper);
+	writer.WriteField(lower_inclusive);
+	writer.WriteField(upper_inclusive);
+}
+
+unique_ptr<Expression> BoundBetweenExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
+	auto input = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto lower = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto upper = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto lower_inclusive = reader.ReadRequired<bool>();
+	auto upper_inclusive = reader.ReadRequired<bool>();
+	return make_unique<BoundBetweenExpression>(move(input), move(lower), move(upper), lower_inclusive, upper_inclusive);
 }
 
 } // namespace duckdb
