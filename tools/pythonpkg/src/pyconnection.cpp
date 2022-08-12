@@ -120,14 +120,14 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		throw StandardException(pending_query.error);
+		throw std::runtime_error(pending_query.error);
 	}
 	return pending_query.Execute();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
-		("Connection has already been closed");
+		throw TransactionException("Connection has already been closed");
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
@@ -147,13 +147,13 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (!res->success) {
-				throw StandardException(res->error);
+				throw std::runtime_error(res->error);
 			}
 		}
 
 		prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
-			throw BinderException(prep->error);
+			throw std::runtime_error(prep->error);
 		}
 	}
 
@@ -180,7 +180,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			res->result = CompletePendingQuery(*pending_query);
 
 			if (!res->result->success) {
-				throw StandardException(res->result->error);
+				throw std::runtime_error(res->result->error);
 			}
 		}
 

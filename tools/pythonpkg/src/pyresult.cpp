@@ -151,14 +151,14 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 	}
 
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
 unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 	auto chunk = result.Fetch();
 	if (!result.success) {
-		throw InvalidInputException(result.error);
+		throw std::runtime_error(result.error);
 	}
 	return chunk;
 }
@@ -166,7 +166,7 @@ unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
 	auto chunk = result.FetchRaw();
 	if (!result.success) {
-		throw InvalidInputException(result.error);
+		throw std::runtime_error(result.error);
 	}
 	return chunk;
 }
@@ -461,7 +461,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 		return py::str(type.ToString());
 	}
 	default:
-		throw NotImplementedException("unsupported type: " + type.ToString());
+		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
 }
 
