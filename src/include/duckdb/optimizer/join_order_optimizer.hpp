@@ -20,7 +20,6 @@
 
 #include <functional>
 
-
 namespace duckdb {
 
 class JoinOrderOptimizer {

@@ -17,7 +17,7 @@ struct hash<duckdb::JoinNode> {
 		return join_node.set->ToString();
 	}
 };
-}
+} // namespace std
 
 namespace duckdb {
 
