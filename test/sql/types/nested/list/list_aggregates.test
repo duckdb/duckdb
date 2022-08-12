@@ -80,6 +80,7 @@ select string_agg(list_value(i), ',') from range(10) tbl(i);
 ----
 [0],[1],[2],[3],[4],[5],[6],[7],[8],[9]
 
+
 # window aggregate
 query III
 select i, i % 2, min(list_value(i)) over(partition by i % 2 order by i) from range(10) tbl(i) ORDER BY 1;
