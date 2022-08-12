@@ -61,7 +61,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	if (stmt->idxname) {
 		info->index_name = stmt->idxname;
 	} else {
-		throw NotImplementedException("Index wout a name not supported yet!");
+		throw NotImplementedException("Index without a name not supported yet!");
 	}
 	for (auto &expr : info->expressions) {
 		info->parsed_expressions.emplace_back(expr->Copy());
