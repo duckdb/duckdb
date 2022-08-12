@@ -2,27 +2,24 @@
 # description: Test simple external join
 # group: [external]
 
-#statement ok
-#pragma verify_external
-
-#statement ok
-#pragma verify_parallelism
+statement ok
+pragma verify_external
 
 statement ok
-pragma threads=1
+pragma verify_parallelism
 
 statement ok
-pragma debug_force_external=true
+pragma threads=8
 
 # Create tables with large string values so that we have to swizzle strings
-# The tables have a single overlapping value to keep the join result small
+# The tables have some overlapping values to keep the join result small 0000000000000000
 statement ok
-create table t1 as select concat('000000000000', range::VARCHAR) i from range(20000)
+create table t1 as select concat('0000000000000000', range::VARCHAR) i from range(100000) order by random()
 
 statement ok
-create table t2 as select concat('000000000000', range::VARCHAR) j from range(19999, 39999)
+create table t2 as select concat('0000000000000000', range::VARCHAR) j from range(90000, 200000) order by random()
 
-query II
-select i, j from t1, t2 where i = j
+query I
+select count(*) from t1, t2 where i = j
 ----
-00000000000019999	00000000000019999
+10000

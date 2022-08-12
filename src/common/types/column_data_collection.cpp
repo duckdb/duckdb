@@ -1,9 +1,10 @@
 #include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/column_data_collection_segment.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -597,12 +598,14 @@ void ColumnDataCollection::InitializeScan(ColumnDataScanState &state, vector<col
 	state.column_ids = move(column_ids);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state) const {
-	InitializeScan(state.scan_state);
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state,
+                                          ColumnDataScanProperties properties) const {
+	InitializeScan(state.scan_state, properties);
 }
 
-void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids) const {
-	InitializeScan(state.scan_state, move(column_ids));
+void ColumnDataCollection::InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
+                                          ColumnDataScanProperties properties) const {
+	InitializeScan(state.scan_state, move(column_ids), properties);
 }
 
 bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,

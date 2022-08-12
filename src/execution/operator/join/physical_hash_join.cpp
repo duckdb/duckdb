@@ -12,6 +12,8 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
+#include <iostream>
+
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -153,7 +155,7 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	state->perfect_join_executor =
 	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
 	// for external hash join
-	state->external = !recursive_cte && ClientConfig::GetConfig(context).force_external;
+	state->external = can_go_external && ClientConfig::GetConfig(context).force_external;
 	// memory usage per thread scales with max mem / num threads
 	double max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	double num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -206,7 +208,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	// swizzle if we reach memory limit
-	if (!recursive_cte &&
+	if (can_go_external &&
 	    ht.SizeInBytes() + ht.PointerTableCapacity(ht.Count()) * sizeof(data_ptr_t) >= gstate.sink_memory_per_thread) {
 		lstate.hash_table->SwizzleBlocks();
 		gstate.external = true;
@@ -365,7 +367,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &sink = (HashJoinGlobalSinkState &)gstate;
 
 	if (sink.external) {
-		D_ASSERT(!recursive_cte);
+		D_ASSERT(can_go_external);
 		// External join - partition HT
 		sink.perfect_join_executor.reset();
 		sink.hash_table->ComputePartitionSizes(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
@@ -497,12 +499,12 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-enum class HashJoinSourceStage : uint8_t { BUILD = 0, PROBE = 1, SCAN_HT = 2, DONE = 3 };
+enum class HashJoinSourceStage : uint8_t { INIT, BUILD, PROBE, SCAN_HT, DONE };
 
 class HashJoinGlobalSourceState : public GlobalSourceState {
 public:
 	HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
-	    : initialized(false), stage(HashJoinSourceStage::SCAN_HT), probe_side_partitioned(false),
+	    : initialized(false), stage(HashJoinSourceStage::INIT), probe_side_partitioned(false),
 	      probe_count(op.children[0]->estimated_cardinality),
 	      parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 	}
@@ -515,6 +517,11 @@ public:
 		}
 		full_outer_scan_state.total = sink.hash_table->Count();
 		probe_collection = make_unique<ColumnDataCollection>(sink.hash_table->buffer_manager, sink.probe_types);
+
+		auto block_capacity = sink.hash_table->GetBlockCollection().block_capacity;
+		build_blocks_per_thread =
+		    MaxValue<idx_t>(idx_t(parallel_scan_chunk_count * STANDARD_VECTOR_SIZE) / block_capacity, 1);
+
 		initialized = true;
 	}
 
@@ -534,6 +541,7 @@ public:
 	//! For HT build synchronization
 	idx_t build_block_idx;
 	idx_t build_block_count;
+	idx_t build_blocks_per_thread;
 	atomic<idx_t> build_block_done;
 
 	//! For probe synchronization
@@ -617,20 +625,30 @@ void PhysicalHashJoin::PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoi
 	gstate.probe_side_partitioned = true;
 }
 
-void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const {
+void PhysicalHashJoin::PrepareNextBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const {
 	lock_guard<mutex> lock(gstate.lock);
 	if (gstate.stage == HashJoinSourceStage::BUILD) {
 		return;
 	}
+	gstate.stage = HashJoinSourceStage::BUILD;
 
-	// Prepare the build side
+	// Put the next partitions in the block collection
 	auto &ht = *sink.hash_table;
 	if (!ht.PrepareExternalFinalize()) {
 		gstate.stage = HashJoinSourceStage::DONE;
 		return;
 	}
-	ht.InitializePointerTable();
 
+	// Prepare the build
+	auto &block_collection = ht.GetBlockCollection();
+	gstate.build_block_idx = 0;
+	gstate.build_block_count = block_collection.blocks.size();
+	gstate.build_block_done = 0;
+	ht.InitializePointerTable();
+}
+
+void PhysicalHashJoin::PrepareNextProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const {
+	lock_guard<mutex> lock(gstate.lock);
 	// Prepare the probe side
 	gstate.probe_collection->InitializeScan(gstate.probe_global_scan_state);
 	gstate.probe_chunk_done = 0;
@@ -638,26 +656,41 @@ void PhysicalHashJoin::PrepareProbeRound(HashJoinGlobalSinkState &sink, HashJoin
 	// Reset full outer scan state (if necessary)
 	if (IsRightOuterJoin(join_type)) {
 		gstate.full_outer_scan_state.Reset();
-		gstate.full_outer_scan_state.total = ht.Count();
+		gstate.full_outer_scan_state.total = sink.hash_table->Count();
 	}
 
-	gstate.stage = HashJoinSourceStage::BUILD;
+	gstate.stage = HashJoinSourceStage::PROBE;
 }
 
 void PhysicalHashJoin::ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
                                      HashJoinLocalSourceState &lstate) const {
-	lock_guard<mutex> lock(gstate.lock);
-	if (gstate.stage != HashJoinSourceStage::BUILD) {
-		// The other threads finished the build stage already!
+	auto &ht = *sink.hash_table;
+
+	idx_t block_idx_start;
+	idx_t block_idx_end;
+	{
+		lock_guard<mutex> lock(gstate.lock);
+		if (gstate.build_block_done == gstate.build_block_count || gstate.stage != HashJoinSourceStage::BUILD) {
+			// The other threads finished the build stage already!
+			return;
+		}
+
+		block_idx_start = gstate.build_block_idx;
+		gstate.build_block_idx =
+		    MinValue<idx_t>(block_idx_start + gstate.build_blocks_per_thread, gstate.build_block_count);
+		block_idx_end = gstate.build_block_idx;
+	}
+
+	if (block_idx_start == block_idx_end) {
 		return;
 	}
 
-	auto &ht = *sink.hash_table;
-	// TODO: parallelize the finalize! - set stage to BUILD at the end of this
-	ht.Finalize(0, ht.GetBlockCollection().blocks.size(), false);
-	ht.finalized = true;
-
-	gstate.stage = HashJoinSourceStage::PROBE;
+	ht.Finalize(block_idx_start, block_idx_end, true);
+	auto done = gstate.build_block_done += (block_idx_end - block_idx_start);
+	if (done == gstate.build_block_count) {
+		ht.finalized = true;
+		PrepareNextProbe(sink, gstate);
+	}
 }
 
 void PhysicalHashJoin::ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
@@ -677,25 +710,30 @@ void PhysicalHashJoin::ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlob
 			if (IsRightOuterJoin(join_type)) {
 				gstate.stage = HashJoinSourceStage::SCAN_HT;
 			} else {
-				PrepareProbeRound(sink, gstate);
+				PrepareNextBuild(sink, gstate);
 			}
 			return;
 		}
 	}
 
-	// Scan input Chunk for next probe
+	if (gstate.probe_chunk_done == gstate.probe_chunk_count) {
+		return;
+	}
+
+	// Scan input chunk for next probe
 	if (!gstate.probe_collection->Scan(gstate.probe_global_scan_state, lstate.probe_local_scan_state,
 	                                   lstate.probe_chunk)) {
 		return; // Scan is done
 	}
-
-	D_ASSERT(gstate.stage == HashJoinSourceStage::PROBE);
-	D_ASSERT(sink.hash_table->finalized);
+	lstate.probe_chunk.Verify();
 
 	// Get the probe chunk columns/hashes
 	lstate.join_keys.ReferenceColumns(lstate.probe_chunk, lstate.join_key_indices);
 	lstate.payload.ReferenceColumns(lstate.probe_chunk, lstate.payload_indices);
 	auto precomputed_hashes = &lstate.probe_chunk.data.back();
+
+	D_ASSERT(gstate.stage == HashJoinSourceStage::PROBE);
+	D_ASSERT(sink.hash_table->finalized);
 
 	// Perform the probe
 	lstate.scan_structure = sink.hash_table->Probe(lstate.join_keys, precomputed_hashes);
@@ -728,7 +766,7 @@ void PhysicalHashJoin::ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGloba
 		auto scanned = fo_ss.scanned += lstate.full_outer_in_progress;
 		lstate.full_outer_in_progress = 0;
 		if (scanned == fo_ss.total) {
-			PrepareProbeRound(sink, gstate);
+			PrepareNextBuild(sink, gstate);
 			return;
 		}
 	}
@@ -738,7 +776,6 @@ void PhysicalHashJoin::ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGloba
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                LocalSourceState &lstate_p) const {
-	D_ASSERT(!recursive_cte);
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	auto &gstate = (HashJoinGlobalSourceState &)gstate_p;
 	auto &lstate = (HashJoinLocalSourceState &)lstate_p;
@@ -750,14 +787,17 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		}
 		return;
 	}
+	D_ASSERT(can_go_external);
 
 	if (!gstate.initialized) {
 		gstate.Initialize(sink);
 	}
 
-	if (!gstate.probe_side_partitioned) {
-		PartitionProbeSide(sink, gstate);
-		PrepareProbeRound(sink, gstate);
+	if (gstate.stage == HashJoinSourceStage::INIT) {
+		if (!gstate.probe_side_partitioned) {
+			PartitionProbeSide(sink, gstate);
+		}
+		PrepareNextBuild(sink, gstate);
 	}
 
 	// Any call to GetData must produce tuples, otherwise the pipeline executor thinks that we're done

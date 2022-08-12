@@ -75,9 +75,13 @@ public:
 	InitializeScan(ColumnDataScanState &state, vector<column_t> column_ids,
 	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Initialize a parallel scan over the column data collection over all columns
-	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state) const;
+	DUCKDB_API void
+	InitializeScan(ColumnDataParallelScanState &state,
+	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Initialize a parallel scan over the column data collection over a subset of the columns
-	DUCKDB_API void InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids) const;
+	DUCKDB_API void
+	InitializeScan(ColumnDataParallelScanState &state, vector<column_t> column_ids,
+	               ColumnDataScanProperties properties = ColumnDataScanProperties::ALLOW_ZERO_COPY) const;
 	//! Scans a DataChunk from the ColumnDataCollection
 	DUCKDB_API bool Scan(ColumnDataScanState &state, DataChunk &result) const;
 	//! Scans a DataChunk from the ColumnDataCollection

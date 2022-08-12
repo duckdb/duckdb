@@ -43,8 +43,8 @@ public:
 	vector<LogicalType> delim_types;
 	//! Used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
-	//! Whether there's a recursive CTE in this pipeline (disables external hash join)
-	bool recursive_cte;
+	//! Whether we can go external (can't yet if recursive CTE or full outer TODO)
+	bool can_go_external;
 
 public:
 	// Operator Interface
@@ -99,12 +99,14 @@ private:
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 
-	//! Partition the probe-side data
+	//! Partition the probe-side data for external hash join
 	void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
-	//! Prepare the next partitioned probe round, which includes finalizing the HT
-	void PrepareProbeRound(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
 
-	//! Calls to build, probe and scan during external hash join
+	//! Prepare the next build/probe stage for external hash join
+	void PrepareNextBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
+	void PrepareNextProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
+
+	//! Functions to build, probe and scan for external hash join
 	void ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
 	                   HashJoinLocalSourceState &lstate) const;
 	void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,

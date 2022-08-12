@@ -1169,7 +1169,7 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	// slice the stuff CAN'T probe right now and append to spill collection
 	CreateSpillChunk(spill_chunk, keys, payload, hashes);
 	spill_chunk.Slice(false_sel, false_count);
-	spill_chunk.SetCardinality(false_count);
+	spill_chunk.Verify();
 	spill_collection.Append(spill_chunk);
 
 	// slice the stuff that we CAN probe right now
