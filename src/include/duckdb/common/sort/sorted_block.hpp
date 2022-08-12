@@ -160,14 +160,17 @@ private:
 	SBScanState read_state;
 	//! The total count of sorted_data
 	const idx_t total_count;
-	//! The global sort state
-	GlobalSortState &global_sort_state;
 	//! Addresses used to gather from the sorted data
 	Vector addresses = Vector(LogicalType::POINTER);
 	//! The number of rows scanned so far
 	idx_t total_scanned;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
+	//! Whether we are unswizzling the blocks
+	const bool unswizzling;
+
+	//! Checks that the newest block is valid
+	void ValidateUnscannedBlock() const;
 };
 
 struct SBIterator {

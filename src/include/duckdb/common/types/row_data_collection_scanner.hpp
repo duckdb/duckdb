@@ -88,6 +88,11 @@ private:
 	const bool external;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
+	//! Whether we are unswizzling the blocks
+	const bool unswizzling;
+
+	//! Checks that the newest block is valid
+	void ValidateUnscannedBlock() const;
 };
 
 } // namespace duckdb

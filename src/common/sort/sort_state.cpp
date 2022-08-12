@@ -180,6 +180,13 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 		auto blob_data = blob_chunk.ToUnifiedFormat();
 		RowOperations::Scatter(blob_chunk, blob_data.get(), sort_layout->blob_layout, addresses, *blob_sorting_heap,
 		                       sel_ptr, blob_chunk.size());
+		// We can't get at the actual blocks through the handles so just set them all...
+		for (auto &rdb : blob_sorting_data->blocks) {
+			rdb.block->SetSwizzling(false);
+		}
+		for (auto &rdb : blob_sorting_heap->blocks) {
+			rdb.block->SetSwizzling(false);
+		}
 	}
 
 	// Finally, serialize payload data
@@ -187,6 +194,15 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 	auto input_data = payload.ToUnifiedFormat();
 	RowOperations::Scatter(payload, input_data.get(), *payload_layout, addresses, *payload_heap, sel_ptr,
 	                       payload.size());
+	// Mark the blocks as unswizzled if there are pointers.
+	if (!payload_layout->AllConstant()) {
+		for (auto &rdb : payload_data->blocks) {
+			rdb.block->SetSwizzling(false);
+		}
+		for (auto &rdb : payload_heap->blocks) {
+			rdb.block->SetSwizzling(false);
+		}
+	}
 }
 
 idx_t LocalSortState::SizeInBytes() const {
@@ -275,6 +291,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}
+	ordered_data_block.block->SetSwizzling(sd.layout.AllConstant());
 	// Replace the unordered data block with the re-ordered data block
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(ordered_data_block));
@@ -282,6 +299,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	if (!sd.layout.AllConstant() && reorder_heap) {
 		// Swizzle the column pointers to offsets
 		RowOperations::SwizzleColumns(sd.layout, ordered_data_handle.Ptr(), count);
+		sd.data_blocks.back().block->SetSwizzling(true);
 		// Create a single heap block to store the ordered heap
 		idx_t total_byte_offset = std::accumulate(heap.blocks.begin(), heap.blocks.end(), 0,
 		                                          [](idx_t a, const RowDataBlock &b) { return a + b.byte_offset; });
@@ -303,6 +321,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		}
 		// Swizzle the base pointer to the offset of each row in the heap
 		RowOperations::SwizzleHeapPointer(sd.layout, ordered_data_handle.Ptr(), ordered_heap_handle.Ptr(), count);
+		ordered_heap_block.block->SetSwizzling(true);
 		// Move the re-ordered heap to the SortedData, and clear the local heap
 		sd.heap_blocks.push_back(move(ordered_heap_block));
 		heap.pinned_blocks.clear();

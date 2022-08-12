@@ -464,6 +464,7 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 		const auto row_sel = FlatVector::IncrementalSelectionVector();
 		Vector addresses(LogicalType::POINTER);
 		auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
+		const auto prev_rows_blocks = rows->blocks.size();
 		auto handles = rows->Build(row_count, key_locations, nullptr, row_sel);
 		vector<UnifiedVectorFormat> input_data;
 		input_data.reserve(input_chunk.ColumnCount());
@@ -472,8 +473,17 @@ void WindowLocalSinkState::Sink(DataChunk &input_chunk, WindowGlobalSinkState &g
 			input_chunk.data[i].ToUnifiedFormat(row_count, pdata);
 			input_data.emplace_back(move(pdata));
 		}
+		const auto prev_heap_blocks = strings->blocks.size();
 		RowOperations::Scatter(input_chunk, input_data.data(), payload_layout, addresses, *strings, *row_sel,
 		                       row_count);
+		if (!payload_layout.AllConstant()) {
+			for (size_t i = prev_rows_blocks; i < rows->blocks.size(); ++i) {
+				rows->blocks[i].block->SetSwizzling(false);
+			}
+			for (size_t i = prev_heap_blocks; i < strings->blocks.size(); ++i) {
+				strings->blocks[i].block->SetSwizzling(false);
+			}
+		}
 		return;
 	}
 
