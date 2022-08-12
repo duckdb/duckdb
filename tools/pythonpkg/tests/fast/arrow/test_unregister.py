@@ -23,9 +23,9 @@ class TestArrowUnregister(object):
 
         arrow_table_2 = connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
         connection.unregister("arrow_table")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("DROP VIEW arrow_table;")
         connection.execute("DROP VIEW IF EXISTS arrow_table;")
 
@@ -46,7 +46,7 @@ class TestArrowUnregister(object):
         # Reconnecting while Arrow Table still in mem.
         connection = duckdb.connect(db)
         assert len(connection.execute("PRAGMA show_tables;").fetchall()) == 0
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
         connection.close()
         del arrow_table_obj
@@ -54,6 +54,6 @@ class TestArrowUnregister(object):
         # Reconnecting after Arrow Table is freed.
         connection = duckdb.connect(db)
         assert len(connection.execute("PRAGMA show_tables;").fetchall()) == 0
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
         connection.close()

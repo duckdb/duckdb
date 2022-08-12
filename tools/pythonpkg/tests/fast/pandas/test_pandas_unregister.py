@@ -13,9 +13,9 @@ class TestPandasUnregister(object):
 
         df2 = connection.execute("SELECT * FROM dataframe;").fetchdf()
         connection.unregister("dataframe")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("SELECT * FROM dataframe;").fetchdf()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("DROP VIEW dataframe;")
         connection.execute("DROP VIEW IF EXISTS dataframe;")
 
@@ -36,7 +36,7 @@ class TestPandasUnregister(object):
         connection = duckdb.connect(db)
         assert len(connection.execute("PRAGMA show_tables;").fetchall()) == 0
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("SELECT * FROM dataframe;").fetchdf()
 
         connection.close()
@@ -47,6 +47,6 @@ class TestPandasUnregister(object):
         # Reconnecting after DataFrame freed.
         connection = duckdb.connect(db)
         assert len(connection.execute("PRAGMA show_tables;").fetchall()) == 0
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             connection.execute("SELECT * FROM dataframe;").fetchdf()
         connection.close()

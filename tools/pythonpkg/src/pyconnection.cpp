@@ -120,7 +120,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		throw std::runtime_error(pending_query.error);
+		throw pending_query.error.ToException();
 	}
 	return pending_query.Execute();
 }
@@ -147,13 +147,13 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (!res->success) {
-				throw std::runtime_error(res->error);
+				throw res->error.ToException();
 			}
 		}
 
 		prep = connection->Prepare(move(statements.back()));
 		if (!prep->success) {
-			throw std::runtime_error(prep->error);
+			throw prep->error.ToException();
 		}
 	}
 
@@ -180,7 +180,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			res->result = CompletePendingQuery(*pending_query);
 
 			if (!res->result->success) {
-				throw std::runtime_error(res->result->error);
+				throw res->result->error.ToException();
 			}
 		}
 

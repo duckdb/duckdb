@@ -54,13 +54,13 @@ class TestMap(object):
         def return_empty_df(df):
             return pd.DataFrame()
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             print(testrel.map(evil1).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             print(testrel.map(evil2).df())
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(duckdb.Error):
             print(testrel.map(evil3).df())
 
         with pytest.raises(AttributeError):
