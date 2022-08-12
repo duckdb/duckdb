@@ -346,7 +346,7 @@ unique_ptr<ResponseWrapper> HTTPFileHandle::Initialize() {
 			return res;
 		} else {
 			throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
-			                         res->error + ")");
+			                         res->error.message + ")");
 		}
 	}
 

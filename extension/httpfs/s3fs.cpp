@@ -285,7 +285,7 @@ void S3FileSystem::UploadBuffer(S3FileHandle &file_handle, shared_ptr<S3WriteBuf
 				success = true;
 				break;
 			} else {
-				last_error = res->error + " (HTTP code " + std::to_string(res->code) + ")";
+				last_error = res->error.message + " (HTTP code " + std::to_string(res->code) + ")";
 			}
 		} catch (std::runtime_error &e) {
 			if (strncmp(e.what(), "HTTP PUT error", 14) != 0) {
