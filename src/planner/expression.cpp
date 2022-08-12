@@ -127,6 +127,9 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, PlanDeseria
 	case ExpressionClass::BOUND_AGGREGATE:
 		result = BoundAggregateExpression::Deserialize(state, reader);
 		break;
+	case ExpressionClass::BOUND_BETWEEN:
+		result = BoundBetweenExpression::Deserialize(state, reader);
+		break;
 	case ExpressionClass::BOUND_CONSTANT:
 		result = BoundConstantExpression::Deserialize(state, reader);
 		break;
