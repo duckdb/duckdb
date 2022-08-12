@@ -161,7 +161,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	auto type = reader.ReadRequired<LogicalOperatorType>();
 	auto children = reader.ReadRequiredSerializableList<LogicalOperator>(gstate);
 
-	LogicalDeserializationState state(gstate, type);
+	LogicalDeserializationState state(gstate, type, children);
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::Deserialize(state, reader);

@@ -13,6 +13,7 @@
 
 namespace duckdb {
 class ClientContext;
+class LogicalOperator;
 
 struct PlanDeserializationState {
 	PlanDeserializationState(ClientContext &context) : context(context) {
@@ -22,12 +23,14 @@ struct PlanDeserializationState {
 };
 
 struct LogicalDeserializationState {
-	LogicalDeserializationState(PlanDeserializationState &gstate, LogicalOperatorType type)
-	    : gstate(gstate), type(type) {
+	LogicalDeserializationState(PlanDeserializationState &gstate, LogicalOperatorType type,
+	                            vector<unique_ptr<LogicalOperator>> &children)
+	    : gstate(gstate), type(type), children(children) {
 	}
 
 	PlanDeserializationState &gstate;
 	LogicalOperatorType type;
+	vector<unique_ptr<LogicalOperator>> &children;
 };
 
 struct ExpressionDeserializationState {

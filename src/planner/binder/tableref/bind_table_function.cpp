@@ -149,6 +149,10 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 	}
 	auto get = make_unique<LogicalGet>(bind_index, table_function, move(bind_data), return_types, return_names);
+	get->parameters = parameters;
+	get->named_parameters = named_parameters;
+	get->input_table_types = input_table_types;
+	get->input_table_names = input_table_names;
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, *get);
 	return move(get);

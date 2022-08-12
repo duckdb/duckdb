@@ -204,10 +204,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		}
 
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// states vector is full, update
 			if (states_idx == STANDARD_VECTOR_SIZE) {
-
 				// update the aggregate state(s)
 				Vector slice = Vector(child_vector, sel_vector, states_idx);
 				aggr.function.update(&slice, aggr_input_data, 1, state_vector_update, states_idx);
