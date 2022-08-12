@@ -123,12 +123,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 }
 
-void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op) {
-	if (!op || !ClientConfig::GetConfig(context).query_verification_enabled) {
-		return;
-	}
-	//! SELECT only for now
-	switch (op->type) {
+static bool OperatorSupportsSerialization(LogicalOperator &op) {
+	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
@@ -146,10 +142,28 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+	case LogicalOperatorType::LOGICAL_LOAD:
 		// unsupported (for now)
-		return;
+		return false;
 	default:
 		break;
+	}
+	for (auto &child : op.children) {
+		if (!OperatorSupportsSerialization(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op) {
+	if (!op || !ClientConfig::GetConfig(context).query_verification_enabled) {
+		return;
+	}
+	//! SELECT only for now
+	if (!OperatorSupportsSerialization(*op)) {
+		return;
 	}
 	BufferedSerializer serializer;
 	op->Serialize(serializer);
