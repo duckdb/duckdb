@@ -8,6 +8,17 @@
 
 #include <algorithm>
 
+namespace std {
+
+//! A JoinNode is defined by the relations it joins.
+template <>
+struct hash<duckdb::JoinNode> {
+	inline string operator()(const duckdb::JoinNode &join_node) const {
+		return join_node.set->ToString();
+	}
+};
+}
+
 namespace duckdb {
 
 //! Returns true if A and B are disjoint, false otherwise

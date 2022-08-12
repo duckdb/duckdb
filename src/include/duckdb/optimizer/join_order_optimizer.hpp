@@ -20,12 +20,6 @@
 
 #include <functional>
 
-template <>
-struct std::hash<duckdb::JoinNode> {
-	std::string operator()(duckdb::JoinNode const &join_node) const noexcept {
-		return join_node.set->ToString();
-	}
-};
 
 namespace duckdb {
 
