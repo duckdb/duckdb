@@ -24,4 +24,4 @@ true
 query I
 SELECT list_position([[[NULL, 42]]], [[NULL, 42]])
 ----
-true
+1
