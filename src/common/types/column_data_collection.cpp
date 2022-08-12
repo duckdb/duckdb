@@ -621,6 +621,10 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 			return false;
 		}
 	}
+	if (segment_index != lstate.current_segment_index) {
+		lstate.current_chunk_state.handles.clear();
+		lstate.current_segment_index = segment_index;
+	}
 	auto &segment = *segments[segment_index];
 	lstate.current_chunk_state.properties = state.scan_state.properties;
 	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
