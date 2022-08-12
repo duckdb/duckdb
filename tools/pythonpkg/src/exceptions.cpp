@@ -50,8 +50,9 @@ void RegisterExceptions(const py::module &m) {
 	auto operational_error = py::register_exception<OperationalError>(m, "OperationalError", error).ptr();
 	py::register_exception<TransactionException>(m, "TransactionException", operational_error);
 	py::register_exception<OutOfMemoryException>(m, "OutOfMemoryException", operational_error);
+	py::register_exception<ConnectionException>(m, "ConnectionException", operational_error);
 	// no object size error
-	// no null pointer error
+	// no null pointer errors
 	py::register_exception<IOException>(m, "IOException", operational_error);
 	py::register_exception<SerializationException>(m, "SerializationException", operational_error);
 
