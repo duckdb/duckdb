@@ -73,7 +73,8 @@ public:
 
 	//! Excess probe data gathered during Sink
 	vector<LogicalType> probe_types;
-	vector<unique_ptr<ColumnDataCollection>> spill_collections;
+	//	vector<unique_ptr<ColumnDataCollection>> spill_collections;
+	vector<unique_ptr<ChunkCollection>> spill_ccs;
 
 	//! Whether or not we have started scanning data using GetData
 	atomic<bool> scanned_data;
@@ -406,7 +407,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
-	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator), spill_collection(nullptr) {
+	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator) {
 	}
 
 	DataChunk join_keys;
@@ -415,8 +416,9 @@ public:
 	unique_ptr<OperatorState> perfect_hash_join_state;
 
 	//! Collection and chunk to sink data into for external join
-	ColumnDataCollection *spill_collection;
-	ColumnDataAppendState spill_append_state;
+	//	ColumnDataCollection *spill_collection;
+	//	ColumnDataAppendState spill_append_state;
+	ChunkCollection *spill_cc;
 	DataChunk spill_chunk;
 
 public:
@@ -440,10 +442,12 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	if (sink.external) {
 		state->spill_chunk.Initialize(allocator, sink.probe_types);
 		lock_guard<mutex> local_ht_lock(sink.lock);
-		sink.spill_collections.push_back(
-		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context.client), sink.probe_types));
-		state->spill_collection = sink.spill_collections.back().get();
-		state->spill_collection->InitializeAppend(state->spill_append_state);
+		//		sink.spill_collections.push_back(
+		//		    make_unique<ColumnDataCollection>(BufferManager::GetBufferManager(context.client),
+		// sink.probe_types)); 		state->spill_collection = sink.spill_collections.back().get();
+		//		state->spill_collection->InitializeAppend(state->spill_append_state);
+		sink.spill_ccs.push_back(make_unique<ChunkCollection>(allocator));
+		state->spill_cc = sink.spill_ccs.back().get();
 	}
 
 	return move(state);
@@ -487,8 +491,10 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
-		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, input, *state.spill_collection,
-		                                                      state.spill_append_state, state.spill_chunk);
+		//		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, input, *state.spill_collection,
+		//		                                                      state.spill_append_state, state.spill_chunk);
+		state.scan_structure =
+		    sink.hash_table->ProbeAndSpill(state.join_keys, input, *state.spill_cc, state.spill_chunk);
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
@@ -530,7 +536,8 @@ public:
 
 public:
 	//! Probe-side data that was spilled during Execute
-	unique_ptr<ColumnDataCollection> probe_collection = nullptr;
+	//	unique_ptr<ColumnDataCollection> probe_collection = nullptr;
+	unique_ptr<ChunkCollection> probe_cc = nullptr;
 
 	//! For synchronizing the external hash join
 	atomic<bool> initialized;
@@ -544,7 +551,7 @@ public:
 	atomic<idx_t> build_block_done;
 
 	//! For probe synchronization
-	ColumnDataParallelScanState probe_global_scan_state;
+	//	ColumnDataParallelScanState probe_global_scan_state;
 	idx_t probe_chunk_count;
 	atomic<idx_t> probe_chunk_done;
 	atomic<idx_t> probe_side_partitioned;
@@ -578,7 +585,7 @@ public:
 
 public:
 	//! Local scan state for probe collection
-	ColumnDataLocalScanState probe_local_scan_state;
+	//	ColumnDataLocalScanState probe_local_scan_state;
 
 	//! Chunks for scanning the probe collection
 	DataChunk probe_chunk;
@@ -614,16 +621,25 @@ void PhysicalHashJoin::PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoi
 	}
 
 	// For now we actually don't partition the probe side TODO
-	for (auto &spill_collection : sink.spill_collections) {
-		if (!gstate.probe_collection) {
-			gstate.probe_collection = move(spill_collection);
+	//	for (auto &spill_collection : sink.spill_collections) {
+	//		if (!gstate.probe_collection) {
+	//			gstate.probe_collection = move(spill_collection);
+	//		} else {
+	//			gstate.probe_collection->Combine(*spill_collection);
+	//		}
+	//	}
+	for (auto &spill_cc : sink.spill_ccs) {
+		if (!gstate.probe_cc) {
+			gstate.probe_cc = move(spill_cc);
 		} else {
-			gstate.probe_collection->Combine(*spill_collection);
+			gstate.probe_cc->Merge(*spill_cc);
 		}
 	}
-	sink.spill_collections.clear();
+	//	sink.spill_collections.clear();
+	sink.spill_ccs.clear();
 
-	gstate.probe_chunk_count = gstate.probe_collection->ChunkCount();
+	//	gstate.probe_chunk_count = gstate.probe_collection->ChunkCount();
+	gstate.probe_chunk_count = gstate.probe_cc->ChunkCount();
 
 	gstate.probe_side_partitioned = true;
 }
@@ -653,7 +669,7 @@ void PhysicalHashJoin::PrepareNextBuild(HashJoinGlobalSinkState &sink, HashJoinG
 void PhysicalHashJoin::PrepareNextProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const {
 	lock_guard<mutex> lock(gstate.lock);
 	// Prepare the probe side
-	gstate.probe_collection->InitializeScan(gstate.probe_global_scan_state);
+	//	gstate.probe_collection->InitializeScan(gstate.probe_global_scan_state);
 	gstate.probe_chunk_done = 0;
 
 	// Reset full outer scan state (if necessary)
@@ -724,10 +740,12 @@ void PhysicalHashJoin::ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlob
 	}
 
 	// Scan input chunk for next probe
-	if (!gstate.probe_collection->Scan(gstate.probe_global_scan_state, lstate.probe_local_scan_state,
-	                                   lstate.probe_chunk)) {
-		return; // Scan is done
-	}
+	//	if (!gstate.probe_collection->Scan(gstate.probe_global_scan_state, lstate.probe_local_scan_state,
+	//	                                   lstate.probe_chunk)) {
+	//		return; // Scan is done
+	//	}
+	auto &probe_chunk = gstate.probe_cc->GetChunk(gstate.probe_chunk_done);
+	lstate.probe_chunk.Reference(probe_chunk);
 	lstate.probe_chunk.Verify();
 
 	// Get the probe chunk columns/hashes
