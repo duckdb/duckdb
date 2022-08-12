@@ -315,7 +315,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		return result;
 	}
 #ifdef DEBUG
-	plan->Verify();
+	plan->Verify(*this);
 #endif
 	if (config.enable_optimizer) {
 		profiler.StartPhase("optimizer");
@@ -325,7 +325,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		profiler.EndPhase();
 
 #ifdef DEBUG
-		plan->Verify();
+		plan->Verify(*this);
 #endif
 	}
 

@@ -14,14 +14,17 @@
 namespace duckdb {
 
 struct CreateTableFunctionInfo : public CreateFunctionInfo {
-	explicit CreateTableFunctionInfo(TableFunctionSet set)
-	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(move(set)) {
-		name = functions.name;
-	}
 	explicit CreateTableFunctionInfo(TableFunction function)
 	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(function.name) {
 		name = function.name;
 		functions.AddFunction(move(function));
+	}
+	explicit CreateTableFunctionInfo(TableFunctionSet set)
+	    : CreateFunctionInfo(CatalogType::TABLE_FUNCTION_ENTRY), functions(move(set)) {
+		name = functions.name;
+		for (auto &func : functions.functions) {
+			func.name = functions.name;
+		}
 	}
 
 	//! The table functions

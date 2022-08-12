@@ -83,6 +83,15 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(table_filters);
 
 	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
+	if (!function.serialize) {
+		// no serialize method: serialize input values and named_parameters for rebinding purposes
+		writer.WriteRegularSerializableList(parameters);
+		if (!named_parameters.empty()) {
+			throw SerializationException("LogicalGet - FIXME serialize named paramters");
+		}
+		writer.WriteRegularSerializableList(input_table_types);
+		writer.WriteList<string>(input_table_names);
+	}
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -93,12 +102,43 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	auto table_filters = reader.ReadRequiredSerializable<TableFilterSet>();
 
 	unique_ptr<FunctionData> bind_data;
-	auto function = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
-	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data);
+	bool has_deserialize;
+	auto function = FunctionSerializer::DeserializeBaseInternal<TableFunction, TableFunctionCatalogEntry>(
+	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
+
+	vector<Value> parameters;
+	vector<LogicalType> input_table_types;
+	vector<string> input_table_names;
+	if (!has_deserialize) {
+		D_ASSERT(!bind_data);
+		parameters = reader.ReadRequiredSerializableList<Value, Value>();
+		// FIXME: deserialize named_parameter_map
+		named_parameter_map_t named_parameters;
+		input_table_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		input_table_names = reader.ReadRequiredList<string>();
+		TableFunctionBindInput input(parameters, named_parameters, input_table_types, input_table_names,
+		                             function.function_info.get());
+
+		vector<LogicalType> bind_return_types;
+		vector<string> bind_names;
+		bind_data = function.bind(state.gstate.context, input, bind_return_types, bind_names);
+		if (returned_types != bind_return_types) {
+			throw SerializationException(
+			    "Table function deserialization failure - bind returned different return types than were serialized");
+		}
+		// names can actually be different because of aliases - only the sizes cannot be different
+		if (returned_names.size() != bind_names.size()) {
+			throw SerializationException(
+			    "Table function deserialization failure - bind returned different returned names than were serialized");
+		}
+	}
 
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
 	result->column_ids = column_ids;
 	result->table_filters = move(*table_filters);
+	result->parameters = move(parameters);
+	result->input_table_types = input_table_types;
+	result->input_table_names = input_table_names;
 	return result;
 }
 

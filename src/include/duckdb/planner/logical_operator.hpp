@@ -57,7 +57,7 @@ public:
 	virtual string ToString() const;
 	DUCKDB_API void Print();
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
-	virtual void Verify();
+	virtual void Verify(ClientContext &context);
 
 	void AddChild(unique_ptr<LogicalOperator> child);
 

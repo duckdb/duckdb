@@ -94,7 +94,7 @@ string LogicalOperator::ToString() const {
 	return renderer.ToString(*this);
 }
 
-void LogicalOperator::Verify() {
+void LogicalOperator::Verify(ClientContext &context) {
 #ifdef DEBUG
 	// verify expressions
 	for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
@@ -119,10 +119,25 @@ void LogicalOperator::Verify() {
 			}
 		}
 		D_ASSERT(!str.empty());
+
+		// verify that serialization + deserialization round-trips correctly
+		if (expressions[expr_idx]->HasParameter()) {
+			continue;
+		}
+		BufferedSerializer serializer;
+		expressions[expr_idx]->Serialize(serializer);
+
+		auto data = serializer.GetData();
+		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+
+		PlanDeserializationState state(context);
+		auto deserialized_expression = Expression::Deserialize(deserializer, state);
+		D_ASSERT(Expression::Equals(expressions[expr_idx].get(), deserialized_expression.get()));
+		D_ASSERT(expressions[expr_idx]->Hash() == deserialized_expression->Hash());
 	}
 	D_ASSERT(!ToString().empty());
 	for (auto &child : children) {
-		child->Verify();
+		child->Verify(context);
 	}
 #endif
 }
@@ -161,7 +176,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	auto type = reader.ReadRequired<LogicalOperatorType>();
 	auto children = reader.ReadRequiredSerializableList<LogicalOperator>(gstate);
 
-	LogicalDeserializationState state(gstate, type);
+	LogicalDeserializationState state(gstate, type, children);
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::Deserialize(state, reader);
