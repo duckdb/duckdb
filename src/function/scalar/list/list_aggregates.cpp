@@ -320,10 +320,12 @@ ListAggregatesBindFunction(ClientContext &context, ScalarFunction &bound_functio
 	auto expr = make_unique<BoundConstantExpression>(Value(list_child_type));
 	children.push_back(move(expr));
 	// push any extra arguments into the list aggregate bind
-	for (idx_t i = 2; i < arguments.size(); i++) {
-		children.push_back(move(arguments[i]));
+	if (arguments.size() > 2) {
+		for (idx_t i = 2; i < arguments.size(); i++) {
+			children.push_back(move(arguments[i]));
+		}
+		arguments.resize(2);
 	}
-	arguments.resize(2);
 
 	auto bound_aggr_function = AggregateFunction::BindAggregateFunction(context, aggr_function, move(children));
 	bound_function.arguments[0] = LogicalType::LIST(bound_aggr_function->function.arguments[0]);
