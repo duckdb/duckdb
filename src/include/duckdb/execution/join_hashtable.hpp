@@ -283,10 +283,8 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	//	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ColumnDataCollection
-	//&spill_collection, 	                                        ColumnDataAppendState &spill_append_state, DataChunk &spill_chunk);
-	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ChunkCollection &spill_cc,
-	                                        DataChunk &spill_chunk);
+	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ColumnDataCollection &spill_collection,
+	                                        ColumnDataAppendState &spill_append_state, DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current partitioned round
