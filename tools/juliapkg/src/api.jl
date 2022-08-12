@@ -2029,6 +2029,23 @@ function duckdb_bind_set_bind_data(bind_info, bind_data, delete_callback)
 end
 
 """
+Sets the cardinality estimate for the table function, used for optimization.
+
+* info: The bind data object.
+* is_exact: Whether or not the cardinality estimate is exact, or an approximation
+"""
+function duckdb_bind_set_cardinality(bind_info, cardinality, is_exact)
+    return ccall(
+        (:duckdb_bind_set_cardinality, libduckdb),
+        Cvoid,
+        (duckdb_bind_info, UInt64, Bool),
+        bind_info,
+        cardinality,
+        is_exact
+    )
+end
+
+"""
 Report that an error has occurred during bind.
 
 * info: The info object
