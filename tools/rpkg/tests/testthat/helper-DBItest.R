@@ -11,7 +11,7 @@ DBItest::make_context(
   # dblog::dblog(drv),
   list(debug = FALSE),
   tweaks = DBItest::tweaks(
-    omit_blob_tests = TRUE,
+    omit_blob_tests = FALSE,
     temporary_tables = FALSE,
     placeholder_pattern = "?",
     timestamp_cast = function(x) sprintf("CAST('%s' AS TIMESTAMP)", x),
