@@ -266,7 +266,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 
 	if (!result.success) {
 		// write the error message
-		out->__deprecated_error_message = (char *)result.error.c_str();
+		out->__deprecated_error_message = (char *)result.error.message.c_str();
 		return DuckDBError;
 	}
 	// copy the data
@@ -452,7 +452,7 @@ const char *duckdb_result_error(duckdb_result *result) {
 		return nullptr;
 	}
 	auto &result_data = *((duckdb::DuckDBResultData *)result->internal_data);
-	return result_data.result->success ? nullptr : result_data.result->error.c_str();
+	return result_data.result->success ? nullptr : result_data.result->error.message.c_str();
 }
 
 idx_t duckdb_result_chunk_count(duckdb_result result) {

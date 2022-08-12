@@ -12,7 +12,7 @@ MaterializedQueryResult::MaterializedQueryResult(StatementType statement_type, S
       collection(move(collection_p)), scan_initialized(false) {
 }
 
-MaterializedQueryResult::MaterializedQueryResult(string error)
+MaterializedQueryResult::MaterializedQueryResult(PreservedError error)
     : QueryResult(QueryResultType::MATERIALIZED_RESULT, move(error)), scan_initialized(false) {
 }
 
@@ -34,7 +34,8 @@ string MaterializedQueryResult::ToString() {
 		}
 		result += "\n";
 	} else {
-		result = error + "\n";
+		D_ASSERT(error);
+		result = error.message + "\n";
 	}
 	return result;
 }

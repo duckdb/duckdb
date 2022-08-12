@@ -11,7 +11,8 @@ PendingQueryResult::PendingQueryResult(shared_ptr<ClientContext> context_p, Prep
       context(move(context_p)), allow_stream_result(allow_stream_result) {
 }
 
-PendingQueryResult::PendingQueryResult(string error) : BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
+PendingQueryResult::PendingQueryResult(PreservedError error)
+    : BaseQueryResult(QueryResultType::PENDING_RESULT, move(error)) {
 }
 
 PendingQueryResult::~PendingQueryResult() {

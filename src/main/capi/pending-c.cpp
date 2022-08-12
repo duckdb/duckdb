@@ -1,6 +1,7 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/common/preserved_error.hpp"
 
 using duckdb::make_unique;
 using duckdb::PendingExecutionResult;
@@ -17,7 +18,7 @@ duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statemen
 	try {
 		result->statement = wrapper->statement->PendingQuery(wrapper->values, false);
 	} catch (std::exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(ex.what());
+		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
 	duckdb_state return_value = result->statement->success ? DuckDBSuccess : DuckDBError;
 	*out_result = (duckdb_pending_result)result;
@@ -45,7 +46,7 @@ const char *duckdb_pending_error(duckdb_pending_result pending_result) {
 	if (!wrapper->statement) {
 		return nullptr;
 	}
-	return wrapper->statement->error.c_str();
+	return wrapper->statement->error.message.c_str();
 }
 
 duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result) {
@@ -64,7 +65,7 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 		return_value = wrapper->statement->ExecuteTask();
 	} catch (std::exception &ex) {
 		wrapper->statement->success = false;
-		wrapper->statement->error = ex.what();
+		wrapper->statement->error = duckdb::PreservedError(ex);
 		return DUCKDB_PENDING_ERROR;
 	}
 	switch (return_value) {

@@ -88,6 +88,7 @@ public:
 
 public:
 	DUCKDB_API const char *what() const noexcept override;
+	DUCKDB_API const string &RawMessage() const;
 
 	DUCKDB_API string ExceptionTypeToString(ExceptionType type);
 
@@ -110,6 +111,7 @@ public:
 
 private:
 	string exception_message_;
+	string raw_message_;
 };
 
 //===--------------------------------------------------------------------===//
@@ -312,18 +314,24 @@ class CastException : public Exception {
 public:
 	DUCKDB_API CastException(const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API CastException(const LogicalType &origType, const LogicalType &newType);
+	DUCKDB_API
+	CastException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class InvalidTypeException : public Exception {
 public:
 	DUCKDB_API InvalidTypeException(PhysicalType type, const string &msg);
 	DUCKDB_API InvalidTypeException(const LogicalType &type, const string &msg);
+	DUCKDB_API
+	InvalidTypeException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class TypeMismatchException : public Exception {
 public:
 	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
 	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
+	DUCKDB_API
+	TypeMismatchException(const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class ValueOutOfRangeException : public Exception {
@@ -332,6 +340,8 @@ public:
 	DUCKDB_API ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
 	DUCKDB_API ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
+	DUCKDB_API ValueOutOfRangeException(
+	    const string &msg); //! Needed to be able to recreate the exception after it's been serialized
 };
 
 class ParameterNotAllowedException : public StandardException {

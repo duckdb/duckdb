@@ -8,6 +8,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/preserved_error.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <ctype.h>
@@ -101,7 +102,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		pDb->con = make_unique<Connection>(*pDb->db);
 	} catch (std::exception &ex) {
 		if (pDb) {
-			pDb->last_error = ex.what();
+			pDb->last_error = PreservedError(ex);
 			pDb->errCode = SQLITE_ERROR;
 		}
 		rc = SQLITE_ERROR;
@@ -191,7 +192,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		*ppStmt = stmt.release();
 		return SQLITE_OK;
 	} catch (std::exception &ex) {
-		db->last_error = ex.what();
+		db->last_error = PreservedError(ex);
 		return SQLITE_ERROR;
 	}
 }
@@ -202,7 +203,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		return SQLITE_MISUSE;
 	}
 	if (!pStmt->prepared) {
-		pStmt->db->last_error = "Attempting sqlite3_step() on a non-successfully prepared statement";
+		pStmt->db->last_error = PreservedError("Attempting sqlite3_step() on a non-successfully prepared statement");
 		return SQLITE_ERROR;
 	}
 	pStmt->current_text = nullptr;
@@ -642,7 +643,7 @@ int sqlite3_initialize(void) {
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	if (pStmt) {
 		if (pStmt->result && !pStmt->result->success) {
-			pStmt->db->last_error = string(pStmt->result->error);
+			pStmt->db->last_error = pStmt->result->error;
 			delete pStmt;
 			return SQLITE_ERROR;
 		}
@@ -764,7 +765,7 @@ const char *sqlite3_errmsg(sqlite3 *db) {
 	if (!db) {
 		return "";
 	}
-	return db->last_error.c_str();
+	return db->last_error.message.c_str();
 }
 
 void sqlite3_interrupt(sqlite3 *db) {

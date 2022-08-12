@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/preserved_error.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ public:
 	DUCKDB_API BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
 	                           vector<LogicalType> types, vector<string> names);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
+	DUCKDB_API BaseQueryResult(QueryResultType type, PreservedError error);
 	DUCKDB_API virtual ~BaseQueryResult();
 
 	//! The type of the result (MATERIALIZED or STREAMING)
@@ -43,11 +44,11 @@ public:
 	//! Whether or not execution was successful
 	bool success;
 	//! The error string (in case execution was not successful)
-	string error;
+	PreservedError error;
 
 public:
 	DUCKDB_API bool HasError();
-	DUCKDB_API const string &GetError();
+	DUCKDB_API const PreservedError &GetError();
 	DUCKDB_API idx_t ColumnCount();
 };
 
@@ -60,7 +61,7 @@ public:
 	DUCKDB_API QueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
 	                       vector<LogicalType> types, vector<string> names, ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
-	DUCKDB_API QueryResult(QueryResultType type, string error);
+	DUCKDB_API QueryResult(QueryResultType type, PreservedError error);
 	DUCKDB_API virtual ~QueryResult() override;
 
 	//! Properties from the client context
@@ -83,15 +84,15 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
 
-	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, string &error) {
+	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
 			return success;
 		} catch (std::exception &ex) {
-			error = ex.what();
+			error = PreservedError(ex);
 			return false;
 		} catch (...) {
-			error = "Unknown error in Fetch";
+			error = PreservedError("Unknown error in Fetch");
 			return false;
 		}
 	}

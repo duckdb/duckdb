@@ -6,16 +6,21 @@
 
 namespace duckdb {
 
-Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID) {
+Exception::Exception(const string &msg) : std::exception(), type(ExceptionType::INVALID), raw_message_(msg) {
 	exception_message_ = msg;
 }
 
-Exception::Exception(ExceptionType exception_type, const string &message) : std::exception(), type(exception_type) {
+Exception::Exception(ExceptionType exception_type, const string &message)
+    : std::exception(), type(exception_type), raw_message_(message) {
 	exception_message_ = ExceptionTypeToString(exception_type) + " Error: " + message;
 }
 
 const char *Exception::what() const noexcept {
 	return exception_message_.c_str();
+}
+
+const string &Exception::RawMessage() const {
+	return raw_message_;
 }
 
 bool Exception::UncaughtException() {
@@ -123,6 +128,9 @@ CastException::CastException(const LogicalType &orig_type, const LogicalType &ne
                 "Type " + orig_type.ToString() + " can't be cast as " + new_type.ToString()) {
 }
 
+CastException::CastException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
+}
+
 ValueOutOfRangeException::ValueOutOfRangeException(const int64_t value, const PhysicalType orig_type,
                                                    const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION, "Type " + TypeIdToString(orig_type) + " with value " +
@@ -153,6 +161,9 @@ ValueOutOfRangeException::ValueOutOfRangeException(const PhysicalType var_type, 
                 "The value is too long to fit into type " + TypeIdToString(var_type) + "(" + to_string(length) + ")") {
 }
 
+ValueOutOfRangeException::ValueOutOfRangeException(const string &msg) : Exception(ExceptionType::OUT_OF_RANGE, msg) {
+}
+
 ConversionException::ConversionException(const string &msg) : Exception(ExceptionType::CONVERSION, msg) {
 }
 
@@ -164,6 +175,9 @@ InvalidTypeException::InvalidTypeException(const LogicalType &type, const string
     : Exception(ExceptionType::INVALID_TYPE, "Invalid Type [" + type.ToString() + "]: " + msg) {
 }
 
+InvalidTypeException::InvalidTypeException(const string &msg) : Exception(ExceptionType::INVALID_TYPE, msg) {
+}
+
 TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + TypeIdToString(type_1) + " does not match with " + TypeIdToString(type_2) + ". " + msg) {
@@ -172,6 +186,9 @@ TypeMismatchException::TypeMismatchException(const PhysicalType type_1, const Ph
 TypeMismatchException::TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg)
     : Exception(ExceptionType::MISMATCH_TYPE,
                 "Type " + type_1.ToString() + " does not match with " + type_2.ToString() + ". " + msg) {
+}
+
+TypeMismatchException::TypeMismatchException(const string &msg) : Exception(ExceptionType::MISMATCH_TYPE, msg) {
 }
 
 TransactionException::TransactionException(const string &msg) : Exception(ExceptionType::TRANSACTION, msg) {

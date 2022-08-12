@@ -209,7 +209,8 @@ void Relation::Insert(const string &schema_name, const string &table_name) {
 	auto insert = make_shared<InsertRelation>(shared_from_this(), schema_name, table_name);
 	auto res = insert->Execute();
 	if (!res->success) {
-		throw Exception("Failed to insert into table '" + table_name + "': " + res->error);
+		D_ASSERT(res->error);
+		throw Exception(res->error.type, "Failed to insert into table '" + table_name + "': " + res->error.message);
 	}
 }
 
@@ -227,7 +228,8 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 	auto create = make_shared<CreateTableRelation>(shared_from_this(), schema_name, table_name);
 	auto res = create->Execute();
 	if (!res->success) {
-		throw Exception("Failed to create table '" + table_name + "': " + res->error);
+		D_ASSERT(res->error);
+		throw Exception(res->error.type, "Failed to create table '" + table_name + "': " + res->error.message);
 	}
 }
 
@@ -235,7 +237,8 @@ void Relation::WriteCSV(const string &csv_file) {
 	auto write_csv = make_shared<WriteCSVRelation>(shared_from_this(), csv_file);
 	auto res = write_csv->Execute();
 	if (!res->success) {
-		throw Exception("Failed to write '" + csv_file + "': " + res->error);
+		D_ASSERT(res->error);
+		throw Exception(res->error.type, "Failed to write '" + csv_file + "': " + res->error.message);
 	}
 }
 
@@ -243,7 +246,8 @@ shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool
 	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace, temporary);
 	auto res = view->Execute();
 	if (!res->success) {
-		throw Exception("Failed to create view '" + name + "': " + res->error);
+		D_ASSERT(res->error);
+		throw Exception(res->error.type, "Failed to create view '" + name + "': " + res->error.message);
 	}
 	return shared_from_this();
 }

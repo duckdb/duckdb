@@ -27,7 +27,7 @@ static void test_runner() {
 
 	unordered_set<string> internal_error_messages = {"Unoptimized Result differs from original result!", "INTERNAL"};
 	if (!result->success) {
-		if (TestIsInternalError(internal_error_messages, result->error)) {
+		if (TestIsInternalError(internal_error_messages, result->error.message)) {
 			result->Print();
 			REQUIRE(result->error.empty());
 		}

@@ -43,7 +43,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		PrintLineSep();
 		PrintHeader("Actual result:");
 		result.Print();
-		if (SkipErrorMessage(result.error)) {
+		if (SkipErrorMessage(result.error.message)) {
 			runner.finished_processing_file = true;
 			return;
 		}
@@ -331,7 +331,7 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error);
+		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error.message);
 		if (!internal_error) {
 			error = !error;
 		} else {
@@ -346,7 +346,7 @@ void TestResultHelper::CheckStatementResult() {
 		PrintSQL(sql_query);
 		PrintLineSep();
 		result.Print();
-		if (expect_ok && SkipErrorMessage(result.error)) {
+		if (expect_ok && SkipErrorMessage(result.error.message)) {
 			runner.finished_processing_file = true;
 			return;
 		}

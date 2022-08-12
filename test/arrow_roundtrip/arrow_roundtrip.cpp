@@ -141,7 +141,7 @@ void RunArrowComparison(Connection &con, const string &query, bool big_result = 
 	REQUIRE(arrow_result->type == QueryResultType::MATERIALIZED_RESULT);
 	if (!arrow_result->success) {
 		printf("-------------------------------------\n");
-		printf("Arrow round-trip query error: %s\n", arrow_result->error.c_str());
+		printf("Arrow round-trip query error: %s\n", arrow_result->error.message.c_str());
 		printf("-------------------------------------\n");
 		printf("Query: %s\n", query.c_str());
 		printf("-------------------------------------\n");

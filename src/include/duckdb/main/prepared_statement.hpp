@@ -11,6 +11,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
+#include "duckdb/common/preserved_error.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -37,7 +38,7 @@ public:
 	//! Whether or not the statement was successfully prepared
 	bool success;
 	//! The error message (if success = false)
-	string error;
+	PreservedError error;
 	//! The amount of bound parameters
 	idx_t n_param;
 

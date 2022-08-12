@@ -12,7 +12,8 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_t
 	D_ASSERT(types.size() == names.size());
 }
 
-BaseQueryResult::BaseQueryResult(QueryResultType type, string error) : type(type), success(false), error(move(error)) {
+BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
+    : type(type), success(false), error(move(error)) {
 }
 
 BaseQueryResult::~BaseQueryResult() {
@@ -21,7 +22,7 @@ BaseQueryResult::~BaseQueryResult() {
 bool BaseQueryResult::HasError() {
 	return !success;
 }
-const string &BaseQueryResult::GetError() {
+const PreservedError &BaseQueryResult::GetError() {
 	return error;
 }
 idx_t BaseQueryResult::ColumnCount() {
@@ -34,7 +35,7 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
       client_properties(move(client_properties_p)) {
 }
 
-QueryResult::QueryResult(QueryResultType type, string error) : BaseQueryResult(type, move(error)) {
+QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQueryResult(type, move(error)) {
 }
 
 QueryResult::~QueryResult() {

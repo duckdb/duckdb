@@ -23,7 +23,7 @@ string StreamQueryResult::ToString() {
 		result = HeaderToString();
 		result += "[[STREAM RESULT]]";
 	} else {
-		result = error + "\n";
+		result = error.message + "\n";
 	}
 	return result;
 }
