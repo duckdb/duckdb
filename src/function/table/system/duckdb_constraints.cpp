@@ -128,6 +128,36 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 		     data.constraint_offset++) {
 			auto &constraint = table.constraints[data.constraint_offset];
 			// return values:
+			// constraint_type, VARCHAR
+			// Processing this first due to shortcut (early continue)
+			string constraint_type;
+			switch (constraint->type) {
+			case ConstraintType::CHECK:
+				constraint_type = "CHECK";
+				break;
+			case ConstraintType::UNIQUE: {
+				auto &unique = (UniqueConstraint &)*constraint;
+				constraint_type = unique.is_primary_key ? "PRIMARY KEY" : "UNIQUE";
+				break;
+			}
+			case ConstraintType::NOT_NULL:
+				constraint_type = "NOT NULL";
+				break;
+			case ConstraintType::FOREIGN_KEY: {
+				auto &bound_constraint =
+				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
+				if (bound_constraint.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+					// Those are already covered by PRIMARY KEY and UNIQUE entries
+					continue;
+				}
+				constraint_type = "FOREIGN KEY";
+				break;
+			}
+			default:
+				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
+			}
+			output.SetValue(5, count, Value(constraint_type));
+
 			// schema_name, LogicalType::VARCHAR
 			output.SetValue(0, count, Value(table.schema->name));
 			// schema_oid, LogicalType::BIGINT
@@ -167,34 +197,6 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 					output.SetValue(4, count, Value::BIGINT(known_unique_constraint_offset->second));
 				}
 			}
-
-			// constraint_type, VARCHAR
-			string constraint_type;
-			switch (constraint->type) {
-			case ConstraintType::CHECK:
-				constraint_type = "CHECK";
-				break;
-			case ConstraintType::UNIQUE: {
-				auto &unique = (UniqueConstraint &)*constraint;
-				constraint_type = unique.is_primary_key ? "PRIMARY KEY" : "UNIQUE";
-				break;
-			}
-			case ConstraintType::NOT_NULL:
-				constraint_type = "NOT NULL";
-				break;
-			case ConstraintType::FOREIGN_KEY: {
-				auto &bound_constraint =
-				    (const BoundForeignKeyConstraint &)*table.bound_constraints[data.constraint_offset];
-				if (bound_constraint.info.type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
-					constraint_type = "REFERENCED KEY";
-				} else {
-					constraint_type = "FOREIGN KEY";
-				}
-			} break;
-			default:
-				throw NotImplementedException("Unimplemented constraint for duckdb_constraints");
-			}
-			output.SetValue(5, count, Value(constraint_type));
 
 			// constraint_text, VARCHAR
 			output.SetValue(6, count, Value(constraint->ToString()));
