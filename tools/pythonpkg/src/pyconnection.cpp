@@ -127,7 +127,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 
 DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object params, bool many) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
@@ -199,7 +199,7 @@ DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, data_frame va
 DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name, py::object python_object,
                                                              const idx_t rows_per_tuple) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
@@ -244,7 +244,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
@@ -255,7 +255,7 @@ Use duckdb.query to run arbitrary SQL queries.)";
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
@@ -272,14 +272,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	return make_unique<DuckDBPyRelation>(connection->Table(tname));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(std::move(params))};
 	return make_unique<DuckDBPyRelation>(connection->Values(values));
@@ -287,7 +287,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Values(py::object params) {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	// First check our temporary view
 	if (temporary_views.find(vname) != temporary_views.end()) {
@@ -298,7 +298,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::View(const string &vname) {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fname, py::object params) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 
 	return make_unique<DuckDBPyRelation>(
@@ -321,7 +321,7 @@ static std::string GenerateRandomName() {
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const data_frame &value) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	string name = "df_" + GenerateRandomName();
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
@@ -335,7 +335,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const data_frame &value)
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
@@ -344,7 +344,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
@@ -355,7 +355,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filen
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object, const idx_t rows_per_tuple) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	py::gil_scoped_acquire acquire;
 	string name = "arrow_object_" + GenerateRandomName();
@@ -383,7 +383,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	string name = "substrait_" + GenerateRandomName();
 	vector<Value> params;
@@ -393,7 +393,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto)
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
@@ -402,7 +402,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	vector<Value> params;
 	params.emplace_back(query);
@@ -411,7 +411,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &
 
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	if (!connection) {
-		throw TransactionException("Connection has already been closed");
+		throw ConnectionException("Connection has already been closed");
 	}
 	return connection->GetTableNames(query);
 }

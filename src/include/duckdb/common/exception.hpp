@@ -131,6 +131,16 @@ public:
 	}
 };
 
+class ConnectionException : public StandardException {
+public:
+	DUCKDB_API explicit ConnectionException(const string &msg);
+
+	template <typename... Args>
+	explicit ConnectionException(const string &msg, Args... params)
+	    : ConnectionException(ConstructMessage(msg, params...)) {
+	}
+};
+
 class ParserException : public StandardException {
 public:
 	DUCKDB_API explicit ParserException(const string &msg);

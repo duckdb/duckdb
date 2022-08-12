@@ -186,6 +186,9 @@ OutOfRangeException::OutOfRangeException(const string &msg) : Exception(Exceptio
 CatalogException::CatalogException(const string &msg) : StandardException(ExceptionType::CATALOG, msg) {
 }
 
+ConnectionException::ConnectionException(const string &msg) : StandardException(ExceptionType::CONNECTION, msg) {
+}
+
 ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
 }
 
