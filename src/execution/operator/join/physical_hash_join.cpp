@@ -487,8 +487,8 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 
 	// perform the actual probe
 	if (sink.external) {
-		state.scan_structure =
-		    sink.hash_table->ProbeAndSpill(state.join_keys, input, *state.spill_collection, state.spill_chunk);
+		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, input, *state.spill_collection,
+		                                                      state.spill_append_state, state.spill_chunk);
 	} else {
 		state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	}
@@ -526,7 +526,7 @@ public:
 	}
 
 	idx_t MaxThreads() override {
-		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
+		return 1; // probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
 
 public:

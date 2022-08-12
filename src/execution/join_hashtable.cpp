@@ -1152,7 +1152,9 @@ static void CreateSpillChunk(DataChunk &spill_chunk, DataChunk &keys, DataChunk 
 }
 
 unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChunk &payload,
-                                                       ColumnDataCollection &spill_collection, DataChunk &spill_chunk) {
+                                                       ColumnDataCollection &spill_collection,
+                                                       ColumnDataAppendState &spill_append_state,
+                                                       DataChunk &spill_chunk) {
 	// hash all the keys
 	Vector hashes(LogicalType::HASH);
 	Hash(keys, *FlatVector::IncrementalSelectionVector(), payload.size(), hashes);
@@ -1166,13 +1168,13 @@ unique_ptr<ScanStructure> JoinHashTable::ProbeAndSpill(DataChunk &keys, DataChun
 	                                            radix_bits, partition_end, &true_sel, &false_sel);
 	auto false_count = keys.size() - true_count;
 
-	// slice the stuff CAN'T probe right now and append to spill collection
+	// slice the stuff we CAN'T probe right now and append to spill collection
 	CreateSpillChunk(spill_chunk, keys, payload, hashes);
 	spill_chunk.Slice(false_sel, false_count);
 	spill_chunk.Verify();
-	spill_collection.Append(spill_chunk);
+	spill_collection.Append(spill_append_state, spill_chunk);
 
-	// slice the stuff that we CAN probe right now
+	// slice the stuff we CAN probe right now
 	hashes.Slice(true_sel, true_count);
 	keys.Slice(true_sel, true_count);
 	payload.Slice(true_sel, true_count);

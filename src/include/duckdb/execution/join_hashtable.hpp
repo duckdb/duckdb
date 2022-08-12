@@ -20,9 +20,11 @@
 #include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
+
 class BufferManager;
 class BufferHandle;
 class ColumnDataCollection;
+class ColumnDataAppendState;
 class Pipeline;
 class Event;
 
@@ -282,7 +284,7 @@ public:
 	bool PrepareExternalFinalize();
 	//! Probe whatever we can, sink the rest into a thread-local HT
 	unique_ptr<ScanStructure> ProbeAndSpill(DataChunk &keys, DataChunk &payload, ColumnDataCollection &spill_collection,
-	                                        DataChunk &spill_chunk);
+	                                        ColumnDataAppendState &spill_append_state, DataChunk &spill_chunk);
 
 private:
 	//! First and last partition of the current partitioned round
