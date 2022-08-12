@@ -118,6 +118,8 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 		group_subset.Slice(groups, sel_vectors[r], sel_vector_sizes[r]);
 		if (!payload_types.empty()) {
 			payload_subset.Slice(payload, sel_vectors[r], sel_vector_sizes[r]);
+		} else {
+			payload_subset.SetCardinality(sel_vector_sizes[r]);
 		}
 		hashes_subset.Slice(hashes, sel_vectors[r], sel_vector_sizes[r]);
 

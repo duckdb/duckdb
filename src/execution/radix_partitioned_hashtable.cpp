@@ -40,7 +40,10 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 		// fake a single group with a constant value for aggregation without groups
 		group_types.emplace_back(LogicalType::TINYINT);
 	}
-	op.GetGroupTypes(grouping_set, group_types);
+	for (auto &entry : grouping_set) {
+		D_ASSERT(entry < op.group_types.size());
+		group_types.push_back(op.group_types[entry]);
+	}
 	SetGroupingValues();
 }
 

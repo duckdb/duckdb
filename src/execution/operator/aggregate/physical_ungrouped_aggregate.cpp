@@ -579,7 +579,9 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 		D_ASSERT(distinct_aggregate_data.IsDistinct(i));
 		auto &radix_state = *distinct_aggregate_data.radix_states[i];
 		bool partitioned = radix_table_p->Finalize(context, radix_state);
-		any_partitioned = any_partitioned || partitioned;
+		if (partitioned) {
+			any_partitioned = true;
+		}
 	}
 	if (any_partitioned) {
 		auto new_event = make_shared<DistinctCombineFinalizeEvent>(*this, gstate, &pipeline, context);

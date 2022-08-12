@@ -46,13 +46,6 @@ public:
 		return grouping_functions;
 	}
 
-	void GetGroupTypes(GroupingSet &set, vector<LogicalType> &result) const {
-		for (auto &entry : set) {
-			D_ASSERT(entry < group_types.size());
-			result.push_back(group_types[entry]);
-		}
-	}
-
 	void InitializeGroupby(vector<unique_ptr<Expression>> groups, vector<unique_ptr<Expression>> expressions,
 	                       vector<vector<idx_t>> grouping_functions) {
 		InitializeGroupbyGroups(move(groups));
