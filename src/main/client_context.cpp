@@ -788,6 +788,7 @@ bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query
 		return true;
 	} catch (const Exception &ex) {
 		error = PreservedError(ex);
+		return false;
 	} catch (std::exception &ex) {
 		error = PreservedError(ex);
 		return false;
