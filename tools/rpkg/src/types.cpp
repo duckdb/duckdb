@@ -84,7 +84,7 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		}
 
 		if (i == len) {
-			return RType::UNKNOWN;
+			return RType::LIST_OF_NULLS;
 		}
 
 		for (; i < len; ++i) {

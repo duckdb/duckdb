@@ -390,6 +390,8 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			AppendBLOBSegment(((data_frame)bind_data.df)[(R_xlen_t)src_df_col_idx], v, sexp_offset, this_count);
 			break;
 		}
+		case RType::LIST_OF_NULLS:
+			break;
 		default:
 			cpp11::stop("rapi_execute: Unsupported column type for scan");
 		}
