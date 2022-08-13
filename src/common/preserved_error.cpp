@@ -16,7 +16,7 @@ PreservedError::PreservedError(const Exception &exception)
 }
 
 // From std::exception
-PreservedError::PreservedError(std::exception &exception)
+PreservedError::PreservedError(const std::exception &exception)
     : initialized(true), type(ExceptionType::INVALID), message(exception.what()) {
 }
 

@@ -16,7 +16,7 @@ namespace duckdb {
 class PreservedError {
 public:
 	DUCKDB_API PreservedError();
-	DUCKDB_API explicit PreservedError(std::exception &exception);
+	DUCKDB_API explicit PreservedError(const std::exception &exception);
 	DUCKDB_API explicit PreservedError(const string &message);
 	DUCKDB_API PreservedError(const Exception &exception);
 
