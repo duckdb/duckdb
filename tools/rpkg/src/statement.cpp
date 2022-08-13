@@ -109,7 +109,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	relation_stmt->query = "";
 	auto stmt = conn->conn->Prepare(move(relation_stmt));
 	if (!stmt->success) {
-		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.message.c_str());
+		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.Message().c_str());
 	}
 
 	return construct_retlist(move(stmt), "", 0);
@@ -131,12 +131,13 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 		auto res = conn->conn->Query(move(statements[i]));
 		if (!res->success) {
 			cpp11::stop("rapi_prepare: Failed to execute statement %s\nError: %s", query.c_str(),
-			            res->error.message.c_str());
+			            res->error.Message().c_str());
 		}
 	}
 	auto stmt = conn->conn->Prepare(move(statements.back()));
 	if (!stmt->success) {
-		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(), stmt->error.message.c_str());
+		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(),
+		            stmt->error.Message().c_str());
 	}
 	auto n_param = stmt->n_param;
 	return construct_retlist(move(stmt), query, n_param);
@@ -718,11 +719,11 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 		R_CheckUserInterrupt();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		cpp11::stop("rapi_execute: Failed to run query\nError: %s", pending_query->error.message.c_str());
+		cpp11::stop("rapi_execute: Failed to run query\nError: %s", pending_query->error.Message().c_str());
 	}
 	auto generic_result = pending_query->Execute();
 	if (!generic_result->success) {
-		cpp11::stop("rapi_execute: Failed to run query\nError: %s", generic_result->error.message.c_str());
+		cpp11::stop("rapi_execute: Failed to run query\nError: %s", generic_result->error.Message().c_str());
 	}
 
 	if (arrow) {

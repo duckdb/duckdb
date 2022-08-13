@@ -35,7 +35,7 @@ string MaterializedQueryResult::ToString() {
 		result += "\n";
 	} else {
 		D_ASSERT(error);
-		result = error.message + "\n";
+		result = error.Message() + "\n";
 	}
 	return result;
 }

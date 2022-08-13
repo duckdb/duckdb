@@ -765,7 +765,7 @@ const char *sqlite3_errmsg(sqlite3 *db) {
 	if (!db) {
 		return "";
 	}
-	return db->last_error.message.c_str();
+	return db->last_error.Message().c_str();
 }
 
 void sqlite3_interrupt(sqlite3 *db) {

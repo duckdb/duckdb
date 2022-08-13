@@ -90,7 +90,7 @@ public:
 	DUCKDB_API const char *what() const noexcept override;
 	DUCKDB_API const string &RawMessage() const;
 
-	DUCKDB_API string ExceptionTypeToString(ExceptionType type);
+	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {

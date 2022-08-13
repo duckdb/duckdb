@@ -111,6 +111,8 @@ unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &lock, Exec
 		result.error = PreservedError(ex);
 		auto &db = DatabaseInstance::GetDatabase(*this);
 		db.Invalidate();
+	} catch (const Exception &ex) {
+		result.error = PreservedError(ex);
 	} catch (std::exception &ex) {
 		result.error = PreservedError(ex);
 	} catch (...) { // LCOV_EXCL_START
@@ -508,6 +510,8 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 			throw Exception("Cannot prepare multiple statements at once!");
 		}
 		return PrepareInternal(*lock, move(statements[0]));
+	} catch (const Exception &ex) {
+		return make_unique<PreparedStatement>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		return make_unique<PreparedStatement>(PreservedError(ex));
 	}
@@ -1036,13 +1040,11 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		try {
 			auto prepare_result = RunStatementInternal(lock, string(), move(verifier.prepare_statement), false, false);
 			if (!prepare_result->success) {
-				prepare_result->error.message = "Failed prepare during verify: " + prepare_result->error.message;
-				throw prepare_result->error.ToException();
+				throw prepare_result->error.ToException("Failed prepare during verify: ");
 			}
 			auto execute_result = RunStatementInternal(lock, string(), move(verifier.execute_statement), false, false);
 			if (!execute_result->success) {
-				execute_result->error.message = "Failed execute during verify: " + execute_result->error.message;
-				throw execute_result->error.ToException();
+				throw execute_result->error.ToException("Failed execute during verify: ");
 			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
 		} catch (std::exception &ex) {
@@ -1072,7 +1074,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		if (error) {
 			interrupted = false;
 			return PreservedError("Explain result differs from original result!\nEXPLAIN failed but query did not (" +
-			                      error.message + ")");
+			                      error.Message() + ")");
 		}
 	}
 

@@ -14,7 +14,7 @@ using namespace duckdb;
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
 		if (!result->success) {                                                                                        \
-			return result->error.message;                                                                              \
+			return result->error.Message();                                                                            \
 		}          /* FIXME */                                                                                         \
 		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),                                            \
 		              true);  */                                                                                       \

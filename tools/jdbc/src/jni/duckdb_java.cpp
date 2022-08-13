@@ -330,7 +330,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 		try {
 			auto res = conn_ref->Query(move(statements[i]));
 			if (!res->success) {
-				env->ThrowNew(J_SQLException, res->error.message.c_str());
+				env->ThrowNew(J_SQLException, res->error.Message().c_str());
 				return nullptr;
 			}
 		} catch (const std::exception &ex) {
@@ -342,7 +342,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	auto stmt_ref = new StatementHolder();
 	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
 	if (!stmt_ref->stmt->success) {
-		string error_msg = string(stmt_ref->stmt->error.message);
+		string error_msg = string(stmt_ref->stmt->error.Message());
 		stmt_ref->stmt = nullptr;
 
 		// No success, so it must be deleted
@@ -439,7 +439,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 
 	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, false);
 	if (!res_ref->res->success) {
-		string error_msg = string(res_ref->res->error.message);
+		string error_msg = string(res_ref->res->error.Message());
 		res_ref->res = nullptr;
 		delete res_ref;
 		env->ThrowNew(J_SQLException, error_msg.c_str());

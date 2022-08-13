@@ -22,7 +22,7 @@ BaseQueryResult::~BaseQueryResult() {
 bool BaseQueryResult::HasError() {
 	return !success;
 }
-const PreservedError &BaseQueryResult::GetError() {
+PreservedError &BaseQueryResult::GetError() {
 	return error;
 }
 idx_t BaseQueryResult::ColumnCount() {

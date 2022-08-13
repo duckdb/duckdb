@@ -252,7 +252,7 @@ Connection.prototype.register = function (name, return_type, fun) {
             console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
-                msg = error.message
+                msg = error.Message()
             }
             throw { name: 'DuckDB-UDF-Exception', message: msg };
         }

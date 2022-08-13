@@ -43,12 +43,12 @@ public:
 	vector<string> names;
 	//! Whether or not execution was successful
 	bool success;
-	//! The error string (in case execution was not successful)
+	//! The error (in case execution was not successful)
 	PreservedError error;
 
 public:
 	DUCKDB_API bool HasError();
-	DUCKDB_API const PreservedError &GetError();
+	DUCKDB_API PreservedError &GetError();
 	DUCKDB_API idx_t ColumnCount();
 };
 

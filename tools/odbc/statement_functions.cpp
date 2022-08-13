@@ -53,7 +53,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
-			DiagRecord diag_rec(stmt->stmt->error.message, SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
+			DiagRecord diag_rec(stmt->stmt->error.Message(), SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
 			                    stmt->dbc->GetDataSourceName());
 			throw OdbcException("PrepareStmt", SQL_ERROR, diag_rec);
 		}
@@ -108,7 +108,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	stmt->res = stmt->stmt->Execute(values);
 
 	if (!stmt->res->success) {
-		duckdb::DiagRecord diag_rec(stmt->res->GetError().message, duckdb::SQLStateType::GENERAL_ERROR,
+		duckdb::DiagRecord diag_rec(stmt->res->GetError().Message(), duckdb::SQLStateType::GENERAL_ERROR,
 		                            stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("SingleExecuteStmt", SQL_ERROR, diag_rec);
 	}

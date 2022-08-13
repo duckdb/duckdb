@@ -346,7 +346,7 @@ struct ExecTask : public Task {
 	void Callback() override {
 		auto env = object.Env();
 		Napi::HandleScope scope(env);
-		callback.Value().MakeCallback(object.Value(), {success ? env.Null() : Napi::String::New(env, error.message)});
+		callback.Value().MakeCallback(object.Value(), {success ? env.Null() : Napi::String::New(env, error.Message())});
 	};
 
 	std::string sql;

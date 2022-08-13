@@ -46,7 +46,7 @@ const char *duckdb_pending_error(duckdb_pending_result pending_result) {
 	if (!wrapper->statement) {
 		return nullptr;
 	}
-	return wrapper->statement->error.message.c_str();
+	return wrapper->statement->error.Message().c_str();
 }
 
 duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result) {

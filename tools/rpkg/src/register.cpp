@@ -40,7 +40,7 @@ using namespace duckdb;
 	static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = R_NilValue;
 	auto res = conn->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
 	if (!res->success) {
-		cpp11::stop(res->error.message.c_str());
+		cpp11::stop(res->error.Message().c_str());
 	}
 }
 

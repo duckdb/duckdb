@@ -43,7 +43,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 		PrintLineSep();
 		PrintHeader("Actual result:");
 		result.Print();
-		if (SkipErrorMessage(result.error.message)) {
+		if (SkipErrorMessage(result.error.Message())) {
 			runner.finished_processing_file = true;
 			return;
 		}
@@ -331,7 +331,7 @@ void TestResultHelper::CheckStatementResult() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error.message);
+		bool internal_error = TestIsInternalError(runner.always_fail_error_messages, result.error.Message());
 		if (!internal_error) {
 			error = !error;
 		} else {
@@ -346,7 +346,7 @@ void TestResultHelper::CheckStatementResult() {
 		PrintSQL(sql_query);
 		PrintLineSep();
 		result.Print();
-		if (expect_ok && SkipErrorMessage(result.error.message)) {
+		if (expect_ok && SkipErrorMessage(result.error.Message())) {
 			runner.finished_processing_file = true;
 			return;
 		}
@@ -373,7 +373,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 	auto csv_result =
 	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
 	if (!csv_result->success) {
-		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error.message);
+		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error.Message());
 		PrintErrorHeader(error.c_str());
 		FAIL_LINE(file_name, query_line, 0);
 	}

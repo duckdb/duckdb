@@ -15,18 +15,34 @@ namespace duckdb {
 
 class PreservedError {
 public:
+	//! Not initialized, default constructor
 	DUCKDB_API PreservedError();
+	//! From std::exception
 	DUCKDB_API explicit PreservedError(const std::exception &exception);
-	DUCKDB_API explicit PreservedError(const string &message);
+	//! From a raw string
+	DUCKDB_API explicit PreservedError(const string &raw_message);
+	//! From an Exception
 	DUCKDB_API PreservedError(const Exception &exception);
 
-	bool initialized;
-	ExceptionType type;
-	string message;
-
 public:
-	DUCKDB_API Exception ToException() const;
+	//! Allows adding addition information to the message
+	DUCKDB_API PreservedError &AddToMessage(const string &prepended_message);
+	//! Recreates the exception that was preserved
+	DUCKDB_API Exception ToException(const string &prepended_message = "") const;
+	//! Used in clients like C-API, creates the final message and returns a pointer to the internal c_str
+	DUCKDB_API const string &Message();
+	//! Let's us do things like 'if (error)'
 	operator bool();
+
+private:
+	//! Whether this PreservedError contains an exception or not
+	bool initialized;
+	//! The ExceptionType of the preserved exception
+	ExceptionType type;
+	//! The message the exception was constructed with (does not contain the Exception Type)
+	string raw_message;
+	//! The final message (stored in the preserved error for compatibility reasons with C-API
+	string final_message;
 };
 
 } // namespace duckdb

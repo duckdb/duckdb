@@ -154,7 +154,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	}
 	D_ASSERT(stream->private_data);
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
-	return my_stream->last_error.message.c_str();
+	return my_stream->last_error.Message().c_str();
 }
 
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)

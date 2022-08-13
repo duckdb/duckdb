@@ -210,7 +210,8 @@ void Relation::Insert(const string &schema_name, const string &table_name) {
 	auto res = insert->Execute();
 	if (!res->success) {
 		D_ASSERT(res->error);
-		throw Exception(res->error.type, "Failed to insert into table '" + table_name + "': " + res->error.message);
+		const string prepended_message = "Failed to insert into table '" + table_name + "': ";
+		throw res->error.ToException(prepended_message);
 	}
 }
 
@@ -229,7 +230,8 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 	auto res = create->Execute();
 	if (!res->success) {
 		D_ASSERT(res->error);
-		throw Exception(res->error.type, "Failed to create table '" + table_name + "': " + res->error.message);
+		const string prepended_message = "Failed to create table '" + table_name + "': ";
+		throw res->error.ToException(prepended_message);
 	}
 }
 
@@ -238,7 +240,8 @@ void Relation::WriteCSV(const string &csv_file) {
 	auto res = write_csv->Execute();
 	if (!res->success) {
 		D_ASSERT(res->error);
-		throw Exception(res->error.type, "Failed to write '" + csv_file + "': " + res->error.message);
+		const string prepended_message = "Failed to write '" + csv_file + "': ";
+		throw res->error.ToException(prepended_message);
 	}
 }
 
@@ -247,7 +250,8 @@ shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool
 	auto res = view->Execute();
 	if (!res->success) {
 		D_ASSERT(res->error);
-		throw Exception(res->error.type, "Failed to create view '" + name + "': " + res->error.message);
+		const string prepended_message = "Failed to create view '" + name + "': ";
+		throw res->error.ToException(prepended_message);
 	}
 	return shared_from_this();
 }

@@ -29,7 +29,7 @@ const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 	if (!wrapper || !wrapper->statement || wrapper->statement->success) {
 		return nullptr;
 	}
-	return wrapper->statement->error.message.c_str();
+	return wrapper->statement->error.Message().c_str();
 }
 
 idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {

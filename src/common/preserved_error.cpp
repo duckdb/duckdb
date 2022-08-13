@@ -6,26 +6,34 @@
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
-// Default constructor
+
 PreservedError::PreservedError() : initialized(false) {
 }
 
-// From Exception
 PreservedError::PreservedError(const Exception &exception)
-    : initialized(true), type(exception.type), message(exception.RawMessage()) {
+    : initialized(true), type(exception.type), raw_message(exception.RawMessage()) {
 }
 
-// From std::exception
 PreservedError::PreservedError(const std::exception &exception)
-    : initialized(true), type(ExceptionType::INVALID), message(exception.what()) {
+    : initialized(true), type(ExceptionType::INVALID), raw_message(exception.what()) {
 }
 
-// From std::string
 PreservedError::PreservedError(const string &message)
-    : initialized(true), type(ExceptionType::INVALID), message(message) {
+    : initialized(true), type(ExceptionType::INVALID), raw_message(message) {
 }
 
-Exception PreservedError::ToException() const {
+const string &PreservedError::Message() {
+	final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
+	return final_message;
+}
+
+PreservedError &PreservedError::AddToMessage(const string &prepended_message) {
+	raw_message = prepended_message + raw_message;
+	return *this;
+}
+
+Exception PreservedError::ToException(const string &prepended_message) const {
+	string message = prepended_message + this->raw_message;
 	switch (type) {
 	case ExceptionType::OUT_OF_RANGE:
 		return OutOfRangeException(message);

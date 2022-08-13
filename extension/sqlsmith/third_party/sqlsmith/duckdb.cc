@@ -161,7 +161,7 @@ void dut_duckdb::test(const std::string &stmt) {
 	interrupt_thread.join();
 
 	if (!result->success) {
-		auto error = result->error.message.c_str();
+		auto error = result->error.Message().c_str();
 		if (regex_match(error, e_internal)) {
 			throw dut::broken(error);
 		}

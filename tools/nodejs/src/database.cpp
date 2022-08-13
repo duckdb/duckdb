@@ -71,7 +71,7 @@ struct OpenTask : public Task {
 
 		std::vector<napi_value> args;
 		if (!success) {
-			args.push_back(Utils::CreateError(env, error.message));
+			args.push_back(Utils::CreateError(env, error.Message()));
 		} else {
 			args.push_back(env.Null());
 		}

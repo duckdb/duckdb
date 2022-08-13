@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
 			}
 
 		} else {
-			j = {{"query", q}, {"success", state.res->success}, {"error", state.res->error.message}};
+			j = {{"query", q}, {"success", state.res->success}, {"error", state.res->error.Message()}};
 		}
 
 		serialize_json(req, resp, j);

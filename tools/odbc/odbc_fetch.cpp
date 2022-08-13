@@ -67,7 +67,7 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			auto chunk = stmt->res->Fetch();
 			if (!stmt->res->success) {
 				stmt->open = false;
-				stmt->error_messages.emplace_back(stmt->res->error.message);
+				stmt->error_messages.emplace_back(stmt->res->error.Message());
 				return SQL_ERROR;
 			}
 			if (!chunk) {
