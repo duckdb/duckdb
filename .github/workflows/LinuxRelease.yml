@@ -47,7 +47,7 @@ jobs:
       FORCE_WARN_UNUSED: 1
       STATIC_LIBCPP: 1
       STATIC_ODBC: 1
-      AARCH_CROSS_COMPILE: ${{ matrix.arch == 'aarch64' }}
+      AARCH_CROSS_COMPILE: ${{ matrix.arch == 'aarch64' && 1 || 0 }}
       CUSTOM_CMAKE_FLAGS: ${{ matrix.arch == 'aarch64' && '-DDUCKDB_JDK_PATH=/tmp/jdk1.8.0_331 -DSTATIC_LINK_UNITTEST=1' || '' }}
 
     steps:
