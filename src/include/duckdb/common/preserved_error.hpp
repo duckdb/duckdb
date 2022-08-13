@@ -15,10 +15,10 @@ namespace duckdb {
 
 class PreservedError {
 public:
-	PreservedError();
-	explicit PreservedError(std::exception &exception);
-	explicit PreservedError(const string &message);
-	PreservedError(const Exception &exception);
+	DUCKDB_API PreservedError();
+	DUCKDB_API explicit PreservedError(std::exception &exception);
+	DUCKDB_API explicit PreservedError(const string &message);
+	DUCKDB_API PreservedError(const Exception &exception);
 
 	bool initialized;
 	ExceptionType type;
@@ -27,7 +27,7 @@ public:
 public:
 	//! To comply with string usage
 	bool empty() const;
-	Exception ToException() const;
+	DUCKDB_API Exception ToException() const;
 	operator bool();
 };
 
