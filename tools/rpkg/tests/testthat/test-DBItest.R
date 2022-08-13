@@ -42,8 +42,6 @@ DBItest::test_all(c(
   "append_roundtrip_factor",
   "bind_factor",
 
-  "append_roundtrip_raw",
-  "append_roundtrip_blob",
   "bind_blob",
   "bind_raw",
 
