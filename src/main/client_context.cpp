@@ -182,6 +182,8 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 		auto &db = DatabaseInstance::GetDatabase(*this);
 		db.Invalidate();
 		error = PreservedError(ex);
+	} catch (const Exception &ex) {
+		error = PreservedError(ex);
 	} catch (std::exception &ex) {
 		error = PreservedError(ex);
 	} catch (...) { // LCOV_EXCL_START
@@ -405,6 +407,8 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			query_progress = active_query->progress_bar->GetCurrentPercentage();
 		}
 		return result;
+	} catch (const Exception &ex) {
+		result.error = PreservedError(ex);
 	} catch (std::exception &ex) {
 		result.error = PreservedError(ex);
 	} catch (...) { // LCOV_EXCL_START
@@ -524,6 +528,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryPreparedInternal(Clien
                                                                            PendingQueryParameters parameters) {
 	try {
 		InitialCleanup(lock);
+	} catch (const Exception &ex) {
+		return make_unique<PendingQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		return make_unique<PendingQueryResult>(PreservedError(ex));
 	}
@@ -606,6 +612,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			PreservedError error;
 			try {
 				error = VerifyQuery(lock, query, move(statement));
+			} catch (const Exception &ex) {
+				error = PreservedError(ex);
 			} catch (std::exception &ex) {
 				error = PreservedError(ex);
 			}
@@ -646,6 +654,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		db.Invalidate();
 		result = make_unique<PendingQueryResult>(PreservedError(ex));
 		return result;
+	} catch (const Exception &ex) {
+		return make_unique<PendingQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		return make_unique<PendingQueryResult>(PreservedError(ex));
 	}
@@ -676,6 +686,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		// fatal exceptions invalidate the entire database
 		auto &db = DatabaseInstance::GetDatabase(*this);
 		db.Invalidate();
+		result = make_unique<PendingQueryResult>(PreservedError(ex));
+	} catch (const Exception &ex) {
+		// other types of exceptions do invalidate the current transaction
 		result = make_unique<PendingQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		// other types of exceptions do invalidate the current transaction
@@ -773,6 +786,8 @@ bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query
 		// parse the query and transform it into a set of statements
 		result = ParseStatementsInternal(lock, query);
 		return true;
+	} catch (const Exception &ex) {
+		error = PreservedError(ex);
 	} catch (std::exception &ex) {
 		error = PreservedError(ex);
 		return false;
@@ -1027,6 +1042,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 				any_failed = true;
 			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result)));
+		} catch (const Exception &ex) {
+			any_failed = true;
+			results.push_back(make_unique<MaterializedQueryResult>(PreservedError(ex)));
 		} catch (std::exception &ex) {
 			any_failed = true;
 			results.push_back(make_unique<MaterializedQueryResult>(PreservedError(ex)));
@@ -1049,10 +1067,12 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 				throw execute_result->error.ToException("Failed execute during verify: ");
 			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
-		} catch (std::exception &ex) {
-			if (!StringUtil::Contains(ex.what(), "Parameter Not Allowed Error")) {
+		} catch (const Exception &ex) {
+			if (ex.type != ExceptionType::PARAMETER_NOT_ALLOWED) {
 				results.push_back(make_unique<MaterializedQueryResult>(PreservedError(ex)));
 			}
+		} catch (std::exception &ex) {
+			results.push_back(make_unique<MaterializedQueryResult>(PreservedError(ex)));
 		}
 		RunStatementInternal(lock, string(), move(verifier.dealloc_statement), false, false);
 
@@ -1070,7 +1090,9 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 			if (!result->success) {
 				error = result->error;
 			}
-		} catch (std::exception &ex) { // LCOV_EXCL_START
+		} catch (const Exception &ex) { // LCOV_EXCL_START
+			error = PreservedError(ex);
+		} catch (std::exception &ex) {
 			error = PreservedError(ex);
 		} // LCOV_EXCL_STOP
 		if (error) {

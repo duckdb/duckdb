@@ -88,6 +88,9 @@ public:
 		try {
 			result = Fetch();
 			return success;
+		} catch (const Exception &ex) {
+			error = PreservedError(ex);
+			return false;
 		} catch (std::exception &ex) {
 			error = PreservedError(ex);
 			return false;

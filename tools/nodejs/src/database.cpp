@@ -60,6 +60,8 @@ struct OpenTask : public Task {
 			extension.Load(*Get<Database>().database);
 			success = true;
 
+		} catch (const Exception &ex) {
+			error = duckdb::PreservedError(ex);
 		} catch (std::exception &ex) {
 			error = duckdb::PreservedError(ex);
 		}

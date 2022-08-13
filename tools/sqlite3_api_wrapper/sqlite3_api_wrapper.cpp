@@ -100,6 +100,12 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		}
 		pDb->db = make_unique<DuckDB>(filename, &config);
 		pDb->con = make_unique<Connection>(*pDb->db);
+	} catch (const Exception &ex) {
+		if (pDb) {
+			pDb->last_error = PreservedError(ex);
+			pDb->errCode = SQLITE_ERROR;
+		}
+		rc = SQLITE_ERROR;
 	} catch (std::exception &ex) {
 		if (pDb) {
 			pDb->last_error = PreservedError(ex);
@@ -191,6 +197,9 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		*ppStmt = stmt.release();
 		return SQLITE_OK;
+	} catch (const Exception &ex) {
+		db->last_error = PreservedError(ex);
+		return SQLITE_ERROR;
 	} catch (std::exception &ex) {
 		db->last_error = PreservedError(ex);
 		return SQLITE_ERROR;

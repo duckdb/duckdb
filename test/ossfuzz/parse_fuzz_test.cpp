@@ -15,7 +15,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 		auto result = con.Query(input);
 		if (!result->success) {
 			for (auto &internal_error : internal_error_messages) {
-				if (duckdb::StringUtil::Contains(result->error, internal_error)) {
+				if (duckdb::StringUtil::Contains(result->error.Message(), internal_error)) {
 					return 1;
 				}
 			}

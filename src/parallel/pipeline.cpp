@@ -179,11 +179,11 @@ void Pipeline::Finalize(Event &event) {
 		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);
 		sink->sink_state->state = sink_state;
 	} catch (Exception &ex) { // LCOV_EXCL_START
-		executor.PushError(ex.type, ex.what());
+		executor.PushError(PreservedError(ex));
 	} catch (std::exception &ex) {
-		executor.PushError(ExceptionType::UNKNOWN_TYPE, ex.what());
+		executor.PushError(PreservedError(ex));
 	} catch (...) {
-		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
+		executor.PushError(PreservedError("Unknown exception in Finalize!"));
 	} // LCOV_EXCL_STOP
 }
 

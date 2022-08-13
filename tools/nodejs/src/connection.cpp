@@ -188,6 +188,8 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 			}
 		}
 		}
+	} catch (const duckdb::Exception &e) {
+		jsargs->error = duckdb::PreservedError(e);
 	} catch (const std::exception &e) {
 		jsargs->error = duckdb::PreservedError(e);
 	}

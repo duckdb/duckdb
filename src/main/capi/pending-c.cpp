@@ -17,6 +17,8 @@ duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statemen
 	auto result = new PendingStatementWrapper();
 	try {
 		result->statement = wrapper->statement->PendingQuery(wrapper->values, false);
+	} catch (const duckdb::Exception &ex) {
+		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {
 		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
@@ -63,6 +65,10 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	PendingExecutionResult return_value;
 	try {
 		return_value = wrapper->statement->ExecuteTask();
+	} catch (const duckdb::Exception &ex) {
+		wrapper->statement->success = false;
+		wrapper->statement->error = duckdb::PreservedError(ex);
+		return DUCKDB_PENDING_ERROR;
 	} catch (std::exception &ex) {
 		wrapper->statement->success = false;
 		wrapper->statement->error = duckdb::PreservedError(ex);
