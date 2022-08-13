@@ -204,7 +204,7 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	if (result && result->success) {
 		// if an error occurred while committing report it in the result
 		result->error = error;
-		result->success = error.empty();
+		result->success = !error;
 	}
 	D_ASSERT(!active_query);
 }
@@ -603,7 +603,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 			} catch (std::exception &ex) {
 				error = PreservedError(ex);
 			}
-			if (!error.empty()) {
+			if (error) {
 				// error in verifying query
 				return make_unique<PendingQueryResult>(error);
 			}
@@ -1069,7 +1069,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		} catch (std::exception &ex) { // LCOV_EXCL_START
 			error = PreservedError(ex);
 		} // LCOV_EXCL_STOP
-		if (!error.empty()) {
+		if (error) {
 			interrupted = false;
 			return PreservedError("Explain result differs from original result!\nEXPLAIN failed but query did not (" +
 			                      error.message + ")");

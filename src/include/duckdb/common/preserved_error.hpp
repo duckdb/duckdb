@@ -25,8 +25,6 @@ public:
 	string message;
 
 public:
-	//! To comply with string usage
-	bool empty() const;
 	DUCKDB_API Exception ToException() const;
 	operator bool();
 };

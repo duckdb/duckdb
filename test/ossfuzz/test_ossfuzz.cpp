@@ -29,7 +29,7 @@ static void test_runner() {
 	if (!result->success) {
 		if (TestIsInternalError(internal_error_messages, result->error.message)) {
 			result->Print();
-			REQUIRE(result->error.empty());
+			REQUIRE(!result->error);
 		}
 	}
 

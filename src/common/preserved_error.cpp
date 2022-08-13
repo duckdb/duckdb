@@ -78,8 +78,4 @@ PreservedError::operator bool() {
 	return initialized;
 }
 
-bool PreservedError::empty() const {
-	return !initialized;
-}
-
 } // namespace duckdb

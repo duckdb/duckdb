@@ -61,7 +61,7 @@ struct OpenTask : public Task {
 			success = true;
 
 		} catch (std::exception &ex) {
-			error = PreservedError(ex);
+			error = duckdb::PreservedError(ex);
 		}
 	}
 

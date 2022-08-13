@@ -129,7 +129,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	idx_t result_count;
 	PreservedError error;
 	if (!ArrowUtil::TryFetchChunk(&result, my_stream->batch_size, out, result_count, error)) {
-		D_ASSERT(!error.empty());
+		D_ASSERT(error);
 		my_stream->last_error = error;
 		return -1;
 	}
