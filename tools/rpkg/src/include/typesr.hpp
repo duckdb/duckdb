@@ -37,6 +37,7 @@ enum class RType {
 	TIME_DAYS_INTEGER,
 	TIME_WEEKS_INTEGER,
 	INTEGER64,
+	BLOB,
 };
 
 struct RApiTypes {
