@@ -9,11 +9,13 @@ find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-include(CheckCXXCompilerFlag)
-check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
-if(COMPILER_SUPPORTS_MARCH_NATIVE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
-endif()
+# Note: disabled march=native for now
+# TODO add march=native flag to duckdb
+#include(CheckCXXCompilerFlag)
+#check_cxx_compiler_flag("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+#if(COMPILER_SUPPORTS_MARCH_NATIVE)
+#    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+#endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL Release)
     set_source_files_properties(
