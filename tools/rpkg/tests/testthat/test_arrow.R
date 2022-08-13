@@ -60,13 +60,13 @@ test_that("to_duckdb", {
       select(int, lgl, dbl) %>%
       to_duckdb(con = con) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE)) %>%
       collect() %>%
       arrange(mean_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE)) %>%
       arrange(mean_int)
   )
 
@@ -76,13 +76,13 @@ test_that("to_duckdb", {
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       to_duckdb(con = con) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE)) %>%
       collect() %>%
       arrange(mean_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(mean_int = mean(int, na.rm = TRUE)) %>%
       arrange(mean_int)
   )
 })
