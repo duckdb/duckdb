@@ -16,7 +16,8 @@ DBItest::make_context(
     placeholder_pattern = "?",
     timestamp_cast = function(x) sprintf("CAST('%s' AS TIMESTAMP)", x),
     date_cast = function(x) sprintf("CAST('%s' AS DATE)", x),
-    time_cast = function(x) sprintf("CAST('%s' AS TIME)", x)
+    time_cast = function(x) sprintf("CAST('%s' AS TIME)", x),
+    blob_cast = function(x) sprintf("%s::BLOB", x)
   ),
   name = "duckdb"
 )
