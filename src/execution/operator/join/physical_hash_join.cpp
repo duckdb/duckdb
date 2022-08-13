@@ -525,7 +525,7 @@ public:
 	}
 
 	idx_t MaxThreads() override {
-		return 1; // probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
+		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
 
 public:
