@@ -489,7 +489,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 		InitialCleanup(*lock);
 		return PrepareInternal(*lock, move(statement));
 	} catch (std::exception &ex) {
-		return make_unique<PreparedStatement>(ex.what());
+		return make_unique<PreparedStatement>(PreservedError(ex));
 	}
 }
 
@@ -509,7 +509,7 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 		}
 		return PrepareInternal(*lock, move(statements[0]));
 	} catch (std::exception &ex) {
-		return make_unique<PreparedStatement>(ex.what());
+		return make_unique<PreparedStatement>(PreservedError(ex));
 	}
 }
 

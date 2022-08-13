@@ -11,7 +11,7 @@ PreparedStatement::PreparedStatement(shared_ptr<ClientContext> context, shared_p
 	D_ASSERT(data || !success);
 }
 
-PreparedStatement::PreparedStatement(string error) : context(nullptr), success(false), error(move(error)) {
+PreparedStatement::PreparedStatement(PreservedError error) : context(nullptr), success(false), error(move(error)) {
 }
 
 PreparedStatement::~PreparedStatement() {

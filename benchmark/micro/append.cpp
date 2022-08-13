@@ -211,7 +211,7 @@ string GetQuery() override {
 }
 string VerifyResult(QueryResult *result) override {
 	if (!result->success) {
-		return result->error;
+		return result->error.message;
 	}
 	return string();
 }

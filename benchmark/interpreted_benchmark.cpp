@@ -366,7 +366,7 @@ string InterpretedBenchmark::GetDatabasePath() {
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (!state.result->success) {
-		return state.result->error;
+		return state.result->error.message;
 	}
 	if (result_column_count == 0) {
 		// no result specified

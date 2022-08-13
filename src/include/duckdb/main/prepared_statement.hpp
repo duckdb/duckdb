@@ -24,7 +24,7 @@ public:
 	DUCKDB_API PreparedStatement(shared_ptr<ClientContext> context, shared_ptr<PreparedStatementData> data,
 	                             string query, idx_t n_param);
 	//! Create a prepared statement that was not successfully prepared
-	DUCKDB_API explicit PreparedStatement(string error);
+	DUCKDB_API explicit PreparedStatement(PreservedError error);
 
 	DUCKDB_API ~PreparedStatement();
 
