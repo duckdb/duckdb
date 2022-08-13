@@ -189,7 +189,7 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 		}
 		}
 	} catch (const std::exception &e) {
-		jsargs->error = PreservedError(e);
+		jsargs->error = duckdb::PreservedError(e);
 	}
 	jsargs->done = true;
 }
@@ -219,7 +219,7 @@ struct RegisterTask : public Task {
 			while (!jsargs.done) {
 				std::this_thread::yield();
 			}
-			if (!jsargs.error.empty()) {
+			if (jsargs.error) {
 				throw jsargs.error.ToException();
 			}
 		};
@@ -338,7 +338,7 @@ struct ExecTask : public Task {
 			}
 		} catch (duckdb::ParserException &e) {
 			success = false;
-			error = PreservedError(e);
+			error = duckdb::PreservedError(e);
 			return;
 		}
 	}
