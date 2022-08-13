@@ -43,7 +43,7 @@ using namespace duckdb;
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
 		if (!result->success) {                                                                                        \
-			return result->error;                                                                                      \
+			return result->error.message;                                                                              \
 		}                                                                                                              \
 		return string();                                                                                               \
 	}                                                                                                                  \

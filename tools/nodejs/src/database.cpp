@@ -61,7 +61,7 @@ struct OpenTask : public Task {
 			success = true;
 
 		} catch (std::exception &ex) {
-			error = ex.what();
+			error = PreservedError(ex);
 		}
 	}
 
@@ -71,7 +71,7 @@ struct OpenTask : public Task {
 
 		std::vector<napi_value> args;
 		if (!success) {
-			args.push_back(Utils::CreateError(env, error));
+			args.push_back(Utils::CreateError(env, error.message));
 		} else {
 			args.push_back(env.Null());
 		}
@@ -83,7 +83,7 @@ struct OpenTask : public Task {
 
 	std::string filename;
 	duckdb::DBConfig duckdb_config;
-	std::string error = "";
+	duckdb::PreservedError error;
 	bool success = false;
 };
 
