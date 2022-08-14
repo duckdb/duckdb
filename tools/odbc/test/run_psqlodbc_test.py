@@ -105,7 +105,6 @@ def try_remove(fpath):
 os.chdir(args.psqlodbcdir)
 
 os.environ['PSQLODBC_TEST_DSN'] = 'DuckDB'
-#os.environ['DYLD_INSERT_LIBRARIES'] = '/Library/Developer/CommandLineTools/usr/lib/clang/13.1.6/lib/darwin/libclang_rt.asan_osx_dynamic.dylib'
 
 reset_db()
 
