@@ -239,8 +239,8 @@ SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQ
 }
 
 SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
-                                SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
-                                SQLSMALLINT *text_length_ptr) {
+                                SQLSMALLINT sqlstate_length, SQLINTEGER *native_error_ptr, SQLCHAR *message_text,
+                                SQLSMALLINT buffer_length, SQLSMALLINT *text_length_ptr) {
 
 	// lambda function that writes the diagnostic messages
 	std::function<bool(duckdb::OdbcHandle *, duckdb::OdbcHandleType)> is_valid_type_func =
@@ -296,7 +296,7 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 		auto rec_idx = rec_number - 1;
 		auto &diag_record = odbc_handle->odbc_diagnostic->GetDiagRecord(rec_idx);
 
-		if (sql_state && strlen((char *)sql_state) >= 5) {
+		if (sql_state && sqlstate_length >= 5) {
 			OdbcUtils::WriteString(diag_record.sql_diag_sqlstate, sql_state, 6);
 		}
 		if (native_error_ptr) {
