@@ -85,11 +85,10 @@ public:
 	//! Index of pruned node
 	idx_t prune_index;
 	bool need_prune = false;
-	vector<unique_ptr<Expression>> reorder_exprs;
 
 public:
 	idx_t GetRootIndex() override {
-		return (need_prune || !reorder_exprs.empty()) ? prune_index : projection_index;
+		return need_prune ? prune_index : projection_index;
 	}
 };
 } // namespace duckdb

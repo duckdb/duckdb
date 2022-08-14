@@ -17,6 +17,28 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
 		auto &setop = (BoundSetOperationNode &)node;
+
+		if (setop.setop_type == SetOperationType::UNION_BY_NAME) {
+			for (idx_t i = 0; i < setop.names.size(); i++) {
+				auto &name = setop.names[i];
+				auto entry = aliases.find(name);
+				if (entry != aliases.end()) {
+					// the alias already exists
+					// check if there is a conflict
+					if (entry->second != i) {
+						// there is a conflict
+						// we place "-1" in the aliases map at this location
+						// "-1" signifies that there is an ambiguous reference
+						aliases[name] = DConstants::INVALID_INDEX;
+					}
+				} else {
+					// the alias is not in there yet, just assign it
+					aliases[name] = i;
+				}
+			}
+			return;
+		}
+
 		GatherAliases(*setop.left, aliases, expressions);
 		GatherAliases(*setop.right, aliases, expressions);
 	} else {
@@ -58,89 +80,9 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 	}
 }
 
-static void PushProjection(BoundQueryNode &node, case_insensitive_map_t<idx_t> &node_names_map,
-                           vector<string> &result_names, vector<LogicalType> &result_types) {
-
-	bool need_reorder = false;
-	idx_t result_size = result_names.size();
-
-	vector<LogicalType> new_types(result_size);
-	vector<string> new_names(result_size);
-	vector<idx_t> reorder_index(result_size);
-	unordered_set<idx_t> null_values_index_set;
-
-	// Reorder names and types
-	for (idx_t i = 0; i < result_size; ++i) {
-		auto name_index = node_names_map.find(result_names[i]);
-		bool name_exist = name_index != node_names_map.end();
-
-		if (name_exist) {
-			new_names[i] = std::move(node.names[name_index->second]);
-			new_types[i] = std::move(node.types[name_index->second]);
-			need_reorder = need_reorder || name_index->second != i;
-			reorder_index[i] = name_index->second;
-		} else {
-			new_names[i] = result_names[i];
-			new_types[i] = result_types[i];
-			need_reorder = true;
-			reorder_index[i] = i;
-			null_values_index_set.insert(i);
-		}
-	}
-
-	node.names = std::move(new_names);
-	node.types = std::move(new_types);
-
-	idx_t node_index;
-	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
-		auto &setop = (BoundSetOperationNode &)(node);
-		node_index = setop.setop_index;
-	} else {
-		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
-		auto &select_node = (BoundSelectNode &)(node);
-		node_index = select_node.projection_index;
-	}
-
-	if (need_reorder) {
-		vector<unique_ptr<Expression>> reorder_expressions(result_size);
-
-		if (node.type == QueryNodeType::SELECT_NODE) {
-			auto &select_node = (BoundSelectNode &)(node);
-			vector<unique_ptr<ParsedExpression>> original_expressions(result_size);
-			for (idx_t i = 0; i < result_size; i++) {
-				if (null_values_index_set.count(i) > 0) {
-					reorder_expressions[i] = make_unique<BoundConstantExpression>(Value(result_types[i]));
-
-					original_expressions[i] = make_unique<ConstantExpression>(Value(result_types[i]));
-				} else {
-					reorder_expressions[i] = make_unique<BoundColumnRefExpression>(
-					    node.types[i], ColumnBinding(node_index, reorder_index[i]));
-
-					original_expressions[i] = std::move(select_node.original_expressions[reorder_index[i]]);
-				}
-			}
-			select_node.reorder_exprs = std::move(reorder_expressions);
-			select_node.original_expressions = std::move(original_expressions);
-		} else {
-			D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
-			auto &setop = (BoundSetOperationNode &)(node);
-			for (idx_t i = 0; i < result_size; i++) {
-				if (null_values_index_set.count(i) > 0) {
-					reorder_expressions[i] = make_unique<BoundConstantExpression>(Value(result_types[i]));
-				} else {
-					reorder_expressions[i] = make_unique<BoundColumnRefExpression>(
-					    node.types[i], ColumnBinding(node_index, reorder_index[i]));
-				}
-			}
-			setop.reorder_exprs = std::move(reorder_expressions);
-		}
-	}
-}
-
 unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	auto result = make_unique<BoundSetOperationNode>();
 	result->setop_type = statement.setop_type;
-	result->reorder_index = GenerateTableIndex();
 
 	// first recursively visit the set operations
 	// both the left and right sides have an independent BindContext and Binder
@@ -155,21 +97,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	result->right_binder = Binder::CreateBinder(context, this);
 	result->right_binder->can_contain_nulls = true;
 	result->right = result->right_binder->BindNode(*statement.right);
-
-	if (!statement.modifiers.empty()) {
-		// handle the ORDER BY/DISTINCT clauses
-
-		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
-		// the ORDER BY
-		case_insensitive_map_t<idx_t> alias_map;
-		expression_map_t<idx_t> expression_map;
-		GatherAliases(*result, alias_map, expression_map);
-
-		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
-		                         alias_map, expression_map, statement.left->GetSelectList().size());
-		BindModifiers(order_binder, statement, *result);
-	}
 
 	result->names = result->left->names;
 
@@ -192,10 +119,16 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		BoundQueryNode *right_node = result->right.get();
 
 		for (idx_t i = 0; i < left_node->names.size(); ++i) {
+			if (left_names_map.find(left_node->names[i]) != left_names_map.end()) {
+				throw BinderException("UNION BY NAME operation doesn't support same name in SELECT list");
+			}
 			left_names_map[left_node->names[i]] = i;
 		}
 
 		for (idx_t i = 0; i < right_node->names.size(); ++i) {
+			if (right_names_map.find(right_node->names[i]) != right_names_map.end()) {
+				throw BinderException("UNION BY NAME operation doesn't support same name in SELECT list");
+			}
 			if (left_names_map.find(right_node->names[i]) == left_names_map.end()) {
 				result->names.push_back(right_node->names[i]);
 			}
@@ -203,6 +136,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 		}
 
 		idx_t new_size = result->names.size();
+		bool need_reorder = false;
 
 		for (idx_t i = 0; i < new_size; ++i) {
 			auto left_index = left_names_map.find(result->names[i]);
@@ -213,11 +147,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 			if (left_exist && right_exist) {
 				result_type = LogicalType::MaxLogicalType(left_node->types[left_index->second],
 				                                          right_node->types[right_index->second]);
+				need_reorder = need_reorder || left_index->second != i || right_index->second != i;
 			} else if (left_exist) {
 				result_type = left_node->types[left_index->second];
+				need_reorder = true;
 			} else {
 				D_ASSERT(right_exist);
 				result_type = right_node->types[right_index->second];
+				need_reorder = true;
 			}
 
 			if (!can_contain_nulls) {
@@ -225,11 +162,41 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 					result_type = ExpressionBinder::ExchangeNullType(result_type);
 				}
 			}
+
 			result->types.push_back(result_type);
 		}
 
-		PushProjection(*result->left, left_names_map, result->names, result->types);
-		PushProjection(*result->right, right_names_map, result->names, result->types);
+		if (need_reorder) {
+			for (idx_t i = 0; i < new_size; ++i) {
+				auto left_index = left_names_map.find(result->names[i]);
+				auto right_index = right_names_map.find(result->names[i]);
+				bool left_exist = left_index != left_names_map.end();
+				bool right_exist = right_index != right_names_map.end();
+				unique_ptr<Expression> left_reorder_expr;
+				unique_ptr<Expression> right_reorder_expr;
+				if (left_exist && right_exist) {
+					left_reorder_expr = make_unique<BoundColumnRefExpression>(
+					    left_node->types[left_index->second],
+					    ColumnBinding(left_node->GetRootIndex(), left_index->second));
+					right_reorder_expr = make_unique<BoundColumnRefExpression>(
+					    right_node->types[right_index->second],
+					    ColumnBinding(right_node->GetRootIndex(), right_index->second));
+				} else if (left_exist) {
+					left_reorder_expr = make_unique<BoundColumnRefExpression>(
+					    left_node->types[left_index->second],
+					    ColumnBinding(left_node->GetRootIndex(), left_index->second));
+					right_reorder_expr = make_unique<BoundConstantExpression>(Value(result->types[i]));
+				} else {
+					D_ASSERT(right_exist);
+					left_reorder_expr = make_unique<BoundConstantExpression>(Value(result->types[i]));
+					right_reorder_expr = make_unique<BoundColumnRefExpression>(
+					    right_node->types[right_index->second],
+					    ColumnBinding(right_node->GetRootIndex(), right_index->second));
+				}
+				result->left_reorder_exprs.push_back(move(left_reorder_expr));
+				result->right_reorder_exprs.push_back(move(right_reorder_expr));
+			}
+		}
 
 	} else {
 		// figure out the types of the setop result by picking the max of both
@@ -242,6 +209,21 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 			}
 			result->types.push_back(result_type);
 		}
+	}
+
+	if (!statement.modifiers.empty()) {
+		// handle the ORDER BY/DISTINCT clauses
+
+		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
+		// the ORDER BY
+		case_insensitive_map_t<idx_t> alias_map;
+		expression_map_t<idx_t> expression_map;
+		GatherAliases(*result, alias_map, expression_map);
+
+		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
+		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
+		                         alias_map, expression_map, result->names.size());
+		BindModifiers(order_binder, statement, *result);
 	}
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions

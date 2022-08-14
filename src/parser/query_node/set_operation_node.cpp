@@ -21,7 +21,7 @@ string SetOperationNode::ToString() const {
 		result += is_distinct ? "UNION" : "UNION ALL";
 		break;
 	case SetOperationType::UNION_BY_NAME:
-		result = "UNION BY NAME";
+		result += "UNION BY NAME";
 		break;
 	case SetOperationType::EXCEPT:
 		D_ASSERT(is_distinct);

@@ -33,13 +33,14 @@ public:
 	shared_ptr<Binder> left_binder;
 	//! The binder used by the right side of the set operation
 	shared_ptr<Binder> right_binder;
-	//! Index of reorder node
-	idx_t reorder_index;
-	vector<unique_ptr<Expression>> reorder_exprs;
+
+	//! exprs used by the UNION BY NAME opeartons to add a new projection
+	vector<unique_ptr<Expression>> left_reorder_exprs;
+	vector<unique_ptr<Expression>> right_reorder_exprs;
 
 public:
 	idx_t GetRootIndex() override {
-		return reorder_exprs.empty() ? setop_index : reorder_index;
+		return setop_index;
 	}
 };
 
