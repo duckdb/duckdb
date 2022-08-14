@@ -32,6 +32,10 @@ def require():
             os.path.join(root_dir, "build/release/extension/*/*.duckdb_extension"),
             os.path.join(root_dir, "build/debug/extension/*/*.duckdb_extension"),
             "../../*.duckdb_extension",
+             "../../../../../build/release/extension/*/*.duckdb_extension",
+            "../../../../../build/debug/extension/*/*.duckdb_extension",
+             "../../../../build/release/extension/*/*.duckdb_extension",
+            "../../../../build/debug/extension/*/*.duckdb_extension",
             "../../../*.duckdb_extension"
         ]
 
