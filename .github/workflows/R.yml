@@ -121,8 +121,11 @@ jobs:
       shell: bash
       run: |
         cd tools/rpkg
-        export NOT_CRAN='false'
-        _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
+        _R_CHECK_CRAN_INCOMING_=FALSE \
+        _R_CHECK_PKG_SIZES_=FALSE \
+        NOT_CRAN='false' \
+        DUCKDB_R_IN_VALGRIND='true' \
+        R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
     - name: Print check directory tree
       if: ${{ always() }}
