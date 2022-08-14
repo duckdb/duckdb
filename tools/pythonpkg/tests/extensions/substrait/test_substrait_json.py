@@ -4,6 +4,7 @@ import pytest
 def test_substrait_json(require):
     connection = require('substrait')
     if connection is None:
+        print("substrait test skipped")
         return
 
     connection.execute('CREATE TABLE integers (i integer)')
@@ -22,6 +23,6 @@ def test_substrait_json(require):
         
     # Test closed connection
     connection.close()
-    with pytest.raises(duckdb.Error, match="Connection has been closed"):
+    with pytest.raises(duckdb.Error, match="Connection has already been closed"):
         connection.get_substrait_json("select * from integers limit 5")
 

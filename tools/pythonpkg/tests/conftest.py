@@ -5,6 +5,7 @@ import shutil
 from os.path import abspath
 import glob
 import duckdb
+from pathlib import Path, PurePath
 
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
@@ -12,17 +13,25 @@ def duckdb_empty_cursor(request):
     cursor = connection.cursor()
     return cursor
  
+def get_duckdb_root_dir(path_to_search_from):
+    path = Path(path_to_search_from)
+    parents = path.parents
+    for parent in parents:
+        parent_path = PurePath(parent)
+        if parent_path.name == 'duckdb':
+            return parent
+    return None
 
 @pytest.fixture(scope="function")
 def require():
     def _require(extension_name, db_name=''):
+        file_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dir = get_duckdb_root_dir(file_dir)
         # Paths to search for extensions
         extension_search_patterns = [
-            "../../../../build/release/extension/*/*.duckdb_extension",
-            "../../../../build/debug/extension/*/*.duckdb_extension",
+            os.path.join(root_dir, "build/release/extension/*/*.duckdb_extension"),
+            os.path.join(root_dir, "build/debug/extension/*/*.duckdb_extension"),
             "../../*.duckdb_extension",
-             "../../../../../build/release/extension/*/*.duckdb_extension",
-            "../../../../../build/debug/extension/*/*.duckdb_extension",
             "../../../*.duckdb_extension"
         ]
 
