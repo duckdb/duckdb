@@ -29,15 +29,18 @@ def require():
         root_dir = get_duckdb_root_dir(file_dir)
         # Paths to search for extensions
         extension_search_patterns = [
-            os.path.join(root_dir, "build/release/extension/*/*.duckdb_extension"),
-            os.path.join(root_dir, "build/debug/extension/*/*.duckdb_extension"),
             "../../*.duckdb_extension",
-             "../../../../../build/release/extension/*/*.duckdb_extension",
+            "../../../../../build/release/extension/*/*.duckdb_extension",
             "../../../../../build/debug/extension/*/*.duckdb_extension",
-             "../../../../build/release/extension/*/*.duckdb_extension",
+            "../../../../build/release/extension/*/*.duckdb_extension",
             "../../../../build/debug/extension/*/*.duckdb_extension",
             "../../../*.duckdb_extension"
         ]
+        if (root_dir):
+            extension_search_patterns += [
+                os.path.join(root_dir, "build/release/extension/*/*.duckdb_extension"),
+                os.path.join(root_dir, "build/debug/extension/*/*.duckdb_extension")
+            ]
 
         # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions
         if 'DUCKDB_PYTHON_TEST_EXTENSION_PATH' in os.environ:
