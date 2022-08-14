@@ -17,8 +17,7 @@ def get_duckdb_root_dir(path_to_search_from):
     path = Path(path_to_search_from)
     parents = path.parents
     for parent in parents:
-        parent_path = PurePath(parent)
-        if parent_path.name == 'duckdb':
+        if parent.name == 'duckdb':
             return parent
     return None
 
