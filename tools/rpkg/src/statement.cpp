@@ -129,7 +129,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	// we only return the result of the last statement to the user, unless one of the previous statements fails
 	for (idx_t i = 0; i + 1 < statements.size(); i++) {
 		auto res = conn->conn->Query(move(statements[i]));
-		if (!res->success) {
+		if (res->HasError()) {
 			cpp11::stop("rapi_prepare: Failed to execute statement %s\nError: %s", query.c_str(),
 			            res->error.Message().c_str());
 		}
@@ -722,7 +722,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 		cpp11::stop("rapi_execute: Failed to run query\nError: %s", pending_query->error.Message().c_str());
 	}
 	auto generic_result = pending_query->Execute();
-	if (!generic_result->success) {
+	if (generic_result->HasError()) {
 		cpp11::stop("rapi_execute: Failed to run query\nError: %s", generic_result->error.Message().c_str());
 	}
 

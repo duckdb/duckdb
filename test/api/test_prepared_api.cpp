@@ -292,12 +292,12 @@ TEST_CASE("Test ANALYZE", "[api]") {
 	auto prep = con.Prepare("ANALYZE");
 	REQUIRE(prep->success);
 	auto res = prep->Execute();
-	REQUIRE(res->success);
+	REQUIRE(!res->HasError());
 
 	prep = con.Prepare("VACUUM");
 	REQUIRE(prep->success);
 	res = prep->Execute();
-	REQUIRE(res->success);
+	REQUIRE(!res->HasError());
 }
 
 TEST_CASE("Test DECIMAL with PreparedStatement", "[api]") {

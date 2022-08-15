@@ -237,7 +237,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in stream that only happens after fetching
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (result->QUERY_RESULT_INTERNAL_SUCCESS) {
+	while (!result->HasError()) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
@@ -257,7 +257,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// same query but call materialize after fetching
 	result = con.SendQuery(
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while (result->QUERY_RESULT_INTERNAL_SUCCESS) {
+	while (!result->HasError()) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;

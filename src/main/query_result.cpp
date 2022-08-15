@@ -8,12 +8,12 @@ namespace duckdb {
 BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                                  vector<LogicalType> types_p, vector<string> names_p)
     : type(type), statement_type(statement_type), properties(properties), types(move(types_p)), names(move(names_p)),
-      QUERY_RESULT_INTERNAL_SUCCESS(true) {
+      success(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
-    : type(type), QUERY_RESULT_INTERNAL_SUCCESS(false), error(move(error)) {
+    : type(type), success(false), error(move(error)) {
 }
 
 BaseQueryResult::~BaseQueryResult() {
@@ -61,10 +61,10 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 
 bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 	// first compare the success state of the results
-	if (QUERY_RESULT_INTERNAL_SUCCESS != other.QUERY_RESULT_INTERNAL_SUCCESS) {
+	if (success != other.success) {
 		return false;
 	}
-	if (!QUERY_RESULT_INTERNAL_SUCCESS) {
+	if (!success) {
 		return error == other.error;
 	}
 	// compare names

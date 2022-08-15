@@ -23,7 +23,9 @@ PreservedError::PreservedError(const string &message)
 }
 
 const string &PreservedError::Message() {
-	final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
+	if (final_message.empty()) {
+		final_message = Exception::ExceptionTypeToString(type) + " Error: " + raw_message;
+	}
 	return final_message;
 }
 

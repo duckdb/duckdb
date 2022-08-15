@@ -165,7 +165,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		// we directly execute all statements besides the final one
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
-			if (!res->success) {
+			if (res->HasError()) {
 				db->last_error = res->error;
 				return SQLITE_ERROR;
 			}
@@ -219,7 +219,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt->result) {
 		// no result yet! call Execute()
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
-		if (!pStmt->result->success) {
+		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->error;
 			pStmt->prepared = nullptr;
@@ -651,7 +651,7 @@ int sqlite3_initialize(void) {
 
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	if (pStmt) {
-		if (pStmt->result && !pStmt->result->success) {
+		if (pStmt->result && pStmt->result->HasError()) {
 			pStmt->db->last_error = pStmt->result->error;
 			delete pStmt;
 			return SQLITE_ERROR;

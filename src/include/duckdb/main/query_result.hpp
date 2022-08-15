@@ -42,7 +42,7 @@ public:
 	//! The names of the result
 	vector<string> names;
 	//! Whether or not execution was successful
-	bool QUERY_RESULT_INTERNAL_SUCCESS;
+	bool success;
 	//! The error (in case execution was not successful)
 	PreservedError error;
 
@@ -89,7 +89,7 @@ public:
 	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
-			return QUERY_RESULT_INTERNAL_SUCCESS;
+			return success;
 		} catch (const Exception &ex) {
 			error = PreservedError(ex);
 			return false;

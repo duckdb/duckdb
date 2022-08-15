@@ -724,7 +724,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending_query = PendingQuery(move(statement), allow_stream_result);
-	if (!pending_query->QUERY_RESULT_INTERNAL_SUCCESS) {
+	if (pending_query->HasError()) {
 		return make_unique<MaterializedQueryResult>(pending_query->error);
 	}
 	return pending_query->Execute();
@@ -757,7 +757,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		parameters.allow_stream_result = allow_stream_result && is_last_statement;
 		auto pending_query = PendingQueryInternal(*lock, move(statement), parameters);
 		unique_ptr<QueryResult> current_result;
-		if (!pending_query->QUERY_RESULT_INTERNAL_SUCCESS) {
+		if (pending_query->HasError()) {
 			current_result = make_unique<MaterializedQueryResult>(pending_query->error);
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
@@ -1057,11 +1057,11 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		// execute the prepared statements
 		try {
 			auto prepare_result = RunStatementInternal(lock, string(), move(verifier.prepare_statement), false, false);
-			if (!prepare_result->QUERY_RESULT_INTERNAL_SUCCESS) {
+			if (prepare_result->HasError()) {
 				throw prepare_result->error.ToException("Failed prepare during verify: ");
 			}
 			auto execute_result = RunStatementInternal(lock, string(), move(verifier.execute_statement), false, false);
-			if (!execute_result->QUERY_RESULT_INTERNAL_SUCCESS) {
+			if (execute_result->HasError()) {
 				throw execute_result->error.ToException("Failed execute during verify: ");
 			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
@@ -1079,7 +1079,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	config.enable_optimizer = optimizer_enabled;
 
 	// check explain, only if the query was successful
-	if (results[0]->QUERY_RESULT_INTERNAL_SUCCESS) {
+	if (!results[0]->HasError()) {
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		PreservedError error;
@@ -1109,7 +1109,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	D_ASSERT(names.size() >= results.size());
 	for (idx_t i = 1; i < results.size(); i++) {
 		auto name = names[i];
-		if (results[0]->QUERY_RESULT_INTERNAL_SUCCESS != results[i]->QUERY_RESULT_INTERNAL_SUCCESS) { // LCOV_EXCL_START
+		if (!results[0]->HasError() = results[i]->HasError()) { // LCOV_EXCL_START
 			string result = name + " differs from original result!\n";
 			result += "Original Result:\n" + results[0]->ToString();
 			result += name + ":\n" + results[i]->ToString();

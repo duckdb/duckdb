@@ -23,7 +23,7 @@ bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.Message().c_str());
 	}
-	return result.QUERY_RESULT_INTERNAL_SUCCESS;
+	return !result.HasError();
 }
 
 bool NO_FAIL(unique_ptr<QueryResult> result) {
@@ -175,7 +175,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t co
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (MaterializedQueryResult &)result;
-	if (!materialized.QUERY_RESULT_INTERNAL_SUCCESS) {
+	if (materialized.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", materialized.error.Message().c_str());
 		return materialized.error.Message();
 	}

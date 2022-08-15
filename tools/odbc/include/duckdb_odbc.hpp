@@ -279,7 +279,7 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->res) {
 			return SQL_ERROR;
 		}
-		if (!stmt->res->success) {
+		if (stmt->res->HasError()) {
 			return SQL_ERROR;
 		}
 		try {

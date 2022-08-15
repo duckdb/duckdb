@@ -17,7 +17,7 @@ atomic<bool> finished;
 static void RunQueryUntilSuccess(Connection &con, string query) {
 	while (true) {
 		auto result = con.Query(query);
-		if (result->QUERY_RESULT_INTERNAL_SUCCESS) {
+		if (!result->HasError()) {
 			break;
 		}
 	}

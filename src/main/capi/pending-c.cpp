@@ -22,7 +22,7 @@ duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statemen
 	} catch (std::exception &ex) {
 		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
-	duckdb_state return_value = result->statement->success ? DuckDBSuccess : DuckDBError;
+	duckdb_state return_value = !result->statement->HasError() ? DuckDBSuccess : DuckDBError;
 	*out_result = (duckdb_pending_result)result;
 
 	return return_value;
@@ -59,18 +59,18 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	if (!wrapper->statement) {
 		return DUCKDB_PENDING_ERROR;
 	}
-	if (!wrapper->statement->success) {
+	if (wrapper->statement->HasError()) {
 		return DUCKDB_PENDING_ERROR;
 	}
 	PendingExecutionResult return_value;
 	try {
 		return_value = wrapper->statement->ExecuteTask();
 	} catch (const duckdb::Exception &ex) {
-		wrapper->statement->success = false;
+		!wrapper->statement->HasError() = false;
 		wrapper->statement->error = duckdb::PreservedError(ex);
 		return DUCKDB_PENDING_ERROR;
 	} catch (std::exception &ex) {
-		wrapper->statement->success = false;
+		!wrapper->statement->HasError() = false;
 		wrapper->statement->error = duckdb::PreservedError(ex);
 		return DUCKDB_PENDING_ERROR;
 	}

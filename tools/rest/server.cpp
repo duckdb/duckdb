@@ -354,9 +354,9 @@ int main(int argc, char **argv) {
 
 		state.res = move(res);
 
-		if (state.res->success) {
+		if (state.!res->HasError()) {
 			j = {{"query", q},
-			     {"success", state.res->success},
+			     {"success", state.!res->HasError()},
 			     {"column_count", state.res->types.size()},
 
 			     {"statement_type", StatementTypeToString(state.res->statement_type)},
@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
 			}
 
 		} else {
-			j = {{"query", q}, {"success", state.res->success}, {"error", state.res->error.Message()}};
+			j = {{"query", q}, {"success", state.!res->HasError()}, {"error", state.res->error.Message()}};
 		}
 
 		serialize_json(req, resp, j);

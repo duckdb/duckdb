@@ -107,7 +107,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 
 	stmt->res = stmt->stmt->Execute(values);
 
-	if (!stmt->res->success) {
+	if (stmt->res->HasError()) {
 		duckdb::DiagRecord diag_rec(stmt->res->GetError().Message(), duckdb::SQLStateType::GENERAL_ERROR,
 		                            stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("SingleExecuteStmt", SQL_ERROR, diag_rec);

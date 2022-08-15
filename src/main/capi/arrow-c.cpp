@@ -16,7 +16,7 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 	auto wrapper = new ArrowResultWrapper();
 	wrapper->result = conn->Query(query);
 	*out_result = (duckdb_arrow)wrapper;
-	return wrapper->result->success ? DuckDBSuccess : DuckDBError;
+	return !wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
 
 duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
@@ -47,7 +47,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	if (!wrapper->result->success) {
+	if (wrapper->result->HasError()) {
 		return 0;
 	}
 	return wrapper->result->RowCount();
@@ -60,7 +60,7 @@ idx_t duckdb_arrow_column_count(duckdb_arrow result) {
 
 idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	if (!wrapper->result->success) {
+	if (wrapper->result->HasError()) {
 		return 0;
 	}
 	idx_t rows_changed = 0;
@@ -106,5 +106,5 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	*out_result = (duckdb_arrow)arrow_wrapper;
-	return arrow_wrapper->result->success ? DuckDBSuccess : DuckDBError;
+	return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }
