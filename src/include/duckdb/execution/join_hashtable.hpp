@@ -25,8 +25,7 @@ class BufferManager;
 class BufferHandle;
 class ColumnDataCollection;
 struct ColumnDataAppendState;
-class Pipeline;
-class Event;
+struct ClientConfig;
 
 struct JoinHTScanState {
 public:
@@ -273,8 +272,7 @@ public:
 	void UnswizzleBlocks();
 
 	//! Computes partition sizes and number of radix bits (called before scheduling partition tasks)
-	void ComputePartitionSizes(Pipeline &pipeline, Event &event, vector<unique_ptr<JoinHashTable>> &local_hts,
-	                           idx_t max_ht_size);
+	void ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size);
 	//! Partition this HT
 	void Partition(JoinHashTable &global_ht);
 

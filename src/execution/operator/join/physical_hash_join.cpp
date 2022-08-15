@@ -12,8 +12,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-#include <iostream>
-
 namespace duckdb {
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -369,7 +367,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		D_ASSERT(can_go_external);
 		// External join - partition HT
 		sink.perfect_join_executor.reset();
-		sink.hash_table->ComputePartitionSizes(pipeline, event, sink.local_hash_tables, sink.max_ht_size);
+		sink.hash_table->ComputePartitionSizes(context.config, sink.local_hash_tables, sink.max_ht_size);
 		auto new_event = make_shared<HashJoinPartitionEvent>(pipeline, sink, sink.local_hash_tables);
 		event.InsertEvent(move(new_event));
 		sink.finalized = true;

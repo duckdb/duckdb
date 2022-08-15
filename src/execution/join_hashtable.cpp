@@ -1017,8 +1017,7 @@ void JoinHashTable::UnswizzleBlocks() {
 	D_ASSERT(SwizzledCount() == 0);
 }
 
-void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
-                                          vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
+void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
 	external = true;
 
 	// First set the number of tuples in the HT per partitioned round
@@ -1039,8 +1038,8 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 	idx_t avg_tuple_size = total_size / total_count;
 	tuples_per_round = max_ht_size / avg_tuple_size;
 
-	if (tuples_per_round >= total_count) {
-		// We doing an external join, but the data fits (probably force_external), just do three probe iterations
+	if (config.force_external) {
+		// For force_external we do three rounds to test all code paths
 		tuples_per_round = (total_count + 2) / 3;
 	}
 
