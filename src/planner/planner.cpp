@@ -58,9 +58,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = parameters_resolved;
 
-	if (bound_parameters.parameters.empty()) {
-		Planner::VerifyPlan(context, plan);
-	}
+	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
@@ -158,7 +156,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	return true;
 }
 
-void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op) {
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
 	if (!op || !ClientConfig::GetConfig(context).query_verification_enabled) {
 		return;
 	}
@@ -174,6 +172,9 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	PlanDeserializationState state(context);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
+	if (map) {
+		*map = move(state.parameter_data);
+	}
 	op = move(new_plan);
 }
 

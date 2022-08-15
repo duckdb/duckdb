@@ -157,6 +157,9 @@ unique_ptr<Expression> Expression::Deserialize(Deserializer &source, PlanDeseria
 	case ExpressionClass::BOUND_UNNEST:
 		result = BoundUnnestExpression::Deserialize(state, reader);
 		break;
+	case ExpressionClass::BOUND_PARAMETER:
+		result = BoundParameterExpression::Deserialize(state, reader);
+		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization %s",
 		                             ExpressionTypeToString(type));

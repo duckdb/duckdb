@@ -70,11 +70,24 @@ void BoundParameterExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*parameter_data);
 }
 
-// unique_ptr<Expression> BoundParameterExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader
-// &reader) { 	auto parameter_nr = reader.ReadRequired<idx_t>(); 	auto result =
-// make_unique<BoundParameterExpression>(parameter_nr); 	result->return_type =
-// reader.ReadRequiredSerializable<LogicalType, LogicalType>(); 	result->parameter_data =
-// reader.ReadRequiredSerializable<BoundParameterData>(); 	return result;
-//}
+unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeserializationState &state,
+                                                               FieldReader &reader) {
+	auto &global_parameter_set = state.gstate.parameter_data;
+	auto parameter_nr = reader.ReadRequired<idx_t>();
+	auto result =  make_unique<BoundParameterExpression>(parameter_nr);
+	result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
+	// check if we have already deserialized a parameter with this number
+	auto entry = global_parameter_set.find(parameter_nr);
+	if (entry == global_parameter_set.end()) {
+		// we have not - store the entry we deserialized from this parameter expression
+		global_parameter_set[parameter_nr] = parameter_data;
+	} else {
+		// we have! use the previously deserialized entry
+		parameter_data = entry->second;
+	}
+	result->parameter_data = move(parameter_data);
+	return result;
+}
 
 } // namespace duckdb
