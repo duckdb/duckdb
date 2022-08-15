@@ -13,34 +13,31 @@
 namespace duckdb {
 
 static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &aliases,
-                          expression_map_t<idx_t> &expressions) {
+                          expression_map_t<idx_t> &expressions, vector<idx_t> &reorder_idx) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
 		auto &setop = (BoundSetOperationNode &)node;
 
+		// create new reorder index
 		if (setop.setop_type == SetOperationType::UNION_BY_NAME) {
-			for (idx_t i = 0; i < setop.names.size(); i++) {
-				auto &name = setop.names[i];
-				auto entry = aliases.find(name);
-				if (entry != aliases.end()) {
-					// the alias already exists
-					// check if there is a conflict
-					if (entry->second != i) {
-						// there is a conflict
-						// we place "-1" in the aliases map at this location
-						// "-1" signifies that there is an ambiguous reference
-						aliases[name] = DConstants::INVALID_INDEX;
-					}
-				} else {
-					// the alias is not in there yet, just assign it
-					aliases[name] = i;
-				}
+			vector<idx_t> new_left_reorder_idx(setop.left_reorder_idx.size());
+			vector<idx_t> new_right_reorder_idx(setop.right_reorder_idx.size());
+			for (idx_t i = 0; i < setop.left_reorder_idx.size(); ++i) {
+				new_left_reorder_idx[i] = reorder_idx[setop.left_reorder_idx[i]];
 			}
+
+			for (idx_t i = 0; i < setop.right_reorder_idx.size(); ++i) {
+				new_right_reorder_idx[i] = reorder_idx[setop.right_reorder_idx[i]];
+			}
+
+			// use new reorder index
+			GatherAliases(*setop.left, aliases, expressions, new_left_reorder_idx);
+			GatherAliases(*setop.right, aliases, expressions, new_right_reorder_idx);
 			return;
 		}
 
-		GatherAliases(*setop.left, aliases, expressions);
-		GatherAliases(*setop.right, aliases, expressions);
+		GatherAliases(*setop.left, aliases, expressions, reorder_idx);
+		GatherAliases(*setop.right, aliases, expressions, reorder_idx);
 	} else {
 		// query node
 		D_ASSERT(node.type == QueryNodeType::SELECT_NODE);
@@ -51,10 +48,14 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 			auto &expr = select.original_expressions[i];
 			// first check if the alias is already in there
 			auto entry = aliases.find(name);
+
+			idx_t index = reorder_idx[i];
+
 			if (entry != aliases.end()) {
 				// the alias already exists
 				// check if there is a conflict
-				if (entry->second != i) {
+
+				if (entry->second != index) {
 					// there is a conflict
 					// we place "-1" in the aliases map at this location
 					// "-1" signifies that there is an ambiguous reference
@@ -62,19 +63,19 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 				}
 			} else {
 				// the alias is not in there yet, just assign it
-				aliases[name] = i;
+				aliases[name] = index;
 			}
 			// now check if the node is already in the set of expressions
 			auto expr_entry = expressions.find(expr.get());
 			if (expr_entry != expressions.end()) {
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
-				if (expr_entry->second != i) {
+				if (expr_entry->second != index) {
 					expressions[expr.get()] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// not in there yet, just place it in there
-				expressions[expr.get()] = i;
+				expressions[expr.get()] = index;
 			}
 		}
 	}
@@ -137,6 +138,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 		idx_t new_size = result->names.size();
 		bool need_reorder = false;
+		vector<idx_t> left_reorder_idx(left_node->names.size());
+		vector<idx_t> right_reorder_idx(right_node->names.size());
 
 		for (idx_t i = 0; i < new_size; ++i) {
 			auto left_index = left_names_map.find(result->names[i]);
@@ -148,13 +151,17 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 				result_type = LogicalType::MaxLogicalType(left_node->types[left_index->second],
 				                                          right_node->types[right_index->second]);
 				need_reorder = need_reorder || left_index->second != i || right_index->second != i;
+				left_reorder_idx[left_index->second] = i;
+				right_reorder_idx[right_index->second] = i;
 			} else if (left_exist) {
 				result_type = left_node->types[left_index->second];
 				need_reorder = true;
+				left_reorder_idx[left_index->second] = i;
 			} else {
 				D_ASSERT(right_exist);
 				result_type = right_node->types[right_index->second];
 				need_reorder = true;
+				right_reorder_idx[right_index->second] = i;
 			}
 
 			if (!can_contain_nulls) {
@@ -165,6 +172,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 
 			result->types.push_back(result_type);
 		}
+
+		result->left_reorder_idx = move(left_reorder_idx);
+		result->right_reorder_idx = move(right_reorder_idx);
 
 		if (need_reorder) {
 			for (idx_t i = 0; i < new_size; ++i) {
@@ -198,6 +208,23 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 			}
 		}
 
+		if (!statement.modifiers.empty()) {
+			// handle the ORDER BY/DISTINCT clauses
+
+			// we recursively visit the children of this node to extract aliases and expressions that can be referenced
+			// in the ORDER BY
+			case_insensitive_map_t<idx_t> alias_map;
+			expression_map_t<idx_t> expression_map;
+			// GatherAliases(*result, alias_map, expression_map, result->left_reorder_idx, result->right_reorder_idx);
+
+			GatherAliases(*result->left, alias_map, expression_map, result->left_reorder_idx);
+			GatherAliases(*result->right, alias_map, expression_map, result->right_reorder_idx);
+
+			// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
+			OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
+			                         alias_map, expression_map, result->names.size());
+			BindModifiers(order_binder, statement, *result);
+		}
 	} else {
 		// figure out the types of the setop result by picking the max of both
 		for (idx_t i = 0; i < result->left->types.size(); i++) {
@@ -209,21 +236,25 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 			}
 			result->types.push_back(result_type);
 		}
-	}
 
-	if (!statement.modifiers.empty()) {
-		// handle the ORDER BY/DISTINCT clauses
+		if (!statement.modifiers.empty()) {
+			// handle the ORDER BY/DISTINCT clauses
 
-		// we recursively visit the children of this node to extract aliases and expressions that can be referenced in
-		// the ORDER BY
-		case_insensitive_map_t<idx_t> alias_map;
-		expression_map_t<idx_t> expression_map;
-		GatherAliases(*result, alias_map, expression_map);
+			// we recursively visit the children of this node to extract aliases and expressions that can be referenced
+			// in the ORDER BY
+			case_insensitive_map_t<idx_t> alias_map;
+			expression_map_t<idx_t> expression_map;
+			vector<idx_t> reorder_idx;
+			for (idx_t i = 0; i < result->names.size(); i++) {
+				reorder_idx.push_back(i);
+			}
+			GatherAliases(*result, alias_map, expression_map, reorder_idx);
 
-		// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
-		OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
-		                         alias_map, expression_map, result->names.size());
-		BindModifiers(order_binder, statement, *result);
+			// now we perform the actual resolution of the ORDER BY/DISTINCT expressions
+			OrderBinder order_binder({result->left_binder.get(), result->right_binder.get()}, result->setop_index,
+			                         alias_map, expression_map, result->names.size());
+			BindModifiers(order_binder, statement, *result);
+		}
 	}
 
 	// finally bind the types of the ORDER/DISTINCT clause expressions

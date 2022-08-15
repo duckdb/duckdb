@@ -25,6 +25,64 @@ SELECT x, y FROM t1 UNION BY NAME SELECT y, z FROM t2;
 NULL	2	2
 NULL	4	4
 
+########## test binding
+query I
+SELECT t1.x FROM t1 UNION BY NAME SELECT x FROM t1 ORDER BY t1.x;
+----
+1
+1
+3
+3
+
+query I
+SELECT x FROM t1 UNION BY NAME SELECT x FROM t1 ORDER BY t1.x;
+----
+1
+1
+3
+3
+
+query II
+(SELECT x FROM t1 UNION ALL SELECT x FROM t1) UNION BY NAME SELECT 5 ORDER BY t1.x;
+----
+NULL	5
+1	NULL
+1	NULL
+3	NULL
+3	NULL
+
+query II
+(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME SELECT 5 ORDER BY y;
+----
+NULL	5
+1	NULL
+1	NULL
+3	NULL
+3	NULL
+
+
+# Ambiguous name
+statement error
+SELECT x AS a FROM t1 UNION BY NAME SELECT x AS b FROM t1 ORDER BY t1.x;
+
+# Error: Binder Error: Ambiguous name in ORDER BY!
+statement error
+(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME (SELECT z FROM t2 UNION ALL SELECT y FROM t2) ORDER BY y;
+
+query II
+(SELECT x FROM t1 UNION ALL SELECT y FROM t1) UNION BY NAME (SELECT z FROM t2 UNION ALL SELECT y FROM t2) ORDER BY t1.y;
+----
+NULL	2
+NULL	4
+NULL	2
+NULL	4
+1	NULL
+1	NULL
+3	NULL
+3	NULL
+
+
+
 ########## test limit
 
 query III

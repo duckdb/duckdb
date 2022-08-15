@@ -32,7 +32,6 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 		if (expr.alias.empty()) {
 			alias = expr.alias;
 		}
-		// alias = expr.GetName();
 	}
 	return make_unique<BoundColumnRefExpression>(move(alias), LogicalType::INVALID,
 	                                             ColumnBinding(projection_index, index));
