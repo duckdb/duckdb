@@ -329,7 +329,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 	for (idx_t i = 0; i + 1 < statements.size(); i++) {
 		try {
 			auto res = conn_ref->Query(move(statements[i]));
-			if (!res->success) {
+			if (res->HasError()) {
 				env->ThrowNew(J_SQLException, res->error.Message().c_str());
 				return nullptr;
 			}

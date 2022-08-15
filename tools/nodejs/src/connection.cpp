@@ -329,12 +329,11 @@ struct ExecTask : public Task {
 				return;
 			}
 
-			// thanks Mark
 			for (duckdb::idx_t i = 0; i < statements.size(); i++) {
 				auto res = connection.connection->Query(move(statements[i]));
-				if (!res->success) {
+				if (res->HasError()) {
 					success = false;
-					error = res->error;
+					error = res->GetErrorObject();
 					break;
 				}
 			}
