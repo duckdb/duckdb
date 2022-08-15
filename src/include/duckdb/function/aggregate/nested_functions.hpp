@@ -39,17 +39,16 @@ struct ListFun {
 	//! Allocates a ListSegment for primitive data values. It contains the header (count, capacity, next), the
 	//! null_mask and the primitive values.
 	template <class T>
-	static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
 	                                        uint16_t &capacity);
 	//! Allocates a ListSegment for LIST data values. It contains the header (count, capacity, next) and the null_mask.
 	//! It also contains the length of each list as well as a linked list of the child values.
-	static data_ptr_t AllocateListData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-	                                   uint16_t &capacity);
+	static data_ptr_t AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity);
 	//! Allocates a ListSegment for STRUCT data values. It contains the header (count, capacity, next) and the
 	//! null_mask.
 	// It also contains pointers to the ListSegments of each child vector.
-	static data_ptr_t AllocateStructData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-	                                     uint16_t &capacity, idx_t child_count);
+	static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+	                                     idx_t child_count);
 
 	//! Get a pointer to the first position of the primitive data of a ListSegment for primitve types.
 	template <class T>
@@ -76,36 +75,35 @@ struct ListFun {
 
 	//! Create a new ListSegment for primitive data and set the header.
 	template <class T>
-	static ListSegment *TemplatedCreatePrimitiveSegment(Allocator &allocator,
-	                                                    vector<unique_ptr<AllocatedData>> &owning_vector,
+	static ListSegment *TemplatedCreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
 	                                                    uint16_t &capacity);
 	//! Type switch for allocating a new ListSegment for primitive data.
-	static ListSegment *CreatePrimitiveSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	static ListSegment *CreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
 	                                           uint16_t &capacity, const LogicalType &type);
 	//! Create a new ListSegment of type LIST, set the header and an empty linked list.
-	static ListSegment *CreateListSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	static ListSegment *CreateListSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
 	                                      uint16_t &capacity);
 	//! Create a new ListSegment of type STRUCT, set the header and recurse into the creation of the segments for each
 	//! child.
-	static ListSegment *CreateStructSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	static ListSegment *CreateStructSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
 	                                        uint16_t &capacity, vector<unique_ptr<Vector>> &children);
 	//! Type switch to create the specific ListSegment types depending on the input type.
-	static ListSegment *CreateSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-	                                  uint16_t &capacity, Vector &input);
+	static ListSegment *CreateSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+	                                  Vector &input);
 
 	//! Get the current segment of a linked list to append data to
-	static ListSegment *GetSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-	                               LinkedList *linked_list, Vector &input);
+	static ListSegment *GetSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+	                               Vector &input);
 	//! Get the current char segment of a linked list to append data to (this is a specialized function for VARCHARs).
-	static ListSegment *GetCharSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+	static ListSegment *GetCharSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
 	                                   LinkedList *linked_list);
 
 	//! Write the data of the current entry of the input vector to the active segment of the linked list.
-	static void WriteDataToSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-	                               ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count);
+	static void WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, ListSegment *segment,
+	                               Vector &input, idx_t &entry_idx, idx_t &count);
 	//! Get the currently active segment of the linked list and call WriteDataToSegment on it.
-	static void AppendRow(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-	                      LinkedList *linked_list, Vector &input, idx_t &entry_idx, idx_t &count);
+	static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+	                      Vector &input, idx_t &entry_idx, idx_t &count);
 
 	//! Get all the data of a segment and write it to the result vector.
 	static void GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &total_count);

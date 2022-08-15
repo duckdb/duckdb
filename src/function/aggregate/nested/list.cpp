@@ -6,27 +6,26 @@
 namespace duckdb {
 
 template <class T>
-data_ptr_t ListFun::AllocatePrimitiveData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+data_ptr_t ListFun::AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                           uint16_t &capacity) {
 
 	owning_vector.emplace_back(allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))));
-	return owning_vector.back()->get();
+	return owning_vector.back().get();
 }
 
-data_ptr_t ListFun::AllocateListData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-                                     uint16_t &capacity) {
+data_ptr_t ListFun::AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity) {
 
 	owning_vector.emplace_back(
 	    allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList)));
-	return owning_vector.back()->get();
+	return owning_vector.back().get();
 }
 
-data_ptr_t ListFun::AllocateStructData(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-                                       uint16_t &capacity, idx_t child_count) {
+data_ptr_t ListFun::AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+                                       idx_t child_count) {
 
 	owning_vector.emplace_back(
 	    allocator.Allocate(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *)));
-	return owning_vector.back()->get();
+	return owning_vector.back().get();
 }
 
 template <class T>
@@ -215,8 +214,7 @@ uint16_t ListFun::GetCapacityForNewSegment(LinkedList *linked_list) {
 }
 
 template <class T>
-ListSegment *ListFun::TemplatedCreatePrimitiveSegment(Allocator &allocator,
-                                                      vector<unique_ptr<AllocatedData>> &owning_vector,
+ListSegment *ListFun::TemplatedCreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                                       uint16_t &capacity) {
 
 	// allocate data and set the header
@@ -227,7 +225,7 @@ ListSegment *ListFun::TemplatedCreatePrimitiveSegment(Allocator &allocator,
 	return segment;
 }
 
-ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                              uint16_t &capacity, const LogicalType &type) {
 
 	auto physical_type = type.InternalType();
@@ -267,7 +265,7 @@ ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<unique
 	}
 }
 
-ListSegment *ListFun::CreateListSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+ListSegment *ListFun::CreateListSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                         uint16_t &capacity) {
 
 	// allocate data and set the header
@@ -284,7 +282,7 @@ ListSegment *ListFun::CreateListSegment(Allocator &allocator, vector<unique_ptr<
 	return segment;
 }
 
-ListSegment *ListFun::CreateStructSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+ListSegment *ListFun::CreateStructSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                           uint16_t &capacity, vector<unique_ptr<Vector>> &children) {
 
 	// allocate data and set header
@@ -303,8 +301,8 @@ ListSegment *ListFun::CreateStructSegment(Allocator &allocator, vector<unique_pt
 	return segment;
 }
 
-ListSegment *ListFun::CreateSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-                                    uint16_t &capacity, Vector &input) {
+ListSegment *ListFun::CreateSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+                                    Vector &input) {
 
 	if (input.GetType().InternalType() == PhysicalType::VARCHAR) {
 		return CreateListSegment(allocator, owning_vector, capacity);
@@ -317,8 +315,8 @@ ListSegment *ListFun::CreateSegment(Allocator &allocator, vector<unique_ptr<Allo
 	return CreatePrimitiveSegment(allocator, owning_vector, capacity, input.GetType());
 }
 
-ListSegment *ListFun::GetSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-                                 LinkedList *linked_list, Vector &input) {
+ListSegment *ListFun::GetSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+                                 Vector &input) {
 
 	ListSegment *segment = nullptr;
 
@@ -346,7 +344,7 @@ ListSegment *ListFun::GetSegment(Allocator &allocator, vector<unique_ptr<Allocat
 	return segment;
 }
 
-ListSegment *ListFun::GetCharSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
+ListSegment *ListFun::GetCharSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                      LinkedList *linked_list) {
 
 	ListSegment *segment = nullptr;
@@ -375,8 +373,8 @@ ListSegment *ListFun::GetCharSegment(Allocator &allocator, vector<unique_ptr<All
 	return segment;
 }
 
-void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector,
-                                 ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
+void ListFun::WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, ListSegment *segment,
+                                 Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
 	UnifiedVectorFormat input_data;
@@ -470,7 +468,7 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<unique_ptr<Allocat
 	}
 }
 
-void ListFun::AppendRow(Allocator &allocator, vector<unique_ptr<AllocatedData>> &owning_vector, LinkedList *linked_list,
+void ListFun::AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
                         Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// FIXME: maybe faster if I first flatten all (nested) vectors in the update function?
@@ -609,7 +607,7 @@ void ListFun::InitializeValidities(Vector &vector, idx_t &capacity) {
 struct ListAggState {
 	LinkedList *linked_list;
 	LogicalType *type;
-	vector<unique_ptr<AllocatedData>> *owning_vector;
+	vector<AllocatedData> *owning_vector;
 };
 
 struct ListFunction {
@@ -660,7 +658,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 		if (!state->linked_list) {
 			state->linked_list = new LinkedList(0, nullptr, nullptr);
 			state->type = new LogicalType(input.GetType());
-			state->owning_vector = new vector<unique_ptr<AllocatedData>>;
+			state->owning_vector = new vector<AllocatedData>;
 		}
 		D_ASSERT(state->type);
 		ListFun::AppendRow(aggr_input_data.allocator, *state->owning_vector, state->linked_list, input, i, count);
@@ -693,7 +691,7 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 			combined_ptr[i]->type = new LogicalType(*state->type);
 
 			// new owning_vector to hold the unique pointers
-			combined_ptr[i]->owning_vector = new vector<unique_ptr<AllocatedData>>;
+			combined_ptr[i]->owning_vector = new vector<AllocatedData>;
 
 		} else {
 			combined_ptr[i]->linked_list->last_segment->next = state->linked_list->first_segment;
