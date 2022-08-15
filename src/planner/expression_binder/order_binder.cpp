@@ -29,7 +29,7 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	if (extra_list && index < extra_list->size()) {
 		alias = extra_list->at(index)->ToString();
 	} else {
-		if (expr.alias.empty()) {
+		if (!expr.alias.empty()) {
 			alias = expr.alias;
 		}
 	}
