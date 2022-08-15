@@ -36,6 +36,25 @@ public:
 	T GetFunctionByOffset(idx_t offset) {
 		return functions[offset];
 	}
+	bool MergeFunctionSet(FunctionSet<T> new_functions) {
+		D_ASSERT(!new_functions.functions.empty());
+		bool need_rewrite_entry = false;
+		idx_t size_new_func = new_functions.functions.size();
+		for (idx_t exist_idx = 0; exist_idx < functions.size(); ++exist_idx) {
+			bool can_add = true;
+			for (idx_t new_idx = 0; new_idx < size_new_func; ++new_idx) {
+				if (new_functions.functions[new_idx].Equal(functions[exist_idx])) {
+					can_add = false;
+					break;
+				}
+			}
+			if (can_add) {
+				new_functions.functions.push_back(functions[exist_idx]);
+				need_rewrite_entry = true;
+			}
+		}
+		return need_rewrite_entry;
+	}
 };
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
