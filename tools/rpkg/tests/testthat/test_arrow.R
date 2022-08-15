@@ -44,6 +44,8 @@ test_that("to_duckdb", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
+  local_edition(3)
+
   dbExecute(con, "PRAGMA threads=1")
   expect_equal(
     ds %>%
