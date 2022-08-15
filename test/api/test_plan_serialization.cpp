@@ -166,17 +166,18 @@ TEST_CASE("Test logical_cross_product", "[serialization]") {
 	test_helper("SELECT * FROM (SELECT 42 as i) CROSS JOIN (SELECT 42 as j)");
 }
 
-TEST_CASE("Test logical_create_index", "[serialization]") {
-	test_helper("CREATE INDEX idx ON tbl (foo)", {"CREATE TABLE tbl (foo INTEGER)"});
-}
-
-TEST_CASE("Test logical_create_schema", "[serialization]") {
-	test_helper("CREATE SCHEMA test");
-}
-
-TEST_CASE("Test logical_create_view", "[serialization]") {
-	test_helper("CREATE VIEW test_view AS (SELECT 42)");
-}
+// TODO: only select for now
+//TEST_CASE("Test logical_create_index", "[serialization]") {
+//	test_helper("CREATE INDEX idx ON tbl (foo)", {"CREATE TABLE tbl (foo INTEGER)"});
+//}
+// TODO: only select for now
+//TEST_CASE("Test logical_create_schema", "[serialization]") {
+//	test_helper("CREATE SCHEMA test");
+//}
+// TODO: only select for now
+//TEST_CASE("Test logical_create_view", "[serialization]") {
+//	test_helper("CREATE VIEW test_view AS (SELECT 42)");
+//}
 
 TEST_CASE("Test logical_top_n", "[serialization]") {
 	test_helper("SELECT * FROM tbl ORDER BY foo LIMIT 1", {"CREATE TABLE tbl (foo INTEGER)"});

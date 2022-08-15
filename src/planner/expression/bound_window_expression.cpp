@@ -126,6 +126,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 void BoundWindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(aggregate.get());
 	if (aggregate) {
+		D_ASSERT(return_type == aggregate->return_type);
 		FunctionSerializer::Serialize<AggregateFunction>(writer, *aggregate, return_type, children, bind_info.get());
 	} else {
 		// children and return_type are written as part of the aggregate function otherwise
@@ -172,6 +173,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->end_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	result->children = move(children);
 	return move(result);
 }
 
