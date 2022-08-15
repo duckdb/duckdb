@@ -21,7 +21,7 @@ set(JSON_EXTENSION_FILES
     ${YYJSON_OBJECT_FILES})
 
 add_library(json_extension STATIC ${JSON_EXTENSION_FILES})
-set(IGNORE_WARNINGS OFF)
+set(INGORE_WARNINGS OFF)
 build_loadable_extension(json ${JSON_EXTENSION_FILES} ${IGNORE_WARNINGS})
 
 install(
