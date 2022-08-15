@@ -216,7 +216,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public int getColumnDisplaySize(int column) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return 0; // most systems will fall back to getPrecision
 	}
 
 	public int getPrecision(int column) throws SQLException {

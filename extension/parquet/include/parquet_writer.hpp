@@ -14,7 +14,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #endif
 
 #include "parquet_types.h"
@@ -27,6 +27,7 @@ class FileOpener;
 
 class ParquetWriter {
 	friend class ColumnWriter;
+	friend class BasicColumnWriter;
 	friend class ListColumnWriter;
 	friend class StructColumnWriter;
 
@@ -35,7 +36,7 @@ public:
 	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
 
 public:
-	void Flush(ChunkCollection &buffer);
+	void Flush(ColumnDataCollection &buffer);
 	void Finalize();
 
 	static duckdb_parquet::format::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);

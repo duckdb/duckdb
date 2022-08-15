@@ -75,7 +75,7 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 	case ExpressionClass::OPERATOR:
 		return OperatorExpression::Equals((OperatorExpression *)this, (OperatorExpression *)other);
 	case ExpressionClass::PARAMETER:
-		return true;
+		return ParameterExpression::Equals((ParameterExpression *)this, (ParameterExpression *)other);
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		return PositionalReferenceExpression::Equals((PositionalReferenceExpression *)this,
 		                                             (PositionalReferenceExpression *)other);

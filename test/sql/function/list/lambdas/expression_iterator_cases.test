@@ -1,0 +1,145 @@
+# name: test/sql/function/list/lambdas/expression_iterator_cases.test
+# description: Test the different possible cases of the expression iterator
+# group: [lambdas]
+
+# these tests check the different cases of the expression iterator
+
+statement ok
+PRAGMA enable_verification
+
+# don't allow BOUND_AGGREGATE inside lambda expressions (binder error)
+
+statement error
+SELECT list_transform([10], x -> sum(1) + x)
+
+statement error
+SELECT list_filter([10], x -> sum(1) > 0)
+
+# BOUND_BETWEEN
+
+query I
+SELECT list_transform([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+----
+[NULL, False, True]
+
+query I
+SELECT list_filter([NULL, DATE '1992-09-20', DATE '2021-09-20'], elem -> extract('year' FROM elem) BETWEEN 2000 AND 2022)
+----
+[2021-09-20]
+
+# BOUND_CASE
+
+query I
+SELECT list_transform(['hello', 'duck', 'sunshine'], str -> CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END)
+----
+[e, other, e]
+
+query I
+SELECT list_filter(['hello', 'duck', 'sunshine'], str -> (CASE WHEN str LIKE '%e%' THEN 'e' ELSE 'other' END) LIKE 'e')
+----
+[hello, sunshine]
+
+# BOUND_CAST
+
+query I
+SELECT list_transform([2.0::DOUBLE], x -> x::INTEGER)
+----
+[2]
+
+query I
+SELECT list_filter([2], x -> x::DOUBLE == 2)
+----
+[2]
+
+# BOUND_COMPARISON
+
+query I
+SELECT list_transform([2.4, NULL, -4.7], x -> x != 10.4)
+----
+[True, NULL, True]
+
+query I
+SELECT list_filter([2.4, NULL, -4.7], x -> x != -4.7)
+----
+[2.4]
+
+# BOUND_CONJUNCTION
+
+query I
+SELECT list_transform([True, False, NULL], x -> x AND true)
+----
+[True, False, NULL]
+
+query I
+SELECT list_filter([True, False, NULL], x -> x AND true)
+----
+[True]
+
+# BOUND_FUNCTION
+
+query I
+SELECT list_transform([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x))
+----
+[20, 3, 17]
+
+query I
+SELECT list_filter([TIMESTAMP '1992-03-22', TIMESTAMP '209-03-22', TIMESTAMP '1700-03-22'], x -> century(x) > 16)
+----
+[1992-03-22 00:00:00, 1700-03-22 00:00:00]
+
+# BOUND_OPERATOR
+
+query I
+SELECT list_transform([2], x -> x + x)
+----
+[4]
+
+query I
+SELECT list_filter([2], x -> x + x = 4)
+----
+[2]
+
+# don't allow BOUND_SUBQUERY inside lambda expressions
+
+statement error
+SELECT list_transform([2], x -> (SELECT 1 - x) * x)
+
+statement error
+SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)
+
+statement ok
+CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
+
+statement error
+SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
+
+# BOUND_UNNEST
+
+query I
+SELECT list_transform([1], x -> x = UNNEST([1]));
+----
+[True]
+
+query I
+SELECT list_filter([1], x -> x = UNNEST([1]));
+----
+[1]
+
+require vector_size 512
+
+# BOUND_WINDOW
+
+statement ok
+CREATE TABLE my_window (l integer[], g integer, o integer)
+
+statement ok
+INSERT INTO my_window VALUES ([1], 1, 1), ([1, NULL, 2], 1, 2), ([], 2, 3), (NULL, NULL, NULL), ([1, 2], 2, 4)
+
+query I
+SELECT list(list_transform(l, e -> e + 1)) OVER (PARTITION BY g ORDER BY o) FROM my_window
+----
+[NULL]
+[[2]]
+[[2], [2, NULL, 3]]
+[[]]
+[[], [2, 3]]

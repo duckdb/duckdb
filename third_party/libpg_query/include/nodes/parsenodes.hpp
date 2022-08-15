@@ -1996,7 +1996,8 @@ typedef struct PGSampleOptions {
 	PGNodeTag type;
 	PGNode *sample_size;      /* the size of the sample to take */
 	char *method;             /* sample method, or NULL for default */
-	int seed;                 /* seed, or NULL for default; */
+	bool has_seed;            /* if the sample method has seed */
+	int seed;                 /* the seed value if set; */
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 
@@ -2015,7 +2016,7 @@ typedef struct PGLimitPercent {
  */
 typedef struct PGLambdaFunction {
 	PGNodeTag type;
-	PGNode *lhs;                 /* list of input parameters */
+	PGNode *lhs;                 /* parameter expression */
 	PGNode *rhs;                 /* lambda expression */
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;

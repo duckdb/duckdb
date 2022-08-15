@@ -29,7 +29,7 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class CatalogSearchPath;
-class ChunkCollection;
+class ColumnDataCollection;
 class DatabaseInstance;
 class FileOpener;
 class LogicalOperator;
@@ -107,7 +107,7 @@ public:
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
-	DUCKDB_API void Append(TableDescription &description, ChunkCollection &collection);
+	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
@@ -159,7 +159,7 @@ public:
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 	//! Returns the parser options for this client context
-	DUCKDB_API ParserOptions GetParserOptions();
+	DUCKDB_API ParserOptions GetParserOptions() const;
 
 	DUCKDB_API unique_ptr<DataChunk> Fetch(ClientContextLock &lock, StreamQueryResult &result);
 
@@ -174,6 +174,8 @@ public:
 
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
+
+	DUCKDB_API ClientProperties GetClientProperties() const;
 
 private:
 	//! Parse statements and resolve pragmas from a query

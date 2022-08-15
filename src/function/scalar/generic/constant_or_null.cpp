@@ -32,7 +32,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			auto &input_mask = FlatVector::Validity(args.data[idx]);
 			if (!input_mask.AllValid()) {
 				// there are null values: need to merge them into the result
-				result.Normalify(args.size());
+				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
 				result_mask.Combine(input_mask, args.size());
 			}
@@ -48,10 +48,10 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 			break;
 		}
 		default: {
-			VectorData vdata;
-			args.data[idx].Orrify(args.size(), vdata);
+			UnifiedVectorFormat vdata;
+			args.data[idx].ToUnifiedFormat(args.size(), vdata);
 			if (!vdata.validity.AllValid()) {
-				result.Normalify(args.size());
+				result.Flatten(args.size());
 				auto &result_mask = FlatVector::Validity(result);
 				for (idx_t i = 0; i < args.size(); i++) {
 					if (!vdata.validity.RowIsValid(vdata.sel->get_index(i))) {

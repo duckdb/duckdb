@@ -4,7 +4,7 @@ add_library_unity(
   aggregate_object.cpp
   physical_hash_aggregate.cpp
   physical_perfecthash_aggregate.cpp
-  physical_simple_aggregate.cpp
+  physical_ungrouped_aggregate.cpp
   physical_window.cpp
   physical_streaming_window.cpp)
 set(ALL_OBJECT_FILES

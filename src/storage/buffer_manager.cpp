@@ -274,7 +274,8 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	// first evict blocks until we have enough memory to store this buffer
 	unique_ptr<FileBuffer> reusable_buffer;
 	if (!EvictBlocks(alloc_size, maximum_memory, &reusable_buffer)) {
-		throw OutOfMemoryException("could not allocate block of %lld bytes%s", alloc_size, InMemoryWarning());
+		throw OutOfMemoryException("could not allocate block of %lld bytes (%lld/%lld used) %s", alloc_size,
+		                           GetUsedMemory(), GetMaxMemory(), InMemoryWarning());
 	}
 
 	auto temp_id = ++temporary_id;

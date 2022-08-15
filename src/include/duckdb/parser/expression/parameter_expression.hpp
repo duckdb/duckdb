@@ -27,6 +27,8 @@ public:
 
 	string ToString() const override;
 
+	static bool Equals(const ParameterExpression *a, const ParameterExpression *b);
+
 	unique_ptr<ParsedExpression> Copy() const override;
 	hash_t Hash() const override;
 

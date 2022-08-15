@@ -118,7 +118,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 }
 
 void ColumnCheckpointState::FlushToDisk() {
-	auto &meta_writer = writer.GetMetaWriter();
+	auto &meta_writer = writer.GetTableWriter();
 
 	meta_writer.Write<idx_t>(data_pointers.size());
 	// then write the data pointers themselves

@@ -1,0 +1,89 @@
+# name: test/sql/vacuum/test_analyze.test
+# description: Test ANALYZE statement
+# group: [vacuum]
+
+# need this, else the distinct stats sampling is different
+require vector_size 1024
+
+require skip_reload
+
+statement ok
+analyze
+
+statement ok
+vacuum
+
+statement error
+vacuum test
+
+statement error
+analyze test
+
+statement ok
+create table test (i int, j int)
+
+statement ok
+analyze test
+
+statement ok
+create view testview as select * from test
+
+statement error
+analyze testview
+
+statement ok
+insert into test select range % 5000, range % 5000 from range(10000)
+
+# inaccurate approx unique due to sampling
+query T
+select stats(i) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+
+query T
+select stats(j) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+
+# we enable verify_parallelism only for ANALYZE
+statement ok
+pragma verify_parallelism
+
+statement ok
+analyze test(i)
+
+statement ok
+pragma disable_verify_parallelism
+
+# i is more accurate now
+query T
+select stats(i) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+
+# j is not yet accurate
+query T
+select stats(j) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 9809]
+
+# now we analyze the whole table
+statement ok
+pragma verify_parallelism
+
+statement ok
+analyze test
+
+statement ok
+pragma disable_verify_parallelism
+
+# both i and j should be more accurate
+query T
+select stats(i) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]
+
+query T
+select stats(j) from test limit 1
+----
+[Min: 0, Max: 4999][Has Null: false, Has No Null: true][Approx Unique: 5080]

@@ -30,6 +30,11 @@ function get_parameter(bind_info::BindInfo, index::Int64)
     return Value(duckdb_bind_get_parameter(bind_info.handle, index))
 end
 
+function set_stats_cardinality(bind_info::BindInfo, cardinality::UInt64, is_exact::Bool)
+    duckdb_bind_set_cardinality(bind_info.handle, cardinality, is_exact)
+    return
+end
+
 function add_result_column(bind_info::BindInfo, name::AbstractString, type::DataType)
     return add_result_column(bind_info, name, create_logical_type(type))
 end

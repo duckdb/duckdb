@@ -107,10 +107,10 @@ public:
 	idx_t SizeInBytes() const;
 	//! Sort the data accumulated so far
 	void Sort(GlobalSortState &global_sort_state, bool reorder_heap);
+	//! Concatenate the blocks held by a RowDataCollection into a single block
+	static RowDataBlock ConcatenateBlocks(RowDataCollection &row_data);
 
 private:
-	//! Concatenate the blocks held by a RowDataCollection into a single block
-	RowDataBlock ConcatenateBlocks(RowDataCollection &row_data);
 	//! Sorts the data in the newly created SortedBlock
 	void SortInMemory();
 	//! Re-order the local state after sorting

@@ -79,8 +79,8 @@ void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
 }
 
-Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
-	D_ASSERT(expr.IsFoldable());
+Value ExpressionExecutor::EvaluateScalar(const Expression &expr, bool allow_unfoldable) {
+	D_ASSERT(allow_unfoldable || expr.IsFoldable());
 	D_ASSERT(expr.IsScalar());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(Allocator::DefaultAllocator(), expr);
@@ -88,7 +88,7 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 	Vector result(expr.return_type);
 	executor.ExecuteExpression(result);
 
-	D_ASSERT(result.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(allow_unfoldable || result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
 	D_ASSERT(result_value.type().InternalType() == expr.return_type.InternalType());
 	return result_value;
@@ -232,7 +232,7 @@ static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__re
 }
 
 template <bool NO_NULL>
-static inline idx_t DefaultSelectSwitch(VectorData &idata, const SelectionVector *sel, idx_t count,
+static inline idx_t DefaultSelectSwitch(UnifiedVectorFormat &idata, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
 		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
@@ -256,8 +256,8 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
 	Execute(expr, state, sel, count, intermediate);
 
-	VectorData idata;
-	intermediate.Orrify(count, idata);
+	UnifiedVectorFormat idata;
+	intermediate.ToUnifiedFormat(count, idata);
 
 	if (!sel) {
 		sel = FlatVector::IncrementalSelectionVector();

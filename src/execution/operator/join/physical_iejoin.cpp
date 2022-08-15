@@ -1,10 +1,9 @@
 #include "duckdb/execution/operator/join/physical_iejoin.hpp"
 
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -191,104 +190,6 @@ OperatorResultType PhysicalIEJoin::Execute(ExecutionContext &context, DataChunk 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-struct SBIterator {
-	static int ComparisonValue(ExpressionType comparison) {
-		switch (comparison) {
-		case ExpressionType::COMPARE_LESSTHAN:
-		case ExpressionType::COMPARE_GREATERTHAN:
-			return -1;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return 0;
-		default:
-			throw InternalException("Unimplemented comparison type for IEJoin!");
-		}
-	}
-
-	explicit SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p = 0)
-	    : sort_layout(gss.sort_layout), block_count(gss.sorted_blocks[0]->radix_sorting_data.size()),
-	      block_capacity(gss.block_capacity), cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size),
-	      all_constant(sort_layout.all_constant), external(gss.external), cmp(ComparisonValue(comparison)),
-	      scan(gss.buffer_manager, gss), block_ptr(nullptr), entry_ptr(nullptr) {
-
-		scan.sb = gss.sorted_blocks[0].get();
-		scan.block_idx = block_count;
-		SetIndex(entry_idx_p);
-	}
-
-	inline idx_t GetIndex() const {
-		return entry_idx;
-	}
-
-	inline void SetIndex(idx_t entry_idx_p) {
-		const auto new_block_idx = entry_idx_p / block_capacity;
-		if (new_block_idx != scan.block_idx) {
-			scan.SetIndices(new_block_idx, 0);
-			if (new_block_idx < block_count) {
-				scan.PinRadix(scan.block_idx);
-				block_ptr = scan.RadixPtr();
-				if (!all_constant) {
-					scan.PinData(*scan.sb->blob_sorting_data);
-				}
-			}
-		}
-
-		scan.entry_idx = entry_idx_p % block_capacity;
-		entry_ptr = block_ptr + scan.entry_idx * entry_size;
-		entry_idx = entry_idx_p;
-	}
-
-	inline SBIterator &operator++() {
-		if (++scan.entry_idx < block_capacity) {
-			entry_ptr += entry_size;
-			++entry_idx;
-		} else {
-			SetIndex(entry_idx + 1);
-		}
-
-		return *this;
-	}
-
-	inline SBIterator &operator--() {
-		if (scan.entry_idx) {
-			--scan.entry_idx;
-			--entry_idx;
-			entry_ptr -= entry_size;
-		} else {
-			SetIndex(entry_idx - 1);
-		}
-
-		return *this;
-	}
-
-	inline bool Compare(const SBIterator &other) const {
-		int comp_res;
-		if (all_constant) {
-			comp_res = FastMemcmp(entry_ptr, other.entry_ptr, cmp_size);
-		} else {
-			comp_res = Comparators::CompareTuple(scan, other.scan, entry_ptr, other.entry_ptr, sort_layout, external);
-		}
-
-		return comp_res <= cmp;
-	}
-
-	// Fixed comparison parameters
-	const SortLayout &sort_layout;
-	const idx_t block_count;
-	const idx_t block_capacity;
-	const size_t cmp_size;
-	const size_t entry_size;
-	const bool all_constant;
-	const bool external;
-	const int cmp;
-
-	// Iteration state
-	SBScanState scan;
-	idx_t entry_idx;
-	data_ptr_t block_ptr;
-	data_ptr_t entry_ptr;
-};
-
 struct IEJoinUnion {
 	using SortedTable = PhysicalRangeJoin::GlobalSortedTable;
 

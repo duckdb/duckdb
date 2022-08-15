@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -42,8 +43,7 @@ void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, G
 	unique_ptr<Index> index;
 	switch (info->index_type) {
 	case IndexType::ART: {
-		index = make_unique<ART>(column_ids, unbound_expressions,
-		                         info->unique ? IndexConstraintType::UNIQUE : IndexConstraintType::NONE);
+		index = make_unique<ART>(column_ids, unbound_expressions, info->constraint_type, *context.client.db);
 		break;
 	}
 	default:
@@ -51,6 +51,9 @@ void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, G
 	}
 	index_entry->index = index.get();
 	index_entry->info = table.storage->info;
+	for (auto &parsed_expr : info->parsed_expressions) {
+		index_entry->parsed_expressions.push_back(parsed_expr->Copy());
+	}
 	table.storage->AddIndex(move(index), expressions);
 
 	chunk.SetCardinality(0);

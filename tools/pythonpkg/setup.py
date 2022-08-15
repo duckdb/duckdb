@@ -154,7 +154,6 @@ class get_numpy_include(object):
         import numpy
         return numpy.get_include()
 
-
 extra_files = []
 header_files = []
 
@@ -163,6 +162,7 @@ main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
 main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
 include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
     source_files = main_source_files
@@ -220,6 +220,7 @@ else:
     sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
     import package_build
 
+    include_directories += [os.path.join('..', '..', include) for include in package_build.third_party_includes()]
     toolchain_args += ['-I' + x for x in package_build.includes(extensions)]
 
     result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
@@ -274,7 +275,7 @@ setup(
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",
-    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python',
+    long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     install_requires=[ # these version is still available for Python 2, newer ones aren't
          'numpy>=1.14'
@@ -297,4 +298,10 @@ setup(
     maintainer = "Hannes Muehleisen",
     maintainer_email = "hannes@cwi.nl",
     cmdclass={"build_ext": build_ext},
+    project_urls={
+        "Documentation": "https://duckdb.org/docs/api/python/overview",
+        "Source": "https://github.com/duckdb/duckdb/blob/master/tools/pythonpkg",
+        "Issues": "https://github.com/duckdb/duckdb/issues",
+        "Changelog": "https://github.com/duckdb/duckdb/releases",
+    },
 )

@@ -61,11 +61,7 @@ PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, 
 	// Set external (can be force with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
 	global_sort_state.external = config.force_external;
-	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/4th of this, to be conservative
-	idx_t max_memory = global_sort_state.buffer_manager.GetMaxMemory();
-	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	memory_per_thread = (max_memory / num_threads) / 4;
+	memory_per_thread = PhysicalRangeJoin::GetMaxThreadMemory(context);
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
@@ -218,8 +214,8 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		}
 		return 0;
 	} else if (keys.ColumnCount() > 1) {
-		//	Normalify the primary, as it will need to merge arbitrary validity masks
-		primary.Normalify(count);
+		//	Flatten the primary, as it will need to merge arbitrary validity masks
+		primary.Flatten(count);
 		auto &pvalidity = FlatVector::Validity(primary);
 		D_ASSERT(keys.ColumnCount() == conditions.size());
 		for (size_t c = 1; c < keys.data.size(); ++c) {
@@ -227,10 +223,10 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 			if (conditions[c].comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
 				continue;
 			}
-			//	Orrify the rest, as the sort code will do this anyway.
+			//	ToUnifiedFormat the rest, as the sort code will do this anyway.
 			auto &v = keys.data[c];
-			VectorData vdata;
-			v.Orrify(count, vdata);
+			UnifiedVectorFormat vdata;
+			v.ToUnifiedFormat(count, vdata);
 			auto &vvalidity = vdata.validity;
 			if (vvalidity.AllValid()) {
 				continue;

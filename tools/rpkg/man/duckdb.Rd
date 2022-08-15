@@ -10,7 +10,12 @@
 \alias{dbDisconnect,duckdb_connection-method}
 \title{Connect to a DuckDB database instance}
 \usage{
-duckdb(dbdir = DBDIR_MEMORY, read_only = FALSE, config = list())
+duckdb(
+  dbdir = DBDIR_MEMORY,
+  read_only = FALSE,
+  bigint = "numeric",
+  config = list()
+)
 
 duckdb_shutdown(drv)
 
@@ -22,7 +27,8 @@ duckdb_shutdown(drv)
   read_only = FALSE,
   timezone_out = "UTC",
   tz_out_convert = c("with", "force"),
-  config = list()
+  config = list(),
+  bigint = "numeric"
 )
 
 \S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
@@ -33,6 +39,8 @@ directory in the file system. With the default, all
 data is kept in RAM}
 
 \item{read_only}{Set to \code{TRUE} for read-only operation}
+
+\item{bigint}{How 64-bit integers should be returned, default is double/numeric. Set to integer64 for bit64 encoding.}
 
 \item{config}{Named list with DuckDB configuration flags}
 

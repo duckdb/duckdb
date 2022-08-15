@@ -155,7 +155,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	D_ASSERT(count > 0);
 	auto &stats = (ListStatistics &)stats_p;
 
-	vector.Normalify(count);
+	vector.Flatten(count);
 	auto &list_validity = FlatVector::Validity(vector);
 
 	// construct the list_entry_t entries to append to the column data
@@ -187,7 +187,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	         child_count);
 #endif
 
-	VectorData vdata;
+	UnifiedVectorFormat vdata;
 	vdata.validity = list_validity;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
 	vdata.data = (data_ptr_t)append_offsets.get();

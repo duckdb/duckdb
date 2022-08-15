@@ -12,7 +12,6 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -72,6 +71,16 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// with propagated statistics
 	if (op.join_stats.empty()) {
 		return;
+	}
+	for (auto &type : op.children[1]->types) {
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::MAP:
+			return;
+		default:
+			break;
+		}
 	}
 	// with equality condition and null values not equal
 	for (auto &&condition : op.conditions) {
@@ -234,7 +243,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	} else {
 		bool can_merge = has_range > 0;
-		bool can_iejoin = has_range >= 2 && rec_ctes.empty();
+		bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
 		switch (op.join_type) {
 		case JoinType::SEMI:
 		case JoinType::ANTI:

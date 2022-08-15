@@ -44,7 +44,7 @@ struct ClientData {
 	unique_ptr<RandomEngine> random_engine;
 
 	//! The catalog search path
-	const unique_ptr<CatalogSearchPath> catalog_search_path;
+	unique_ptr<CatalogSearchPath> catalog_search_path;
 
 	//! The file opener of the client context
 	unique_ptr<FileOpener> file_opener;

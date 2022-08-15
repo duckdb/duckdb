@@ -1,0 +1,109 @@
+# name: test/sql/function/list/lambdas/incorrect.test
+# description: Test incorrect usage of the lambda functions
+# group: [lambdas]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE incorrect_test (i integer);
+
+foreach func_name list_transform list_filter
+
+statement error
+SELECT ${func_name}()
+
+statement error
+SELECT ${func_name}([])
+
+statement error
+SELECT ${func_name}([1], x -> x, 3)
+
+statement error
+SELECT ${func_name}(1, 2, 3)
+
+statement error
+SELECT ${func_name}(NULL, NULL)
+
+statement error
+SELECT ${func_name}(NULL, x)
+
+statement error
+SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
+
+statement error
+SELECT ${func_name}(NULL, i) FROM incorrect_test
+
+statement error
+SELECT ${func_name}(NULL, x -> y)
+
+statement error
+SELECT ${func_name}([1])
+
+statement error
+SELECT ${func_name}([1], NULL)
+
+statement error
+SELECT ${func_name}(1, x -> x + 1)
+
+statement error
+SELECT ${func_name}([[1]], x -> x + 1)
+
+statement error
+SELECT ${func_name}(1, 1)
+
+statement error
+SELECT ${func_name}([True], x -> x, x -> x)
+
+endloop
+
+# lambda parameter has the same name as a column
+statement ok
+CREATE TABLE l_test (l integer[])
+
+statement error
+SELECT l, list_transform(l, l -> l + 1) FROM l_test
+
+statement error
+select list_apply(i, x -> x * 3 + 2 / zz) from (values (list_value(1, 2, 3))) tbl(i);
+
+# lambda cannot be the root of a plan
+statement error
+select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
+
+statement error
+select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
+
+statement error
+select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
+statement error
+select list_apply(i, a.x -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
+statement error
+select list_apply(i, x -> x + 1 AND y + 1) from (values (list_value(1, 2, 3))) tbl(i);
+
+statement ok
+CREATE TABLE l_filter_test (l integer[])
+
+statement error
+SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
+
+statement error
+SELECT list_transform([1, 2], (x, y) -> x + y)
+
+statement error
+SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
+
+statement error
+SELECT list_filter([1, 2], (x, y) -> x >= y)
+
+statement error
+SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
+
+# using lambdas in functions that do not support them
+statement error
+SELECT cos(x -> x + 1)
+
+statement error
+SELECT cos([1], x -> x + 1)

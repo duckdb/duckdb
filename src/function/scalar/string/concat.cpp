@@ -28,8 +28,8 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			// non-constant vector: set the result type to a flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			// now get the lengths of each of the input elements
-			VectorData vdata;
-			input.Orrify(args.size(), vdata);
+			UnifiedVectorFormat vdata;
+			input.ToUnifiedFormat(args.size(), vdata);
 
 			auto input_data = (string_t *)vdata.data;
 			// now add the length of each vector to the result length
@@ -74,8 +74,8 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			}
 		} else {
 			// standard vector
-			VectorData idata;
-			input.Orrify(args.size(), idata);
+			UnifiedVectorFormat idata;
+			input.ToUnifiedFormat(args.size(), idata);
 
 			auto input_data = (string_t *)idata.data;
 			for (idx_t i = 0; i < args.size(); i++) {
@@ -118,9 +118,9 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
                               const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
-	auto orrified_data = unique_ptr<VectorData[]>(new VectorData[args.ColumnCount() - 1]);
+	auto orrified_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[args.ColumnCount() - 1]);
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		args.data[col_idx].Orrify(args.size(), orrified_data[col_idx - 1]);
+		args.data[col_idx].ToUnifiedFormat(args.size(), orrified_data[col_idx - 1]);
 	}
 
 	// first figure out the lengths
@@ -186,8 +186,8 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 
 static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &separator = args.data[0];
-	VectorData vdata;
-	separator.Orrify(args.size(), vdata);
+	UnifiedVectorFormat vdata;
+	separator.ToUnifiedFormat(args.size(), vdata);
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {

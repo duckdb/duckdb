@@ -96,11 +96,11 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 		sel_vector_sizes[r] = 0;
 	}
 
-	hashes.Normalify(groups.size());
+	hashes.Flatten(groups.size());
 	auto hashes_ptr = FlatVector::GetData<hash_t>(hashes);
 
 	for (idx_t i = 0; i < groups.size(); i++) {
-		auto partition = (hashes_ptr[i] & partition_info.radix_mask) >> partition_info.RADIX_SHIFT;
+		auto partition = partition_info.GetHashPartition(hashes_ptr[i]);
 		D_ASSERT(partition < partition_info.n_partitions);
 		sel_vectors[partition].set_index(sel_vector_sizes[partition]++, i);
 	}
@@ -126,7 +126,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 
 void PartitionableHashTable::Partition() {
 	D_ASSERT(!IsPartitioned());
-	D_ASSERT(radix_partitioned_hts.size() == 0);
+	D_ASSERT(radix_partitioned_hts.empty());
 	D_ASSERT(partition_info.n_partitions > 1);
 
 	vector<GroupedAggregateHashTable *> partition_hts(partition_info.n_partitions);

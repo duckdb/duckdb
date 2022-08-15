@@ -57,8 +57,8 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction instr("instr",                                      // name of the function
 	                     {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                     LogicalType::BIGINT,                          // return type
-	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, false, nullptr,
-	                     nullptr, InStrPropagateStats);
+	                     ScalarFunction::BinaryFunction<string_t, string_t, int64_t, InstrOperator>, nullptr, nullptr,
+	                     InStrPropagateStats);
 	set.AddFunction(instr);
 	instr.name = "strpos";
 	set.AddFunction(instr);

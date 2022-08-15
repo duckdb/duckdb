@@ -14,7 +14,7 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 		// Make sure we only have flat vectors hereafter (for now)
 		auto &chunk_vec = chunk.data[col_idx];
 		if (with_data) {
-			chunk_vec.Normalify(chunk.size());
+			chunk_vec.Flatten(chunk.size());
 		}
 
 		// Do a post-order DFS traversal
@@ -52,7 +52,7 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 
 			// Create validity vector
 			if (with_data) {
-				vec->Normalify(chunk.size());
+				vec->Flatten(chunk.size());
 				auto &validity = duckdb::FlatVector::Validity(*vec);
 				auto validity_buffer = Napi::Uint8Array::New(env, chunk.size());
 				for (idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {

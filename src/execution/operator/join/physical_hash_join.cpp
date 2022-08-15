@@ -62,7 +62,7 @@ public:
 
 class HashJoinGlobalState : public GlobalSinkState {
 public:
-	HashJoinGlobalState() {
+	HashJoinGlobalState() : scanned_data(false) {
 	}
 
 	//! The HT used by the join
@@ -71,6 +71,8 @@ public:
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 	//! Whether or not the hash table has been finalized
 	bool finalized = false;
+	//! Whether or not we have started scanning data using GetData
+	atomic<bool> scanned_data;
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -229,6 +231,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	auto &state = (PhysicalHashJoinState &)state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	D_ASSERT(sink.finalized);
+	D_ASSERT(!sink.scanned_data);
 
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;
@@ -291,6 +294,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	auto &state = (HashJoinScanState &)gstate;
+	sink.scanned_data = true;
 	sink.hash_table->ScanFullOuter(chunk, state.ht_scan_state);
 }
 

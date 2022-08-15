@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 
@@ -18,9 +18,14 @@ public:
 	explicit BoundParameterExpression(idx_t parameter_nr);
 
 	idx_t parameter_nr;
-	Value *value;
+	shared_ptr<BoundParameterData> parameter_data;
 
 public:
+	//! Invalidate a bound parameter expression - forcing a rebind on any subsequent filters
+	DUCKDB_API static void Invalidate(Expression &expr);
+	//! Invalidate all parameters within an expression
+	DUCKDB_API static void InvalidateRecursive(Expression &expr);
+
 	bool IsScalar() const override;
 	bool HasParameter() const override;
 	bool IsFoldable() const override;
@@ -32,4 +37,5 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 };
+
 } // namespace duckdb

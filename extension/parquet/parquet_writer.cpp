@@ -245,7 +245,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	}
 }
 
-void ParquetWriter::Flush(ChunkCollection &buffer) {
+void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	if (buffer.Count() == 0) {
 		return;
 	}
@@ -258,19 +258,24 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 	row_group.__isset.file_offset = true;
 
 	// iterate over each of the columns of the chunk collection and write them
-	auto &chunks = buffer.Chunks();
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		auto write_state = column_writers[col_idx]->InitializeWriteState(row_group);
-		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
-			column_writers[col_idx]->Prepare(*write_state, nullptr, chunks[chunk_idx]->data[col_idx],
-			                                 chunks[chunk_idx]->size());
+		const unique_ptr<ColumnWriter> &col_writer = column_writers[col_idx];
+		auto write_state = col_writer->InitializeWriteState(row_group);
+		if (col_writer->HasAnalyze()) {
+			for (auto &chunk : buffer.Chunks()) {
+				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());
+			}
+			col_writer->FinalizeAnalyze(*write_state);
 		}
-		column_writers[col_idx]->BeginWrite(*write_state);
-		for (idx_t chunk_idx = 0; chunk_idx < chunks.size(); chunk_idx++) {
-			column_writers[col_idx]->Write(*write_state, chunks[chunk_idx]->data[col_idx], chunks[chunk_idx]->size());
+		for (auto &chunk : buffer.Chunks()) {
+			col_writer->Prepare(*write_state, nullptr, chunk.data[col_idx], chunk.size());
 		}
-		column_writers[col_idx]->FinalizeWrite(*write_state);
+		col_writer->BeginWrite(*write_state);
+		for (auto &chunk : buffer.Chunks()) {
+			col_writer->Write(*write_state, chunk.data[col_idx], chunk.size());
+		}
+		col_writer->FinalizeWrite(*write_state);
 	}
 
 	// append the row group to the file meta data

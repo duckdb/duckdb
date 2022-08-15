@@ -1,0 +1,7 @@
+# name: test/sql/alter/test_alter_if_exists.test
+# description: Test ALTER SEQUENCE IF EXISTS
+# group: [alter]
+
+# sequence does not exist
+statement ok
+ALTER SEQUENCE IF EXISTS seq OWNED BY x;
