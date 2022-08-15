@@ -1191,15 +1191,14 @@ static bool CanInterpolate(const LogicalType &type) {
 	}
 }
 
-static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-                               const AggregateFunction &function) {
+static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
 	writer.WriteList<double>(bind_data->quantiles);
 }
 
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
-                                              AggregateFunction &bound_function) {
+                                             AggregateFunction &bound_function) {
 	auto quantiles = reader.ReadRequiredList<double>();
 	return make_unique<QuantileBindData>(move(quantiles));
 }

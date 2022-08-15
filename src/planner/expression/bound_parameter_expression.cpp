@@ -71,10 +71,10 @@ void BoundParameterExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeserializationState &state,
-                                                               FieldReader &reader) {
+                                                             FieldReader &reader) {
 	auto &global_parameter_set = state.gstate.parameter_data;
 	auto parameter_nr = reader.ReadRequired<idx_t>();
-	auto result =  make_unique<BoundParameterExpression>(parameter_nr);
+	auto result = make_unique<BoundParameterExpression>(parameter_nr);
 	result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
 	// check if we have already deserialized a parameter with this number

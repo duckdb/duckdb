@@ -167,15 +167,15 @@ TEST_CASE("Test logical_cross_product", "[serialization]") {
 }
 
 // TODO: only select for now
-//TEST_CASE("Test logical_create_index", "[serialization]") {
+// TEST_CASE("Test logical_create_index", "[serialization]") {
 //	test_helper("CREATE INDEX idx ON tbl (foo)", {"CREATE TABLE tbl (foo INTEGER)"});
 //}
 // TODO: only select for now
-//TEST_CASE("Test logical_create_schema", "[serialization]") {
+// TEST_CASE("Test logical_create_schema", "[serialization]") {
 //	test_helper("CREATE SCHEMA test");
 //}
 // TODO: only select for now
-//TEST_CASE("Test logical_create_view", "[serialization]") {
+// TEST_CASE("Test logical_create_view", "[serialization]") {
 //	test_helper("CREATE VIEW test_view AS (SELECT 42)");
 //}
 

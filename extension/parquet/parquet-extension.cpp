@@ -105,6 +105,17 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataCollection buffer;
 };
 
+void ParquetOptions::Serialize(FieldWriter &writer) const {
+	writer.WriteField<bool>(binary_as_string);
+	writer.WriteField<bool>(filename);
+	writer.WriteField<bool>(hive_partitioning);
+}
+void ParquetOptions::Deserialize(FieldReader &reader) {
+	binary_as_string = reader.ReadRequired<bool>();
+	filename = reader.ReadRequired<bool>();
+	hive_partitioning = reader.ReadRequired<bool>();
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -388,8 +399,7 @@ public:
 		writer.WriteList<string>(bind_data.files);
 		writer.WriteRegularSerializableList(bind_data.types);
 		writer.WriteList<string>(bind_data.names);
-
-		// TODO ParquetOptions
+		bind_data.parquet_options.Serialize(writer);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
@@ -398,6 +408,7 @@ public:
 		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		auto names = reader.ReadRequiredList<string>();
 		ParquetOptions options(context);
+		options.Deserialize(reader);
 
 		return ParquetScanBindInternal(context, files, types, names, options);
 	}

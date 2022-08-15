@@ -57,6 +57,16 @@ public:
 		}
 	}
 
+	// vector<bool> yay
+	template <class T, class CONTAINER_TYPE = vector<T>>
+	void WriteListNoReference(const CONTAINER_TYPE &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for (auto element : elements) {
+			Write<T>(element);
+		}
+	}
+
 	template <class T>
 	void WriteSerializable(const T &element) {
 		AddField();
@@ -174,6 +184,7 @@ public:
 		AddField();
 		auto result_count = source.Read<uint32_t>();
 		vector<T> result;
+		result.reserve(result_count);
 		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(source.Read<T>());
 		}

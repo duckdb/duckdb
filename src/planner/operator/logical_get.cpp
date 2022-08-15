@@ -86,12 +86,10 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 	if (!function.serialize) {
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
 		writer.WriteRegularSerializableList(parameters);
-		if (!named_parameters.empty()) {
-			writer.WriteField<idx_t>(named_parameters.size());
-			for (auto &pair : named_parameters) {
-				writer.WriteString(pair.first);
-				writer.WriteSerializable(pair.second);
-			}
+		writer.WriteField<idx_t>(named_parameters.size());
+		for (auto &pair : named_parameters) {
+			writer.WriteString(pair.first);
+			writer.WriteSerializable(pair.second);
 		}
 		writer.WriteRegularSerializableList(input_table_types);
 		writer.WriteList<string>(input_table_names);
@@ -121,7 +119,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 		named_parameter_map_t named_parameters;
 		for (idx_t i = 0; i < named_parameters_size; i++) {
 			auto first = reader.ReadRequired<string>();
-			auto second = reader.ReadRequired<Value>();
+			auto second = reader.ReadRequiredSerializable<Value, Value>();
 			auto pair = make_pair(first, second);
 			named_parameters.insert(pair);
 		}
