@@ -373,7 +373,7 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	return std::move(batches);
 }
 
-py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+duckdb::pyarrow::arrow_table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -393,10 +393,10 @@ py::object DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	py::list batches = FetchAllArrowChunks(chunk_size);
 
 	// We return an Arrow Table
-	return from_batches_func(batches, schema_obj);
+	return py::cast<duckdb::pyarrow::arrow_table>(from_batches_func(batches, schema_obj));
 }
 
-py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
+duckdb::pyarrow::record_batch_reader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -406,7 +406,7 @@ py::object DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	//! We have to construct an Arrow Array Stream
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
-	return record_batch_reader;
+	return py::cast<duckdb::pyarrow::record_batch_reader>(record_batch_reader);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {

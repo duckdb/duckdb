@@ -21,6 +21,30 @@
 #include <vector>
 
 namespace duckdb {
+
+namespace pyarrow {
+class record_batch_reader : public py::object {
+public:
+	record_batch_reader(const py::object &o) : py::object(o, borrowed_t {}) {
+	}
+	using py::object::object;
+
+	static bool check_(const py::handle &object) {
+		return !py::none().is(object);
+	}
+};
+class arrow_table : public py::object {
+public:
+	arrow_table(const py::object &o) : py::object(o, borrowed_t {}) {
+	}
+	using py::object::object;
+
+	static bool check_(const py::handle &object) {
+		return !py::none().is(object);
+	}
+};
+} // namespace pyarrow
+
 class PythonTableArrowArrayStreamFactory {
 public:
 	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, ClientConfig &config)
@@ -46,3 +70,16 @@ private:
 	                                 ArrowStreamParameters &parameters, ClientConfig &config);
 };
 } // namespace duckdb
+
+namespace pybind11 {
+namespace detail {
+template <>
+struct handle_type_name<duckdb::pyarrow::record_batch_reader> {
+	static constexpr auto name = _("pyarrow.lib.RecordBatchReader");
+};
+template <>
+struct handle_type_name<duckdb::pyarrow::arrow_table> {
+	static constexpr auto name = _("pyarrow.lib.Table");
+};
+} // namespace detail
+} // namespace pybind11

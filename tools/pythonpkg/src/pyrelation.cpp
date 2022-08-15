@@ -462,7 +462,7 @@ py::object DuckDBPyRelation::Fetchall() {
 	return res->Fetchall();
 }
 
-py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
+duckdb::pyarrow::arrow_table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;
@@ -474,7 +474,7 @@ py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 	return res->FetchArrowTable(batch_size);
 }
 
-py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
+duckdb::pyarrow::record_batch_reader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 	auto res = make_unique<DuckDBPyResult>();
 	{
 		py::gil_scoped_release release;

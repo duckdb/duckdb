@@ -42,11 +42,11 @@ public:
 
 	data_frame FetchDF();
 
-	py::object FetchArrowTable(idx_t chunk_size);
+	duckdb::pyarrow::arrow_table FetchArrowTable(idx_t chunk_size);
 
 	data_frame FetchDFChunk(idx_t vectors_per_chunk);
 
-	py::object FetchRecordBatchReader(idx_t chunk_size);
+	duckdb::pyarrow::record_batch_reader FetchRecordBatchReader(idx_t chunk_size);
 
 	py::list Description();
 
