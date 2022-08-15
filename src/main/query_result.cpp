@@ -43,7 +43,6 @@ const std::string &BaseQueryResult::GetError() {
 }
 
 PreservedError &BaseQueryResult::GetErrorObject() {
-	D_ASSERT(HasError());
 	return error;
 }
 
