@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/common/stack.hpp"
 
 namespace duckdb {
 
@@ -57,7 +58,7 @@ public:
 
 private:
 	//! Stack of iterator entries
-	stack<IteratorEntry> stack;
+	stack<IteratorEntry> nodes;
 	//! Last visited leaf
 	Leaf *last_leaf = nullptr;
 	//! Go to the next node

@@ -98,7 +98,7 @@ void Iterator::FindMinimum(Node &node) {
 		break;
 	}
 	}
-	stack.push(IteratorEntry(&node, pos));
+	nodes.push(IteratorEntry(&node, pos));
 	FindMinimum(*next);
 }
 
@@ -147,20 +147,20 @@ bool Iterator::Scan(Key *bound, idx_t max_count, vector<row_t> &result_ids, bool
 }
 
 bool Iterator::Next() {
-	if (!stack.empty()) {
-		auto cur_node = stack.top().node;
+	if (!nodes.empty()) {
+		auto cur_node = nodes.top().node;
 		if (cur_node->type == NodeType::NLeaf) {
 			// Pop Leaf (We must pop the prefix size + the key to the node (unless we are popping the root)
-			idx_t elements_to_pop = cur_node->prefix.Size() + (stack.size() != 1);
+			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
 			cur_key.Pop(elements_to_pop);
-			stack.pop();
+			nodes.pop();
 		}
 	}
 
 	// Look for the next leaf
-	while (!stack.empty()) {
+	while (!nodes.empty()) {
 		// cur_node
-		auto &top = stack.top();
+		auto &top = nodes.top();
 		Node *node = top.node;
 		if (node->type == NodeType::NLeaf) {
 			// found a leaf: move to next node
@@ -178,13 +178,13 @@ bool Iterator::Next() {
 				cur_key.Push(next_node->prefix[i]);
 			}
 			// next node found: push it
-			stack.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
+			nodes.push(IteratorEntry(next_node, DConstants::INVALID_INDEX));
 		} else {
 			// no node found: move up the tree and Pop prefix and key of current node
-			auto cur_node = stack.top().node;
-			idx_t elements_to_pop = cur_node->prefix.Size() + (stack.size() != 1);
+			auto cur_node = nodes.top().node;
+			idx_t elements_to_pop = cur_node->prefix.Size() + (nodes.size() != 1);
 			cur_key.Pop(elements_to_pop);
-			stack.pop();
+			nodes.pop();
 		}
 	}
 	return false;
@@ -197,8 +197,8 @@ bool Iterator::Bound(Node *node, Key &key, bool inclusive) {
 	}
 	idx_t depth = 0;
 	while (true) {
-		stack.push(IteratorEntry(node, 0));
-		auto &top = stack.top();
+		nodes.push(IteratorEntry(node, 0));
+		auto &top = nodes.top();
 		// reconstruct the prefix
 		for (idx_t i = 0; i < top.node->prefix.Size(); i++) {
 			cur_key.Push(top.node->prefix[i]);
@@ -207,13 +207,13 @@ bool Iterator::Bound(Node *node, Key &key, bool inclusive) {
 			while (node->type != NodeType::NLeaf) {
 				auto min_pos = node->GetMin();
 				PushKey(node, min_pos);
-				stack.push(IteratorEntry(node, min_pos));
+				nodes.push(IteratorEntry(node, min_pos));
 				node = node->GetChild(*art, min_pos);
 				// reconstruct the prefix
 				for (idx_t i = 0; i < node->prefix.Size(); i++) {
 					cur_key.Push(node->prefix[i]);
 				}
-				auto &c_top = stack.top();
+				auto &c_top = nodes.top();
 				c_top.node = node;
 			}
 		}
@@ -256,7 +256,7 @@ bool Iterator::Bound(Node *node, Key &key, bool inclusive) {
 		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less
-				stack.pop();
+				nodes.pop();
 				return Next();
 			} else {
 				// Greater
