@@ -120,7 +120,7 @@ static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_
 		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		throw pending_query.error.ToException();
+		pending_query.ThrowError();
 	}
 	return pending_query.Execute();
 }
@@ -153,7 +153,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 
 		prep = connection->Prepare(move(statements.back()));
 		if (prep->HasError()) {
-			throw prep->error.ToException();
+			prep->error.ToException();
 		}
 	}
 
