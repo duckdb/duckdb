@@ -9,7 +9,7 @@ include_directories(include ../.. ../../third_party/httplib
 
 add_library(httpfs_extension STATIC s3fs.cpp httpfs.cpp crypto.cpp
                                     httpfs-extension.cpp)
-set(INGORE_WARNINGS OFF)
+set(IGNORE_WARNINGS OFF)
 build_loadable_extension(httpfs s3fs.cpp httpfs.cpp crypto.cpp
                          httpfs-extension.cpp ${IGNORE_WARNINGS})
 

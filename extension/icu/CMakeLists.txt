@@ -22,7 +22,7 @@ set(ICU_EXTENSION_FILES
 add_library(icu_extension STATIC ${ICU_EXTENSION_FILES})
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
-set(INGORE_WARNINGS ON)
+set(IGNORE_WARNINGS ON)
 build_loadable_extension(icu ${ICU_EXTENSION_FILES} ${IGNORE_WARNINGS})
 install(
   TARGETS icu_extension

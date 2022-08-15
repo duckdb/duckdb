@@ -657,7 +657,7 @@ function(link_threads LIBRARY)
   endif()
 endfunction()
 
-function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNINGS)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   #  skip building extensions on mingw because its weird
   if(WIN32 AND NOT MSVC)
     return()
@@ -670,6 +670,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY IGNORE_WARNING
   list(REMOVE_AT FILES 0)
   # remove output_directory
   list(REMOVE_AT FILES 0)
+  # remove ignore_warnings
+  list(REMOVE_AT FILES -1)
 
   add_library(${TARGET_NAME} SHARED ${FILES})
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
@@ -741,10 +743,13 @@ endif()
 
 endfunction()
 
-function(build_loadable_extension NAME IGNORE_WARNINGS)
+function(build_loadable_extension NAME)
   # all parameters after name
   set(FILES ${ARGV})
+  # Remove name
   list(REMOVE_AT FILES 0)
+  # Remove ignore_warnings
+  list(REMOVE_AT FILES -1)
 
   build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES} ${IGNORE_WARNINGS})
 endfunction()
