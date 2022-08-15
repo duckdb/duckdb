@@ -28,9 +28,11 @@ bool BaseQueryResult::HasError() {
 	D_ASSERT((bool)error == !success);
 	return !success;
 }
+
 const std::string &BaseQueryResult::GetError() {
 	return error.Message();
 }
+
 PreservedError &BaseQueryResult::GetErrorObject() {
 	return error;
 }
