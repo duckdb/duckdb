@@ -94,8 +94,6 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         py::arg("aggregation_columns"))
 	    .def("describe", &DuckDBPyRelation::Describe,
 	         "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
-	    .def("union", &DuckDBPyRelation::Union,
-	         "Create the set union of this relation object with another relation object in other_rel")
 	    .def("except_", &DuckDBPyRelation::Except,
 	         "Create the set except of this relation object with another relation object in other_rel",
 	         py::arg("other_rel"))
