@@ -31,6 +31,7 @@ class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
+class SimpleFunction;
 
 struct PragmaInfo;
 
