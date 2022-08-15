@@ -47,7 +47,8 @@ void PhysicalJoin::BuildJoinPipelines(Executor &executor, Pipeline &current, Pip
 
 		if (join_op.type == PhysicalOperatorType::HASH_JOIN) {
 			auto &hash_join_op = (PhysicalHashJoin &)join_op;
-			hash_join_op.can_go_external = !state.recursive_cte && !IsRightOuterJoin(join_op.join_type);
+			hash_join_op.can_go_external = !state.recursive_cte && !IsRightOuterJoin(join_op.join_type) &&
+			                               join_op.join_type != JoinType::ANTI && join_op.join_type != JoinType::MARK;
 			if (hash_join_op.can_go_external) {
 				add_child_pipeline = true;
 			}

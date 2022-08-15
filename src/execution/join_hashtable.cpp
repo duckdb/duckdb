@@ -1017,7 +1017,8 @@ void JoinHashTable::UnswizzleBlocks() {
 	D_ASSERT(SwizzledCount() == 0);
 }
 
-void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts, idx_t max_ht_size) {
+void JoinHashTable::ComputePartitionSizes(ClientConfig &config, vector<unique_ptr<JoinHashTable>> &local_hts,
+                                          idx_t max_ht_size) {
 	external = true;
 
 	// First set the number of tuples in the HT per partitioned round

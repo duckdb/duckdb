@@ -72,13 +72,13 @@ quackquack5978325
 quackquack5978326
 
 # IN-clause (semi join)
-query I
+query I sort
 SELECT k FROM integers WHERE i IN (SELECT * FROM other_table)
 ----
-quackquack337
-quackquack948247
 quackquack1779793
+quackquack337
 quackquack4779793
+quackquack948247
 
 query I
 (SELECT k FROM integers WHERE i>1978321 LIMIT 5) UNION ALL (SELECT k FROM integers WHERE i>4978321 LIMIT 5)
