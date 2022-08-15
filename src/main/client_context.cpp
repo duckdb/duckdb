@@ -545,7 +545,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	auto lock = LockContext();
 	auto pending = PendingQueryPreparedInternal(*lock, query, prepared, parameters);
 	if (pending->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending->error);
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->ExecuteInternal(*lock);
 }
@@ -582,7 +582,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	parameters.allow_stream_result = allow_stream_result;
 	auto pending = PendingQueryInternal(lock, move(statement), parameters, verify);
 	if (pending->HasError()) {
-		return make_unique<MaterializedQueryResult>(move(pending->error));
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return ExecutePendingQueryInternal(lock, *pending);
 }
@@ -725,7 +725,7 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto pending_query = PendingQuery(move(statement), allow_stream_result);
 	if (pending_query->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending_query->error);
+		return make_unique<MaterializedQueryResult>(pending_query->GetErrorObject());
 	}
 	return pending_query->Execute();
 }
@@ -758,7 +758,7 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		auto pending_query = PendingQueryInternal(*lock, move(statement), parameters);
 		unique_ptr<QueryResult> current_result;
 		if (pending_query->HasError()) {
-			current_result = make_unique<MaterializedQueryResult>(pending_query->error);
+			current_result = make_unique<MaterializedQueryResult>(pending_query->GetErrorObject());
 		} else {
 			current_result = ExecutePendingQueryInternal(*lock, *pending_query);
 		}
@@ -1058,11 +1058,11 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		try {
 			auto prepare_result = RunStatementInternal(lock, string(), move(verifier.prepare_statement), false, false);
 			if (prepare_result->HasError()) {
-				throw prepare_result->error.ToException("Failed prepare during verify: ");
+				throw prepare_result->GetErrorObject().ToException("Failed prepare during verify: ");
 			}
 			auto execute_result = RunStatementInternal(lock, string(), move(verifier.execute_statement), false, false);
 			if (execute_result->HasError()) {
-				throw execute_result->error.ToException("Failed execute during verify: ");
+				throw execute_result->GetErrorObject().ToException("Failed execute during verify: ");
 			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
 		} catch (const Exception &ex) {
@@ -1086,7 +1086,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		try {
 			auto result = RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
 			if (result->HasError()) {
-				error = result->error;
+				error = result->GetErrorObject();
 			}
 		} catch (const Exception &ex) { // LCOV_EXCL_START
 			error = PreservedError(ex);
@@ -1109,7 +1109,7 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 	D_ASSERT(names.size() >= results.size());
 	for (idx_t i = 1; i < results.size(); i++) {
 		auto name = names[i];
-		if (!results[0]->HasError() = results[i]->HasError()) { // LCOV_EXCL_START
+		if (results[0]->HasError() != results[i]->HasError()) { // LCOV_EXCL_START
 			string result = name + " differs from original result!\n";
 			result += "Original Result:\n" + results[0]->ToString();
 			result += name + ":\n" + results[i]->ToString();

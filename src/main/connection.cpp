@@ -229,21 +229,21 @@ shared_ptr<Relation> Connection::RelationFromQuery(unique_ptr<SelectStatement> s
 void Connection::BeginTransaction() {
 	auto result = Query("BEGIN TRANSACTION");
 	if (result->HasError()) {
-		throw result->error.ToException();
+		throw result->GetErrorObject().ToException();
 	}
 }
 
 void Connection::Commit() {
 	auto result = Query("COMMIT");
 	if (result->HasError()) {
-		throw result->error.ToException();
+		throw result->GetErrorObject().ToException();
 	}
 }
 
 void Connection::Rollback() {
 	auto result = Query("ROLLBACK");
 	if (result->HasError()) {
-		throw result->error.ToException();
+		throw result->GetErrorObject().ToException();
 	}
 }
 

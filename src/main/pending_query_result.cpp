@@ -21,19 +21,19 @@ PendingQueryResult::~PendingQueryResult() {
 unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 	if (!context) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error);
+		                            error.Message());
 	}
 	return context->LockContext();
 }
 
 void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
-	bool invalidated = !success || !context;
+	bool invalidated = HasError() || !context;
 	if (!invalidated) {
 		invalidated = !context->IsActiveResult(lock, this);
 	}
 	if (invalidated) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error);
+		                            error.Message());
 	}
 }
 
@@ -51,7 +51,7 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 	CheckExecutableInternal(lock);
 	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY) {
 	}
-	if (!success) {
+	if (HasError()) {
 		return make_unique<MaterializedQueryResult>(error);
 	}
 	auto result = context->FetchResultInternal(lock, *this);

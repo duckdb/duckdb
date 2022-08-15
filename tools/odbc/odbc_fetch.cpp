@@ -65,9 +65,9 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			// it's need to reset the last_fetched_len
 			ResetLastFetchedVariableVal();
 			auto chunk = stmt->res->Fetch();
-			if (!stmt->res->success) {
+			if (stmt->res->HasError()) {
 				stmt->open = false;
-				stmt->error_messages.emplace_back(stmt->res->error.Message());
+				stmt->error_messages.emplace_back(stmt->res->GetError());
 				return SQL_ERROR;
 			}
 			if (!chunk) {
@@ -85,8 +85,7 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			}
 		} catch (duckdb::Exception &e) {
 			// TODO this is quite dirty, we should have separate error holder
-			stmt->res->error = PreservedError(e);
-			stmt->res->success = false;
+			stmt->res->SetError(PreservedError(e));
 			stmt->open = false;
 			stmt->error_messages.emplace_back(std::string(e.what()));
 			return SQL_ERROR;

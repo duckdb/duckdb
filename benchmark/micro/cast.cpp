@@ -26,7 +26,7 @@ string GetQuery() override {
 }
 string VerifyResult(QueryResult *result) override {
 	if (result->HasError()) {
-		return result->error.Message();
+		return result->GetError();
 	}
 	return string();
 }
@@ -53,7 +53,7 @@ string GetQuery() override {
 }
 string VerifyResult(QueryResult *result) override {
 	if (result->HasError()) {
-		return result->error.Message();
+		return result->GetError();
 	}
 	return string();
 }
@@ -82,7 +82,7 @@ string GetQuery() override {
 }
 string VerifyResult(QueryResult *result) override {
 	if (result->HasError()) {
-		return result->error.Message();
+		return result->GetError();
 	}
 	return string();
 }

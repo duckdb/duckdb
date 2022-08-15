@@ -20,17 +20,18 @@ BaseQueryResult::~BaseQueryResult() {
 }
 
 void BaseQueryResult::SetError(PreservedError error) {
-	success = false;
-	error = move(error);
+	success = !error;
+	this->error = move(error);
 }
 
 bool BaseQueryResult::HasError() {
+	D_ASSERT((bool)error == !success);
 	return !success;
 }
 const std::string &BaseQueryResult::GetError() {
 	return error.Message();
 }
-const PreservedError &BaseQueryResult::GetErrorObject() {
+PreservedError &BaseQueryResult::GetErrorObject() {
 	return error;
 }
 
@@ -65,7 +66,7 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 		return false;
 	}
 	if (!success) {
-		return error == other.error;
+		return GetErrorObject() == other.GetErrorObject();
 	}
 	// compare names
 	if (names != other.names) {

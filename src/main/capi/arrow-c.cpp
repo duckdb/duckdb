@@ -34,7 +34,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 		return DuckDBSuccess;
 	}
 	auto wrapper = (ArrowResultWrapper *)result;
-	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->error);
+	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
 	if (!success) { // LCOV_EXCL_START
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
@@ -77,7 +77,7 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 
 const char *duckdb_query_arrow_error(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	return wrapper->result->error.Message().c_str();
+	return wrapper->result->GetError().c_str();
 }
 
 void duckdb_destroy_arrow(duckdb_arrow *result) {

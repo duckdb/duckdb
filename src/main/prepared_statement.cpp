@@ -17,6 +17,10 @@ PreparedStatement::PreparedStatement(PreservedError error) : context(nullptr), s
 PreparedStatement::~PreparedStatement() {
 }
 
+bool PreparedStatement::HasError() const {
+	return !success;
+}
+
 idx_t PreparedStatement::ColumnCount() {
 	D_ASSERT(data);
 	return data->types.size();
@@ -45,7 +49,7 @@ const vector<string> &PreparedStatement::GetNames() {
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
 	auto pending = PendingQuery(values, allow_stream_result);
 	if (pending->HasError()) {
-		return make_unique<MaterializedQueryResult>(pending->error);
+		return make_unique<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->Execute();
 }

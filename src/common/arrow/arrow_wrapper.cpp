@@ -111,7 +111,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	auto &result = *my_stream->result;
 	if (result.HasError()) {
-		my_stream->last_error = result.GetError();
+		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
@@ -191,7 +191,7 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 		unique_ptr<DataChunk> data_chunk;
 		if (!TryFetchNext(*result, data_chunk, error)) {
 			if (result->HasError()) {
-				error = result->error;
+				error = result->GetErrorObject();
 			}
 			return false;
 		}

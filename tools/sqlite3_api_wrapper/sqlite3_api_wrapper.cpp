@@ -166,7 +166,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
 			auto res = db->con->Query(move(statements[i]));
 			if (res->HasError()) {
-				db->last_error = res->error;
+				db->last_error = res->GetErrorObject();
 				return SQLITE_ERROR;
 			}
 		}
@@ -221,7 +221,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
 		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
-			pStmt->db->last_error = pStmt->result->error;
+			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			pStmt->prepared = nullptr;
 			return SQLITE_ERROR;
 		}
@@ -652,7 +652,7 @@ int sqlite3_initialize(void) {
 int sqlite3_finalize(sqlite3_stmt *pStmt) {
 	if (pStmt) {
 		if (pStmt->result && pStmt->result->HasError()) {
-			pStmt->db->last_error = pStmt->result->error;
+			pStmt->db->last_error = pStmt->result->GetErrorObject();
 			delete pStmt;
 			return SQLITE_ERROR;
 		}

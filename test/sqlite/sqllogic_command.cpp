@@ -73,7 +73,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(Connection *connection
 	auto result = connection->Query(sql_query);
 
 	if (result->HasError()) {
-		TestHelperExtension::SetLastError(result->error.Message());
+		TestHelperExtension::SetLastError(result->GetError());
 	} else {
 		TestHelperExtension::ClearLastError();
 	}

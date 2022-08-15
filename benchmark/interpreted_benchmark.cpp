@@ -291,7 +291,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		result = state->con.Query(init_query);
 		while (result) {
 			if (result->HasError()) {
-				throw result->error.ToException();
+				throw result->GetErrorObject().ToException();
 			}
 			result = move(result->next);
 		}
@@ -315,7 +315,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	}
 	while (result) {
 		if (result->HasError()) {
-			throw result->error.ToException();
+			throw result->GetErrorObject().ToException();
 		}
 		result = move(result->next);
 	}
@@ -346,7 +346,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 		result = state.con.Query(cleanup_query);
 		while (result) {
 			if (result->HasError()) {
-				throw result->error.ToException();
+				throw result->GetErrorObject().ToException();
 			}
 			result = move(result->next);
 		}
@@ -366,7 +366,7 @@ string InterpretedBenchmark::GetDatabasePath() {
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (state.result->HasError()) {
-		return state.result->error.Message();
+		return state.result->GetError();
 	}
 	if (result_column_count == 0) {
 		// no result specified

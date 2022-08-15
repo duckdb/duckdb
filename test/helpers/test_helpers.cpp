@@ -21,7 +21,7 @@ namespace duckdb {
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.error.Message().c_str());
+		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 	}
 	return !result.HasError();
 }
@@ -117,7 +117,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 	}
 	auto &result = (MaterializedQueryResult &)result_;
 	if (result.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", result.error.Message().c_str());
+		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 		return false;
 	}
 	if (result.names.size() != result.types.size()) {
@@ -176,8 +176,8 @@ string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (MaterializedQueryResult &)result;
 	if (materialized.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", materialized.error.Message().c_str());
-		return materialized.error.Message();
+		fprintf(stderr, "Query failed with message: %s\n", materialized.GetError().c_str());
+		return materialized.GetError();
 	}
 	string error;
 	if (!compare_result(csv, materialized.Collection(), materialized.types, header, error)) {

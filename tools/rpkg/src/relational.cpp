@@ -197,7 +197,7 @@ external_pointer<T> make_external(const string &rclass, Args &&...args) {
 
 static SEXP result_to_df(unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
-		stop(res->error.Message());
+		stop(res->GetError());
 	}
 	if (res->type == QueryResultType::STREAM_RESULT) {
 		res = ((StreamQueryResult &)*res).Materialize();
@@ -244,7 +244,7 @@ static SEXP result_to_df(unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_sql(duckdb::rel_extptr_t rel, std::string sql) {
 	auto res = rel->rel->Query("_", sql);
 	if (res->HasError()) {
-		stop(res->error.Message());
+		stop(res->GetError());
 	}
 	return result_to_df(move(res));
 }

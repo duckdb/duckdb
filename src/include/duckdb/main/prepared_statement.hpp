@@ -43,6 +43,8 @@ public:
 	idx_t n_param;
 
 public:
+	//! Returns whether or not an error occurred
+	bool HasError() const;
 	//! Returns the number of columns in the result
 	idx_t ColumnCount();
 	//! Returns the statement type of the underlying prepared statement object

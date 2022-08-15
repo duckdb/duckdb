@@ -48,7 +48,7 @@ const char *duckdb_pending_error(duckdb_pending_result pending_result) {
 	if (!wrapper->statement) {
 		return nullptr;
 	}
-	return wrapper->statement->error.Message().c_str();
+	return wrapper->statement->GetError().c_str();
 }
 
 duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_result) {
@@ -66,12 +66,10 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	try {
 		return_value = wrapper->statement->ExecuteTask();
 	} catch (const duckdb::Exception &ex) {
-		!wrapper->statement->HasError() = false;
-		wrapper->statement->error = duckdb::PreservedError(ex);
+		wrapper->statement->SetError(duckdb::PreservedError(ex));
 		return DUCKDB_PENDING_ERROR;
 	} catch (std::exception &ex) {
-		!wrapper->statement->HasError() = false;
-		wrapper->statement->error = duckdb::PreservedError(ex);
+		wrapper->statement->SetError(duckdb::PreservedError(ex));
 		return DUCKDB_PENDING_ERROR;
 	}
 	switch (return_value) {

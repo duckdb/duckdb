@@ -41,17 +41,19 @@ public:
 	vector<LogicalType> types;
 	//! The names of the result
 	vector<string> names;
-	//! Whether or not execution was successful
-	bool success;
-	//! The error (in case execution was not successful)
-	PreservedError error;
 
 public:
 	DUCKDB_API void SetError(PreservedError error);
 	DUCKDB_API bool HasError();
 	DUCKDB_API const std::string &GetError();
-	DUCKDB_API const PreservedError &GetErrorObject();
+	DUCKDB_API PreservedError &GetErrorObject();
 	DUCKDB_API idx_t ColumnCount();
+
+protected:
+	//! Whether or not execution was successful
+	bool success;
+	//! The error (in case execution was not successful)
+	PreservedError error;
 };
 
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
