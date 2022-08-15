@@ -690,11 +690,8 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
-		switch (arguments[1]->return_type.id()) {
+		switch (bound_function.arguments[1].id()) {
 		case LogicalType::TIMESTAMP:
-		case LogicalType::TIMESTAMP_MS:
-		case LogicalType::TIMESTAMP_NS:
-		case LogicalType::TIMESTAMP_S:
 			bound_function.function = DateTruncFunction<timestamp_t, date_t>;
 			bound_function.statistics = DateTruncStats<timestamp_t, date_t>(part_code);
 			break;
@@ -708,11 +705,8 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 		bound_function.return_type = LogicalType::DATE;
 		break;
 	default:
-		switch (arguments[1]->return_type.id()) {
+		switch (bound_function.arguments[1].id()) {
 		case LogicalType::TIMESTAMP:
-		case LogicalType::TIMESTAMP_MS:
-		case LogicalType::TIMESTAMP_NS:
-		case LogicalType::TIMESTAMP_S:
 			bound_function.statistics = DateTruncStats<timestamp_t, timestamp_t>(part_code);
 			break;
 		case LogicalType::DATE:
