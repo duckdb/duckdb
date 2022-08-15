@@ -1058,11 +1058,11 @@ PreservedError ClientContext::VerifyQuery(ClientContextLock &lock, const string 
 		try {
 			auto prepare_result = RunStatementInternal(lock, string(), move(verifier.prepare_statement), false, false);
 			if (prepare_result->HasError()) {
-				throw prepare_result->GetErrorObject().ToException("Failed prepare during verify: ");
+				prepare_result->ThrowError("Failed prepare during verify: ");
 			}
 			auto execute_result = RunStatementInternal(lock, string(), move(verifier.execute_statement), false, false);
 			if (execute_result->HasError()) {
-				throw execute_result->GetErrorObject().ToException("Failed execute during verify: ");
+				execute_result->ThrowError("Failed execute during verify: ");
 			}
 			results.push_back(unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(execute_result)));
 		} catch (const Exception &ex) {

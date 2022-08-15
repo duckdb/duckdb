@@ -32,7 +32,8 @@ public:
 	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message();
 	//! Let's us do things like 'if (error)'
-	operator bool();
+	operator bool() const;
+	bool operator==(const PreservedError &other) const;
 
 private:
 	//! Whether this PreservedError contains an exception or not

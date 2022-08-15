@@ -211,7 +211,7 @@ void Relation::Insert(const string &schema_name, const string &table_name) {
 	if (res->HasError()) {
 		D_ASSERT(res->GetErrorObject());
 		const string prepended_message = "Failed to insert into table '" + table_name + "': ";
-		throw res->GetErrorObject().ToException(prepended_message);
+		res->ThrowError(prepended_message);
 	}
 }
 
@@ -231,7 +231,7 @@ void Relation::Create(const string &schema_name, const string &table_name) {
 	if (res->HasError()) {
 		D_ASSERT(res->GetErrorObject());
 		const string prepended_message = "Failed to create table '" + table_name + "': ";
-		throw res->GetErrorObject().ToException(prepended_message);
+		res->ThrowError(prepended_message);
 	}
 }
 
@@ -241,7 +241,7 @@ void Relation::WriteCSV(const string &csv_file) {
 	if (res->HasError()) {
 		D_ASSERT(res->GetErrorObject());
 		const string prepended_message = "Failed to write '" + csv_file + "': ";
-		throw res->GetErrorObject().ToException(prepended_message);
+		res->ThrowError(prepended_message);
 	}
 }
 
@@ -251,7 +251,7 @@ shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool
 	if (res->HasError()) {
 		D_ASSERT(res->GetErrorObject());
 		const string prepended_message = "Failed to create view '" + name + "': ";
-		throw res->GetErrorObject().ToException(prepended_message);
+		res->ThrowError(prepended_message);
 	}
 	return shared_from_this();
 }

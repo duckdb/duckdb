@@ -84,8 +84,18 @@ Exception PreservedError::ToException(const string &prepended_message) const {
 	}
 }
 
-PreservedError::operator bool() {
+PreservedError::operator bool() const {
 	return initialized;
+}
+
+bool PreservedError::operator==(const PreservedError &other) const {
+	if (initialized != other.initialized) {
+		return false;
+	}
+	if (type != other.type) {
+		return false;
+	}
+	return raw_message == other.raw_message;
 }
 
 } // namespace duckdb

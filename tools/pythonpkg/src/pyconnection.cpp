@@ -147,7 +147,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			auto res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
-				throw res->GetErrorObject().ToException();
+				res->ThrowError();
 			}
 		}
 
@@ -180,7 +180,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 			res->result = CompletePendingQuery(*pending_query);
 
 			if (res->result->HasError()) {
-				throw res->result->GetErrorObject().ToException();
+				res->result->ThrowError();
 			}
 		}
 

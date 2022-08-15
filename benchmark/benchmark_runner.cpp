@@ -63,7 +63,7 @@ void BenchmarkRunner::SaveDatabase(DuckDB &db, string name) {
 	auto result = con.Query(
 	    StringUtil::Format("EXPORT DATABASE '%s' (FORMAT CSV)", fs.JoinPath(DUCKDB_BENCHMARK_DIRECTORY, name)));
 	if (result->HasError()) {
-		throw result->GetErrorObject().ToException("Failed to save database: ");
+		result->ThrowError("Failed to save database: ");
 	}
 }
 
@@ -80,7 +80,7 @@ bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
 	Connection con(db);
 	auto result = con.Query(StringUtil::Format("IMPORT DATABASE '%s'", base_dir));
 	if (result->HasError()) {
-		throw result->GetErrorObject().ToException("Failed to load database: ");
+		result->ThrowError("Failed to load database: ");
 	}
 	return true;
 }

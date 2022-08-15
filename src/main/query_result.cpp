@@ -19,12 +19,17 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
 BaseQueryResult::~BaseQueryResult() {
 }
 
+void BaseQueryResult::ThrowError(const string &prepended_message) const {
+	D_ASSERT(HasError());
+	throw error.ToException(prepended_message);
+}
+
 void BaseQueryResult::SetError(PreservedError error) {
 	success = !error;
 	this->error = move(error);
 }
 
-bool BaseQueryResult::HasError() {
+bool BaseQueryResult::HasError() const {
 	D_ASSERT((bool)error == !success);
 	return !success;
 }
@@ -34,6 +39,7 @@ const std::string &BaseQueryResult::GetError() {
 }
 
 PreservedError &BaseQueryResult::GetErrorObject() {
+	D_ASSERT(HasError());
 	return error;
 }
 
@@ -68,7 +74,7 @@ bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 		return false;
 	}
 	if (!success) {
-		return GetErrorObject() == other.GetErrorObject();
+		return error == other.error;
 	}
 	// compare names
 	if (names != other.names) {
