@@ -13,7 +13,7 @@
 namespace duckdb {
 
 static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &aliases,
-                          expression_map_t<idx_t> &expressions, vector<idx_t> &reorder_idx) {
+                          expression_map_t<idx_t> &expressions, const vector<idx_t> &reorder_idx) {
 	if (node.type == QueryNodeType::SET_OPERATION_NODE) {
 		// setop, recurse
 		auto &setop = (BoundSetOperationNode &)node;
