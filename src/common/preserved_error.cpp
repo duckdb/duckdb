@@ -29,6 +29,11 @@ const string &PreservedError::Message() {
 	return final_message;
 }
 
+const ExceptionType &PreservedError::Type() const {
+	D_ASSERT(initialized);
+	return this->type;
+}
+
 PreservedError &PreservedError::AddToMessage(const string &prepended_message) {
 	raw_message = prepended_message + raw_message;
 	return *this;

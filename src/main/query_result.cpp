@@ -34,6 +34,10 @@ bool BaseQueryResult::HasError() const {
 	return !success;
 }
 
+const ExceptionType &BaseQueryResult::GetErrorType() const {
+	return error.Type();
+}
+
 const std::string &BaseQueryResult::GetError() {
 	return error.Message();
 }

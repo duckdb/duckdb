@@ -25,6 +25,8 @@ public:
 	DUCKDB_API PreservedError(const Exception &exception);
 
 public:
+	//! Get the internal exception type of the error
+	DUCKDB_API const ExceptionType &Type() const;
 	//! Allows adding addition information to the message
 	DUCKDB_API PreservedError &AddToMessage(const string &prepended_message);
 	//! Recreates the exception that was preserved
