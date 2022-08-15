@@ -14,21 +14,18 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 		return;
 	}
 
-	// The main data blocks can just be moved
-	swizzled_block_collection.Merge(block_collection);
-	block_collection.Clear();
-
 	if (layout.AllConstant()) {
-		// No heap blocks!
+		// No heap blocks! Just merge fixed-size data
+		swizzled_block_collection.Merge(block_collection);
 		return;
 	}
 
 	// We create one heap block per data block and swizzle the pointers
-	auto &buffer_manager = swizzled_block_collection.buffer_manager;
+	auto &buffer_manager = block_collection.buffer_manager;
 	auto &heap_blocks = string_heap.blocks;
 	idx_t heap_block_idx = 0;
 	idx_t heap_block_remaining = heap_blocks[heap_block_idx]->count;
-	for (auto &data_block : swizzled_block_collection.blocks) {
+	for (auto &data_block : block_collection.blocks) {
 		if (heap_block_remaining == 0) {
 			heap_block_remaining = heap_blocks[++heap_block_idx]->count;
 		}
@@ -42,7 +39,7 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 		if (heap_block_remaining >= data_block->count) {
 			// Easy: current heap block contains all strings for this data block, just copy (reference) the block
 			swizzled_string_heap.blocks.emplace_back(heap_blocks[heap_block_idx]->Copy());
-			swizzled_string_heap.blocks.back()->count = 0;
+			swizzled_string_heap.blocks.back()->count = data_block->count;
 
 			// Swizzle the heap pointer
 			auto heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
@@ -92,6 +89,9 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 			}
 		}
 	}
+
+	// We're done with variable-sized data, now just merge the fixed-size data
+	swizzled_block_collection.Merge(block_collection);
 	D_ASSERT(swizzled_block_collection.blocks.size() == swizzled_string_heap.blocks.size());
 
 	// Update counts and cleanup

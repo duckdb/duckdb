@@ -101,7 +101,7 @@ public:
 		} else {
 			bytes = count * entry_size;
 		}
-		return MaxValue(bytes, (idx_t)Storage::BLOCK_SIZE);
+		return bytes;
 	}
 
 	static idx_t EntriesPerBlock(idx_t width) {

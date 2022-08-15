@@ -205,8 +205,8 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	}
 
 	// swizzle if we reach memory limit
-	if (can_go_external &&
-	    ht.SizeInBytes() + ht.PointerTableCapacity(ht.Count()) * sizeof(data_ptr_t) >= gstate.sink_memory_per_thread) {
+	auto approx_ptr_table_size = ht.Count() * 3 * sizeof(data_ptr_t);
+	if (can_go_external && ht.SizeInBytes() + approx_ptr_table_size >= gstate.sink_memory_per_thread) {
 		lstate.hash_table->SwizzleBlocks();
 		gstate.external = true;
 	}
