@@ -87,7 +87,11 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
 		writer.WriteRegularSerializableList(parameters);
 		if (!named_parameters.empty()) {
-			throw SerializationException("LogicalGet - FIXME serialize named paramters");
+			writer.WriteField<idx_t>(named_parameters.size());
+			for (auto &pair : named_parameters) {
+				writer.WriteString(pair.first);
+				writer.WriteSerializable(pair.second);
+			}
 		}
 		writer.WriteRegularSerializableList(input_table_types);
 		writer.WriteList<string>(input_table_names);
@@ -112,8 +116,16 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	if (!has_deserialize) {
 		D_ASSERT(!bind_data);
 		parameters = reader.ReadRequiredSerializableList<Value, Value>();
-		// FIXME: deserialize named_parameter_map
+
+		auto named_parameters_size = reader.ReadRequired<idx_t>();
 		named_parameter_map_t named_parameters;
+		for (idx_t i = 0; i < named_parameters_size; i++) {
+			auto first = reader.ReadRequired<string>();
+			auto second = reader.ReadRequired<Value>();
+			auto pair = make_pair(first, second);
+			named_parameters.insert(pair);
+		}
+
 		input_table_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		input_table_names = reader.ReadRequiredList<string>();
 		TableFunctionBindInput input(parameters, named_parameters, input_table_types, input_table_names,
