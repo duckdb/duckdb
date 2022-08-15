@@ -33,6 +33,18 @@ struct LinkedList {
 	ListSegment *first_segment = nullptr;
 	ListSegment *last_segment = nullptr;
 };
+
+struct GetSegmentDataFunction;
+typedef void (*get_data_from_segment_t)(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+                                        Vector &result, idx_t &total_count);
+
+struct GetSegmentDataFunction {
+	// raw segment function
+	get_data_from_segment_t segment_function;
+
+	// used for lists/structs to store child function pointers
+	vector<GetSegmentDataFunction> child_functions;
+};
 struct ListFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 
@@ -60,9 +72,6 @@ struct ListFun {
 	//! Get a pointer to the child pointers of a ListSegment of type STRUCT.
 	static ListSegment **GetStructData(ListSegment *segment);
 
-	//! Type switch to load the data value at segment_idx into the vector data.
-	static void GetPrimitiveDataValue(ListSegment *segment, const LogicalType &type, data_ptr_t &vector_data,
-	                                  idx_t &segment_idx, idx_t row_idx);
 	//! Type switch to store the vector data in the segment.
 	static void SetPrimitiveDataValue(ListSegment *segment, const LogicalType &type, data_ptr_t &input_data,
 	                                  idx_t &row_idx);
@@ -105,10 +114,22 @@ struct ListFun {
 	static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
 	                      Vector &input, idx_t &entry_idx, idx_t &count);
 
-	//! Get all the data of a segment and write it to the result vector.
-	static void GetDataFromSegment(ListSegment *segment, Vector &result, idx_t &total_count);
+	//! Get all the data of a primitive segment and write it to the result vector.
+	template <class T>
+	static void GetDataFromPrimitiveSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+	                                        Vector &result, idx_t &total_count);
+	//! Get all the data of a varchar segment and write it to the result vector.
+	static void GetDataFromVarcharSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+	                                      Vector &result, idx_t &total_count);
+	//! Get all the data of a LIST segment and write it to the result vector.
+	static void GetDataFromListSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+	                                   Vector &result, idx_t &total_count);
+	//! Get all the data of a STRUCT segment and write it to the result vector.
+	static void GetDataFromStructSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+	                                     Vector &result, idx_t &total_count);
 	//! Loop over a linked list and read all its segment into the result vector.
-	static void BuildListVector(LinkedList *linked_list, Vector &result, idx_t &initial_total_count);
+	static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list,
+	                            Vector &result, idx_t &initial_total_count);
 
 	//! Initialize all validity masks of a vector to the value of capacity.
 	static void InitializeValidities(Vector &vector, idx_t &capacity);
