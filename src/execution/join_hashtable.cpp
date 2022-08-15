@@ -15,8 +15,8 @@ using ScanStructure = JoinHashTable::ScanStructure;
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), conditions(conditions), build_types(move(btypes)), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false), radix_bits(7),
-      partition_start(0), partition_end(0) {
+      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), external(false), radix_bits(4),
+      tuples_per_round(0), partition_start(0), partition_end(0) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -1026,7 +1026,7 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 	idx_t total_size = 0;
 	for (auto &ht : local_hts) {
 		// TODO: SizeInBytes / SwizzledSize overestimates size by a lot because we make extra references of heap blocks
-		//  Need to re-compute this somehow
+		//  Need to compute this more accurately
 		total_count += ht->Count() + ht->SwizzledCount();
 		total_size += ht->SizeInBytes() + ht->SwizzledSize();
 	}
@@ -1045,7 +1045,7 @@ void JoinHashTable::ComputePartitionSizes(Pipeline &pipeline, Event &event,
 	}
 
 	// Set the number of radix bits (minimum 4, maximum 8)
-	for (radix_bits = 4; radix_bits < 8; radix_bits++) {
+	for (; radix_bits < 8; radix_bits++) {
 		auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 		auto avg_partition_size = total_size / num_partitions;
 

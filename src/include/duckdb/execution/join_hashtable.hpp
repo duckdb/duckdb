@@ -136,7 +136,7 @@ public:
 	void Build(DataChunk &keys, DataChunk &input);
 	//! Merge another HT into this one
 	void Merge(JoinHashTable &other);
-	//! Allocate the pointer table for TODO
+	//! Initialize the pointer table for the probe
 	void InitializePointerTable();
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
