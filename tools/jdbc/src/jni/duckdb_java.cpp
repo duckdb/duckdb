@@ -330,7 +330,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 		try {
 			auto res = conn_ref->Query(move(statements[i]));
 			if (res->HasError()) {
-				env->ThrowNew(J_SQLException, res->error.Message().c_str());
+				env->ThrowNew(J_SQLException, res->GetError().c_str());
 				return nullptr;
 			}
 		} catch (const std::exception &ex) {

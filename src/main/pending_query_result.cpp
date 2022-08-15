@@ -21,7 +21,7 @@ PendingQueryResult::~PendingQueryResult() {
 unique_ptr<ClientContextLock> PendingQueryResult::LockContext() {
 	if (!context) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            this->error.Message());
+		                            GetError());
 	}
 	return context->LockContext();
 }
@@ -33,7 +33,7 @@ void PendingQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	}
 	if (invalidated) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            error.Message());
+		                            GetError());
 	}
 }
 

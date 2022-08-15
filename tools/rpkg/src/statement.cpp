@@ -719,7 +719,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 		R_CheckUserInterrupt();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
-		cpp11::stop("rapi_execute: Failed to run query\nError: %s", pending_query->error.Message().c_str());
+		cpp11::stop("rapi_execute: Failed to run query\nError: %s", pending_query->GetError().c_str());
 	}
 	auto generic_result = pending_query->Execute();
 	if (generic_result->HasError()) {

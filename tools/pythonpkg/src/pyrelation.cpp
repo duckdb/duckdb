@@ -433,7 +433,7 @@ data_frame DuckDBPyRelation::ToDF() {
 		res->result = rel->Execute();
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res->FetchDF();
 }
@@ -445,7 +445,7 @@ py::object DuckDBPyRelation::Fetchone() {
 		res->result = rel->Execute();
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res->Fetchone();
 }
@@ -457,7 +457,7 @@ py::object DuckDBPyRelation::Fetchall() {
 		res->result = rel->Execute();
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res->Fetchall();
 }
@@ -469,7 +469,7 @@ py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 		res->result = rel->Execute();
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res->FetchArrowTable(batch_size);
 }
@@ -481,7 +481,7 @@ py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 		res->result = rel->Execute();
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res->FetchRecordBatchReader(batch_size);
 }
@@ -537,7 +537,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, cons
 		res->result = rel->Query(view_name, sql_query);
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res;
 }
@@ -549,7 +549,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 		res->result = rel->Execute();
 	}
 	if (res->result->HasError()) {
-		throw res->result->error.ToException();
+		throw res->result->ThrowError();
 	}
 	return res;
 }
