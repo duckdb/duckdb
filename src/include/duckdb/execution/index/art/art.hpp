@@ -35,12 +35,30 @@ struct IteratorEntry {
 	idx_t pos = 0;
 };
 
+//! Keeps track of the current key in the iterator
+struct IteratorCurrentKey {
+	//! Subscript operator
+	uint8_t &operator[](idx_t idx);
+	//! Push Byte
+	void Push(uint8_t key);
+	//! Pops n elements
+	void Pop(idx_t n);
+	bool operator>(const Key &k) const;
+	bool operator>=(const Key &k) const;
+
+private:
+	//! The current key position
+	idx_t cur_key_pos = 0;
+	//! The current key of the Leaf Node
+	vector<uint8_t> key;
+};
+
 struct Iterator {
 	//! The current Leaf Node, valid if depth>0
 	Leaf *node = nullptr;
-	//! The current key of the Leaf Node
-	unique_ptr<Key> cur_key;
-	//! The current depth
+	//! Current Key
+	IteratorCurrentKey cur_key;
+	//! The current Tree depth
 	int32_t depth = 0;
 	//! Stack, the size is determined at runtime
 	vector<IteratorEntry> stack;

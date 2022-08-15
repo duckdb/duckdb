@@ -544,11 +544,11 @@ bool ART::IteratorScan(ARTIndexScanState *state, Iterator *it, Key *bound, idx_t
 		if (HAS_BOUND) {
 			D_ASSERT(bound);
 			if (INCLUSIVE) {
-				if (it->node->prefix.GTKey(*bound, it->depth)) {
+				if (it->cur_key > *bound) {
 					break;
 				}
 			} else {
-				if (it->node->prefix.GTEKey(*bound, it->depth)) {
+				if (it->cur_key >= *bound) {
 					break;
 				}
 			}
@@ -573,6 +573,50 @@ void Iterator::SetEntry(idx_t entry_depth, IteratorEntry entry) {
 	stack[entry_depth] = entry;
 }
 
+uint8_t &IteratorCurrentKey::operator[](idx_t idx) {
+	if (idx >= key.size()) {
+		key.push_back(0);
+	}
+	D_ASSERT(idx < key.size());
+	return key[idx];
+}
+
+//! Push Byte
+void IteratorCurrentKey::Push(uint8_t byte) {
+	if (cur_key_pos == key.size()) {
+		key.push_back(byte);
+	}
+	D_ASSERT(cur_key_pos < key.size());
+	key[cur_key_pos++] = byte;
+}
+//! Pops n elements
+void IteratorCurrentKey::Pop(idx_t n) {
+	cur_key_pos -= n;
+	D_ASSERT(cur_key_pos <= key.size());
+}
+
+bool IteratorCurrentKey::operator>(const Key &k) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(cur_key_pos, k.len); i++) {
+		if (key[i] > k.data[i]) {
+			return true;
+		} else if (key[i] < k.data[i]) {
+			return false;
+		}
+	}
+	return cur_key_pos > k.len;
+}
+
+bool IteratorCurrentKey::operator>=(const Key &k) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(cur_key_pos, k.len); i++) {
+		if (key[i] > k.data[i]) {
+			return true;
+		} else if (key[i] < k.data[i]) {
+			return false;
+		}
+	}
+	return cur_key_pos >= k.len;
+}
+
 bool ART::IteratorNext(Iterator &it) {
 	// Skip leaf
 	if ((it.depth) && ((it.stack[it.depth - 1].node)->type == NodeType::NLeaf)) {
@@ -581,22 +625,44 @@ bool ART::IteratorNext(Iterator &it) {
 
 	// Look for the next leaf
 	while (it.depth > 0) {
+		// cur_node
 		auto &top = it.stack[it.depth - 1];
 		Node *node = top.node;
-
 		if (node->type == NodeType::NLeaf) {
 			// found a leaf: move to next node
 			it.node = (Leaf *)node;
 			return true;
 		}
-
 		// Find next node
 		top.pos = node->GetNextPos(top.pos);
 		if (top.pos != DConstants::INVALID_INDEX) {
+			// add key-byte of the new node
+			switch (node->type) {
+			case NodeType::N4:
+				it.cur_key.Push(((Node4 *)node)->key[top.pos]);
+				break;
+			case NodeType::N16:
+				it.cur_key.Push(((Node16 *)node)->key[top.pos]);
+				break;
+			case NodeType::N48:
+			case NodeType::N256:
+				it.cur_key.Push(top.pos);
+				break;
+			case NodeType::NLeaf:
+				break;
+			}
+			auto next_node = node->GetChild(*this, top.pos);
+			// add prefix of new node
+			for (idx_t i = 0; i < next_node->prefix.Size(); i++) {
+				it.cur_key.Push(next_node->prefix[i]);
+			}
 			// next node found: go there
-			it.SetEntry(it.depth, IteratorEntry(node->GetChild(*this, top.pos), DConstants::INVALID_INDEX));
+			it.SetEntry(it.depth, IteratorEntry(next_node, DConstants::INVALID_INDEX));
 			it.depth++;
 		} else {
+			// Pop prefix and key of current node
+			idx_t elements_to_pop = node->prefix.Size() + 1;
+			it.cur_key.Pop(elements_to_pop);
 			// no node found: move up the tree
 			it.depth--;
 		}
@@ -715,16 +781,22 @@ bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_coun
 Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 	Node *next = nullptr;
 	idx_t pos = 0;
+	// reconstruct the prefix
+	for (idx_t i = 0; i < node.prefix.Size(); i++) {
+		it.cur_key.Push(node.prefix[i]);
+	}
 	switch (node.type) {
 	case NodeType::NLeaf:
 		it.node = (Leaf *)&node;
 		return (Leaf &)node;
 	case NodeType::N4: {
 		next = ((Node4 &)node).children[0].Unswizzle(*this);
+		it.cur_key.Push(((Node4 &)node).key[0]);
 		break;
 	}
 	case NodeType::N16: {
 		next = ((Node16 &)node).children[0].Unswizzle(*this);
+		it.cur_key.Push(((Node16 &)node).key[0]);
 		break;
 	}
 	case NodeType::N48: {
@@ -732,6 +804,7 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		while (n48.child_index[pos] == Node::EMPTY_MARKER) {
 			pos++;
 		}
+		it.cur_key.Push(pos);
 		next = n48.children[n48.child_index[pos]].Unswizzle(*this);
 		break;
 	}
@@ -740,6 +813,7 @@ Leaf &ART::FindMinimum(Iterator &it, Node &node) {
 		while (!n256.children[pos].pointer) {
 			pos++;
 		}
+		it.cur_key.Push(pos);
 		next = (Node *)n256.children[pos].Unswizzle(*this);
 		break;
 	}
@@ -758,11 +832,10 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 	auto upper_bound = CreateKey(*this, types[0], state->values[0]);
 
 	if (!it->start) {
-		it->cur_key = make_unique<Key>(it->);
 		// first find the minimum value in the ART: we start scanning from this value
-		auto &minimum = FindMinimum(state->iterator, *tree);
+		FindMinimum(state->iterator, *tree);
 		// early out min value higher than upper bound query
-		if (minimum.prefix.GTKey(*upper_bound, it->depth)) {
+		if (it->cur_key > *upper_bound) {
 			return true;
 		}
 		it->start = true;
