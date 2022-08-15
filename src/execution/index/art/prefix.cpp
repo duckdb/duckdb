@@ -15,7 +15,7 @@ Prefix::Prefix(Key &key, uint32_t depth, uint32_t size) : size(size) {
 
 	// Copy Key to Prefix
 	idx_t prefix_idx = 0;
-	for (idx_t i = depth; i < size; i++) {
+	for (idx_t i = depth; i < size + depth; i++) {
 		prefix[prefix_idx++] = key.data[i];
 	}
 }
@@ -97,37 +97,6 @@ uint32_t Prefix::KeyMismatch(Key &key, uint64_t depth) {
 		}
 	}
 	return pos;
-}
-
-bool Prefix::EqualKey(Key &key, unsigned depth) {
-	for (idx_t i = 0; i < size; i++) {
-		if (prefix[i] != key.data[i + depth]) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool Prefix::GTKey(Key &key, unsigned depth) {
-	for (idx_t i = 0; i < size; i++) {
-		if (prefix[i] > key.data[i + depth]) {
-			return true;
-		} else if (prefix[i] < key.data[i + depth]) {
-			return false;
-		}
-	}
-	return false;
-}
-
-bool Prefix::GTEKey(Key &key, unsigned depth) {
-	for (idx_t i = 0; i < size; i++) {
-		if (prefix[i] > key.data[i + depth]) {
-			return true;
-		} else if (prefix[i] < key.data[i + depth]) {
-			return false;
-		}
-	}
-	return true;
 }
 
 } // namespace duckdb

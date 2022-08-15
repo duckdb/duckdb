@@ -39,12 +39,6 @@ public:
 	void Serialize(duckdb::MetaBlockWriter &writer);
 	// Deserializes Prefix
 	void Deserialize(duckdb::MetaBlockReader &reader);
-	// If prefix equals key (starting from depth)
-	bool EqualKey(Key &key, unsigned depth);
-	// If prefix > key (starting from depth)
-	bool GTKey(Key &key, unsigned depth);
-	// If prefix >= key (starting from depth)
-	bool GTEKey(Key &key, unsigned depth);
 
 	// Compare the key with the prefix of the node, return the number matching bytes
 	uint32_t KeyMismatch(Key &key, uint64_t depth);

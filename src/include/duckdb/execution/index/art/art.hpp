@@ -45,6 +45,7 @@ struct IteratorCurrentKey {
 	void Pop(idx_t n);
 	bool operator>(const Key &k) const;
 	bool operator>=(const Key &k) const;
+	bool operator==(const Key &k) const;
 
 private:
 	//! The current key position
@@ -66,6 +67,8 @@ struct Iterator {
 	bool start = false;
 
 	void SetEntry(idx_t depth, IteratorEntry entry);
+
+	void PushKey(Node *node, uint16_t pos);
 };
 
 struct ARTIndexScanState : public IndexScanState {
@@ -142,9 +145,6 @@ private:
 
 	//! Erase element from leaf (if leaf has more than one value) or eliminate the leaf itself
 	void Erase(Node *&node, Key &key, unsigned depth, row_t row_id);
-
-	//! Check if the key of the leaf is equal to the searched key
-	bool LeafMatches(Node *node, Key &key, unsigned depth);
 
 	//! Find the node with a matching key, optimistic version
 	Node *Lookup(Node *node, Key &key, unsigned depth);

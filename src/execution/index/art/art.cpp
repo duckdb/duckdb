@@ -47,11 +47,6 @@ ART::~ART() {
 	}
 }
 
-bool ART::LeafMatches(Node *node, Key &key, unsigned depth) {
-	auto leaf = static_cast<Leaf *>(node);
-	return leaf->prefix.EqualKey(key, depth);
-}
-
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(Transaction &transaction, Value value,
                                                               ExpressionType expression_type) {
 	auto result = make_unique<ARTIndexScanState>();
@@ -400,14 +395,13 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 	// Delete a leaf from a tree
 	if (node->type == NodeType::NLeaf) {
 		// Make sure we have the right leaf
-		if (ART::LeafMatches(node, key, depth)) {
-			auto leaf = static_cast<Leaf *>(node);
-			leaf->Remove(row_id);
-			if (leaf->count == 0) {
-				delete node;
-				node = nullptr;
-			}
+		auto leaf = static_cast<Leaf *>(node);
+		leaf->Remove(row_id);
+		if (leaf->count == 0) {
+			delete node;
+			node = nullptr;
 		}
+
 		return;
 	}
 
@@ -423,7 +417,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 		auto child = node->GetChild(*this, pos);
 		D_ASSERT(child);
 
-		if (child->type == NodeType::NLeaf && LeafMatches(child, key, depth)) {
+		if (child->type == NodeType::NLeaf) {
 			// Leaf found, remove entry
 			auto leaf = (Leaf *)child;
 			leaf->Remove(row_id);
@@ -617,9 +611,40 @@ bool IteratorCurrentKey::operator>=(const Key &k) const {
 	return cur_key_pos >= k.len;
 }
 
+void Iterator::PushKey(Node *cur_node, uint16_t pos) {
+	switch (cur_node->type) {
+	case NodeType::N4:
+		cur_key.Push(((Node4 *)cur_node)->key[pos]);
+		break;
+	case NodeType::N16:
+		cur_key.Push(((Node16 *)cur_node)->key[pos]);
+		break;
+	case NodeType::N48:
+	case NodeType::N256:
+		cur_key.Push(pos);
+		break;
+	case NodeType::NLeaf:
+		break;
+	}
+}
+
+bool IteratorCurrentKey::operator==(const Key &k) const {
+	if (cur_key_pos != k.len) {
+		return false;
+	}
+	for (idx_t i = 0; i < cur_key_pos; i++) {
+		if (key[i] != k.data[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool ART::IteratorNext(Iterator &it) {
 	// Skip leaf
 	if ((it.depth) && ((it.stack[it.depth - 1].node)->type == NodeType::NLeaf)) {
+		idx_t elements_to_pop = it.stack[it.depth - 1].node->prefix.Size() + (it.depth != 1);
+		it.cur_key.Pop(elements_to_pop);
 		it.depth--;
 	}
 
@@ -637,20 +662,7 @@ bool ART::IteratorNext(Iterator &it) {
 		top.pos = node->GetNextPos(top.pos);
 		if (top.pos != DConstants::INVALID_INDEX) {
 			// add key-byte of the new node
-			switch (node->type) {
-			case NodeType::N4:
-				it.cur_key.Push(((Node4 *)node)->key[top.pos]);
-				break;
-			case NodeType::N16:
-				it.cur_key.Push(((Node16 *)node)->key[top.pos]);
-				break;
-			case NodeType::N48:
-			case NodeType::N256:
-				it.cur_key.Push(top.pos);
-				break;
-			case NodeType::NLeaf:
-				break;
-			}
+			it.PushKey(node, top.pos);
 			auto next_node = node->GetChild(*this, top.pos);
 			// add prefix of new node
 			for (idx_t i = 0; i < next_node->prefix.Size(); i++) {
@@ -660,10 +672,9 @@ bool ART::IteratorNext(Iterator &it) {
 			it.SetEntry(it.depth, IteratorEntry(next_node, DConstants::INVALID_INDEX));
 			it.depth++;
 		} else {
-			// Pop prefix and key of current node
-			idx_t elements_to_pop = node->prefix.Size() + 1;
+			// no node found: move up the tree and Pop prefix and key of current node
+			idx_t elements_to_pop = it.stack[it.depth - 1].node->prefix.Size() + (it.depth != 1);
 			it.cur_key.Pop(elements_to_pop);
-			// no node found: move up the tree
 			it.depth--;
 		}
 	}
@@ -687,9 +698,19 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 		it.SetEntry(it.depth, IteratorEntry(node, 0));
 		auto &top = it.stack[it.depth];
 		it.depth++;
+		// reconstruct the prefix
+		for (idx_t i = 0; i < top.node->prefix.Size(); i++) {
+			it.cur_key.Push(top.node->prefix[i]);
+		}
 		if (!equal) {
 			while (node->type != NodeType::NLeaf) {
-				node = node->GetChild(*this, node->GetMin());
+				auto min_pos = node->GetMin();
+				it.PushKey(node, min_pos);
+				node = node->GetChild(*this, min_pos);
+				// reconstruct the prefix
+				for (idx_t i = 0; i < node->prefix.Size(); i++) {
+					it.cur_key.Push(node->prefix[i]);
+				}
 				auto &c_top = it.stack[it.depth];
 				c_top.node = node;
 				it.depth++;
@@ -701,7 +722,7 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 			it.node = leaf;
 			// if the search is not inclusive the leaf node could still be equal to the current value
 			// check if leaf is equal to the current key
-			if (leaf->prefix.EqualKey(key, depth)) {
+			if (it.cur_key == key) {
 				// if it's not inclusive check if there is a next leaf
 				if (!inclusive && !IteratorNext(it)) {
 					return false;
@@ -710,22 +731,21 @@ bool ART::Bound(Node *node, Key &key, Iterator &it, bool inclusive) {
 				}
 			}
 
-			if (leaf->prefix.GTKey(key, depth)) {
+			if (it.cur_key > key) {
 				return true;
 			}
 			// Leaf is lower than key
 			// Check if next leaf is still lower than key
 			while (IteratorNext(it)) {
-
-				if (leaf->prefix.EqualKey(key, depth)) {
-					// if its not inclusive check if there is a next leaf
+				if (it.cur_key == key) {
+					// if it's not inclusive check if there is a next leaf
 					if (!inclusive && !IteratorNext(it)) {
 						return false;
 					} else {
 						return true;
 					}
-				} else if (leaf->prefix.GTKey(key, depth)) {
-					// if its not inclusive check if there is a next leaf
+				} else if (it.cur_key > key) {
+					// if it's not inclusive check if there is a next leaf
 					return true;
 				}
 			}

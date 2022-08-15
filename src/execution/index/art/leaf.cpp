@@ -53,7 +53,7 @@ BlockPointer Leaf::Serialize(duckdb::MetaBlockWriter &writer) {
 Leaf *Leaf::Deserialize(MetaBlockReader &reader) {
 	Prefix prefix;
 	prefix.Deserialize(reader);
-	auto num_elements = reader.Read<idx_t>();
+	auto num_elements = reader.Read<uint16_t>();
 	auto elements = unique_ptr<row_t[]>(new row_t[num_elements]);
 	for (idx_t i = 0; i < num_elements; i++) {
 		elements[i] = reader.Read<row_t>();
