@@ -44,14 +44,14 @@ Prefix &Prefix::operator=(Prefix &&other) noexcept {
 }
 
 uint8_t Prefix::Reduce(uint32_t n) {
-	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[size - n - 1]);
-	idx_t new_prefix_idx = 0;
+	auto new_size = size - n - 1;
+	auto new_prefix = unique_ptr<uint8_t[]>(new uint8_t[new_size]);
 	auto key = prefix[n];
-	for (idx_t i = n + 1; i < size; i++) {
-		new_prefix[new_prefix_idx++] = prefix[i];
+	for (idx_t i = 0; i < new_size; i++) {
+		new_prefix[i] = prefix[i + n + 1];
 	}
 	prefix = move(new_prefix);
-	size -= n + 1;
+	size = new_size;
 	return key;
 }
 

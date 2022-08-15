@@ -19,7 +19,6 @@ public:
 
 	Leaf(unique_ptr<row_t[]> row_ids, idx_t num_elements, Prefix &prefix);
 	idx_t capacity;
-	idx_t num_elements;
 
 	row_t GetRowId(idx_t index) {
 		return row_ids[index];

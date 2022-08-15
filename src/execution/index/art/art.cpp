@@ -278,11 +278,11 @@ void ART::VerifyDeleteForeignKey(DataChunk &chunk, string *err_msg_ptr) {
 
 bool ART::InsertToLeaf(Leaf &leaf, row_t row_id) {
 #ifdef DEBUG
-	for (idx_t k = 0; k < leaf.num_elements; k++) {
+	for (idx_t k = 0; k < leaf.count; k++) {
 		D_ASSERT(leaf.GetRowId(k) != row_id);
 	}
 #endif
-	if (IsUnique() && leaf.num_elements != 0) {
+	if (IsUnique() && leaf.count != 0) {
 		return false;
 	}
 	leaf.Insert(row_id);
@@ -317,10 +317,9 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 
 		Node *new_node = new Node4();
 		new_node->prefix = Prefix(key, depth, new_prefix_length);
-		// fixme: I think leaf_prefix[0] should be returned from reduce and reduce -1
 		auto key_byte = node->prefix.Reduce(new_prefix_length);
 		Node4::Insert(new_node, key_byte, node);
-		Node *leaf_node = new Leaf(*value, new_prefix_length + 1, row_id);
+		Node *leaf_node = new Leaf(*value, depth + new_prefix_length + 1, row_id);
 		Node4::Insert(new_node, key[depth + new_prefix_length], leaf_node);
 		node = new_node;
 		return true;
@@ -386,7 +385,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		auto node = Lookup(tree, *keys[i], 0);
 		if (node) {
 			auto leaf = static_cast<Leaf *>(node);
-			for (idx_t k = 0; k < leaf->num_elements; k++) {
+			for (idx_t k = 0; k < leaf->count; k++) {
 				D_ASSERT(leaf->GetRowId(k) != row_identifiers[i]);
 			}
 		}
@@ -404,7 +403,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 		if (ART::LeafMatches(node, key, depth)) {
 			auto leaf = static_cast<Leaf *>(node);
 			leaf->Remove(row_id);
-			if (leaf->num_elements == 0) {
+			if (leaf->count == 0) {
 				delete node;
 				node = nullptr;
 			}
@@ -428,7 +427,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 			// Leaf found, remove entry
 			auto leaf = (Leaf *)child;
 			leaf->Remove(row_id);
-			if (leaf->num_elements == 0) {
+			if (leaf->count == 0) {
 				// Leaf is empty, delete leaf, decrement node counter and maybe shrink node
 				Node::Erase(node, pos, *this);
 			}
@@ -483,10 +482,10 @@ bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &
 	if (!leaf) {
 		return true;
 	}
-	if (leaf->num_elements > max_count) {
+	if (leaf->count > max_count) {
 		return false;
 	}
-	for (idx_t i = 0; i < leaf->num_elements; i++) {
+	for (idx_t i = 0; i < leaf->count; i++) {
 		row_t row_id = leaf->GetRowId(i);
 		result_ids.push_back(row_id);
 	}
@@ -500,7 +499,7 @@ void ART::SearchEqualJoinNoFetch(Value &equal_value, idx_t &result_size) {
 	if (!leaf) {
 		return;
 	}
-	result_size = leaf->num_elements;
+	result_size = leaf->count;
 }
 
 Node *ART::Lookup(Node *node, Key &key, unsigned depth) {
@@ -554,11 +553,11 @@ bool ART::IteratorScan(ARTIndexScanState *state, Iterator *it, Key *bound, idx_t
 				}
 			}
 		}
-		if (result_ids.size() + it->node->num_elements > max_count) {
+		if (result_ids.size() + it->node->count > max_count) {
 			// adding these elements would exceed the max count
 			return false;
 		}
-		for (idx_t i = 0; i < it->node->num_elements; i++) {
+		for (idx_t i = 0; i < it->node->count; i++) {
 			row_t row_id = it->node->GetRowId(i);
 			result_ids.push_back(row_id);
 		}
@@ -759,6 +758,7 @@ bool ART::SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, 
 	auto upper_bound = CreateKey(*this, types[0], state->values[0]);
 
 	if (!it->start) {
+		it->cur_key = make_unique<Key>(it->);
 		// first find the minimum value in the ART: we start scanning from this value
 		auto &minimum = FindMinimum(state->iterator, *tree);
 		// early out min value higher than upper bound query

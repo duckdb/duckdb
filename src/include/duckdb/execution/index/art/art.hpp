@@ -38,6 +38,8 @@ struct IteratorEntry {
 struct Iterator {
 	//! The current Leaf Node, valid if depth>0
 	Leaf *node = nullptr;
+	//! The current key of the Leaf Node
+	unique_ptr<Key> cur_key;
 	//! The current depth
 	int32_t depth = 0;
 	//! Stack, the size is determined at runtime
