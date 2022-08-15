@@ -341,8 +341,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNI
 
 	auto stmt_ref = new StatementHolder();
 	stmt_ref->stmt = conn_ref->Prepare(move(statements.back()));
-	if (!stmt_ref->stmt->success) {
-		string error_msg = string(stmt_ref->stmt->error.Message());
+	if (stmt_ref->stmt->HasError()) {
+		string error_msg = string(stmt_ref->stmt->GetError());
 		stmt_ref->stmt = nullptr;
 
 		// No success, so it must be deleted
@@ -438,8 +438,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 	}
 
 	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, false);
-	if (!res_ref->res->success) {
-		string error_msg = string(res_ref->res->error.Message());
+	if (res_ref->res->HasError()) {
+		string error_msg = string(res_ref->res->GetError());
 		res_ref->res = nullptr;
 		delete res_ref;
 		env->ThrowNew(J_SQLException, error_msg.c_str());
@@ -502,7 +502,7 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
+	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
 		return nullptr;
 	}
@@ -537,7 +537,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
                                                                                 jobject res_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
-	if (!res_ref || !res_ref->res || !res_ref->res->success) {
+	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
 		return nullptr;
 	}
@@ -691,7 +691,7 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare_1ty
                                                                                    jobject stmt_ref_buf) {
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref || !stmt_ref->stmt || !stmt_ref->stmt->success) {
+	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid statement");
 		return nullptr;
 	}
