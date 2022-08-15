@@ -432,7 +432,7 @@ data_frame DuckDBPyRelation::ToDF() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res->FetchDF();
@@ -444,7 +444,7 @@ py::object DuckDBPyRelation::Fetchone() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res->Fetchone();
@@ -456,7 +456,7 @@ py::object DuckDBPyRelation::Fetchall() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res->Fetchall();
@@ -468,7 +468,7 @@ py::object DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res->FetchArrowTable(batch_size);
@@ -480,7 +480,7 @@ py::object DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res->FetchRecordBatchReader(batch_size);
@@ -536,7 +536,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, cons
 		py::gil_scoped_release release;
 		res->result = rel->Query(view_name, sql_query);
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res;
@@ -548,7 +548,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 		py::gil_scoped_release release;
 		res->result = rel->Execute();
 	}
-	if (!res->result->success) {
+	if (res->result->HasError()) {
 		throw res->result->error.ToException();
 	}
 	return res;

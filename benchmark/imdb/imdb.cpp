@@ -13,8 +13,8 @@ using namespace duckdb;
 		return imdb::get_query(QNR);                                                                                   \
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
-		if (!result->success) {                                                                                        \
-			return result->error.Message();                                                                            \
+		if (result->HasError()) {                                                                                      \
+			return result->GetError();                                                                                 \
 		}          /* FIXME */                                                                                         \
 		return ""; /*return compare_csv(*result, tpch::get_answer(SF, QNR),                                            \
 		              true);  */                                                                                       \

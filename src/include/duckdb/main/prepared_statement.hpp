@@ -43,6 +43,8 @@ public:
 	idx_t n_param;
 
 public:
+	//! Returns the stored error message
+	const string &GetError();
 	//! Returns whether or not an error occurred
 	bool HasError() const;
 	//! Returns the number of columns in the result

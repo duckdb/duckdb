@@ -42,8 +42,8 @@ using namespace duckdb;
 		return "SELECT * FROM strings WHERE s " + (NOT_IN ? string("NOT ") : string("")) + "IN (" + in_list + ")";     \
 	}                                                                                                                  \
 	virtual string VerifyResult(QueryResult *result) {                                                                 \
-		if (!result->success) {                                                                                        \
-			return result->error.Message();                                                                            \
+		if (result->HasError()) {                                                                                      \
+			return result->GetError();                                                                                 \
 		}                                                                                                              \
 		return string();                                                                                               \
 	}                                                                                                                  \

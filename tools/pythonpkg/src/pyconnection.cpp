@@ -152,7 +152,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		}
 
 		prep = connection->Prepare(move(statements.back()));
-		if (!prep->success) {
+		if (prep->HasError()) {
 			throw prep->error.ToException();
 		}
 	}

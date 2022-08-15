@@ -173,7 +173,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		// now prepare the query
 		auto prepared = db->con->Prepare(move(statements.back()));
-		if (!prepared->success) {
+		if (prepared->HasError()) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;
 			return SQLITE_ERROR;

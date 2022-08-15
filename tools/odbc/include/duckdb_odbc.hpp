@@ -262,7 +262,7 @@ SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
 		if (!stmt->stmt) {
 			return SQL_ERROR;
 		}
-		if (!stmt->stmt->success) {
+		if (stmt->stmt->HasError()) {
 			return SQL_ERROR;
 		}
 		try {

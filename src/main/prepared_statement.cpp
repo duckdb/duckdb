@@ -17,6 +17,11 @@ PreparedStatement::PreparedStatement(PreservedError error) : context(nullptr), s
 PreparedStatement::~PreparedStatement() {
 }
 
+const string &PreparedStatement::GetError() {
+	D_ASSERT(HasError());
+	return error.Message();
+}
+
 bool PreparedStatement::HasError() const {
 	return !success;
 }

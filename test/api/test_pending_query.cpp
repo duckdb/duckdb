@@ -151,7 +151,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 
 	SECTION("Standard prepared") {
 		auto prepare = con.Prepare("SELECT SUM(i) FROM range(1000000) tbl(i) WHERE i>=$1");
-		REQUIRE(prepare->success);
+		REQUIRE(!prepare->HasError());
 
 		auto pending_query = prepare->PendingQuery(0);
 		REQUIRE(!pending_query->HasError());
@@ -176,7 +176,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 	}
 	SECTION("Error during prepare") {
 		auto prepare = con.Prepare("SELECT SUM(i+X) FROM range(1000000) tbl(i) WHERE i>=$1");
-		REQUIRE(!prepare->success);
+		REQUIRE(prepare->HasError());
 
 		REQUIRE_THROWS(prepare->PendingQuery(0));
 	}
@@ -212,8 +212,8 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 	SECTION("Multiple prepared statements") {
 		auto prepare1 = con.Prepare("SELECT SUM(i) FROM range(1000000) tbl(i) WHERE i>=$1");
 		auto prepare2 = con.Prepare("SELECT SUM(i) FROM range(1000000) tbl(i) WHERE i<=$1");
-		REQUIRE(prepare1->success);
-		REQUIRE(prepare2->success);
+		REQUIRE(!prepare1->HasError());
+		REQUIRE(!prepare2->HasError());
 
 		// we can execute from both prepared statements individually
 		auto pending_query = prepare1->PendingQuery(500000);

@@ -108,7 +108,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
 	auto stmt = conn->conn->Prepare(move(relation_stmt));
-	if (!stmt->success) {
+	if (stmt->HasError()) {
 		cpp11::stop("rapi_prepare_substrait: Failed to prepare query %s\nError: %s", stmt->error.Message().c_str());
 	}
 
@@ -135,7 +135,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 		}
 	}
 	auto stmt = conn->conn->Prepare(move(statements.back()));
-	if (!stmt->success) {
+	if (stmt->HasError()) {
 		cpp11::stop("rapi_prepare: Failed to prepare query %s\nError: %s", query.c_str(),
 		            stmt->error.Message().c_str());
 	}

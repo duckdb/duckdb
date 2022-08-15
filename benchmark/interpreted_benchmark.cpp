@@ -44,7 +44,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	      con(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
-		D_ASSERT(res->success);
+		D_ASSERT(!res->HasError());
 	}
 
 	unique_ptr<DBConfig> GetBenchmarkConfig() {

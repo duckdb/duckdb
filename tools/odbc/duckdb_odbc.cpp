@@ -122,7 +122,7 @@ void OdbcHandleStmt::Close() {
 }
 
 SQLRETURN OdbcHandleStmt::MaterializeResult() {
-	if (!stmt || !stmt->success) {
+	if (!stmt || stmt->HasError()) {
 		return SQL_SUCCESS;
 	}
 	if (res || !res->HasError()) {

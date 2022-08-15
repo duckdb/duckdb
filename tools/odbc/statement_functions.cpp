@@ -52,7 +52,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
-		if (!stmt->stmt->success) {
+		if (stmt->stmt->HasError()) {
 			DiagRecord diag_rec(stmt->stmt->error.Message(), SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
 			                    stmt->dbc->GetDataSourceName());
 			throw OdbcException("PrepareStmt", SQL_ERROR, diag_rec);
