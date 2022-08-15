@@ -105,22 +105,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			return nullptr;
 		}
 		// total sum is guaranteed to fit in a single int64: use int64 sum instead of hugeint sum
-		switch (internal_type) {
-		case PhysicalType::INT32:
-			expr.function =
-			    AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
-			        LogicalType::INTEGER, LogicalType::HUGEINT);
-			expr.function.name = "sum";
-			break;
-		case PhysicalType::INT64:
-			expr.function =
-			    AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
-			        LogicalType::BIGINT, LogicalType::HUGEINT);
-			expr.function.name = "sum";
-			break;
-		default:
-			throw InternalException("Unsupported type for propagate sum stats");
-		}
+		expr.function = SumFun::GetSumAggregateNoOverflow(internal_type);
 	}
 	return nullptr;
 }
@@ -158,6 +143,25 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	}
 }
 
+AggregateFunction SumFun::GetSumAggregateNoOverflow(PhysicalType type) {
+	switch(type) {
+	case PhysicalType::INT32: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::INTEGER, LogicalType::HUGEINT);
+		function.name = "sum_no_overflow";
+		return function;
+	}
+	case PhysicalType::INT64: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int64_t, hugeint_t, IntegerSumOperation>(
+		    LogicalType::BIGINT, LogicalType::HUGEINT);
+		function.name = "sum_no_overflow";
+		return function;
+	}
+	default:
+		throw InternalException("Unsupported type for sum_no_overflow");
+	}
+}
+
 unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
@@ -182,6 +186,11 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(sum);
+
+	AggregateFunctionSet sum_no_overflow("sum_no_overflow");
+	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
+	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
+	set.AddFunction(sum_no_overflow);
 
 	// fsum
 	AggregateFunctionSet fsum("fsum");
