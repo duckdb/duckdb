@@ -109,7 +109,10 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.TIME;
 		case DATE:
 			return Types.DATE;
+		case TIMESTAMP_S:
+		case TIMESTAMP_MS:
 		case TIMESTAMP:
+		case TIMESTAMP_NS:
 			return Types.TIMESTAMP;
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return Types.TIME_WITH_TIMEZONE;

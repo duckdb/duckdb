@@ -156,6 +156,9 @@ public class DuckDBResultSet implements ResultSet {
 		case DATE:
 			return getDate(columnIndex);
 		case TIMESTAMP:
+		case TIMESTAMP_NS:
+		case TIMESTAMP_S:
+		case TIMESTAMP_MS:
 			return getTimestamp(columnIndex);
 		case TIMESTAMP_WITH_TIME_ZONE:
 			return getOffsetDateTime(columnIndex);
@@ -475,6 +478,16 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1000);
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+			System.out.println(getbuf(columnIndex, 8).getLong());
+			return DuckDBTimestamp.toSqlTimestampNanos(getbuf(columnIndex, 8).getLong());
+		}
+		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
 		}
 		return null;
 	}
