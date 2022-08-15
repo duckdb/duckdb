@@ -33,13 +33,13 @@ namespace std {
 template <>
 struct hash<duckdb::UniqueKeyInfo> {
 	template <class X>
-	static size_t compute_hash(const X &x) {
+	static size_t ComputeHash(const X &x) {
 		return hash<X>()(x);
 	}
 
 	size_t operator()(const duckdb::UniqueKeyInfo &j) const {
 		D_ASSERT(j.columns.size() > 0);
-		return compute_hash(j.schema) + compute_hash(j.table) + compute_hash(j.columns[0]);
+		return ComputeHash(j.schema) + ComputeHash(j.table) + ComputeHash(j.columns[0]);
 	}
 };
 
@@ -210,7 +210,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				break;
 			}
 
-			if (uk_info.columns.size() == 0) {
+			if (uk_info.columns.empty()) {
 				output.SetValue(4, count, Value::BIGINT(data.unique_constraint_offset++));
 			} else {
 				auto known_unique_constraint_offset = data.known_fk_unique_constraint_offsets.find(uk_info);
