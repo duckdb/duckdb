@@ -63,6 +63,11 @@ jobs:
       shell: bash
       run: ./scripts/node_version.sh upload
 
+    - name: Validate Docs
+      run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
+      env:
+        npm_config_yes: true 
+
     - name: Node 10
       shell: bash
       run: ./scripts/node_build.sh 10
@@ -89,6 +94,10 @@ jobs:
     - name: Node 17
       shell: bash
       run: ./scripts/node_build.sh 17
+
+    - name: Node 18
+      shell: bash
+      run: ./scripts/node_build.sh 18
 
    osx-nodejs:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
@@ -144,6 +153,10 @@ jobs:
         shell: bash
         run: ./scripts/node_build.sh 17
 
+      - name: Node 18
+        shell: bash
+        run: ./scripts/node_build.sh 18
+
    win-nodejs:
      name: node.js Windows
      runs-on: windows-latest
@@ -151,7 +164,7 @@ jobs:
 
      strategy:
        matrix:
-         node: [ '10', '12', '14', '15', '16' ]
+         node: [ '10', '12', '14', '15', '16', '17', '18' ]
          isRelease:
             - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
          exclude:

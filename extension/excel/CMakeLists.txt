@@ -8,8 +8,9 @@ add_subdirectory(numformat)
 
 add_library(excel_extension STATIC excel-extension.cpp
                                    ${NUMFORMAT_OBJECT_FILES})
-
-build_loadable_extension(excel excel-extension.cpp ${NUMFORMAT_OBJECT_FILES})
+set(INGORE_WARNINGS OFF)
+build_loadable_extension(excel excel-extension.cpp ${NUMFORMAT_OBJECT_FILES}
+                         ${IGNORE_WARNINGS})
 
 install(
   TARGETS excel_extension

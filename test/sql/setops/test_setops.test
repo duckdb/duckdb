@@ -2,6 +2,9 @@
 # description: Test UNION/EXCEPT/INTERSECT
 # group: [setops]
 
+statement ok
+PRAGMA enable_verification
+
 query I
 SELECT 1 UNION ALL SELECT 2
 ----

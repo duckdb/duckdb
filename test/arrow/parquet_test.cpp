@@ -23,6 +23,7 @@
 #include "parquet/exception.h"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "test_helpers.hpp"
 
 std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
@@ -85,7 +86,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
 	auto timezone_config = duckdb::QueryResult::GetConfigTimezone(*result);
-	duckdb::QueryResult::ToArrowSchema(&abi_arrow_schema, result->types, result->names, timezone_config);
+	duckdb::ArrowConverter::ToArrowSchema(&abi_arrow_schema, result->types, result->names, timezone_config);
 	auto result_schema = arrow::ImportSchema(&abi_arrow_schema);
 
 	while (true) {
@@ -93,8 +94,9 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
+		data_chunk->Verify();
 		ArrowArray arrow_array;
-		data_chunk->ToArrowArray(&arrow_array);
+		duckdb::ArrowConverter::ToArrowArray(*data_chunk, &arrow_array);
 		auto batch = arrow::ImportRecordBatch(&arrow_array, result_schema.ValueUnsafe());
 		batches_result.push_back(batch.MoveValueUnsafe());
 	}
@@ -109,7 +111,7 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 			break;
 		}
 		ArrowArray arrow_array;
-		data_chunk->ToArrowArray(&arrow_array);
+		duckdb::ArrowConverter::ToArrowArray(*data_chunk, &arrow_array);
 		auto batch = arrow::ImportRecordBatch(&arrow_array, result_schema.ValueUnsafe());
 		batches_result.push_back(batch.MoveValueUnsafe());
 	}

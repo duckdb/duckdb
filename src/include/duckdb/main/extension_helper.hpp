@@ -28,10 +28,10 @@ public:
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
-	static void InstallExtension(DatabaseInstance &db, const string &extension, bool force_install);
-	static void LoadExternalExtension(DatabaseInstance &db, const string &extension);
+	static void InstallExtension(ClientContext &context, const string &extension, bool force_install);
+	static void LoadExternalExtension(ClientContext &context, const string &extension);
 
-	static string ExtensionDirectory(FileSystem &fs);
+	static string ExtensionDirectory(ClientContext &context);
 
 	static idx_t DefaultExtensionCount();
 	static DefaultExtension GetDefaultExtension(idx_t index);

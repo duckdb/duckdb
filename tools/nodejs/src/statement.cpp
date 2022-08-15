@@ -311,7 +311,7 @@ struct RunPreparedTask : public Task {
 		}
 		case RunType::ALL: {
 			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
-			Napi::Array result_arr(Napi::Array::New(env, materialized_result->collection.Count()));
+			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()));
 
 			duckdb::idx_t out_idx = 0;
 			while (true) {

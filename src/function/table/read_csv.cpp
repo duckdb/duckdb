@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 #include <limits>
 
@@ -90,7 +91,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 
 	if (result->options.include_parsed_hive_partitions) {
-		auto partitions = ParseHivePartitions(result->files[0]);
+		auto partitions = HivePartitioning::Parse(result->files[0]);
 		result->hive_partition_col_idx = names.size();
 		for (auto &part : partitions) {
 			return_types.emplace_back(LogicalType::VARCHAR);
@@ -117,6 +118,9 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInit(ClientContext &context, 
 	auto result = make_unique<ReadCSVOperatorData>();
 	if (bind_data.initial_reader) {
 		result->csv_reader = move(bind_data.initial_reader);
+	} else if (bind_data.files.empty()) {
+		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
+		return move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
 		result->csv_reader = make_unique<BufferedCSVReader>(context, bind_data.options, bind_data.sql_types);
@@ -135,6 +139,12 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
 	auto &data = (ReadCSVOperatorData &)*data_p.global_state;
+
+	if (!data.csv_reader) {
+		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
+		return;
+	}
+
 	do {
 		data.csv_reader->ParseCSV(output);
 		data.bytes_read = data.csv_reader->bytes_in_chunk;
@@ -155,7 +165,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		col.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	if (bind_data.options.include_parsed_hive_partitions) {
-		auto partitions = ParseHivePartitions(data.csv_reader->options.file_path);
+		auto partitions = HivePartitioning::Parse(data.csv_reader->options.file_path);
 
 		idx_t i = bind_data.hive_partition_col_idx;
 
@@ -212,9 +222,32 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 	return percentage;
 }
 
+void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                              vector<unique_ptr<Expression>> &filters) {
+	auto data = (ReadCSVData *)bind_data_p;
+
+	if (data->options.include_parsed_hive_partitions || data->options.include_file_name) {
+		string first_file = data->files[0];
+
+		unordered_map<string, column_t> column_map;
+		for (idx_t i = 0; i < get.column_ids.size(); i++) {
+			column_map.insert({get.names[get.column_ids[i]], i});
+		}
+
+		HivePartitioning::ApplyFiltersToFileList(data->files, filters, column_map, get.table_index,
+		                                         data->options.include_parsed_hive_partitions,
+		                                         data->options.include_file_name);
+
+		if (data->files.empty() || data->files[0] != first_file) {
+			data->initial_reader.reset();
+		}
+	}
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInit);
 	read_csv.table_scan_progress = CSVReaderProgress;
+	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }
@@ -224,6 +257,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	TableFunction read_csv_auto("read_csv_auto", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVAutoBind, ReadCSVInit);
 	read_csv_auto.table_scan_progress = CSVReaderProgress;
+	read_csv_auto.pushdown_complex_filter = CSVComplexFilterPushdown;
 	ReadCSVAddNamedParameters(read_csv_auto);
 	set.AddFunction(read_csv_auto);
 }

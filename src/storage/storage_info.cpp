@@ -2,6 +2,6 @@
 
 namespace duckdb {
 
-const uint64_t VERSION_NUMBER = 37;
+const uint64_t VERSION_NUMBER = 38;
 
 } // namespace duckdb

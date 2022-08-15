@@ -262,7 +262,7 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		return LogicalType::BOOLEAN;
 	} else if (py::isinstance<py::int_>(ele)) {
 		Value integer;
-		if (!TryTransformPythonInteger(integer, ele)) {
+		if (!TryTransformPythonNumeric(integer, ele)) {
 			can_convert = false;
 			return LogicalType::SQLNULL;
 		}
@@ -311,8 +311,7 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		}
 		return DictToStruct(dict, can_convert);
 	} else if (py::isinstance(ele, import_cache.numpy.ndarray())) {
-		auto dtype_str = string(py::str(ele.attr("dtype")));
-		auto extended_type = ConvertPandasType(dtype_str);
+		auto extended_type = ConvertPandasType(ele.attr("dtype"));
 		LogicalType ltype;
 		ltype = PandasToLogicalType(extended_type);
 		if (extended_type == PandasType::OBJECT) {
