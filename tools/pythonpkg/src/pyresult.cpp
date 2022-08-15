@@ -312,7 +312,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
-void DuckDBPyResult::ChangeToTZType(data_frame &df) {
+void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
@@ -322,19 +322,19 @@ void DuckDBPyResult::ChangeToTZType(data_frame &df) {
 	}
 }
 
-data_frame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
-	auto df = py::cast<data_frame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+DataFrame DuckDBPyResult::FrameFromNumpy(const py::handle &o) {
+	auto df = py::cast<DataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	return df;
 }
 
-data_frame DuckDBPyResult::FetchDF() {
+DataFrame DuckDBPyResult::FetchDF() {
 	timezone_config = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(FetchNumpyInternal());
 }
 
-data_frame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 	if (timezone_config.empty()) {
 		timezone_config = QueryResult::GetConfigTimezone(*result);
 	}
@@ -373,7 +373,7 @@ py::object DuckDBPyResult::FetchAllArrowChunks(idx_t chunk_size) {
 	return std::move(batches);
 }
 
-duckdb::pyarrow::arrow_table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -393,10 +393,10 @@ duckdb::pyarrow::arrow_table DuckDBPyResult::FetchArrowTable(idx_t chunk_size) {
 	py::list batches = FetchAllArrowChunks(chunk_size);
 
 	// We return an Arrow Table
-	return py::cast<duckdb::pyarrow::arrow_table>(from_batches_func(batches, schema_obj));
+	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
 }
 
-duckdb::pyarrow::record_batch_reader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
+duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -406,7 +406,7 @@ duckdb::pyarrow::record_batch_reader DuckDBPyResult::FetchRecordBatchReader(idx_
 	//! We have to construct an Arrow Array Stream
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), chunk_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
-	return py::cast<duckdb::pyarrow::record_batch_reader>(record_batch_reader);
+	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {

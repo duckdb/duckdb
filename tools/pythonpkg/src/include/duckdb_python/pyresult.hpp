@@ -40,13 +40,13 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	data_frame FetchDF();
+	DataFrame FetchDF();
 
-	duckdb::pyarrow::arrow_table FetchArrowTable(idx_t chunk_size);
+	duckdb::pyarrow::Table FetchArrowTable(idx_t chunk_size);
 
-	data_frame FetchDFChunk(idx_t vectors_per_chunk);
+	DataFrame FetchDFChunk(idx_t vectors_per_chunk);
 
-	duckdb::pyarrow::record_batch_reader FetchRecordBatchReader(idx_t chunk_size);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	py::list Description();
 
@@ -61,9 +61,9 @@ private:
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
 
-	data_frame FrameFromNumpy(const py::handle &o);
+	DataFrame FrameFromNumpy(const py::handle &o);
 
-	void ChangeToTZType(data_frame &df);
+	void ChangeToTZType(DataFrame &df);
 };
 
 } // namespace duckdb
