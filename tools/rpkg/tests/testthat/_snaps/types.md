@@ -110,7 +110,7 @@
       [1]  42 999  NA  NA -42
       
       $int_array[[3]]
-      [1] NA
+      NULL
       
       
       $double_array
@@ -121,7 +121,7 @@
       [1]   42  NaN  Inf -Inf   NA  -42
       
       $double_array[[3]]
-      [1] NA
+      NULL
       
       
       $date_array
@@ -133,7 +133,7 @@
       [5] "2022-05-12"    
       
       $date_array[[3]]
-      [1] NA
+      NULL
       
       
       $timestamp_array
@@ -146,7 +146,7 @@
       [5] "2022-05-12 16:23:45.00000 UTC"   
       
       $timestamp_array[[3]]
-      [1] NA
+      NULL
       
       
       $timestamptz_array
@@ -159,7 +159,7 @@
       [5] "2022-05-12 23:23:45.00000 UTC"   
       
       $timestamptz_array[[3]]
-      [1] NA
+      NULL
       
       
       $varchar_array
@@ -170,7 +170,7 @@
       [1] "🦆🦆🦆🦆🦆🦆" "goose"        NA             ""            
       
       $varchar_array[[3]]
-      [1] NA
+      NULL
       
       
       $nested_int_array
@@ -185,7 +185,7 @@
       [1]  42 999  NA  NA -42
       
       $nested_int_array[[2]][[3]]
-      [1] NA
+      NULL
       
       $nested_int_array[[2]][[4]]
       integer(0)
@@ -195,7 +195,7 @@
       
       
       $nested_int_array[[3]]
-      [1] NA
+      NULL
       
       
       $struct
@@ -206,9 +206,9 @@
       
       $struct_of_arrays
                            a                         b
-      1                   NA                        NA
+      1                 NULL                      NULL
       2 42, 999, NA, NA, -42 🦆🦆🦆🦆🦆🦆, goose, NA, 
-      3                   NA                        NA
+      3                 NULL                      NULL
       
       $array_of_structs
       $array_of_structs[[1]]
@@ -222,7 +222,7 @@
       3 NA         <NA>
       
       $array_of_structs[[3]]
-      [1] NA
+      NULL
       
       
 
