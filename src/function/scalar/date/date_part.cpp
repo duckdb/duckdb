@@ -1333,8 +1333,7 @@ struct StructDatePart {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
 
-		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
 		return make_unique<BindData>(bound_function.return_type, part_codes);
 	}

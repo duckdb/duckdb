@@ -106,6 +106,10 @@ public:
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API static idx_t BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info,
 	                                     string &error);
+
+	//! Used in the bind to erase an argument from a function
+	DUCKDB_API static void EraseArgument(SimpleFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments, idx_t argument_index);
 };
 
 class SimpleFunction : public Function {
@@ -116,6 +120,9 @@ public:
 
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
+	//! The set of original arguments of the function - only set if Function::EraseArgument is called
+	//! Used for (de)serialization purposes
+	vector<LogicalType> original_arguments;
 	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
 	//! arguments
 	LogicalType varargs;

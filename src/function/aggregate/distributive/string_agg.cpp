@@ -134,7 +134,7 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 	if (separator_val.IsNull()) {
 		arguments[0] = make_unique<BoundConstantExpression>(Value(LogicalType::VARCHAR));
 	}
-	function.arguments.erase(function.arguments.begin() + 1);
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_unique<StringAggBindData>(separator_val.ToString());
 }
 

@@ -299,14 +299,14 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments.pop_back();
+		Function::EraseArgument(bound_function, arguments, arguments.size() - 1);
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
 		return make_unique<VariableReturnBindData>(bound_function.return_type);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		bound_function.arguments.pop_back();
+		Function::EraseArgument(bound_function, arguments, arguments.size() - 1);
 		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
 		bound_function.return_type = LogicalType::SQLNULL;
 		return nullptr;
@@ -341,7 +341,6 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
-
 	bound_function.return_type = arguments[0]->return_type;
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }

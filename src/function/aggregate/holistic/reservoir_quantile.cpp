@@ -355,7 +355,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	}
 
 	if (arguments.size() <= 2) {
-		arguments.pop_back();
+		Function::EraseArgument(function, arguments, arguments.size() - 1);
 		return make_unique<ReservoirQuantileBindData>(quantiles, 8192);
 	}
 	if (!arguments[2]->IsFoldable()) {
@@ -372,15 +372,15 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	}
 
 	// remove the quantile argument so we can use the unary aggregate
-	arguments.pop_back();
-	arguments.pop_back();
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_unique<ReservoirQuantileBindData>(quantiles, sample_size);
 }
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                       vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function = GetReservoirQuantileAggregateFunction(arguments[0]->return_type.InternalType());
+	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function.name = "reservoir_quantile";
 	function.serialize = ReservoirQuantileBindData::Serialize;
 	function.deserialize = ReservoirQuantileBindData::Deserialize;
@@ -399,8 +399,8 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 
 unique_ptr<FunctionData> BindReservoirQuantileDecimalList(ClientContext &context, AggregateFunction &function,
                                                           vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function = GetReservoirQuantileListAggregateFunction(arguments[0]->return_type);
+	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function.serialize = ReservoirQuantileBindData::Serialize;
 	function.deserialize = ReservoirQuantileBindData::Deserialize;
 	function.name = "reservoir_quantile";

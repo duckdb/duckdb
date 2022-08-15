@@ -164,9 +164,14 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
 	}
-	BufferedSerializer serializer;
-	op->Serialize(serializer);
 
+	BufferedSerializer serializer;
+	try {
+		op->Serialize(serializer);
+	} catch(NotImplementedException &ex) {
+		// ignore for now (FIXME)
+		return;
+	}
 	auto data = serializer.GetData();
 	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
 

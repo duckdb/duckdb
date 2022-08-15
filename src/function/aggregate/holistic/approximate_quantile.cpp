@@ -176,7 +176,7 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 	}
 
 	// remove the quantile argument so we can use the unary aggregate
-	arguments.pop_back();
+	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_unique<ApproximateQuantileBindData>(quantiles);
 }
 

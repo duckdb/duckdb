@@ -20,9 +20,11 @@ public:
 		D_ASSERT(!function.name.empty());
 		writer.WriteString(function.name);
 		writer.WriteRegularSerializableList(function.arguments);
+		writer.WriteRegularSerializableList(function.original_arguments);
 		bool serialize = function.serialize;
 		writer.WriteField(serialize);
 		if (serialize) {
+			D_ASSERT(function.deserialize);
 			function.serialize(writer, bind_info, function);
 		}
 	}
@@ -41,6 +43,8 @@ public:
 		auto &context = state.context;
 		auto name = reader.ReadRequired<string>();
 		auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		// note: original_arguments are optional (can be list of size 0)
+		auto original_arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 
 		auto &catalog = Catalog::GetCatalog(context);
 		auto func_catalog = catalog.GetEntry(context, type, DEFAULT_SCHEMA, name);
@@ -49,7 +53,7 @@ public:
 		}
 
 		auto functions = (CATALOG_ENTRY *)func_catalog;
-		auto function = functions->functions.GetFunctionByArguments(arguments);
+		auto function = functions->functions.GetFunctionByArguments(original_arguments.empty() ? arguments : original_arguments);
 		function.arguments = move(arguments);
 
 		has_deserialize = reader.ReadRequired<bool>();
@@ -59,6 +63,9 @@ public:
 				                             function.name);
 			}
 			bind_info = function.deserialize(context, reader, function);
+		} else {
+			D_ASSERT(!function.serialize);
+			D_ASSERT(!function.deserialize);
 		}
 		return function;
 	}
