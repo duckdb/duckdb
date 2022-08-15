@@ -29,7 +29,7 @@ public:
 	DUCKDB_API PreservedError &AddToMessage(const string &prepended_message);
 	//! Recreates the exception that was preserved
 	DUCKDB_API Exception ToException(const string &prepended_message = "") const;
-	//! Used in clients like C-API, creates the final message and returns a pointer to the internal c_str
+	//! Used in clients like C-API, creates the final message and returns a reference to it
 	DUCKDB_API const string &Message();
 	//! Let's us do things like 'if (error)'
 	operator bool();
@@ -41,7 +41,7 @@ private:
 	ExceptionType type;
 	//! The message the exception was constructed with (does not contain the Exception Type)
 	string raw_message;
-	//! The final message (stored in the preserved error for compatibility reasons with C-API
+	//! The final message (stored in the preserved error for compatibility reasons with C-API)
 	string final_message;
 };
 

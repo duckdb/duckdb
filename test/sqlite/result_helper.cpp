@@ -35,7 +35,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 	auto &query_has_label = query_ptr->query_has_label;
 	auto &query_label = query_ptr->query_label;
 
-	if (!result.success) {
+	if (result.HasError()) {
 		PrintLineSep();
 		std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
 		PrintLineSep();
@@ -320,7 +320,7 @@ void TestResultHelper::CheckQueryResult(unique_ptr<MaterializedQueryResult> owne
 }
 
 void TestResultHelper::CheckStatementResult() {
-	bool error = !result.success;
+	bool error = result.HasError();
 
 	if (runner.output_result_mode || runner.debug_mode) {
 		result.Print();
@@ -372,7 +372,7 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
 
 	auto csv_result =
 	    con.Query("SELECT * FROM read_csv('" + fname + "', header=1, sep='|', columns=" + struct_definition + ")");
-	if (!csv_result->success) {
+	if (!csv_result->QUERY_RESULT_INTERNAL_SUCCESS) {
 		string error = StringUtil::Format("Could not read CSV File \"%s\": %s", fname, csv_result->error.Message());
 		PrintErrorHeader(error.c_str());
 		FAIL_LINE(file_name, query_line, 0);

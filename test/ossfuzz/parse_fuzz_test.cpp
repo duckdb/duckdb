@@ -13,7 +13,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 	con.Query("PRAGMA enable_verification");
 	try {
 		auto result = con.Query(input);
-		if (!result->success) {
+		if (result->HasError()) {
 			for (auto &internal_error : internal_error_messages) {
 				if (duckdb::StringUtil::Contains(result->error.Message(), internal_error)) {
 					return 1;

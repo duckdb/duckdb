@@ -17,7 +17,7 @@ atomic<bool> finished;
 static void RunQueryUntilSuccess(Connection &con, string query) {
 	while (true) {
 		auto result = con.Query(query);
-		if (result->success) {
+		if (result->QUERY_RESULT_INTERNAL_SUCCESS) {
 			break;
 		}
 	}
@@ -60,7 +60,7 @@ static void create_use_prepared_statement(DuckDB *db) {
 			// execute the prepared statement until the prepared statement is dropped because of the CASCADE in another
 			// thread
 			result = con.Query("EXECUTE s1");
-			if (!result->success) {
+			if (result->HasError()) {
 				break;
 			} else {
 				D_ASSERT(CHECK_COLUMN(result, 0, {15}));
@@ -117,13 +117,13 @@ static void create_use_table_view(DuckDB *db, int threadnr) {
 		RunQueryUntilSuccess(con, "CREATE VIEW s1." + vname + " AS SELECT 42");
 		while (true) {
 			result = con.Query("SELECT SUM(i) FROM s1." + tname);
-			if (!result->success) {
+			if (result->HasError()) {
 				break;
 			} else {
 				REQUIRE(CHECK_COLUMN(result, 0, {15}));
 			}
 			result = con.Query("SELECT * FROM s1." + vname);
-			if (!result->success) {
+			if (result->HasError()) {
 				break;
 			} else {
 				REQUIRE(CHECK_COLUMN(result, 0, {42}));

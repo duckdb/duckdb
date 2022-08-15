@@ -157,7 +157,7 @@ py::object DuckDBPyResult::GetValueToPython(const Value &val, const LogicalType 
 
 unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 	auto chunk = result.Fetch();
-	if (!result.success) {
+	if (result.HasError()) {
 		throw result.error.ToException();
 	}
 	return chunk;
@@ -165,7 +165,7 @@ unique_ptr<DataChunk> FetchNext(QueryResult &result) {
 
 unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
 	auto chunk = result.FetchRaw();
-	if (!result.success) {
+	if (result.HasError()) {
 		throw result.error.ToException();
 	}
 	return chunk;

@@ -20,10 +20,10 @@ using namespace std;
 namespace duckdb {
 
 bool NO_FAIL(QueryResult &result) {
-	if (!result.success) {
+	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.Message().c_str());
 	}
-	return result.success;
+	return result.QUERY_RESULT_INTERNAL_SUCCESS;
 }
 
 bool NO_FAIL(unique_ptr<QueryResult> result) {
@@ -116,7 +116,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 		return false;
 	}
 	auto &result = (MaterializedQueryResult &)result_;
-	if (!result.success) {
+	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.error.Message().c_str());
 		return false;
 	}
@@ -175,7 +175,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t co
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
 	D_ASSERT(result.type == QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (MaterializedQueryResult &)result;
-	if (!materialized.success) {
+	if (!materialized.QUERY_RESULT_INTERNAL_SUCCESS) {
 		fprintf(stderr, "Query failed with message: %s\n", materialized.error.Message().c_str());
 		return materialized.error.Message();
 	}

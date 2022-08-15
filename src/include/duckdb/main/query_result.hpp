@@ -42,13 +42,15 @@ public:
 	//! The names of the result
 	vector<string> names;
 	//! Whether or not execution was successful
-	bool success;
+	bool QUERY_RESULT_INTERNAL_SUCCESS;
 	//! The error (in case execution was not successful)
 	PreservedError error;
 
 public:
+	DUCKDB_API void SetError(PreservedError error);
 	DUCKDB_API bool HasError();
-	DUCKDB_API PreservedError &GetError();
+	DUCKDB_API const std::string &GetError();
+	DUCKDB_API const PreservedError &GetErrorObject();
 	DUCKDB_API idx_t ColumnCount();
 };
 
@@ -87,7 +89,7 @@ public:
 	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
-			return success;
+			return QUERY_RESULT_INTERNAL_SUCCESS;
 		} catch (const Exception &ex) {
 			error = PreservedError(ex);
 			return false;

@@ -12,7 +12,7 @@ TEST_CASE("Test Pending Query API", "[api]") {
 
 	SECTION("Materialized result") {
 		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)");
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
 
@@ -26,7 +26,7 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	}
 	SECTION("Streaming result") {
 		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)", true);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
 
@@ -42,7 +42,7 @@ TEST_CASE("Test Pending Query API", "[api]") {
 		auto pending_query = con.PendingQuery("SELECT SUM(i) FROM range(1000000) tbl(i)", true);
 		while (pending_query->ExecuteTask() == PendingExecutionResult::RESULT_NOT_READY)
 			;
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
 
@@ -71,7 +71,7 @@ TEST_CASE("Test Pending Query API", "[api]") {
 	}
 	SECTION("Binding error in pending query") {
 		auto pending_query = con.PendingQuery("SELECT XXXSUM(i) FROM range(1000000) tbl(i)");
-		REQUIRE(!pending_query->success);
+		REQUIRE(!pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		REQUIRE_THROWS(pending_query->ExecuteTask());
 		REQUIRE_THROWS(pending_query->Execute());
 
@@ -83,7 +83,7 @@ TEST_CASE("Test Pending Query API", "[api]") {
 		// this succeeds initially
 		auto pending_query =
 		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)");
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		// we only encounter the failure later on as we are executing the query
 		auto result = pending_query->Execute();
 		REQUIRE_FAIL(result);
@@ -96,13 +96,13 @@ TEST_CASE("Test Pending Query API", "[api]") {
 		// this succeeds initially
 		auto pending_query =
 		    con.PendingQuery("SELECT concat(SUM(i)::varchar, 'hello')::INT FROM range(1000000) tbl(i)", true);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		// still succeeds...
 		auto result = pending_query->Execute();
-		REQUIRE(result->success);
+		REQUIRE(result->QUERY_RESULT_INTERNAL_SUCCESS);
 		auto chunk = result->Fetch();
 		REQUIRE(!chunk);
-		REQUIRE(!result->success);
+		REQUIRE(result->HasError());
 
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
@@ -154,7 +154,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		REQUIRE(prepare->success);
 
 		auto pending_query = prepare->PendingQuery(0);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 
 		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(499999500000)}));
@@ -165,7 +165,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 
 		// we can use the prepared query again, however
 		pending_query = prepare->PendingQuery(500000);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 
 		result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(374999750000)}));
@@ -187,14 +187,14 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		// this succeeds initially
 		parameters = {Value::INTEGER(0)};
 		auto pending_query = prepared->PendingQuery(parameters, true);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		// still succeeds...
 		auto result = pending_query->Execute();
-		REQUIRE(result->success);
+		REQUIRE(result->QUERY_RESULT_INTERNAL_SUCCESS);
 		//! fail!
 		auto chunk = result->Fetch();
 		REQUIRE(!chunk);
-		REQUIRE(!result->success);
+		REQUIRE(result->HasError());
 
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
@@ -203,10 +203,10 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 		// if we change the parameter this works
 		parameters = {Value::INTEGER(2000000)};
 		pending_query = prepared->PendingQuery(parameters, true);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 		// still succeeds...
 		result = pending_query->Execute();
-		REQUIRE(result->success);
+		REQUIRE(result->QUERY_RESULT_INTERNAL_SUCCESS);
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(0)}));
 	}
 	SECTION("Multiple prepared statements") {
@@ -217,13 +217,13 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api]") {
 
 		// we can execute from both prepared statements individually
 		auto pending_query = prepare1->PendingQuery(500000);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 
 		auto result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(374999750000)}));
 
 		pending_query = prepare2->PendingQuery(500000);
-		REQUIRE(pending_query->success);
+		REQUIRE(pending_query->QUERY_RESULT_INTERNAL_SUCCESS);
 
 		result = pending_query->Execute();
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(125000250000)}));

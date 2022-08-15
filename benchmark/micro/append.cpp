@@ -210,7 +210,7 @@ string GetQuery() override {
 	return "COPY integers TO 'integers.csv' DELIMITER '|' HEADER";
 }
 string VerifyResult(QueryResult *result) override {
-	if (!result->success) {
+	if (result->HasError()) {
 		return result->error.Message();
 	}
 	return string();

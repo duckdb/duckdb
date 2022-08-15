@@ -74,7 +74,7 @@ static void append_to_integers(DuckDB *db, idx_t threadnr) {
 	Connection con(*db);
 	for (idx_t i = 0; i < CONCURRENT_INDEX_INSERT_COUNT; i++) {
 		auto result = con.Query("INSERT INTO integers VALUES (1)");
-		if (!result->success) {
+		if (result->HasError()) {
 			FAIL();
 		}
 	}
@@ -210,7 +210,7 @@ static void mix_insert_to_primary_key(DuckDB *db, atomic<idx_t> *count, idx_t th
 	Connection con(*db);
 	for (int32_t i = 0; i < 100; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", i);
-		if (result->success) {
+		if (result->QUERY_RESULT_INTERNAL_SUCCESS) {
 			(*count)++;
 		}
 	}
@@ -267,19 +267,19 @@ TEST_CASE("Mix of UPDATES and INSERTS on table with PRIMARY KEY constraints", "[
 
 string append_to_primary_key(Connection &con, idx_t thread_nr) {
 	unique_ptr<QueryResult> result;
-	if (!con.Query("BEGIN TRANSACTION")->success) {
+	if (!con.Query("BEGIN TRANSACTION")->QUERY_RESULT_INTERNAL_SUCCESS) {
 		return "Failed BEGIN TRANSACTION";
 	}
 	// obtain the initial count
 	result = con.Query("SELECT COUNT(*) FROM integers WHERE i >= 0");
-	if (!result->success) {
+	if (result->HasError()) {
 		return "Failed initial query: " + result->error.Message();
 	}
 	auto chunk = result->Fetch();
 	auto initial_count = chunk->GetValue(0, 0).GetValue<int32_t>();
 	for (int32_t i = 0; i < 50; i++) {
 		result = con.Query("INSERT INTO integers VALUES ($1)", (int32_t)(thread_nr * 1000 + i));
-		if (!result->success) {
+		if (result->HasError()) {
 			return "Failed INSERT: " + result->error.Message();
 		}
 		// check the count
@@ -289,7 +289,7 @@ string append_to_primary_key(Connection &con, idx_t thread_nr) {
 			       Value::INTEGER(initial_count + i + 1).ToString() + " rows";
 		}
 	}
-	if (!con.Query("COMMIT")->success) {
+	if (!con.Query("COMMIT")->QUERY_RESULT_INTERNAL_SUCCESS) {
 		return "Failed COMMIT";
 	}
 	return "";

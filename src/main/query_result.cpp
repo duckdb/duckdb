@@ -8,23 +8,32 @@ namespace duckdb {
 BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties,
                                  vector<LogicalType> types_p, vector<string> names_p)
     : type(type), statement_type(statement_type), properties(properties), types(move(types_p)), names(move(names_p)),
-      success(true) {
+      QUERY_RESULT_INTERNAL_SUCCESS(true) {
 	D_ASSERT(types.size() == names.size());
 }
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, PreservedError error)
-    : type(type), success(false), error(move(error)) {
+    : type(type), QUERY_RESULT_INTERNAL_SUCCESS(false), error(move(error)) {
 }
 
 BaseQueryResult::~BaseQueryResult() {
 }
 
+void BaseQueryResult::SetError(PreservedError error) {
+	success = false;
+	error = move(error);
+}
+
 bool BaseQueryResult::HasError() {
 	return !success;
 }
-PreservedError &BaseQueryResult::GetError() {
+const std::string &BaseQueryResult::GetError() {
+	return error.Message();
+}
+const PreservedError &BaseQueryResult::GetErrorObject() {
 	return error;
 }
+
 idx_t BaseQueryResult::ColumnCount() {
 	return types.size();
 }
@@ -52,10 +61,10 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 
 bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 	// first compare the success state of the results
-	if (success != other.success) {
+	if (QUERY_RESULT_INTERNAL_SUCCESS != other.QUERY_RESULT_INTERNAL_SUCCESS) {
 		return false;
 	}
-	if (!success) {
+	if (!QUERY_RESULT_INTERNAL_SUCCESS) {
 		return error == other.error;
 	}
 	// compare names
