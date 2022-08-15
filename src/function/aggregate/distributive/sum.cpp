@@ -144,7 +144,7 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 }
 
 AggregateFunction SumFun::GetSumAggregateNoOverflow(PhysicalType type) {
-	switch(type) {
+	switch (type) {
 	case PhysicalType::INT32: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int32_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::INTEGER, LogicalType::HUGEINT);

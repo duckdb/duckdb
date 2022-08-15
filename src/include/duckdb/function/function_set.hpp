@@ -59,50 +59,23 @@ public:
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
-	explicit ScalarFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	explicit ScalarFunctionSet(string name);
 
-	ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments) {
-		string error;
-		idx_t index = Function::BindFunction(name, *this, arguments, error);
-		if (index == DConstants::INVALID_INDEX) {
-			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-			                        error);
-		}
-		return GetFunctionByOffset(index);
-	}
+	ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
-	explicit AggregateFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	explicit AggregateFunctionSet(string name);
 
-	AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments) {
-		string error;
-		idx_t index = Function::BindFunction(name, *this, arguments, error);
-		if (index == DConstants::INVALID_INDEX) {
-			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-			                        error);
-		}
-		return GetFunctionByOffset(index);
-	}
+	AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
-	explicit TableFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	explicit TableFunctionSet(string name);
 
-	TableFunction GetFunctionByArguments(const vector<LogicalType> &arguments) {
-		string error;
-		idx_t index = Function::BindFunction(name, *this, arguments, error);
-		if (index == DConstants::INVALID_INDEX) {
-			throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
-			                        error);
-		}
-		return GetFunctionByOffset(index);
-	}
+	TableFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
