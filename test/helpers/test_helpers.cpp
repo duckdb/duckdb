@@ -9,6 +9,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "pid.hpp"
 
 #include <cmath>
 #include <fstream>
@@ -64,7 +65,11 @@ string TestDirectoryPath() {
 	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
 		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
 	}
-	return TESTING_DIRECTORY_NAME;
+	string path = StringUtil::Format(TESTING_DIRECTORY_NAME "/%d", getpid());
+	if (!fs->DirectoryExists(path)) {
+		fs->CreateDirectory(path);
+	}
+	return path;
 }
 
 string TestCreatePath(string suffix) {

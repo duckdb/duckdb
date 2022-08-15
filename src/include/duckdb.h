@@ -1612,6 +1612,14 @@ Sets the user-provided bind data in the bind object. This object can be retrieve
 DUCKDB_API void duckdb_bind_set_bind_data(duckdb_bind_info info, void *bind_data, duckdb_delete_callback_t destroy);
 
 /*!
+Sets the cardinality estimate for the table function, used for optimization.
+
+* info: The bind data object.
+* is_exact: Whether or not the cardinality estimate is exact, or an approximation
+*/
+DUCKDB_API void duckdb_bind_set_cardinality(duckdb_bind_info info, idx_t cardinality, bool is_exact);
+
+/*!
 Report that an error has occurred while calling bind.
 
 * info: The info object

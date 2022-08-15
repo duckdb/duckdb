@@ -556,11 +556,25 @@ end
 
 # cleanup background tasks
 function cleanup_tasks(tasks, state)
+    # mark execution as finished so the individual tasks will quit
     duckdb_finish_execution(state)
+    # now wait for all tasks to finish executing
+    exceptions = []
     for task in tasks
-        Base.wait(task)
+        try
+            Base.wait(task)
+        catch ex
+            push!(exceptions, ex)
+        end
     end
+    # clean up the tasks and task state
+    empty!(tasks)
     duckdb_destroy_task_state(state)
+
+    # if any tasks threw, propagate the error upwards by throwing as well
+    for ex in exceptions
+        throw(ex)
+    end
     return
 end
 
