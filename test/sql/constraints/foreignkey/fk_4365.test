@@ -1,0 +1,15 @@
+# name: test/sql/constraints/foreignkey/fk_4365.test
+# description: Issue #4365: Multiple NOT NULL constraints in duckdb_constraints()
+# group: [foreignkey]
+
+statement ok
+create table x (c1 integer, primary key (c1));
+
+# This should not add a second NOT NULL constraint, because it already exists
+statement ok
+create table y (c1 integer, foreign key (c1) references x (c1));
+
+query I
+select count(*) from duckdb_constraints() where constraint_type = 'NOT NULL';
+----
+1
