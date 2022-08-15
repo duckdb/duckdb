@@ -23,53 +23,9 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/execution/index/art/iterator.hpp"
 
 namespace duckdb {
-struct IteratorEntry {
-	IteratorEntry() {
-	}
-	IteratorEntry(Node *node, idx_t pos) : node(node), pos(pos) {
-	}
-
-	Node *node = nullptr;
-	idx_t pos = 0;
-};
-
-//! Keeps track of the current key in the iterator
-struct IteratorCurrentKey {
-	//! Subscript operator
-	uint8_t &operator[](idx_t idx);
-	//! Push Byte
-	void Push(uint8_t key);
-	//! Pops n elements
-	void Pop(idx_t n);
-	bool operator>(const Key &k) const;
-	bool operator>=(const Key &k) const;
-	bool operator==(const Key &k) const;
-
-private:
-	//! The current key position
-	idx_t cur_key_pos = 0;
-	//! The current key of the Leaf Node
-	vector<uint8_t> key;
-};
-
-struct Iterator {
-	//! The current Leaf Node, valid if depth>0
-	Leaf *node = nullptr;
-	//! Current Key
-	IteratorCurrentKey cur_key;
-	//! The current Tree depth
-	int32_t depth = 0;
-	//! Stack, the size is determined at runtime
-	vector<IteratorEntry> stack;
-
-	bool start = false;
-
-	void SetEntry(idx_t depth, IteratorEntry entry);
-
-	void PushKey(Node *node, uint16_t pos);
-};
 
 struct ARTIndexScanState : public IndexScanState {
 	ARTIndexScanState() : checked(false), result_index(0) {
@@ -149,26 +105,14 @@ private:
 	//! Find the node with a matching key, optimistic version
 	Node *Lookup(Node *node, Key &key, unsigned depth);
 
-	//! Find the first node that is bigger (or equal to) a specific key
-	bool Bound(Node *node, Key &key, Iterator &iterator, bool inclusive);
-
-	//! Gets next node for range queries
-	bool IteratorNext(Iterator &iter);
-
 	bool SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchLess(ARTIndexScanState *state, bool inclusive, idx_t max_count, vector<row_t> &result_ids);
 	bool SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool right_inclusive, idx_t max_count,
 	                      vector<row_t> &result_ids);
 
-	template <bool HAS_BOUND, bool INCLUSIVE>
-	bool IteratorScan(ARTIndexScanState *state, Iterator *it, Key *upper_bound, idx_t max_count,
-	                  vector<row_t> &result_ids);
-
 	void GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys);
 
 	void VerifyExistence(DataChunk &chunk, VerifyExistenceType verify_type, string *err_msg_ptr = nullptr);
-
-	Leaf &FindMinimum(Iterator &it, Node &node);
 };
 
 } // namespace duckdb
