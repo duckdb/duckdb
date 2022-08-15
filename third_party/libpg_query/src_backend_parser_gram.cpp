@@ -1551,7 +1551,7 @@ static const char *const yytname[] =
   "reset_rest", "CallStmt", "SelectStmt", "select_with_parens",
   "select_no_parens", "select_clause", "simple_select", "with_clause",
   "cte_list", "common_table_expr", "into_clause", "OptTempTableName",
-  "opt_table", "all_or_distinct", "by_union", "distinct_clause",
+  "opt_table", "all_or_distinct", "by_name", "distinct_clause",
   "opt_all_clause", "opt_ignore_nulls", "opt_sort_clause", "sort_clause",
   "sortby_list", "sortby", "opt_asc_desc", "opt_nulls_order",
   "select_limit", "opt_select_limit", "limit_clause", "offset_clause",
