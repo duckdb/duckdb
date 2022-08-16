@@ -36,9 +36,9 @@ public:
 	idx_t block_position;
 
 	//! Used for synchronization of parallel external join
-	atomic<idx_t> total;
+	idx_t total;
 	idx_t scan_index;
-	atomic<idx_t> scanned;
+	idx_t scanned;
 
 public:
 	void Reset() {

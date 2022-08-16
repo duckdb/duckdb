@@ -79,14 +79,14 @@ public:
 
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
-	HashJoinLocalSinkState(Allocator &allocator, const PhysicalHashJoin &hj) : build_executor(allocator) {
-		if (!hj.right_projection_map.empty()) {
-			build_chunk.Initialize(allocator, hj.build_types);
+	HashJoinLocalSinkState(Allocator &allocator, const PhysicalHashJoin &op) : build_executor(allocator) {
+		if (!op.right_projection_map.empty()) {
+			build_chunk.Initialize(allocator, op.build_types);
 		}
-		for (auto &cond : hj.conditions) {
+		for (auto &cond : op.conditions) {
 			build_executor.AddExpression(*cond.right);
 		}
-		join_keys.Initialize(allocator, hj.condition_types);
+		join_keys.Initialize(allocator, op.condition_types);
 	}
 
 public:
@@ -401,9 +401,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class PhysicalHashJoinState : public OperatorState {
+class HashJoinOperatorState : public OperatorState {
 public:
-	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator), spill_collection(nullptr) {
+	explicit HashJoinOperatorState(Allocator &allocator) : probe_executor(allocator), spill_collection(nullptr) {
 	}
 
 	DataChunk join_keys;
@@ -425,7 +425,7 @@ public:
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
 	auto &allocator = Allocator::Get(context.client);
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
-	auto state = make_unique<PhysicalHashJoinState>(allocator);
+	auto state = make_unique<HashJoinOperatorState>(allocator);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
@@ -448,7 +448,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 
 OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                              GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (PhysicalHashJoinState &)state_p;
+	auto &state = (HashJoinOperatorState &)state_p;
 	auto &sink = (HashJoinGlobalSinkState &)*sink_state;
 	D_ASSERT(sink.finalized);
 	D_ASSERT(!sink.scanned_data);
@@ -533,14 +533,14 @@ public:
 	//! For HT build synchronization
 	idx_t build_block_idx;
 	idx_t build_block_count;
-	atomic<idx_t> build_block_done;
+	idx_t build_block_done;
 	idx_t build_blocks_per_thread;
 
 	//! For probe synchronization
 	ColumnDataParallelScanState probe_global_scan;
 	idx_t probe_chunk_count;
-	atomic<idx_t> probe_chunk_done;
-	atomic<idx_t> probe_side_partitioned;
+	idx_t probe_chunk_done;
+	atomic<bool> probe_side_partitioned;
 
 	//! For full/outer synchronization
 	JoinHTScanState full_outer_scan;
@@ -713,6 +713,8 @@ bool HashJoinGlobalSourceState::AssignTask(HashJoinGlobalSinkState &sink, HashJo
 			return true;
 		}
 		break;
+	case HashJoinSourceStage::DONE:
+		break;
 	default:
 		throw InternalException("Unexpected HashJoinSourceStage in AssignTask!");
 	}
@@ -726,7 +728,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, A
 	join_keys.Initialize(allocator, op.condition_types);
 	payload.Initialize(allocator, op.children[0]->types);
 
-	// Store the indices of the columns so we can reference them easily
+	// Store the indices of the columns to reference them easily
 	idx_t col_idx = 0;
 	for (; col_idx < op.condition_types.size(); col_idx++) {
 		join_key_indices.push_back(col_idx);
@@ -870,10 +872,12 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 		gstate.PartitionProbeSide(sink);
 
 		lock_guard<mutex> lock(gstate.lock);
-		if (IsRightOuterJoin(join_type)) {
-			gstate.global_stage = HashJoinSourceStage::SCAN_HT;
-		} else {
-			gstate.PrepareBuild(sink);
+		if (gstate.global_stage == HashJoinSourceStage::INIT) {
+			if (IsRightOuterJoin(join_type)) {
+				gstate.global_stage = HashJoinSourceStage::SCAN_HT;
+			} else {
+				gstate.PrepareBuild(sink);
+			}
 		}
 	}
 

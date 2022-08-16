@@ -997,14 +997,8 @@ void JoinHashTable::UnFinalize() {
 }
 
 bool JoinHashTable::PrepareExternalFinalize() {
-	if (partition_block_collections.empty()) {
-		// Empty HT!
-		return false;
-	}
-
 	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	partition_start = partition_end;
-	if (partition_start == num_partitions) {
+	if (partition_block_collections.empty() || partition_end == num_partitions) {
 		return false;
 	}
 
@@ -1015,6 +1009,7 @@ bool JoinHashTable::PrepareExternalFinalize() {
 	// Determine how many partitions we can do next (at least one)
 	idx_t next = 0;
 	idx_t count = 0;
+	partition_start = partition_end;
 	for (idx_t p = partition_start; p < num_partitions; p++) {
 		auto partition_count = partition_block_collections[p]->count;
 		if (partition_count != 0 && count != 0 && count + partition_count > tuples_per_round) {
