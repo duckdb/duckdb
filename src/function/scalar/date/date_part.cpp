@@ -1446,7 +1446,8 @@ struct StructDatePart {
 		result.Verify(count);
 	}
 
-	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
+	                              const ScalarFunction &function) {
 		D_ASSERT(bind_data_p);
 		auto &info = (BindData &)*bind_data_p;
 		writer.WriteSerializable(info.stype);
@@ -1454,7 +1455,7 @@ struct StructDatePart {
 	}
 
 	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
-												 ScalarFunction &bound_function) {
+	                                                    ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
 		return make_unique<BindData>(move(stype), move(part_codes));

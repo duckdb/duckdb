@@ -168,7 +168,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	BufferedSerializer serializer;
 	try {
 		op->Serialize(serializer);
-	} catch(NotImplementedException &ex) {
+	} catch (NotImplementedException &ex) {
 		// ignore for now (FIXME)
 		return;
 	}

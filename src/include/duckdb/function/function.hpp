@@ -109,8 +109,8 @@ public:
 	                                     string &error);
 
 	//! Used in the bind to erase an argument from a function
-	DUCKDB_API static void EraseArgument(SimpleFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments, idx_t argument_index);
+	DUCKDB_API static void EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+	                                     idx_t argument_index);
 };
 
 class SimpleFunction : public Function {

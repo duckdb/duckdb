@@ -425,8 +425,8 @@ idx_t Function::BindFunction(const string &name, TableFunctionSet &functions, ve
 	return Function::BindFunction(name, functions, types, error);
 }
 
-void Function::EraseArgument(SimpleFunction &bound_function,
-									 vector<unique_ptr<Expression>> &arguments, idx_t argument_index) {
+void Function::EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+                             idx_t argument_index) {
 	if (bound_function.original_arguments.empty()) {
 		bound_function.original_arguments = bound_function.arguments;
 	}

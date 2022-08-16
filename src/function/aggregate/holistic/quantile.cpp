@@ -1097,9 +1097,9 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
 	D_ASSERT(bind_data_p);
 	throw NotImplementedException("FIXME: serializing quantiles is not supported right now");
-//
-//	auto bind_data = (QuantileBindData *)bind_data_p;
-//	writer.WriteList<double>(bind_data->quantiles);
+	//
+	//	auto bind_data = (QuantileBindData *)bind_data_p;
+	//	writer.WriteList<double>(bind_data->quantiles);
 }
 
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
@@ -1165,7 +1165,8 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 	return make_unique<QuantileBindData>(quantiles);
 }
 
-static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
+static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                     const AggregateFunction &function) {
 	throw NotImplementedException("FIXME: serializing quantiles with decimals is not supported right now");
 }
 
@@ -1270,8 +1271,10 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 	return fun;
 }
 
-AggregateFunction GetQuantileDecimalAggregate(vector<LogicalType> arguments, LogicalType return_type, bind_aggregate_function_t bind) {
-	AggregateFunction fun(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind);
+AggregateFunction GetQuantileDecimalAggregate(vector<LogicalType> arguments, LogicalType return_type,
+                                              bind_aggregate_function_t bind) {
+	AggregateFunction fun(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      bind);
 	fun.bind = bind;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
@@ -1286,18 +1289,22 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	                                       LogicalType::INTERVAL, LogicalType::VARCHAR};
 
 	AggregateFunctionSet median("median");
-	median.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, BindMedianDecimal));
+	median.AddFunction(
+	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, BindMedianDecimal));
 
 	AggregateFunctionSet quantile_disc("quantile_disc");
-	quantile_disc.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE}, LogicalTypeId::DECIMAL,
-	                                            BindDiscreteQuantileDecimal));
-	quantile_disc.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
-	                                            LogicalType::LIST(LogicalTypeId::DECIMAL), BindDiscreteQuantileDecimalList));
+	quantile_disc.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
+	                                                      LogicalTypeId::DECIMAL, BindDiscreteQuantileDecimal));
+	quantile_disc.AddFunction(
+	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
+	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindDiscreteQuantileDecimalList));
 
 	AggregateFunctionSet quantile_cont("quantile_cont");
-	quantile_cont.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE}, LogicalTypeId::DECIMAL, BindContinuousQuantileDecimal));
-	quantile_cont.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
-	                                            LogicalType::LIST(LogicalTypeId::DECIMAL), BindContinuousQuantileDecimalList));
+	quantile_cont.AddFunction(GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
+	                                                      LogicalTypeId::DECIMAL, BindContinuousQuantileDecimal));
+	quantile_cont.AddFunction(
+	    GetQuantileDecimalAggregate({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
+	                                LogicalType::LIST(LogicalTypeId::DECIMAL), BindContinuousQuantileDecimalList));
 
 	for (const auto &type : QUANTILES) {
 		median.AddFunction(GetMedianAggregate(type));

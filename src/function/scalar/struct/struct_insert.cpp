@@ -75,6 +75,19 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
+static void StructInsertSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+							  const ScalarFunction &function) {
+	D_ASSERT(bind_data_p);
+	auto &info = (VariableReturnBindData &)*bind_data_p;
+	writer.WriteSerializable(info.stype);
+}
+
+static unique_ptr<FunctionData> StructInsertDeserialize(ClientContext &context, FieldReader &reader,
+													ScalarFunction &bound_function) {
+	auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	return make_unique<VariableReturnBindData>(bound_function.return_type);
+}
+
 unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
@@ -99,6 +112,8 @@ void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr,
 	                   StructInsertStats);
 	fun.varargs = LogicalType::ANY;
+	fun.serialize = StructInsertSerialize;
+	fun.deserialize = StructInsertDeserialize;
 	set.AddFunction(fun);
 }
 
