@@ -446,6 +446,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #ifndef __MINGW32__
 				return;
 #endif
+			} else if (param == "notarm") {
+#ifdef __arm__
+				return;
+#endif
 			} else if (param == "notwindows") {
 #ifdef _WIN32
 				return;
