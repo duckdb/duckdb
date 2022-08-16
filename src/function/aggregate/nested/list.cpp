@@ -876,6 +876,14 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 1);
+	D_ASSERT(function.arguments.size() == 1);
+
+	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		function.arguments[0] = LogicalTypeId::UNKNOWN;
+		function.return_type = LogicalType::SQLNULL;
+		return nullptr;
+	}
+
 	function.return_type = LogicalType::LIST(arguments[0]->return_type);
 	return make_unique<ListBindData>(function.return_type);
 }
