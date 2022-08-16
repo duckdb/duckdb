@@ -1,0 +1,41 @@
+# name: test/sql/update/update_delete_wal.test
+# description: Integer null update checkpoint
+# group: [update]
+
+load __TEST_DIR__/update_delete_wal.db
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+create table test (id bigint primary key, c1 text);
+
+statement ok
+insert into test (id, c1) values (1, 'foo');
+
+statement ok
+insert into test (id, c1) values (2, 'bar');
+
+statement ok
+begin transaction;
+
+statement ok
+delete from test where id = 1;
+
+statement ok
+update test set c1='baz' where id=2;
+
+statement ok
+commit;
+
+query II
+SELECT * FROM test ORDER BY id
+----
+2	baz
+
+restart
+
+query II
+SELECT * FROM test ORDER BY id
+----
+2	baz

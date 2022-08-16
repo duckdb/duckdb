@@ -2,7 +2,7 @@
 # description: Integer null update checkpoint
 # group: [update]
 
-load __TEST_DIR__/string_null_update.db
+load __TEST_DIR__/update_null_integers.db
 
 statement ok
 SET wal_autocheckpoint='1TB';
