@@ -30,16 +30,22 @@ string StreamQueryResult::ToString() {
 
 unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	if (!context) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            GetError());
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
 	}
 	return context->LockContext();
 }
 
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	if (!IsOpenInternal(lock)) {
-		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            GetError());
+		string error_str = "Attempting to execute an unsuccessful or closed pending query result";
+		if (HasError()) {
+			error_str += StringUtil::Format("\nError: %s", GetError());
+		}
+		throw InvalidInputException(error_str);
 	}
 }
 
