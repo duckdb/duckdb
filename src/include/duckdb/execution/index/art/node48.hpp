@@ -8,6 +8,7 @@
 
 #pragma once
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
 
 namespace duckdb {
 
