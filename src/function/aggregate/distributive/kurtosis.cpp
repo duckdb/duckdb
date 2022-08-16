@@ -60,8 +60,8 @@ struct KurtosisOperation {
 		double temp = 1 / n;
 		//! This is necessary due to linux 32 bits
 		long double temp_aux = 1 / n;
-		if (state->sum_sqr - state->sum * state->sum * temp == 0 ||
-		    state->sum_sqr - state->sum * state->sum * temp_aux == 0) {
+		if (state->sum_sqr - state->sum * (state->sum * temp) == 0 ||
+		    state->sum_sqr - state->sum * (state->sum * temp_aux) == 0) {
 			mask.SetInvalid(idx);
 			return;
 		}
