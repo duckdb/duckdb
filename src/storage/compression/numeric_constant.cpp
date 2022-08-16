@@ -61,6 +61,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(result, true);
 		} else {
+			result.Flatten(scan_count);
 			ConstantFillFunctionValidity(segment, result, 0, scan_count);
 		}
 	}
