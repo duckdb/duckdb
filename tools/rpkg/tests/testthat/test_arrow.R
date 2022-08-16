@@ -60,14 +60,14 @@ test_that("to_duckdb", {
       select(int, lgl, dbl) %>%
       to_duckdb(con = con) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(mean_int),
+      arrange(sum_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-      arrange(mean_int)
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      arrange(sum_int)
   )
 
   # can group_by before the to_duckdb
@@ -76,14 +76,14 @@ test_that("to_duckdb", {
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
       to_duckdb(con = con) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(mean_int),
+      arrange(sum_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-      arrange(mean_int)
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      arrange(sum_int)
   )
 })
 

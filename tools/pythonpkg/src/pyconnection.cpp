@@ -191,7 +191,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, data_frame value) {
+DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
@@ -319,7 +319,7 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const data_frame &value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -499,28 +499,28 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
-data_frame DuckDBPyConnection::FetchDF() {
+DataFrame DuckDBPyConnection::FetchDF() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDF();
 }
 
-data_frame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
+DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
-py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchArrowTable(chunk_size);
 }
 
-py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
