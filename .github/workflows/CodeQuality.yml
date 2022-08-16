@@ -140,7 +140,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          python3 scripts/try_timeout.py --timeout=3000 --retry=3 build/coverage/test/unittest "[coverage]"
+          python3 scripts/try_timeout.py --timeout=4800 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper

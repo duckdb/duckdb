@@ -5,12 +5,13 @@
 
 namespace duckdb {
 
-class data_frame : public py::object {
+class DataFrame : public py::object {
 public:
-	data_frame(const py::object &o) : py::object(o, borrowed_t {}) {
+	DataFrame(const py::object &o) : py::object(o, borrowed_t {}) {
 	}
 	using py::object::object;
 
+public:
 	static bool check_(const py::handle &object) {
 		return !py::none().is(object);
 	}
@@ -53,7 +54,7 @@ LogicalType PandasToLogicalType(const PandasType &col_type);
 namespace pybind11 {
 namespace detail {
 template <>
-struct handle_type_name<duckdb::data_frame> {
+struct handle_type_name<duckdb::DataFrame> {
 	static constexpr auto name = _("pandas.DataFrame");
 };
 } // namespace detail
