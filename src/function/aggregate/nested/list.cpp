@@ -38,12 +38,12 @@ static ListSegment *CreateSegment(Allocator &allocator, vector<AllocatedData> &o
                                   Vector &input);
 static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
                       Vector &input, idx_t &entry_idx, idx_t &count);
-static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list,
-                            Vector &result, idx_t &initial_total_count);
+static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list, Vector &result,
+                            idx_t &initial_total_count);
 
 template <class T>
 static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                          uint16_t &capacity) {
+                                        uint16_t &capacity) {
 
 	owning_vector.emplace_back(allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))));
 	return owning_vector.back().get();
@@ -57,7 +57,7 @@ static data_ptr_t AllocateListData(Allocator &allocator, vector<AllocatedData> &
 }
 
 static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
-                                       idx_t child_count) {
+                                     idx_t child_count) {
 
 	owning_vector.emplace_back(
 	    allocator.Allocate(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *)));
@@ -83,7 +83,7 @@ static ListSegment **GetStructData(ListSegment *segment) {
 }
 
 static void SetPrimitiveDataValue(ListSegment *segment, const LogicalType &type, data_ptr_t &input_data,
-                                    idx_t &row_idx) {
+                                  idx_t &row_idx) {
 
 	auto physical_type = type.InternalType();
 	switch (physical_type) {
@@ -175,7 +175,7 @@ static uint16_t GetCapacityForNewSegment(LinkedList *linked_list) {
 
 template <class T>
 static ListSegment *TemplatedCreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                                      uint16_t &capacity) {
+                                                    uint16_t &capacity) {
 
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocatePrimitiveData<T>(allocator, owning_vector, capacity);
@@ -186,7 +186,7 @@ static ListSegment *TemplatedCreatePrimitiveSegment(Allocator &allocator, vector
 }
 
 static ListSegment *CreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                             uint16_t &capacity, const LogicalType &type) {
+                                           uint16_t &capacity, const LogicalType &type) {
 
 	auto physical_type = type.InternalType();
 
@@ -225,8 +225,7 @@ static ListSegment *CreatePrimitiveSegment(Allocator &allocator, vector<Allocate
 	}
 }
 
-static ListSegment *CreateListSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                        uint16_t &capacity) {
+static ListSegment *CreateListSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity) {
 
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocateListData(allocator, owning_vector, capacity);
@@ -242,8 +241,8 @@ static ListSegment *CreateListSegment(Allocator &allocator, vector<AllocatedData
 	return segment;
 }
 
-static ListSegment *CreateStructSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                          uint16_t &capacity, vector<unique_ptr<Vector>> &children) {
+static ListSegment *CreateStructSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+                                        vector<unique_ptr<Vector>> &children) {
 
 	// allocate data and set header
 	auto segment = (ListSegment *)AllocateStructData(allocator, owning_vector, capacity, children.size());
@@ -262,7 +261,7 @@ static ListSegment *CreateStructSegment(Allocator &allocator, vector<AllocatedDa
 }
 
 static ListSegment *CreateSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
-                                    Vector &input) {
+                                  Vector &input) {
 
 	if (input.GetType().InternalType() == PhysicalType::VARCHAR) {
 		return CreateListSegment(allocator, owning_vector, capacity);
@@ -276,7 +275,7 @@ static ListSegment *CreateSegment(Allocator &allocator, vector<AllocatedData> &o
 }
 
 static ListSegment *GetSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
-                                 Vector &input) {
+                               Vector &input) {
 
 	ListSegment *segment = nullptr;
 
@@ -305,7 +304,7 @@ static ListSegment *GetSegment(Allocator &allocator, vector<AllocatedData> &owni
 }
 
 static ListSegment *GetCharSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
-                                     LinkedList *linked_list) {
+                                   LinkedList *linked_list) {
 
 	ListSegment *segment = nullptr;
 
@@ -334,7 +333,7 @@ static ListSegment *GetCharSegment(Allocator &allocator, vector<AllocatedData> &
 }
 
 static void WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, ListSegment *segment,
-                                 Vector &input, idx_t &entry_idx, idx_t &count) {
+                               Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
 	UnifiedVectorFormat input_data;
@@ -429,7 +428,7 @@ static void WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &owni
 }
 
 static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
-                        Vector &input, idx_t &entry_idx, idx_t &count) {
+                      Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// FIXME: maybe faster if I first flatten all (nested) vectors in the update function?
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -445,7 +444,7 @@ static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector
 
 template <class T>
 static void GetDataFromPrimitiveSegment(GetSegmentDataFunction &, ListSegment *segment, Vector &result,
-                                          idx_t &total_count) {
+                                        idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
@@ -470,7 +469,7 @@ static void GetDataFromPrimitiveSegment(GetSegmentDataFunction &, ListSegment *s
 }
 
 static void GetDataFromVarcharSegment(GetSegmentDataFunction &, ListSegment *segment, Vector &result,
-                                        idx_t &total_count) {
+                                      idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
@@ -511,7 +510,7 @@ static void GetDataFromVarcharSegment(GetSegmentDataFunction &, ListSegment *seg
 }
 
 static void GetDataFromListSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
-                                     Vector &result, idx_t &total_count) {
+                                   Vector &result, idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
@@ -551,7 +550,7 @@ static void GetDataFromListSegment(GetSegmentDataFunction &get_segment_data_func
 }
 
 static void GetDataFromStructSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
-                                       Vector &result, idx_t &total_count) {
+                                     Vector &result, idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
 
@@ -575,8 +574,8 @@ static void GetDataFromStructSegment(GetSegmentDataFunction &get_segment_data_fu
 	}
 }
 
-static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list,
-                              Vector &result, idx_t &initial_total_count) {
+static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list, Vector &result,
+                            idx_t &initial_total_count) {
 
 	idx_t total_count = initial_total_count;
 	while (linked_list->first_segment) {
@@ -607,7 +606,7 @@ static void InitializeValidities(Vector &vector, idx_t &capacity) {
 }
 
 struct ListBindData : public FunctionData {
-	ListBindData(const LogicalType &stype_p);
+	explicit ListBindData(const LogicalType &stype_p);
 	~ListBindData() override;
 
 	LogicalType stype;
@@ -866,8 +865,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 		InitializeValidities(aggr_vector, total_capacity);
 
 		idx_t total_count = 0;
-		BuildListVector(list_bind_data.get_segment_data_function, state->linked_list, aggr_vector,
-		                         total_count);
+		BuildListVector(list_bind_data.get_segment_data_function, state->linked_list, aggr_vector, total_count);
 		ListVector::Append(result, aggr_vector, total_capacity);
 
 		// now destroy the state (for parallel destruction)
