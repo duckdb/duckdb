@@ -98,21 +98,6 @@ public:
 private:
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
-
-	//! Partition the probe-side data for external hash join
-	void PartitionProbeSide(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
-
-	//! Prepare the next build/probe stage for external hash join
-	void PrepareNextBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
-	void PrepareNextProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate) const;
-
-	//! Functions to build, probe and scan for external hash join
-	void ExternalBuild(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
-	                   HashJoinLocalSourceState &lstate) const;
-	void ExternalProbe(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
-	                   HashJoinLocalSourceState &lstate, DataChunk &chunk) const;
-	void ExternalScan(HashJoinGlobalSinkState &sink, HashJoinGlobalSourceState &gstate,
-	                  HashJoinLocalSourceState &lstate, DataChunk &chunk) const;
 };
 
 } // namespace duckdb

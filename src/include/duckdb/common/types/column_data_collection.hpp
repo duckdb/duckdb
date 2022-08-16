@@ -127,6 +127,12 @@ public:
 	static bool ResultEquals(const ColumnDataCollection &left, const ColumnDataCollection &right,
 	                         string &error_message);
 
+	//! Obtains the next scan index to scan from
+	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
+	//! Scans at the indices (obtained from NextScanIndex)
+	void ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate, DataChunk &result,
+	                 idx_t chunk_index, idx_t segment_index, idx_t row_index) const;
+
 private:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
@@ -135,9 +141,6 @@ private:
 	void CreateSegment();
 
 	static ColumnDataCopyFunction GetCopyFunction(const LogicalType &type);
-
-	//! Obtains the next scan index to scan from
-	bool NextScanIndex(ColumnDataScanState &state, idx_t &chunk_index, idx_t &segment_index, idx_t &row_index) const;
 
 private:
 	//! The Column Data Allocator

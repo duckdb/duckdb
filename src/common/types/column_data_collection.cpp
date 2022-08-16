@@ -621,15 +621,7 @@ bool ColumnDataCollection::Scan(ColumnDataParallelScanState &state, ColumnDataLo
 			return false;
 		}
 	}
-	if (segment_index != lstate.current_segment_index) {
-		lstate.current_chunk_state.handles.clear();
-		lstate.current_segment_index = segment_index;
-	}
-	auto &segment = *segments[segment_index];
-	lstate.current_chunk_state.properties = state.scan_state.properties;
-	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
-	lstate.current_row_index = row_index;
-	result.Verify();
+	ScanAtIndex(state, lstate, result, chunk_index, segment_index, row_index);
 	return true;
 }
 
@@ -671,6 +663,20 @@ bool ColumnDataCollection::NextScanIndex(ColumnDataScanState &state, idx_t &chun
 	segment_index = state.segment_index;
 	chunk_index = state.chunk_index++;
 	return true;
+}
+
+void ColumnDataCollection::ScanAtIndex(ColumnDataParallelScanState &state, ColumnDataLocalScanState &lstate,
+                                       DataChunk &result, idx_t chunk_index, idx_t segment_index,
+                                       idx_t row_index) const {
+	if (segment_index != lstate.current_segment_index) {
+		lstate.current_chunk_state.handles.clear();
+		lstate.current_segment_index = segment_index;
+	}
+	auto &segment = *segments[segment_index];
+	lstate.current_chunk_state.properties = state.scan_state.properties;
+	segment.ReadChunk(chunk_index, lstate.current_chunk_state, result, state.scan_state.column_ids);
+	lstate.current_row_index = row_index;
+	result.Verify();
 }
 
 bool ColumnDataCollection::Scan(ColumnDataScanState &state, DataChunk &result) const {

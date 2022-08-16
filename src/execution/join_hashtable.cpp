@@ -1002,14 +1002,14 @@ bool JoinHashTable::PrepareExternalFinalize() {
 		return false;
 	}
 
-	if (finalized) {
-		UnFinalize();
-	}
-
 	idx_t num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	partition_start = partition_end;
 	if (partition_start == num_partitions) {
 		return false;
+	}
+
+	if (finalized) {
+		UnFinalize();
 	}
 
 	// Determine how many partitions we can do next (at least one)
