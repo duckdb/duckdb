@@ -31,7 +31,7 @@ string StreamQueryResult::ToString() {
 unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 	if (!context) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            GetErrorObject());
+		                            GetError());
 	}
 	return context->LockContext();
 }
@@ -39,7 +39,7 @@ unique_ptr<ClientContextLock> StreamQueryResult::LockContext() {
 void StreamQueryResult::CheckExecutableInternal(ClientContextLock &lock) {
 	if (!IsOpenInternal(lock)) {
 		throw InvalidInputException("Attempting to execute an unsuccessful or closed pending query result\nError: %s",
-		                            GetErrorObject());
+		                            GetError());
 	}
 }
 
@@ -58,7 +58,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 }
 
 unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
-	if (!success || !context) {
+	if (HasError() || !context) {
 		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	auto collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
@@ -74,7 +74,7 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	}
 	auto result =
 	    make_unique<MaterializedQueryResult>(statement_type, properties, names, move(collection), client_properties);
-	if (!success) {
+	if (HasError()) {
 		return make_unique<MaterializedQueryResult>(GetErrorObject());
 	}
 	return result;

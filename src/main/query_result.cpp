@@ -39,6 +39,7 @@ const ExceptionType &BaseQueryResult::GetErrorType() const {
 }
 
 const std::string &BaseQueryResult::GetError() {
+	D_ASSERT(HasError());
 	return error.Message();
 }
 
