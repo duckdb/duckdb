@@ -36,6 +36,9 @@ public:
 	T GetFunctionByOffset(idx_t offset) {
 		return functions[offset];
 	}
+	T &GetFunctionReferenceByOffset(idx_t offset) {
+		return functions[offset];
+	}
 	bool MergeFunctionSet(FunctionSet<T> new_functions) {
 		D_ASSERT(!new_functions.functions.empty());
 		bool need_rewrite_entry = false;
