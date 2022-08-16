@@ -11,6 +11,7 @@ add_library_unity(
   helper-c.cpp
   hugeint-c.cpp
   logical_types-c.cpp
+  pending-c.cpp
   prepared-c.cpp
   replacement_scan-c.cpp
   result-c.cpp
