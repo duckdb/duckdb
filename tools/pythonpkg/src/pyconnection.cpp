@@ -1,35 +1,32 @@
 #include "duckdb_python/pyconnection.hpp"
-#include "duckdb_python/pyresult.hpp"
-#include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/python_conversion.hpp"
-#include "duckdb_python/pandas_scan.hpp"
-#include "duckdb_python/map.hpp"
 
+#include "datetime.h" // from Python
 #include "duckdb/common/arrow/arrow.hpp"
-#include "duckdb_python/arrow_array_stream.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb_python/arrow_array_stream.hpp"
+#include "duckdb_python/map.hpp"
+#include "duckdb_python/pandas_scan.hpp"
+#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_conversion.hpp"
-
-#include "datetime.h" // from Python
-#include "duckdb/main/connection_manager.hpp"
 
 #include <random>
 
 namespace duckdb {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
-unordered_map<string, weak_ptr<DuckDB>> db_instances;
+DBInstanceCache instance_cache;
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -593,105 +590,65 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 }
 
 string GetDBAbsolutePath(const string &database) {
-	if (database == ":memory:" || database.empty()) {
+	if (database.empty()) {
 		return ":memory:";
+	}
+	if (database.rfind(":memory:", 0) == 0) {
+		return database;
 	}
 	py::object abspath = py::module_::import("os.path").attr("abspath");
 	return py::str(abspath(database));
 }
 
-bool IsConfigurationSame(ClientContext *context, DBConfig &config, const py::dict &config_dict, bool read_only) {
-	if (read_only) {
-		if (config.options.access_mode != AccessMode::READ_ONLY) {
-			return false;
-		}
-	} else {
-		if (config.options.access_mode == AccessMode::READ_ONLY) {
-			return false;
-		}
-	}
+unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_dict) {
+	unordered_map<string, string> config_dict;
 	for (auto &kv : config_dict) {
-		string key = py::str(kv.first);
-		auto val = Value(py::str(kv.second));
-		auto cur_val = config.GetOptionByName(key)->get_setting(*context);
-		if (cur_val != val) {
-			return false;
-		}
+		auto key = py::str(kv.first);
+		auto val = py::str(kv.second);
+		config_dict[key] = val;
 	}
-	return true;
+	return config_dict;
 }
-shared_ptr<DuckDB> DuckDBPyConnection::GetDBInstance(const string &database, const py::dict &config_dict,
-                                                     bool read_only, bool &new_instance) {
-	new_instance = false;
-	DBConfig config;
-	auto abs_path = GetDBAbsolutePath(database);
-	if (read_only) {
-		config.options.access_mode = AccessMode::READ_ONLY;
-	}
-	for (auto &kv : config_dict) {
-		string key = py::str(kv.first);
-		string val = py::str(kv.second);
-		auto config_property = DBConfig::GetOptionByName(key);
-		if (!config_property) {
-			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
-		}
-		config.SetOption(*config_property, Value(val));
-	}
 
-	if (config.options.enable_external_access) {
-		config.replacement_scans.emplace_back(ScanReplacement);
+void CreateNewInstance(DuckDBPyConnection &res, const string &db_abs_path, unordered_map<string, string> &config_dict,
+                       bool read_only) {
+	// We don't cache unnamed memory instances (i.e., :memory:)
+	bool cache_instance = db_abs_path != ":memory:";
+	res.database = instance_cache.CreateInstance(db_abs_path, config_dict, read_only, cache_instance);
+	res.connection = make_unique<Connection>(*res.database);
+	auto &context = *res.connection->context;
+	PandasScanFunction scan_fun;
+	CreateTableFunctionInfo scan_info(scan_fun);
+	MapFunction map_fun;
+	CreateTableFunctionInfo map_info(map_fun);
+	auto &catalog = Catalog::GetCatalog(context);
+	context.transaction.BeginTransaction();
+	catalog.CreateTableFunction(context, &scan_info);
+	catalog.CreateTableFunction(context, &map_info);
+	context.transaction.Commit();
+	auto &db_config = res.database->instance->config;
+	db_config.AddExtensionOption("pandas_analyze_sample",
+	                             "The maximum number of rows to sample when analyzing a pandas object column.",
+	                             LogicalType::UBIGINT);
+	db_config.options.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
+	if (db_config.options.enable_external_access) {
+		db_config.replacement_scans.emplace_back(ScanReplacement);
 	}
-	if (abs_path == ":memory:") {
-		new_instance = true;
-		return make_shared<DuckDB>(database, &config);
-	}
-	shared_ptr<DuckDB> db_instance;
-	if (db_instances.find(abs_path) != db_instances.end()) {
-		db_instance = db_instances[abs_path].lock();
-		if (db_instance) {
-			auto existing_context = db_instance->instance->GetConnectionManager().GetConnectionList().front().get();
-			if (!IsConfigurationSame(existing_context, db_instance->instance->config, config_dict, read_only)) {
-				throw std::runtime_error("Can't open a connection to same database file with a different configuration "
-				                         "than existing connections");
-			}
-		}
-
-		db_instance = db_instances[abs_path].lock();
-	}
-	if (!db_instance) {
-		new_instance = true;
-		db_instance = make_shared<DuckDB>(database, &config);
-		db_instances[abs_path] = db_instance;
-	}
-	return db_instance;
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
-                                                           const py::dict &config_dict) {
+                                                           const py::dict &py_config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
-	bool new_instance;
-	res->database = GetDBInstance(database, config_dict, read_only, new_instance);
-	res->connection = make_unique<Connection>(*res->database);
+	auto abs_path = GetDBAbsolutePath(database);
+	auto config_dict = TransformPyConfigDict(py_config_dict);
 
-
-	auto &context = *res->connection->context;
-	if (new_instance) {
-		PandasScanFunction scan_fun;
-		CreateTableFunctionInfo scan_info(scan_fun);
-		MapFunction map_fun;
-		CreateTableFunctionInfo map_info(map_fun);
-		auto &catalog = Catalog::GetCatalog(context);
-		context.transaction.BeginTransaction();
-		catalog.CreateTableFunction(context, &scan_info);
-		catalog.CreateTableFunction(context, &map_info);
-		context.transaction.Commit();
-		auto &db_config = res->database->instance->config;
-		db_config.AddExtensionOption("pandas_analyze_sample",
-	                             "The maximum number of rows to sample when analyzing a pandas object column.",
-	                             LogicalType::UBIGINT);
-		db_config.options.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
-
+	res->database = instance_cache.GetInstance(database, config_dict, read_only);
+	if (!res->database) {
+		//! No cached database, we must create a new instance
+		CreateNewInstance(*res, abs_path, config_dict, read_only);
+		return res;
 	}
+	res->connection = make_unique<Connection>(*res->database);
 	return res;
 }
 

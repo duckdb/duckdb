@@ -123,7 +123,8 @@ public:
 
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t chunk_size) const;
 
-	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
+	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only,
+	                                              const py::dict &py_config_dict);
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
@@ -136,8 +137,6 @@ public:
 
 private:
 	unique_lock<std::mutex> AcquireConnectionLock();
-	static shared_ptr<DuckDB> GetDBInstance(const string &database, const py::dict &config_dict, bool read_only,
-	                                        bool &new_instance);
 };
 
 } // namespace duckdb
