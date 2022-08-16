@@ -413,6 +413,19 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Home Directory
+//===--------------------------------------------------------------------===//
+void HomeDirectorySetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.home_directory = input.IsNull() ? input.ToString() : string();
+}
+
+Value HomeDirectorySetting::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.home_directory);
+}
+
+//===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {

@@ -77,6 +77,8 @@ public:
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          vector<column_t> bound_columns, Expression &cast_expr);
+	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
+	DataTable(ClientContext &context, DataTable &parent, unique_ptr<Constraint> constraint);
 
 	shared_ptr<DataTableInfo> info;
 
@@ -178,6 +180,8 @@ public:
 	static bool IsForeignKeyIndex(const vector<idx_t> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 private:
+	//! Verify the new added constraints against current persistent&local data
+	void VerifyNewConstraint(ClientContext &context, DataTable &parent, const Constraint *constraint);
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk);
 	//! Verify constraints with a chunk from the Update containing only the specified column_ids

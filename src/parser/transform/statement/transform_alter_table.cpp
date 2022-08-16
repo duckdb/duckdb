@@ -83,8 +83,15 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 			                                                 column_definition.Type(), move(expr));
 			break;
 		}
+		case duckdb_libpgquery::PG_AT_SetNotNull: {
+			result->info = make_unique<SetNotNullInfo>(qname.schema, qname.name, command->name);
+			break;
+		}
+		case duckdb_libpgquery::PG_AT_DropNotNull: {
+			result->info = make_unique<DropNotNullInfo>(qname.schema, qname.name, command->name);
+			break;
+		}
 		case duckdb_libpgquery::PG_AT_DropConstraint:
-		case duckdb_libpgquery::PG_AT_DropNotNull:
 		default:
 			throw NotImplementedException("ALTER TABLE option not supported yet!");
 		}

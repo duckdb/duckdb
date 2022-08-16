@@ -5,7 +5,7 @@
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
 
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -97,8 +97,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
-	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
-	         py::arg("config") = py::dict())
+	    .def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
@@ -192,7 +191,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, data_frame value) {
+DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
@@ -320,7 +319,7 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const data_frame &value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -463,11 +462,11 @@ void DuckDBPyConnection::Close() {
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
-	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
+	ExtensionHelper::InstallExtension(*connection->context, extension, force_install);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
-	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
+	ExtensionHelper::LoadExternalExtension(*connection->context, extension);
 }
 
 // cursor() is stupid
@@ -500,28 +499,28 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
-data_frame DuckDBPyConnection::FetchDF() {
+DataFrame DuckDBPyConnection::FetchDF() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDF();
 }
 
-data_frame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
+DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
-py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchArrowTable(chunk_size);
 }
 
-py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
@@ -663,9 +662,8 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 	return import_cache.get();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
-                                                         bool read_only, const py::dict &config) {
-	return self.Connect(database, read_only, config);
+DuckDBPyConnection *DuckDBPyConnection::Enter() {
+	return this;
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,

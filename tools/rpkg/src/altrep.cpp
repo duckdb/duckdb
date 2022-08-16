@@ -45,23 +45,17 @@ void *AltrepString::Dataptr(SEXP x, Rboolean writeable) {
 	auto *wrapper = duckdb_altrep_wrapper(x);
 	if (R_altrep_data2(x) == R_NilValue) {
 		R_set_altrep_data2(x, NEW_STRING(wrapper->length));
-		idx_t dest_offset = 0;
-		for (auto &vec : wrapper->vectors) {
-			auto src_ptr = FlatVector::GetData<string_t>(vec);
-			auto &mask = FlatVector::Validity(vec);
-			for (size_t row_idx = 0; row_idx < MinValue<idx_t>(STANDARD_VECTOR_SIZE, wrapper->length - dest_offset);
-			     row_idx++) {
-				if (!mask.RowIsValid(row_idx)) {
-					SET_STRING_ELT(R_altrep_data2(x), dest_offset + row_idx, NA_STRING);
-				} else {
-					SET_STRING_ELT(
-					    R_altrep_data2(x), dest_offset + row_idx,
-					    Rf_mkCharLenCE(src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize(), CE_UTF8));
-				}
+		for (idx_t row_idx = 0; row_idx < wrapper->length; row_idx++) {
+			if (!wrapper->mask_data[row_idx]) {
+				SET_STRING_ELT(R_altrep_data2(x), row_idx, NA_STRING);
+			} else {
+				SET_STRING_ELT(R_altrep_data2(x), row_idx,
+				               Rf_mkCharLenCE(wrapper->string_data[row_idx].GetDataUnsafe(),
+				                              wrapper->string_data[row_idx].GetSize(), CE_UTF8));
 			}
-			dest_offset += STANDARD_VECTOR_SIZE;
 		}
-		wrapper->vectors.clear();
+		wrapper->string_data.reset();
+		wrapper->mask_data.reset();
 	}
 	return CHARACTER_POINTER(R_altrep_data2(x));
 }
@@ -75,14 +69,10 @@ SEXP AltrepString::Elt(SEXP x, R_xlen_t i) {
 	if (R_altrep_data2(x) != R_NilValue) {
 		return STRING_ELT(R_altrep_data2(x), i);
 	}
-	auto &vec = wrapper->vectors[i / STANDARD_VECTOR_SIZE];
-	auto src_ptr = FlatVector::GetData<string_t>(vec);
-	auto &mask = FlatVector::Validity(vec);
-	auto vec_idx = i % STANDARD_VECTOR_SIZE;
-	if (!mask.RowIsValid(vec_idx)) {
+	if (!wrapper->mask_data[i]) {
 		return NA_STRING;
 	}
-	return Rf_mkCharLenCE(src_ptr[vec_idx].GetDataUnsafe(), src_ptr[vec_idx].GetSize(), CE_UTF8);
+	return Rf_mkCharLenCE(wrapper->string_data[i].GetDataUnsafe(), wrapper->string_data[i].GetSize(), CE_UTF8);
 }
 
 void AltrepString::SetElt(SEXP x, R_xlen_t i, SEXP val) {

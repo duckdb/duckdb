@@ -78,6 +78,8 @@ enum class AlterTableType : uint8_t {
 	ALTER_COLUMN_TYPE = 5,
 	SET_DEFAULT = 6,
 	FOREIGN_KEY_CONSTRAINT = 7,
+	SET_NOT_NULL = 8,
+	DROP_NOT_NULL = 9
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -255,6 +257,38 @@ struct RenameViewInfo : public AlterViewInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterView(FieldWriter &writer) const override;
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
+};
+
+//===--------------------------------------------------------------------===//
+// SetNotNullInfo
+//===--------------------------------------------------------------------===//
+struct SetNotNullInfo : public AlterTableInfo {
+	SetNotNullInfo(string schema, string table, string column_name);
+	~SetNotNullInfo() override;
+
+	//! The column name to alter
+	string column_name;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	void SerializeAlterTable(FieldWriter &writer) const override;
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
+};
+
+//===--------------------------------------------------------------------===//
+// DropNotNullInfo
+//===--------------------------------------------------------------------===//
+struct DropNotNullInfo : public AlterTableInfo {
+	DropNotNullInfo(string schema, string table, string column_name);
+	~DropNotNullInfo() override;
+
+	//! The column name to alter
+	string column_name;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	void SerializeAlterTable(FieldWriter &writer) const override;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
 };
 

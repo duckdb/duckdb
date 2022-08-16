@@ -6,10 +6,10 @@
 
 namespace duckdb {
 
-void RowDataCollectionScanner::SwizzleBlocks(RowDataCollection &swizzled_block_collection,
-                                             RowDataCollection &swizzled_string_heap,
-                                             RowDataCollection &block_collection, RowDataCollection &string_heap,
-                                             const RowLayout &layout) {
+void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block_collection,
+                                               RowDataCollection &swizzled_string_heap,
+                                               RowDataCollection &block_collection, RowDataCollection &string_heap,
+                                               const RowLayout &layout) {
 	if (block_collection.count == 0) {
 		return;
 	}
@@ -106,7 +106,7 @@ void RowDataCollectionScanner::ScanState::PinData() {
 	if (!data_handle.IsValid() || data_handle.GetBlockId() != data_block.block->BlockId()) {
 		data_handle = rows.buffer_manager.Pin(data_block.block);
 	}
-	if (scanner.layout.AllConstant()) {
+	if (scanner.layout.AllConstant() || !scanner.external) {
 		return;
 	}
 
@@ -119,12 +119,41 @@ void RowDataCollectionScanner::ScanState::PinData() {
 }
 
 RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, RowDataCollection &heap_p,
-                                                   const RowLayout &layout_p, bool flush_p)
+                                                   const RowLayout &layout_p, bool external_p, bool flush_p)
     : rows(rows_p), heap(heap_p), layout(layout_p), read_state(*this), total_count(rows.count), total_scanned(0),
-      flush(flush_p) {
+      external(external_p), flush(flush_p) {
 
-	if (!layout.AllConstant()) {
+	if (!layout.AllConstant() && external) {
 		D_ASSERT(rows.blocks.size() == heap.blocks.size());
+	}
+}
+
+void RowDataCollectionScanner::ReSwizzle() {
+	if (rows.count == 0) {
+		return;
+	}
+
+	if (layout.AllConstant() || !external) {
+		// No heap blocks!
+		return;
+	}
+
+	D_ASSERT(rows.blocks.size() == heap.blocks.size());
+
+	// We create one heap block per data block and swizzle the pointers
+	idx_t heap_block_idx = 0;
+	for (auto &data_block : rows.blocks) {
+		// Pin the data block and swizzle the pointers within the rows
+		auto data_handle = rows.buffer_manager.Pin(data_block.block);
+		auto data_ptr = data_handle.Ptr();
+		RowOperations::SwizzleColumns(layout, data_ptr, data_block.count);
+
+		// Swizzle the heap pointers
+		auto &heap_block = heap.blocks[heap_block_idx++];
+		auto heap_handle = heap.buffer_manager.Pin(heap_block.block);
+		auto heap_ptr = Load<data_ptr_t>(data_ptr + layout.GetHeapPointerOffset());
+		auto heap_offset = heap_ptr - heap_handle.Ptr();
+		RowOperations::SwizzleHeapPointer(layout, data_ptr, heap_ptr, data_block.count, heap_offset);
 	}
 }
 
@@ -138,7 +167,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	if (flush) {
 		for (idx_t i = 0; i < read_state.block_idx; ++i) {
 			rows.blocks[i].block = nullptr;
-			if (!layout.AllConstant()) {
+			if (!layout.AllConstant() && external) {
 				heap.blocks[i].block = nullptr;
 			}
 		}
@@ -159,7 +188,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 			row_ptr += row_width;
 		}
 		// Unswizzle the offsets back to pointers (if needed)
-		if (!layout.AllConstant()) {
+		if (!layout.AllConstant() && external) {
 			RowOperations::UnswizzlePointers(layout, data_ptr, read_state.heap_handle.Ptr(), next);
 		}
 		// Update state indices

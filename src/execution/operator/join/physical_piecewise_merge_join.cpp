@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_piecewise_merge_join.hpp"
+#include "duckdb/execution/operator/join/outer_join_marker.hpp"
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
@@ -161,16 +162,13 @@ public:
 	explicit PiecewiseMergeJoinState(Allocator &allocator, const PhysicalPiecewiseMergeJoin &op,
 	                                 BufferManager &buffer_manager, bool force_external)
 	    : allocator(allocator), op(op), buffer_manager(buffer_manager), force_external(force_external),
-	      left_position(0), first_fetch(true), finished(true), right_position(0), right_chunk_index(0),
-	      rhs_executor(allocator) {
+	      left_outer(IsLeftOuterJoin(op.join_type)), left_position(0), first_fetch(true), finished(true),
+	      right_position(0), right_chunk_index(0), rhs_executor(allocator) {
 		vector<LogicalType> condition_types;
 		for (auto &order : op.lhs_orders) {
 			condition_types.push_back(order.expression->return_type);
 		}
-		if (IsLeftOuterJoin(op.join_type)) {
-			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-			memset(lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-		}
+		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 		lhs_layout.Initialize(op.children[0]->types);
 		lhs_payload.Initialize(allocator, op.children[0]->types);
 
@@ -193,7 +191,7 @@ public:
 
 	// Block sorting
 	DataChunk lhs_payload;
-	unique_ptr<bool[]> lhs_found_match;
+	OuterJoinMarker left_outer;
 	vector<BoundOrderByNode> lhs_order;
 	RowLayout lhs_layout;
 	unique_ptr<LocalSortedTable> lhs_local_table;
@@ -525,11 +523,11 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			state.finished = false;
 		}
 		if (state.finished) {
-			if (IsLeftOuterJoin(join_type)) {
+			if (state.left_outer.Enabled()) {
 				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 				// have a match found
-				PhysicalJoin::ConstructLeftJoinResult(state.lhs_payload, chunk, state.lhs_found_match.get());
-				memset(state.lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+				state.left_outer.ConstructLeftJoinResult(state.lhs_payload, chunk);
+				state.left_outer.Reset();
 			}
 			state.first_fetch = true;
 			state.finished = false;
@@ -601,9 +599,9 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			}
 
 			// found matches: mark the found matches if required
-			if (state.lhs_found_match) {
+			if (state.left_outer.Enabled()) {
 				for (idx_t i = 0; i < result_count; i++) {
-					state.lhs_found_match[left_info.result[sel->get_index(i)]] = true;
+					state.left_outer.SetMatch(left_info.result[sel->get_index(i)]);
 				}
 			}
 			if (gstate.table->found_match) {
@@ -696,8 +694,6 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 	// still need to output
 	const auto found_match = sink.table->found_match.get();
 
-	// ConstructFullOuterJoinResult(sink.table->found_match.get(), sink.right_chunks, chunk,
-	// state.right_outer_position);
 	DataChunk rhs_chunk;
 	rhs_chunk.Initialize(Allocator::Get(context.client), sink.table->global_sort_state.payload_layout.GetTypes());
 	SelectionVector rsel(STANDARD_VECTOR_SIZE);
