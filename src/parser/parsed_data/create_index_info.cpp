@@ -30,7 +30,7 @@ void CreateIndexInfo::SerializeInternal(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer, ClientContext &context) {
+unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
 	auto result = make_unique<CreateIndexInfo>();
 	result->DeserializeBase(deserializer);
 
@@ -39,8 +39,8 @@ unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deseriali
 	result->index_name = reader.ReadRequired<string>();
 	result->constraint_type = reader.ReadRequired<IndexConstraintType>();
 
-	result->expressions = reader.ReadRequiredSerializableList<ParsedExpression>(context);
-	result->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>(context);
+	result->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	result->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
 	// TODO(stephwang): review below for unique_ptr<BaseTableRef> table
 	// unique_ptr<TableRef> table;

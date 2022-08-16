@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

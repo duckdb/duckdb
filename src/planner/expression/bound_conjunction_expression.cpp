@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

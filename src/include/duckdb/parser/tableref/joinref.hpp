@@ -43,6 +43,6 @@ public:
 	//! Serializes a blob into a JoinRef
 	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a JoinRef
-	static unique_ptr<TableRef> Deserialize(FieldReader &source, ClientContext &context);
+	static unique_ptr<TableRef> Deserialize(FieldReader &source);
 };
 } // namespace duckdb

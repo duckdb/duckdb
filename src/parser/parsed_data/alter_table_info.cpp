@@ -18,14 +18,14 @@ void AlterInfo::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<AlterType>();
 
 	unique_ptr<AlterInfo> result;
 	switch (type) {
 	case AlterType::ALTER_TABLE:
-		result = AlterTableInfo::Deserialize(reader, context);
+		result = AlterTableInfo::Deserialize(reader);
 		break;
 	case AlterType::ALTER_VIEW:
 		result = AlterViewInfo::Deserialize(reader);
@@ -79,7 +79,7 @@ void AlterTableInfo::Serialize(FieldWriter &writer) const {
 	SerializeAlterTable(writer);
 }
 
-unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader, ClientContext &context) {
+unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<AlterTableType>();
 	auto schema = reader.ReadRequired<string>();
 	auto table = reader.ReadRequired<string>();
@@ -90,13 +90,13 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader, ClientCon
 	case AlterTableType::RENAME_TABLE:
 		return RenameTableInfo::Deserialize(reader, schema, table);
 	case AlterTableType::ADD_COLUMN:
-		return AddColumnInfo::Deserialize(reader, schema, table, context);
+		return AddColumnInfo::Deserialize(reader, schema, table);
 	case AlterTableType::REMOVE_COLUMN:
 		return RemoveColumnInfo::Deserialize(reader, schema, table);
 	case AlterTableType::ALTER_COLUMN_TYPE:
-		return ChangeColumnTypeInfo::Deserialize(reader, schema, table, context);
+		return ChangeColumnTypeInfo::Deserialize(reader, schema, table);
 	case AlterTableType::SET_DEFAULT:
-		return SetDefaultInfo::Deserialize(reader, schema, table, context);
+		return SetDefaultInfo::Deserialize(reader, schema, table);
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT:
 		return AlterForeignKeyInfo::Deserialize(reader, schema, table);
 	case AlterTableType::SET_NOT_NULL:
@@ -172,9 +172,8 @@ void AddColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteSerializable(new_column);
 }
 
-unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, string schema, string table,
-                                                 ClientContext &context) {
-	auto new_column = reader.ReadRequiredSerializable<ColumnDefinition, ColumnDefinition>(context);
+unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, string schema, string table) {
+	auto new_column = reader.ReadRequiredSerializable<ColumnDefinition, ColumnDefinition>();
 	return make_unique<AddColumnInfo>(move(schema), move(table), move(new_column));
 }
 
@@ -227,11 +226,10 @@ void ChangeColumnTypeInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteOptional(expression);
 }
 
-unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, string schema, string table,
-                                                        ClientContext &context) {
+unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, string schema, string table) {
 	auto column_name = reader.ReadRequired<string>();
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto expression = reader.ReadOptional<ParsedExpression>(nullptr, context);
+	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	return make_unique<ChangeColumnTypeInfo>(move(schema), move(table), move(column_name), move(target_type),
 	                                         move(expression));
 }
@@ -257,10 +255,9 @@ void SetDefaultInfo::SerializeAlterTable(FieldWriter &writer) const {
 	writer.WriteOptional(expression);
 }
 
-unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string schema, string table,
-                                                  ClientContext &context) {
+unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, string schema, string table) {
 	auto column_name = reader.ReadRequired<string>();
-	auto new_default = reader.ReadOptional<ParsedExpression>(nullptr, context);
+	auto new_default = reader.ReadOptional<ParsedExpression>(nullptr);
 	return make_unique<SetDefaultInfo>(move(schema), move(table), move(column_name), move(new_default));
 }
 

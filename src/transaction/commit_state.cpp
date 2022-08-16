@@ -45,7 +45,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source, context);
+			auto info = AlterInfo::Deserialize(source);
 			// write the alter table in the log
 			table_entry->CommitAlter(*info);
 			log->WriteAlter(*info);
@@ -68,7 +68,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
-			auto info = AlterInfo::Deserialize(source, context);
+			auto info = AlterInfo::Deserialize(source);
 			// write the alter table in the log
 			log->WriteAlter(*info);
 		} else {

@@ -73,7 +73,7 @@ void ExpressionListRef::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader, ClientContext &context) {
+unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<ExpressionListRef>();
 	// value list
 	result->expected_names = reader.ReadRequiredList<string>();
@@ -82,7 +82,7 @@ unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader, ClientC
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < value_list_size; i++) {
 		vector<unique_ptr<ParsedExpression>> value_list;
-		source.ReadList<ParsedExpression>(value_list, context);
+		source.ReadList<ParsedExpression>(value_list);
 		result->values.push_back(move(value_list));
 	}
 	return move(result);

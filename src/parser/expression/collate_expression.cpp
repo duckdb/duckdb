@@ -36,9 +36,8 @@ void CollateExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(collation);
 }
 
-unique_ptr<ParsedExpression> CollateExpression::Deserialize(ExpressionType type, FieldReader &reader,
-                                                            ClientContext &context) {
-	auto child = reader.ReadRequiredSerializable<ParsedExpression>(context);
+unique_ptr<ParsedExpression> CollateExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto collation = reader.ReadRequired<string>();
 	return make_unique_base<ParsedExpression, CollateExpression>(collation, move(child));
 }

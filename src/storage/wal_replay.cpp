@@ -259,7 +259,7 @@ void ReplayState::ReplayDropTable() {
 }
 
 void ReplayState::ReplayAlter() {
-	auto info = AlterInfo::Deserialize(source, context);
+	auto info = AlterInfo::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}

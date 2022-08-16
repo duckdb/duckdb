@@ -2,6 +2,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

@@ -15,9 +15,9 @@ void SelectStatement::Serialize(Serializer &serializer) const {
 	node->Serialize(serializer);
 }
 
-unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto result = make_unique<SelectStatement>();
-	result->node = QueryNode::Deserialize(source, context);
+	result->node = QueryNode::Deserialize(source);
 	return result;
 }
 

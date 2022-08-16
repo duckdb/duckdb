@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

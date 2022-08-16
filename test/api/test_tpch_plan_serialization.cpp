@@ -8,6 +8,7 @@
 #include "duckdb/planner/planner.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include "tpch-extension.hpp"
 

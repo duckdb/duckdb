@@ -22,7 +22,7 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 
 	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
-	auto create_info = reader.ReadOptional<CreateInfo>(nullptr, context);
+	auto create_info = reader.ReadOptional<CreateInfo>(nullptr);
 	if (create_info->type != CatalogType::INDEX_ENTRY) {
 		throw InternalException("Unexpected type: '%s', expected '%s'", CatalogTypeToString(create_info->type),
 		                        CatalogTypeToString(CatalogType::INDEX_ENTRY));

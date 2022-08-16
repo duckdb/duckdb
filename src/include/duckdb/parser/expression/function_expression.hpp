@@ -52,7 +52,7 @@ public:
 	hash_t Hash() const override;
 
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source, ClientContext &context);
+	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 	void Verify() const override;
 

@@ -3,6 +3,7 @@
 #include "t_digest.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 #include <algorithm>
 #include <cmath>

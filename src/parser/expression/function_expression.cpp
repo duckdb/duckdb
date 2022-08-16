@@ -98,14 +98,12 @@ void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(export_state);
 }
 
-unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader,
-                                                             ClientContext &context) {
+unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto children = reader.ReadRequiredSerializableList<ParsedExpression>(context);
-	auto filter = reader.ReadOptional<ParsedExpression>(nullptr, context);
-	auto order_bys =
-	    unique_ptr_cast<ResultModifier, OrderModifier>(reader.ReadRequiredSerializable<ResultModifier>(context));
+	auto children = reader.ReadRequiredSerializableList<ParsedExpression>();
+	auto filter = reader.ReadOptional<ParsedExpression>(nullptr);
+	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(reader.ReadRequiredSerializable<ResultModifier>());
 	auto distinct = reader.ReadRequired<bool>();
 	auto is_operator = reader.ReadRequired<bool>();
 	auto export_state = reader.ReadField<bool>(false);

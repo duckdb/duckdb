@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
 
 namespace duckdb {
 

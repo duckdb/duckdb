@@ -41,9 +41,8 @@ void CastExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(try_cast);
 }
 
-unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, FieldReader &reader,
-                                                         ClientContext &context) {
-	auto child = reader.ReadRequiredSerializable<ParsedExpression>(context);
+unique_ptr<ParsedExpression> CastExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto cast_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto try_cast = reader.ReadRequired<bool>();
 	return make_unique_base<ParsedExpression, CastExpression>(cast_type, move(child), try_cast);

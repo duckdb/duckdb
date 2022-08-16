@@ -43,15 +43,15 @@ protected:
 	}
 
 public:
-	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer, ClientContext &context) {
+	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer) {
 		auto result = make_unique<CreateTableInfo>();
 		result->DeserializeBase(deserializer);
 
 		FieldReader reader(deserializer);
 		result->table = reader.ReadRequired<string>();
-		result->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>(context);
-		result->constraints = reader.ReadRequiredSerializableList<Constraint>(context);
-		result->query = reader.ReadOptional<SelectStatement>(nullptr, context);
+		result->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
+		result->constraints = reader.ReadRequiredSerializableList<Constraint>();
+		result->query = reader.ReadOptional<SelectStatement>(nullptr);
 		reader.Finalize();
 
 		return result;

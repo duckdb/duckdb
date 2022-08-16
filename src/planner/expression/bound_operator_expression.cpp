@@ -2,6 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression_util.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 

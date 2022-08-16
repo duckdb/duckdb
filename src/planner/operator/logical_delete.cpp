@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 

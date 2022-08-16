@@ -3,6 +3,7 @@
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 #include <algorithm>
 #include <stdlib.h>

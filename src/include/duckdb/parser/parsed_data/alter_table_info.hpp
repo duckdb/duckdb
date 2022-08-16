@@ -42,7 +42,7 @@ public:
 	virtual unique_ptr<AlterInfo> Copy() const = 0;
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source, ClientContext &context);
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
 //===--------------------------------------------------------------------===//
@@ -92,7 +92,7 @@ public:
 	CatalogType GetCatalogType() const override;
 	void Serialize(FieldWriter &writer) const override;
 	virtual void SerializeAlterTable(FieldWriter &writer) const = 0;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, ClientContext &context);
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader);
 };
 
 //===--------------------------------------------------------------------===//
@@ -142,7 +142,7 @@ struct AddColumnInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table, ClientContext &context);
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
 };
 
 //===--------------------------------------------------------------------===//
@@ -183,7 +183,7 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table, ClientContext &context);
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
 };
 
 //===--------------------------------------------------------------------===//
@@ -201,7 +201,7 @@ struct SetDefaultInfo : public AlterTableInfo {
 public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table, ClientContext &context);
+	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, string schema, string table);
 };
 
 //===--------------------------------------------------------------------===//
