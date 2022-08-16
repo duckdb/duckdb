@@ -692,20 +692,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		db_config.options.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
 
 	}
-
-	PandasScanFunction scan_fun;
-	CreateTableFunctionInfo scan_info(scan_fun);
-
-	MapFunction map_fun;
-	CreateTableFunctionInfo map_info(map_fun);
-
-	auto &catalog = Catalog::GetCatalog(context);
-	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &scan_info);
-	catalog.CreateTableFunction(context, &map_info);
-
-	context.transaction.Commit();
-
 	return res;
 }
 
