@@ -158,7 +158,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 }
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
-	if (!op || !ClientConfig::GetConfig(context).query_verification_enabled) {
+	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
 	}
 	//! SELECT only for now

@@ -9,6 +9,7 @@
 #include "duckdb/planner/planner.hpp"
 #include "test_helpers.hpp"
 #include "tpcds-extension.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include <map>
 #include <set>

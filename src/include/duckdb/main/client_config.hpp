@@ -54,6 +54,8 @@ struct ClientConfig {
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
+	// Whether or not we should verify the serializer
+	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing

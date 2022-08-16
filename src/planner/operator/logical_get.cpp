@@ -84,6 +84,7 @@ void LogicalGet::Serialize(FieldWriter &writer) const {
 
 	FunctionSerializer::SerializeBase<TableFunction>(writer, function, bind_data.get());
 	if (!function.serialize) {
+		D_ASSERT(!function.deserialize);
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
 		writer.WriteRegularSerializableList(parameters);
 		writer.WriteField<idx_t>(named_parameters.size());
@@ -109,6 +110,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	    reader, state.gstate, CatalogType::TABLE_FUNCTION_ENTRY, bind_data, has_deserialize);
 
 	vector<Value> parameters;
+	named_parameter_map_t named_parameters;
 	vector<LogicalType> input_table_types;
 	vector<string> input_table_names;
 	if (!has_deserialize) {
@@ -116,7 +118,6 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 		parameters = reader.ReadRequiredSerializableList<Value, Value>();
 
 		auto named_parameters_size = reader.ReadRequired<idx_t>();
-		named_parameter_map_t named_parameters;
 		for (idx_t i = 0; i < named_parameters_size; i++) {
 			auto first = reader.ReadRequired<string>();
 			auto second = reader.ReadRequiredSerializable<Value, Value>();
@@ -144,9 +145,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	}
 
 	auto result = make_unique<LogicalGet>(table_index, function, move(bind_data), returned_types, returned_names);
-	result->column_ids = column_ids;
+	result->column_ids = move(column_ids);
 	result->table_filters = move(*table_filters);
 	result->parameters = move(parameters);
+	result->named_parameters = move(named_parameters);
 	result->input_table_types = input_table_types;
 	result->input_table_names = input_table_names;
 	return result;
