@@ -1,0 +1,20 @@
+# name: test/sql/aggregate/aggregates/test_distinct_ungrouped_min.test_coverage
+# description: DISTINCT aggregations, without GROUP BY
+# group: [aggregates]
+
+statement ok
+create or replace table tbl as select * FROM ( VALUES
+	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
+	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
+) tbl(i)
+
+query I
+select (min(distinct i)::TEXT)[2:2] from tbl;
+----
+a
