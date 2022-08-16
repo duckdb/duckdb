@@ -98,6 +98,21 @@ SELECT date_trunc(s, d) FROM dates;
 1994-05-05 00:00:00
 2021-01-04 00:00:00
 
+# Issue #4388: Verify DATE results for all timestamp types
+foreach temporal TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
+
+query I
+select date_trunc('day', '2022-08-15 07:52:55'::${temporal});
+----
+2022-08-15
+
+query I
+select date_trunc('hour', '2022-08-15 07:52:55'::${temporal});
+----
+2022-08-15 07:00:00
+
+endloop
+
 # Timestamps should return timestamp type
 query T
 SELECT date_trunc('minute', TIMESTAMP '1992-02-02 04:03:02') FROM timestamps LIMIT 1;
