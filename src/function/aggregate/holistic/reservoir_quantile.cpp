@@ -356,7 +356,7 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 	}
 
 	if (arguments.size() <= 2) {
-		Function::EraseArgument(function, arguments, arguments.size() - 1);
+		arguments.pop_back();
 		return make_unique<ReservoirQuantileBindData>(quantiles, 8192);
 	}
 	if (!arguments[2]->IsFoldable()) {
