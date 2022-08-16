@@ -88,7 +88,7 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeseriali
 		parameter_data = entry->second;
 	}
 	result->parameter_data = move(parameter_data);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

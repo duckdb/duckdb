@@ -50,7 +50,7 @@ unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeseria
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto res = make_unique<BoundConjunctionExpression>(state.type);
 	res->children = move(children);
-	return res;
+	return move(res);
 }
 
 } // namespace duckdb

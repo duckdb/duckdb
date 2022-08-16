@@ -90,7 +90,7 @@ unique_ptr<Expression> BoundCaseExpression::Deserialize(ExpressionDeserializatio
 	auto result = make_unique<BoundCaseExpression>(return_type);
 	result->else_expr = move(else_expr);
 	result->case_checks = move(case_checks);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb
