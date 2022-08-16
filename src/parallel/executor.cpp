@@ -43,16 +43,14 @@ struct ScheduleEventData {
 	ScheduleEventData(const vector<shared_ptr<Pipeline>> &pipelines,
 	                  unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines,
 	                  unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &union_pipelines,
-	                  unordered_map<Pipeline *, vector<Pipeline *>> &child_dependencies,
 	                  vector<shared_ptr<Event>> &events, bool initial_schedule)
-	    : pipelines(pipelines), child_pipelines(child_pipelines), union_pipelines(union_pipelines),
-	      child_dependencies(child_dependencies), events(events), initial_schedule(initial_schedule) {
+	    : pipelines(pipelines), child_pipelines(child_pipelines), union_pipelines(union_pipelines), events(events),
+	      initial_schedule(initial_schedule) {
 	}
 
 	const vector<shared_ptr<Pipeline>> &pipelines;
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines;
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &union_pipelines;
-	unordered_map<Pipeline *, vector<Pipeline *>> &child_dependencies;
 	unordered_map<Pipeline *, vector<Pipeline *>> scheduled_pipelines;
 	vector<shared_ptr<Event>> &events;
 	bool initial_schedule;
@@ -116,13 +114,10 @@ void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, ScheduleEv
 void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline,
                                      ScheduleEventData &event_data) {
 	auto &events = event_data.events;
-	auto &child_dependencies = event_data.child_dependencies;
 	pipeline->Ready();
 
 	auto child_ptr = pipeline.get();
-	auto dependencies = child_dependencies.find(child_ptr);
 	D_ASSERT(event_data.union_pipelines.find(child_ptr) == event_data.union_pipelines.end());
-	D_ASSERT(dependencies != child_dependencies.end());
 	// create the pipeline event and the event stack
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
@@ -132,30 +127,39 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 	stack.pipeline_event = pipeline_event.get();
 	stack.pipeline_finish_event = parent_entry->second.pipeline_finish_event;
 	stack.pipeline_complete_event = parent_entry->second.pipeline_complete_event;
-
 	// set up the dependencies for this child pipeline
 	unordered_set<Event *> finish_events;
-	for (auto &main_dep : dependencies->second) {
-		vector<Pipeline *> pipeline_dependencies;
-		auto dep_scheduled = event_data.scheduled_pipelines.find(main_dep);
-		if (dep_scheduled == event_data.scheduled_pipelines.end()) {
-			pipeline_dependencies.push_back(main_dep);
-		} else {
-			pipeline_dependencies = dep_scheduled->second;
-		}
-		for (auto &dep : pipeline_dependencies) {
-			auto dep_entry = event_map.find(dep);
-			D_ASSERT(dep_entry != event_map.end());
-			D_ASSERT(dep_entry->second.pipeline_event);
-			D_ASSERT(dep_entry->second.pipeline_finish_event);
 
-			auto finish_event = dep_entry->second.pipeline_finish_event;
-			stack.pipeline_event->AddDependency(*dep_entry->second.pipeline_event);
-			if (finish_events.find(finish_event) == finish_events.end()) {
-				finish_event->AddDependency(*stack.pipeline_event);
-				finish_events.insert(finish_event);
+	vector<Pipeline *> remaining_pipelines;
+	unordered_set<Pipeline *> already_scheduled;
+	remaining_pipelines.push_back(parent);
+	for (idx_t i = 0; i < remaining_pipelines.size(); i++) {
+		auto dep = remaining_pipelines[i];
+		if (already_scheduled.find(dep) != already_scheduled.end()) {
+			continue;
+		}
+		already_scheduled.insert(dep);
+
+		auto dep_scheduled = event_data.scheduled_pipelines.find(dep);
+		if (dep_scheduled != event_data.scheduled_pipelines.end()) {
+			for (auto &next_dep : dep_scheduled->second) {
+				remaining_pipelines.push_back(next_dep);
 			}
 		}
+
+		auto dep_entry = event_map.find(dep);
+		D_ASSERT(dep_entry != event_map.end());
+		D_ASSERT(dep_entry->second.pipeline_event);
+		D_ASSERT(dep_entry->second.pipeline_finish_event);
+
+		auto finish_event = dep_entry->second.pipeline_finish_event;
+		stack.pipeline_event->AddDependency(*dep_entry->second.pipeline_event);
+		if (finish_events.find(finish_event) == finish_events.end()) {
+			finish_event->AddDependency(*stack.pipeline_event);
+			finish_events.insert(finish_event);
+		}
+
+		event_data.scheduled_pipelines[dep].push_back(child_ptr);
 	}
 
 	events.push_back(move(pipeline_event));
@@ -205,15 +209,13 @@ void Executor::ScheduleEventsInternal(ScheduleEventData &event_data) {
 }
 
 void Executor::ScheduleEvents() {
-	ScheduleEventData event_data(pipelines, child_pipelines, union_pipelines, child_dependencies, events, true);
+	ScheduleEventData event_data(pipelines, child_pipelines, union_pipelines, events, true);
 	ScheduleEventsInternal(event_data);
 }
 
 void Executor::ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events) {
-	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
 	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> union_pipelines;
-	unordered_map<Pipeline *, vector<Pipeline *>> child_dependencies;
-	ScheduleEventData event_data(pipelines, child_pipelines, union_pipelines, child_dependencies, events, false);
+	ScheduleEventData event_data(pipelines, child_pipelines, union_pipelines, events, false);
 	ScheduleEventsInternal(event_data);
 }
 
@@ -425,7 +427,6 @@ void Executor::Reset() {
 	events.clear();
 	union_pipelines.clear();
 	child_pipelines.clear();
-	child_dependencies.clear();
 	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 
@@ -434,7 +435,6 @@ void Executor::AddChildPipeline(Pipeline *current) {
 	// found another operator that is a source
 	// schedule a child pipeline
 	auto child_pipeline = make_shared<Pipeline>(*this);
-	auto child_pipeline_ptr = child_pipeline.get();
 	child_pipeline->sink = current->sink;
 	child_pipeline->operators = current->operators;
 	child_pipeline->source = current->operators.back();
@@ -443,15 +443,6 @@ void Executor::AddChildPipeline(Pipeline *current) {
 
 	vector<Pipeline *> dependencies;
 	dependencies.push_back(current);
-	auto child_entry = child_pipelines.find(current);
-	if (child_entry != child_pipelines.end()) {
-		for (auto &current_child : child_entry->second) {
-			D_ASSERT(child_dependencies.find(current_child.get()) != child_dependencies.end());
-			child_dependencies[current_child.get()].push_back(child_pipeline_ptr);
-		}
-	}
-	D_ASSERT(child_dependencies.find(child_pipeline_ptr) == child_dependencies.end());
-	child_dependencies.insert(make_pair(child_pipeline_ptr, move(dependencies)));
 	child_pipelines[current].push_back(move(child_pipeline));
 }
 
