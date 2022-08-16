@@ -622,6 +622,18 @@ std::string ParquetExtension::Name() {
 
 } // namespace duckdb
 
+extern "C" {
+
+DUCKDB_EXTENSION_API void parquet_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::ParquetExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *parquet_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}
+
 #ifndef DUCKDB_EXTENSION_MAIN
 #error DUCKDB_EXTENSION_MAIN not defined
 #endif
