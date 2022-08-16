@@ -41,6 +41,10 @@ private:
 
 class CAPIResult {
 public:
+	CAPIResult() {
+	}
+	CAPIResult(duckdb_result result, bool success) : success(success), result(result) {
+	}
 	~CAPIResult() {
 		duckdb_destroy_result(&result);
 	}

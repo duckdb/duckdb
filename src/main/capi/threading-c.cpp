@@ -41,6 +41,15 @@ void duckdb_execute_tasks_state(duckdb_task_state state_p) {
 	scheduler.ExecuteForever(state->marker.get());
 }
 
+idx_t duckdb_execute_n_tasks_state(duckdb_task_state state_p, idx_t max_tasks) {
+	if (!state_p) {
+		return 0;
+	}
+	auto state = (CAPITaskState *)state_p;
+	auto &scheduler = duckdb::TaskScheduler::GetScheduler(state->db);
+	return scheduler.ExecuteTasks(state->marker.get(), max_tasks);
+}
+
 void duckdb_finish_execution(duckdb_task_state state_p) {
 	if (!state_p) {
 		return;
@@ -52,6 +61,14 @@ void duckdb_finish_execution(duckdb_task_state state_p) {
 		auto &scheduler = duckdb::TaskScheduler::GetScheduler(state->db);
 		scheduler.Signal(state->execute_count);
 	}
+}
+
+bool duckdb_task_state_is_finished(duckdb_task_state state_p) {
+	if (!state_p) {
+		return false;
+	}
+	auto state = (CAPITaskState *)state_p;
+	return !(*state->marker);
 }
 
 void duckdb_destroy_task_state(duckdb_task_state state_p) {

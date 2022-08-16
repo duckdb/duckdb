@@ -141,6 +141,25 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #endif
 }
 
+idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
+#ifndef DUCKDB_NO_THREADS
+	idx_t completed_tasks = 0;
+	// loop until the marker is set to false
+	while (*marker && completed_tasks < max_tasks) {
+		unique_ptr<Task> task;
+		if (!queue->q.try_dequeue(task)) {
+			return completed_tasks;
+		}
+		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		task.reset();
+		completed_tasks++;
+	}
+	return completed_tasks;
+#else
+	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
+#endif
+}
+
 void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
 	unique_ptr<Task> task;

@@ -71,9 +71,9 @@ statement ok
 COPY test_table_large TO '__TEST_DIR__/test_table_large.parquet' (ROW_GROUP_SIZE 1000);
 
 query II
-SELECT sum(i), max(filename) FROM parquet_scan('__TEST_DIR__/test_table_large.parquet', FILENAME=1) where i>5000;
+SELECT sum(i), max(regexp_replace(filename, '^.*/', '')) FROM parquet_scan('__TEST_DIR__/test_table_large.parquet', FILENAME=1) where i>5000;
 ----
-37492500	duckdb_unittest_tempdir/test_table_large.parquet
+37492500	test_table_large.parquet
 
 # Same file twice
 query III
