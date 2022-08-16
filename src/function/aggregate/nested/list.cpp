@@ -5,22 +5,58 @@
 
 namespace duckdb {
 
+struct ListSegment {
+	uint16_t count;
+	uint16_t capacity;
+	ListSegment *next;
+};
+struct LinkedList {
+	LinkedList() {};
+	LinkedList(idx_t total_capacity_p, ListSegment *first_segment_p, ListSegment *last_segment_p)
+	    : total_capacity(total_capacity_p), first_segment(first_segment_p), last_segment(last_segment_p) {
+	}
+
+	idx_t total_capacity = 0;
+	ListSegment *first_segment = nullptr;
+	ListSegment *last_segment = nullptr;
+};
+
+// forward declaration
+struct GetSegmentDataFunction;
+typedef void (*get_data_from_segment_t)(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+                                        Vector &result, idx_t &total_count);
+struct GetSegmentDataFunction {
+	// raw segment function
+	get_data_from_segment_t segment_function;
+
+	// used for lists/structs to store child function pointers
+	vector<GetSegmentDataFunction> child_functions;
+};
+
+// forward declarations
+static ListSegment *CreateSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+                                  Vector &input);
+static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+                      Vector &input, idx_t &entry_idx, idx_t &count);
+static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list,
+                            Vector &result, idx_t &initial_total_count);
+
 template <class T>
-data_ptr_t ListFun::AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
+static data_ptr_t AllocatePrimitiveData(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                           uint16_t &capacity) {
 
 	owning_vector.emplace_back(allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(T))));
 	return owning_vector.back().get();
 }
 
-data_ptr_t ListFun::AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity) {
+static data_ptr_t AllocateListData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity) {
 
 	owning_vector.emplace_back(
 	    allocator.Allocate(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList)));
 	return owning_vector.back().get();
 }
 
-data_ptr_t ListFun::AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+static data_ptr_t AllocateStructData(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
                                        idx_t child_count) {
 
 	owning_vector.emplace_back(
@@ -29,24 +65,24 @@ data_ptr_t ListFun::AllocateStructData(Allocator &allocator, vector<AllocatedDat
 }
 
 template <class T>
-T *ListFun::TemplatedGetPrimitiveData(ListSegment *segment) {
+static T *TemplatedGetPrimitiveData(ListSegment *segment) {
 	return (T *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-uint64_t *ListFun::GetListLengthData(ListSegment *segment) {
+static uint64_t *GetListLengthData(ListSegment *segment) {
 	return (uint64_t *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-LinkedList *ListFun::GetListChildData(ListSegment *segment) {
+static LinkedList *GetListChildData(ListSegment *segment) {
 	return (LinkedList *)(((char *)segment) + sizeof(ListSegment) +
 	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
-ListSegment **ListFun::GetStructData(ListSegment *segment) {
+static ListSegment **GetStructData(ListSegment *segment) {
 	return (ListSegment **)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
-void ListFun::SetPrimitiveDataValue(ListSegment *segment, const LogicalType &type, data_ptr_t &input_data,
+static void SetPrimitiveDataValue(ListSegment *segment, const LogicalType &type, data_ptr_t &input_data,
                                     idx_t &row_idx) {
 
 	auto physical_type = type.InternalType();
@@ -122,11 +158,11 @@ void ListFun::SetPrimitiveDataValue(ListSegment *segment, const LogicalType &typ
 	}
 }
 
-bool *ListFun::GetNullMask(ListSegment *segment) {
+static bool *GetNullMask(ListSegment *segment) {
 	return (bool *)(((char *)segment) + sizeof(ListSegment));
 }
 
-uint16_t ListFun::GetCapacityForNewSegment(LinkedList *linked_list) {
+static uint16_t GetCapacityForNewSegment(LinkedList *linked_list) {
 
 	// consecutive segments grow by the power of two
 	uint16_t capacity = 4;
@@ -138,7 +174,7 @@ uint16_t ListFun::GetCapacityForNewSegment(LinkedList *linked_list) {
 }
 
 template <class T>
-ListSegment *ListFun::TemplatedCreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
+static ListSegment *TemplatedCreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                                       uint16_t &capacity) {
 
 	// allocate data and set the header
@@ -149,7 +185,7 @@ ListSegment *ListFun::TemplatedCreatePrimitiveSegment(Allocator &allocator, vect
 	return segment;
 }
 
-ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
+static ListSegment *CreatePrimitiveSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                              uint16_t &capacity, const LogicalType &type) {
 
 	auto physical_type = type.InternalType();
@@ -189,7 +225,7 @@ ListSegment *ListFun::CreatePrimitiveSegment(Allocator &allocator, vector<Alloca
 	}
 }
 
-ListSegment *ListFun::CreateListSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
+static ListSegment *CreateListSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                         uint16_t &capacity) {
 
 	// allocate data and set the header
@@ -206,7 +242,7 @@ ListSegment *ListFun::CreateListSegment(Allocator &allocator, vector<AllocatedDa
 	return segment;
 }
 
-ListSegment *ListFun::CreateStructSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
+static ListSegment *CreateStructSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                           uint16_t &capacity, vector<unique_ptr<Vector>> &children) {
 
 	// allocate data and set header
@@ -225,7 +261,7 @@ ListSegment *ListFun::CreateStructSegment(Allocator &allocator, vector<Allocated
 	return segment;
 }
 
-ListSegment *ListFun::CreateSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
+static ListSegment *CreateSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, uint16_t &capacity,
                                     Vector &input) {
 
 	if (input.GetType().InternalType() == PhysicalType::VARCHAR) {
@@ -239,7 +275,7 @@ ListSegment *ListFun::CreateSegment(Allocator &allocator, vector<AllocatedData> 
 	return CreatePrimitiveSegment(allocator, owning_vector, capacity, input.GetType());
 }
 
-ListSegment *ListFun::GetSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+static ListSegment *GetSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
                                  Vector &input) {
 
 	ListSegment *segment = nullptr;
@@ -268,7 +304,7 @@ ListSegment *ListFun::GetSegment(Allocator &allocator, vector<AllocatedData> &ow
 	return segment;
 }
 
-ListSegment *ListFun::GetCharSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
+static ListSegment *GetCharSegment(Allocator &allocator, vector<AllocatedData> &owning_vector,
                                      LinkedList *linked_list) {
 
 	ListSegment *segment = nullptr;
@@ -297,7 +333,7 @@ ListSegment *ListFun::GetCharSegment(Allocator &allocator, vector<AllocatedData>
 	return segment;
 }
 
-void ListFun::WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, ListSegment *segment,
+static void WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &owning_vector, ListSegment *segment,
                                  Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
@@ -392,7 +428,7 @@ void ListFun::WriteDataToSegment(Allocator &allocator, vector<AllocatedData> &ow
 	}
 }
 
-void ListFun::AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
+static void AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vector, LinkedList *linked_list,
                         Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// FIXME: maybe faster if I first flatten all (nested) vectors in the update function?
@@ -408,7 +444,7 @@ void ListFun::AppendRow(Allocator &allocator, vector<AllocatedData> &owning_vect
 }
 
 template <class T>
-void ListFun::GetDataFromPrimitiveSegment(GetSegmentDataFunction &, ListSegment *segment, Vector &result,
+static void GetDataFromPrimitiveSegment(GetSegmentDataFunction &, ListSegment *segment, Vector &result,
                                           idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
@@ -433,7 +469,7 @@ void ListFun::GetDataFromPrimitiveSegment(GetSegmentDataFunction &, ListSegment 
 	}
 }
 
-void ListFun::GetDataFromVarcharSegment(GetSegmentDataFunction &, ListSegment *segment, Vector &result,
+static void GetDataFromVarcharSegment(GetSegmentDataFunction &, ListSegment *segment, Vector &result,
                                         idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
@@ -474,7 +510,7 @@ void ListFun::GetDataFromVarcharSegment(GetSegmentDataFunction &, ListSegment *s
 	}
 }
 
-void ListFun::GetDataFromListSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+static void GetDataFromListSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
                                      Vector &result, idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
@@ -514,7 +550,7 @@ void ListFun::GetDataFromListSegment(GetSegmentDataFunction &get_segment_data_fu
 	BuildListVector(get_segment_data_function.child_functions[0], &linked_child_list, child_vector, starting_offset);
 }
 
-void ListFun::GetDataFromStructSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
+static void GetDataFromStructSegment(GetSegmentDataFunction &get_segment_data_function, ListSegment *segment,
                                        Vector &result, idx_t &total_count) {
 
 	auto &aggr_vector_validity = FlatVector::Validity(result);
@@ -539,7 +575,7 @@ void ListFun::GetDataFromStructSegment(GetSegmentDataFunction &get_segment_data_
 	}
 }
 
-void ListFun::BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list,
+static void BuildListVector(GetSegmentDataFunction &get_segment_data_function, LinkedList *linked_list,
                               Vector &result, idx_t &initial_total_count) {
 
 	idx_t total_count = initial_total_count;
@@ -554,7 +590,7 @@ void ListFun::BuildListVector(GetSegmentDataFunction &get_segment_data_function,
 	linked_list->last_segment = nullptr;
 }
 
-void ListFun::InitializeValidities(Vector &vector, idx_t &capacity) {
+static void InitializeValidities(Vector &vector, idx_t &capacity) {
 
 	auto &validity_mask = FlatVector::Validity(vector);
 	validity_mask.Initialize(capacity);
@@ -587,11 +623,11 @@ struct ListBindData : public FunctionData {
 	}
 };
 
-void GetSegmentDataFunctions(GetSegmentDataFunction &get_segment_data_function, const LogicalType &type) {
+static void GetSegmentDataFunctions(GetSegmentDataFunction &get_segment_data_function, const LogicalType &type) {
 
 	if (type.id() == LogicalTypeId::LIST) {
 
-		get_segment_data_function.segment_function = ListFun::GetDataFromListSegment;
+		get_segment_data_function.segment_function = GetDataFromListSegment;
 
 		// recurse
 		get_segment_data_function.child_functions.emplace_back(GetSegmentDataFunction());
@@ -599,7 +635,7 @@ void GetSegmentDataFunctions(GetSegmentDataFunction &get_segment_data_function, 
 
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 
-		get_segment_data_function.segment_function = ListFun::GetDataFromStructSegment;
+		get_segment_data_function.segment_function = GetDataFromStructSegment;
 
 		// recurse
 		auto child_types = StructType::GetChildTypes(type);
@@ -615,59 +651,59 @@ void GetSegmentDataFunctions(GetSegmentDataFunction &get_segment_data_function, 
 		switch (physical_type) {
 		case PhysicalType::BIT:
 		case PhysicalType::BOOL: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<bool>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<bool>;
 			break;
 		}
 		case PhysicalType::INT8: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<int8_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<int8_t>;
 			break;
 		}
 		case PhysicalType::INT16: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<int16_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<int16_t>;
 			break;
 		}
 		case PhysicalType::INT32: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<int32_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<int32_t>;
 			break;
 		}
 		case PhysicalType::INT64: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<int64_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<int64_t>;
 			break;
 		}
 		case PhysicalType::UINT8: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<uint8_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<uint8_t>;
 			break;
 		}
 		case PhysicalType::UINT16: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<uint16_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<uint16_t>;
 			break;
 		}
 		case PhysicalType::UINT32: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<uint32_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<uint32_t>;
 			break;
 		}
 		case PhysicalType::UINT64: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<uint64_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<uint64_t>;
 			break;
 		}
 		case PhysicalType::FLOAT: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<float>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<float>;
 			break;
 		}
 		case PhysicalType::DOUBLE: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<double>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<double>;
 			break;
 		}
 		case PhysicalType::INT128: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<hugeint_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<hugeint_t>;
 			break;
 		}
 		case PhysicalType::INTERVAL: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromPrimitiveSegment<interval_t>;
+			get_segment_data_function.segment_function = GetDataFromPrimitiveSegment<interval_t>;
 			break;
 		}
 		case PhysicalType::VARCHAR: {
-			get_segment_data_function.segment_function = ListFun::GetDataFromVarcharSegment;
+			get_segment_data_function.segment_function = GetDataFromVarcharSegment;
 			break;
 		}
 		default:
@@ -743,7 +779,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 			state->owning_vector = new vector<AllocatedData>;
 		}
 		D_ASSERT(state->type);
-		ListFun::AppendRow(aggr_input_data.allocator, *state->owning_vector, state->linked_list, input, i, count);
+		AppendRow(aggr_input_data.allocator, *state->owning_vector, state->linked_list, input, i, count);
 	}
 }
 
@@ -827,10 +863,10 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 		// ListVector::Reserve only increases the validity mask, if (to_reserve > capacity),
 		// which will not be the case if the value passed to the constructor of aggr_vector
 		// is greater than to_reserve
-		ListFun::InitializeValidities(aggr_vector, total_capacity);
+		InitializeValidities(aggr_vector, total_capacity);
 
 		idx_t total_count = 0;
-		ListFun::BuildListVector(list_bind_data.get_segment_data_function, state->linked_list, aggr_vector,
+		BuildListVector(list_bind_data.get_segment_data_function, state->linked_list, aggr_vector,
 		                         total_count);
 		ListVector::Append(result, aggr_vector, total_capacity);
 
