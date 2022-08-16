@@ -93,7 +93,7 @@ void VectorListBuffer::PushBack(const Value &insert) {
 VectorListBuffer::~VectorListBuffer() {
 }
 
-ManagedVectorBuffer::ManagedVectorBuffer(unique_ptr<BufferHandle> handle)
+ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)
     : VectorBuffer(VectorBufferType::MANAGED_BUFFER), handle(move(handle)) {
 }
 

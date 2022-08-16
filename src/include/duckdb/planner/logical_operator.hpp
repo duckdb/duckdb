@@ -24,13 +24,9 @@ namespace duckdb {
 //! logical query tree
 class LogicalOperator {
 public:
-	explicit LogicalOperator(LogicalOperatorType type) : type(type) {
-	}
-	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-	    : type(type), expressions(move(expressions)) {
-	}
-	virtual ~LogicalOperator() {
-	}
+	explicit LogicalOperator(LogicalOperatorType type);
+	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
+	virtual ~LogicalOperator();
 
 	//! The type of the logical operator
 	LogicalOperatorType type;
@@ -44,9 +40,7 @@ public:
 	idx_t estimated_cardinality = 0;
 
 public:
-	virtual vector<ColumnBinding> GetColumnBindings() {
-		return {ColumnBinding(0, 0)};
-	}
+	virtual vector<ColumnBinding> GetColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
 	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
 	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
@@ -61,18 +55,9 @@ public:
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify();
 
-	void AddChild(unique_ptr<LogicalOperator> child) {
-		children.push_back(move(child));
-	}
+	void AddChild(unique_ptr<LogicalOperator> child);
 
-	virtual idx_t EstimateCardinality(ClientContext &context) {
-		// simple estimator, just take the max of the children
-		idx_t max_cardinality = 0;
-		for (auto &child : children) {
-			max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
-		}
-		return max_cardinality;
-	}
+	virtual idx_t EstimateCardinality(ClientContext &context);
 
 protected:
 	//! Resolve types for this specific operator

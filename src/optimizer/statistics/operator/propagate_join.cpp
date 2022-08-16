@@ -77,8 +77,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					case JoinType::OUTER: {
 						// inner/left/right/full outer join, replace with cross product
 						// since the condition is always true, left/right/outer join are equivalent to inner join here
-						auto cross_product = make_unique<LogicalCrossProduct>();
-						cross_product->children = move(join.children);
+						auto cross_product =
+						    LogicalCrossProduct::Create(move(join.children[0]), move(join.children[1]));
 						*node_ptr = move(cross_product);
 						return;
 					}

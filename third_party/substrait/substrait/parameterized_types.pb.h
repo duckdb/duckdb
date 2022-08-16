@@ -47,7 +47,7 @@ struct TableStruct_substrait_2fparameterized_5ftypes_2eproto {
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::AuxiliaryParseTableField aux[]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
-  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[13]
+  static const ::PROTOBUF_NAMESPACE_ID::internal::ParseTable schema[14]
     PROTOBUF_SECTION_VARIABLE(protodesc_cold);
   static const ::PROTOBUF_NAMESPACE_ID::internal::FieldMetadata field_metadata[];
   static const ::PROTOBUF_NAMESPACE_ID::internal::SerializationTable serialization_table[];
@@ -88,6 +88,9 @@ extern ParameterizedType_ParameterizedNamedStructDefaultTypeInternal _Parameteri
 class ParameterizedType_ParameterizedStruct;
 struct ParameterizedType_ParameterizedStructDefaultTypeInternal;
 extern ParameterizedType_ParameterizedStructDefaultTypeInternal _ParameterizedType_ParameterizedStruct_default_instance_;
+class ParameterizedType_ParameterizedUserDefined;
+struct ParameterizedType_ParameterizedUserDefinedDefaultTypeInternal;
+extern ParameterizedType_ParameterizedUserDefinedDefaultTypeInternal _ParameterizedType_ParameterizedUserDefined_default_instance_;
 class ParameterizedType_ParameterizedVarChar;
 struct ParameterizedType_ParameterizedVarCharDefaultTypeInternal;
 extern ParameterizedType_ParameterizedVarCharDefaultTypeInternal _ParameterizedType_ParameterizedVarChar_default_instance_;
@@ -107,6 +110,7 @@ template<> ::substrait::ParameterizedType_ParameterizedList* Arena::CreateMaybeM
 template<> ::substrait::ParameterizedType_ParameterizedMap* Arena::CreateMaybeMessage<::substrait::ParameterizedType_ParameterizedMap>(Arena*);
 template<> ::substrait::ParameterizedType_ParameterizedNamedStruct* Arena::CreateMaybeMessage<::substrait::ParameterizedType_ParameterizedNamedStruct>(Arena*);
 template<> ::substrait::ParameterizedType_ParameterizedStruct* Arena::CreateMaybeMessage<::substrait::ParameterizedType_ParameterizedStruct>(Arena*);
+template<> ::substrait::ParameterizedType_ParameterizedUserDefined* Arena::CreateMaybeMessage<::substrait::ParameterizedType_ParameterizedUserDefined>(Arena*);
 template<> ::substrait::ParameterizedType_ParameterizedVarChar* Arena::CreateMaybeMessage<::substrait::ParameterizedType_ParameterizedVarChar>(Arena*);
 template<> ::substrait::ParameterizedType_TypeParameter* Arena::CreateMaybeMessage<::substrait::ParameterizedType_TypeParameter>(Arena*);
 PROTOBUF_NAMESPACE_CLOSE
@@ -2082,6 +2086,174 @@ class ParameterizedType_ParameterizedMap final :
 };
 // -------------------------------------------------------------------
 
+class ParameterizedType_ParameterizedUserDefined final :
+    public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.ParameterizedType.ParameterizedUserDefined) */ {
+ public:
+  inline ParameterizedType_ParameterizedUserDefined() : ParameterizedType_ParameterizedUserDefined(nullptr) {}
+  ~ParameterizedType_ParameterizedUserDefined() override;
+  explicit constexpr ParameterizedType_ParameterizedUserDefined(::PROTOBUF_NAMESPACE_ID::internal::ConstantInitialized);
+
+  ParameterizedType_ParameterizedUserDefined(const ParameterizedType_ParameterizedUserDefined& from);
+  ParameterizedType_ParameterizedUserDefined(ParameterizedType_ParameterizedUserDefined&& from) noexcept
+    : ParameterizedType_ParameterizedUserDefined() {
+    *this = ::std::move(from);
+  }
+
+  inline ParameterizedType_ParameterizedUserDefined& operator=(const ParameterizedType_ParameterizedUserDefined& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline ParameterizedType_ParameterizedUserDefined& operator=(ParameterizedType_ParameterizedUserDefined&& from) noexcept {
+    if (this == &from) return *this;
+    if (GetOwningArena() == from.GetOwningArena()
+  #ifdef PROTOBUF_FORCE_COPY_IN_MOVE
+        && GetOwningArena() != nullptr
+  #endif  // !PROTOBUF_FORCE_COPY_IN_MOVE
+    ) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* descriptor() {
+    return GetDescriptor();
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Descriptor* GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  static const ::PROTOBUF_NAMESPACE_ID::Reflection* GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  static const ParameterizedType_ParameterizedUserDefined& default_instance() {
+    return *internal_default_instance();
+  }
+  static inline const ParameterizedType_ParameterizedUserDefined* internal_default_instance() {
+    return reinterpret_cast<const ParameterizedType_ParameterizedUserDefined*>(
+               &_ParameterizedType_ParameterizedUserDefined_default_instance_);
+  }
+  static constexpr int kIndexInFileMessages =
+    11;
+
+  friend void swap(ParameterizedType_ParameterizedUserDefined& a, ParameterizedType_ParameterizedUserDefined& b) {
+    a.Swap(&b);
+  }
+  inline void Swap(ParameterizedType_ParameterizedUserDefined* other) {
+    if (other == this) return;
+  #ifdef PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() != nullptr &&
+        GetOwningArena() == other->GetOwningArena()) {
+   #else  // PROTOBUF_FORCE_COPY_IN_SWAP
+    if (GetOwningArena() == other->GetOwningArena()) {
+  #endif  // !PROTOBUF_FORCE_COPY_IN_SWAP
+      InternalSwap(other);
+    } else {
+      ::PROTOBUF_NAMESPACE_ID::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(ParameterizedType_ParameterizedUserDefined* other) {
+    if (other == this) return;
+    GOOGLE_DCHECK(GetOwningArena() == other->GetOwningArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  ParameterizedType_ParameterizedUserDefined* New(::PROTOBUF_NAMESPACE_ID::Arena* arena = nullptr) const final {
+    return CreateMaybeMessage<ParameterizedType_ParameterizedUserDefined>(arena);
+  }
+  using ::PROTOBUF_NAMESPACE_ID::Message::CopyFrom;
+  void CopyFrom(const ParameterizedType_ParameterizedUserDefined& from);
+  using ::PROTOBUF_NAMESPACE_ID::Message::MergeFrom;
+  void MergeFrom(const ParameterizedType_ParameterizedUserDefined& from);
+  private:
+  static void MergeImpl(::PROTOBUF_NAMESPACE_ID::Message* to, const ::PROTOBUF_NAMESPACE_ID::Message& from);
+  public:
+  PROTOBUF_ATTRIBUTE_REINITIALIZES void Clear() final;
+  bool IsInitialized() const final;
+
+  size_t ByteSizeLong() const final;
+  const char* _InternalParse(const char* ptr, ::PROTOBUF_NAMESPACE_ID::internal::ParseContext* ctx) final;
+  uint8_t* _InternalSerialize(
+      uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const final;
+  int GetCachedSize() const final { return _cached_size_.Get(); }
+
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const final;
+  void InternalSwap(ParameterizedType_ParameterizedUserDefined* other);
+
+  private:
+  friend class ::PROTOBUF_NAMESPACE_ID::internal::AnyMetadata;
+  static ::PROTOBUF_NAMESPACE_ID::StringPiece FullMessageName() {
+    return "substrait.ParameterizedType.ParameterizedUserDefined";
+  }
+  protected:
+  explicit ParameterizedType_ParameterizedUserDefined(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                       bool is_message_owned = false);
+  private:
+  static void ArenaDtor(void* object);
+  inline void RegisterArenaDtor(::PROTOBUF_NAMESPACE_ID::Arena* arena);
+  public:
+
+  static const ClassData _class_data_;
+  const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*GetClassData() const final;
+
+  ::PROTOBUF_NAMESPACE_ID::Metadata GetMetadata() const final;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  enum : int {
+    kTypePointerFieldNumber = 1,
+    kVariationPointerFieldNumber = 2,
+    kNullabilityFieldNumber = 3,
+  };
+  // uint32 type_pointer = 1;
+  void clear_type_pointer();
+  uint32_t type_pointer() const;
+  void set_type_pointer(uint32_t value);
+  private:
+  uint32_t _internal_type_pointer() const;
+  void _internal_set_type_pointer(uint32_t value);
+  public:
+
+  // uint32 variation_pointer = 2;
+  void clear_variation_pointer();
+  uint32_t variation_pointer() const;
+  void set_variation_pointer(uint32_t value);
+  private:
+  uint32_t _internal_variation_pointer() const;
+  void _internal_set_variation_pointer(uint32_t value);
+  public:
+
+  // .substrait.Type.Nullability nullability = 3;
+  void clear_nullability();
+  ::substrait::Type_Nullability nullability() const;
+  void set_nullability(::substrait::Type_Nullability value);
+  private:
+  ::substrait::Type_Nullability _internal_nullability() const;
+  void _internal_set_nullability(::substrait::Type_Nullability value);
+  public:
+
+  // @@protoc_insertion_point(class_scope:substrait.ParameterizedType.ParameterizedUserDefined)
+ private:
+  class _Internal;
+
+  template <typename T> friend class ::PROTOBUF_NAMESPACE_ID::Arena::InternalHelper;
+  typedef void InternalArenaConstructable_;
+  typedef void DestructorSkippable_;
+  uint32_t type_pointer_;
+  uint32_t variation_pointer_;
+  int nullability_;
+  mutable ::PROTOBUF_NAMESPACE_ID::internal::CachedSize _cached_size_;
+  friend struct ::TableStruct_substrait_2fparameterized_5ftypes_2eproto;
+};
+// -------------------------------------------------------------------
+
 class ParameterizedType_IntegerOption final :
     public ::PROTOBUF_NAMESPACE_ID::Message /* @@protoc_insertion_point(class_definition:substrait.ParameterizedType.IntegerOption) */ {
  public:
@@ -2136,7 +2308,7 @@ class ParameterizedType_IntegerOption final :
                &_ParameterizedType_IntegerOption_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    11;
+    12;
 
   friend void swap(ParameterizedType_IntegerOption& a, ParameterizedType_IntegerOption& b) {
     a.Swap(&b);
@@ -2338,6 +2510,7 @@ class ParameterizedType final :
     kStruct = 25,
     kList = 27,
     kMap = 28,
+    kUserDefined = 30,
     kUserDefinedPointer = 31,
     kTypeParameter = 33,
     KIND_NOT_SET = 0,
@@ -2348,7 +2521,7 @@ class ParameterizedType final :
                &_ParameterizedType_default_instance_);
   }
   static constexpr int kIndexInFileMessages =
-    12;
+    13;
 
   friend void swap(ParameterizedType& a, ParameterizedType& b) {
     a.Swap(&b);
@@ -2430,6 +2603,7 @@ class ParameterizedType final :
   typedef ParameterizedType_ParameterizedNamedStruct ParameterizedNamedStruct;
   typedef ParameterizedType_ParameterizedList ParameterizedList;
   typedef ParameterizedType_ParameterizedMap ParameterizedMap;
+  typedef ParameterizedType_ParameterizedUserDefined ParameterizedUserDefined;
   typedef ParameterizedType_IntegerOption IntegerOption;
 
   // accessors -------------------------------------------------------
@@ -2458,6 +2632,7 @@ class ParameterizedType final :
     kStructFieldNumber = 25,
     kListFieldNumber = 27,
     kMapFieldNumber = 28,
+    kUserDefinedFieldNumber = 30,
     kUserDefinedPointerFieldNumber = 31,
     kTypeParameterFieldNumber = 33,
   };
@@ -2875,14 +3050,32 @@ class ParameterizedType final :
       ::substrait::ParameterizedType_ParameterizedMap* map);
   ::substrait::ParameterizedType_ParameterizedMap* unsafe_arena_release_map();
 
-  // uint32 user_defined_pointer = 31;
-  bool has_user_defined_pointer() const;
+  // .substrait.ParameterizedType.ParameterizedUserDefined user_defined = 30;
+  bool has_user_defined() const;
+  private:
+  bool _internal_has_user_defined() const;
+  public:
+  void clear_user_defined();
+  const ::substrait::ParameterizedType_ParameterizedUserDefined& user_defined() const;
+  PROTOBUF_NODISCARD ::substrait::ParameterizedType_ParameterizedUserDefined* release_user_defined();
+  ::substrait::ParameterizedType_ParameterizedUserDefined* mutable_user_defined();
+  void set_allocated_user_defined(::substrait::ParameterizedType_ParameterizedUserDefined* user_defined);
+  private:
+  const ::substrait::ParameterizedType_ParameterizedUserDefined& _internal_user_defined() const;
+  ::substrait::ParameterizedType_ParameterizedUserDefined* _internal_mutable_user_defined();
+  public:
+  void unsafe_arena_set_allocated_user_defined(
+      ::substrait::ParameterizedType_ParameterizedUserDefined* user_defined);
+  ::substrait::ParameterizedType_ParameterizedUserDefined* unsafe_arena_release_user_defined();
+
+  // uint32 user_defined_pointer = 31 [deprecated = true];
+  PROTOBUF_DEPRECATED bool has_user_defined_pointer() const;
   private:
   bool _internal_has_user_defined_pointer() const;
   public:
-  void clear_user_defined_pointer();
-  uint32_t user_defined_pointer() const;
-  void set_user_defined_pointer(uint32_t value);
+  PROTOBUF_DEPRECATED void clear_user_defined_pointer();
+  PROTOBUF_DEPRECATED uint32_t user_defined_pointer() const;
+  PROTOBUF_DEPRECATED void set_user_defined_pointer(uint32_t value);
   private:
   uint32_t _internal_user_defined_pointer() const;
   void _internal_set_user_defined_pointer(uint32_t value);
@@ -2934,6 +3127,7 @@ class ParameterizedType final :
   void set_has_struct_();
   void set_has_list();
   void set_has_map();
+  void set_has_user_defined();
   void set_has_user_defined_pointer();
   void set_has_type_parameter();
 
@@ -2969,6 +3163,7 @@ class ParameterizedType final :
     ::substrait::ParameterizedType_ParameterizedStruct* struct__;
     ::substrait::ParameterizedType_ParameterizedList* list_;
     ::substrait::ParameterizedType_ParameterizedMap* map_;
+    ::substrait::ParameterizedType_ParameterizedUserDefined* user_defined_;
     uint32_t user_defined_pointer_;
     ::substrait::ParameterizedType_TypeParameter* type_parameter_;
   } kind_;
@@ -4573,6 +4768,70 @@ inline void ParameterizedType_ParameterizedMap::_internal_set_nullability(::subs
 inline void ParameterizedType_ParameterizedMap::set_nullability(::substrait::Type_Nullability value) {
   _internal_set_nullability(value);
   // @@protoc_insertion_point(field_set:substrait.ParameterizedType.ParameterizedMap.nullability)
+}
+
+// -------------------------------------------------------------------
+
+// ParameterizedType_ParameterizedUserDefined
+
+// uint32 type_pointer = 1;
+inline void ParameterizedType_ParameterizedUserDefined::clear_type_pointer() {
+  type_pointer_ = 0u;
+}
+inline uint32_t ParameterizedType_ParameterizedUserDefined::_internal_type_pointer() const {
+  return type_pointer_;
+}
+inline uint32_t ParameterizedType_ParameterizedUserDefined::type_pointer() const {
+  // @@protoc_insertion_point(field_get:substrait.ParameterizedType.ParameterizedUserDefined.type_pointer)
+  return _internal_type_pointer();
+}
+inline void ParameterizedType_ParameterizedUserDefined::_internal_set_type_pointer(uint32_t value) {
+  
+  type_pointer_ = value;
+}
+inline void ParameterizedType_ParameterizedUserDefined::set_type_pointer(uint32_t value) {
+  _internal_set_type_pointer(value);
+  // @@protoc_insertion_point(field_set:substrait.ParameterizedType.ParameterizedUserDefined.type_pointer)
+}
+
+// uint32 variation_pointer = 2;
+inline void ParameterizedType_ParameterizedUserDefined::clear_variation_pointer() {
+  variation_pointer_ = 0u;
+}
+inline uint32_t ParameterizedType_ParameterizedUserDefined::_internal_variation_pointer() const {
+  return variation_pointer_;
+}
+inline uint32_t ParameterizedType_ParameterizedUserDefined::variation_pointer() const {
+  // @@protoc_insertion_point(field_get:substrait.ParameterizedType.ParameterizedUserDefined.variation_pointer)
+  return _internal_variation_pointer();
+}
+inline void ParameterizedType_ParameterizedUserDefined::_internal_set_variation_pointer(uint32_t value) {
+  
+  variation_pointer_ = value;
+}
+inline void ParameterizedType_ParameterizedUserDefined::set_variation_pointer(uint32_t value) {
+  _internal_set_variation_pointer(value);
+  // @@protoc_insertion_point(field_set:substrait.ParameterizedType.ParameterizedUserDefined.variation_pointer)
+}
+
+// .substrait.Type.Nullability nullability = 3;
+inline void ParameterizedType_ParameterizedUserDefined::clear_nullability() {
+  nullability_ = 0;
+}
+inline ::substrait::Type_Nullability ParameterizedType_ParameterizedUserDefined::_internal_nullability() const {
+  return static_cast< ::substrait::Type_Nullability >(nullability_);
+}
+inline ::substrait::Type_Nullability ParameterizedType_ParameterizedUserDefined::nullability() const {
+  // @@protoc_insertion_point(field_get:substrait.ParameterizedType.ParameterizedUserDefined.nullability)
+  return _internal_nullability();
+}
+inline void ParameterizedType_ParameterizedUserDefined::_internal_set_nullability(::substrait::Type_Nullability value) {
+  
+  nullability_ = value;
+}
+inline void ParameterizedType_ParameterizedUserDefined::set_nullability(::substrait::Type_Nullability value) {
+  _internal_set_nullability(value);
+  // @@protoc_insertion_point(field_set:substrait.ParameterizedType.ParameterizedUserDefined.nullability)
 }
 
 // -------------------------------------------------------------------
@@ -6278,7 +6537,81 @@ inline ::substrait::ParameterizedType_ParameterizedMap* ParameterizedType::mutab
   return _msg;
 }
 
-// uint32 user_defined_pointer = 31;
+// .substrait.ParameterizedType.ParameterizedUserDefined user_defined = 30;
+inline bool ParameterizedType::_internal_has_user_defined() const {
+  return kind_case() == kUserDefined;
+}
+inline bool ParameterizedType::has_user_defined() const {
+  return _internal_has_user_defined();
+}
+inline void ParameterizedType::set_has_user_defined() {
+  _oneof_case_[0] = kUserDefined;
+}
+inline void ParameterizedType::clear_user_defined() {
+  if (_internal_has_user_defined()) {
+    if (GetArenaForAllocation() == nullptr) {
+      delete kind_.user_defined_;
+    }
+    clear_has_kind();
+  }
+}
+inline ::substrait::ParameterizedType_ParameterizedUserDefined* ParameterizedType::release_user_defined() {
+  // @@protoc_insertion_point(field_release:substrait.ParameterizedType.user_defined)
+  if (_internal_has_user_defined()) {
+    clear_has_kind();
+      ::substrait::ParameterizedType_ParameterizedUserDefined* temp = kind_.user_defined_;
+    if (GetArenaForAllocation() != nullptr) {
+      temp = ::PROTOBUF_NAMESPACE_ID::internal::DuplicateIfNonNull(temp);
+    }
+    kind_.user_defined_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline const ::substrait::ParameterizedType_ParameterizedUserDefined& ParameterizedType::_internal_user_defined() const {
+  return _internal_has_user_defined()
+      ? *kind_.user_defined_
+      : reinterpret_cast< ::substrait::ParameterizedType_ParameterizedUserDefined&>(::substrait::_ParameterizedType_ParameterizedUserDefined_default_instance_);
+}
+inline const ::substrait::ParameterizedType_ParameterizedUserDefined& ParameterizedType::user_defined() const {
+  // @@protoc_insertion_point(field_get:substrait.ParameterizedType.user_defined)
+  return _internal_user_defined();
+}
+inline ::substrait::ParameterizedType_ParameterizedUserDefined* ParameterizedType::unsafe_arena_release_user_defined() {
+  // @@protoc_insertion_point(field_unsafe_arena_release:substrait.ParameterizedType.user_defined)
+  if (_internal_has_user_defined()) {
+    clear_has_kind();
+    ::substrait::ParameterizedType_ParameterizedUserDefined* temp = kind_.user_defined_;
+    kind_.user_defined_ = nullptr;
+    return temp;
+  } else {
+    return nullptr;
+  }
+}
+inline void ParameterizedType::unsafe_arena_set_allocated_user_defined(::substrait::ParameterizedType_ParameterizedUserDefined* user_defined) {
+  clear_kind();
+  if (user_defined) {
+    set_has_user_defined();
+    kind_.user_defined_ = user_defined;
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:substrait.ParameterizedType.user_defined)
+}
+inline ::substrait::ParameterizedType_ParameterizedUserDefined* ParameterizedType::_internal_mutable_user_defined() {
+  if (!_internal_has_user_defined()) {
+    clear_kind();
+    set_has_user_defined();
+    kind_.user_defined_ = CreateMaybeMessage< ::substrait::ParameterizedType_ParameterizedUserDefined >(GetArenaForAllocation());
+  }
+  return kind_.user_defined_;
+}
+inline ::substrait::ParameterizedType_ParameterizedUserDefined* ParameterizedType::mutable_user_defined() {
+  ::substrait::ParameterizedType_ParameterizedUserDefined* _msg = _internal_mutable_user_defined();
+  // @@protoc_insertion_point(field_mutable:substrait.ParameterizedType.user_defined)
+  return _msg;
+}
+
+// uint32 user_defined_pointer = 31 [deprecated = true];
 inline bool ParameterizedType::_internal_has_user_defined_pointer() const {
   return kind_case() == kUserDefinedPointer;
 }
@@ -6402,6 +6735,8 @@ inline ParameterizedType::KindCase ParameterizedType::kind_case() const {
 #ifdef __GNUC__
   #pragma GCC diagnostic pop
 #endif  // __GNUC__
+// -------------------------------------------------------------------
+
 // -------------------------------------------------------------------
 
 // -------------------------------------------------------------------

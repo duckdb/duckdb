@@ -44,6 +44,7 @@ void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_
 	proto_host_port_out = url.substr(0, slash_pos);
 
 	path_out = url.substr(slash_pos);
+
 	if (path_out.empty()) {
 		throw std::runtime_error("URL needs to contain a path");
 	}
@@ -158,7 +159,8 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 				    out_offset = 0;
 				    auto content_length = std::stoll(response.get_header_value("Content-Length", 0));
 				    if ((idx_t)content_length != buffer_out_len) {
-					    throw std::runtime_error("offset error");
+					    throw std::runtime_error("HTTP GET error: Content-Length from server mismatches requested "
+					                             "range, server may not support range requests.");
 				    }
 			    }
 			    return true;

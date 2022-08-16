@@ -1,18 +1,9 @@
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
-
-template <class T>
-static inline bool ValueEqualsOrNot(const T &left, const T &right) {
-	return left == right;
-}
-
-template <>
-inline bool ValueEqualsOrNot(const string_t &left, const string_t &right) {
-	return StringComparisonOperators::EqualsOrNot<false>(left, right);
-}
 
 struct ContainsFunctor {
 	static inline bool Initialize() {
@@ -53,15 +44,15 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 	auto list_size = ListVector::GetListSize(list);
 	auto &child_vector = ListVector::GetEntry(list);
 
-	VectorData child_data;
-	child_vector.Orrify(list_size, child_data);
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(list_size, child_data);
 
-	VectorData list_data;
-	list.Orrify(count, list_data);
+	UnifiedVectorFormat list_data;
+	list.ToUnifiedFormat(count, list_data);
 	auto list_entries = (list_entry_t *)list_data.data;
 
-	VectorData value_data;
-	value_vector.Orrify(count, value_data);
+	UnifiedVectorFormat value_data;
+	value_vector.ToUnifiedFormat(count, value_data);
 
 	// not required for a comparison of nested types
 	auto child_value = FlatVector::GetData<CHILD_TYPE>(child_vector);
@@ -87,15 +78,16 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 			}
 
 			if (!is_nested) {
-				if (ValueEqualsOrNot<CHILD_TYPE>(child_value[child_value_idx], values[value_index])) {
+				if (Equals::Operation(child_value[child_value_idx], values[value_index])) {
 					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
 			} else {
 				// FIXME: using Value is less efficient than modifying the vector comparison code
 				// to more efficiently compare nested types
-				if (ValueEqualsOrNot<Value>(child_vector.GetValue(child_value_idx),
-				                            value_vector.GetValue(value_index))) {
+				auto lvalue = child_vector.GetValue(child_value_idx);
+				auto rvalue = value_vector.GetValue(value_index);
+				if (Value::NotDistinctFrom(lvalue, rvalue)) {
 					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
@@ -169,17 +161,7 @@ static unique_ptr<FunctionData> ListContainsOrPositionBind(ClientContext &contex
 
 	const auto &list = arguments[0]->return_type; // change to list
 	const auto &value = arguments[1]->return_type;
-	if (list.id() == LogicalTypeId::SQLNULL && value.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.arguments[1] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-	} else if (list.id() == LogicalTypeId::SQLNULL || value.id() == LogicalTypeId::SQLNULL) {
-		// In case either the list or the value is NULL, return NULL
-		// Similar to behaviour of prestoDB
-		bound_function.arguments[0] = list;
-		bound_function.arguments[1] = value;
-		bound_function.return_type = LogicalTypeId::SQLNULL;
-	} else if (list.id() == LogicalTypeId::UNKNOWN) {
+	if (list.id() == LogicalTypeId::UNKNOWN) {
 		bound_function.return_type = RETURN_TYPE;
 		if (value.id() != LogicalTypeId::UNKNOWN) {
 			// only list is a parameter, cast it to a list of value type
@@ -219,13 +201,13 @@ static unique_ptr<FunctionData> ListPositionBind(ClientContext &context, ScalarF
 ScalarFunction ListContainsFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, // argument list
 	                      LogicalType::BOOLEAN,                                    // return type
-	                      ListContainsFunction, false, false, ListContainsBind, nullptr);
+	                      ListContainsFunction, ListContainsBind, nullptr);
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, // argument list
 	                      LogicalType::INTEGER,                                    // return type
-	                      ListPositionFunction, false, false, ListPositionBind, nullptr);
+	                      ListPositionFunction, ListPositionBind, nullptr);
 }
 
 void ListContainsFun::RegisterFunction(BuiltinFunctions &set) {

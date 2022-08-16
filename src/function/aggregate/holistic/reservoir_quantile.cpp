@@ -315,17 +315,21 @@ AggregateFunction GetReservoirQuantileListAggregateFunction(const LogicalType &t
 }
 
 static double CheckReservoirQuantile(const Value &quantile_val) {
+	if (quantile_val.IsNull()) {
+		throw BinderException("RESERVOIR_QUANTILE QUANTILE parameter cannot be NULL");
+	}
 	auto quantile = quantile_val.GetValue<double>();
-
-	if (quantile_val.IsNull() || quantile < 0 || quantile > 1) {
+	if (quantile < 0 || quantile > 1) {
 		throw BinderException("RESERVOIR_QUANTILE can only take parameters in the range [0, 1]");
 	}
-
 	return quantile;
 }
 
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("RESERVOIR_QUANTILE can only take constant quantile parameters");
 	}
@@ -347,6 +351,9 @@ unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, Aggregate
 		throw BinderException("RESERVOIR_QUANTILE can only take constant sample size parameters");
 	}
 	Value sample_size_val = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+	if (sample_size_val.IsNull()) {
+		throw BinderException("Size of the RESERVOIR_QUANTILE sample cannot be NULL");
+	}
 	auto sample_size = sample_size_val.GetValue<int32_t>();
 
 	if (sample_size_val.IsNull() || sample_size <= 0) {

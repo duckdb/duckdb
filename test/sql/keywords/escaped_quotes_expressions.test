@@ -2,6 +2,9 @@
 # description: Test escaped quotes in expressions
 # group: [keywords]
 
+require skip_reload
+
+
 statement ok
 PRAGMA enable_verification;
 

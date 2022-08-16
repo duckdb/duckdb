@@ -2,6 +2,8 @@
 # description: Test parallel group by
 # group: [group]
 
+require skip_reload
+
 statement ok
 PRAGMA threads=4
 

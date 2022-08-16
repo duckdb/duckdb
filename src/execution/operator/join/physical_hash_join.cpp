@@ -45,6 +45,16 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 //===--------------------------------------------------------------------===//
 class HashJoinLocalState : public LocalSinkState {
 public:
+	HashJoinLocalState(Allocator &allocator, const PhysicalHashJoin &hj) : build_executor(allocator) {
+		if (!hj.right_projection_map.empty()) {
+			build_chunk.Initialize(allocator, hj.build_types);
+		}
+		for (auto &cond : hj.conditions) {
+			build_executor.AddExpression(*cond.right);
+		}
+		join_keys.Initialize(allocator, hj.condition_types);
+	}
+
 	DataChunk build_chunk;
 	DataChunk join_keys;
 	ExpressionExecutor build_executor;
@@ -52,7 +62,7 @@ public:
 
 class HashJoinGlobalState : public GlobalSinkState {
 public:
-	HashJoinGlobalState() {
+	HashJoinGlobalState() : scanned_data(false) {
 	}
 
 	//! The HT used by the join
@@ -61,6 +71,8 @@ public:
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 	//! Whether or not the hash table has been finalized
 	bool finalized = false;
+	//! Whether or not we have started scanning data using GetData
+	atomic<bool> scanned_data;
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -100,11 +112,12 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(move(aggr));
 
+			auto &allocator = Allocator::Get(context);
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
-			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
+			    allocator, BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
-			info.group_chunk.Initialize(delim_types);
-			info.result_chunk.Initialize(payload_types);
+			info.group_chunk.Initialize(allocator, delim_types);
+			info.result_chunk.Initialize(allocator, payload_types);
 		}
 	}
 	// for perfect hash join
@@ -114,14 +127,8 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 }
 
 unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_unique<HashJoinLocalState>();
-	if (!right_projection_map.empty()) {
-		state->build_chunk.Initialize(build_types);
-	}
-	for (auto &cond : conditions) {
-		state->build_executor.AddExpression(*cond.right);
-	}
-	state->join_keys.Initialize(condition_types);
+	auto &allocator = Allocator::Get(context.client);
+	auto state = make_unique<HashJoinLocalState>(allocator, *this);
 	return move(state);
 }
 
@@ -190,6 +197,9 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
+	explicit PhysicalHashJoinState(Allocator &allocator) : probe_executor(allocator) {
+	}
+
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
@@ -201,13 +211,14 @@ public:
 	}
 };
 
-unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &context) const {
-	auto state = make_unique<PhysicalHashJoinState>();
+unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
+	auto &allocator = Allocator::Get(context.client);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
+	auto state = make_unique<PhysicalHashJoinState>(allocator);
 	if (sink.perfect_join_executor) {
 		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 	} else {
-		state->join_keys.Initialize(condition_types);
+		state->join_keys.Initialize(allocator, condition_types);
 		for (auto &cond : conditions) {
 			state->probe_executor.AddExpression(*cond.left);
 		}
@@ -220,6 +231,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 	auto &state = (PhysicalHashJoinState &)state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	D_ASSERT(sink.finalized);
+	D_ASSERT(!sink.scanned_data);
 
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;
@@ -282,6 +294,7 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	auto &state = (HashJoinScanState &)gstate;
+	sink.scanned_data = true;
 	sink.hash_table->ScanFullOuter(chunk, state.ht_scan_state);
 }
 

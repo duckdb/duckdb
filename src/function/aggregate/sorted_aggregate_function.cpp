@@ -71,7 +71,8 @@ struct SortedAggregateBindData : public FunctionData {
 };
 
 struct SortedAggregateState {
-	SortedAggregateState() : nsel(0) {
+	SortedAggregateState()
+	    : arguments(Allocator::DefaultAllocator()), ordering(Allocator::DefaultAllocator()), nsel(0) {
 	}
 
 	ChunkCollection arguments;
@@ -136,8 +137,8 @@ struct SortedAggregateFunction {
 
 		// We have to scatter the chunks one at a time
 		// so build a selection vector for each one.
-		VectorData svdata;
-		states.Orrify(count, svdata);
+		UnifiedVectorFormat svdata;
+		states.ToUnifiedFormat(count, svdata);
 
 		// Build the selection vector for each state.
 		auto sdata = (SortedAggregateState **)svdata.data;

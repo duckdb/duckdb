@@ -324,9 +324,11 @@ SELECT ROUND(12::DECIMAL(3,0))
 statement error
 SELECT ROUND(12::DECIMAL(3,0), i) FROM range(1) tbl(i)
 
-# null precision is not supported
-statement error
+# null precision becomes null (postgres behavior)
+query T
 SELECT ROUND(12::DECIMAL(3,0), NULL)
+----
+NULL
 
 # different types for ROUND
 query III

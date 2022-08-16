@@ -73,6 +73,9 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
                                                         vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
+	if (arguments[1]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("List of paths must be constant");
 	}

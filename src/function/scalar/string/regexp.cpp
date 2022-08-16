@@ -159,6 +159,9 @@ static unique_ptr<FunctionData> RegexpMatchesBind(ClientContext &context, Scalar
 	RE2::Options options;
 	options.set_log_errors(false);
 	if (arguments.size() == 3) {
+		if (arguments[2]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
@@ -215,6 +218,9 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 	auto data = make_unique<RegexpReplaceBindData>();
 	data->options.set_log_errors(false);
 	if (arguments.size() == 4) {
+		if (arguments[3]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[3]->IsFoldable()) {
 			throw InvalidInputException("Regex options field must be a constant");
 		}
@@ -293,6 +299,9 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 
 	string group_string = "";
 	if (arguments.size() == 3) {
+		if (arguments[2]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Group index field field must be a constant!");
 		}
@@ -313,37 +322,41 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_full_match("regexp_full_match");
-	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                                             RegexpMatchesFunction<RegexFullMatch>, false, false, RegexpMatchesBind,
-	                                             nullptr, nullptr, RegexInitLocalState));
-	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                             LogicalType::BOOLEAN, RegexpMatchesFunction<RegexFullMatch>, false,
-	                                             false, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState));
+	regexp_full_match.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, RegexpMatchesFunction<RegexFullMatch>,
+	    RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_full_match.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	    RegexpMatchesFunction<RegexFullMatch>, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
 
 	ScalarFunctionSet regexp_partial_match("regexp_matches");
-	regexp_partial_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                                                RegexpMatchesFunction<RegexPartialMatch>, false, false,
-	                                                RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState));
-	regexp_partial_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                                LogicalType::BOOLEAN, RegexpMatchesFunction<RegexPartialMatch>,
-	                                                false, false, RegexpMatchesBind, nullptr, nullptr,
-	                                                RegexInitLocalState));
+	regexp_partial_match.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, RegexpMatchesFunction<RegexPartialMatch>,
+	    RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState, LogicalType::INVALID,
+	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_partial_match.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
+	    RegexpMatchesFunction<RegexPartialMatch>, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState,
+	    LogicalType::INVALID, FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
 
 	ScalarFunctionSet regexp_replace("regexp_replace");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                                          LogicalType::VARCHAR, RegexReplaceFunction, false, false,
-	                                          RegexReplaceBind));
+	                                          LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind));
 	regexp_replace.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                   LogicalType::VARCHAR, RegexReplaceFunction, false, false, RegexReplaceBind));
+	                   LogicalType::VARCHAR, RegexReplaceFunction, RegexReplaceBind));
 
 	ScalarFunctionSet regexp_extract("regexp_extract");
-	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                          RegexExtractFunction, false, false, RegexExtractBind, nullptr, nullptr,
-	                                          RegexExtractInitLocalState));
-	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER},
-	                                          LogicalType::VARCHAR, RegexExtractFunction, false, false,
-	                                          RegexExtractBind, nullptr, nullptr, RegexExtractInitLocalState));
+	regexp_extract.AddFunction(
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, RegexExtractFunction,
+	                   RegexExtractBind, nullptr, nullptr, RegexExtractInitLocalState, LogicalType::INVALID,
+	                   FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
+	regexp_extract.AddFunction(ScalarFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, RegexExtractFunction,
+	    RegexExtractBind, nullptr, nullptr, RegexExtractInitLocalState, LogicalType::INVALID,
+	    FunctionSideEffects::NO_SIDE_EFFECTS, FunctionNullHandling::SPECIAL_HANDLING));
 
 	set.AddFunction(regexp_full_match);
 	set.AddFunction(regexp_partial_match);

@@ -26,7 +26,6 @@ skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not f
 library(arrow, warn.conflicts = FALSE)
 library(dplyr, warn.conflicts = FALSE)
 library(duckdb)
-library("testthat")
 library("DBI")
 
 example_data <- dplyr::tibble(
@@ -41,10 +40,12 @@ example_data <- dplyr::tibble(
 
 test_that("to_duckdb", {
   ds <- InMemoryDataset$create(example_data)
+  con <- dbConnect(duckdb::duckdb())
 
+  dbExecute(con, "PRAGMA threads=1")
   expect_equal(
     ds %>%
-      to_duckdb() %>%
+      to_duckdb(con = con) %>%
       collect() %>%
       # factors don't roundtrip https://github.com/duckdb/duckdb/issues/1879
       select(!fct) %>%
@@ -57,16 +58,16 @@ test_that("to_duckdb", {
   expect_equal(
     ds %>%
       select(int, lgl, dbl) %>%
-      to_duckdb() %>%
+      to_duckdb(con = con) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(mean_int),
+      arrange(sum_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-      arrange(mean_int)
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      arrange(sum_int)
   )
 
   # can group_by before the to_duckdb
@@ -74,15 +75,15 @@ test_that("to_duckdb", {
     ds %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      to_duckdb() %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
+      to_duckdb(con = con) %>%
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
       collect() %>%
-      arrange(mean_int),
+      arrange(sum_int),
     example_data %>%
       select(int, lgl, dbl) %>%
       group_by(lgl) %>%
-      summarise(mean_int = mean(int, na.rm = TRUE), mean_dbl = mean(dbl, na.rm = TRUE)) %>%
-      arrange(mean_int)
+      summarise(sum_int = sum(int, na.rm = TRUE)) %>%
+      arrange(sum_int)
   )
 })
 
@@ -199,7 +200,7 @@ test_that("to_arrow roundtrip, with dataset", {
 # we need to create a connection separate from the ephemeral one that is made
 # with arrow_duck_connection()
 con <- dbConnect(duckdb::duckdb())
-dbExecute(con, "PRAGMA threads=2")
+dbExecute(con, "PRAGMA threads=1")
 on.exit(dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
 test_that("Joining, auto-cleanup enabled", {
@@ -224,7 +225,7 @@ test_that("Joining, auto-cleanup enabled", {
   expect_true(all(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
   rm(table_one, table_two)
   gc()
-  expect_false(any(c(table_one_name, table_two_name) %in% duckdb::duckdb_list_arrow(con)))
+  expect_false(any(c(table_one_name,     table_two_name) %in% duckdb::duckdb_list_arrow(con)))
 })
 
 test_that("Joining, auto-cleanup disabled", {

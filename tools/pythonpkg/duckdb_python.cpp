@@ -1,20 +1,17 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/parser/parser.hpp"
 
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
-#include "duckdb/parser/parser.hpp"
+#include "duckdb_python/exceptions.hpp"
 
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
-#include <random>
-#include <stdlib.h>
 
 #ifndef DUCKDB_PYTHON_LIB_NAME
 #define DUCKDB_PYTHON_LIB_NAME duckdb
@@ -80,6 +77,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
+	RegisterExceptions(m);
+
 	m.def("connect", &DuckDBPyConnection::Connect,
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
@@ -113,6 +112,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("proto"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("get_substrait", &DuckDBPyRelation::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
 	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("get_substrait_json", &DuckDBPyRelation::GetSubstraitJSON, "Serialize a query object to protobuf",
+	      py::arg("query"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
 	      py::arg("binary_as_string"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());

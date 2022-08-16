@@ -96,8 +96,8 @@ unique_ptr<BaseStatistics> StructInsertStats(ClientContext &context, FunctionSta
 
 void StructInsertFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, false, StructInsertBind,
-	                   nullptr, StructInsertStats);
+	ScalarFunction fun("struct_insert", {}, LogicalTypeId::STRUCT, StructInsertFunction, StructInsertBind, nullptr,
+	                   StructInsertStats);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }

@@ -4,6 +4,8 @@
 
 require test_helper
 
+require skip_reload
+
 statement ok
 CREATE TABLE hello(i INTEGER);
 

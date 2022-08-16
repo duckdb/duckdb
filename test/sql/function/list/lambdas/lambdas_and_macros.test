@@ -1,0 +1,41 @@
+# name: test/sql/function/list/lambdas/lambdas_and_macros.test
+# description: Test mixing lambdas and macros
+# group: [lambdas]
+
+statement ok
+PRAGMA enable_verification
+
+# conflicting column names
+statement ok
+create table test as select range i from range(3);
+
+# Error: Binder Error: Conflicting column names for column i!
+statement error
+create macro my_macro(i) as (select i in (select i from test));
+
+statement ok
+CREATE MACRO list_contains_macro(x, y) AS (list_contains(x, y))
+
+query I
+SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
+----
+[[1, 2, 3]]
+
+statement ok
+CREATE MACRO macro_with_lambda(list, num) AS (list_transform(list, x -> x + num))
+
+query I
+SELECT list_filter([[1, 2], NULL, [3], [4, NULL]], f -> list_count(macro_with_lambda(f, 2)) > 1)
+----
+[[1, 2]]
+
+statement error
+CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, x -> x + y + z))
+
+# this is a bit more tricky, because the operator mismatch is only detected when using the macro
+statement ok
+CREATE MACRO some_macro(x, y, z) AS (SELECT list_transform(x, a -> x + y + z))
+
+statement error
+SELECT some_macro([1, 2], 3, 4);
+

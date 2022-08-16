@@ -2,6 +2,8 @@
 # description: Test standard update behavior
 # group: [update]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 

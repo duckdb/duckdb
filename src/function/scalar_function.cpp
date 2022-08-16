@@ -6,21 +6,22 @@ FunctionLocalState::~FunctionLocalState() {
 }
 
 ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
-                               scalar_function_t function, bool has_side_effects, bind_scalar_function_t bind,
+                               scalar_function_t function, bind_scalar_function_t bind,
                                dependency_function_t dependency, function_statistics_t statistics,
-                               init_local_state_t init_local_state, LogicalType varargs, bool propagate_null_values)
-    : BaseScalarFunction(move(name), move(arguments), move(return_type), has_side_effects, move(varargs),
-                         propagate_null_values),
+                               init_local_state_t init_local_state, LogicalType varargs,
+                               FunctionSideEffects side_effects, FunctionNullHandling null_handling)
+    : BaseScalarFunction(move(name), move(arguments), move(return_type), side_effects, move(varargs), null_handling),
       function(move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
       statistics(statistics) {
 }
 
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-                               bool propagate_null_values, bool has_side_effects, bind_scalar_function_t bind,
-                               dependency_function_t dependency, function_statistics_t statistics,
-                               init_local_state_t init_local_state, LogicalType varargs)
-    : ScalarFunction(string(), move(arguments), move(return_type), move(function), has_side_effects, bind, dependency,
-                     statistics, init_local_state, move(varargs), propagate_null_values) {
+                               bind_scalar_function_t bind, dependency_function_t dependency,
+                               function_statistics_t statistics, init_local_state_t init_local_state,
+                               LogicalType varargs, FunctionSideEffects side_effects,
+                               FunctionNullHandling null_handling)
+    : ScalarFunction(string(), move(arguments), move(return_type), move(function), bind, dependency, statistics,
+                     init_local_state, move(varargs), side_effects, null_handling) {
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {

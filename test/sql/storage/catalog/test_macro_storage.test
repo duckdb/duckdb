@@ -2,6 +2,9 @@
 # description: Create and drop a macro over different runs
 # group: [catalog]
 
+require skip_reload
+
+
 # load the DB from disk
 load __TEST_DIR__/macro_storage.db
 

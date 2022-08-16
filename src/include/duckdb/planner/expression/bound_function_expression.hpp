@@ -21,7 +21,7 @@ public:
 	                        vector<unique_ptr<Expression>> arguments, unique_ptr<FunctionData> bind_info,
 	                        bool is_operator = false);
 
-	// The bound function expression
+	//! The bound function expression
 	ScalarFunction function;
 	//! List of child-expressions of the function
 	vector<unique_ptr<Expression>> children;

@@ -3,7 +3,8 @@
 \name{duckdb_prepare_substrait}
 \alias{duckdb_prepare_substrait}
 \title{Query DuckDB using Substrait
-TODO document this}
+Method for interpreting a Substrait BLOB plan as a DuckDB Query Plan
+It interprets and executes the query.}
 \usage{
 duckdb_prepare_substrait(conn, query, arrow = FALSE)
 }
@@ -19,5 +20,6 @@ A DuckDB Query Result
 }
 \description{
 Query DuckDB using Substrait
-TODO document this
+Method for interpreting a Substrait BLOB plan as a DuckDB Query Plan
+It interprets and executes the query.
 }

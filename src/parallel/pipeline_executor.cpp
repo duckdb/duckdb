@@ -20,9 +20,9 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
 		auto current_operator = pipeline.operators[i];
 		auto chunk = make_unique<DataChunk>();
-		chunk->Initialize(prev_operator->GetTypes());
+		chunk->Initialize(Allocator::Get(context.client), prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
-		intermediate_states.push_back(current_operator->GetOperatorState(context.client));
+		intermediate_states.push_back(current_operator->GetOperatorState(context));
 		if (can_cache_in_pipeline && current_operator->RequiresCache()) {
 			auto &cache_types = current_operator->GetTypes();
 			bool can_cache = true;
@@ -36,7 +36,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 				continue;
 			}
 			cached_chunks[i] = make_unique<DataChunk>();
-			cached_chunks[i]->Initialize(current_operator->GetTypes());
+			cached_chunks[i]->Initialize(Allocator::Get(context.client), current_operator->GetTypes());
 		}
 		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
@@ -184,7 +184,7 @@ void PipelineExecutor::CacheChunk(DataChunk &current_chunk, idx_t operator_idx) 
 			if (chunk_cache.size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD)) {
 				// chunk cache full: return it
 				current_chunk.Move(chunk_cache);
-				chunk_cache.Initialize(pipeline.operators[operator_idx]->GetTypes());
+				chunk_cache.Initialize(Allocator::Get(context.client), pipeline.operators[operator_idx]->GetTypes());
 			} else {
 				// chunk cache not full: probe again
 				current_chunk.Reset();
@@ -345,7 +345,7 @@ void PipelineExecutor::FetchFromSource(DataChunk &result) {
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 	PhysicalOperator *last_op = pipeline.operators.empty() ? pipeline.source : pipeline.operators.back();
-	chunk.Initialize(last_op->GetTypes());
+	chunk.Initialize(Allocator::DefaultAllocator(), last_op->GetTypes());
 }
 
 void PipelineExecutor::StartOperator(PhysicalOperator *op) {

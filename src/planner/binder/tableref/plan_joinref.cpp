@@ -161,12 +161,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition))) {
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
-		auto cross_product = make_unique<LogicalCrossProduct>();
-
-		cross_product->AddChild(move(left));
-		cross_product->AddChild(move(right));
-
-		unique_ptr<LogicalOperator> root = move(cross_product);
+		auto root = LogicalCrossProduct::Create(move(left), move(right));
 
 		auto filter = make_unique<LogicalFilter>(move(ref.condition));
 		// visit the expressions in the filter

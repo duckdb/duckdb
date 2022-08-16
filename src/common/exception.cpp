@@ -100,6 +100,10 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Out of Memory";
 	case ExceptionType::PERMISSION:
 		return "Permission";
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		return "Parameter Not Resolved";
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		return "Parameter Not Allowed";
 	default:
 		return "Unknown";
 	}
@@ -209,16 +213,24 @@ SequenceException::SequenceException(const string &msg) : Exception(ExceptionTyp
 InterruptException::InterruptException() : Exception(ExceptionType::INTERRUPT, "Interrupted!") {
 }
 
-FatalException::FatalException(const string &msg) : Exception(ExceptionType::FATAL, msg) {
+FatalException::FatalException(ExceptionType type, const string &msg) : Exception(type, msg) {
 }
 
-InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
+InternalException::InternalException(const string &msg) : FatalException(ExceptionType::INTERNAL, msg) {
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
 OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {
+}
+
+ParameterNotAllowedException::ParameterNotAllowedException(const string &msg)
+    : StandardException(ExceptionType::PARAMETER_NOT_ALLOWED, msg) {
+}
+
+ParameterNotResolvedException::ParameterNotResolvedException()
+    : Exception(ExceptionType::PARAMETER_NOT_RESOLVED, "Parameter types could not be resolved") {
 }
 
 } // namespace duckdb

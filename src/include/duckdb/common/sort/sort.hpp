@@ -81,7 +81,7 @@ public:
 
 	//! Pinned heap data (if sorting in memory)
 	vector<RowDataBlock> heap_blocks;
-	vector<unique_ptr<BufferHandle>> pinned_blocks;
+	vector<BufferHandle> pinned_blocks;
 
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t block_capacity;
@@ -107,10 +107,10 @@ public:
 	idx_t SizeInBytes() const;
 	//! Sort the data accumulated so far
 	void Sort(GlobalSortState &global_sort_state, bool reorder_heap);
+	//! Concatenate the blocks held by a RowDataCollection into a single block
+	static RowDataBlock ConcatenateBlocks(RowDataCollection &row_data);
 
 private:
-	//! Concatenate the blocks held by a RowDataCollection into a single block
-	RowDataBlock ConcatenateBlocks(RowDataCollection &row_data);
 	//! Sorts the data in the newly created SortedBlock
 	void SortInMemory();
 	//! Re-order the local state after sorting

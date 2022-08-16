@@ -8,9 +8,14 @@ using namespace duckdb;
 
 namespace duckdb {
 static bool test_force_storage = false;
+static bool test_force_reload = false;
 
 bool TestForceStorage() {
 	return test_force_storage;
+}
+
+bool TestForceReload() {
+	return test_force_reload;
 }
 
 } // namespace duckdb
@@ -23,6 +28,8 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
+		} else if (string(argv[i]) == "--force-reload") {
+			test_force_reload = true;
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
 		} else {

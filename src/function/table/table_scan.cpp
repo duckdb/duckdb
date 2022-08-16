@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/main/client_config.hpp"
 
 #include "duckdb/common/mutex.hpp"
 
@@ -51,7 +52,7 @@ struct TableScanGlobalState : public GlobalTableFunctionState {
 	}
 };
 
-static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &context, TableFunctionInitInput &input,
+static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                               GlobalTableFunctionState *gstate) {
 	auto result = make_unique<TableScanLocalState>();
 	auto &bind_data = (TableScanBindData &)*input.bind_data;
@@ -61,7 +62,7 @@ static unique_ptr<LocalTableFunctionState> TableScanInitLocal(ClientContext &con
 		col = storage_idx;
 	}
 	result->scan_state.table_filters = input.filters;
-	TableScanParallelStateNext(context, input.bind_data, result.get(), gstate);
+	TableScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
 	return move(result);
 }
 
@@ -223,6 +224,11 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	auto table = bind_data.table;
 	auto &storage = *table->storage;
 
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_optimizer) {
+		// we only push index scans if the optimizer is enabled
+		return;
+	}
 	if (bind_data.is_index_scan) {
 		return;
 	}
@@ -335,6 +341,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
+				get.function.name = "index_scan";
 				get.function.init_local = nullptr;
 				get.function.init_global = IndexScanInitGlobal;
 				get.function.function = IndexScanFunction;

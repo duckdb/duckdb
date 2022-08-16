@@ -5,6 +5,10 @@
 # note: query verification is disabled for these queries
 # because running the same query multiple times with a sequence does not result in the same answer
 # create a sequence
+
+require skip_reload
+
+
 statement ok
 CREATE SEQUENCE seq;
 
@@ -478,3 +482,30 @@ CREATE SEQUENCE fresh;
 
 statement error
 select currval('fresh');
+
+# convert inputs into varchar if that's not the case
+statement error
+select nextval(1 + 1);
+
+statement error
+select currval(true);
+
+# max value specified more than once
+statement error
+CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
+
+# min value specified more than once
+statement error
+CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
+
+# start value specified more than once
+statement error
+CREATE SEQUENCE wrongseq START 13 START WITH 3;
+
+# cycle value specified more than once
+statement error
+CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
+
+# increment value specified more than once
+statement error
+CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;

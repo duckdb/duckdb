@@ -4,14 +4,14 @@
 
 namespace duckdb {
 
-PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager,
+PerfectAggregateHashTable::PerfectAggregateHashTable(Allocator &allocator, BufferManager &buffer_manager,
                                                      const vector<LogicalType> &group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), addresses(LogicalType::POINTER),
-      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)),
-      sel(STANDARD_VECTOR_SIZE) {
+    : BaseAggregateHashTable(allocator, aggregate_objects_p, buffer_manager, move(payload_types_p)),
+      addresses(LogicalType::POINTER), required_bits(move(required_bits_p)), total_required_bits(0),
+      group_minima(move(group_minima_p)), sel(STANDARD_VECTOR_SIZE) {
 	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}
@@ -36,7 +36,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 }
 
 template <class T>
-static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, uintptr_t *address_data,
+static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
 	auto data = (T *)group_data.data;
 	auto min_val = min.GetValueUnsafe<T>();
@@ -64,8 +64,8 @@ static void ComputeGroupLocationTemplated(VectorData &group_data, Value &min, ui
 }
 
 static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_data, idx_t current_shift, idx_t count) {
-	VectorData vdata;
-	group.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	group.ToUnifiedFormat(count, vdata);
 
 	switch (group.GetType().InternalType()) {
 	case PhysicalType::INT8:
@@ -119,10 +119,12 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
 	auto &aggregates = layout.GetAggregates();
-	for (auto &aggregate : aggregates) {
+	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
+		auto &aggregate = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
-			RowOperations::UpdateFilteredStates(aggregate, addresses, payload, payload_idx);
+			RowOperations::UpdateFilteredStates(filter_set.GetFilterData(aggr_idx), aggregate, addresses, payload,
+			                                    payload_idx);
 		} else {
 			RowOperations::UpdateStates(aggregate, addresses, payload, payload_idx, payload.size());
 		}

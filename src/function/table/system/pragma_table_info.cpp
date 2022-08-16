@@ -6,6 +6,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -29,6 +30,7 @@ struct PragmaTableOperatorData : public GlobalTableFunctionState {
 
 static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
+
 	names.emplace_back("cid");
 	return_types.emplace_back(LogicalType::INTEGER);
 

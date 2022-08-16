@@ -11,7 +11,7 @@ void ExpressionState::AddChild(Expression *expr) {
 
 void ExpressionState::Finalize() {
 	if (!types.empty()) {
-		intermediate_chunk.Initialize(types);
+		intermediate_chunk.Initialize(root.executor->allocator, types);
 	}
 }
 ExpressionState::ExpressionState(const Expression &expr, ExpressionExecutorState &root)

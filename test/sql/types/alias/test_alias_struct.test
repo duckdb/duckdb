@@ -2,6 +2,8 @@
 # description: Test creates alias for struct type
 # group: [alias]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
@@ -15,12 +17,12 @@ statement ok
 INSERT INTO a VALUES ({'i': 3, 'j': 4});
 
 query I
-SELECT * FROM a ORDER BY (b).i;
+SELECT * FROM a;
 ----
 {'i': 3, 'j': 4}
 
 query I
-SELECT * FROM a ORDER BY (b).i;
+SELECT * FROM a;
 ----
 {'i': 3, 'j': 4}
 
@@ -28,34 +30,34 @@ statement ok
 INSERT INTO a VALUES (NULL);
 
 query I
-SELECT * FROM a ORDER BY (b).i;
+SELECT * FROM a;
 ----
-NULL
 {'i': 3, 'j': 4}
+NULL
 
 # unnamed struct
 statement ok
 INSERT INTO a VALUES (ROW(2, 3));
 
 query I
-SELECT * FROM a ORDER BY (b).i;
+SELECT * FROM a;
 ----
+{'i': 3, 'j': 4}
 NULL
 {'i': 2, 'j': 3}
-{'i': 3, 'j': 4}
 
 # null values in children
 statement ok
 INSERT INTO a VALUES (ROW(3, NULL)), (ROW(NULL, 4));
 
 query I
-SELECT * FROM a ORDER BY (b).i, (b).j;
+SELECT * FROM a;
 ----
+{'i': 3, 'j': 4}
 NULL
-{'i': NULL, 'j': 4}
 {'i': 2, 'j': 3}
 {'i': 3, 'j': NULL}
-{'i': 3, 'j': 4}
+{'i': NULL, 'j': 4}
 
 # incorrect number of struct entries
 statement error

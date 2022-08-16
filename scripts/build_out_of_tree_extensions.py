@@ -11,7 +11,7 @@ import sys
 parser = argparse.ArgumentParser(description='Builds out-of-tree extensions for DuckDB')
 
 parser.add_argument('--extensions', action='store',
-                    help='CSV file with DuckDB extensions to build', default=".github/workflows/extensions.csv")
+                    help='CSV file with DuckDB extensions to build', default=".github/config/extensions.csv")
 
 
 args = parser.parse_args()
@@ -49,10 +49,12 @@ basedir = os.getcwd()
 for task in tasks:
     print(task)
     clonedir = task['name'] + "_clone"
-    exec('git clone %s %s' % (task['url'], clonedir))
+    if not os.path.isdir(clonedir):
+        exec('git clone %s %s' % (task['url'], clonedir))
     os.chdir(clonedir)
     exec('git checkout %s' % (task['commit']))
     os.chdir(basedir)
     os.environ['BUILD_OUT_OF_TREE_EXTENSION'] = clonedir
+    print(f"Building extension \"{task['name']}\" from URL \"{task['url']}\" at commit \"{task['commit']}\" at clonedir \"{clonedir}\"")
     exec('make')
 print("done")

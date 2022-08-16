@@ -1,10 +1,11 @@
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
 
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 #include "datetime.h" // from Python
 #include "duckdb/main/connection_manager.hpp"
@@ -28,6 +30,7 @@ namespace duckdb {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 unordered_map<string, weak_ptr<DuckDB>> db_instances;
+shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
@@ -82,8 +85,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"), py::arg("rows_per_thread") = 1000000)
-	    .def("df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df (alias of from_df)",
-	         py::arg("df"))
+	    .def("df", &DuckDBPyConnection::FromDF,
+	         "Create a relation object from the Data.Frame in df. This is an alias of from_df", py::arg("df"))
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
@@ -92,10 +95,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
-	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
-	         py::arg("config") = py::dict())
+	    .def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
@@ -104,6 +108,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
 
 	PyDateTime_IMPORT;
+	DuckDBPyConnection::ImportCache();
 }
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
@@ -114,13 +119,7 @@ DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::obj
 static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query) {
 	PendingExecutionResult execution_result;
 	do {
-		{
-			py::gil_scoped_release release;
-			execution_result = pending_query.ExecuteTask();
-		}
-		if (PyErr_CheckSignals() != 0) {
-			throw std::runtime_error("Query interrupted");
-		}
+		execution_result = pending_query.ExecuteTask();
 	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		throw std::runtime_error(pending_query.error);
@@ -135,7 +134,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	result = nullptr;
 	unique_ptr<PreparedStatement> prep;
 	{
-		auto cur_py_connection_lock = AcquireConnectionLock();
+		py::gil_scoped_release release;
+		unique_lock<std::mutex> lock(py_connection_lock);
 
 		auto statements = connection->ExtractStatements(query);
 		if (statements.empty()) {
@@ -176,7 +176,8 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		auto res = make_unique<DuckDBPyResult>();
 		{
-			auto cur_py_connection_lock = AcquireConnectionLock();
+			py::gil_scoped_release release;
+			unique_lock<std::mutex> lock(py_connection_lock);
 			auto pending_query = prep->PendingQuery(args);
 			res->result = CompletePendingQuery(*pending_query);
 
@@ -192,7 +193,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, py::object value) {
+DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
@@ -320,7 +321,7 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const py::object &value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -401,6 +402,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	vector<Value> params;
+	params.emplace_back(query);
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
+}
+
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
@@ -454,11 +464,11 @@ void DuckDBPyConnection::Close() {
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
-	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
+	ExtensionHelper::InstallExtension(*connection->context, extension, force_install);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
-	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
+	ExtensionHelper::LoadExternalExtension(*connection->context, extension);
 }
 
 // cursor() is stupid
@@ -491,28 +501,28 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
-py::object DuckDBPyConnection::FetchDF() {
+DataFrame DuckDBPyConnection::FetchDF() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDF();
 }
 
-py::object DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
+DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
-py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchArrowTable(chunk_size);
 }
 
-py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
@@ -592,11 +602,11 @@ string GetDBAbsolutePath(const string &database) {
 
 bool IsConfigurationSame(ClientContext *context, DBConfig &config, const py::dict &config_dict, bool read_only) {
 	if (read_only) {
-		if (config.access_mode != AccessMode::READ_ONLY) {
+		if (config.options.access_mode != AccessMode::READ_ONLY) {
 			return false;
 		}
 	} else {
-		if (config.access_mode == AccessMode::READ_ONLY) {
+		if (config.options.access_mode == AccessMode::READ_ONLY) {
 			return false;
 		}
 	}
@@ -616,7 +626,7 @@ shared_ptr<DuckDB> DuckDBPyConnection::GetDBInstance(const string &database, con
 	DBConfig config;
 	auto abs_path = GetDBAbsolutePath(database);
 	if (read_only) {
-		config.access_mode = AccessMode::READ_ONLY;
+		config.options.access_mode = AccessMode::READ_ONLY;
 	}
 	for (auto &kv : config_dict) {
 		string key = py::str(kv.first);
@@ -628,7 +638,7 @@ shared_ptr<DuckDB> DuckDBPyConnection::GetDBInstance(const string &database, con
 		config.SetOption(*config_property, Value(val));
 	}
 
-	if (config.enable_external_access) {
+	if (config.options.enable_external_access) {
 		config.replacement_scans.emplace_back(ScanReplacement);
 	}
 	if (abs_path == ":memory:") {
@@ -663,6 +673,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	res->database = GetDBInstance(database, config_dict, read_only, new_instance);
 	res->connection = make_unique<Connection>(*res->database);
 
+
 	auto &context = *res->connection->context;
 	if (new_instance) {
 		PandasScanFunction scan_fun;
@@ -674,80 +685,28 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		catalog.CreateTableFunction(context, &scan_info);
 		catalog.CreateTableFunction(context, &map_info);
 		context.transaction.Commit();
+		auto &db_config = res->database->instance->config;
+		db_config.AddExtensionOption("pandas_analyze_sample",
+	                             "The maximum number of rows to sample when analyzing a pandas object column.",
+	                             LogicalType::UBIGINT);
+		db_config.options.set_variables["pandas_analyze_sample"] = Value::UBIGINT(1000);
+
 	}
+
+	PandasScanFunction scan_fun;
+	CreateTableFunctionInfo scan_info(scan_fun);
+
+	MapFunction map_fun;
+	CreateTableFunctionInfo map_info(map_fun);
+
+	auto &catalog = Catalog::GetCatalog(context);
+	context.transaction.BeginTransaction();
+	catalog.CreateTableFunction(context, &scan_info);
+	catalog.CreateTableFunction(context, &map_info);
+
+	context.transaction.Commit();
 
 	return res;
-}
-
-Value TransformPythonValue(py::handle ele) {
-	auto datetime_mod = py::module::import("datetime");
-	auto datetime_date = datetime_mod.attr("date");
-	auto datetime_datetime = datetime_mod.attr("datetime");
-	auto datetime_time = datetime_mod.attr("time");
-	auto decimal_mod = py::module::import("decimal");
-	auto decimal_decimal = decimal_mod.attr("Decimal");
-
-	if (ele.is_none()) {
-		return Value();
-	} else if (py::isinstance<py::bool_>(ele)) {
-		return Value::BOOLEAN(ele.cast<bool>());
-	} else if (py::isinstance<py::int_>(ele)) {
-		return Value::BIGINT(ele.cast<int64_t>());
-	} else if (py::isinstance<py::float_>(ele)) {
-		return Value::DOUBLE(ele.cast<double>());
-	} else if (py::isinstance(ele, decimal_decimal)) {
-		return py::str(ele).cast<string>();
-	} else if (py::isinstance(ele, datetime_datetime)) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		auto hour = PyDateTime_DATE_GET_HOUR(ptr);
-		auto minute = PyDateTime_DATE_GET_MINUTE(ptr);
-		auto second = PyDateTime_DATE_GET_SECOND(ptr);
-		auto micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-		return Value::TIMESTAMP(year, month, day, hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_time)) {
-		auto ptr = ele.ptr();
-		auto hour = PyDateTime_TIME_GET_HOUR(ptr);
-		auto minute = PyDateTime_TIME_GET_MINUTE(ptr);
-		auto second = PyDateTime_TIME_GET_SECOND(ptr);
-		auto micros = PyDateTime_TIME_GET_MICROSECOND(ptr);
-		return Value::TIME(hour, minute, second, micros);
-	} else if (py::isinstance(ele, datetime_date)) {
-		auto ptr = ele.ptr();
-		auto year = PyDateTime_GET_YEAR(ptr);
-		auto month = PyDateTime_GET_MONTH(ptr);
-		auto day = PyDateTime_GET_DAY(ptr);
-		return Value::DATE(year, month, day);
-	} else if (py::isinstance<py::str>(ele)) {
-		return ele.cast<string>();
-	} else if (py::isinstance<py::memoryview>(ele)) {
-		py::memoryview py_view = ele.cast<py::memoryview>();
-		PyObject *py_view_ptr = py_view.ptr();
-		Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
-		return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
-	} else if (py::isinstance<py::bytes>(ele)) {
-		const string &ele_string = ele.cast<string>();
-		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
-	} else if (py::isinstance<py::list>(ele)) {
-		auto size = py::len(ele);
-
-		if (size == 0) {
-			return Value::EMPTYLIST(LogicalType::SQLNULL);
-		}
-
-		vector<Value> values;
-		values.reserve(size);
-
-		for (auto py_val : ele) {
-			values.emplace_back(TransformPythonValue(py_val));
-		}
-
-		return Value::LIST(values);
-	} else {
-		throw std::runtime_error("unknown param type " + py::str(ele.get_type()).cast<string>());
-	}
 }
 
 vector<Value> DuckDBPyConnection::TransformPythonParamList(py::handle params) {
@@ -768,9 +727,15 @@ DuckDBPyConnection *DuckDBPyConnection::DefaultConnection() {
 	return default_connection.get();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
-                                                         bool read_only, const py::dict &config) {
-	return self.Connect(database, read_only, config);
+PythonImportCache *DuckDBPyConnection::ImportCache() {
+	if (!import_cache) {
+		import_cache = make_shared<PythonImportCache>();
+	}
+	return import_cache.get();
+}
+
+DuckDBPyConnection *DuckDBPyConnection::Enter() {
+	return this;
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
@@ -781,6 +746,7 @@ bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_ty
 
 void DuckDBPyConnection::Cleanup() {
 	default_connection.reset();
+	import_cache.reset();
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(string &py_object_type) {

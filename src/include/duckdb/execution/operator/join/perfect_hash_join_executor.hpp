@@ -41,7 +41,7 @@ public:
 public:
 	bool CanDoPerfectHashJoin();
 
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context);
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context);
 	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                                         OperatorState &state);
 	bool BuildPerfectHashTable(LogicalType &type);

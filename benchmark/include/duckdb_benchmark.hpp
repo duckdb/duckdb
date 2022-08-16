@@ -25,10 +25,27 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 	unique_ptr<QueryResult> result;
 
 	DuckDBBenchmarkState(string path) : db(path.empty() ? nullptr : path.c_str()), conn(db) {
-		conn.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = conn.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(res->success);
+		string profiling_mode;
+		switch (instance.configuration.profile_info) {
+		case BenchmarkProfileInfo::NONE:
+			profiling_mode = "";
+			break;
+		case BenchmarkProfileInfo::NORMAL:
+			profiling_mode = "standard";
+			break;
+		case BenchmarkProfileInfo::DETAILED:
+			profiling_mode = "detailed";
+			break;
+		default:
+			throw InternalException("Unknown profiling option \"%s\"", instance.configuration.profile_info);
+		}
+		if (!profiling_mode.empty()) {
+			res = conn.Query("PRAGMA profiling_mode=" + profiling_mode);
+			D_ASSERT(res->success);
+		}
 	}
 	virtual ~DuckDBBenchmarkState() {
 	}

@@ -36,6 +36,7 @@ struct CreateInfo;
 struct BoundCreateTableInfo;
 struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
+struct BoundParameterMap;
 
 enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
 
@@ -45,8 +46,11 @@ struct CorrelatedColumnInfo {
 	string name;
 	idx_t depth;
 
+	CorrelatedColumnInfo(ColumnBinding binding, LogicalType type_p, string name_p, idx_t depth)
+	    : binding(binding), type(move(type_p)), name(move(name_p)), depth(depth) {
+	}
 	explicit CorrelatedColumnInfo(BoundColumnRefExpression &expr)
-	    : binding(expr.binding), type(expr.return_type), name(expr.GetName()), depth(expr.depth) {
+	    : CorrelatedColumnInfo(expr.binding, expr.return_type, expr.GetName(), expr.depth) {
 	}
 
 	bool operator==(const CorrelatedColumnInfo &rhs) const {
@@ -80,15 +84,15 @@ public:
 	//! vector)
 	vector<CorrelatedColumnInfo> correlated_columns;
 	//! The set of parameter expressions bound by this binder
-	vector<BoundParameterExpression *> *parameters;
-	//! The types of the prepared statement parameters, if any
-	vector<LogicalType> *parameter_types;
+	BoundParameterMap *parameters;
 	//! Statement properties
 	StatementProperties properties;
 	//! The alias for the currently processing subquery, if it exists
 	string alias;
 	//! Macro parameter bindings (if any)
-	MacroBinding *macro_binding = nullptr;
+	DummyBinding *macro_binding = nullptr;
+	//! The intermediate lambda bindings to bind nested lambdas (if any)
+	vector<DummyBinding> *lambda_bindings = nullptr;
 
 public:
 	BoundStatement Bind(SQLStatement &statement);
@@ -159,6 +163,8 @@ public:
 	void AddTableName(string table_name);
 	const unordered_set<string> &GetTableNames();
 
+	void SetCanContainNulls(bool can_contain_nulls);
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -204,6 +210,8 @@ private:
 	BoundStatement Bind(CreateStatement &stmt);
 	BoundStatement Bind(DropStatement &stmt);
 	BoundStatement Bind(AlterStatement &stmt);
+	BoundStatement Bind(PrepareStatement &stmt);
+	BoundStatement Bind(ExecuteStatement &stmt);
 	BoundStatement Bind(TransactionStatement &stmt);
 	BoundStatement Bind(PragmaStatement &stmt);
 	BoundStatement Bind(ExplainStatement &stmt);

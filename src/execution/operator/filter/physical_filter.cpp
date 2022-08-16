@@ -22,7 +22,8 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 
 class FilterState : public OperatorState {
 public:
-	explicit FilterState(Expression &expr) : executor(expr), sel(STANDARD_VECTOR_SIZE) {
+	explicit FilterState(ExecutionContext &context, Expression &expr)
+	    : executor(Allocator::Get(context.client), expr), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;
@@ -34,8 +35,8 @@ public:
 	}
 };
 
-unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ClientContext &context) const {
-	return make_unique<FilterState>(*expression);
+unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &context) const {
+	return make_unique<FilterState>(context, *expression);
 }
 
 OperatorResultType PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

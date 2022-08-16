@@ -8,6 +8,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
@@ -60,6 +61,9 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 
 	result = prepared->Execute(1);
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
+
+	// no prepared statement
+	REQUIRE_FAIL(con.SendQuery("SELECT ?"));
 }
 
 TEST_CASE("Test prepared statements and dependencies", "[api]") {
@@ -130,9 +134,9 @@ TEST_CASE("Alter table and prepared statements", "[api]") {
 	// we can alter the type of the column
 	REQUIRE_NO_FAIL(con2.Query("ALTER TABLE a ALTER i TYPE BIGINT USING i"));
 
-	// after the table is altered, the return types change, so we fail executing the statement
-	REQUIRE_FAIL(prepared->Execute(12));
-	REQUIRE_FAIL(prepared->Execute(12));
+	// after the table is altered, the return types change, but the rebind is still successful
+	result = prepared->Execute(12);
+	REQUIRE(CHECK_COLUMN(result, 0, {12}));
 }
 
 TEST_CASE("Test destructors of prepared statements", "[api]") {
@@ -273,9 +277,6 @@ TEST_CASE("Test prepared statement parameter counting", "[api]") {
 	auto p4 = con.Prepare("SELECT $1::int, $2::string");
 	REQUIRE(p4->success);
 	REQUIRE(p4->n_param == 2);
-
-	auto p5 = con.Prepare("SELECT $2::int, $2::string");
-	REQUIRE(!p5->success);
 }
 
 TEST_CASE("Test ANALYZE", "[api]") {

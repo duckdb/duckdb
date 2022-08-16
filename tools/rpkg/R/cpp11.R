@@ -16,8 +16,8 @@ rapi_shutdown <- function(dbsexp) {
   invisible(.Call(`_duckdb_rapi_shutdown`, dbsexp))
 }
 
-rapi_register_df <- function(conn, name, value) {
-  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value))
+rapi_register_df <- function(conn, name, value, integer64) {
+  invisible(.Call(`_duckdb_rapi_register_df`, conn, name, value, integer64))
 }
 
 rapi_unregister_df <- function(conn, name) {
@@ -120,6 +120,10 @@ rapi_get_substrait <- function(conn, query) {
   .Call(`_duckdb_rapi_get_substrait`, conn, query)
 }
 
+rapi_get_substrait_json <- function(conn, query) {
+  .Call(`_duckdb_rapi_get_substrait_json`, conn, query)
+}
+
 rapi_prepare_substrait <- function(conn, query) {
   .Call(`_duckdb_rapi_prepare_substrait`, conn, query)
 }
@@ -128,8 +132,8 @@ rapi_prepare <- function(conn, query) {
   .Call(`_duckdb_rapi_prepare`, conn, query)
 }
 
-rapi_bind <- function(stmt, params, arrow) {
-  .Call(`_duckdb_rapi_bind`, stmt, params, arrow)
+rapi_bind <- function(stmt, params, arrow, integer64) {
+  .Call(`_duckdb_rapi_bind`, stmt, params, arrow, integer64)
 }
 
 rapi_execute_arrow <- function(qry_res, chunk_size) {
@@ -140,8 +144,8 @@ rapi_record_batch <- function(qry_res, chunk_size) {
   .Call(`_duckdb_rapi_record_batch`, qry_res, chunk_size)
 }
 
-rapi_execute <- function(stmt, arrow) {
-  .Call(`_duckdb_rapi_execute`, stmt, arrow)
+rapi_execute <- function(stmt, arrow, integer64) {
+  .Call(`_duckdb_rapi_execute`, stmt, arrow, integer64)
 }
 
 rapi_ptr_to_str <- function(extptr) {

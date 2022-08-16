@@ -5,6 +5,7 @@
 
 #include "boolean_column_reader.hpp"
 #include "cast_column_reader.hpp"
+#include "generated_column_reader.hpp"
 #include "callback_column_reader.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "list_column_reader.hpp"
@@ -44,7 +45,6 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
       type(move(type_p)), page_rows_available(0) {
 
 	// dummies for Skip()
-	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 }
@@ -687,7 +687,7 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), read_cache(ListType::GetChildType(Type())),
+      child_column_reader(move(child_column_reader_p)), read_cache(reader.allocator, ListType::GetChildType(Type())),
       read_vector(read_cache), overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -698,17 +698,44 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_filter.set();
 }
 
-// ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
-//                             Vector &result_out)
 void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
-	parquet_filter_t filter;
 	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	Vector result_out(Type());
-	Read(num_values, filter, define_out.get(), repeat_out.get(), result_out);
+
+	idx_t remaining = num_values;
+	idx_t read = 0;
+
+	while (remaining) {
+		Vector result_out(Type());
+		parquet_filter_t filter;
+		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
+		read += Read(to_read, filter, define_out.get(), repeat_out.get(), result_out);
+		remaining -= to_read;
+	}
+
+	if (read != num_values) {
+		throw InternalException("Not all skips done!");
+	}
 }
+
+//===--------------------------------------------------------------------===//
+// Generated Constant Column Reader
+//===--------------------------------------------------------------------===//
+GeneratedConstantColumnReader::GeneratedConstantColumnReader(ParquetReader &reader, LogicalType type_p,
+                                                             const SchemaElement &schema_p, idx_t schema_idx_p,
+                                                             idx_t max_define_p, idx_t max_repeat_p, Value constant_p)
+    : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      constant(move(constant_p)) {
+}
+idx_t GeneratedConstantColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out,
+                                          uint8_t *repeat_out, Vector &result) {
+	result.SetValue(0, constant);
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	return num_values;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
@@ -717,7 +744,7 @@ CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, Logi
                    child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
       child_reader(move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
-	intermediate_chunk.Initialize(intermediate_types);
+	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
 unique_ptr<BaseStatistics> CastColumnReader::Stats(const std::vector<ColumnChunk> &columns) {
@@ -738,7 +765,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	if (!filter.all()) {
 		// work-around for filters: set all values that are filtered to NULL to prevent the cast from failing on
 		// uninitialized data
-		intermediate_vector.Normalify(amount);
+		intermediate_vector.Flatten(amount);
 		auto &validity = FlatVector::Validity(intermediate_vector);
 		for (idx_t i = 0; i < amount; i++) {
 			if (!filter[i]) {

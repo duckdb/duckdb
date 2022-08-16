@@ -2,6 +2,7 @@
 
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]
+environment = "PIP_CONSTRAINT='build-constraints.txt'"
 before-build = 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
 before-test = 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy "psutil>=5.9.0" google-cloud-storage && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==8.0" || true) && (pip install --prefer-binary "ibis-framework[duckdb]" || true) && (pip install --prefer-binary "ibis-substrait"  || true)'
 test-requires = 'pytest'
@@ -15,4 +16,7 @@ test-command = "python -m pytest {project}/tests/fast"
 # For 32 bit we don't build extensions
 [[tool.cibuildwheel.overrides]]
 select = "*i686*"
+test-command = "python -m pytest {project}/tests/fast"
+
+[tool.cibuildwheel.windows]
 test-command = "python -m pytest {project}/tests/fast"

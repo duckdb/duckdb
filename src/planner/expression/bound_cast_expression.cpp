@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_default_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/function/cast_rules.hpp"
 
 namespace duckdb {
 
@@ -9,30 +10,67 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
       try_cast(try_cast_p) {
 }
 
+unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
+                                                 bool try_cast) {
+	if (expr->return_type == target_type) {
+		return expr;
+	}
+	auto &expr_type = expr->return_type;
+	if (target_type.id() == LogicalTypeId::LIST && expr_type.id() == LogicalTypeId::LIST) {
+		auto &target_list = ListType::GetChildType(target_type);
+		auto &expr_list = ListType::GetChildType(expr_type);
+		if (target_list.id() == LogicalTypeId::ANY || expr_list == target_list) {
+			return expr;
+		}
+	}
+	return make_unique<BoundCastExpression>(move(expr), target_type, try_cast);
+}
+
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                           bool try_cast) {
 	D_ASSERT(expr);
 	if (expr->expression_class == ExpressionClass::BOUND_PARAMETER) {
 		auto &parameter = (BoundParameterExpression &)*expr;
+		if (!target_type.IsValid()) {
+			// invalidate the parameter
+			parameter.parameter_data->return_type = LogicalType::INVALID;
+			parameter.return_type = target_type;
+			return expr;
+		}
+		if (parameter.parameter_data->return_type.id() == LogicalTypeId::INVALID) {
+			// we don't know the type of this parameter
+			parameter.return_type = target_type;
+			return expr;
+		}
+		if (parameter.parameter_data->return_type.id() == LogicalTypeId::UNKNOWN) {
+			// prepared statement parameter cast - but there is no type, convert the type
+			parameter.parameter_data->return_type = target_type;
+			parameter.return_type = target_type;
+			return expr;
+		}
+		// prepared statement parameter already has a type
+		if (parameter.parameter_data->return_type == target_type) {
+			// this type! we are done
+			parameter.return_type = parameter.parameter_data->return_type;
+			return expr;
+		}
+		// invalidate the type
+		parameter.parameter_data->return_type = LogicalType::INVALID;
 		parameter.return_type = target_type;
+		return expr;
 	} else if (expr->expression_class == ExpressionClass::BOUND_DEFAULT) {
+		D_ASSERT(target_type.IsValid());
 		auto &def = (BoundDefaultExpression &)*expr;
 		def.return_type = target_type;
-	} else if (expr->return_type != target_type) {
-		auto &expr_type = expr->return_type;
-		if (target_type.id() == LogicalTypeId::LIST && expr_type.id() == LogicalTypeId::LIST) {
-			auto &target_list = ListType::GetChildType(target_type);
-			auto &expr_list = ListType::GetChildType(expr_type);
-			if (target_list.id() == LogicalTypeId::ANY || expr_list == target_list) {
-				return expr;
-			}
-		}
-		return make_unique<BoundCastExpression>(move(expr), target_type, try_cast);
 	}
-	return expr;
+	if (!target_type.IsValid()) {
+		return expr;
+	}
+	return AddCastExpressionInternal(move(expr), target_type, try_cast);
 }
 
 bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const LogicalType &target_type) {
+	D_ASSERT(source_type.IsValid() && target_type.IsValid());
 	if (source_type.id() == LogicalTypeId::BOOLEAN || target_type.id() == LogicalTypeId::BOOLEAN) {
 		return false;
 	}

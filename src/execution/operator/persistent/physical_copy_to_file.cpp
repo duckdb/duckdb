@@ -47,7 +47,7 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkSta
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
 	g.rows_copied += input.size();
-	function.copy_to_sink(context.client, *bind_data, *g.global_state, *l.local_state, input);
+	function.copy_to_sink(context, *bind_data, *g.global_state, *l.local_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -56,7 +56,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
 	if (function.copy_to_combine) {
-		function.copy_to_combine(context.client, *bind_data, *g.global_state, *l.local_state);
+		function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 	}
 }
 
@@ -74,7 +74,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 }
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context.client, *bind_data));
+	return make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 }
 unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));

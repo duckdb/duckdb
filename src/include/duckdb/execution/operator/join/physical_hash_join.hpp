@@ -41,7 +41,7 @@ public:
 
 public:
 	// Operator Interface
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 

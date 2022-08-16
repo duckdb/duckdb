@@ -21,7 +21,9 @@ class LogicalPrepare : public LogicalOperator {
 public:
 	LogicalPrepare(string name, shared_ptr<PreparedStatementData> prepared, unique_ptr<LogicalOperator> logical_plan)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_PREPARE), name(name), prepared(move(prepared)) {
-		children.push_back(move(logical_plan));
+		if (logical_plan) {
+			children.push_back(move(logical_plan));
+		}
 	}
 
 	string name;

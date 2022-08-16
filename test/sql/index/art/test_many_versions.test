@@ -2,6 +2,9 @@
 # description: Test ART index creation with many versions
 # group: [art]
 
+statement ok
+PRAGMA enable_verification
+
 # insert the values [1...20001]
 statement ok con1
 CREATE TABLE integers(i INTEGER)

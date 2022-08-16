@@ -31,6 +31,7 @@ static void test_in_memory_initialization(string dbdir) {
 	REQUIRE(!fs->DirectoryExists(dbdir));
 
 	// clean up
+	con.reset();
 	db.reset();
 
 	// make sure to clean up the database & temporary folder

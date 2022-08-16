@@ -42,6 +42,9 @@ public:
 
 	virtual void ExecuteInternal() = 0;
 	void Execute();
+
+private:
+	void RestartDatabase(Connection *&connection, string sql_query);
 };
 
 class Statement : public Command {
@@ -71,7 +74,6 @@ public:
 class RestartCommand : public Command {
 public:
 	RestartCommand(SQLLogicTestRunner &runner);
-
 	void ExecuteInternal() override;
 };
 

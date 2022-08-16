@@ -1,3 +1,4 @@
+add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(operator)
@@ -8,11 +9,15 @@ add_subdirectory(types)
 add_subdirectory(value_operations)
 add_subdirectory(vector_operations)
 
+if(${EXIT_TIME_DESTRUCTORS_WARNING})
+  set(CMAKE_CXX_FLAGS_DEBUG
+      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
+endif()
+
 add_library_unity(
   duckdb_common
   OBJECT
   allocator.cpp
-  arrow_wrapper.cpp
   assert.cpp
   compressed_file_system.cpp
   constants.cpp
@@ -24,6 +29,7 @@ add_library_unity(
   file_buffer.cpp
   file_system.cpp
   gzip_file_system.cpp
+  hive_partitioning.cpp
   pipe_file_system.cpp
   limits.cpp
   local_file_system.cpp

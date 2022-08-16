@@ -22,6 +22,7 @@ public:
 	//! Turns the JoinCondition into an expression; note that this destroys the JoinCondition as the expression inherits
 	//! the left/right expressions
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
+	static unique_ptr<Expression> CreateExpression(vector<JoinCondition> conditions);
 
 public:
 	unique_ptr<Expression> left;

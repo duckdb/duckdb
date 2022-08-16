@@ -23,7 +23,7 @@ namespace duckdb {
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY TO is disabled by configuration");
 	}
 	BoundStatement result;
@@ -65,7 +65,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.enable_external_access) {
+	if (!config.options.enable_external_access) {
 		throw PermissionException("COPY FROM is disabled by configuration");
 	}
 	BoundStatement result;

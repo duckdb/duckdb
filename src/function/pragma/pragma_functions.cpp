@@ -16,8 +16,8 @@ namespace duckdb {
 
 static void PragmaEnableProfilingStatement(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	config.enable_profiler = true;
+	config.emit_profiler_output = true;
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {
@@ -31,7 +31,6 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.enable_profiler = false;
-	config.profiler_print_format = ProfilerPrintFormat::NONE;
 }
 
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
@@ -67,7 +66,7 @@ static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionPar
 }
 
 static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).force_checkpoint = true;
+	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
 
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
@@ -75,19 +74,19 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 }
 
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).object_cache_enable = true;
+	DBConfig::GetConfig(context).options.object_cache_enable = true;
 }
 
 static void PragmaDisableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).object_cache_enable = false;
+	DBConfig::GetConfig(context).options.object_cache_enable = false;
 }
 
 static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).checkpoint_on_shutdown = true;
+	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = true;
 }
 
 static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
-	DBConfig::GetConfig(context).checkpoint_on_shutdown = false;
+	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {

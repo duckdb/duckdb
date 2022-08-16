@@ -37,7 +37,7 @@ public:
 private:
 	SQLRETURN SetValue(idx_t rec_idx);
 	void SetValue(Value &value, idx_t val_idx);
-	Value GetNextValue();
+	Value GetNextValue(idx_t val_idx);
 	SQLRETURN SetParamIndex();
 	SQLRETURN PutCharData(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
 	                      SQLLEN str_len_or_ind_ptr);

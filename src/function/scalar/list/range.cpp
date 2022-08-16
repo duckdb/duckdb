@@ -114,16 +114,16 @@ public:
 	explicit RangeInfoStruct(DataChunk &args_p) : args(args_p) {
 		switch (args.ColumnCount()) {
 		case 1:
-			args.data[0].Orrify(args.size(), vdata[0]);
+			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
 			break;
 		case 2:
-			args.data[0].Orrify(args.size(), vdata[0]);
-			args.data[1].Orrify(args.size(), vdata[1]);
+			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
 			break;
 		case 3:
-			args.data[0].Orrify(args.size(), vdata[0]);
-			args.data[1].Orrify(args.size(), vdata[1]);
-			args.data[2].Orrify(args.size(), vdata[2]);
+			args.data[0].ToUnifiedFormat(args.size(), vdata[0]);
+			args.data[1].ToUnifiedFormat(args.size(), vdata[1]);
+			args.data[2].ToUnifiedFormat(args.size(), vdata[2]);
 			break;
 		default:
 			throw InternalException("Unsupported number of parameters for range");
@@ -184,7 +184,7 @@ public:
 
 private:
 	DataChunk &args;
-	VectorData vdata[3];
+	UnifiedVectorFormat vdata[3];
 };
 
 template <class OP, bool INCLUSIVE_BOUND>

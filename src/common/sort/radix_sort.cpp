@@ -39,12 +39,12 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	// Re-order
 	auto temp_block =
 	    buffer_manager.Allocate(MaxValue((end - start) * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-	data_ptr_t temp_ptr = temp_block->Ptr();
+	data_ptr_t temp_ptr = temp_block.Ptr();
 	for (idx_t i = 0; i < end - start; i++) {
 		FastMemcpy(temp_ptr, entry_ptrs[i], sort_layout.entry_size);
 		temp_ptr += sort_layout.entry_size;
 	}
-	memcpy(dataptr + start * sort_layout.entry_size, temp_block->Ptr(), (end - start) * sort_layout.entry_size);
+	memcpy(dataptr + start * sort_layout.entry_size, temp_block.Ptr(), (end - start) * sort_layout.entry_size);
 	// Determine if there are still ties (if this is not the last column)
 	if (tie_col < sort_layout.column_count - 1) {
 		data_ptr_t idx_ptr = dataptr + start * sort_layout.entry_size + sort_layout.comparison_size;
@@ -66,7 +66,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *
 	D_ASSERT(!ties[count - 1]);
 	auto &blob_block = sb.blob_sorting_data->data_blocks.back();
 	auto blob_handle = buffer_manager.Pin(blob_block.block);
-	const data_ptr_t blob_ptr = blob_handle->Ptr();
+	const data_ptr_t blob_ptr = blob_handle.Ptr();
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!ties[i]) {
@@ -117,8 +117,8 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 		// Init counts to 0
 		memset(counts, 0, sizeof(counts));
 		// Const some values for convenience
-		const data_ptr_t source_ptr = swap ? temp_block->Ptr() : dataptr;
-		const data_ptr_t target_ptr = swap ? dataptr : temp_block->Ptr();
+		const data_ptr_t source_ptr = swap ? temp_block.Ptr() : dataptr;
+		const data_ptr_t target_ptr = swap ? dataptr : temp_block.Ptr();
 		const idx_t offset = col_offset + sorting_size - r;
 		// Collect counts
 		data_ptr_t offset_ptr = source_ptr + offset;
@@ -146,7 +146,7 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 	}
 	// Move data back to original buffer (if it was swapped)
 	if (swap) {
-		memcpy(dataptr, temp_block->Ptr(), count * row_width);
+		memcpy(dataptr, temp_block.Ptr(), count * row_width);
 	}
 }
 
@@ -245,7 +245,7 @@ void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const i
 	} else {
 		auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
 		auto preallocated_array = unique_ptr<idx_t[]>(new idx_t[sorting_size * SortConstants::MSD_RADIX_LOCATIONS]);
-		RadixSortMSD(dataptr, temp_block->Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
+		RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
 		             preallocated_array.get(), false);
 	}
 }
@@ -276,7 +276,7 @@ void LocalSortState::SortInMemory() {
 	auto &block = sb.radix_sorting_data.back();
 	const auto &count = block.count;
 	auto handle = buffer_manager->Pin(block.block);
-	const auto dataptr = handle->Ptr();
+	const auto dataptr = handle.Ptr();
 	// Assign an index to each row
 	data_ptr_t idx_dataptr = dataptr + sort_layout->comparison_size;
 	for (uint32_t i = 0; i < count; i++) {

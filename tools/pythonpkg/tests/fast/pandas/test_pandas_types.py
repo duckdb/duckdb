@@ -49,6 +49,19 @@ class TestPandasTypes(object):
         assert df_out['object'][2] == df_in['object'][2]
         assert numpy.isnan(df_out['object'][3])
 
+    def test_pandas_float64(self):
+        data = numpy.array([0.233, numpy.nan, 3456.2341231, float('-inf'), -23424.45345, float('+inf'), 0.0000000001])
+        df_in = pd.DataFrame({
+            'object': pd.Series(data, dtype='float64'),
+        })
+        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+        
+        for i in range(len(data)):
+            if (numpy.isnan(df_out['object'][i])):
+                assert(i == 1)
+                continue
+            assert df_out['object'][i] == df_in['object'][i]
+
     def test_pandas_interval(self, duckdb_cursor):
         if pd. __version__ != '1.2.4':
             return
@@ -69,6 +82,6 @@ class TestPandasTypes(object):
         expected_result = data[0]
         df_in = pd.DataFrame({'object': pd.Series(data, dtype='object')})
         result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
-        assert result == str(expected_result)
+        assert result == expected_result
 
 

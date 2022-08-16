@@ -3,7 +3,7 @@
 \name{duckdb_get_substrait}
 \alias{duckdb_get_substrait}
 \title{Get the Substrait plan for a SQL query
-TODO document this}
+Transforms a SQL query into a raw vector containing the serialized Substrait query blob}
 \usage{
 duckdb_get_substrait(conn, query)
 }
@@ -17,5 +17,5 @@ A raw vector containing the substrait protobuf blob
 }
 \description{
 Get the Substrait plan for a SQL query
-TODO document this
+Transforms a SQL query into a raw vector containing the serialized Substrait query blob
 }

@@ -2,6 +2,9 @@
 # description: PREPARE for DELETE/UPDATE
 # group: [prepared]
 
+require skip_reload
+
+
 # DELETE
 statement ok
 CREATE TABLE b (i TINYINT)

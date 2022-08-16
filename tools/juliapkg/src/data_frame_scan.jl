@@ -119,6 +119,10 @@ function df_bind_function(info::DuckDB.BindInfo)
     extra_data = DuckDB.get_extra_data(info)
     df = extra_data[name]
 
+    # set the cardinality
+    row_count::UInt64 = size(df, 1)
+    DuckDB.set_stats_cardinality(info, row_count, true)
+
     # register the result columns
     input_columns = Vector()
     scan_types::Vector{Type} = Vector()

@@ -613,7 +613,7 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
 		if (offset > 0) {
 			Vector sliced_vector(update_chunk.data[i], offset);
-			sliced_vector.Normalify(count);
+			sliced_vector.Flatten(count);
 			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
 		} else {
 			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
@@ -641,14 +641,22 @@ unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) {
 	return stats[column_idx]->statistics->Copy();
 }
 
-void RowGroup::MergeStatistics(idx_t column_idx, BaseStatistics &other) {
+void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 	D_ASSERT(column_idx < stats.size());
 
 	lock_guard<mutex> slock(stats_lock);
 	stats[column_idx]->statistics->Merge(other);
 }
 
+void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
+	D_ASSERT(column_idx < stats.size());
+
+	lock_guard<mutex> slock(stats_lock);
+	other.Merge(*stats[column_idx]->statistics);
+}
+
 RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats) {
+	RowGroupPointer row_group_pointer;
 	vector<unique_ptr<ColumnCheckpointState>> states;
 	states.reserve(columns.size());
 
@@ -663,22 +671,21 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 		D_ASSERT(stats);
 
 		global_stats[column_idx]->Merge(*stats);
+		row_group_pointer.statistics.push_back(move(stats));
 		states.push_back(move(checkpoint_state));
 	}
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(states.size() == columns.size());
-	RowGroupPointer row_group_pointer;
 	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	for (auto &state : states) {
 		// get the current position of the meta data writer
-		auto &meta_writer = writer.GetMetaWriter();
+		auto &meta_writer = writer.GetTableWriter();
 		auto pointer = meta_writer.GetBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
-		row_group_pointer.statistics.push_back(state->GetStatistics());
 
 		// now flush the actual column data to disk
 		state->FlushToDisk();

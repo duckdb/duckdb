@@ -433,7 +433,7 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 	}
 
 	// Try to allocate a buffer from the buffer manager
-	unique_ptr<BufferHandle> duckdb_buffer;
+	BufferHandle duckdb_buffer;
 	bool set_waiting_for_memory = false;
 
 	while (true) {
@@ -466,8 +466,8 @@ std::shared_ptr<S3WriteBuffer> S3FileSystem::GetBuffer(S3FileHandle &file_handle
 		}
 	}
 
-	auto new_write_buffer =
-	    make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size, duckdb_buffer);
+	auto new_write_buffer = make_shared<S3WriteBuffer>(write_buffer_idx * file_handle.part_size, file_handle.part_size,
+	                                                   move(duckdb_buffer));
 
 	{
 		std::unique_lock<std::mutex> lck(file_handle.write_buffers_lock);

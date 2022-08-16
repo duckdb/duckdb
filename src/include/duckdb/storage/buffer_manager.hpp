@@ -16,6 +16,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/buffer/managed_buffer.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -46,12 +47,12 @@ public:
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	DUCKDB_API unique_ptr<BufferHandle> Allocate(idx_t block_size);
+	DUCKDB_API BufferHandle Allocate(idx_t block_size);
 
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size);
 
-	unique_ptr<BufferHandle> Pin(shared_ptr<BlockHandle> &handle);
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle);
 	void Unpin(shared_ptr<BlockHandle> &handle);
 
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
@@ -76,10 +77,14 @@ public:
 
 	void SetTemporaryDirectory(string new_dir);
 
+	DUCKDB_API Allocator &GetBufferAllocator();
+
 private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
-	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit);
+	//! If the "buffer" argument is specified AND the system can find a buffer to re-use for the given allocation size
+	//! "buffer" will be made to point to the re-usable memory. Note that this is not guaranteed.
+	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Garbage collect eviction queue
 	void PurgeQueue();
@@ -87,7 +92,7 @@ private:
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(ManagedBuffer &buffer);
 	//! Read a temporary buffer from disk
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id);
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> buffer = nullptr);
 	//! Get the path of the temporary buffer
 	string GetTemporaryPath(block_id_t id);
 
@@ -98,6 +103,11 @@ private:
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 	string InMemoryWarning();
+
+	static data_ptr_t BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size);
+	static void BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+	static data_ptr_t BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
+	                                         idx_t size);
 
 private:
 	//! The database instance
@@ -122,5 +132,7 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+	//! Allocator associated with the buffer manager, that passes all allocations through this buffer manager
+	Allocator buffer_allocator;
 };
 } // namespace duckdb

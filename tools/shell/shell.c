@@ -295,7 +295,7 @@ static void endTimer(void){
     sqlite3_int64 iEnd = timeOfDay();
     struct rusage sEnd;
     getrusage(RUSAGE_SELF, &sEnd);
-    printf("Run Time: real %.3f user %f sys %f\n",
+    printf("Run Time (s): real %.3f user %f sys %f\n",
        (iEnd - iBegin)*0.001,
        timeDiff(&sBegin.ru_utime, &sEnd.ru_utime),
        timeDiff(&sBegin.ru_stime, &sEnd.ru_stime));
@@ -374,7 +374,7 @@ static void endTimer(void){
     FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
     sqlite3_int64 ftWallEnd = timeOfDay();
     getProcessTimesAddr(hProcess,&ftCreation,&ftExit,&ftKernelEnd,&ftUserEnd);
-    printf("Run Time: real %.3f user %f sys %f\n",
+    printf("Run Time (s): real %.3f user %f sys %f\n",
        (ftWallEnd - ftWallBegin)*0.001,
        timeDiff(&ftUserBegin, &ftUserEnd),
        timeDiff(&ftKernelBegin, &ftKernelEnd));
@@ -10808,6 +10808,7 @@ struct ShellState {
 #define MODE_Box     16  /* Unicode box-drawing characters */
 #define MODE_Latex   17  /* Latex tabular formatting */
 #define MODE_Trash   18  /* Discard output */
+#define MODE_Jsonlines 19  /* Output JSON Lines */
 
 static const char *modeDescr[] = {
   "line",
@@ -10828,7 +10829,8 @@ static const char *modeDescr[] = {
   "table",
   "box",
   "latex",
-  "trash"
+  "trash",
+    "jsonlines"
 };
 
 /*
@@ -11822,12 +11824,19 @@ static int shell_callback(
       raw_printf(p->out,");\n");
       break;
     }
-    case MODE_Json: {
+    case MODE_Json:
+	case MODE_Jsonlines: {
       if( azArg==0 ) break;
       if( p->cnt==0 ){
-        fputs("[{", p->out);
+        if (p->cMode == MODE_Json) {
+          fputc('[', p->out);
+        }
+        fputc('{', p->out);
       }else{
-        fputs(",\n{", p->out);
+        if (p->cMode == MODE_Json) {
+          fputc(',', p->out);
+        }
+        fputs("\n{", p->out);
       }
       p->cnt++;
       for(i=0; i<nArg; i++){
@@ -12938,6 +12947,9 @@ static void exec_prepared_stmt(
       sqlite3_free(pData);
       if( pArg->cMode==MODE_Json ){
         fputs("]\n", pArg->out);
+      }
+      if( pArg->cMode==MODE_Jsonlines ){
+        fputs("\n", pArg->out);
       }
     }
   }
@@ -18251,6 +18263,8 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Latex;
     }else if( c2=='t' && strncmp(azArg[1],"trash",n2)==0 ){
       p->mode = MODE_Trash;
+	}else if( c2=='j' && strncmp(azArg[1],"jsonlines",n2)==0 ){
+		p->mode = MODE_Jsonlines;
     }else if( nArg==1 ){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
@@ -20275,7 +20289,7 @@ static const char zOptions[] =
 #endif
   "   -newline SEP         set output row separator. Default: '\\n'\n"
   "   -nofollow            refuse to open symbolic links to database files\n"
-  "   -no-stdin            exit after processing options instead of reading stdin"
+  "   -no-stdin            exit after processing options instead of reading stdin\n"
   "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
   "   -pagecache SIZE N    use N slots of SZ bytes each for page cache memory\n"
   "   -quote               set output mode to 'quote'\n"
@@ -20287,6 +20301,7 @@ static const char zOptions[] =
 #endif
   "   -stats               print memory stats before each finalize\n"
   "   -table               set output mode to 'table'\n"
+  "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
   "   -vfs NAME            use NAME as the default VFS\n"
 #ifdef SQLITE_ENABLE_VFSTRACE
@@ -20692,6 +20707,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.mode = MODE_Column;
     }else if( strcmp(z,"-json")==0 ){
       data.mode = MODE_Json;
+	}else if( strcmp(z,"-jsonlines")==0 ){
+		data.mode = MODE_Jsonlines;
     }else if( strcmp(z,"-markdown")==0 ){
       data.mode = MODE_Markdown;
     }else if( strcmp(z,"-table")==0 ){
@@ -20748,6 +20765,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.statsOn = 1;
     }else if( strcmp(z,"-scanstats")==0 ){
       data.scanstatsOn = 1;
+    }else if( strcmp(z,"-unsigned")==0 ){
+      data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
     }else if( strcmp(z,"-backslash")==0 ){
       /* Undocumented command-line option: -backslash
       ** Causes C-style backslash escapes to be evaluated in SQL statements
@@ -20759,6 +20778,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       bail_on_error = 1;
     }else if( strcmp(z,"-version")==0 ){
       printf("%s %s\n", sqlite3_libversion(), sqlite3_sourceid());
+      free(azCmd);
       return 0;
     }else if( strcmp(z,"-interactive")==0 ){
       stdin_is_interactive = 1;
@@ -20804,16 +20824,26 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       z = cmdline_option_value(argc,argv,++i);
       if( z[0]=='.' ){
         rc = do_meta_command(z, &data);
-        if( rc && bail_on_error ) return rc==2 ? 0 : rc;
+        if( rc && bail_on_error ){
+          free(azCmd);
+          return rc==2 ? 0 : rc;
+        }
       }else{
         open_db(&data, 0);
         rc = shell_exec(&data, z, &zErrMsg);
         if( zErrMsg!=0 ){
           utf8_printf(stderr,"Error: %s\n", zErrMsg);
-          if( bail_on_error ) return rc!=0 ? rc : 1;
+          sqlite3_free(zErrMsg);
+          if( bail_on_error ){
+            free(azCmd);
+            return rc!=0 ? rc : 1;
+          }
         }else if( rc!=0 ){
           utf8_printf(stderr,"Error: unable to process SQL \"%s\"\n", z);
-          if( bail_on_error ) return rc;
+          if( bail_on_error ){
+            free(azCmd);
+            return rc;
+          }
         }
       }
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_HAVE_ZLIB)
@@ -20821,6 +20851,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       if( nCmd>0 ){
         utf8_printf(stderr, "Error: cannot mix regular SQL or dot-commands"
                             " with \"%s\"\n", z);
+        free(azCmd);
         return 1;
       }
       open_db(&data, OPEN_DB_ZIPFILE);
@@ -20836,6 +20867,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     }else{
       utf8_printf(stderr,"%s: Error: unknown option: %s\n", Argv0, z);
       raw_printf(stderr,"Use -help for a list of options.\n");
+      free(azCmd);
       return 1;
     }
     data.cMode = data.mode;
@@ -20849,15 +20881,21 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
     for(i=0; i<nCmd; i++){
       if( azCmd[i][0]=='.' ){
         rc = do_meta_command(azCmd[i], &data);
-        if( rc ) return rc==2 ? 0 : rc;
+        if( rc ){
+          free(azCmd);
+          return rc==2 ? 0 : rc;
+        }
       }else{
         open_db(&data, 0);
         rc = shell_exec(&data, azCmd[i], &zErrMsg);
         if( zErrMsg!=0 ){
           utf8_printf(stderr,"Error: %s\n", zErrMsg);
+          sqlite3_free(zErrMsg);
+          free(azCmd);
           return rc!=0 ? rc : 1;
         }else if( rc!=0 ){
           utf8_printf(stderr,"Error: unable to process SQL: %s\n", azCmd[i]);
+          free(azCmd);
           return rc;
         }
       }

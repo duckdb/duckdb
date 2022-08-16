@@ -21,7 +21,7 @@ TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &
 
 void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
-	D_ASSERT(columns.size() > 0);
+	D_ASSERT(!columns.empty());
 
 	// deserialize the total table statistics
 	info.data->column_stats.reserve(columns.size());

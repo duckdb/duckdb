@@ -62,7 +62,7 @@ enum ReturnContentType { JSON, BSON, CBOR, MESSAGE_PACK, UBJSON };
 
 template <class T, class TARGET>
 static void assign_json_loop(Vector &v, idx_t col_idx, idx_t count, json &j) {
-	v.Normalify(count);
+	v.Flatten(count);
 	auto data_ptr = FlatVector::GetData<T>(v);
 	auto &mask = FlatVector::Validity(v);
 	for (idx_t i = 0; i < count; i++) {
@@ -83,7 +83,7 @@ static void assign_json_string_loop(Vector &v, idx_t col_idx, idx_t count, json 
 	} else {
 		result_vector = &v;
 	}
-	result_vector->Normalify(count);
+	result_vector->Flatten(count);
 	auto data_ptr = FlatVector::GetData<string_t>(*result_vector);
 	auto &mask = FlatVector::Validity(*result_vector);
 	for (idx_t i = 0; i < count; i++) {
@@ -255,9 +255,9 @@ int main(int argc, char **argv) {
 			print_help();
 			exit(0);
 		} else if (arg == "--read_only") {
-			config.access_mode = AccessMode::READ_ONLY;
+			config.options.access_mode = AccessMode::READ_ONLY;
 		} else if (arg == "--disable_copy") {
-			config.enable_external_access = false;
+			config.options.enable_external_access = false;
 		} else if (StringUtil::StartsWith(arg, "--database=")) {
 			auto splits = StringUtil::Split(arg, '=');
 			if (splits.size() != 2) {
@@ -326,7 +326,7 @@ int main(int argc, char **argv) {
 		logfile.open(logfile_name, std::ios_base::app);
 	}
 
-	config.maximum_memory = 10737418240;
+	config.options.maximum_memory = 10737418240;
 
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
 

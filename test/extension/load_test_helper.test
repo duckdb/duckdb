@@ -4,6 +4,8 @@
 
 require test_helper
 
+require skip_reload
+
 query I
 SELECT test_helper_hello();
 ----
