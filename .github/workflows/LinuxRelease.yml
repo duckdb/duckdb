@@ -64,11 +64,24 @@ jobs:
       run: |
         make
 
-    - name: Test
+    - name: Test AMD64
       shell: bash
       if: ${{ matrix.arch == 'amd64' }}
       run: |
         make allunit
+
+    - name: Set up QEMU
+      if: ${{ matrix.arch == 'aarch64' }}
+      uses: docker/setup-qemu-action@v2
+      with:
+        platforms: arm64
+
+    - name: Test AARCH64
+      shell: bash
+      if: ${{ matrix.arch == 'aarch64' }}
+      run: |
+        docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" arm64v8/ubuntu:18.04 /duckdb_dir/build/release/test/unittest --test-dir /duckdb_dir
+        docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir"  arm64v8/openjdk java -cp /duckdb_dir/build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Tools Tests
       shell: bash
