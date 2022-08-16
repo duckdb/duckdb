@@ -2,12 +2,12 @@ name: CodeQuality
 on:
   push:
     paths-ignore:
-      - '**.md'
+      - "**.md"
   pull_request:
     paths-ignore:
-      - '**.md'
-      - '.github/workflows/**'
-      - '!.github/workflows/CodeQuality.yml'
+      - "**.md"
+      - ".github/workflows/**"
+      - "!.github/workflows/CodeQuality.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -45,7 +45,6 @@ jobs:
           clang-format --version
           clang-format --dump-config
           make format-check-silent
-
 
   tidy-check:
     name: Tidy Check
@@ -115,7 +114,7 @@ jobs:
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Before Install
         shell: bash
@@ -144,7 +143,6 @@ jobs:
           build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
           python tools/shell/shell-test.py build/coverage/duckdb
-
 
       - name: Generate Coverage
         shell: bash

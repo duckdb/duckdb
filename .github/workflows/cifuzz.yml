@@ -11,24 +11,24 @@ jobs:
     if: github.repository == 'duckdb/duckdb'
     runs-on: ubuntu-latest
     steps:
-    - name: Build Fuzzers
-      id: build
-      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
-      with:
-        oss-fuzz-project-name: 'duckdb'
-        dry-run: false
-    - name: Run Fuzzers
-      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
-      with:
-        oss-fuzz-project-name: 'duckdb'
-        fuzz-seconds: 600
-        dry-run: false
-    - name: Upload Crash
-      uses: actions/upload-artifact@v1
-      if: failure() && steps.build.outcome == 'success'
-      with:
-        name: artifacts
-        path: ./out/artifacts
+      - name: Build Fuzzers
+        id: build
+        uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master
+        with:
+          oss-fuzz-project-name: "duckdb"
+          dry-run: false
+      - name: Run Fuzzers
+        uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
+        with:
+          oss-fuzz-project-name: "duckdb"
+          fuzz-seconds: 600
+          dry-run: false
+      - name: Upload Crash
+        uses: actions/upload-artifact@v1
+        if: failure() && steps.build.outcome == 'success'
+        with:
+          name: artifacts
+          path: ./out/artifacts
 
   sqlsmith-fuzzing:
     name: SQLSmith Fuzzing
@@ -54,12 +54,12 @@ jobs:
       - name: Build
         shell: bash
         run: |
-            make debug
+          make debug
 
       - name: Fuzz
         shell: bash
         run: |
-            python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
+          python3 scripts/run_fuzzer.py  --sqlsmith --alltypes --shell=build/debug/duckdb
 
   sqlancer-fuzzing:
     name: SQLancer Fuzzing
@@ -82,7 +82,7 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: '3.9'
+          python-version: "3.9"
 
       - name: Build SQLancer
         shell: bash
@@ -123,4 +123,4 @@ jobs:
       - name: Fuzz
         shell: bash
         run: |
-            python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb
+          python3 scripts/run_sqlancer.py --sqlancer=`pwd`/sqlancer --shell=build/debug/duckdb

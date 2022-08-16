@@ -2,16 +2,16 @@ name: Main
 on:
   push:
     paths-ignore:
-      - '**.md'
+      - "**.md"
   pull_request:
     paths-ignore:
-      - '**.md'
-      - 'tools/nodejs/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
-      - '.github/workflows/**'
-      - '!.github/workflows/Main.yml'
+      - "**.md"
+      - "tools/nodejs/**"
+      - "tools/juliapkg/**"
+      - "tools/pythonpkg/**"
+      - "tools/rpkg/**"
+      - ".github/workflows/**"
+      - "!.github/workflows/Main.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -25,7 +25,7 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
- linux-debug:
+  linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
 
@@ -45,29 +45,28 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run:  make debug
+      - name: Build
+        shell: bash
+        run: make debug
 
-    - name: Test
-      shell: bash
-      run: make unittestci
+      - name: Test
+        shell: bash
+        run: make unittestci
 
-
- force-storage:
+  force-storage:
     name: Force Storage
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -85,28 +84,28 @@ jobs:
       BUILD_EXCEL: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: make reldebug
+      - name: Build
+        shell: bash
+        run: make reldebug
 
-    - name: Test
-      shell: bash
-      run: build/reldebug/test/unittest "*" --force-storage
+      - name: Test
+        shell: bash
+        run: build/reldebug/test/unittest "*" --force-storage
 
- force-restart:
+  force-restart:
     name: Force Restart
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -124,38 +123,38 @@ jobs:
       BUILD_EXCEL: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: make reldebug
+      - name: Build
+        shell: bash
+        run: make reldebug
 
-    - name: Test
-      shell: bash
-      run: build/reldebug/test/unittest "*" --force-reload --force-storage
+      - name: Test
+        shell: bash
+        run: build/reldebug/test/unittest "*" --force-reload --force-storage
 
- linux-arrow:
-      name: Linux Debug (Arrow Tests)
-      runs-on: ubuntu-20.04
-      needs: linux-debug
-      env:
-        CC: gcc-10
-        CXX: g++-10
-        TREAT_WARNINGS_AS_ERRORS: 1
-        GEN: ninja
+  linux-arrow:
+    name: Linux Debug (Arrow Tests)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
+      GEN: ninja
 
-      steps:
+    steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -177,7 +176,7 @@ jobs:
         shell: bash
         run: make unittestarrow
 
- threadsan:
+  threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -195,34 +194,33 @@ jobs:
       TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: THREADSAN=1 make reldebug
+      - name: Build
+        shell: bash
+        run: THREADSAN=1 make reldebug
 
-    - name: Test
-      shell: bash
-      run: |
+      - name: Test
+        shell: bash
+        run: |
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
-
- valgrind:
+  valgrind:
     name: Valgrind
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -233,53 +231,52 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: make debug
+      - name: Build
+        shell: bash
+        run: make debug
 
-    - name: Test
-      shell: bash
-      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      - name: Test
+        shell: bash
+        run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
- docs:
+  docs:
     name: Website Docs
     runs-on: ubuntu-20.04
     needs: linux-debug
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Clone Website
-      shell: bash
-      run: git clone https://github.com/duckdb/duckdb-web
+      - name: Clone Website
+        shell: bash
+        run: git clone https://github.com/duckdb/duckdb-web
 
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.9"
 
-    - name: Package
-      shell: bash
-      run: |
-        cd duckdb-web
-        python3 scripts/generate_docs.py ..
+      - name: Package
+        shell: bash
+        run: |
+          cd duckdb-web
+          python3 scripts/generate_docs.py ..
 
-
- sqllogic:
+  sqllogic:
     name: Sqllogic tests
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -288,15 +285,15 @@ jobs:
       CXX: g++-10
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Test
-      shell: bash
-      run: make sqlite
+      - name: Test
+        shell: bash
+        run: make sqlite
 
- expanded:
+  expanded:
     name: Expanded
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -308,26 +305,26 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: ./.github/actions/swap_space
+      - uses: ./.github/actions/swap_space
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: make debug
+      - name: Build
+        shell: bash
+        run: make debug
 
- jdbc:
+  jdbc:
     name: JDBC Compliance
     runs-on: ubuntu-18.04
     needs: linux-debug
@@ -338,30 +335,30 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Install
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/cwida/jdbccts.git
+      - name: Install
+        shell: bash
+        run: |
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+          git clone https://github.com/cwida/jdbccts.git
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: make release
+      - name: Build
+        shell: bash
+        run: make release
 
-    - name: Test
-      shell: bash
-      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
+      - name: Test
+        shell: bash
+        run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
- odbc:
+  odbc:
     name: ODBC
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -370,63 +367,63 @@ jobs:
       GEN: ninja
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.7"
 
-    - name: Dependencies
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pip julia
-        pip3 install pyodbc
+      - name: Dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pip julia
+          pip3 install pyodbc
 
-    - name: Install nanodbc
-      shell: bash
-      run: |
-        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
-        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+      - name: Install nanodbc
+        shell: bash
+        run: |
+          wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
+          (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
 
-    - name: Install psqlodbc
-      shell: bash
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout 50097b950e6cbdfaaf13208fbc7160538f796912 && make debug)
+      - name: Install psqlodbc
+        shell: bash
+        run: |
+          git clone https://github.com/Mytherin/psqlodbc.git
+          (cd psqlodbc && git checkout 50097b950e6cbdfaaf13208fbc7160538f796912 && make debug)
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: DISABLE_SANITIZER=1 make debug
+      - name: Build
+        shell: bash
+        run: DISABLE_SANITIZER=1 make debug
 
-    - name: Test nanodbc
-      shell: bash
-      run: ./tools/odbc/test/run_nanodbc_tests.sh
+      - name: Test nanodbc
+        shell: bash
+        run: ./tools/odbc/test/run_nanodbc_tests.sh
 
-    - name: Test psqlodbc
-      shell: bash
-      run: ./tools/odbc/test/run_psqlodbc_tests.sh
+      - name: Test psqlodbc
+        shell: bash
+        run: ./tools/odbc/test/run_psqlodbc_tests.sh
 
-    - name: Test isql
-      shell: bash
-      run: ./tools/odbc/test/run_isql_tests.sh
+      - name: Test isql
+        shell: bash
+        run: ./tools/odbc/test/run_isql_tests.sh
 
-    - name: Test R ODBC
-      shell: bash
-      run: R -f tools/odbc/test/rodbc.R
+      - name: Test R ODBC
+        shell: bash
+        run: R -f tools/odbc/test/rodbc.R
 
-    - name: Test Python ODBC
-      shell: bash
-      run: ./tools/odbc/test/run_pyodbc_tests.sh
+      - name: Test Python ODBC
+        shell: bash
+        run: ./tools/odbc/test/run_pyodbc_tests.sh
 
-    - name: Test Julia ODBC
-      shell: bash
-      run: |
-        export ASAN_OPTIONS=verify_asan_link_order=0
-        julia tools/odbc/test/julia-test.jl
+      - name: Test Julia ODBC
+        shell: bash
+        run: |
+          export ASAN_OPTIONS=verify_asan_link_order=0
+          julia tools/odbc/test/julia-test.jl

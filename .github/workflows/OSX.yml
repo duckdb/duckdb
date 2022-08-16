@@ -2,10 +2,10 @@ name: OSX
 on:
   push:
     paths-ignore:
-      - '**.md'
+      - "**.md"
   pull_request:
     branches-ignore:
-      - '**'
+      - "**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -27,31 +27,31 @@ jobs:
       TREAT_WARNINGS_AS_ERRORS: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.7"
 
-    - name: Build
-      shell: bash
-      run: make debug
+      - name: Build
+        shell: bash
+        run: make debug
 
-    - name: Test
-      shell: bash
-      run: make unittestci
+      - name: Test
+        shell: bash
+        run: make unittestci
 
-    - name: Amalgamation
-      shell: bash
-      run: |
-        python scripts/amalgamation.py --extended
-        python scripts/parquet_amalgamation.py
-        cd src/amalgamation
-        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+      - name: Amalgamation
+        shell: bash
+        run: |
+          python scripts/amalgamation.py --extended
+          python scripts/parquet_amalgamation.py
+          cd src/amalgamation
+          clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+          clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+          clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
   xcode-release:
     name: OSX Release
@@ -68,55 +68,55 @@ jobs:
       OSX_BUILD_UNIVERSAL: 1
 
     steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: "3.7"
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
 
-    - name: Build
-      shell: bash
-      run: make
+      - name: Build
+        shell: bash
+        run: make
 
-    - name: Unit Test
-      shell: bash
-      run: make allunit
+      - name: Unit Test
+        shell: bash
+        run: make allunit
 
-    - name: Tools Tests
-      shell: bash
-      run: |
-        python tools/shell/shell-test.py build/release/duckdb
-        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+      - name: Tools Tests
+        shell: bash
+        run: |
+          python tools/shell/shell-test.py build/release/duckdb
+          java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
-    - name: Examples
-      shell: bash
-      run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
-        (cd examples/jdbc; make; make maven)
+      - name: Examples
+        shell: bash
+        run: |
+          (cd examples/embedded-c; make)
+          (cd examples/embedded-c++; make)
+          (cd examples/jdbc; make; make maven)
 
-    - name: Deploy
-      shell: bash
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-osx-universal.zip build/release/duckdb
-        zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+      - name: Deploy
+        shell: bash
+        run: |
+          python scripts/amalgamation.py
+          zip -j duckdb_cli-osx-universal.zip build/release/duckdb
+          zip -j libduckdb-osx-universal.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+          python scripts/asset-upload-gha.py libduckdb-osx-universal.zip duckdb_cli-osx-universal.zip duckdb_jdbc-osx-universal.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-osx
-        path: |
-          libduckdb-osx-universal.zip
-          duckdb_cli-osx-universal.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
+      - uses: actions/upload-artifact@v2
+        with:
+          name: duckdb-binaries-osx
+          path: |
+            libduckdb-osx-universal.zip
+            duckdb_cli-osx-universal.zip
+            build/release/tools/jdbc/duckdb_jdbc.jar
 
   xcode-extensions:
     name: OSX Extensions Release
@@ -136,7 +136,7 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: '3.7'
+          python-version: "3.7"
 
       - name: Install OpenSSL
         shell: bash
