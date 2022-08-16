@@ -9,6 +9,7 @@
 
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/stack.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
 namespace duckdb {
 
