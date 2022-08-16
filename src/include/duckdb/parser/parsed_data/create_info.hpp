@@ -56,7 +56,7 @@ public:
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 
-	void CopyProperties(CreateInfo &other) const;
+	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 };
 
 } // namespace duckdb

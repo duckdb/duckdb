@@ -62,21 +62,21 @@ public:
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
-	explicit ScalarFunctionSet(string name);
+	DUCKDB_API explicit ScalarFunctionSet(string name);
 
-	ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
+	DUCKDB_API ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
-	explicit AggregateFunctionSet(string name);
+	DUCKDB_API explicit AggregateFunctionSet(string name);
 
-	AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
+	DUCKDB_API AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
-	explicit TableFunctionSet(string name);
+	DUCKDB_API explicit TableFunctionSet(string name);
 
 	TableFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };

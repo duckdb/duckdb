@@ -18,10 +18,8 @@
 namespace duckdb {
 
 struct CreateTableInfo : public CreateInfo {
-	CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, INVALID_SCHEMA) {
-	}
-	CreateTableInfo(string schema, string name) : CreateInfo(CatalogType::TABLE_ENTRY, schema), table(name) {
-	}
+	DUCKDB_API CreateTableInfo();
+	DUCKDB_API CreateTableInfo(string schema, string name);
 
 	//! Table name to insert to
 	string table;
@@ -33,44 +31,12 @@ struct CreateTableInfo : public CreateInfo {
 	unique_ptr<SelectStatement> query;
 
 protected:
-	void SerializeInternal(Serializer &serializer) const override {
-		FieldWriter writer(serializer);
-		writer.WriteString(table);
-		writer.WriteRegularSerializableList(columns);
-		writer.WriteSerializableList(constraints);
-		writer.WriteOptional(query);
-		writer.Finalize();
-	}
+	void SerializeInternal(Serializer &serializer) const override;
 
 public:
-	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer) {
-		auto result = make_unique<CreateTableInfo>();
-		result->DeserializeBase(deserializer);
+	DUCKDB_API static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer);
 
-		FieldReader reader(deserializer);
-		result->table = reader.ReadRequired<string>();
-		result->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
-		result->constraints = reader.ReadRequiredSerializableList<Constraint>();
-		result->query = reader.ReadOptional<SelectStatement>(nullptr);
-		reader.Finalize();
-
-		return result;
-	}
-
-	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateTableInfo>(schema, table);
-		CopyProperties(*result);
-		for (auto &column : columns) {
-			result->columns.push_back(column.Copy());
-		}
-		for (auto &constraint : constraints) {
-			result->constraints.push_back(constraint->Copy());
-		}
-		if (query) {
-			result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
-		}
-		return move(result);
-	}
+	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 };
 
 } // namespace duckdb
