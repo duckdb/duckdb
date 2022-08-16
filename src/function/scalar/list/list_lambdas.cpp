@@ -314,10 +314,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
-		Function::EraseArgument(bound_function, arguments, arguments.size() - 1);
-		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
-		bound_function.return_type = LogicalType::SQLNULL;
-		return nullptr;
+		throw ParameterNotResolvedException();
 	}
 
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);

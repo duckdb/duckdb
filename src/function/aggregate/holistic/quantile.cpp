@@ -1094,6 +1094,20 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 	}
 }
 
+static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
+	D_ASSERT(bind_data_p);
+	throw NotImplementedException("FIXME: serializing quantiles is not supported right now");
+//
+//	auto bind_data = (QuantileBindData *)bind_data_p;
+//	writer.WriteList<double>(bind_data->quantiles);
+}
+
+unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
+                                             AggregateFunction &bound_function) {
+	auto quantiles = reader.ReadRequiredList<double>();
+	return make_unique<QuantileBindData>(move(quantiles));
+}
+
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
                                     vector<unique_ptr<Expression>> &arguments) {
 	return make_unique<QuantileBindData>(0.5);
@@ -1105,6 +1119,8 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 
 	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "median";
+	function.serialize = QuantileSerialize;
+	function.deserialize = QuantileDeserialize;
 	return bind_data;
 }
 
@@ -1147,20 +1163,6 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_unique<QuantileBindData>(quantiles);
-}
-
-static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
-	D_ASSERT(bind_data_p);
-	throw NotImplementedException("FIXME: serializing quantiles is not supported right now");
-//
-//	auto bind_data = (QuantileBindData *)bind_data_p;
-//	writer.WriteList<double>(bind_data->quantiles);
-}
-
-unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
-                                             AggregateFunction &bound_function) {
-	auto quantiles = reader.ReadRequiredList<double>();
-	return make_unique<QuantileBindData>(move(quantiles));
 }
 
 static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
@@ -1221,6 +1223,8 @@ AggregateFunction GetMedianAggregate(const LogicalType &type) {
 	auto fun = CanInterpolate(type) ? GetContinuousQuantileAggregateFunction(type)
 	                                : GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindMedian;
+	fun.serialize = QuantileSerialize;
+	fun.deserialize = QuantileDeserialize;
 	return fun;
 }
 
