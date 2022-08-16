@@ -8,7 +8,7 @@ LogicalColumnDataGet::LogicalColumnDataGet(idx_t table_index, vector<LogicalType
                                            unique_ptr<ColumnDataCollection> collection)
     : LogicalOperator(LogicalOperatorType::LOGICAL_CHUNK_GET), table_index(table_index), collection(move(collection)) {
 	D_ASSERT(types.size() > 0);
-	chunk_types = types;
+	chunk_types = move(types);
 }
 
 vector<ColumnBinding> LogicalColumnDataGet::GetColumnBindings() {

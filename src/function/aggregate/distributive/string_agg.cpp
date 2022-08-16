@@ -164,7 +164,7 @@ void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	string_agg_param.serialize = StringAggSerialize;
 	string_agg_param.deserialize = StringAggDeserialize;
 	string_agg.AddFunction(string_agg_param);
-	string_agg_param.arguments.push_back(LogicalType::VARCHAR);
+	string_agg_param.arguments.emplace_back(LogicalType::VARCHAR);
 	string_agg.AddFunction(string_agg_param);
 	set.AddFunction(string_agg);
 	string_agg.name = "group_concat";

@@ -435,9 +435,9 @@ static void DefineReservoirQuantile(AggregateFunctionSet &set, const LogicalType
 	set.AddFunction(fun);
 }
 
-static void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, vector<LogicalType> arguments,
-                                                LogicalType return_value) {
-	AggregateFunction fun(move(arguments), move(return_value), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+static void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const vector<LogicalType> &arguments,
+                                                const LogicalType &return_value) {
+	AggregateFunction fun(arguments, return_value, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      BindReservoirQuantileDecimal);
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;

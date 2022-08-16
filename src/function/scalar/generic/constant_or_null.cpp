@@ -65,9 +65,8 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-ScalarFunction ConstantOrNull::GetFunction(LogicalType return_type) {
-	return ScalarFunction("constant_or_null", {return_type, LogicalType::ANY}, move(return_type),
-	                      ConstantOrNullFunction);
+ScalarFunction ConstantOrNull::GetFunction(const LogicalType &return_type) {
+	return ScalarFunction("constant_or_null", {return_type, LogicalType::ANY}, return_type, ConstantOrNullFunction);
 }
 
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {

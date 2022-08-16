@@ -1271,10 +1271,9 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 	return fun;
 }
 
-AggregateFunction GetQuantileDecimalAggregate(vector<LogicalType> arguments, LogicalType return_type,
+AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &arguments, const LogicalType &return_type,
                                               bind_aggregate_function_t bind) {
-	AggregateFunction fun(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                      bind);
+	AggregateFunction fun(arguments, return_type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, bind);
 	fun.bind = bind;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;

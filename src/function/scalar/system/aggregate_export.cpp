@@ -12,7 +12,7 @@ struct ExportAggregateBindData : public FunctionData {
 	idx_t state_size;
 
 	explicit ExportAggregateBindData(AggregateFunction aggr_p, idx_t state_size_p)
-	    : aggr(aggr_p), state_size(state_size_p) {
+	    : aggr(move(aggr_p)), state_size(state_size_p) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
