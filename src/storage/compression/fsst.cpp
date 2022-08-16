@@ -361,7 +361,7 @@ public:
 
 unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
-	auto analyze_state = dynamic_cast<FSSTAnalyzeState *>(analyze_state_p.get());
+	auto analyze_state = static_cast<FSSTAnalyzeState *>(analyze_state_p.get());
 	auto compression_state = make_unique<FSSTCompressionState>(checkpointer);
 
 	if (analyze_state->fsst_encoder != nullptr) {
