@@ -35,7 +35,7 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 			return RType::UNKNOWN;
 		}
 	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "difftime")) {
-		SEXP units = Rf_getAttrib(v, Rf_install("units"));
+		SEXP units = Rf_getAttrib(v, RStrings::get().units_sym);
 		if (TYPEOF(units) != STRSXP) {
 			return RType::UNKNOWN;
 		}

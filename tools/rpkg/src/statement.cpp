@@ -471,7 +471,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n, b
 		// actual loop over rows
 		for (size_t row_idx = 0; row_idx < n; row_idx++) {
 			if (!FlatVector::Validity(src_vec).RowIsValid(row_idx)) {
-				SET_ELEMENT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
+				SET_ELEMENT(dest, dest_offset + row_idx, R_NilValue);
 			} else {
 				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset);
 
