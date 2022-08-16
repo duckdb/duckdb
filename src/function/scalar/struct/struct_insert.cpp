@@ -76,14 +76,14 @@ static unique_ptr<FunctionData> StructInsertBind(ClientContext &context, ScalarF
 }
 
 static void StructInsertSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-							  const ScalarFunction &function) {
+                                  const ScalarFunction &function) {
 	D_ASSERT(bind_data_p);
 	auto &info = (VariableReturnBindData &)*bind_data_p;
 	writer.WriteSerializable(info.stype);
 }
 
 static unique_ptr<FunctionData> StructInsertDeserialize(ClientContext &context, FieldReader &reader,
-													ScalarFunction &bound_function) {
+                                                        ScalarFunction &bound_function) {
 	auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }

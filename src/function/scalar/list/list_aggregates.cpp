@@ -27,6 +27,13 @@ struct ListAggregatesBindData : public FunctionData {
 		auto &other = (const ListAggregatesBindData &)other_p;
 		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
 	}
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+		throw NotImplementedException("FIXME: list aggr serialize");
+	}
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	                                            ScalarFunction &bound_function) {
+		throw NotImplementedException("FIXME: list aggr deserialize");
+	}
 };
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)
@@ -437,6 +444,8 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	                             ListAggregateFunction, ListAggregateBind);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
+	result.serialize = ListAggregatesBindData::Serialize;
+	result.deserialize = ListAggregatesBindData::Deserialize;
 	return result;
 }
 
