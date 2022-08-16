@@ -1111,7 +1111,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
 		if (existing_function) {
 			auto new_info = (CreateScalarFunctionInfo *)info;
-			if (existing_function->functions.MergeFunctionSet(new_info->functions)) {
+			if (new_info->functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
 			}
