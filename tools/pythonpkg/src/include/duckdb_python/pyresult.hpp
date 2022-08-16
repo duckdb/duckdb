@@ -25,6 +25,8 @@ public:
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, py::object> categories_type;
 
+	string timezone_config;
+
 	explicit DuckDBPyResult() {};
 
 public:
@@ -38,13 +40,13 @@ public:
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
-	py::object FetchDF();
+	DataFrame FetchDF();
 
-	py::object FetchArrowTable(idx_t chunk_size);
+	duckdb::pyarrow::Table FetchArrowTable(idx_t chunk_size);
 
-	py::object FetchDFChunk(idx_t vectors_per_chunk);
+	DataFrame FetchDFChunk(idx_t vectors_per_chunk);
 
-	py::object FetchRecordBatchReader(idx_t chunk_size);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t chunk_size);
 
 	py::list Description();
 
@@ -58,6 +60,10 @@ private:
 	py::object FetchAllArrowChunks(idx_t chunk_size);
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t chunk_size);
+
+	DataFrame FrameFromNumpy(const py::handle &o);
+
+	void ChangeToTZType(DataFrame &df);
 };
 
 } // namespace duckdb

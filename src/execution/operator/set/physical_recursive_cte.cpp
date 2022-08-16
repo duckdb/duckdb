@@ -2,7 +2,7 @@
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
-#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column_data_collection.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -28,7 +28,7 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
-	    : intermediate_table(Allocator::Get(context)), new_groups(STANDARD_VECTOR_SIZE) {
+	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
 		ht = make_unique<GroupedAggregateHashTable>(Allocator::Get(context), BufferManager::GetBufferManager(context),
 		                                            op.types, vector<LogicalType>(),
 		                                            vector<BoundAggregateExpression *>());
@@ -37,8 +37,10 @@ public:
 	unique_ptr<GroupedAggregateHashTable> ht;
 
 	bool intermediate_empty = true;
-	ChunkCollection intermediate_table;
-	idx_t chunk_idx = 0;
+	ColumnDataCollection intermediate_table;
+	ColumnDataScanState scan_state;
+	bool initialized = false;
+	bool finished_scan = false;
 	SelectionVector new_groups;
 };
 
@@ -78,29 +80,40 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkS
 void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                    LocalSourceState &lstate) const {
 	auto &gstate = (RecursiveCTEState &)*sink_state;
+	if (!gstate.initialized) {
+		gstate.intermediate_table.InitializeScan(gstate.scan_state);
+		gstate.finished_scan = false;
+		gstate.initialized = true;
+	}
 	while (chunk.size() == 0) {
-		if (gstate.chunk_idx < gstate.intermediate_table.ChunkCount()) {
+		if (!gstate.finished_scan) {
 			// scan any chunks we have collected so far
-			chunk.Reference(gstate.intermediate_table.GetChunk(gstate.chunk_idx));
-			gstate.chunk_idx++;
-			break;
+			gstate.intermediate_table.Scan(gstate.scan_state, chunk);
+			if (chunk.size() == 0) {
+				gstate.finished_scan = true;
+			} else {
+				break;
+			}
 		} else {
 			// we have run out of chunks
 			// now we need to recurse
 			// we set up the working table as the data we gathered in this iteration of the recursion
 			working_table->Reset();
-			working_table->Merge(gstate.intermediate_table);
+			working_table->Combine(gstate.intermediate_table);
 			// and we clear the intermediate table
+			gstate.finished_scan = false;
 			gstate.intermediate_table.Reset();
-			gstate.chunk_idx = 0;
 			// now we need to re-execute all of the pipelines that depend on the recursion
 			ExecuteRecursivePipelines(context);
 
 			// check if we obtained any results
 			// if not, we are done
 			if (gstate.intermediate_table.Count() == 0) {
+				gstate.finished_scan = true;
 				break;
 			}
+			// set up the scan again
+			gstate.intermediate_table.InitializeScan(gstate.scan_state);
 		}
 	}
 }

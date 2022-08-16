@@ -21,7 +21,7 @@ include_dir = os.path.join('src', 'include')
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb.h'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
-    os.path.join(include_dir, 'duckdb', 'common', 'arrow.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'blob.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'decimal.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
@@ -63,9 +63,11 @@ if '--extended' in sys.argv:
         "duckdb/planner/filter/constant_filter.hpp",
         "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
         "duckdb/common/types/vector_cache.hpp",
+        "duckdb/common/string_map_set.hpp",
         "duckdb/planner/filter/null_filter.hpp",
-        "duckdb/common/arrow_wrapper.hpp",
+        "duckdb/common/arrow/arrow_wrapper.hpp",
         "duckdb/common/hive_partitioning.hpp",
+        "duckdb/planner/operator/logical_get.hpp",
         "duckdb/common/compressed_file_system.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))

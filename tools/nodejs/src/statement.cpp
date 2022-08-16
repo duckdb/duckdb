@@ -130,6 +130,10 @@ static duckdb::Value BindParameter(const Napi::Value source) {
 static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::LogicalTypeId id) {
 	Napi::Value value;
 
+	if (dval.IsNull()) {
+		return env.Null();
+	}
+
 	// TODO templateroo here
 	switch (id) {
 	case duckdb::LogicalTypeId::BOOLEAN: {
@@ -225,11 +229,6 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 
 		for (duckdb::idx_t col_idx = 0; col_idx < chunk.ColumnCount(); col_idx++) {
 			duckdb::Value dval = chunk.GetValue(col_idx, row_idx);
-			if (dval.IsNull()) {
-				row_result.Set(node_names[col_idx], env.Null());
-				continue;
-			}
-
 			row_result.Set(node_names[col_idx], convert_col_val(env, dval, chunk.data[col_idx].GetType().id()));
 		}
 		result.Set(row_idx, row_result);
@@ -312,7 +311,7 @@ struct RunPreparedTask : public Task {
 		}
 		case RunType::ALL: {
 			auto materialized_result = (duckdb::MaterializedQueryResult *)result.get();
-			Napi::Array result_arr(Napi::Array::New(env, materialized_result->collection.Count()));
+			Napi::Array result_arr(Napi::Array::New(env, materialized_result->RowCount()));
 
 			duckdb::idx_t out_idx = 0;
 			while (true) {

@@ -34,3 +34,11 @@ SELECT a FROM exprtest WHERE a BETWEEN 43 AND 44
 
 statement ok
 SELECT CASE a WHEN 42 THEN 100 WHEN 43 THEN 200 ELSE 300 END FROM exprtest
+
+# At least one of the lines should contain the word "Optimizer" to verify that we're getting optimizer timings
+query T
+SELECT COUNT(*) > 0
+FROM read_csv('__TEST_DIR__/test.json', columns={'c': 'VARCHAR'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+WHERE contains(c, 'Optimizer');
+----
+true

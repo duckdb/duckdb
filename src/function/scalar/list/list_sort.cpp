@@ -90,6 +90,9 @@ void SinkDataChunk(Vector *child_vector, SelectionVector &sel, idx_t offset_list
 	payload_chunk.data[0].Reference(payload_vector);
 	payload_chunk.SetCardinality(offset_lists_indices);
 
+	key_chunk.Verify();
+	payload_chunk.Verify();
+
 	// sink
 	local_sort_state.SinkChunk(key_chunk, payload_chunk);
 	data_to_sort = true;
@@ -103,6 +106,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto &result_validity = FlatVector::Validity(result);
 
+	args.Flatten();
 	if (lists.GetType().id() == LogicalTypeId::SQLNULL) {
 		result_validity.SetInvalid(0);
 		return;
@@ -150,7 +154,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	bool data_to_sort = false;
 
 	for (idx_t i = 0; i < count; i++) {
-
 		auto lists_index = lists_data.sel->get_index(i);
 		const auto &list_entry = list_entries[lists_index];
 
@@ -166,7 +169,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
-
 			// lists_indices vector is full, sink
 			if (offset_lists_indices == STANDARD_VECTOR_SIZE) {
 				SinkDataChunk(&child_vector, sel, offset_lists_indices, info.types, info.payload_types, payload_vector,
@@ -174,10 +176,10 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 				offset_lists_indices = 0;
 			}
 
-			auto source_idx = child_data.sel->get_index(list_entry.offset + child_idx);
+			auto source_idx = list_entry.offset + child_idx;
 			sel.set_index(offset_lists_indices, source_idx);
 			lists_indices_data[offset_lists_indices] = (uint32_t)i;
-			payload_vector_data[offset_lists_indices] = incr_payload_count;
+			payload_vector_data[offset_lists_indices] = source_idx;
 			offset_lists_indices++;
 			incr_payload_count++;
 		}
@@ -189,7 +191,6 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	}
 
 	if (data_to_sort) {
-
 		// add local state to global state, which sorts the data
 		global_sort_state.AddLocalState(local_sort_state);
 		global_sort_state.PrepareMergePhase();
@@ -216,6 +217,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 			for (idx_t i = 0; i < row_count; i++) {
 				sel_sorted.set_index(sel_sorted_idx, result_data[i]);
+				D_ASSERT(result_data[i] < lists_size);
 				sel_sorted_idx++;
 			}
 		}

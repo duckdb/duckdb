@@ -5,11 +5,10 @@ namespace duckdb {
 
 void PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                            LocalSourceState &lstate) const {
-	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (info->load_type == LoadType::INSTALL || info->load_type == LoadType::FORCE_INSTALL) {
-		ExtensionHelper::InstallExtension(db, info->filename, info->load_type == LoadType::FORCE_INSTALL);
+		ExtensionHelper::InstallExtension(context.client, info->filename, info->load_type == LoadType::FORCE_INSTALL);
 	} else {
-		ExtensionHelper::LoadExternalExtension(db, info->filename);
+		ExtensionHelper::LoadExternalExtension(context.client, info->filename);
 	}
 }
 

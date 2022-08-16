@@ -5,7 +5,7 @@
 #include "duckdb_python/pandas_scan.hpp"
 #include "duckdb_python/map.hpp"
 
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -83,8 +83,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         py::arg("df") = py::none())
 	    .def("from_arrow", &DuckDBPyConnection::FromArrow, "Create a relation object from an Arrow object",
 	         py::arg("arrow_object"), py::arg("rows_per_thread") = 1000000)
-	    .def("df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df (alias of from_df)",
-	         py::arg("df"))
+	    .def("df", &DuckDBPyConnection::FromDF,
+	         "Create a relation object from the Data.Frame in df. This is an alias of from_df", py::arg("df"))
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
@@ -93,10 +93,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
 	         py::arg("proto"))
 	    .def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"))
+	    .def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
+	         "Serialize a query to protobuf on the JSON format", py::arg("query"))
 	    .def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"))
-	    .def("__enter__", &DuckDBPyConnection::Enter, py::arg("database") = ":memory:", py::arg("read_only") = false,
-	         py::arg("config") = py::dict())
+	    .def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
@@ -190,7 +191,7 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	return this;
 }
 
-DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, py::object value) {
+DuckDBPyConnection *DuckDBPyConnection::Append(const string &name, DataFrame value) {
 	RegisterPythonObject("__append_df", std::move(value));
 	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
 }
@@ -318,7 +319,7 @@ static std::string GenerateRandomName() {
 	return ss.str();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const py::object &value) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const DataFrame &value) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
@@ -399,6 +400,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &quer
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait", params)->Alias(query));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query) {
+	if (!connection) {
+		throw std::runtime_error("connection closed");
+	}
+	vector<Value> params;
+	params.emplace_back(query);
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("get_substrait_json", params)->Alias(query));
+}
+
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
@@ -452,11 +462,11 @@ void DuckDBPyConnection::Close() {
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
-	ExtensionHelper::InstallExtension(*connection->context->db, extension, force_install);
+	ExtensionHelper::InstallExtension(*connection->context, extension, force_install);
 }
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
-	ExtensionHelper::LoadExternalExtension(*connection->context->db, extension);
+	ExtensionHelper::LoadExternalExtension(*connection->context, extension);
 }
 
 // cursor() is stupid
@@ -489,28 +499,28 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	}
 	return result->FetchNumpyInternal();
 }
-py::object DuckDBPyConnection::FetchDF() {
+DataFrame DuckDBPyConnection::FetchDF() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDF();
 }
 
-py::object DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
+DataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchDFChunk(vectors_per_chunk);
 }
 
-py::object DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
+duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t chunk_size) {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchArrowTable(chunk_size);
 }
 
-py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
+duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t chunk_size) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
@@ -652,9 +662,8 @@ PythonImportCache *DuckDBPyConnection::ImportCache() {
 	return import_cache.get();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter(DuckDBPyConnection &self, const string &database,
-                                                         bool read_only, const py::dict &config) {
-	return self.Connect(database, read_only, config);
+DuckDBPyConnection *DuckDBPyConnection::Enter() {
+	return this;
 }
 
 bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,

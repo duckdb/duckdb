@@ -1,0 +1,58 @@
+# name: test/sql/aggregate/aggregates/test_any_value_noninlined.test
+# description: Test ANY_VALUE with non-inlined strings
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(a INTEGER, b VARCHAR)
+
+statement ok
+INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalongstring')
+
+# non-grouped aggregate
+query T
+SELECT ANY_VALUE(b) FROM tbl
+----
+thisisalongstring
+
+query T
+SELECT ANY_VALUE(b) FROM tbl WHERE a=2
+----
+thisisalongstring
+
+query T
+SELECT ANY_VALUE(b) FROM tbl WHERE a=1
+----
+NULL
+
+query T
+SELECT ANY_VALUE(b) FROM tbl WHERE a=1 GROUP BY a
+----
+NULL
+
+query T
+SELECT ANY_VALUE(b) FROM tbl WHERE a=0
+----
+NULL
+
+query T
+SELECT ANY_VALUE(b) FROM tbl WHERE a=0 GROUP BY b
+----
+
+# grouped aggregate
+query IT
+SELECT a, ANY_VALUE(b) FROM tbl GROUP BY a ORDER BY a
+----
+1
+NULL
+2
+thisisalongstring
+3
+thisisalsoalongstring
+
+query I
+SELECT ANY_VALUE(i) FROM (VALUES (NULL::INT32)) tbl(i)
+----
+NULL

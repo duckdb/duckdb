@@ -14,7 +14,7 @@
 namespace duckdb {
 class DuckDBToSubstrait {
 public:
-	explicit DuckDBToSubstrait(duckdb::LogicalOperator &dop) {
+	explicit DuckDBToSubstrait(ClientContext &context, duckdb::LogicalOperator &dop) : context(context) {
 		TransformPlan(dop);
 	};
 
@@ -23,6 +23,7 @@ public:
 	}
 	//! Serializes the substrait plan to a string
 	string SerializeToString();
+	string SerializeToJson();
 
 private:
 	//! Transform DuckDB Plan to Substrait Plan
@@ -57,6 +58,7 @@ private:
 	void TransformBoolean(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformDecimal(duckdb::Value &dval, substrait::Expression &sexpr);
 	void TransformHugeInt(Value &dval, substrait::Expression &sexpr);
+
 	//! Methods to transform a DuckDB Expression to a Substrait Expression
 	void TransformExpr(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset = 0);
 	void TransformBoundRefExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
@@ -68,6 +70,10 @@ private:
 	void TransformNotNullExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr, uint64_t col_offset);
 	void TransformCaseExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
 	void TransformInExpression(duckdb::Expression &dexpr, substrait::Expression &sexpr);
+
+	//! Transforms DuckDB Types into Substrait Types for LogicalGet Schemas
+	void TransformTypeInfo(substrait::Type_Struct *type_schema, LogicalType &type, BaseStatistics &column_statistics,
+	                       bool not_null);
 
 	//! Transforms a DuckDB Logical Type into a Substrait Type
 	::substrait::Type DuckToSubstraitType(LogicalType &d_type);
@@ -84,6 +90,8 @@ private:
 
 	string GetDecimalInternalString(duckdb::Value &value);
 
+	void AllocateFunctionArgument(substrait::Expression_ScalarFunction *scalar_fun, substrait::Expression *value);
+
 	//! Creates a Conjuction
 	template <typename T, typename FUNC>
 	substrait::Expression *CreateConjunction(T &source, FUNC f) {
@@ -96,8 +104,8 @@ private:
 				auto temp_expr = new substrait::Expression();
 				auto scalar_fun = temp_expr->mutable_scalar_function();
 				scalar_fun->set_function_reference(RegisterFunction("and"));
-				scalar_fun->mutable_args()->AddAllocated(res);
-				scalar_fun->mutable_args()->AddAllocated(child_expression);
+				AllocateFunctionArgument(scalar_fun, res);
+				AllocateFunctionArgument(scalar_fun, child_expression);
 				res = temp_expr;
 			}
 		}
@@ -110,5 +118,6 @@ private:
 
 	//! The substrait Plan
 	substrait::Plan plan;
+	ClientContext &context;
 };
 } // namespace duckdb
