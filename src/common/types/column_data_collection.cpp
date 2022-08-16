@@ -238,10 +238,10 @@ void ColumnDataRowIterationHelper::ColumnDataRowIterator::Next() {
 	}
 }
 
-ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::begin() {
+ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::begin() { // NOLINT
 	return ColumnDataRowIterationHelper::ColumnDataRowIterator(collection.Count() == 0 ? nullptr : &collection);
 }
-ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::end() {
+ColumnDataRowIterationHelper::ColumnDataRowIterator ColumnDataRowIterationHelper::end() { // NOLINT
 	return ColumnDataRowIterationHelper::ColumnDataRowIterator(nullptr);
 }
 
