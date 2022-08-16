@@ -503,8 +503,9 @@ void ScanStructure::AdvancePointers(const SelectionVector &sel, idx_t sel_count)
 void ScanStructure::InitializeSelectionVector(const SelectionVector *&current_sel) {
 	idx_t non_empty_count = 0;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(pointers);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = current_sel->get_index(i);
+	auto cnt = count;
+	for (idx_t i = 0; i < cnt; i++) {
+		const auto idx = current_sel->get_index(i);
 		ptrs[idx] = Load<data_ptr_t>(ptrs[idx]);
 		if (ptrs[idx]) {
 			sel_vector.set_index(non_empty_count++, idx);
