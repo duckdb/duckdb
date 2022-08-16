@@ -25,6 +25,7 @@ bool DBInstanceCache::IsConfigurationSame(ClientContext *context, DBConfig &conf
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &abs_database_path,
                                                 const std::unordered_map<string, string> &config_dict, bool read_only) {
+	lock_guard<mutex> l(cache_lock);
 	shared_ptr<DuckDB> db_instance;
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		db_instance = db_instances[abs_database_path].lock();
@@ -34,9 +35,10 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &abs_database_path,
 				throw std::runtime_error("Can't open a connection to same database file with a different configuration "
 				                         "than existing connections");
 			}
+		} else{
+			// clean-up
+			db_instances.erase(abs_database_path);
 		}
-
-		db_instance = db_instances[abs_database_path].lock();
 	}
 	return db_instance;
 }
@@ -44,6 +46,7 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &abs_database_path,
 shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &abs_database_path,
                                                    const std::unordered_map<string, string> &config_dict,
                                                    bool read_only, bool cache_instance) {
+	lock_guard<mutex> l(cache_lock);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		throw std::runtime_error("Instance with path: " + abs_database_path + " already exists.");
 	}
@@ -61,7 +64,11 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &abs_database_pa
 		config.SetOption(*config_property, Value(val));
 	}
 	// Creates new instance
-	auto db_instance = make_shared<DuckDB>(abs_database_path, &config);
+	string instance_path = abs_database_path;
+	if (abs_database_path.rfind(":memory:", 0) == 0) {
+		instance_path = ":memory:";
+	}
+	auto db_instance = make_shared<DuckDB>(instance_path, &config);
 	if (cache_instance) {
 		db_instances[abs_database_path] = db_instance;
 	}

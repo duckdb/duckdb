@@ -594,6 +594,7 @@ string GetDBAbsolutePath(const string &database) {
 		return ":memory:";
 	}
 	if (database.rfind(":memory:", 0) == 0) {
+		// this is a memory db, just return it.
 		return database;
 	}
 	py::object abspath = py::module_::import("os.path").attr("abspath");
@@ -602,7 +603,7 @@ string GetDBAbsolutePath(const string &database) {
 
 unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_dict) {
 	unordered_map<string, string> config_dict;
-	for (auto &kv : config_dict) {
+	for (auto &kv : py_config_dict) {
 		auto key = py::str(kv.first);
 		auto val = py::str(kv.second);
 		config_dict[key] = val;
@@ -639,13 +640,13 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &db_abs_path, unord
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            const py::dict &py_config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
-	auto abs_path = GetDBAbsolutePath(database);
+	auto db_abs_path = GetDBAbsolutePath(database);
 	auto config_dict = TransformPyConfigDict(py_config_dict);
 
-	res->database = instance_cache.GetInstance(database, config_dict, read_only);
+	res->database = instance_cache.GetInstance(db_abs_path, config_dict, read_only);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
-		CreateNewInstance(*res, abs_path, config_dict, read_only);
+		CreateNewInstance(*res, db_abs_path, config_dict, read_only);
 		return res;
 	}
 	res->connection = make_unique<Connection>(*res->database);

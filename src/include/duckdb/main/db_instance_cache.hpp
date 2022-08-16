@@ -30,8 +30,12 @@ private:
 	//! A map with the cached instances <absolute_path/instance>
 	unordered_map<string, weak_ptr<DuckDB>> db_instances;
 
+	//! Lock to alter cache
+	mutex cache_lock;
+
 	//! Checks if a DBConfig matches with a config dictionary
 	bool IsConfigurationSame(ClientContext *context, DBConfig &config,
 	                         const std::unordered_map<string, string> &config_dict, bool read_only);
+
 };
 } // namespace duckdb
