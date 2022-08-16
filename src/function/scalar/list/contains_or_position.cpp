@@ -1,18 +1,9 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
-
-template <class T>
-static inline bool ValueEqualsOrNot(const T &left, const T &right) {
-	return left == right;
-}
-
-template <>
-inline bool ValueEqualsOrNot(const string_t &left, const string_t &right) {
-	return StringComparisonOperators::EqualsOrNot<false>(left, right);
-}
 
 struct ContainsFunctor {
 	static inline bool Initialize() {
@@ -87,15 +78,16 @@ static void TemplatedContainsOrPosition(DataChunk &args, ExpressionState &state,
 			}
 
 			if (!is_nested) {
-				if (ValueEqualsOrNot<CHILD_TYPE>(child_value[child_value_idx], values[value_index])) {
+				if (Equals::Operation(child_value[child_value_idx], values[value_index])) {
 					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}
 			} else {
 				// FIXME: using Value is less efficient than modifying the vector comparison code
 				// to more efficiently compare nested types
-				if (ValueEqualsOrNot<Value>(child_vector.GetValue(child_value_idx),
-				                            value_vector.GetValue(value_index))) {
+				auto lvalue = child_vector.GetValue(child_value_idx);
+				auto rvalue = value_vector.GetValue(value_index);
+				if (Value::NotDistinctFrom(lvalue, rvalue)) {
 					result_entries[i] = OP::UpdateResultEntries(child_idx);
 					break; // Found value in list, no need to look further
 				}

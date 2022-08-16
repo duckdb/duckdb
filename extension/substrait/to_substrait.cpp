@@ -820,28 +820,29 @@ substrait::Rel *DuckDBToSubstrait::TransformGet(LogicalOperator &dop) {
 	auto &table_scan_bind_data = (TableScanBindData &)*dget.bind_data;
 	auto sget = get_rel->mutable_read();
 
-	// Turn Filter pushdown into Filter
 	if (!dget.table_filters.filters.empty()) {
-		auto filter = new substrait::Rel();
-		filter->mutable_filter()->set_allocated_input(get_rel);
-
-		filter->mutable_filter()->set_allocated_condition(
+		// Pushdown filter
+		auto filter =
 		    CreateConjunction(dget.table_filters.filters, [&](std::pair<const idx_t, unique_ptr<TableFilter>> &in) {
 			    auto col_idx = in.first;
 			    auto &filter = *in.second;
 			    return TransformFilter(col_idx, filter);
-		    }));
-		rel = filter;
+		    });
+		sget->set_allocated_filter(filter);
 	}
 
-	// Turn Projection Pushdown into Projection
 	if (!dget.column_ids.empty()) {
-		auto projection_rel = new substrait::Rel();
-		projection_rel->mutable_project()->set_allocated_input(rel);
+		// Projection Pushdown
+		auto projection = new substrait::Expression_MaskExpression();
+		auto select = new substrait::Expression_MaskExpression_StructSelect();
+
 		for (auto col_idx : dget.column_ids) {
-			CreateFieldRef(projection_rel->mutable_project()->add_expressions(), col_idx);
+			auto struct_item = select->add_struct_items();
+			struct_item->set_field((int32_t)col_idx);
+			// FIXME do we need to set the child? if yes, to what?
 		}
-		rel = projection_rel;
+		projection->set_allocated_select(select);
+		sget->set_allocated_projection(projection);
 	}
 
 	// Add Table Schema
