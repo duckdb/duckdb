@@ -158,7 +158,7 @@ AggregateFunction SumFun::GetSumAggregateNoOverflow(PhysicalType type) {
 		return function;
 	}
 	default:
-		throw InternalException("Unsupported type for sum_no_overflow");
+		throw BinderException("Unsupported internal type for sum_no_overflow");
 	}
 }
 
@@ -167,6 +167,16 @@ unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunctio
 	auto decimal_type = arguments[0]->return_type;
 	function = SumFun::GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
+	function.arguments[0] = decimal_type;
+	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
+	return nullptr;
+}
+
+unique_ptr<FunctionData> BindDecimalSumNoOverflow(ClientContext &context, AggregateFunction &function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
+	auto decimal_type = arguments[0]->return_type;
+	function = SumFun::GetSumAggregateNoOverflow(decimal_type.InternalType());
+	function.name = "sum_no_overflow";
 	function.arguments[0] = decimal_type;
 	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
 	return nullptr;
@@ -190,6 +200,9 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum_no_overflow("sum_no_overflow");
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT32));
 	sum_no_overflow.AddFunction(GetSumAggregateNoOverflow(PhysicalType::INT64));
+	sum_no_overflow.AddFunction(
+	    AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSumNoOverflow));
 	set.AddFunction(sum_no_overflow);
 
 	// fsum

@@ -5,7 +5,8 @@ namespace duckdb {
 CreateTableInfo::CreateTableInfo() : CreateInfo(CatalogType::TABLE_ENTRY, INVALID_SCHEMA) {
 }
 
-CreateTableInfo::CreateTableInfo(string schema, string name) : CreateInfo(CatalogType::TABLE_ENTRY, schema), table(name) {
+CreateTableInfo::CreateTableInfo(string schema, string name)
+    : CreateInfo(CatalogType::TABLE_ENTRY, schema), table(name) {
 }
 
 void CreateTableInfo::SerializeInternal(Serializer &serializer) const {
@@ -46,4 +47,4 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	return move(result);
 }
 
-}
+} // namespace duckdb
