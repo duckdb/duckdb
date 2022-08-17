@@ -105,27 +105,33 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx)) {
-			auto string_size = data[idx].GetSize();
 
-			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
-				return false;
-			}
-
-			if (sample_selected) {
-				if (string_size > 0) {
-					state.have_valid_row = true;
-					if (data[idx].IsInlined()) {
-						state.fsst_strings.push_back(data[idx]);
-					} else {
-						state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
-					}
-					state.fsst_string_total_size += string_size;
-				} else {
-					state.empty_strings++;
-				}
-			}
+		if (!vdata.validity.RowIsValid(idx)) {
+			continue;
 		}
+
+		// We need to check all strings for this, otherwise we run in to trouble during compression if we miss ones
+		auto string_size = data[idx].GetSize();
+		if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
+			return false;
+		}
+
+		if (!sample_selected) {
+			continue;
+		}
+
+		if (string_size > 0) {
+			state.have_valid_row = true;
+			if (data[idx].IsInlined()) {
+				state.fsst_strings.push_back(data[idx]);
+			} else {
+				state.fsst_strings.emplace_back(state.fsst_string_heap.AddBlob(data[idx]));
+			}
+			state.fsst_string_total_size += string_size;
+		} else {
+			state.empty_strings++;
+		}
+
 	}
 	return true;
 }
@@ -390,14 +396,15 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 
-		// Note: we treat nulls and empty strings the same, due to
-		auto row_is_valid = vdata.validity.RowIsValid(idx) && data[idx].GetSize();
-		if (row_is_valid) {
-			total_count++;
-			total_size += data[idx].GetSize();
-			sizes_in.push_back(data[idx].GetSize());
-			strings_in.push_back((unsigned char *)data[idx].GetDataUnsafe());
+		// Note: we treat nulls and empty strings the same
+		if (!vdata.validity.RowIsValid(idx) || data[idx].GetSize() == 0) {
+			continue;
 		}
+
+		total_count++;
+		total_size += data[idx].GetSize();
+		sizes_in.push_back(data[idx].GetSize());
+		strings_in.push_back((unsigned char *)data[idx].GetDataUnsafe());
 	}
 
 	// Only Nulls, nothing to compress

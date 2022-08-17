@@ -453,20 +453,20 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	}
 
 	if (vector->GetVectorType() == VectorType::FSST_VECTOR) {
-		if (vector->GetType().id() == LogicalTypeId::VARCHAR) {
-			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-
-			auto str_compressed = ((string_t *)data)[index];
-			auto decompressed_string_size =
-			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-			                           str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
-			                           StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
-			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-
-			return Value(string((char *)decompress_buffer, decompressed_string_size));
-		} else {
+		if (vector->GetType().InternalType() != PhysicalType::VARCHAR) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
+
+		unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
+
+		auto str_compressed = ((string_t *)data)[index];
+		auto decompressed_string_size =
+			duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+								   str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
+								   StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
+		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
+
+		return Value(string((char *)decompress_buffer, decompressed_string_size));
 	}
 
 	switch (vector->GetType().id()) {
