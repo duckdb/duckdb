@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_RB_H
 #define JEMALLOC_INTERNAL_RB_H
 
+#include <cstdint>
+
 namespace duckdb_jemalloc {
 
 /*-

@@ -4,6 +4,8 @@
 #include "jemalloc/internal/ehooks.h"
 #include "jemalloc/internal/emap.h"
 
+#include <cstdint>
+
 namespace duckdb_jemalloc {
 
 #define SAN_PAGE_GUARD PAGE

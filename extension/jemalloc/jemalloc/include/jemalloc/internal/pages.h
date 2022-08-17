@@ -1,6 +1,8 @@
 #ifndef JEMALLOC_INTERNAL_PAGES_EXTERNS_H
 #define JEMALLOC_INTERNAL_PAGES_EXTERNS_H
 
+#include <cstdint>
+
 namespace duckdb_jemalloc {
 
 /* Page size.  LG_PAGE is determined by the configure script. */

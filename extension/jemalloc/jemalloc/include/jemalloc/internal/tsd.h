@@ -15,6 +15,8 @@
 #include "jemalloc/internal/util.h"
 #include "jemalloc/internal/witness.h"
 
+#include <cstdint>
+
 namespace duckdb_jemalloc {
 
 /*
