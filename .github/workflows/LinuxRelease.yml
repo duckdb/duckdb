@@ -210,7 +210,7 @@ jobs:
  old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-18.04
-#    needs: linux-release-64
+    needs: linux-release-64
 
     env:
       CC: gcc-4.8
