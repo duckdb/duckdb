@@ -119,7 +119,7 @@ struct DecimalArithmeticBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_unique<DecimalArithmeticBindData>();
 		res->check_overflow = check_overflow;
-		return res;
+		return move(res);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
