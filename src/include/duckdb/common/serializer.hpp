@@ -28,7 +28,6 @@ public:
 	//! The version is mostly the most recent one, unless modifying old data or streaming to
 	//! an older version
 	void SetVersion(uint64_t v) {
-		D_ASSERT(v > 0);
 		D_ASSERT(this->version == 0); // version can only be set once
 		this->version = v;
 	}
@@ -100,7 +99,6 @@ public:
 	//! The version is mostly the most recent one, unless reading old data or streaming from
 	//! an older version
 	void SetVersion(uint64_t v) {
-		D_ASSERT(v > 0);
 		D_ASSERT(this->version == 0); // version can only be set once
 		this->version = v;
 	}
