@@ -7,7 +7,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 FieldWriter::FieldWriter(Serializer &serializer_p)
     : serializer(serializer_p), buffer(make_unique<BufferedSerializer>()), field_count(0), finalized(false) {
-	buffer->SetVersion(serializer.GetVersion());
+	if (buffer->GetVersion() != 0) {
+		buffer->SetVersion(serializer.GetVersion());
+	}
 }
 
 FieldWriter::~FieldWriter() {
