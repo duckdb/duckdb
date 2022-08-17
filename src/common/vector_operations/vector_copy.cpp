@@ -9,7 +9,6 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "fsst.h"
 
 namespace duckdb {
 
@@ -123,31 +122,9 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 
 	D_ASSERT(sel);
 
-	// For FSST Vectors we decompress on copy
+	// For FSST Vectors we decompress instead of copying.
 	if (source->GetVectorType() == VectorType::FSST_VECTOR) {
-		D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
-		auto ldata = FSSTVector::GetCompressedData<string_t>(*source);
-		auto tdata = FlatVector::GetData<string_t>(target);
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto source_idx = sel->get_index(source_offset + i);
-			auto target_idx = target_offset + i;
-			string_t compressed_string = ldata[source_idx];
-			if (tmask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
-				// Decompress string
-				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-				auto decompressed_string_size = duckdb_fsst_decompress(
-				    (duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*source)),
-				    compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
-				    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
-				D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-
-				auto str =
-				    StringVector::AddStringOrBlob(target, (const char *)decompress_buffer, decompressed_string_size);
-				tdata[target_idx] = str;
-			} else {
-				tdata[target_idx] = string_t(nullptr, 0);
-			}
-		}
+		FSSTVector::DecompressVector(*source, target, source_offset, target_offset, copy_count, sel);
 		return;
 	}
 

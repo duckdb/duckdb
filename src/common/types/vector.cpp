@@ -14,6 +14,8 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/fsst.hpp"
 #include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
@@ -456,17 +458,11 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		if (vector->GetType().InternalType() != PhysicalType::VARCHAR) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
-
-		unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-
 		auto str_compressed = ((string_t *)data)[index];
-		auto decompressed_string_size =
-			duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-								   str_compressed.GetSize(), (unsigned char *)str_compressed.GetDataUnsafe(),
-								   StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
-		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-
-		return Value(string((char *)decompress_buffer, decompressed_string_size));
+		Value result =
+		    FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+		                                    (unsigned char *)str_compressed.GetDataUnsafe(), str_compressed.GetSize());
+		return result;
 	}
 
 	switch (vector->GetType().id()) {
@@ -634,16 +630,10 @@ string Vector::ToString(idx_t count) const {
 	case VectorType::FSST_VECTOR: {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = ((string_t *)data)[i];
-
-			// Decompress string
-			unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-			auto decompressed_string_size =
-			    duckdb_fsst_decompress((duckdb_fsst_decoder_t *)FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
-			                           compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
-			                           StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
-			D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-
-			retval += string((const char *)decompress_buffer, decompressed_string_size) + (i == count - 1 ? "" : ", ");
+			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
+			                                            (unsigned char *)compressed_string.GetDataUnsafe(),
+			                                            compressed_string.GetSize());
+			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 	} break;
 	case VectorType::CONSTANT_VECTOR:
@@ -829,7 +819,7 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 	case VectorType::FSST_VECTOR: {
 		// create a new flat vector of this type
 		Vector other(GetType());
-		// now copy the data of this vector to the other vector, removing the selection vector in the process
+		// copy the data of this vector to the other vector, removing compression and selection vector in the process
 		VectorOperations::Copy(*this, other, sel, count, 0, 0);
 		// create a reference to the data in the other vector
 		this->Reference(other);
@@ -1439,7 +1429,7 @@ string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 	return fsst_string_buffer.AddBlob(data);
 }
 
-void *FSSTVector::GetDecoder(Vector &vector) {
+void *FSSTVector::GetDecoder(const Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	if (!vector.auxiliary) {
 		throw InternalException("GetDecoder called on FSST Vector without registered buffer");
@@ -1459,6 +1449,27 @@ void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_d
 
 	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder);
+}
+
+void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,
+                                  const SelectionVector *sel) {
+	D_ASSERT(src.GetVectorType() == VectorType::FSST_VECTOR);
+	D_ASSERT(dst.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto dst_mask = FlatVector::Validity(dst);
+	auto ldata = FSSTVector::GetCompressedData<string_t>(src);
+	auto tdata = FlatVector::GetData<string_t>(dst);
+	for (idx_t i = 0; i < copy_count; i++) {
+		auto source_idx = sel->get_index(src_offset + i);
+		auto target_idx = dst_offset + i;
+		string_t compressed_string = ldata[source_idx];
+		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(src), dst,
+			                                                    (unsigned char *)compressed_string.GetDataUnsafe(),
+			                                                    compressed_string.GetSize());
+		} else {
+			tdata[target_idx] = string_t(nullptr, 0);
+		}
+	}
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {

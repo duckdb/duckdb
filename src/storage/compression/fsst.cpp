@@ -5,6 +5,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/common/fsst.hpp"
 #include "miniz_wrapper.hpp"
 #include "fsst.h"
 
@@ -131,7 +132,6 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 		} else {
 			state.empty_strings++;
 		}
-
 	}
 	return true;
 }
@@ -589,15 +589,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			    dict, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values]);
 
 			if (str_len > 0) {
-				// Decompress string
-				unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
-				auto decompressed_string_size = duckdb_fsst_decompress(
-				    (duckdb_fsst_decoder_t *)scan_state.duckdb_fsst_decoder.get(), str_len, (unsigned char *)str_ptr,
-				    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
-				D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-
-				result_data[i + result_offset] =
-				    StringVector::AddStringOrBlob(result, (const char *)decompress_buffer, decompressed_string_size);
+				result_data[i + result_offset] = FSSTPrimitives::DecompressValue(
+				    scan_state.duckdb_fsst_decoder.get(), result, (unsigned char *)str_ptr, str_len);
 			} else {
 				result_data[i + result_offset] = string_t(nullptr, 0);
 			}
@@ -629,7 +622,6 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto have_symbol_table = ParseFSSTSegmentHeader(base_ptr, &decoder, &width);
 
 	auto result_data = FlatVector::GetData<string_t>(result);
-	unsigned char decompress_buffer[StringUncompressed::STRING_BLOCK_LIMIT + 1];
 
 	if (have_symbol_table) {
 		// We basically just do a scan of 1 which is kinda expensive as we need to repeatedly delta decode until we
@@ -648,15 +640,8 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
 		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
-		// Decompress string
-		auto decompressed_string_size = duckdb_fsst_decompress(
-		    &decoder, compressed_string.GetSize(), (unsigned char *)compressed_string.GetDataUnsafe(),
-		    StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
-		D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
-
-		auto decompressed_string =
-		    StringVector::AddStringOrBlob(result, (char *)decompress_buffer, decompressed_string_size);
-		result_data[result_idx] = decompressed_string;
+		result_data[result_idx] = FSSTPrimitives::DecompressValue(
+		    (void *)&decoder, result, (unsigned char *)compressed_string.GetDataUnsafe(), compressed_string.GetSize());
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
 		result_data[result_idx] = string_t(nullptr, 0);

@@ -385,10 +385,18 @@ struct FSSTVector {
 	static inline T *GetCompressedData(Vector &vector) {
 		return (T *)FSSTVector::GetCompressedData(vector);
 	}
+	//! Decompresses an FSST_VECTOR into a FLAT_VECTOR. Note: validity is not copied.
+	static void DecompressVector(const Vector &src, Vector &dst, idx_t src_offset, idx_t dst_offset, idx_t copy_count,
+	                             const SelectionVector *sel);
+	static string_t DecompressValue(void *duckdb_fsst_decoder, Vector &result, unsigned char *compressed_string,
+	                                idx_t compressed_string_len);
+	static Value DecompressValue(void *duckdb_fsst_decoder, unsigned char *compressed_string,
+	                             idx_t compressed_string_len);
+
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, string_t data);
 	DUCKDB_API static string_t AddCompressedString(Vector &vector, const char *data, idx_t len);
 	DUCKDB_API static void RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder);
-	DUCKDB_API static void *GetDecoder(Vector &vector);
+	DUCKDB_API static void *GetDecoder(const Vector &vector);
 };
 
 struct StructVector {
