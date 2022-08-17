@@ -450,6 +450,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #ifdef __arm__
 				return;
 #endif
+			} else if (param == "notarmlinux") {
+#if defined(__arm__) and defined(__GNUC__)
+				return;
+#endif
 			} else if (param == "notwindows") {
 #ifdef _WIN32
 				return;

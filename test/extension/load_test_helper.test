@@ -4,6 +4,8 @@
 
 require test_helper
 
+require notarmlinux
+
 require skip_reload
 
 query I

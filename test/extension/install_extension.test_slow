@@ -4,6 +4,8 @@
 
 require notmingw
 
+require notarmlinux
+
 require skip_reload
 
 statement ok
