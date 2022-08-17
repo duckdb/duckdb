@@ -91,12 +91,20 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 			tmask.Set(target_offset + i, valid);
 		}
 	} else {
-		auto &smask = FlatVector::Validity(*source);
-		if (smask.IsMaskSet()) {
+		const ValidityMask *smask;
+		if (source->GetVectorType() == VectorType::FLAT_VECTOR) {
+			smask = &(FlatVector::Validity(*source));
+		} else if (source->GetVectorType() == VectorType::FSST_VECTOR) {
+			smask = &(FSSTVector::Validity(*source));
+		} else {
+			throw InternalException("Unsupported vector type in vector copy");
+		}
+
+		if (smask->IsMaskSet()) {
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto idx = sel->get_index(source_offset + i);
 
-				if (smask.RowIsValid(idx)) {
+				if (smask->RowIsValid(idx)) {
 					// set valid
 					if (!tmask.AllValid()) {
 						tmask.SetValidUnsafe(target_offset + i);

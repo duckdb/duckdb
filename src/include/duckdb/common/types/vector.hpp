@@ -284,24 +284,20 @@ struct FlatVector {
 		return FlatVector::GetData<T>(vector)[idx];
 	}
 	static inline const ValidityMask &Validity(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FSST_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.validity;
 	}
 	static inline ValidityMask &Validity(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FSST_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return vector.validity;
 	}
 	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FSST_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		vector.validity.Initialize(new_validity);
 	}
 	DUCKDB_API static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
-		         vector.GetVectorType() == VectorType::FSST_VECTOR);
+		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
@@ -361,6 +357,18 @@ struct StringVector {
 };
 
 struct FSSTVector {
+	static inline const ValidityMask &Validity(const Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		return vector.validity;
+	}
+	static inline ValidityMask &Validity(Vector &vector) {
+		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		return vector.validity;
+	}
+	static inline void SetValidity(Vector &vector, ValidityMask &new_validity) {
+		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
+		vector.validity.Initialize(new_validity);
+	}
 	static inline const_data_ptr_t GetCompressedData(const Vector &vector) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FSST_VECTOR);
 		return vector.data;
