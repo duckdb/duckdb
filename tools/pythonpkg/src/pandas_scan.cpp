@@ -174,13 +174,13 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 	py::list column_name_list;
 	auto df_columns = py::list(original_df.attr("columns"));
 
-	for (auto &column_name_py : df_columns) {
+	for (auto column_name_py : df_columns) {
 		string column_name = py::str(column_name_py);
 		// put it all lower_case
 		auto column_name_low = StringUtil::Lower(column_name);
 		name_map[column_name_low] = 1;
 	}
-	for (auto &column_name_py : df_columns) {
+	for (auto column_name_py : df_columns) {
 		const string column_name = py::str(column_name_py);
 		auto column_name_low = StringUtil::Lower(column_name);
 		if (columns_seen.find(column_name_low) == columns_seen.end()) {
