@@ -31,6 +31,6 @@ public:
 	//! Serializes a blob into a CrossProductRef
 	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a CrossProductRef
-	static unique_ptr<TableRef> Deserialize(FieldReader &source, ClientContext &context);
+	static unique_ptr<TableRef> Deserialize(FieldReader &source);
 };
 } // namespace duckdb

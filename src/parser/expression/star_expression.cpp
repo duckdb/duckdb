@@ -77,8 +77,7 @@ void StarExpression::Serialize(FieldWriter &writer) const {
 	}
 }
 
-unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader,
-                                                         ClientContext &context) {
+unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto &source = reader.GetSource();
 
 	auto result = make_unique<StarExpression>();
@@ -90,7 +89,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(ExpressionType type, Fi
 	auto replace_count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < replace_count; i++) {
 		auto name = source.Read<string>();
-		auto expr = ParsedExpression::Deserialize(source, context);
+		auto expr = ParsedExpression::Deserialize(source);
 		result->replace_list.insert(make_pair(name, move(expr)));
 	}
 	return move(result);

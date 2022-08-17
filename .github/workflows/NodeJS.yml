@@ -14,7 +14,6 @@ on:
       - 'tools/rpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -67,7 +66,7 @@ jobs:
     - name: Validate Docs
       run: npx jsdoc-to-markdown --files tools/nodejs/lib/*.js >> $GITHUB_STEP_SUMMARY
       env:
-        npm_config_yes: true 
+        npm_config_yes: true
 
     - name: Node 10
       shell: bash

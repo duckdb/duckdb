@@ -52,7 +52,7 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 
 	auto type = reader.ReadRequired<TableReferenceType>();
@@ -64,22 +64,22 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source, ClientContext &
 		result = BaseTableRef::Deserialize(reader);
 		break;
 	case TableReferenceType::CROSS_PRODUCT:
-		result = CrossProductRef::Deserialize(reader, context);
+		result = CrossProductRef::Deserialize(reader);
 		break;
 	case TableReferenceType::JOIN:
-		result = JoinRef::Deserialize(reader, context);
+		result = JoinRef::Deserialize(reader);
 		break;
 	case TableReferenceType::SUBQUERY:
-		result = SubqueryRef::Deserialize(reader, context);
+		result = SubqueryRef::Deserialize(reader);
 		break;
 	case TableReferenceType::TABLE_FUNCTION:
-		result = TableFunctionRef::Deserialize(reader, context);
+		result = TableFunctionRef::Deserialize(reader);
 		break;
 	case TableReferenceType::EMPTY:
 		result = EmptyTableRef::Deserialize(reader);
 		break;
 	case TableReferenceType::EXPRESSION_LIST:
-		result = ExpressionListRef::Deserialize(reader, context);
+		result = ExpressionListRef::Deserialize(reader);
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:

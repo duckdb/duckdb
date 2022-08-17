@@ -71,11 +71,11 @@ void JoinRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(using_columns);
 }
 
-unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader, ClientContext &context) {
+unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
 	auto result = make_unique<JoinRef>();
-	result->left = reader.ReadRequiredSerializable<TableRef>(context);
-	result->right = reader.ReadRequiredSerializable<TableRef>(context);
-	result->condition = reader.ReadOptional<ParsedExpression>(nullptr, context);
+	result->left = reader.ReadRequiredSerializable<TableRef>();
+	result->right = reader.ReadRequiredSerializable<TableRef>();
+	result->condition = reader.ReadOptional<ParsedExpression>(nullptr);
 	result->type = reader.ReadRequired<JoinType>();
 	result->is_natural = reader.ReadRequired<bool>();
 	result->using_columns = reader.ReadRequiredList<string>();

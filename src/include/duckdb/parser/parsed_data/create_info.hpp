@@ -52,11 +52,11 @@ protected:
 public:
 	void Serialize(Serializer &serializer) const;
 
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, ClientContext &context);
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 
-	void CopyProperties(CreateInfo &other) const;
+	DUCKDB_API void CopyProperties(CreateInfo &other) const;
 };
 
 } // namespace duckdb

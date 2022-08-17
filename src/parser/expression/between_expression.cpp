@@ -38,11 +38,10 @@ void BetweenExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*upper);
 }
 
-unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type, FieldReader &source,
-                                                            ClientContext &context) {
-	auto input = source.ReadRequiredSerializable<ParsedExpression>(context);
-	auto lower = source.ReadRequiredSerializable<ParsedExpression>(context);
-	auto upper = source.ReadRequiredSerializable<ParsedExpression>(context);
+unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type, FieldReader &source) {
+	auto input = source.ReadRequiredSerializable<ParsedExpression>();
+	auto lower = source.ReadRequiredSerializable<ParsedExpression>();
+	auto upper = source.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<BetweenExpression>(move(input), move(lower), move(upper));
 }
 

@@ -148,7 +148,6 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	Planner::VerifyPlan(context, plan);
 
-
 	return plan;
 }
 

@@ -107,7 +107,7 @@ void ParsedExpression::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto expression_class = reader.ReadRequired<ExpressionClass>();
 	auto type = reader.ReadRequired<ExpressionType>();
@@ -115,28 +115,25 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source,
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {
 	case ExpressionClass::BETWEEN:
-		result = BetweenExpression::Deserialize(type, reader, context);
-		break;
-	case ExpressionClass::BOUND_EXPRESSION:
-		result = BoundExpression::Deserialize(type, reader, context);
+		result = BetweenExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CASE:
-		result = CaseExpression::Deserialize(type, reader, context);
+		result = CaseExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CAST:
-		result = CastExpression::Deserialize(type, reader, context);
+		result = CastExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::COLLATE:
-		result = CollateExpression::Deserialize(type, reader, context);
+		result = CollateExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::COLUMN_REF:
 		result = ColumnRefExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::COMPARISON:
-		result = ComparisonExpression::Deserialize(type, reader, context);
+		result = ComparisonExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CONJUNCTION:
-		result = ConjunctionExpression::Deserialize(type, reader, context);
+		result = ConjunctionExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::CONSTANT:
 		result = ConstantExpression::Deserialize(type, reader);
@@ -145,13 +142,13 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source,
 		result = DefaultExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::FUNCTION:
-		result = FunctionExpression::Deserialize(type, reader, context);
+		result = FunctionExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::LAMBDA:
-		result = LambdaExpression::Deserialize(type, reader, context);
+		result = LambdaExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::OPERATOR:
-		result = OperatorExpression::Deserialize(type, reader, context);
+		result = OperatorExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(type, reader);
@@ -160,13 +157,13 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source,
 		result = PositionalReferenceExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::STAR:
-		result = StarExpression::Deserialize(type, reader, context);
+		result = StarExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::SUBQUERY:
-		result = SubqueryExpression::Deserialize(type, reader, context);
+		result = SubqueryExpression::Deserialize(type, reader);
 		break;
 	case ExpressionClass::WINDOW:
-		result = WindowExpression::Deserialize(type, reader, context);
+		result = WindowExpression::Deserialize(type, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization: '%s'!",

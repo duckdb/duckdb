@@ -59,12 +59,10 @@ static bool PrefixFunction(const string_t &str, const string_t &pattern) {
 }
 
 ScalarFunction PrefixFun::GetFunction() {
-	auto function = ScalarFunction("prefix",                                     // name of the function
+	return ScalarFunction("prefix",                                     // name of the function
 	                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // argument list
 	                      LogicalType::BOOLEAN,                         // return type
 	                      ScalarFunction::BinaryFunction<string_t, string_t, bool, PrefixOperator>);
-	function.function_set_key = 0;
-	return function;
 }
 
 void PrefixFun::RegisterFunction(BuiltinFunctions &set) {

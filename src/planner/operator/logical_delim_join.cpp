@@ -3,22 +3,25 @@
 
 namespace duckdb {
 
+LogicalDelimJoin::LogicalDelimJoin(JoinType type)
+    : LogicalComparisonJoin(type, LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+}
+
 void LogicalDelimJoin::Serialize(FieldWriter &writer) const {
-	if (type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) { // DeliminatorPlanUpdater::VisitOperator can turn a
-		                                                        // delim join into a comparison join
-		return LogicalComparisonJoin::Serialize(writer);
+	LogicalComparisonJoin::Serialize(writer);
+	if (type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		D_ASSERT(duplicate_eliminated_columns.empty());
+		// if the delim join has no delim columns anymore it is turned into a regular comparison join
+		return;
 	}
-	writer.WriteField(join_type);
 	writer.WriteSerializableList(duplicate_eliminated_columns);
 }
 
-unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                          FieldReader &reader) {
-	auto join_type = reader.ReadRequired<JoinType>();
-	auto duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(context);
-	auto result = make_unique<LogicalDelimJoin>(join_type);
-	result->duplicate_eliminated_columns = move(duplicate_eliminated_columns);
-	return result;
+unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto result = make_unique<LogicalDelimJoin>(JoinType::INVALID);
+	LogicalComparisonJoin::Deserialize(*result, state, reader);
+	result->duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	return move(result);
 }
 
 } // namespace duckdb

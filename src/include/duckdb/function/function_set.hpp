@@ -12,7 +12,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
-#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -24,72 +23,61 @@ public:
 
 	//! The name of the function set
 	string name;
-
-	//! The set of functions. Each function has
-	map<idx_t, T> functions;
+	//! The set of functions.
+	vector<T> functions;
 
 public:
 	void AddFunction(T function) {
-		if (function.function_set_key == DConstants::INVALID_INDEX) {
-			auto new_key = functions.size();
-#ifdef DEBUG
-			new_key += 42; // artifically introduce a large gap in the key space to catch problems where the index
-			               // should be used instead of an offset
-#endif
-			function.function_set_key = new_key;
-		}
-		AddFunction(move(function), function.function_set_key);
-	}
-	T GetFunction(idx_t key) {
-		if (key == DConstants::INVALID_INDEX) {
-			throw InternalException("Invalid function key for %s", name);
-		}
-		if (functions.find(key) == functions.end()) {
-			throw InternalException("Function key %llu not in use for %s", key, name);
-		}
-		return functions.at(key);
+		functions.push_back(move(function));
 	}
 	idx_t Size() {
 		return functions.size();
 	}
 	T GetFunctionByOffset(idx_t offset) {
-		idx_t current_offset = 0;
-		for (auto &entry : functions) {
-			if (offset == current_offset) {
-				return entry.second;
-			}
-			current_offset++;
-		}
-		throw InternalException("Function index %llu too big, only have %llu functions for %s", offset,
-		                        functions.size(), name);
+		return functions[offset];
 	}
-
-	void AddFunction(T function, idx_t key) {
-		if (functions.find(key) != functions.end()) {
-			throw InternalException("Function index %llu already in use in %s", key, name);
+	T &GetFunctionReferenceByOffset(idx_t offset) {
+		return functions[offset];
+	}
+	bool MergeFunctionSet(FunctionSet<T> new_functions) {
+		D_ASSERT(!new_functions.functions.empty());
+		bool need_rewrite_entry = false;
+		for (auto &new_func : new_functions.functions) {
+			bool can_add = true;
+			for (auto &func : functions) {
+				if (new_func.Equal(func)) {
+					can_add = false;
+					break;
+				}
+			}
+			if (can_add) {
+				functions.push_back(new_func);
+				need_rewrite_entry = true;
+			}
 		}
-		function.name = name;
-		function.function_set_key = key;
-		functions.insert(std::pair<idx_t, T>(key, move(function)));
+		return need_rewrite_entry;
 	}
 };
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
-	explicit ScalarFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	DUCKDB_API explicit ScalarFunctionSet(string name);
+
+	DUCKDB_API ScalarFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
-	explicit AggregateFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	DUCKDB_API explicit AggregateFunctionSet(string name);
+
+	DUCKDB_API AggregateFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
-	explicit TableFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	DUCKDB_API explicit TableFunctionSet(string name);
+
+	TableFunction GetFunctionByArguments(const vector<LogicalType> &arguments);
 };
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {

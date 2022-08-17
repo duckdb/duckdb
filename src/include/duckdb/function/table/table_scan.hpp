@@ -40,6 +40,7 @@ public:
 struct TableScanFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static TableFunction GetFunction();
+	static TableFunction GetIndexScanFunction();
 	static TableCatalogEntry *GetTableEntry(const TableFunction &function, const FunctionData *bind_data);
 };
 

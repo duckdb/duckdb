@@ -47,7 +47,7 @@ public:
 	//! Serializes a TableRef to a stand-alone binary blob
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a TableRef
-	DUCKDB_API static unique_ptr<TableRef> Deserialize(Deserializer &source, ClientContext &context);
+	DUCKDB_API static unique_ptr<TableRef> Deserialize(Deserializer &source);
 
 	//! Copy the properties of this table ref to the target
 	void CopyProperties(TableRef &target) const;

@@ -34,8 +34,7 @@ public:
 
 public:
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(ClientContext &context, LogicalOperatorType type,
-	                                               FieldReader &reader);
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override {

@@ -43,7 +43,7 @@ public:
 	//! Serializes a QueryNode to a stand-alone binary blob
 	void Serialize(FieldWriter &writer) const override;
 	//! Deserializes a blob back into a QueryNode
-	static unique_ptr<QueryNode> Deserialize(FieldReader &reader, ClientContext &context);
+	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
 };
 
 } // namespace duckdb

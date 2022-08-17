@@ -1,0 +1,37 @@
+# name: test/sql/update/update_null_integers.test
+# description: Integer null update checkpoint
+# group: [update]
+
+load __TEST_DIR__/update_null_integers.db
+
+statement ok
+SET wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE t(i int, j int);
+
+# Insert >= 1024 NULLs
+statement ok
+INSERT INTO t SELECT ii, NULL FROM range(1024) tbl(ii);
+
+query III
+select COUNT(j), MIN(j), MAX(j) from t;
+----
+0	NULL	NULL
+
+# checkpoint to trigger the issue
+statement ok
+CHECKPOINT;
+
+query III
+select COUNT(j), MIN(j), MAX(j) from t;
+----
+0	NULL	NULL
+
+statement ok
+UPDATE t SET j = 1;
+
+query III
+select COUNT(j), MIN(j), MAX(j) from t;
+----
+1024	1	1

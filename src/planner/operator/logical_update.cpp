@@ -1,4 +1,7 @@
 #include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/common/field_writer.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
@@ -11,8 +14,8 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 	writer.WriteField(update_is_del_and_insert);
 }
 
-unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto &context = state.gstate.context;
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto &catalog = Catalog::GetCatalog(context);
 
@@ -26,9 +29,9 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(ClientContext &context, L
 	result->table_index = reader.ReadRequired<idx_t>();
 	result->return_chunk = reader.ReadRequired<bool>();
 	result->columns = reader.ReadRequiredList<column_t>();
-	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);
+	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

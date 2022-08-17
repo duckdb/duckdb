@@ -223,7 +223,7 @@ CatalogEntry *SchemaCatalogEntry::AddFunction(ClientContext &context, CreateFunc
 		auto scalar_info = (CreateScalarFunctionInfo *)info;
 		auto &scalars = *(ScalarFunctionCatalogEntry *)entry;
 		for (const auto &scalar : scalars.functions.functions) {
-			scalar_info->functions.AddFunction(scalar.second);
+			scalar_info->functions.AddFunction(scalar);
 		}
 		break;
 	}
@@ -231,7 +231,7 @@ CatalogEntry *SchemaCatalogEntry::AddFunction(ClientContext &context, CreateFunc
 		auto agg_info = (CreateAggregateFunctionInfo *)info;
 		auto &aggs = *(AggregateFunctionCatalogEntry *)entry;
 		for (const auto &agg : aggs.functions.functions) {
-			agg_info->functions.AddFunction(agg.second);
+			agg_info->functions.AddFunction(agg);
 		}
 		break;
 	}

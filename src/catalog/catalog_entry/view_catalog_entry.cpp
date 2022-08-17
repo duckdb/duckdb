@@ -62,7 +62,7 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source, C
 	info->schema = reader.ReadRequired<string>();
 	info->view_name = reader.ReadRequired<string>();
 	info->sql = reader.ReadRequired<string>();
-	info->query = reader.ReadRequiredSerializable<SelectStatement>(context);
+	info->query = reader.ReadRequiredSerializable<SelectStatement>();
 	info->aliases = reader.ReadRequiredList<string>();
 	info->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	reader.Finalize();

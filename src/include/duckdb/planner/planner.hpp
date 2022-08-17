@@ -38,7 +38,8 @@ public:
 
 public:
 	void CreatePlan(unique_ptr<SQLStatement> statement);
-	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op);
+	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
+	                       bound_parameter_map_t *map = nullptr);
 
 private:
 	void CreatePlan(SQLStatement &statement);

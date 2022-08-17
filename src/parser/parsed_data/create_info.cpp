@@ -24,17 +24,17 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	SerializeInternal(serializer);
 }
 
-unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer, ClientContext &context) {
+unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.Read<CatalogType>();
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:
-		return CreateIndexInfo::Deserialize(deserializer, context);
+		return CreateIndexInfo::Deserialize(deserializer);
 	case CatalogType::TABLE_ENTRY:
-		return CreateTableInfo::Deserialize(deserializer, context);
+		return CreateTableInfo::Deserialize(deserializer);
 	case CatalogType::SCHEMA_ENTRY:
 		return CreateSchemaInfo::Deserialize(deserializer);
 	case CatalogType::VIEW_ENTRY:
-		return CreateViewInfo::Deserialize(deserializer, context);
+		return CreateViewInfo::Deserialize(deserializer);
 	default:
 		throw NotImplementedException("Cannot deserialize '%s'", CatalogTypeToString(type));
 	}

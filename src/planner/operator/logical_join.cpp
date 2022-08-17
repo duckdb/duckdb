@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -59,12 +60,19 @@ void LogicalJoin::GetExpressionBindings(Expression &expr, unordered_set<idx_t> &
 }
 
 void LogicalJoin::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	writer.WriteField<JoinType>(join_type);
+	writer.WriteField<idx_t>(mark_index);
+	writer.WriteList<idx_t>(left_projection_map);
+	writer.WriteList<idx_t>(right_projection_map);
+	//	writer.WriteSerializableList(join_stats);
 }
 
-unique_ptr<LogicalOperator> LogicalJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                     FieldReader &reader) {
-	throw NotImplementedException(LogicalOperatorToString(type));
+void LogicalJoin::Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader) {
+	join.join_type = reader.ReadRequired<JoinType>();
+	join.mark_index = reader.ReadRequired<idx_t>();
+	join.left_projection_map = reader.ReadRequiredList<idx_t>();
+	join.right_projection_map = reader.ReadRequiredList<idx_t>();
+	//	join.join_stats = reader.ReadRequiredSerializableList<BaseStatistics>(reader.GetSource());
 }
 
 } // namespace duckdb

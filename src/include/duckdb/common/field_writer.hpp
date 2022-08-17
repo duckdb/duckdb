@@ -18,8 +18,8 @@ class BufferedSerializer;
 
 class FieldWriter {
 public:
-	FieldWriter(Serializer &serializer);
-	~FieldWriter();
+	DUCKDB_API FieldWriter(Serializer &serializer);
+	DUCKDB_API ~FieldWriter();
 
 public:
 	template <class T>
@@ -53,6 +53,16 @@ public:
 		AddField();
 		Write<uint32_t>(elements.size());
 		for (auto &element : elements) {
+			Write<T>(element);
+		}
+	}
+
+	// vector<bool> yay
+	template <class T, class CONTAINER_TYPE = vector<T>>
+	void WriteListNoReference(const CONTAINER_TYPE &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for (auto element : elements) {
 			Write<T>(element);
 		}
 	}
@@ -91,7 +101,7 @@ public:
 	}
 
 	// Called after all fields have been written. Should always be called.
-	void Finalize();
+	DUCKDB_API void Finalize();
 
 	Serializer &GetSerializer() {
 		return *buffer;
@@ -107,7 +117,7 @@ private:
 		WriteData((const_data_ptr_t)&element, sizeof(T));
 	}
 
-	void WriteData(const_data_ptr_t buffer, idx_t write_size);
+	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size);
 
 private:
 	Serializer &serializer;
@@ -139,8 +149,8 @@ private:
 
 class FieldReader {
 public:
-	FieldReader(Deserializer &source);
-	~FieldReader();
+	DUCKDB_API FieldReader(Deserializer &source);
+	DUCKDB_API ~FieldReader();
 
 public:
 	template <class T>
@@ -174,6 +184,7 @@ public:
 		AddField();
 		auto result_count = source.Read<uint32_t>();
 		vector<T> result;
+		result.reserve(result_count);
 		for (idx_t i = 0; i < result_count; i++) {
 			result.push_back(source.Read<T>());
 		}
@@ -278,7 +289,7 @@ public:
 	}
 
 	//! Called after all fields have been read. Should always be called.
-	void Finalize();
+	DUCKDB_API void Finalize();
 
 	Deserializer &GetSource() {
 		return source;

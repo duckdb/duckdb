@@ -48,14 +48,13 @@ void LogicalFilter::Serialize(FieldWriter &writer) const {
 	writer.WriteList<idx_t>(projection_map);
 }
 
-unique_ptr<LogicalOperator> LogicalFilter::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
-	auto expressions = reader.ReadRequiredSerializableList<Expression>(context);
+unique_ptr<LogicalOperator> LogicalFilter::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto projection_map = reader.ReadRequiredList<idx_t>();
 	auto result = make_unique<LogicalFilter>();
 	result->expressions = move(expressions);
 	result->projection_map = move(projection_map);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

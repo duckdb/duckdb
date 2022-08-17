@@ -30,6 +30,15 @@ struct ICUStrptime : public ICUDateFunc {
 		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<ICUStrptimeBindData>(*this);
 		}
+
+		static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+			throw NotImplementedException("FIXME: serialize icu-strptime");
+		}
+
+		static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+		                                            ScalarFunction &bound_function) {
+			throw NotImplementedException("FIXME: serialize icu-strptime");
+		}
 	};
 
 	static void ParseFormatSpecifier(string_t &format_specifier, StrpTimeFormat &format) {
@@ -141,7 +150,7 @@ struct ICUStrptime : public ICUDateFunc {
 		}
 
 		// Tail patch the old binder
-		auto bound_function = func.functions.GetFunction(best_function);
+		auto &bound_function = func.functions.GetFunctionReferenceByOffset(best_function);
 		bind = bound_function.bind;
 		bound_function.bind = StrpTimeBindFunction;
 	}

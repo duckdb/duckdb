@@ -55,18 +55,17 @@ void CaseExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable<ParsedExpression>(*else_expr);
 }
 
-unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader,
-                                                         ClientContext &context) {
+unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto result = make_unique<CaseExpression>();
 	auto &source = reader.GetSource();
 	auto count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < count; i++) {
 		CaseCheck new_check;
-		new_check.when_expr = ParsedExpression::Deserialize(source, context);
-		new_check.then_expr = ParsedExpression::Deserialize(source, context);
+		new_check.when_expr = ParsedExpression::Deserialize(source);
+		new_check.then_expr = ParsedExpression::Deserialize(source);
 		result->case_checks.push_back(move(new_check));
 	}
-	result->else_expr = reader.ReadRequiredSerializable<ParsedExpression>(context);
+	result->else_expr = reader.ReadRequiredSerializable<ParsedExpression>();
 	return move(result);
 }
 

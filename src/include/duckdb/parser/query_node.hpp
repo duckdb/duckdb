@@ -65,7 +65,7 @@ public:
 	//! Serializes a QueryNode to a stand-alone binary blob
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a QueryNode
-	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source, ClientContext &context);
+	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
 	string ResultModifiersToString() const;
 

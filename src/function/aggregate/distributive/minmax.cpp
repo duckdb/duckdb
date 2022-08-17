@@ -518,7 +518,6 @@ unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunc
 		function = GetUnaryAggregate<OP>(LogicalType::HUGEINT);
 		break;
 	}
-	function.function_set_key = (idx_t)function.arguments[0].id(); // TODO this is pretty evil
 	function.name = move(name);
 	function.arguments[0] = decimal_type;
 	function.return_type = decimal_type;
@@ -540,18 +539,16 @@ static void AddMinMaxOperator(AggregateFunctionSet &set) {
 		if (type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BLOB || type.id() == LogicalType::JSON) {
 			set.AddFunction(
 			    AggregateFunction::UnaryAggregateDestructor<MinMaxState<string_t>, string_t, string_t, OP_STRING>(
-			        type.id(), type.id()),
-			    (idx_t)type.id());
+			        type.id(), type.id()));
 		} else if (type.id() == LogicalTypeId::DECIMAL) {
 			set.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                  BindDecimalMinMax<OP>),
-			                (idx_t)type.id());
+			                                  BindDecimalMinMax<OP>));
 		} else if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP ||
 		           type.id() == LogicalTypeId::STRUCT) {
-			set.AddFunction(GetMinMaxFunction<OP_VECTOR, VectorMinMaxState>(type), (idx_t)type.id());
+			set.AddFunction(GetMinMaxFunction<OP_VECTOR, VectorMinMaxState>(type));
 
 		} else {
-			set.AddFunction(GetUnaryAggregate<OP>(type), (idx_t)type.id()); // TODO this is pretty evil
+			set.AddFunction(GetUnaryAggregate<OP>(type)); // TODO this is pretty evil
 		}
 	}
 }

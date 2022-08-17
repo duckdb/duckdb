@@ -699,8 +699,8 @@ unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source,
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
 	info->table = reader.ReadRequired<string>();
-	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>(context);
-	info->constraints = reader.ReadRequiredSerializableList<Constraint>(context);
+	info->columns = reader.ReadRequiredSerializableList<ColumnDefinition, ColumnDefinition>();
+	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
 	reader.Finalize();
 
 	return info;

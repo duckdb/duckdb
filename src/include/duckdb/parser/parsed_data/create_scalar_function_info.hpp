@@ -24,7 +24,7 @@ struct CreateScalarFunctionInfo : public CreateFunctionInfo {
 	    : CreateFunctionInfo(CatalogType::SCALAR_FUNCTION_ENTRY), functions(move(set)) {
 		name = functions.name;
 		for (auto &func : functions.functions) {
-			func.second.name = functions.name;
+			func.name = functions.name;
 		}
 	}
 

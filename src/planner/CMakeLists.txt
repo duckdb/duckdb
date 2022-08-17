@@ -19,6 +19,7 @@ add_library_unity(
   binder.cpp
   bind_context.cpp
   planner.cpp
+  plan_serialization.cpp
   pragma_handler.cpp
   logical_operator_visitor.cpp
   table_filter.cpp)

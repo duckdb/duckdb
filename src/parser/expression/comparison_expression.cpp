@@ -36,10 +36,9 @@ void ComparisonExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*right);
 }
 
-unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType type, FieldReader &reader,
-                                                               ClientContext &context) {
-	auto left_child = reader.ReadRequiredSerializable<ParsedExpression>(context);
-	auto right_child = reader.ReadRequiredSerializable<ParsedExpression>(context);
+unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType type, FieldReader &reader) {
+	auto left_child = reader.ReadRequiredSerializable<ParsedExpression>();
+	auto right_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	return make_unique<ComparisonExpression>(type, move(left_child), move(right_child));
 }
 

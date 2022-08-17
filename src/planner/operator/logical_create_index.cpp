@@ -12,17 +12,17 @@ void LogicalCreateIndex::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(info);
 }
 
-unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                            FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto &context = state.gstate.context;
 	auto catalog_info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto &catalog = Catalog::GetCatalog(context);
 	TableCatalogEntry *table = catalog.GetEntry<TableCatalogEntry>(context, catalog_info->schema, catalog_info->table);
 
 	auto column_ids = reader.ReadRequiredList<column_t>();
 
-	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(context);
+	auto unbound_expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
-	auto create_info = reader.ReadOptional<CreateInfo>(nullptr, context);
+	auto create_info = reader.ReadOptional<CreateInfo>(nullptr);
 	if (create_info->type != CatalogType::INDEX_ENTRY) {
 		throw InternalException("Unexpected type: '%s', expected '%s'", CatalogTypeToString(create_info->type),
 		                        CatalogTypeToString(CatalogType::INDEX_ENTRY));

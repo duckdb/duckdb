@@ -31,6 +31,7 @@ class ScalarFunctionSet;
 class ScalarFunction;
 class TableFunctionSet;
 class TableFunction;
+class SimpleFunction;
 
 struct PragmaInfo;
 
@@ -88,24 +89,28 @@ public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns DConstants::INVALID_INDEX and sets error if none could be found
 	DUCKDB_API static idx_t BindFunction(const string &name, ScalarFunctionSet &functions,
-	                                     vector<LogicalType> &arguments, string &error);
+	                                     const vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, ScalarFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
 	DUCKDB_API static idx_t BindFunction(const string &name, AggregateFunctionSet &functions,
-	                                     vector<LogicalType> &arguments, string &error);
+	                                     const vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, AggregateFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
 	DUCKDB_API static idx_t BindFunction(const string &name, TableFunctionSet &functions,
-	                                     vector<LogicalType> &arguments, string &error);
+	                                     const vector<LogicalType> &arguments, string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, TableFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API static idx_t BindFunction(const string &name, PragmaFunctionSet &functions, PragmaInfo &info,
 	                                     string &error);
+
+	//! Used in the bind to erase an argument from a function
+	DUCKDB_API static void EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,
+	                                     idx_t argument_index);
 };
 
 class SimpleFunction : public Function {
@@ -114,10 +119,11 @@ public:
 	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
-	idx_t function_set_key;
-
 	//! The set of arguments of the function
 	vector<LogicalType> arguments;
+	//! The set of original arguments of the function - only set if Function::EraseArgument is called
+	//! Used for (de)serialization purposes
+	vector<LogicalType> original_arguments;
 	//! The type of varargs to support, or LogicalTypeId::INVALID if the function does not accept variable length
 	//! arguments
 	LogicalType varargs;

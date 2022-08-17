@@ -54,7 +54,7 @@ void ConjunctionOrFilter::Serialize(FieldWriter &writer) const {
 unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(FieldReader &source) {
 	auto res = make_unique<ConjunctionOrFilter>();
 	res->child_filters = source.ReadRequiredSerializableList<TableFilter>();
-	return res;
+	return move(res);
 }
 
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
@@ -109,7 +109,7 @@ void ConjunctionAndFilter::Serialize(FieldWriter &writer) const {
 unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(FieldReader &source) {
 	auto res = make_unique<ConjunctionAndFilter>();
 	res->child_filters = source.ReadRequiredSerializableList<TableFilter>();
-	return res;
+	return move(res);
 }
 
 } // namespace duckdb

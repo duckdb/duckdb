@@ -32,14 +32,11 @@ void LogicalLimit::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(offset);
 }
 
-unique_ptr<LogicalOperator> LogicalLimit::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                      FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalLimit::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto limit_val = reader.ReadRequired<int64_t>();
 	auto offset_val = reader.ReadRequired<int64_t>();
-	unique_ptr<Expression> limit;
-	limit = reader.ReadOptional<Expression>(move(limit), context);
-	unique_ptr<Expression> offset;
-	offset = reader.ReadOptional<Expression>(move(offset), context);
+	auto limit = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	return make_unique<LogicalLimit>(limit_val, offset_val, move(limit), move(offset));
 }
 } // namespace duckdb

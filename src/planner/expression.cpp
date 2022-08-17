@@ -5,12 +5,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
 
@@ -101,60 +96,70 @@ hash_t Expression::Hash() const {
 
 void Expression::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
+	writer.WriteField<ExpressionClass>(expression_class);
 	writer.WriteField<ExpressionType>(type);
+	writer.WriteString(alias);
 	Serialize(writer);
 	writer.Finalize();
 }
 
-unique_ptr<Expression> Expression::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<Expression> Expression::Deserialize(Deserializer &source, PlanDeserializationState &gstate) {
 	FieldReader reader(source);
+	auto expression_class = reader.ReadRequired<ExpressionClass>();
 	auto type = reader.ReadRequired<ExpressionType>();
+	auto alias = reader.ReadRequired<string>();
+
+	ExpressionDeserializationState state(gstate, type);
 
 	unique_ptr<Expression> result;
-	switch (type) {
-	case ExpressionType::BOUND_REF:
-		result = BoundReferenceExpression::Deserialize(context, type, reader);
+	switch (expression_class) {
+	case ExpressionClass::BOUND_REF:
+		result = BoundReferenceExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::BOUND_COLUMN_REF:
-		result = BoundColumnRefExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_COLUMN_REF:
+		result = BoundColumnRefExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::BOUND_AGGREGATE:
-		result = BoundAggregateExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_AGGREGATE:
+		result = BoundAggregateExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::VALUE_CONSTANT:
-		result = BoundConstantExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_BETWEEN:
+		result = BoundBetweenExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::BOUND_FUNCTION:
-		result = BoundFunctionExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_CONSTANT:
+		result = BoundConstantExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::OPERATOR_CAST:
-		result = BoundCastExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_FUNCTION:
+		result = BoundFunctionExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::CASE_EXPR:
-		result = BoundCaseExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_CAST:
+		result = BoundCastExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::CONJUNCTION_AND:
-	case ExpressionType::CONJUNCTION_OR:
-		result = BoundConjunctionExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_CASE:
+		result = BoundCaseExpression::Deserialize(state, reader);
 		break;
-	case ExpressionType::COMPARE_EQUAL:
-	case ExpressionType::COMPARE_NOTEQUAL:
-	case ExpressionType::COMPARE_LESSTHAN:
-	case ExpressionType::COMPARE_GREATERTHAN:
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-	case ExpressionType::COMPARE_IN:
-	case ExpressionType::COMPARE_NOT_IN:
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-	case ExpressionType::COMPARE_BETWEEN:
-	case ExpressionType::COMPARE_NOT_BETWEEN:
-	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		result = BoundComparisonExpression::Deserialize(context, type, reader);
+	case ExpressionClass::BOUND_CONJUNCTION:
+		result = BoundConjunctionExpression::Deserialize(state, reader);
+		break;
+	case ExpressionClass::BOUND_COMPARISON:
+		result = BoundComparisonExpression::Deserialize(state, reader);
+		break;
+	case ExpressionClass::BOUND_OPERATOR:
+		result = BoundOperatorExpression::Deserialize(state, reader);
+		break;
+	case ExpressionClass::BOUND_WINDOW:
+		result = BoundWindowExpression::Deserialize(state, reader);
+		break;
+	case ExpressionClass::BOUND_UNNEST:
+		result = BoundUnnestExpression::Deserialize(state, reader);
+		break;
+	case ExpressionClass::BOUND_PARAMETER:
+		result = BoundParameterExpression::Deserialize(state, reader);
 		break;
 	default:
 		throw SerializationException("Unsupported type for expression deserialization %s",
 		                             ExpressionTypeToString(type));
 	}
+	result->alias = alias;
 	reader.Finalize();
 	return result;
 }

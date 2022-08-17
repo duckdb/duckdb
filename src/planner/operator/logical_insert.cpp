@@ -19,12 +19,12 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(bound_defaults);
 }
 
-unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
+	auto &context = state.gstate.context;
 	auto insert_values_size = reader.ReadRequired<idx_t>();
 	vector<vector<unique_ptr<Expression>>> insert_values;
 	for (idx_t i = 0; i < insert_values_size; ++i) {
-		insert_values.push_back(reader.ReadRequiredSerializableList<Expression>(context));
+		insert_values.push_back(reader.ReadRequiredSerializableList<Expression>(state.gstate));
 	}
 
 	auto column_index_map = reader.ReadRequiredList<idx_t>();
@@ -32,7 +32,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
-	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(context);
+	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	auto &catalog = Catalog::GetCatalog(context);
 
@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 	}
 
 	auto result = make_unique<LogicalInsert>(table_catalog_entry);
-	result->type = type;
+	result->type = state.type;
 	result->table = table_catalog_entry;
 	result->table_index = table_index;
 	result->return_chunk = return_chunk;
@@ -51,7 +51,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(ClientContext &context, L
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
 	result->bound_defaults = move(bound_defaults);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

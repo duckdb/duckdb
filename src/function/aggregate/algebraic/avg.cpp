@@ -149,54 +149,23 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 	}
 };
 
-static void SerializeDecimalAvg(FieldWriter &writer, const FunctionData *bind_data_p,
-                                const AggregateFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (AverageDecimalBindData *)bind_data_p;
-	writer.WriteField(bind_data->scale);
-}
-
-static unique_ptr<FunctionData> DeserializeDecimalAvg(ClientContext &context, FieldReader &reader,
-                                                      AggregateFunction &function) {
-	return make_unique<AverageDecimalBindData>(reader.ReadRequired<double>());
-}
-
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
-		auto function = AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
+		return AggregateFunction::UnaryAggregate<AvgState<int64_t>, int16_t, double, IntegerAverageOperation>(
 		    LogicalType::SMALLINT, LogicalType::DOUBLE);
-		function.function_set_key = 1;
-		function.serialize = SerializeDecimalAvg;
-		function.deserialize = DeserializeDecimalAvg;
-		return function;
 	}
 	case PhysicalType::INT32: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::INTEGER, LogicalType::DOUBLE);
-		function.function_set_key = 2;
-		function.serialize = SerializeDecimalAvg;
-		function.deserialize = DeserializeDecimalAvg;
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int32_t, double, IntegerAverageOperationHugeint>(
+		    LogicalType::INTEGER, LogicalType::DOUBLE);
 	}
 	case PhysicalType::INT64: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
-		        LogicalType::BIGINT, LogicalType::DOUBLE);
-		function.function_set_key = 3;
-		function.serialize = SerializeDecimalAvg;
-		function.deserialize = DeserializeDecimalAvg;
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, double, IntegerAverageOperationHugeint>(
+		    LogicalType::BIGINT, LogicalType::DOUBLE);
 	}
 	case PhysicalType::INT128: {
-		auto function =
-		    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
-		        LogicalType::HUGEINT, LogicalType::DOUBLE);
-		function.function_set_key = 4;
-		function.serialize = SerializeDecimalAvg;
-		function.deserialize = DeserializeDecimalAvg;
-		return function;
+		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
+		    LogicalType::HUGEINT, LogicalType::DOUBLE);
 	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
@@ -219,15 +188,13 @@ void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 
 	avg.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                                  BindDecimalAvg),
-	                0);
-	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16), 1);
-	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32), 2);
-	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64), 3);
-	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128), 4);
+	                                  BindDecimalAvg));
+	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
+	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
+	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
+	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
-	                    LogicalType::DOUBLE, LogicalType::DOUBLE),
-	                5);
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
 
 	avg.name = "mean";

@@ -42,15 +42,15 @@ unique_ptr<CreateMacroInfo> ScalarMacroCatalogEntry::Deserialize(Deserializer &m
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
-	auto expression = reader.ReadRequiredSerializable<ParsedExpression>(context);
+	auto expression = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto func = make_unique<ScalarMacroFunction>(move(expression));
 	info->function = move(func);
-	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>(context);
+	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto default_param_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
-		info->function->default_parameters[name] = ParsedExpression::Deserialize(source, context);
+		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
 	}
 	// dont like this
 	// info->type=CatalogType::MACRO_ENTRY;
@@ -85,15 +85,15 @@ unique_ptr<CreateMacroInfo> TableMacroCatalogEntry::Deserialize(Deserializer &ma
 	FieldReader reader(main_source);
 	info->schema = reader.ReadRequired<string>();
 	info->name = reader.ReadRequired<string>();
-	auto query_node = reader.ReadRequiredSerializable<QueryNode>(context);
+	auto query_node = reader.ReadRequiredSerializable<QueryNode>();
 	auto table_function = make_unique<TableMacroFunction>(move(query_node));
 	info->function = move(table_function);
-	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>(context);
+	info->function->parameters = reader.ReadRequiredSerializableList<ParsedExpression>();
 	auto default_param_count = reader.ReadRequired<uint32_t>();
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < default_param_count; i++) {
 		auto name = source.Read<string>();
-		info->function->default_parameters[name] = ParsedExpression::Deserialize(source, context);
+		info->function->default_parameters[name] = ParsedExpression::Deserialize(source);
 	}
 
 	reader.Finalize();

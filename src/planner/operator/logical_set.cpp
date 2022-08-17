@@ -9,8 +9,7 @@ void LogicalSet::Serialize(FieldWriter &writer) const {
 	writer.WriteField(scope);
 }
 
-unique_ptr<LogicalOperator> LogicalSet::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                    FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalSet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto name = reader.ReadRequired<std::string>();
 	auto value = Value::Deserialize(reader.GetSource());
 	auto scope = reader.ReadRequired<SetScope>();

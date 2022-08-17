@@ -35,6 +35,9 @@ public:
 	unique_ptr<DataChunk> delete_chunk;
 	unique_ptr<DataChunk> update_chunk;
 
+private:
+	ClientContext &context;
+
 public:
 	template <bool HAS_LOG>
 	void CommitEntry(UndoFlags type, data_ptr_t data);
@@ -48,8 +51,6 @@ private:
 	void WriteUpdate(UpdateInfo *info);
 
 	void AppendRowId(row_t rowid);
-
-	ClientContext &context;
 };
 
 } // namespace duckdb

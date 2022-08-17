@@ -22,18 +22,23 @@ string LogicalComparisonJoin::ParamsToString() const {
 }
 
 void LogicalComparisonJoin::Serialize(FieldWriter &writer) const {
-	writer.WriteField(join_type);
+	LogicalJoin::Serialize(writer);
 	writer.WriteRegularSerializableList(conditions);
 	writer.WriteRegularSerializableList(delim_types);
 }
 
-unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(ClientContext &context, LogicalOperatorType type,
+void LogicalComparisonJoin::Deserialize(LogicalComparisonJoin &comparison_join, LogicalDeserializationState &state,
+                                        FieldReader &reader) {
+	LogicalJoin::Deserialize(comparison_join, state, reader);
+	comparison_join.conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition>(state.gstate);
+	comparison_join.delim_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+}
+
+unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(LogicalDeserializationState &state,
                                                                FieldReader &reader) {
-	auto join_type = reader.ReadRequired<JoinType>();
-	auto result = make_unique<LogicalComparisonJoin>(join_type, type);
-	result->conditions = reader.ReadRequiredSerializableList<JoinCondition, JoinCondition, ClientContext &>(context);
-	result->delim_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	return result;
+	auto result = make_unique<LogicalComparisonJoin>(JoinType::INVALID, state.type);
+	LogicalComparisonJoin::Deserialize(*result, state, reader);
+	return move(result);
 }
 
 } // namespace duckdb

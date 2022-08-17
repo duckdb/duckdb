@@ -13,7 +13,6 @@ on:
       - 'tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/R.yml'
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -56,8 +55,8 @@ jobs:
     runs-on: ubuntu-20.04
     needs: r-test-extension
     env:
-      LIBARROW_BINARY : 'false'
-      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
       BUILD_SUBSTRAIT_EXTENSION: 1
 
     steps:
@@ -156,8 +155,8 @@ jobs:
     needs: rstats-linux
 
     env:
-      LIBARROW_BINARY : 'false'
-      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
       DUCKDB_R_DEBUG: 1
     steps:
     - uses: actions/checkout@v3

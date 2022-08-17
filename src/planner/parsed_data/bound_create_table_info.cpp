@@ -33,18 +33,20 @@ void BoundCreateTableInfo::Serialize(Serializer &serializer) const {
 	// vector<BlockPointer> indexes;
 }
 
-unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer &source, ClientContext &context) {
+unique_ptr<BoundCreateTableInfo> BoundCreateTableInfo::Deserialize(Deserializer &source,
+                                                                   PlanDeserializationState &state) {
 	auto create_info = SchemaCatalogEntry::Deserialize(source);
 	auto schema_name = create_info->schema;
 	auto result = make_unique<BoundCreateTableInfo>(move(create_info));
+	auto &context = state.context;
 	result->schema = Catalog::GetCatalog(context).GetSchema(context, schema_name);
-	result->base = source.ReadOptional<CreateInfo>(context);
+	result->base = source.ReadOptional<CreateInfo>();
 
-	source.ReadList<Constraint>(result->constraints, context);
+	source.ReadList<Constraint>(result->constraints);
 	source.ReadList<BoundConstraint>(result->bound_constraints);
-	source.ReadList<Expression>(result->bound_defaults, context);
+	source.ReadList<Expression>(result->bound_defaults, state);
 
-	result->query = source.ReadOptional<LogicalOperator>(context);
+	result->query = source.ReadOptional<LogicalOperator>(state);
 	return result;
 }
 } // namespace duckdb

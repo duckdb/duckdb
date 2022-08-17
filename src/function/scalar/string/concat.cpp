@@ -254,7 +254,7 @@ void ConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	concat_op.AddFunction(ScalarFunction({LogicalType::BLOB, LogicalType::BLOB}, LogicalType::BLOB, ConcatOperator));
 	concat_op.AddFunction(ListConcatFun::GetFunction());
 	for (auto &fun : concat_op.functions) {
-		fun.second.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+		fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	}
 	set.AddFunction(concat_op);
 

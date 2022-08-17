@@ -39,7 +39,7 @@ public:
 		return move(result);
 	}
 
-	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer, ClientContext &context) {
+	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer) {
 		auto result = make_unique<CreateViewInfo>();
 		result->DeserializeBase(deserializer);
 
@@ -47,7 +47,7 @@ public:
 		result->view_name = reader.ReadRequired<string>();
 		result->aliases = reader.ReadRequiredList<string>();
 		result->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-		result->query = reader.ReadOptional<SelectStatement>(nullptr, context);
+		result->query = reader.ReadOptional<SelectStatement>(nullptr);
 		reader.Finalize();
 
 		return result;

@@ -33,11 +33,10 @@ void LogicalSample::Serialize(FieldWriter &writer) const {
 	sample_options->Serialize(writer.GetSerializer());
 }
 
-unique_ptr<LogicalOperator> LogicalSample::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                       FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalSample::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto sample_options = SampleOptions::Deserialize(reader.GetSource());
 	// TODO(stephwang): review how to pass child LogicalOperator
 	auto result = make_unique<LogicalSample>(move(sample_options), nullptr);
-	return result;
+	return move(result);
 }
 } // namespace duckdb

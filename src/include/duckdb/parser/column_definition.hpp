@@ -65,7 +65,7 @@ public:
 	DUCKDB_API ColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source, ClientContext &context);
+	DUCKDB_API static ColumnDefinition Deserialize(Deserializer &source);
 
 	//===--------------------------------------------------------------------===//
 	// Generated Columns (VIRTUAL)

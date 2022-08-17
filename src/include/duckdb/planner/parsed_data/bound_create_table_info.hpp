@@ -52,7 +52,7 @@ struct BoundCreateTableInfo {
 	//! Serializes a BoundCreateTableInfo to a stand-alone binary blob
 	void Serialize(Serializer &serializer) const;
 	//! Deserializes a blob back into a BoundCreateTableInfo
-	static unique_ptr<BoundCreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
+	static unique_ptr<BoundCreateTableInfo> Deserialize(Deserializer &source, PlanDeserializationState &state);
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

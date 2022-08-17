@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -44,11 +45,12 @@ void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializableList(children);
 }
 
-unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ClientContext &context, ExpressionType type, FieldReader &reader) {
-	auto children = reader.ReadRequiredSerializableList<Expression>(context);
-	auto res = make_unique<BoundConjunctionExpression>(type);
+unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeserializationState &state,
+                                                               FieldReader &reader) {
+	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
+	auto res = make_unique<BoundConjunctionExpression>(state.type);
 	res->children = move(children);
-	return res;
+	return move(res);
 }
 
 } // namespace duckdb

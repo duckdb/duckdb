@@ -8,8 +8,7 @@ void LogicalShow::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(aliases);
 }
 
-unique_ptr<LogicalOperator> LogicalShow::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                     FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalShow::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto types_select = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto aliases = reader.ReadRequiredList<string>();
 
@@ -17,6 +16,6 @@ unique_ptr<LogicalOperator> LogicalShow::Deserialize(ClientContext &context, Log
 	auto result = unique_ptr<LogicalShow>(new LogicalShow());
 	result->types_select = types_select;
 	result->aliases = aliases;
-	return result;
+	return move(result);
 }
 } // namespace duckdb

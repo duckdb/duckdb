@@ -61,8 +61,8 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source,
 	create_index_info->sql = reader.ReadRequired<string>();
 	create_index_info->index_type = IndexType(reader.ReadRequired<uint8_t>());
 	create_index_info->constraint_type = IndexConstraintType(reader.ReadRequired<uint8_t>());
-	create_index_info->expressions = reader.ReadRequiredSerializableList<ParsedExpression>(context);
-	create_index_info->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>(context);
+	create_index_info->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
+	create_index_info->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
 	create_index_info->column_ids = reader.ReadRequiredList<idx_t>();
 	reader.Finalize();

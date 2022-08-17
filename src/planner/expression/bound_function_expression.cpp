@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/parser/expression_util.hpp"
+#include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
 
@@ -73,65 +74,21 @@ void BoundFunctionExpression::Verify() const {
 
 void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
 	D_ASSERT(!function.name.empty());
-	writer.WriteString(function.name);
-	if (function.function_set_key == DConstants::INVALID_INDEX) {
-		throw SerializationException("Invalid function serialization key for %s", function.name);
-	}
-	// TODO need to serialize function arguments too cause e.g. sum changes those
-	writer.WriteField(function.function_set_key);
-
+	D_ASSERT(return_type == function.return_type);
 	writer.WriteField(is_operator);
-	writer.WriteSerializable(return_type);
-	writer.WriteRegularSerializableList(function.arguments);
-
-	writer.WriteSerializableList(children);
-
-	writer.WriteField(bind_info != nullptr);
-	if (bind_info) {
-		if (!function.serialize) {
-			throw SerializationException("Have bind info but no serialization function for %s", function.name);
-		}
-		function.serialize(writer, bind_info.get(), function);
-	}
+	FunctionSerializer::Serialize<ScalarFunction>(writer, function, return_type, children, bind_info.get());
 }
 
-unique_ptr<Expression> BoundFunctionExpression::Deserialize(ClientContext &context, ExpressionType type,
+unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializationState &state,
                                                             FieldReader &reader) {
-	auto name = reader.ReadRequired<string>();
-	auto function_set_key = reader.ReadRequired<idx_t>();
-	D_ASSERT(function_set_key != DConstants::INVALID_INDEX);
-
 	auto is_operator = reader.ReadRequired<bool>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto children = reader.ReadRequiredSerializableList<Expression>(context);
-
-	// TODO this is duplicated in logical_get and bound_aggregate_expression more or less, make it a template or so
-
-	auto &catalog = Catalog::GetCatalog(context);
-	auto func_catalog = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-
-	if (!func_catalog || func_catalog->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
-		throw InternalException("Cant find catalog entry for function %s", name);
-	}
-
-	auto functions = (ScalarFunctionCatalogEntry *)func_catalog;
-	auto function = functions->functions.GetFunction(function_set_key);
+	vector<unique_ptr<Expression>> children;
 	unique_ptr<FunctionData> bind_info;
+	auto function = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
+	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
 
-	// sometimes the bind changes those, not sure if we should generically set those
-	function.return_type = return_type;
-	function.arguments = move(arguments);
-
-	auto has_bind_info = reader.ReadRequired<bool>();
-
-	if (has_bind_info) {
-		if (!function.deserialize) {
-			throw SerializationException("Have bind info but no deserialization function for %s", function.name);
-		}
-		bind_info = function.deserialize(context, reader, function);
-	}
-
-	return make_unique<BoundFunctionExpression>(return_type, function, move(children), move(bind_info), is_operator);
+	auto return_type = function.return_type;
+	return make_unique<BoundFunctionExpression>(move(return_type), move(function), move(children), move(bind_info),
+	                                            is_operator);
 }
 } // namespace duckdb

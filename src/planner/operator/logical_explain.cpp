@@ -10,14 +10,13 @@ void LogicalExplain::Serialize(FieldWriter &writer) const {
 	writer.WriteString(logical_plan_opt);
 }
 
-unique_ptr<LogicalOperator> LogicalExplain::Deserialize(ClientContext &context, LogicalOperatorType type,
-                                                        FieldReader &reader) {
+unique_ptr<LogicalOperator> LogicalExplain::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto explain_type = reader.ReadRequired<ExplainType>();
 	// TODO(stephwang) review if unique_ptr<LogicalOperator> plan is needed
 	auto result = unique_ptr<LogicalExplain>(new LogicalExplain(explain_type));
-	result->physical_plan = reader.ReadRequired<std::string>();
-	result->logical_plan_unopt = reader.ReadRequired<std::string>();
-	result->logical_plan_opt = reader.ReadRequired<std::string>();
-	return result;
+	result->physical_plan = reader.ReadRequired<string>();
+	result->logical_plan_unopt = reader.ReadRequired<string>();
+	result->logical_plan_opt = reader.ReadRequired<string>();
+	return move(result);
 }
 } // namespace duckdb
