@@ -2,6 +2,9 @@
 # description: Test correct behavior if we unexpectedly abort after a checkpoint right after the free list is written
 # group: [storage]
 
+require skip_reload
+
+
 load __TEST_DIR__/checkpoint_abort.db
 
 statement ok

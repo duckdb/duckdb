@@ -29,6 +29,8 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return 1;
 	}
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

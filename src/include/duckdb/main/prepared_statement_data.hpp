@@ -13,9 +13,11 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 class CatalogEntry;
+class ClientContext;
 class PhysicalOperator;
 class SQLStatement;
 
@@ -30,7 +32,7 @@ public:
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
 	//! The map of parameter index to the actual value entry
-	unordered_map<idx_t, vector<unique_ptr<Value>>> value_map;
+	bound_parameter_map_t value_map;
 
 	//! The result names of the transaction
 	vector<string> names;
@@ -45,6 +47,9 @@ public:
 	idx_t catalog_version;
 
 public:
+	void CheckParameterCount(idx_t parameter_count);
+	//! Whether or not the prepared statement data requires the query to rebound for the given parameters
+	bool RequireRebind(ClientContext &context, const vector<Value> &values);
 	//! Bind a set of values to the prepared statement data
 	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter

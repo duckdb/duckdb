@@ -12,8 +12,7 @@ CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : context(context
 	SetPaths(ParsePaths(""));
 }
 
-void CatalogSearchPath::Set(const string &new_value, bool is_set_schema) {
-	auto new_paths = ParsePaths(new_value);
+void CatalogSearchPath::Set(vector<string> &new_paths, bool is_set_schema) {
 	if (is_set_schema && new_paths.size() != 1) {
 		throw CatalogException("SET schema can set only 1 schema. This has %d", new_paths.size());
 	}
@@ -25,6 +24,11 @@ void CatalogSearchPath::Set(const string &new_value, bool is_set_schema) {
 	}
 	this->set_paths = move(new_paths);
 	SetPaths(set_paths);
+}
+
+void CatalogSearchPath::Set(const string &new_value, bool is_set_schema) {
+	auto new_paths = ParsePaths(new_value);
+	Set(new_paths, is_set_schema);
 }
 
 const vector<string> &CatalogSearchPath::Get() {

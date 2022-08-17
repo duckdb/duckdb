@@ -137,8 +137,8 @@ struct SortedAggregateFunction {
 
 		// We have to scatter the chunks one at a time
 		// so build a selection vector for each one.
-		VectorData svdata;
-		states.Orrify(count, svdata);
+		UnifiedVectorFormat svdata;
+		states.ToUnifiedFormat(count, svdata);
 
 		// Build the selection vector for each state.
 		auto sdata = (SortedAggregateState **)svdata.data;
@@ -239,6 +239,14 @@ struct SortedAggregateFunction {
 			}
 		}
 	}
+
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
+		throw NotImplementedException("FIXME: serialize sorted aggregate not supported");
+	}
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	                                            AggregateFunction &function) {
+		throw NotImplementedException("FIXME: deserialize sorted aggregate not supported");
+	}
 };
 
 unique_ptr<FunctionData> AggregateFunction::BindSortedAggregate(AggregateFunction &bound_function,
@@ -267,6 +275,8 @@ unique_ptr<FunctionData> AggregateFunction::BindSortedAggregate(AggregateFunctio
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::Finalize, SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>);
+	bound_function.serialize = SortedAggregateFunction::Serialize;
+	bound_function.deserialize = SortedAggregateFunction::Deserialize;
 
 	return move(sorted_bind);
 }

@@ -67,7 +67,7 @@ describe('Extension loading', function() {
     var db;
 
     before(function(done) {
-        db = new duckdb.Database(':memory:', done);
+        db = new duckdb.Database(':memory:', {"allow_unsigned_extensions":"true"}, done);
     });
 
     for (ext of extension_paths) {

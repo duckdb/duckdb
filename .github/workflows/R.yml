@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-20.04
     needs: r-test-extension
     env:
-      LIBARROW_BINARY : 'false'
-      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
       BUILD_SUBSTRAIT_EXTENSION: 1
 
     steps:
@@ -77,7 +77,7 @@ jobs:
         GITHUB_PAT: ${{ github.token }}
       shell: bash
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc tidy
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
@@ -155,8 +155,8 @@ jobs:
     needs: rstats-linux
 
     env:
-      LIBARROW_BINARY : 'false'
-      ARROW_RUNTIME_SIMD_LEVEL : 'AVX2'
+      LIBARROW_BINARY: 'false'
+      ARROW_USER_SIMD_LEVEL: 'AVX2'
       DUCKDB_R_DEBUG: 1
     steps:
     - uses: actions/checkout@v3

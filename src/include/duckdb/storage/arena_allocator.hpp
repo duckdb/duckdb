@@ -17,7 +17,7 @@ struct ArenaChunk {
 	ArenaChunk(Allocator &allocator, idx_t size);
 	~ArenaChunk();
 
-	unique_ptr<AllocatedData> data;
+	AllocatedData data;
 	idx_t current_position;
 	idx_t maximum_size;
 	unique_ptr<ArenaChunk> next;

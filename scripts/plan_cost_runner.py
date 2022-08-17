@@ -111,14 +111,14 @@ def main():
             regressions.append((query_name, old_cost, new_cost))
             
     exit_code = 0
-    if len(improvements) > 1:
+    if improvements:
         print_banner("IMPROVEMENTS DETECTED")
         print_diffs(improvements)
-    if len(regressions) > 1:
+    if regressions:
         exit_code = 1
         print_banner("REGRESSIONS DETECTED")
         print_diffs(regressions)
-    if len(improvements) == 0 and len(regressions) == 0:
+    if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
     
     os.remove(OLD_DB_NAME)

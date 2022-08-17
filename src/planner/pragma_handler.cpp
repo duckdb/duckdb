@@ -24,14 +24,13 @@ void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatemen
 		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
 			// PRAGMA statement: check if we need to replace it by a new set of statements
 			PragmaHandler handler(context);
-			auto new_query = handler.HandlePragma(statements[i].get()); //*((PragmaStatement &)*statements[i]).info
+			auto new_query = handler.HandlePragma(statements[i].get());
 			if (!new_query.empty()) {
 				// this PRAGMA statement gets replaced by a new query string
 				// push the new query string through the parser again and add it to the transformer
 				Parser parser(context.GetParserOptions());
 				parser.ParseQuery(new_query);
 				// insert the new statements and remove the old statement
-				// FIXME: off by one here maybe?
 				for (idx_t j = 0; j < parser.statements.size(); j++) {
 					new_statements.push_back(move(parser.statements[j]));
 				}
@@ -68,7 +67,7 @@ string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &inf
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}
-	auto &bound_function = entry->functions[bound_idx];
+	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
 	if (bound_function.query) {
 		QueryErrorContext error_context(statement, statement->stmt_location);
 		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,

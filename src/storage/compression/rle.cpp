@@ -94,8 +94,8 @@ unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type)
 template <class T>
 bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &rle_state = (RLEAnalyzeState<T> &)state;
-	VectorData vdata;
-	input.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -156,7 +156,7 @@ struct RLECompressState : public CompressionState {
 		handle = buffer_manager.Pin(current_segment->block);
 	}
 
-	void Append(VectorData &vdata, idx_t count) {
+	void Append(UnifiedVectorFormat &vdata, idx_t count) {
 		auto data = (T *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
@@ -230,8 +230,8 @@ unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpoi
 template <class T>
 void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
 	auto &state = (RLECompressState<T> &)state_p;
-	VectorData vdata;
-	scan_vector.Orrify(count, vdata);
+	UnifiedVectorFormat vdata;
+	scan_vector.ToUnifiedFormat(count, vdata);
 
 	state.Append(vdata, count);
 }

@@ -23,6 +23,8 @@ typedef std::function<unique_ptr<PhysicalResultCollector>(ClientContext &context
     get_result_collector_t;
 
 struct ClientConfig {
+	//! The home directory used by the system (if any)
+	string home_directory;
 	//! If the query profiler is enabled or not.
 	bool enable_profiler = false;
 	//! If detailed query profiling is enabled
@@ -52,6 +54,8 @@ struct ClientConfig {
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
+	// Whether or not we should verify the serializer
+	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
@@ -78,8 +82,9 @@ struct ClientConfig {
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
+	static const ClientConfig &GetConfig(const ClientContext &context);
 
-	static string ExtractTimezoneFromConfig(ClientConfig &config);
+	string ExtractTimezone() const;
 };
 
 } // namespace duckdb

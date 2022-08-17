@@ -2,6 +2,9 @@
 # description: Test that index entries are properly removed after aborted append
 # group: [transactions]
 
+require skip_reload
+
+
 statement ok
 PRAGMA enable_verification
 

@@ -2050,7 +2050,7 @@ inline std::string encode_url(const std::string &s) {
 	for (size_t i = 0; s[i]; i++) {
 		switch (s[i]) {
 		case ' ': result += "%20"; break;
-		case '+': result += "%2B"; break;
+//		case '+': result += "%2B"; break;
 		case '\r': result += "%0D"; break;
 		case '\n': result += "%0A"; break;
 		case '\'': result += "%27"; break;
@@ -2096,7 +2096,12 @@ inline std::string decode_url(const std::string &s,
 				int val = 0;
 				if (from_hex_to_i(s, i + 1, 2, val)) {
 					// 2 digits hex codes
-					result += static_cast<char>(val);
+					if (static_cast<char>(val) == '+'){
+						// We don't decode +
+						result += "%2B";
+					} else {
+						result += static_cast<char>(val);
+					}
 					i += 2; // '00'
 				} else {
 					result += s[i];
@@ -3695,7 +3700,7 @@ inline void parse_query_text(const std::string &s, Params &params) {
 		});
 
 		if (!key.empty()) {
-			params.emplace(decode_url(key, true), decode_url(val, true));
+			params.emplace(decode_url(key, true), decode_url(val, false));
 		}
 	});
 }

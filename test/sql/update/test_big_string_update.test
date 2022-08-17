@@ -2,6 +2,8 @@
 # description: Test update of big string
 # group: [update]
 
+require skip_reload
+
 # create a table
 statement ok con1
 CREATE TABLE test (a VARCHAR);

@@ -16,7 +16,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
-	statep.Normalify(STANDARD_VECTOR_SIZE);
+	statep.Flatten(STANDARD_VECTOR_SIZE);
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {

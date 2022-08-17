@@ -41,7 +41,12 @@ public class DuckDBTimestamp {
 			LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
 				, nanosPartMicros(timeMicros), ZoneOffset.UTC));
 	}
-	
+
+	public static Timestamp toSqlTimestampNanos(long timeNanos) {
+		return Timestamp.valueOf(
+			LocalDateTime.ofEpochSecond(nanos2seconds(timeNanos)
+				, nanosPartNanos(timeNanos), ZoneOffset.UTC));
+	}
 	public static LocalDateTime toLocalDateTime(long timeMicros) {
 		return LocalDateTime.ofEpochSecond(micros2seconds(timeMicros)
 				, nanosPartMicros(timeMicros), ZoneOffset.UTC);
@@ -92,6 +97,23 @@ public class DuckDBTimestamp {
 		}
 		else {
 			return (int) ((1000_000L + (micros % 1000_000L)) * 1000);
+		}
+	}
+
+	private static long nanos2seconds(long nanos) {
+		if ((nanos % 1_000_000_000L) >= 0) {
+			return nanos / 1_000_000_000L;
+		} else {
+			return (nanos / 1_000_000_000L) -1;
+		}
+	}
+
+	private static int nanosPartNanos(long nanos) {
+		if ((nanos % 1_000_000_000L) >= 0) {
+			return (int) ((nanos % 1_000_000_000L));
+		}
+		else {
+			return (int) ((1_000_000_000L + (nanos % 1_000_000_000L)));
 		}
 	}
 }

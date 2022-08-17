@@ -500,10 +500,7 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 
 		if (node->info->filters.empty()) {
 			// no filters, create a cross product
-			auto join = make_unique<LogicalCrossProduct>();
-			join->children.push_back(move(left.second));
-			join->children.push_back(move(right.second));
-			result_operator = move(join);
+			result_operator = LogicalCrossProduct::Create(move(left.second), move(right.second));
 		} else {
 			// we have filters, create a join node
 			auto join = make_unique<LogicalComparisonJoin>(JoinType::INNER);

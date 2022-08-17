@@ -54,7 +54,7 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	idx_t chunk_count = input.size();
-	input.Normalify();
+	input.Flatten();
 
 	// we have not: append to the reservoir
 	idx_t required_count;
@@ -104,7 +104,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		idx_t append_to_next_sample = input.size() - append_to_current_sample_count;
 		if (append_to_current_sample_count > 0) {
 			// we have elements remaining, first add them to the current sample
-			input.Normalify();
+			input.Flatten();
 
 			input.SetCardinality(append_to_current_sample_count);
 			current_sample->AddToReservoir(input);

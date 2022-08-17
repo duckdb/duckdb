@@ -25,14 +25,14 @@ public:
 
 public:
 	template <class T>
-	static inline unique_ptr<Key> CreateKey(T element, bool is_little_endian) {
-		auto data = Key::CreateData<T>(element, is_little_endian);
+	static inline unique_ptr<Key> CreateKey(T element) {
+		auto data = Key::CreateData<T>(element);
 		return make_unique<Key>(move(data), sizeof(element));
 	}
 
 	template <class T>
-	static inline unique_ptr<Key> CreateKey(const Value &element, bool is_little_endian) {
-		return CreateKey(element.GetValueUnsafe<T>(), is_little_endian);
+	static inline unique_ptr<Key> CreateKey(const Value &element) {
+		return CreateKey(element.GetValueUnsafe<T>());
 	}
 
 public:
@@ -49,16 +49,16 @@ public:
 
 private:
 	template <class T>
-	static inline unique_ptr<data_t[]> CreateData(T value, bool is_little_endian) {
+	static inline unique_ptr<data_t[]> CreateData(T value) {
 		auto data = unique_ptr<data_t[]>(new data_t[sizeof(value)]);
-		Radix::EncodeData<T>(data.get(), value, is_little_endian);
+		Radix::EncodeData<T>(data.get(), value);
 		return data;
 	}
 };
 
 template <>
-unique_ptr<Key> Key::CreateKey(string_t value, bool is_little_endian);
+unique_ptr<Key> Key::CreateKey(string_t value);
 template <>
-unique_ptr<Key> Key::CreateKey(const char *value, bool is_little_endian);
+unique_ptr<Key> Key::CreateKey(const char *value);
 
 } // namespace duckdb

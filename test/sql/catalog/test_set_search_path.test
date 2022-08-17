@@ -2,6 +2,8 @@
 # description: SET schema and SET search_path
 # group: [catalog]
 
+require skip_reload
+
 # create a couple of schemas with a table each
 statement ok
 CREATE TABLE main_table(i INTEGER);

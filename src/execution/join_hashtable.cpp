@@ -68,7 +68,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 		auto indices = ConstantVector::GetData<hash_t>(hashes);
 		*indices = *indices & bitmask;
 	} else {
-		hashes.Normalify(count);
+		hashes.Flatten(count);
 		auto indices = FlatVector::GetData<hash_t>(hashes);
 		for (idx_t i = 0; i < count; i++) {
 			indices[i] &= bitmask;
@@ -77,8 +77,8 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 }
 
 void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers) {
-	VectorData hdata;
-	hashes.Orrify(count, hdata);
+	UnifiedVectorFormat hdata;
+	hashes.ToUnifiedFormat(count, hdata);
 
 	auto hash_data = (hash_t *)hdata.data;
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
@@ -107,7 +107,8 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 	}
 }
 
-static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
+static idx_t FilterNullValues(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t count,
+                              SelectionVector &result) {
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
@@ -119,9 +120,9 @@ static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx
 	return result_count;
 }
 
-idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data,
+idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data,
                                  const SelectionVector *&current_sel, SelectionVector &sel, bool build_side) {
-	key_data = keys.Orrify();
+	key_data = keys.ToUnifiedFormat();
 
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = FlatVector::IncrementalSelectionVector();
@@ -172,7 +173,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	}
 
 	// prepare the keys for processing
-	unique_ptr<VectorData[]> key_data;
+	unique_ptr<UnifiedVectorFormat[]> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel, true);
@@ -197,7 +198,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	DataChunk source_chunk;
 	source_chunk.InitializeEmpty(layout.GetTypes());
 
-	vector<VectorData> source_data;
+	vector<UnifiedVectorFormat> source_data;
 	source_data.reserve(layout.ColumnCount());
 
 	// serialize the keys to the key locations
@@ -209,22 +210,22 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	D_ASSERT(build_types.size() == payload.ColumnCount());
 	for (idx_t i = 0; i < payload.ColumnCount(); i++) {
 		source_chunk.data[source_data.size()].Reference(payload.data[i]);
-		VectorData pdata;
-		payload.data[i].Orrify(payload.size(), pdata);
+		UnifiedVectorFormat pdata;
+		payload.data[i].ToUnifiedFormat(payload.size(), pdata);
 		source_data.emplace_back(move(pdata));
 	}
 	if (IsRightOuterJoin(join_type)) {
 		// for FULL/RIGHT OUTER joins initialize the "found" boolean to false
 		source_chunk.data[source_data.size()].Reference(vfound);
-		VectorData fdata;
-		vfound.Orrify(keys.size(), fdata);
+		UnifiedVectorFormat fdata;
+		vfound.ToUnifiedFormat(keys.size(), fdata);
 		source_data.emplace_back(move(fdata));
 	}
 
 	// serialise the hashes at the end
 	source_chunk.data[source_data.size()].Reference(hash_values);
-	VectorData hdata;
-	hash_values.Orrify(keys.size(), hdata);
+	UnifiedVectorFormat hdata;
+	hash_values.ToUnifiedFormat(keys.size(), hdata);
 	source_data.emplace_back(move(hdata));
 
 	source_chunk.SetCardinality(keys);
@@ -239,7 +240,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	// use bitmask to get position in array
 	ApplyBitmask(hashes, count);
 
-	hashes.Normalify(count);
+	hashes.Flatten(count);
 
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map.Ptr();
@@ -549,8 +550,8 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		if (ht.null_values_are_equal[col_idx]) {
 			continue;
 		}
-		VectorData jdata;
-		join_keys.data[col_idx].Orrify(join_keys.size(), jdata);
+		UnifiedVectorFormat jdata;
+		join_keys.data[col_idx].ToUnifiedFormat(join_keys.size(), jdata);
 		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
@@ -618,8 +619,8 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 			mask.Copy(FlatVector::Validity(last_key), input.size());
 			break;
 		default: {
-			VectorData kdata;
-			last_key.Orrify(keys.size(), kdata);
+			UnifiedVectorFormat kdata;
+			last_key.ToUnifiedFormat(keys.size(), kdata);
 			for (idx_t i = 0; i < input.size(); i++) {
 				auto kidx = kdata.sel->get_index(i);
 				mask.Set(i, kdata.validity.RowIsValid(kidx));

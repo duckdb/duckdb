@@ -2,6 +2,8 @@
 # description: Test BIT_OR operator
 # group: [aggregates]
 
+require skip_reload
+
 # test on scalar values
 query II
 SELECT BIT_OR(3), BIT_OR(NULL)

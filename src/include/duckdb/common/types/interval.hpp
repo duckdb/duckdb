@@ -75,6 +75,9 @@ public:
 	//! Returns the exact difference between two timestamps (days and seconds)
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
 
+	//! Returns the inverted interval
+	static interval_t Invert(interval_t interval);
+
 	//! Add an interval to a date
 	static date_t Add(date_t left, interval_t right);
 	//! Add an interval to a timestamp

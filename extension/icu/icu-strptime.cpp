@@ -30,6 +30,15 @@ struct ICUStrptime : public ICUDateFunc {
 		unique_ptr<FunctionData> Copy() const override {
 			return make_unique<ICUStrptimeBindData>(*this);
 		}
+
+		static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+			throw NotImplementedException("FIXME: serialize icu-strptime");
+		}
+
+		static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+		                                            ScalarFunction &bound_function) {
+			throw NotImplementedException("FIXME: serialize icu-strptime");
+		}
 	};
 
 	static void ParseFormatSpecifier(string_t &format_specifier, StrpTimeFormat &format) {
@@ -98,6 +107,9 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
 	                                                     vector<unique_ptr<Expression>> &arguments) {
+		if (arguments[1]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[1]->IsFoldable()) {
 			throw InvalidInputException("strptime format must be a constant");
 		}
@@ -132,14 +144,13 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &func = (ScalarFunctionCatalogEntry &)*entry;
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
-		bool cast_parameters;
-		const idx_t best_function = Function::BindFunction(func.name, func.functions, types, error, cast_parameters);
+		const idx_t best_function = Function::BindFunction(func.name, func.functions, types, error);
 		if (best_function == DConstants::INVALID_INDEX) {
 			return;
 		}
 
 		// Tail patch the old binder
-		auto &bound_function = func.functions[best_function];
+		auto &bound_function = func.functions.GetFunctionReferenceByOffset(best_function);
 		bind = bound_function.bind;
 		bound_function.bind = StrpTimeBindFunction;
 	}
@@ -234,7 +245,7 @@ struct ICUStrftime : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-		                               ICUStrftimeFunction, false, false, Bind));
+		                               ICUStrftimeFunction, Bind));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);

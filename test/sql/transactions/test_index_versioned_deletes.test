@@ -2,6 +2,9 @@
 # description: Test index with versioned data from deletes
 # group: [transactions]
 
+require skip_reload
+
+
 statement ok con1
 CREATE TABLE integers(i INTEGER PRIMARY KEY)
 

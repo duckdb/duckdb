@@ -67,7 +67,7 @@ void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is
 
 	output.SetValue(3, count, f.varargs.id() != LogicalTypeId::INVALID ? Value(f.varargs.ToString()) : Value());
 	output.SetValue(4, count, f.return_type.ToString());
-	output.SetValue(5, count, Value::BOOLEAN(f.has_side_effects));
+	output.SetValue(5, count, Value::BOOLEAN(f.side_effects == FunctionSideEffects::HAS_SIDE_EFFECTS));
 
 	count++;
 }
@@ -84,22 +84,24 @@ static void PragmaFunctionsFunction(ClientContext &context, TableFunctionInput &
 		switch (entry->type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
 			auto &func = (ScalarFunctionCatalogEntry &)*entry;
-			if (data.offset_in_entry >= func.functions.size()) {
+			if (data.offset_in_entry >= func.functions.Size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
 				break;
 			}
-			AddFunction(func.functions[data.offset_in_entry++], count, output, false);
+			auto entry = func.functions.GetFunctionByOffset(data.offset_in_entry++);
+			AddFunction(entry, count, output, false);
 			break;
 		}
 		case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 			auto &aggr = (AggregateFunctionCatalogEntry &)*entry;
-			if (data.offset_in_entry >= aggr.functions.size()) {
+			if (data.offset_in_entry >= aggr.functions.Size()) {
 				data.offset++;
 				data.offset_in_entry = 0;
 				break;
 			}
-			AddFunction(aggr.functions[data.offset_in_entry++], count, output, true);
+			auto entry = aggr.functions.GetFunctionByOffset(data.offset_in_entry++);
+			AddFunction(entry, count, output, true);
 			break;
 		}
 		default:

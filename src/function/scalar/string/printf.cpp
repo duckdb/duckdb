@@ -72,7 +72,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			break;
 		default:
 			// FLAT VECTOR, we can directly OR the nullmask
-			args.data[i].Normalify(args.size());
+			args.data[i].Flatten(args.size());
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			result_validity.Combine(FlatVector::Validity(args.data[i]), args.size());
 			break;
@@ -111,7 +111,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 				break;
 			}
 			case LogicalTypeId::SMALLINT: {
-				auto arg_data = FlatVector::GetData<int8_t>(col);
+				auto arg_data = FlatVector::GetData<int16_t>(col);
 				format_args.emplace_back(duckdb_fmt::internal::make_arg<CTX>(arg_data[arg_idx]));
 				break;
 			}
@@ -156,14 +156,14 @@ void PrintfFun::RegisterFunction(BuiltinFunctions &set) {
 	// duckdb_fmt::printf_context, duckdb_fmt::vsprintf
 	ScalarFunction printf_fun =
 	    ScalarFunction("printf", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, false, BindPrintfFunction);
+	                   PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>, BindPrintfFunction);
 	printf_fun.varargs = LogicalType::ANY;
 	set.AddFunction(printf_fun);
 
 	// duckdb_fmt::format_context, duckdb_fmt::vformat
 	ScalarFunction format_fun =
 	    ScalarFunction("format", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                   PrintfFunction<FMTFormat, duckdb_fmt::format_context>, false, BindPrintfFunction);
+	                   PrintfFunction<FMTFormat, duckdb_fmt::format_context>, BindPrintfFunction);
 	format_fun.varargs = LogicalType::ANY;
 	set.AddFunction(format_fun);
 }

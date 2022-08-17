@@ -1,0 +1,29 @@
+# name: test/sql/index/art/test_art_storage.test
+# description: ART Storage
+# group: [art]
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE integers(i integer,j integer)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+# Insert values and create index
+statement ok
+INSERT INTO integers VALUES (1,1),(2,2),(3,3),(4,4),(5,5),
+
+statement ok
+checkpoint
+
+restart
+
+query I
+SELECT j FROM integers where i = 3;
+----
+3
+
+statement ok
+DROP INDEX i_index

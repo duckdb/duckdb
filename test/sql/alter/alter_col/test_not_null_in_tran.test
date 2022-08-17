@@ -1,0 +1,261 @@
+# name: test/sql/alter/alter_col/test_not_null_in_tran.test
+# description: Test Set/Drop NOT NULL in transaction
+# group: [alter_col]
+
+statement ok
+PRAGMA enable_verification
+
+# Scenario #1, alter with uncommitted data
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t SELECT i, i FROM RANGE(2048) tbl(i)
+
+# Insert uncommitted null 
+statement ok 
+BEGIN TRANSACTION
+
+statement ok 
+INSERT INTO t VALUES(9999, NULL)
+
+statement error
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+# Has null, cannot alter after tran
+statement error 
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+query I
+SELECT i FROM t WHERE j IS NULL
+----
+9999
+
+# Prepare persistent data
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t SELECT i, i FROM RANGE(2048) tbl(i)
+
+# Insert uncommitted data 
+statement ok
+BEGIN TRANSACTION
+
+statement ok 
+INSERT INTO t values(8888, 8888)
+
+statement ok 
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+# Cannot insert after tran
+statement error 
+INSERT INTO t VALUES(9999, NULL)
+
+# No null data
+query II
+SELECT * FROM t WHERE j = 8888
+----
+8888	8888
+
+# Scenario #2, add/drop in the same tran
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i int, j int)
+
+statement ok
+INSERT INTO T SELECT 1,1 FROM RANGE(2048)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+INSERT INTO t VALUES(2, 2)
+
+statement ok
+ALTER TABLE t ALTER COLUMN j DROP NOT NULL
+
+statement ok
+INSERT INTO t values(3, NULL)
+
+statement ok
+COMMIT
+
+# Insert null after tran
+statement ok
+INSERT INTO t VALUES(4, NULL)
+
+query II
+SELECT * FROM t WHERE j IS NULL
+----
+3	NULL
+4	NULL
+
+# Scenario #3, rollback alter 
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i int, j int)
+
+statement ok
+INSERT INTO T SELECT 1,1 FROM RANGE(2048)
+
+statement ok
+BEGIN TRANSACTION
+
+# Set&Rollback
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+INSERT INTO T VALUES(8888, 8888)
+
+statement ok
+ROLLBACK
+
+# CAN insert null after rollback 
+statement ok 
+INSERT INTO t VALUES(9999, NULL)
+
+query I
+SELECT i FROM t WHERE j IS NULL
+----
+9999
+
+# Prepare data with NOT NULL constraint
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i int, j int)
+
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+INSERT INTO T SELECT 1,1 FROM RANGE(2048)
+
+statement ok
+BEGIN TRANSACTION
+
+# Drop&Rollback
+statement ok
+ALTER TABLE t ALTER COLUMN j DROP NOT NULL
+
+statement ok 
+INSERT INTO T VALUES(7777, NULL)
+
+statement ok
+ROLLBACK
+
+# CANNOT insert null after rollback 
+statement error 
+INSERT INTO t VALUES(8888, NULL)
+
+# NO null values
+query I
+SELECT COUNT(*) FROM t WHERE j IS NULL
+----
+0
+
+# Scenario #4, Create table then Alter in the same tran
+# Set in the same tran
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE t(i INTEGER)
+
+statement ok
+ALTER TABLE t ALTER COLUMN i SET NOT NULL
+
+statement ok
+INSERT INTO t SELECT 1 FROM RANGE(1024)
+
+statement ok
+COMMIT
+
+statement error
+INSERT INTO t VALUES(NULL)
+
+# Drop in the same tran
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE t(i INTEGER NOT NULL)
+
+statement ok
+INSERT INTO t SELECT 1 FROM RANGE(1024)
+
+statement ok
+ALTER TABLE t ALTER COLUMN i DROP NOT NULL
+
+statement ok
+INSERT INTO t VALUES(NULL)
+
+statement ok
+COMMIT
+
+statement ok
+INSERT INTO t VALUES(NULL)
+
+mode skip
+# Scenario #5, Insert null, delete null locally, then alter
+statement ok
+DROP TABLE IF EXISTS t
+
+statement ok
+CREATE TABLE t(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO t SELECT 1,1 FROM RANGE(1024) 
+
+# Insert null
+statement ok
+INSERT INTO t VALUES(2,NULL)
+
+statement ok
+BEGIN TRANSACTION
+
+# Delete null locally
+statement ok
+DELETE FROM t WHERE i = 2
+
+statement ok
+ALTER TABLE t ALTER COLUMN j SET NOT NULL
+
+statement ok
+COMMIT
+
+statement error
+INSERT INTO t VALUES(3, NULL)
+
+# NO null values
+query I
+SELECT COUNT(*) FROM t WHERE j IS NULL
+----
+0
+
+mode unskip

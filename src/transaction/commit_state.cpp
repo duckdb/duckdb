@@ -17,8 +17,8 @@
 
 namespace duckdb {
 
-CommitState::CommitState(transaction_t commit_id, WriteAheadLog *log)
-    : log(log), commit_id(commit_id), current_table_info(nullptr) {
+CommitState::CommitState(ClientContext &context, transaction_t commit_id, WriteAheadLog *log)
+    : log(log), commit_id(commit_id), current_table_info(nullptr), context(context) {
 }
 
 void CommitState::SwitchTable(DataTableInfo *table_info, UndoFlags new_op) {

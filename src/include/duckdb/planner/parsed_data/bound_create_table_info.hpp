@@ -16,6 +16,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
+#include "duckdb/storage/table_index.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -45,6 +46,13 @@ struct BoundCreateTableInfo {
 	unique_ptr<PersistentTableData> data;
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
+	//! Indexes created by this table <Block_ID, Offset>
+	vector<BlockPointer> indexes;
+
+	//! Serializes a BoundCreateTableInfo to a stand-alone binary blob
+	void Serialize(Serializer &serializer) const;
+	//! Deserializes a blob back into a BoundCreateTableInfo
+	static unique_ptr<BoundCreateTableInfo> Deserialize(Deserializer &source, PlanDeserializationState &state);
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

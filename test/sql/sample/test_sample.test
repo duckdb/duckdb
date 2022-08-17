@@ -238,3 +238,14 @@ select * from integers using sample system(5 rows);
 # sample_size is out of range
 statement error
 select * from integers using sample 10000%;
+
+query I
+select i from integers using sample (1 rows) repeatable (0);
+----
+130
+
+query I
+select i from integers using sample reservoir(1%) repeatable (0);
+----
+83
+21

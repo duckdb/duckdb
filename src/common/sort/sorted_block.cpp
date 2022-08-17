@@ -349,4 +349,28 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 	total_scanned += scanned;
 }
 
+int SBIterator::ComparisonValue(ExpressionType comparison) {
+	switch (comparison) {
+	case ExpressionType::COMPARE_LESSTHAN:
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return -1;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return 0;
+	default:
+		throw InternalException("Unimplemented comparison type for IEJoin!");
+	}
+}
+
+SBIterator::SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p)
+    : sort_layout(gss.sort_layout), block_count(gss.sorted_blocks[0]->radix_sorting_data.size()),
+      block_capacity(gss.block_capacity), cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size),
+      all_constant(sort_layout.all_constant), external(gss.external), cmp(ComparisonValue(comparison)),
+      scan(gss.buffer_manager, gss), block_ptr(nullptr), entry_ptr(nullptr) {
+
+	scan.sb = gss.sorted_blocks[0].get();
+	scan.block_idx = block_count;
+	SetIndex(entry_idx_p);
+}
+
 } // namespace duckdb

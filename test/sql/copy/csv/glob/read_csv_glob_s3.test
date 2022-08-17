@@ -126,7 +126,7 @@ SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/f*/f\*.csv', auto
 2019-06-15
 2019-06-25
 
-# TODO: for supporting this we need to url combine s3 url encoding with duckdb pattern matching
+# TODO: for supporting this we need to combine s3 url encoding with duckdb pattern matching
 #query I
 #SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/f2/f[a].csv', auto_detect=1) ORDER BY 1
 #----

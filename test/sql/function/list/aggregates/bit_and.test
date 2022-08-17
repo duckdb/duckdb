@@ -2,6 +2,9 @@
 # description: Test the list_bit_and aggregate function
 # group: [aggregates]
 
+require skip_reload
+
+
 # bit_and on a sequence
 statement ok
 CREATE SEQUENCE seq;

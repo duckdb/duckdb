@@ -54,12 +54,12 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 }
 
 void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
-                                       const idx_t count) {
+                                       const idx_t count, const idx_t base_offset) {
 	const idx_t row_width = layout.GetRowWidth();
 	row_ptr += layout.GetHeapPointerOffset();
 	idx_t cumulative_offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		Store<idx_t>(cumulative_offset, row_ptr);
+		Store<idx_t>(base_offset + cumulative_offset, row_ptr);
 		cumulative_offset += Load<uint32_t>(heap_base_ptr + cumulative_offset);
 		row_ptr += row_width;
 	}

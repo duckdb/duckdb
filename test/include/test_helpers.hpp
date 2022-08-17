@@ -19,6 +19,7 @@
 namespace duckdb {
 
 bool TestForceStorage();
+bool TestForceReload();
 void RegisterSqllogictests();
 
 void DeleteDatabase(string path);

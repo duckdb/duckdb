@@ -10,6 +10,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -1210,10 +1211,10 @@ void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scala
                                 scalar_function_t ts_func, scalar_function_t interval_func,
                                 function_statistics_t date_stats, function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set(name);
-	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, false,
-	                                        nullptr, nullptr, date_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false, false,
-	                                        nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, move(interval_func)));
 	set.AddFunction(operator_set);
 }
@@ -1231,13 +1232,13 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
                                 function_statistics_t date_stats, function_statistics_t ts_stats,
                                 function_statistics_t time_stats) {
 	ScalarFunctionSet operator_set(name);
-	operator_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), false, false,
-	                                        nullptr, nullptr, date_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), false, false,
-	                                        nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, move(date_func), nullptr, nullptr, date_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, move(ts_func), nullptr, nullptr, ts_stats));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, move(interval_func)));
-	operator_set.AddFunction(ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, move(time_func), false, false,
-	                                        nullptr, nullptr, time_stats));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIME}, LogicalType::BIGINT, move(time_func), nullptr, nullptr, time_stats));
 	set.AddFunction(operator_set);
 }
 
@@ -1299,6 +1300,9 @@ struct StructDatePart {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		// collect names and deconflict, construct return type
+		if (arguments[0]->HasParameter()) {
+			throw ParameterNotResolvedException();
+		}
 		if (!arguments[0]->IsFoldable()) {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
@@ -1330,8 +1334,7 @@ struct StructDatePart {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
 		}
 
-		arguments.erase(arguments.begin());
-		bound_function.arguments.erase(bound_function.arguments.begin());
+		Function::EraseArgument(bound_function, arguments, 0);
 		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
 		return make_unique<BindData>(bound_function.return_type, part_codes);
 	}
@@ -1384,8 +1387,8 @@ struct StructDatePart {
 				}
 			}
 		} else {
-			VectorData rdata;
-			input.Orrify(count, rdata);
+			UnifiedVectorFormat rdata;
+			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
 			auto tdata = (const INPUT_TYPE *)rdata.data;
@@ -1444,11 +1447,29 @@ struct StructDatePart {
 		result.Verify(count);
 	}
 
+	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
+	                              const ScalarFunction &function) {
+		D_ASSERT(bind_data_p);
+		auto &info = (BindData &)*bind_data_p;
+		writer.WriteSerializable(info.stype);
+		writer.WriteList<DatePartSpecifier>(info.part_codes);
+	}
+
+	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	                                                    ScalarFunction &bound_function) {
+		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
+		return make_unique<BindData>(move(stype), move(part_codes));
+	}
+
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		return ScalarFunction({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, false, false, Bind);
+		ScalarFunction result({part_type, temporal_type}, result_type, Function<INPUT_TYPE>, Bind);
+		result.serialize = SerializeFunction;
+		result.deserialize = DeserializeFunction;
+		return result;
 	}
 };
 

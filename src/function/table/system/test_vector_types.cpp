@@ -225,7 +225,7 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 	}
 	if (bind_data.all_flat) {
 		for (auto &entry : result->entries) {
-			entry->Normalify();
+			entry->Flatten();
 			entry->Verify();
 		}
 	}

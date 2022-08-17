@@ -31,11 +31,11 @@ static void ExtractStringManyFunction(DataChunk &args, ExpressionState &state, V
 CreateScalarFunctionInfo JSONFunctions::GetExtractFunction() {
 	// Generic extract function
 	ScalarFunctionSet set("json_extract");
-	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::JSON, ExtractFunction, false,
-	                               false, JSONReadFunctionData::Bind, nullptr, nullptr));
+	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::JSON, ExtractFunction,
+	                               JSONReadFunctionData::Bind));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::JSON), ExtractManyFunction, false, false,
-	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
+	                               LogicalType::LIST(LogicalType::JSON), ExtractManyFunction,
+	                               JSONReadManyFunctionData::Bind));
 
 	return CreateScalarFunctionInfo(set);
 }
@@ -44,10 +44,10 @@ CreateScalarFunctionInfo JSONFunctions::GetExtractStringFunction() {
 	// String extract function
 	ScalarFunctionSet set("json_extract_string");
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                               ExtractStringFunction, false, false, JSONReadFunctionData::Bind, nullptr, nullptr));
+	                               ExtractStringFunction, JSONReadFunctionData::Bind));
 	set.AddFunction(ScalarFunction({LogicalType::JSON, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::VARCHAR), ExtractStringManyFunction, false, false,
-	                               JSONReadManyFunctionData::Bind, nullptr, nullptr));
+	                               LogicalType::LIST(LogicalType::VARCHAR), ExtractStringManyFunction,
+	                               JSONReadManyFunctionData::Bind));
 
 	return CreateScalarFunctionInfo(set);
 }

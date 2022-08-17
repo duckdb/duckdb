@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -56,10 +55,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 		// we add it to the main query by adding a cross product
 		// FIXME: should use something else besides cross product as we always add only one scalar constant
-		auto cross_product = make_unique<LogicalCrossProduct>();
-		cross_product->AddChild(move(root));
-		cross_product->AddChild(move(plan));
-		root = move(cross_product);
+		root = LogicalCrossProduct::Create(move(root), move(plan));
 
 		// we replace the original subquery with a ColumnRefExpression referring to the result of the projection (either
 		// TRUE or FALSE)
@@ -97,10 +93,7 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 		// FIXME: should use something else besides cross product as we always add only one scalar constant and cross
 		// product is not optimized for this.
 		D_ASSERT(root);
-		auto cross_product = make_unique<LogicalCrossProduct>();
-		cross_product->AddChild(move(root));
-		cross_product->AddChild(move(plan));
-		root = move(cross_product);
+		root = LogicalCrossProduct::Create(move(root), move(plan));
 
 		// we replace the original subquery with a BoundColumnRefExpression referring to the first result of the
 		// aggregation

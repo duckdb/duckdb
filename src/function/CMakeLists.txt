@@ -9,6 +9,7 @@ add_library_unity(
   cast_rules.cpp
   compression_config.cpp
   function.cpp
+  function_set.cpp
   pragma_function.cpp
   macro_function.cpp
   scalar_macro_function.cpp

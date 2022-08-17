@@ -24,13 +24,16 @@ class TableDataWriter {
 
 public:
 	TableDataWriter(DatabaseInstance &db, CheckpointManager &checkpoint_manager, TableCatalogEntry &table,
-	                MetaBlockWriter &meta_writer);
+	                MetaBlockWriter &table_data_writer, MetaBlockWriter &meta_data_writer);
 	~TableDataWriter();
 
-	BlockPointer WriteTableData();
+	void WriteTableData();
 
+	MetaBlockWriter &GetTableWriter() {
+		return table_data_writer;
+	}
 	MetaBlockWriter &GetMetaWriter() {
-		return meta_writer;
+		return meta_data_writer;
 	}
 
 	CheckpointManager &GetCheckpointManager() {
@@ -42,7 +45,10 @@ public:
 private:
 	CheckpointManager &checkpoint_manager;
 	TableCatalogEntry &table;
-	MetaBlockWriter &meta_writer;
+	// Writes the actual table data
+	MetaBlockWriter &table_data_writer;
+	// Writes the metadata of the table
+	MetaBlockWriter &meta_data_writer;
 };
 
 } // namespace duckdb

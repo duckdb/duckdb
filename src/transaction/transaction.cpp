@@ -12,7 +12,6 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 
 #include <cstring>
@@ -90,7 +89,7 @@ bool Transaction::AutomaticCheckpoint(DatabaseInstance &db) {
 
 	auto initial_size = log->GetWALSize();
 	idx_t expected_wal_size = initial_size + storage.EstimatedSize() + undo_buffer.EstimatedSize();
-	return expected_wal_size > config.checkpoint_wal_size;
+	return expected_wal_size > config.options.checkpoint_wal_size;
 }
 
 string Transaction::Commit(DatabaseInstance &db, transaction_t commit_id, bool checkpoint) noexcept {

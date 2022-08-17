@@ -86,7 +86,7 @@ void ParsedExpressionIterator::EnumerateChildren(
 	case ExpressionClass::LAMBDA: {
 		auto &lambda_expr = (LambdaExpression &)expr;
 		callback(lambda_expr.lhs);
-		callback(lambda_expr.rhs);
+		callback(lambda_expr.expr);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
@@ -214,7 +214,9 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(
 		auto &j_ref = (JoinRef &)ref;
 		EnumerateTableRefChildren(*j_ref.left, callback);
 		EnumerateTableRefChildren(*j_ref.right, callback);
-		callback(j_ref.condition);
+		if (j_ref.condition) {
+			callback(j_ref.condition);
+		}
 		break;
 	}
 	case TableReferenceType::SUBQUERY: {

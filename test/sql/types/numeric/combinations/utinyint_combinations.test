@@ -1,0 +1,36 @@
+# name: test/sql/types/numeric/combinations/utinyint_combinations.test
+# description: Testing resulting types of different types combined with utinyint
+# group: [combinations]
+
+statement ok
+PRAGMA enable_verification
+
+#SMALLINT -> SMALLINT
+query I
+select typeof([100::UTINYINT, 10000::SMALLINT]);
+----
+SMALLINT[]
+
+#TINYINT -> SMALLINT
+query I
+select typeof([100::UTINYINT, 127::TINYINT]);
+----
+SMALLINT[]
+
+#UTINYINT -> UTINYINT
+query I
+select typeof([100::UTINYINT, 127::UTINYINT]);
+----
+UTINYINT[]
+
+#USMALLINT -> USMALLINT
+query I
+select typeof([100::UTINYINT, 127::USMALLINT]);
+----
+USMALLINT[]
+
+#DECIMAL -> DECIMAL
+query I
+select typeof([100::UTINYINT, 10.5::DECIMAL]);
+----
+DECIMAL(18,3)[]

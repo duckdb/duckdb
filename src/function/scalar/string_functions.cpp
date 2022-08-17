@@ -36,6 +36,7 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	Register<MismatchesFun>();
 	Register<LevenshteinFun>();
 	Register<JaccardFun>();
+	Register<JaroWinklerFun>();
 
 	// blob functions
 	Register<Base64Fun>();

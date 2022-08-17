@@ -13,10 +13,9 @@ namespace duckdb {
 
 class Node16 : public Node {
 public:
-	Node16(ART &art, size_t compression_lengthh);
-
+	explicit Node16(size_t compression_length);
 	uint8_t key[16];
-	unique_ptr<Node> child[16];
+	SwizzleablePointer children[16];
 
 public:
 	//! Get position of a byte, returns -1 if not exists
@@ -27,13 +26,16 @@ public:
 	//! Get the next position in the node, or DConstants::INVALID_INDEX if there is no next position
 	idx_t GetNextPos(idx_t pos) override;
 	//! Get Node16 Child
-	unique_ptr<Node> *GetChild(idx_t pos) override;
+	Node *GetChild(ART &art, idx_t pos) override;
+
+	//! Replace child pointer
+	void ReplaceChildPointer(idx_t pos, Node *node) override;
 
 	idx_t GetMin() override;
 
 	//! Insert node into Node16
-	static void Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child);
+	static void Insert(Node *&node, uint8_t key_byte, Node *child);
 	//! Shrink to node 4
-	static void Erase(ART &art, unique_ptr<Node> &node, int pos);
+	static void Erase(Node *&node, int pos, ART &art);
 };
 } // namespace duckdb

@@ -3,11 +3,11 @@
 
 namespace duckdb {
 
-Node256::Node256(ART &art, size_t compression_length) : Node(art, NodeType::N256, compression_length) {
+Node256::Node256(size_t compression_length) : Node(NodeType::N256, compression_length) {
 }
 
 idx_t Node256::GetChildPos(uint8_t k) {
-	if (child[k]) {
+	if (children[k].pointer) {
 		return k;
 	} else {
 		return DConstants::INVALID_INDEX;
@@ -16,7 +16,7 @@ idx_t Node256::GetChildPos(uint8_t k) {
 
 idx_t Node256::GetChildGreaterEqual(uint8_t k, bool &equal) {
 	for (idx_t pos = k; pos < 256; pos++) {
-		if (child[pos]) {
+		if (children[pos].pointer) {
 			if (pos == k) {
 				equal = true;
 			} else {
@@ -30,50 +30,54 @@ idx_t Node256::GetChildGreaterEqual(uint8_t k, bool &equal) {
 
 idx_t Node256::GetMin() {
 	for (idx_t i = 0; i < 256; i++) {
-		if (child[i]) {
+		if (children[i].pointer) {
 			return i;
 		}
 	}
 	return DConstants::INVALID_INDEX;
 }
 
+void Node256::ReplaceChildPointer(idx_t pos, Node *node) {
+	children[pos] = node;
+}
+
 idx_t Node256::GetNextPos(idx_t pos) {
 	for (pos == DConstants::INVALID_INDEX ? pos = 0 : pos++; pos < 256; pos++) {
-		if (child[pos]) {
+		if (children[pos].pointer) {
 			return pos;
 		}
 	}
 	return Node::GetNextPos(pos);
 }
 
-unique_ptr<Node> *Node256::GetChild(idx_t pos) {
-	D_ASSERT(child[pos]);
-	return &child[pos];
+Node *Node256::GetChild(ART &art, idx_t pos) {
+	return children[pos].Unswizzle(art);
 }
 
-void Node256::Insert(ART &art, unique_ptr<Node> &node, uint8_t key_byte, unique_ptr<Node> &child) {
-	Node256 *n = static_cast<Node256 *>(node.get());
+void Node256::Insert(Node *&node, uint8_t key_byte, Node *child) {
+	auto n = (Node256 *)(node);
 
 	n->count++;
-	n->child[key_byte] = move(child);
+	n->children[key_byte] = child;
 }
 
-void Node256::Erase(ART &art, unique_ptr<Node> &node, int pos) {
-	Node256 *n = static_cast<Node256 *>(node.get());
-
-	n->child[pos].reset();
+void Node256::Erase(Node *&node, int pos, ART &art) {
+	auto n = (Node256 *)(node);
+	n->children[pos].Reset();
 	n->count--;
 	if (node->count <= 36) {
-		auto new_node = make_unique<Node48>(art, n->prefix_length);
-		CopyPrefix(art, n, new_node.get());
+		auto new_node = new Node48(n->prefix_length);
+		CopyPrefix(n, new_node);
 		for (idx_t i = 0; i < 256; i++) {
-			if (n->child[i]) {
+			if (n->children[i].pointer) {
 				new_node->child_index[i] = new_node->count;
-				new_node->child[new_node->count] = move(n->child[i]);
+				new_node->children[new_node->count] = n->children[i];
+				n->children[i] = nullptr;
 				new_node->count++;
 			}
 		}
-		node = move(new_node);
+		delete node;
+		node = new_node;
 	}
 }
 

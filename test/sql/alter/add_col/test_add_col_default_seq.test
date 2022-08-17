@@ -2,6 +2,9 @@
 # description: Test ALTER TABLE ADD COLUMN: ADD COLUMN with sequence as default value
 # group: [add_col]
 
+require skip_reload
+
+
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)
 

@@ -71,10 +71,12 @@ unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, FunctionStati
 
 void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_pack", {}, LogicalTypeId::STRUCT, StructPackFunction, false, StructPackBind, nullptr,
+	ScalarFunction fun("struct_pack", {}, LogicalTypeId::STRUCT, StructPackFunction, StructPackBind, nullptr,
 	                   StructPackStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	fun.serialize = VariableReturnBindData::Serialize;
+	fun.deserialize = VariableReturnBindData::Deserialize;
 	set.AddFunction(fun);
 	fun.name = "row";
 	set.AddFunction(fun);
