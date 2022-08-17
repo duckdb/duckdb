@@ -144,6 +144,11 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }
 
+bool DuckDBPyRelation::IsTableLike(const py::object obj) {
+	auto TableLike = py::module::import("pyduckdb.protocols").attr("TableLike");
+	return py::isinstance(obj, TableLike);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromDf(const data_frame &df, DuckDBPyConnection *conn) {
 	return conn->FromDF(df);
 }

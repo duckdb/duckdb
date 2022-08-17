@@ -47,6 +47,8 @@ public:
 public:
 	static void Initialize(py::handle &m);
 
+	static bool IsTableLike(const py::object obj);
+
 	static unique_ptr<DuckDBPyRelation> FromDf(const data_frame &df,
 	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
