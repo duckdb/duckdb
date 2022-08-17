@@ -61,8 +61,9 @@ class TestPythonMultithreading(object):
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
 
-    def test_multiple_cursors_persisted(self, duckdb_cursor):
-        duckdb_con = duckdb.connect('another_test_10.duckdb')
+    def test_multiple_cursors_persisted(self, request):
+        dbname = f'{request.node.name}.duckdb'
+        duckdb_con = duckdb.connect(dbname)
         duckdb_con.execute("""CREATE OR REPLACE TABLE my_inserts (thread_name varchar)""")
 
 
@@ -83,10 +84,11 @@ class TestPythonMultithreading(object):
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
         duckdb_con.close()
-        os.remove('another_test_10.duckdb')
+        os.remove(dbname)
 
-    def test_same_connection_persisted(self, duckdb_cursor):
-        duckdb_con = duckdb.connect('another_test_10.duckdb')
+    def test_same_connection_persisted(self, request):
+        dbname = f'{request.node.name}.duckdb'
+        duckdb_con = duckdb.connect(dbname)
         duckdb_con.execute("""CREATE OR REPLACE TABLE my_inserts (thread_name varchar)""")
 
 
@@ -107,4 +109,4 @@ class TestPythonMultithreading(object):
 
         assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [('my_thread_0',), ('my_thread_1',), ('my_thread_2',)]
         duckdb_con.close()
-        os.remove('another_test_10.duckdb')
+        os.remove(dbname)

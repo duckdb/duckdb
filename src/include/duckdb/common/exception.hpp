@@ -69,9 +69,9 @@ enum class ExceptionType {
 	NULL_POINTER = 27,    // nullptr exception
 	IO = 28,              // IO exception
 	INTERRUPT = 29,       // interrupt
-	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
+	FATAL = 30,           // Fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
-	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
+	    31,               // Internal exceptions indicate something went wrong internally (i.e. bug in the code base)
 	INVALID_INPUT = 32,          // Input or arguments error
 	OUT_OF_MEMORY = 33,          // out of memory
 	PERMISSION = 34,             // insufficient permissions
@@ -91,6 +91,8 @@ public:
 	DUCKDB_API const string &RawMessage() const;
 
 	DUCKDB_API static string ExceptionTypeToString(ExceptionType type);
+	[[noreturn]]
+	DUCKDB_API static void ThrowAsInnerType(const Exception& exception);
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {

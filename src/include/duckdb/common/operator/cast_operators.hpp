@@ -63,7 +63,7 @@ struct Cast {
 struct HandleCastError {
 	static void AssignError(string error_message, string *error_message_ptr) {
 		if (!error_message_ptr) {
-			throw ConversionException(error_message);
+			throw InvalidInputException(error_message);
 		}
 		if (error_message_ptr->empty()) {
 			*error_message_ptr = error_message;

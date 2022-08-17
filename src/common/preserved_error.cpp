@@ -45,7 +45,7 @@ Exception PreservedError::ToException(const string &prepended_message) const {
 	case ExceptionType::OUT_OF_RANGE:
 		return OutOfRangeException(message);
 	case ExceptionType::CONVERSION:
-		return CastException(message);
+		return ConversionException(message); //FIXME: make a separation between Conversion/Cast exception?
 	case ExceptionType::INVALID_TYPE:
 		return InvalidTypeException(message);
 	case ExceptionType::MISMATCH_TYPE:

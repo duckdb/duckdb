@@ -217,16 +217,24 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				}
 			}
 		}
-	} catch (std::exception &ex) { // LCOV_EXCL_START
+	} catch (const Exception &ex) { // LCOV_EXCL_START
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
-		throw;
+		auto p = std::current_exception();
+		std::rethrow_exception(p);
+	} catch (std::exception &ex) {
+		if (executor.HasError()) {
+			executor.ThrowException();
+		}
+		auto p = std::current_exception();
+		std::rethrow_exception(p);
 	} catch (...) {
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
-		throw;
+		auto p = std::current_exception();
+		std::rethrow_exception(p);
 	} // LCOV_EXCL_STOP
 }
 

@@ -1186,18 +1186,21 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		if (require_new_transaction) {
 			transaction.Rollback();
 		}
-		throw;
+		auto p = std::current_exception();
+		std::rethrow_exception(p);
 	} catch (FatalException &ex) {
 		auto &db = DatabaseInstance::GetDatabase(*this);
 		db.Invalidate();
-		throw;
+		auto p = std::current_exception();
+		std::rethrow_exception(p);
 	} catch (std::exception &ex) {
 		if (require_new_transaction) {
 			transaction.Rollback();
 		} else {
 			ActiveTransaction().Invalidate();
 		}
-		throw;
+		auto p = std::current_exception();
+		std::rethrow_exception(p);
 	}
 	if (require_new_transaction) {
 		transaction.Commit();

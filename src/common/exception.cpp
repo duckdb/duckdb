@@ -114,6 +114,57 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
+void Exception::ThrowAsInnerType(const Exception& exception) {
+	auto& type = exception.type;
+	auto& message = exception.raw_message_;
+	switch (type) {
+	case ExceptionType::OUT_OF_RANGE:
+		throw OutOfRangeException(message);
+	case ExceptionType::CONVERSION:
+		throw ConversionException(message); //FIXME: make a separation between Conversion/Cast exception?
+	case ExceptionType::INVALID_TYPE:
+		throw InvalidTypeException(message);
+	case ExceptionType::MISMATCH_TYPE:
+		throw TypeMismatchException(message);
+	case ExceptionType::TRANSACTION:
+		throw TransactionException(message);
+	case ExceptionType::NOT_IMPLEMENTED:
+		throw NotImplementedException(message);
+	case ExceptionType::CATALOG:
+		throw CatalogException(message);
+	case ExceptionType::CONNECTION:
+		throw ConnectionException(message);
+	case ExceptionType::PARSER:
+		throw ParserException(message);
+	case ExceptionType::PERMISSION:
+		throw PermissionException(message);
+	case ExceptionType::SYNTAX:
+		throw SyntaxException(message);
+	case ExceptionType::CONSTRAINT:
+		throw ConstraintException(message);
+	case ExceptionType::BINDER:
+		throw BinderException(message);
+	case ExceptionType::IO:
+		throw IOException(message);
+	case ExceptionType::SERIALIZATION:
+		throw SerializationException(message);
+	case ExceptionType::INTERRUPT:
+		throw InterruptException();
+	case ExceptionType::INTERNAL:
+		throw InternalException(message);
+	case ExceptionType::INVALID_INPUT:
+		throw InvalidInputException(message);
+	case ExceptionType::OUT_OF_MEMORY:
+		throw OutOfMemoryException(message);
+	case ExceptionType::PARAMETER_NOT_ALLOWED:
+		throw ParameterNotAllowedException(message);
+	case ExceptionType::PARAMETER_NOT_RESOLVED:
+		throw ParameterNotResolvedException();
+	default:
+		throw Exception(type, message);
+	}
+}
+
 StandardException::StandardException(ExceptionType exception_type, const string &message)
     : Exception(exception_type, message) {
 }
