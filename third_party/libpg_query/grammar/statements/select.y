@@ -205,9 +205,9 @@ simple_select:
 					n->fromClause = list_make1($2);
 					$$ = (PGNode *)n;
 				}
-            | select_clause UNION by_name select_clause
+            | select_clause UNION all_or_distinct by_name select_clause
 				{
-					$$ = makeSetOp(PG_SETOP_UNION_BY_NAME, true, $1, $4);
+					$$ = makeSetOp(PG_SETOP_UNION_BY_NAME, $3, $1, $5);
 				}    
 			| select_clause UNION all_or_distinct select_clause
 				{
@@ -355,8 +355,9 @@ all_or_distinct:
 			| DISTINCT								{ $$ = false; }
 			| /*EMPTY*/								{ $$ = false; }
 		;
+
 by_name:
-            BY NAME_P                                     {}
+            BY NAME_P                                     { }
         ;
 
 /* We use (NIL) as a placeholder to indicate that all target expressions

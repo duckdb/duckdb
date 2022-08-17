@@ -103,7 +103,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 			result->setop_type = SetOperationType::INTERSECT;
 			break;
 		case duckdb_libpgquery::PG_SETOP_UNION_BY_NAME:
-			select_distinct = false;
+			select_distinct = !stmt->all;
 			result->setop_type = SetOperationType::UNION_BY_NAME;
 			break;
 		default:
