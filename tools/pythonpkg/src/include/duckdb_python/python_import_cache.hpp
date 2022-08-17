@@ -43,6 +43,19 @@ private:
 // Modules
 //===--------------------------------------------------------------------===//
 
+struct ProtocolCacheItem : public PythonImportCacheItem {
+public:
+	~ProtocolCacheItem() override {
+	}
+	virtual void LoadSubtypes(PythonImportCache &cache) override {
+		table.LoadAttribute("TableLike", cache, *this);
+	}
+
+public:
+	//! protocols.TableLike
+	PythonImportCacheItem table;
+};
+
 struct DecimalCacheItem : public PythonImportCacheItem {
 public:
 	~DecimalCacheItem() override {
@@ -111,6 +124,7 @@ public:
 		datetime.LoadModule("datetime", *this);
 		decimal.LoadModule("decimal", *this);
 		uuid.LoadModule("uuid", *this);
+		protocol.LoadModule("pyduckdb.protocols", *this);
 	}
 	~PythonImportCache();
 
@@ -119,6 +133,7 @@ public:
 	DatetimeCacheItem datetime;
 	DecimalCacheItem decimal;
 	UUIDCacheItem uuid;
+	ProtocolCacheItem protocol;
 
 public:
 	PyObject *AddCache(py::object item);

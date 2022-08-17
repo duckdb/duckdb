@@ -6,10 +6,7 @@
 namespace duckdb {
 
 bool Protocol::ListLike(py::handle &element) {
-	static const char* required_attributes[] = {
-		"__getitem__",
-		"__len__"
-	};
+	static const char *required_attributes[] = {"__getitem__", "__len__"};
 	const idx_t len = sizeof(required_attributes) / sizeof(*required_attributes);
 	bool success = true;
 	for (idx_t i = 0; i < len; i++) {
