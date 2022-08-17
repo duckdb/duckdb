@@ -31,8 +31,7 @@ jobs:
     container:  ${{ matrix.arch == 'aarch64' && 'ubuntu:18.04' || 'ubuntu:16.04' }}
     strategy:
       matrix:
-#        arch: [ amd64, aarch64 ]
-        arch: [ aarch64 ]
+        arch: [ amd64, aarch64 ]
     env:
       GEN: ninja
       BUILD_BENCHMARK: 1
@@ -64,11 +63,11 @@ jobs:
       run: |
         make
 
-#    - name: Test
-#      shell: bash
-#      if: ${{ matrix.arch == 'amd64' }}
-#      run: |
-#        make allunit
+    - name: Test
+      shell: bash
+      if: ${{ matrix.arch == 'amd64' }}
+      run: |
+        make allunit
 
     - name: Tools Tests
       shell: bash
