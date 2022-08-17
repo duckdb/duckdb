@@ -4,14 +4,14 @@
 
 statement ok
 create or replace table tbl as select * FROM ( VALUES
-	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'a' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
-	([(select string_agg(i, '') from (select 'b' as i from range(1000000) tbl(i)) as tbl)]),
+	([repeat('a', 1000000)]),
+	([repeat('a', 1000000)]),
+	([repeat('a', 1000000)]),
+	([repeat('a', 1000000)]),
+	([repeat('b', 1000000)]),
+	([repeat('b', 1000000)]),
+	([repeat('b', 1000000)]),
+	([repeat('b', 1000000)]),
 ) tbl(i)
 
 query I
