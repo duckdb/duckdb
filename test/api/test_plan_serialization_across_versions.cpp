@@ -71,10 +71,10 @@ private:
 };
 
 template <typename S, typename T, typename V>
-static void test_helper(const V version_compatible_value,
-    					const uint64_t sourceVersion, S* source_factory(double), const uint64_t targetVersion,
+static void test_helper(const V version_compatible_value, const uint64_t sourceVersion, S *source_factory(double),
+                        const uint64_t targetVersion,
                         unique_ptr<LogicalOperator> target_deserialize(ClientContext &, LogicalOperatorType,
-                                                                        FieldReader &)) {
+                                                                       FieldReader &)) {
 	DuckDB db;
 	Connection con(db);
 	BufferedSerializer serializer;
@@ -92,25 +92,25 @@ static void test_helper(const V version_compatible_value,
 	auto read_op = target_deserialize(*con.context, LogicalOperatorType::LOGICAL_DUMMY_SCAN, reader);
 	reader.Finalize();
 
-	REQUIRE(version_compatible_value == ((T*)read_op.get())->value);
+	REQUIRE(version_compatible_value == ((T *)read_op.get())->value);
 }
 
 TEST_CASE("Test serializing / deserializing on the same version", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
-	test_helper<NewOperator, NewOperator>(1.1, NEW_VERSION, [](double d) { return new NewOperator(d);},
-	    NEW_VERSION, NewOperator::Deserialize);
+	test_helper<NewOperator, NewOperator>(
+	    1.1, NEW_VERSION, [](double d) { return new NewOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
 }
 
 TEST_CASE("Test serializing / deserializing from new to old", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	const uint64_t OLD_VERSION = 1;
-	test_helper<NewOperator, OldOperator>(1.0, NEW_VERSION, [](double d) { return new NewOperator(d);},
-	    OLD_VERSION, OldOperator::Deserialize);
+	test_helper<NewOperator, OldOperator>(
+	    1.0, NEW_VERSION, [](double d) { return new NewOperator(d); }, OLD_VERSION, OldOperator::Deserialize);
 }
 
 TEST_CASE("Test serializing / deserializing from old to new", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	const uint64_t OLD_VERSION = 1;
-	test_helper<OldOperator, NewOperator>(1, OLD_VERSION, [](double d) { return new OldOperator(d);},
-	    NEW_VERSION, NewOperator::Deserialize);
+	test_helper<OldOperator, NewOperator>(
+	    1, OLD_VERSION, [](double d) { return new OldOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
 }

@@ -15,15 +15,11 @@
 
 namespace duckdb {
 
-
 //! The Serialize class is a base class that can be used to serializing objects into a binary buffer
 class Serializer {
 private:
-	// nocommit: what should the default be? check the discussion comment in test_plan_serialization.cpp
-	// nocommit: we can also keep Serializer stateless and implement versioning on the various subclasses
-	//			 the current approach means we don't have to implement the getter and setter everywhere
-	//           but it comes at price of not forgetting to pass the version on various wrappers.
 	uint64_t version = 0L;
+
 public:
 	virtual ~Serializer() {
 	}
@@ -95,6 +91,7 @@ public:
 class Deserializer {
 private:
 	uint64_t version = 0L;
+
 public:
 	virtual ~Deserializer() {
 	}

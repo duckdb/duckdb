@@ -26,16 +26,6 @@ class FieldReader;
 
 //! The current version of the plan serialization format. Exposed via by @Serializer & @Desializer
 //! to be used by various Operator to know what format to read and write.
-//! nocommit: some question for discussions:
-//!  - what is the right scope for this versioning? Should it be plan specific? should we something that represents
-//!    the DuckDb version?
-//!  - Tied to the above - we'll need serialize extension specific logic. What happens when there's a change there?
-//!    do we expect to have to bump the DuckDb format version? If so, would it be simpler to just bump on every release
-//!    (a new version doesn't mean old versions can't be read).
-//!  - who should set the version? the version of a stream is typically set by the opener of the stream. For example:
-//!		- When reading from a file, the file header will have the version which will be set on the stream
-//!     - When reading / writing to a socket (and some other code on the other side), a shared version will be
-//! 	  negotiated when opening the socket and used for the rest of the communication.
 extern const uint64_t PLAN_SERIALIZATION_VERSION;
 
 //! LogicalOperator is the base class of the logical operators present in the
