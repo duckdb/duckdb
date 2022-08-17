@@ -15,6 +15,7 @@ namespace duckdb {
 
 class BufferHandle;
 class RowDataCollection;
+struct RowDataBlock;
 class DataChunk;
 
 //! Used to scan the data into DataChunks after sorting
@@ -66,6 +67,8 @@ public:
 	//! we need to re-swizzle.
 	void ReSwizzle();
 
+	void SwizzleBlock(RowDataBlock &data_block, RowDataBlock &heap_block);
+
 	//! Scans the next data chunk from the sorted data
 	void Scan(DataChunk &chunk);
 
@@ -88,6 +91,11 @@ private:
 	const bool external;
 	//! Whether to flush the blocks after scanning
 	const bool flush;
+	//! Whether we are unswizzling the blocks
+	const bool unswizzling;
+
+	//! Checks that the newest block is valid
+	void ValidateUnscannedBlock() const;
 };
 
 } // namespace duckdb
