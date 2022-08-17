@@ -62,9 +62,9 @@ struct SkewnessOperation {
 			return;
 		}
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
-		target[idx] = temp1 * temp *
-		              (state->sum_cub - 3 * state->sum_sqr * (state->sum * temp) + 2 * pow(state->sum, 3) * temp * temp) /
-		              div;
+		target[idx] =
+		    temp1 * temp *
+		    (state->sum_cub - 3 * state->sum_sqr * (state->sum * temp) + 2 * pow(state->sum, 3) * temp * temp) / div;
 		if (!Value::DoubleIsFinite(target[idx])) {
 			throw OutOfRangeException("SKEW is out of range!");
 		}

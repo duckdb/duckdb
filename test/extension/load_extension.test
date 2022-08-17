@@ -4,7 +4,7 @@
 
 require notmingw
 
-require notarmlinux
+require notaarch64
 
 require skip_reload
 

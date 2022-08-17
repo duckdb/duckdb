@@ -450,8 +450,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #ifdef __arm__
 				return;
 #endif
-			} else if (param == "notarmlinux") {
-#if defined(__arm__) and defined(__GNUC__)
+			} else if (param == "notaarch64") {
+#if defined(__aarch64__) and defined(__GNUC__)
 				return;
 #endif
 			} else if (param == "notwindows") {

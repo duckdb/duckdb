@@ -1,7 +1,7 @@
 find_package(Java 1.8)
 
 # Allow setting custom JDK path, e.g. for cross compilation
-if (DUCKDB_JDK_PATH)
+if(DUCKDB_JDK_PATH)
   set(JAVA_AWT_LIBRARY ${DUCKDB_JDK_PATH}/jre/lib/aarch64/libjawt.so)
   set(JAVA_JVM_LIBRARY ${DUCKDB_JDK_PATH}/jre/lib/aarch64/server/libjvm.so)
   set(JAVA_INCLUDE_PATH ${DUCKDB_JDK_PATH}/include)

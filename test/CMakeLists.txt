@@ -35,7 +35,7 @@ if(BUILD_ARROW_ABI_TEST)
 endif()
 
 if(NOT WIN32 AND NOT SUN)
-  if (STATIC_LINK_UNITTEST)
+  if(STATIC_LINK_UNITTEST)
     target_link_libraries(unittest duckdb_static test_helpers)
   else()
     target_link_libraries(unittest duckdb test_helpers)
