@@ -246,7 +246,7 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 			bound_function.statistics = PropagateNumericStats<TryDecimalAdd, AddPropagateStatistics, AddOperator>;
 		}
 	}
-	return bind_data;
+	return move(bind_data);
 }
 
 static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
@@ -455,7 +455,7 @@ struct DecimalNegateBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto res = make_unique<DecimalNegateBindData>();
 		res->bound_type = bound_type;
-		return res;
+		return move(res);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -764,7 +764,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		bound_function.statistics =
 		    PropagateNumericStats<TryDecimalMultiply, MultiplyPropagateStatistics, MultiplyOperator>;
 	}
-	return bind_data;
+	return move(bind_data);
 }
 
 void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
