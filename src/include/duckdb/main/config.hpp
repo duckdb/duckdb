@@ -118,6 +118,7 @@ struct DBConfigOptions {
 	case_insensitive_map_t<Value> set_variables;
 	//! Whether unsigned extensions should be loaded
 	bool allow_unsigned_extensions = false;
+	bool operator==(const DBConfigOptions &other) const;
 };
 struct DBConfig {
 	friend class DatabaseInstance;
@@ -125,6 +126,7 @@ struct DBConfig {
 
 public:
 	DUCKDB_API DBConfig();
+	DUCKDB_API DBConfig(std::unordered_map<string, string> &config_dict, bool read_only);
 	DUCKDB_API ~DBConfig();
 
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
@@ -165,6 +167,9 @@ public:
 	DUCKDB_API vector<CompressionFunction *> GetCompressionFunctions(PhysicalType data_type);
 	//! Return the compression function for the specified compression type/physical type combo
 	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
+
+	bool operator==(const DBConfig &other);
+	bool operator!=(const DBConfig &other);
 
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;

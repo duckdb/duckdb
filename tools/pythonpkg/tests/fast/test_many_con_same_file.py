@@ -47,21 +47,37 @@ def test_multiple_writes_named_memory():
     del con3
 
 def test_diff_config():
-    con1 = duckdb.connect("test.db")
-    with pytest.raises(Exception, match="Can't open a connection to same database file with a different configuration than existing connections"):
+    con1 = duckdb.connect("test.db",False)
+    with pytest.raises(duckdb.Error, match="Can't open a connection to same database file with a different configuration than existing connections"):
         con2 = duckdb.connect("test.db",True)
     con1.close()
     del con1
 
     con1 = duckdb.connect("test.db", config={'default_order': 'desc'})
 
-    with pytest.raises(Exception, match="Can't open a connection to same database file with a different configuration than existing connections"):
+    with pytest.raises(duckdb.Error, match="Can't open a connection to same database file with a different configuration than existing connections"):
         con2 = duckdb.connect("test.db", config={'default_order': 'asc'})
     
     con2 = duckdb.connect("test.db", config={'default_order': 'desc'})
-    con1.close()
     con2.close()
-    del con1
     del con2
+
+    # If con2 does not define this configuration it should also break.
+    with pytest.raises(duckdb.Error, match="Can't open a connection to same database file with a different configuration than existing connections"):
+        con2 = duckdb.connect("test.db")
+
+    con1.close()
+    
+    del con1
+
+    con1 = duckdb.connect("test.db")
+
+    with pytest.raises(duckdb.Error, match="Can't open a connection to same database file with a different configuration than existing connections"):
+        con2 = duckdb.connect("test.db", config={'default_order': 'desc'})
+
+
+
+    
+
 
     

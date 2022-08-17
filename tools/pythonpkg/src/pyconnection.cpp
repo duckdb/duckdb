@@ -611,11 +611,10 @@ unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_di
 	return config_dict;
 }
 
-void CreateNewInstance(DuckDBPyConnection &res, const string &db_abs_path, unordered_map<string, string> &config_dict,
-                       bool read_only) {
+void CreateNewInstance(DuckDBPyConnection &res, const string &db_abs_path, DBConfig &config) {
 	// We don't cache unnamed memory instances (i.e., :memory:)
 	bool cache_instance = db_abs_path != ":memory:";
-	res.database = instance_cache.CreateInstance(db_abs_path, config_dict, read_only, cache_instance);
+	res.database = instance_cache.CreateInstance(db_abs_path, config, cache_instance);
 	res.connection = make_unique<Connection>(*res.database);
 	auto &context = *res.connection->context;
 	PandasScanFunction scan_fun;
@@ -642,11 +641,12 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	auto res = make_shared<DuckDBPyConnection>();
 	auto db_abs_path = GetDBAbsolutePath(database);
 	auto config_dict = TransformPyConfigDict(py_config_dict);
+	DBConfig config(config_dict, read_only);
 
-	res->database = instance_cache.GetInstance(db_abs_path, config_dict, read_only);
+	res->database = instance_cache.GetInstance(db_abs_path, config);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
-		CreateNewInstance(*res, db_abs_path, config_dict, read_only);
+		CreateNewInstance(*res, db_abs_path, config);
 		return res;
 	}
 	res->connection = make_unique<Connection>(*res->database);
