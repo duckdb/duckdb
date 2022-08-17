@@ -8,7 +8,6 @@ on:
       - '**.md'
       - '.github/workflows/**'
       - '!.github/workflows/CodeQuality.yml'
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
