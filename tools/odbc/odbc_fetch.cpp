@@ -70,7 +70,7 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 				stmt->error_messages.emplace_back(stmt->res->GetError());
 				return SQL_ERROR;
 			}
-			if (!chunk) {
+			if (!chunk || chunk->size() == 0) {
 				resultset_end = true;
 				return SQL_NO_DATA;
 			}

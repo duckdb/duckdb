@@ -125,7 +125,7 @@ SQLRETURN OdbcHandleStmt::MaterializeResult() {
 	if (!stmt || stmt->HasError()) {
 		return SQL_SUCCESS;
 	}
-	if (res || !res->HasError()) {
+	if (!res || res->HasError()) {
 		return SQL_SUCCESS;
 	}
 	return odbc_fetcher->Materialize(this);
