@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	result->columns = reader.ReadRequiredList<column_t>();
 	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

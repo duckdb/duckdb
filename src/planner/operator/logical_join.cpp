@@ -67,19 +67,6 @@ void LogicalJoin::Serialize(FieldWriter &writer) const {
 	//	writer.WriteSerializableList(join_stats);
 }
 
-//
-//	//! The type of the join (INNER, OUTER, etc...)
-//	JoinType join_type;
-//	//! Table index used to refer to the MARK column (in case of a MARK join)
-//	idx_t mark_index;
-//	//! The columns of the LHS that are output by the join
-//	vector<idx_t> left_projection_map;
-//	//! The columns of the RHS that are output by the join
-//	vector<idx_t> right_projection_map;
-//	//! Join Keys statistics (optional)
-//	vector<unique_ptr<BaseStatistics>> join_stats;
-//
-
 void LogicalJoin::Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader) {
 	join.join_type = reader.ReadRequired<JoinType>();
 	join.mark_index = reader.ReadRequired<idx_t>();

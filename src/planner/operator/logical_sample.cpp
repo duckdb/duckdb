@@ -37,6 +37,6 @@ unique_ptr<LogicalOperator> LogicalSample::Deserialize(LogicalDeserializationSta
 	auto sample_options = SampleOptions::Deserialize(reader.GetSource());
 	// TODO(stephwang): review how to pass child LogicalOperator
 	auto result = make_unique<LogicalSample>(move(sample_options), nullptr);
-	return result;
+	return move(result);
 }
 } // namespace duckdb

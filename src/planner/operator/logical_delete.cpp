@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	auto result = make_unique<LogicalDelete>(table_catalog_entry);
 	result->table_index = reader.ReadRequired<idx_t>();
 	result->return_chunk = reader.ReadRequired<bool>();
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

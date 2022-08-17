@@ -151,7 +151,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	result->named_parameters = move(named_parameters);
 	result->input_table_types = input_table_types;
 	result->input_table_names = input_table_names;
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

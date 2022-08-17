@@ -52,7 +52,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	result->file_path = file_path;
 	result->use_tmp_file = use_tmp_file;
 	result->is_file_and_exists = is_file_and_exists;
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

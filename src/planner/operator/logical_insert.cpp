@@ -51,7 +51,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->column_index_map = column_index_map;
 	result->expected_types = expected_types;
 	result->bound_defaults = move(bound_defaults);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

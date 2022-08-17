@@ -54,7 +54,7 @@ unique_ptr<LogicalOperator> LogicalFilter::Deserialize(LogicalDeserializationSta
 	auto result = make_unique<LogicalFilter>();
 	result->expressions = move(expressions);
 	result->projection_map = move(projection_map);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> LogicalAnyJoin::Deserialize(LogicalDeserializationSt
 	auto condition = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto result = make_unique<LogicalAnyJoin>(join_type);
 	result->condition = move(condition);
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb
