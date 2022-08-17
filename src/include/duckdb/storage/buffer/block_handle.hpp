@@ -47,8 +47,8 @@ public:
 		return !unswizzled;
 	}
 
-	inline void SetSwizzling(bool swizzling) {
-		unswizzled = !swizzling;
+	inline void SetSwizzling(const char *unswizzler) {
+		unswizzled = unswizzler;
 	}
 
 private:
@@ -74,7 +74,7 @@ private:
 	//! The memory usage of the block
 	idx_t memory_usage;
 	//! Does the block contain any memory pointers?
-	bool unswizzled;
+	const char *unswizzled;
 };
 
 } // namespace duckdb

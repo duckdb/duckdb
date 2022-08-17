@@ -66,12 +66,10 @@ void SortedData::Unswizzle() {
 		auto &data_block = data_blocks[i];
 		auto &heap_block = heap_blocks[i];
 		D_ASSERT(!data_block.block->IsSwizzled());
-		D_ASSERT(!heap_block.block->IsSwizzled());
 		auto data_handle_p = buffer_manager.Pin(data_block.block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block.block);
 		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block.count);
-		data_block.block->SetSwizzling(false);
-		heap_block.block->SetSwizzling(false);
+		data_block.block->SetSwizzling("SortedData::Unswizzle");
 		state.heap_blocks.push_back(move(heap_block));
 		state.pinned_blocks.push_back(move(heap_handle_p));
 	}
@@ -299,8 +297,8 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
 PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx)
     : sorted_data(*global_sort_state.sorted_blocks[0]->payload_data),
       read_state(global_sort_state.buffer_manager, global_sort_state),
-      total_count(sorted_data.data_blocks[block_idx].count), total_scanned(0),
-      flush(false), unswizzling(!sorted_data.layout.AllConstant() && global_sort_state.external) {
+      total_count(sorted_data.data_blocks[block_idx].count), total_scanned(0), flush(false),
+      unswizzling(!sorted_data.layout.AllConstant() && global_sort_state.external) {
 	read_state.SetIndices(block_idx, 0);
 	ValidateUnscannedBlock();
 }
@@ -308,7 +306,6 @@ PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_i
 void PayloadScanner::ValidateUnscannedBlock() const {
 	if (unswizzling && read_state.block_idx < sorted_data.data_blocks.size()) {
 		D_ASSERT(sorted_data.data_blocks[read_state.block_idx].block->IsSwizzled());
-		D_ASSERT(sorted_data.heap_blocks[read_state.block_idx].block->IsSwizzled());
 	}
 }
 
@@ -345,8 +342,7 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 		// Unswizzle the offsets back to pointers (if needed)
 		if (unswizzling) {
 			RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle.Ptr(), next);
-			sorted_data.data_blocks[read_state.block_idx].block->SetSwizzling(false);
-			sorted_data.heap_blocks[read_state.block_idx].block->SetSwizzling(false);
+			sorted_data.data_blocks[read_state.block_idx].block->SetSwizzling("PayloadScanner::Scan");
 		}
 		// Update state indices
 		read_state.entry_idx += next;

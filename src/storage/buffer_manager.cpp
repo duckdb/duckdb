@@ -17,7 +17,7 @@ struct BufferAllocatorData : PrivateAllocatorData {
 
 BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
     : db(db), readers(0), block_id(block_id_p), buffer(nullptr), eviction_timestamp(0), can_destroy(false),
-      unswizzled(false) {
+      unswizzled(nullptr) {
 	eviction_timestamp = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
@@ -25,7 +25,7 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
 
 BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
                          bool can_destroy_p, idx_t block_size)
-    : db(db), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p), unswizzled(false) {
+    : db(db), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p), unswizzled(nullptr) {
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
@@ -35,7 +35,7 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 BlockHandle::~BlockHandle() {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	// being destroyed, so any unswizzled pointers are just binary junk now.
-	unswizzled = false;
+	unswizzled = nullptr;
 	// no references remain to this block: erase
 	if (state == BlockState::BLOCK_LOADED) {
 		// the block is still loaded in memory: erase it
