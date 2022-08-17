@@ -47,7 +47,7 @@ public:
 public:
 	static void Initialize(py::handle &m);
 
-	static unique_ptr<DuckDBPyRelation> FromDf(const data_frame &df,
+	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df,
 	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
@@ -87,29 +87,29 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(const data_frame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const DataFrame &df, const string &expr,
 	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	py::str GetAlias();
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> AliasDF(const data_frame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> AliasDF(const DataFrame &df, const string &expr,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> FilterDf(const data_frame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> FilterDf(const DataFrame &df, const string &expr,
 	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 
-	static unique_ptr<DuckDBPyRelation> LimitDF(const data_frame &df, int64_t n,
+	static unique_ptr<DuckDBPyRelation> LimitDF(const DataFrame &df, int64_t n,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> OrderDf(const data_frame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> OrderDf(const DataFrame &df, const string &expr,
 	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
@@ -165,23 +165,23 @@ public:
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
-	static unique_ptr<DuckDBPyRelation> AggregateDF(const data_frame &df, const string &expr, const string &groups = "",
+	static unique_ptr<DuckDBPyRelation> AggregateDF(const DataFrame &df, const string &expr, const string &groups = "",
 	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	static unique_ptr<DuckDBPyRelation> DistinctDF(const data_frame &df,
+	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df,
 	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
-	data_frame ToDF();
+	DataFrame ToDF();
 
 	py::object Fetchone();
 
 	py::object Fetchall();
 
-	py::object ToArrowTable(idx_t batch_size);
+	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
 
-	py::object ToRecordBatch(idx_t batch_size);
+	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
 
@@ -195,7 +195,7 @@ public:
 
 	void WriteCsv(const string &file);
 
-	static void WriteCsvDF(const data_frame &df, const string &file,
+	static void WriteCsvDF(const DataFrame &df, const string &file,
 	                       DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	// should this return a rel with the new view?
@@ -205,7 +205,7 @@ public:
 
 	unique_ptr<DuckDBPyResult> Execute();
 
-	static unique_ptr<DuckDBPyResult> QueryDF(const data_frame &df, const string &view_name, const string &sql_query,
+	static unique_ptr<DuckDBPyResult> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
 	                                          DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	void InsertInto(const string &table);
