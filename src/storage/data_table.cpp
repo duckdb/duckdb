@@ -1038,8 +1038,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	result.Initialize(Allocator::Get(db), types);
 
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
-	row_group->ScanCommitted(state.row_group_scan_state, result,
-	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
+	row_group->ScanCommitted(state.row_group_scan_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 	result.Slice(sel, count);
 
 	info->indexes.Scan([&](Index &index) {
