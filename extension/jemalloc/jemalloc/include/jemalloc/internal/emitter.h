@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/ql.h"
 
+#include <cstdarg>
+
 namespace duckdb_jemalloc {
 
 enum emitter_output_e {

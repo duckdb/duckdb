@@ -1,6 +1,8 @@
 #include "jemalloc/internal/jemalloc_preamble.h"
 #include "jemalloc/internal/jemalloc_internal_includes.h"
 
+#include <cstdarg>
+
 namespace duckdb_jemalloc {
 
 static safety_check_abort_hook_t safety_check_abort;

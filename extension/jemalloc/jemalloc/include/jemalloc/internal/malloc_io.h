@@ -3,6 +3,8 @@
 
 #include "jemalloc/internal/jemalloc_internal_types.h"
 
+#include <cstdarg>
+
 namespace duckdb_jemalloc {
 
 #ifdef _WIN32
