@@ -259,7 +259,7 @@ jobs:
            pwd
            ls
            docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled" arm64v8/ubuntu:18.04 /duckdb_crosscompiled/unittest --test-dir /duckdb_dir
-           docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled" arm64v8/openjdk java -cp -Duser.dir=/duckdb_dir /duckdb_crosscompiled/build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+           docker run -t --platform=linux/arm64 --volume "${PWD}:/duckdb_dir" --volume "/tmp:/duckdb_crosscompiled" arm64v8/openjdk cd /duckdb_dir && java -cp /duckdb_crosscompiled/build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
  old-gcc:
     name: GCC 4.8
