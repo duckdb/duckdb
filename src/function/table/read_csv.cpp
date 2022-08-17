@@ -325,7 +325,7 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, Fie
 	result_data->filename_col_idx = reader.ReadRequired<idx_t>();
 	result_data->hive_partition_col_idx = reader.ReadRequired<idx_t>();
 	result_data->options.Deserialize(reader);
-	return result_data;
+	return move(result_data);
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {
