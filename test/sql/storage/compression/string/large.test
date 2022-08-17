@@ -44,6 +44,11 @@ SELECT SUM(a::INT), MIN(a::INT), MAX(a::INT), COUNT(*) FROM test where a NOT NUL
 ----
 1499998500000	0	999999	3000000
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 DROP TABLE test;
 

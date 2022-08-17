@@ -60,6 +60,16 @@ SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(list) FROM test_large_list) tbl
 ----
 100000	-4999950000
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_large_list') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 DROP TABLE test_large_list
 

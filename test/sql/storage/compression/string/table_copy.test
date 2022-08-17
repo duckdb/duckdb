@@ -42,6 +42,16 @@ select sum(a::INT) from test_2;
 ----
 37425000
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_2') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 DROP TABLE test;
 

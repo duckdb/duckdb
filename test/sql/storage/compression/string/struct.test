@@ -36,6 +36,11 @@ SELECT SUM(s['a']::INT), MIN(s['a']::INT), MAX(s['a']::INT), COUNT(*) FROM test
 ----
 4980000	0	249	40000
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 DROP TABLE test;
 

@@ -4,6 +4,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/constants.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/fsst.hpp"
 #include "miniz_wrapper.hpp"
@@ -143,38 +144,41 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	size_t max_compressed_string_length = 0;
 
 	auto string_count = state.fsst_strings.size();
-	if (string_count) {
-		size_t output_buffer_size = 7 + 2 * state.fsst_string_total_size; // size as specified in fsst.h
 
-		std::vector<size_t> fsst_string_sizes;
-		std::vector<unsigned char *> fsst_string_ptrs;
-		for (auto &str : state.fsst_strings) {
-			fsst_string_sizes.push_back(str.GetSize());
-			fsst_string_ptrs.push_back((unsigned char *)str.GetDataUnsafe());
-		}
-
-		state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
-
-		// TODO: do we really need to encode to get a size estimate?
-		auto compressed_ptrs = std::vector<unsigned char *>(string_count, nullptr);
-		auto compressed_sizes = std::vector<size_t>(string_count, 0);
-		unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
-
-		auto res = duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
-		                                output_buffer_size, compressed_buffer.get(), &compressed_sizes[0],
-		                                &compressed_ptrs[0]);
-
-		if (string_count != res) {
-			throw std::runtime_error("FSST output buffer is too small unexpectedly");
-		}
-
-		// Sum and and Max compressed lengths
-		for (auto &size : compressed_sizes) {
-			compressed_dict_size += size;
-			max_compressed_string_length = MaxValue(max_compressed_string_length, size);
-		}
-		D_ASSERT(compressed_dict_size == (compressed_ptrs[res - 1] - compressed_ptrs[0]) + compressed_sizes[res - 1]);
+	if (!string_count) {
+		return DConstants::INVALID_INDEX;
 	}
+
+	size_t output_buffer_size = 7 + 2 * state.fsst_string_total_size; // size as specified in fsst.h
+
+	std::vector<size_t> fsst_string_sizes;
+	std::vector<unsigned char *> fsst_string_ptrs;
+	for (auto &str : state.fsst_strings) {
+		fsst_string_sizes.push_back(str.GetSize());
+		fsst_string_ptrs.push_back((unsigned char *)str.GetDataUnsafe());
+	}
+
+	state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
+
+	// TODO: do we really need to encode to get a size estimate?
+	auto compressed_ptrs = std::vector<unsigned char *>(string_count, nullptr);
+	auto compressed_sizes = std::vector<size_t>(string_count, 0);
+	unique_ptr<unsigned char[]> compressed_buffer(new unsigned char[output_buffer_size]);
+
+	auto res =
+	    duckdb_fsst_compress(state.fsst_encoder, string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0],
+	                         output_buffer_size, compressed_buffer.get(), &compressed_sizes[0], &compressed_ptrs[0]);
+
+	if (string_count != res) {
+		throw std::runtime_error("FSST output buffer is too small unexpectedly");
+	}
+
+	// Sum and and Max compressed lengths
+	for (auto &size : compressed_sizes) {
+		compressed_dict_size += size;
+		max_compressed_string_length = MaxValue(max_compressed_string_length, size);
+	}
+	D_ASSERT(compressed_dict_size == (compressed_ptrs[res - 1] - compressed_ptrs[0]) + compressed_sizes[res - 1]);
 
 	auto minimum_width = BitpackingPrimitives::MinimumBitWidth(max_compressed_string_length);
 	auto bitpacked_offsets_size =
@@ -370,12 +374,14 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer
 	auto analyze_state = static_cast<FSSTAnalyzeState *>(analyze_state_p.get());
 	auto compression_state = make_unique<FSSTCompressionState>(checkpointer);
 
-	if (analyze_state->fsst_encoder != nullptr) {
-		compression_state->fsst_encoder = analyze_state->fsst_encoder;
-		compression_state->fsst_serialized_symbol_table_size =
-		    duckdb_fsst_export(compression_state->fsst_encoder, &compression_state->fsst_serialized_symbol_table[0]);
-		analyze_state->fsst_encoder = nullptr;
+	if (analyze_state->fsst_encoder == nullptr) {
+		throw InternalException("No encoder found during FSST compression");
 	}
+
+	compression_state->fsst_encoder = analyze_state->fsst_encoder;
+	compression_state->fsst_serialized_symbol_table_size =
+	    duckdb_fsst_export(compression_state->fsst_encoder, &compression_state->fsst_serialized_symbol_table[0]);
+	analyze_state->fsst_encoder = nullptr;
 
 	return std::move(compression_state);
 }
@@ -407,8 +413,8 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		strings_in.push_back((unsigned char *)data[idx].GetDataUnsafe());
 	}
 
-	// Only Nulls, nothing to compress
-	if (total_count == 0 || state.fsst_encoder == nullptr) {
+	// Only Nulls or empty strings in this vector, nothing to compress
+	if (total_count == 0) {
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
 			if (!vdata.validity.RowIsValid(idx)) {

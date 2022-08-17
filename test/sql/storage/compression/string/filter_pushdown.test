@@ -36,6 +36,11 @@ SELECT MIN(id), MAX(id), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
 ----
 5000	5000	BLEEPBLOOP-0	BLEEPBLOOP-0	1
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 DROP TABLE test;
 

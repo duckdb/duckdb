@@ -43,6 +43,11 @@ select a[3] from test limit 5;
 3
 4
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 DROP TABLE test;
 

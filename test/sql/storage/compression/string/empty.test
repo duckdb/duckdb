@@ -39,6 +39,11 @@ B
 (empty)
 A
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 CREATE TABLE test_empty_large AS SELECT '' as a from range(0,10000);
 
@@ -53,6 +58,11 @@ query III
 select count(*), min(a[1]), max(a[1]) from test_empty_large limit 5;
 ----
 10002	(empty)	A
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_empty_large') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
 
 statement ok
 DROP TABLE test_empty

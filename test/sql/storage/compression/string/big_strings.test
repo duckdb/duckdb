@@ -36,10 +36,15 @@ b	b	3900
 a	a	3900
 b	b	3900
 
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 statement ok
 PRAGMA force_compression='uncompressed'
 
-# Big string, should disable dictionary compression
+# Big string, should disable string compression
 statement ok
 CREATE TABLE big_string (a VARCHAR);
 
@@ -59,6 +64,11 @@ a	a	8000
 b	b	8000
 a	a	8000
 b	b	8000
+
+query I
+SELECT lower(compression) FROM pragma_storage_info('big_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+uncompressed
 
 statement ok
 DROP TABLE big_string;

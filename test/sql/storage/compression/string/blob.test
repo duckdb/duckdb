@@ -2,7 +2,7 @@
 # description: blob tests
 # group: [string]
 
-load __TEST_DIR__/test_dictionary.db
+load __TEST_DIR__/test_string_compression.db
 
 foreach enable_fsst_vector true false
 
@@ -10,6 +10,9 @@ statement ok
 SET enable_fsst_vectors='${enable_fsst_vector}'
 
 foreach compression fsst dictionary
+
+statement ok
+PRAGMA force_compression='${compression}'
 
 statement ok
 PRAGMA enable_verification
@@ -42,6 +45,14 @@ SELECT * FROM blobs
 \xAA\xFF\xAA\xAA\xFF\xAA
 \xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA
 
+statement ok
+checkpoint
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('blobs') WHERE segment_type ILIKE 'BLOB' LIMIT 1
+----
+1
+
 # Insert valid hex strings with number and letters
 statement ok
 DELETE FROM blobs
@@ -70,20 +81,13 @@ INSERT INTO blobs VALUES('\xAA\xA')
 statement error
 INSERT INTO blobs VALUES('blablabla\x')
 
-# BLOB with “non-printable” octets
-statement error
-SELECT 'abc �'::BYTEA;
+statement ok
+checkpoint
 
-# BLOB null and empty values
-query T
-SELECT ''::BLOB
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('blobs') WHERE segment_type ILIKE 'BLOB' LIMIT 1
 ----
-(empty)
-
-query T
-SELECT NULL::BLOB
-----
-NULL
+1
 
 statement ok
 CREATE TABLE blob_empty (b BYTEA);
@@ -102,9 +106,11 @@ SELECT * FROM blob_empty
 NULL
 NULL
 
-# convert non-ascii string to blob using cat
-statement error
-select 'ü'::blob;
+# FSST will get skipped for only empty/null strings
+query I
+SELECT lower(compression)!='fsst' FROM pragma_storage_info('blob_empty') WHERE segment_type ILIKE 'BLOB' LIMIT 1
+----
+1
 
 statement ok
 DROP TABLE blobs;

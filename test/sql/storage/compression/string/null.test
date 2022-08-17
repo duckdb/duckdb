@@ -39,7 +39,7 @@ DROP TABLE nulls
 
 # many null values
 statement ok
-CREATE TABLE nulls(i INTEGER)
+CREATE TABLE nulls(i VARCHAR)
 
 statement ok
 INSERT INTO nulls SELECT NULL FROM range(70000)
@@ -56,6 +56,11 @@ SELECT COUNT(*), COUNT(i::INT), SUM(i::INT) FROM nulls
 ----
 70000	0	NULL
 
+query I
+SELECT lower(compression)='uncompressed' or (lower(compression)='dictionary' and '${compression}'='dictionary') FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
 # mix with non-null values
 statement ok
 INSERT INTO nulls VALUES (1), (1), (1), (2), (2), (2)
@@ -71,6 +76,11 @@ query III
 SELECT COUNT(*), COUNT(i::INT), SUM(i::INT) FROM nulls
 ----
 70006	6	9
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
 
 statement ok
 DROP TABLE nulls
