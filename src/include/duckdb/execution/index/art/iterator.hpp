@@ -55,7 +55,7 @@ public:
 	//! Finds minimum value of the tree
 	void FindMinimum(Node &node);
 	//! Goes to lower bound
-	bool Bound(Node *node, Key &key, bool inclusive);
+	bool LowerBound(Node *node, Key &key, bool inclusive);
 
 private:
 	//! Stack of iterator entries

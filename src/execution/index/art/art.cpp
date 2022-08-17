@@ -322,7 +322,7 @@ bool ART::Insert(Node *&node, unique_ptr<Key> value, unsigned depth, row_t row_i
 
 	// Handle prefix of inner node
 	if (node->prefix.Size()) {
-		uint32_t mismatch_pos = node->prefix.KeyMismatch(key, depth);
+		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			// Prefix differs, create new node
 			Node *new_node = new Node4();
@@ -407,7 +407,7 @@ void ART::Erase(Node *&node, Key &key, unsigned depth, row_t row_id) {
 
 	// Handle prefix
 	if (node->prefix.Size()) {
-		if (node->prefix.KeyMismatch(key, depth) != node->prefix.Size()) {
+		if (node->prefix.KeyMismatchPosition(key, depth) != node->prefix.Size()) {
 			return;
 		}
 		depth += node->prefix.Size();
@@ -541,7 +541,7 @@ bool ART::SearchGreater(ARTIndexScanState *state, bool inclusive, idx_t max_coun
 	// that satisfies our requirement
 	if (!it->art) {
 		it->art = this;
-		bool found = it->Bound(tree, *key, inclusive);
+		bool found = it->LowerBound(tree, *key, inclusive);
 		if (!found) {
 			return true;
 		}
@@ -586,7 +586,7 @@ bool ART::SearchCloseRange(ARTIndexScanState *state, bool left_inclusive, bool r
 	// first find the first node that satisfies the left predicate
 	if (!it->art) {
 		it->art = this;
-		bool found = it->Bound(tree, *lower_bound, left_inclusive);
+		bool found = it->LowerBound(tree, *lower_bound, left_inclusive);
 		if (!found) {
 			return true;
 		}

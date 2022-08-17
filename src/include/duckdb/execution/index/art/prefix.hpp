@@ -35,15 +35,14 @@ public:
 	// other.prefix + key + this->Prefix
 	void Concatenate(uint8_t key, Prefix &other);
 	// Reduces the prefix in n elements, and returns what would be the first one as a key
-	// I hate this function, looks messy
 	uint8_t Reduce(uint32_t n);
 	// Serializes Prefix
 	void Serialize(duckdb::MetaBlockWriter &writer);
 	// Deserializes Prefix
 	void Deserialize(duckdb::MetaBlockReader &reader);
 
-	// Compare the key with the prefix of the node, return the number matching bytes
-	uint32_t KeyMismatch(Key &key, uint64_t depth);
+	// Compare the key with the prefix of the node, return the position where it mismatches
+	uint32_t KeyMismatchPosition(Key &key, uint64_t depth);
 
 private:
 	unique_ptr<uint8_t[]> prefix;

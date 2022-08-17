@@ -190,7 +190,7 @@ bool Iterator::Next() {
 	return false;
 }
 
-bool Iterator::Bound(Node *node, Key &key, bool inclusive) {
+bool Iterator::LowerBound(Node *node, Key &key, bool inclusive) {
 	bool equal = false;
 	if (!node) {
 		return false;
@@ -252,7 +252,7 @@ bool Iterator::Bound(Node *node, Key &key, bool inclusive) {
 			}
 			return false;
 		}
-		uint32_t mismatch_pos = node->prefix.KeyMismatch(key, depth);
+		uint32_t mismatch_pos = node->prefix.KeyMismatchPosition(key, depth);
 		if (mismatch_pos != node->prefix.Size()) {
 			if (node->prefix[mismatch_pos] < key[depth + mismatch_pos]) {
 				// Less

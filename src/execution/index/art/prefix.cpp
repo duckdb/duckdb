@@ -89,7 +89,7 @@ void Prefix::Deserialize(duckdb::MetaBlockReader &reader) {
 	}
 }
 
-uint32_t Prefix::KeyMismatch(Key &key, uint64_t depth) {
+uint32_t Prefix::KeyMismatchPosition(Key &key, uint64_t depth) {
 	uint64_t pos;
 	for (pos = 0; pos < size; pos++) {
 		if (key[depth + pos] != prefix[pos]) {
