@@ -1,6 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
@@ -252,6 +253,11 @@ DUCKDB_EXTENSION_API void loadable_extension_demo_init(duckdb::DatabaseInstance 
 	ScalarFunction sub_point_func("sub_point", {target_type, target_type}, target_type, SubPointFunction);
 	CreateScalarFunctionInfo sub_point_info(sub_point_func);
 	catalog.CreateFunction(client_context, &sub_point_info);
+
+	// Quack function
+	QuackFunction quack_function;
+	CreateTableFunctionInfo quack_info(quack_function);
+	catalog.CreateTableFunction(client_context, &quack_info);
 
 	con.Commit();
 

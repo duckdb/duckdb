@@ -231,7 +231,7 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTable() {
-	auto info = TableCatalogEntry::Deserialize(source);
+	auto info = TableCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
@@ -271,7 +271,7 @@ void ReplayState::ReplayAlter() {
 // Replay View
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateView() {
-	auto entry = ViewCatalogEntry::Deserialize(source);
+	auto entry = ViewCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
@@ -394,7 +394,7 @@ void ReplayState::ReplaySequenceValue() {
 // Replay Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateMacro() {
-	auto entry = ScalarMacroCatalogEntry::Deserialize(source);
+	auto entry = ScalarMacroCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
@@ -420,7 +420,7 @@ void ReplayState::ReplayDropMacro() {
 // Replay Table Macro
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTableMacro() {
-	auto entry = TableMacroCatalogEntry::Deserialize(source);
+	auto entry = TableMacroCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}

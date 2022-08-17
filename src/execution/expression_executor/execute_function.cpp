@@ -75,6 +75,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.SetCardinality(count);
 
 	state->profiler.BeginSample();
+	D_ASSERT(expr.function.function);
 	expr.function.function(arguments, *state, result);
 	state->profiler.EndSample(count);
 

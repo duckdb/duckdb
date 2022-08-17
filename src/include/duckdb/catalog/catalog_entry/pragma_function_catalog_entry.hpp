@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/function/pragma_function.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 
@@ -22,6 +23,6 @@ public:
 	PragmaFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreatePragmaFunctionInfo *info);
 
 	//! The pragma functions
-	vector<PragmaFunction> functions;
+	PragmaFunctionSet functions;
 };
 } // namespace duckdb

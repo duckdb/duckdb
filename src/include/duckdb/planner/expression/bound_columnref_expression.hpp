@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+class FieldReader;
+class FieldWriter;
+
 //! A BoundColumnRef expression represents a ColumnRef expression that was bound to an actual table and column index. It
 //! is not yet executable, however. The ColumnBindingResolver transforms the BoundColumnRefExpressions into
 //! BoundExpressions, which refer to indexes into the physical chunks that pass through the executor.
@@ -41,5 +44,8 @@ public:
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;
+
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
 };
 } // namespace duckdb

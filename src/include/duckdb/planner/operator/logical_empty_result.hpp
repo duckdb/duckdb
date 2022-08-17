@@ -12,9 +12,11 @@
 
 namespace duckdb {
 
-//! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that ceratin parts of
+//! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that certain parts of
 //! the tree will always return an empty result.
 class LogicalEmptyResult : public LogicalOperator {
+	LogicalEmptyResult();
+
 public:
 	explicit LogicalEmptyResult(unique_ptr<LogicalOperator> op);
 
@@ -27,6 +29,8 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return bindings;
 	}
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {

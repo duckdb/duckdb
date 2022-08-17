@@ -13,6 +13,8 @@
 namespace duckdb {
 
 class LogicalShow : public LogicalOperator {
+	LogicalShow() : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {};
+
 public:
 	explicit LogicalShow(unique_ptr<LogicalOperator> plan) : LogicalOperator(LogicalOperatorType::LOGICAL_SHOW) {
 		children.push_back(move(plan));
@@ -20,6 +22,10 @@ public:
 
 	vector<LogicalType> types_select;
 	vector<string> aliases;
+
+public:
+	void Serialize(FieldWriter &writer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override {
