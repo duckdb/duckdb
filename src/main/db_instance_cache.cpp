@@ -1,9 +1,22 @@
 #include "duckdb/main/db_instance_cache.hpp"
 
 namespace duckdb {
-shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &abs_database_path, const DBConfig &config) {
+
+string GetDBAbsolutePath(const string &database) {
+	if (database.empty()) {
+		return ":memory:";
+	}
+	if (database.rfind(":memory:", 0) == 0) {
+		// this is a memory db, just return it.
+		return database;
+	}
+	return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database);
+}
+
+shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DBConfig &config) {
 	lock_guard<mutex> l(cache_lock);
 	shared_ptr<DuckDB> db_instance;
+	auto abs_database_path = GetDBAbsolutePath(database);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		db_instance = db_instances[abs_database_path].lock();
 		if (db_instance) {
@@ -20,9 +33,9 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &abs_database_path,
 	return db_instance;
 }
 
-shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &abs_database_path, DBConfig &config,
-                                                   bool cache_instance) {
+shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBConfig &config, bool cache_instance) {
 	lock_guard<mutex> l(cache_lock);
+	auto abs_database_path = GetDBAbsolutePath(database);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		throw duckdb::Exception(ExceptionType::CONNECTION,
 		                        "Instance with path: " + abs_database_path + " already exists.");

@@ -589,18 +589,6 @@ static unique_ptr<TableFunctionRef> ScanReplacement(ClientContext &context, cons
 	return nullptr;
 }
 
-string GetDBAbsolutePath(const string &database) {
-	if (database.empty()) {
-		return ":memory:";
-	}
-	if (database.rfind(":memory:", 0) == 0) {
-		// this is a memory db, just return it.
-		return database;
-	}
-	py::object abspath = py::module_::import("os.path").attr("abspath");
-	return py::str(abspath(database));
-}
-
 unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_dict) {
 	unordered_map<string, string> config_dict;
 	for (auto &kv : py_config_dict) {
@@ -611,10 +599,10 @@ unordered_map<string, string> TransformPyConfigDict(const py::dict &py_config_di
 	return config_dict;
 }
 
-void CreateNewInstance(DuckDBPyConnection &res, const string &db_abs_path, DBConfig &config) {
+void CreateNewInstance(DuckDBPyConnection &res, const string &database, DBConfig &config) {
 	// We don't cache unnamed memory instances (i.e., :memory:)
-	bool cache_instance = db_abs_path != ":memory:";
-	res.database = instance_cache.CreateInstance(db_abs_path, config, cache_instance);
+	bool cache_instance = database != ":memory:" && !database.empty();
+	res.database = instance_cache.CreateInstance(database, config, cache_instance);
 	res.connection = make_unique<Connection>(*res.database);
 	auto &context = *res.connection->context;
 	PandasScanFunction scan_fun;
@@ -639,14 +627,13 @@ void CreateNewInstance(DuckDBPyConnection &res, const string &db_abs_path, DBCon
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            const py::dict &py_config_dict) {
 	auto res = make_shared<DuckDBPyConnection>();
-	auto db_abs_path = GetDBAbsolutePath(database);
 	auto config_dict = TransformPyConfigDict(py_config_dict);
 	DBConfig config(config_dict, read_only);
 
-	res->database = instance_cache.GetInstance(db_abs_path, config);
+	res->database = instance_cache.GetInstance(database, config);
 	if (!res->database) {
 		//! No cached database, we must create a new instance
-		CreateNewInstance(*res, db_abs_path, config);
+		CreateNewInstance(*res, database, config);
 		return res;
 	}
 	res->connection = make_unique<Connection>(*res->database);

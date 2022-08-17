@@ -18,11 +18,10 @@ class DBInstanceCache {
 public:
 	DBInstanceCache() {};
 	//! Gets a DB Instance from the cache if already exists (Fails if the configurations do not match)
-	shared_ptr<DuckDB> GetInstance(const string &abs_database_path, const DBConfig &config_dict);
+	shared_ptr<DuckDB> GetInstance(const string &database, const DBConfig &config_dict);
 
 	//! Creates and caches a new DB Instance (Fails if a cached instance already exists)
-	shared_ptr<DuckDB> CreateInstance(const string &abs_database_path, DBConfig &config_dict,
-	                                  bool cache_instance = true);
+	shared_ptr<DuckDB> CreateInstance(const string &database, DBConfig &config_dict, bool cache_instance = true);
 
 private:
 	//! A map with the cached instances <absolute_path/instance>
