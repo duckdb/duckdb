@@ -82,12 +82,15 @@ static void GatherAliases(BoundQueryNode &node, case_insensitive_map_t<idx_t> &a
 }
 
 static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain_nulls) {
+	D_ASSERT(result.setop_type == SetOperationType::UNION_BY_NAME);
 	case_insensitive_map_t<idx_t> left_names_map;
 	case_insensitive_map_t<idx_t> right_names_map;
 
 	BoundQueryNode *left_node = result.left.get();
 	BoundQueryNode *right_node = result.right.get();
 
+	// Build a name_map to use to check if a name exists
+	// We throw a binder exception if two same name in the SELECT list
 	for (idx_t i = 0; i < left_node->names.size(); ++i) {
 		if (left_names_map.find(left_node->names[i]) != left_names_map.end()) {
 			throw BinderException("UNION(ALL) BY NAME operation doesn't support same name in SELECT list");
@@ -110,6 +113,9 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 	vector<idx_t> left_reorder_idx(left_node->names.size());
 	vector<idx_t> right_reorder_idx(right_node->names.size());
 
+	// Construct return type and reorder_idxs
+	// reorder_idxs is used to gather correct alias_map
+	// and expression_map in GatherAlias(...)
 	for (idx_t i = 0; i < new_size; ++i) {
 		auto left_index = left_names_map.find(result.names[i]);
 		auto right_index = right_names_map.find(result.names[i]);
@@ -147,6 +153,8 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 	result.left_reorder_idx = move(left_reorder_idx);
 	result.right_reorder_idx = move(right_reorder_idx);
 
+	// If reorder is required, collect reorder expressions for push projection
+	// into the two child nodes of union node
 	if (need_reorder) {
 		for (idx_t i = 0; i < new_size; ++i) {
 			auto left_index = left_names_map.find(result.names[i]);
@@ -164,6 +172,7 @@ static void BuildUnionByNameInfo(BoundSetOperationNode &result, bool can_contain
 			} else if (left_exist) {
 				left_reorder_expr = make_unique<BoundColumnRefExpression>(
 				    left_node->types[left_index->second], ColumnBinding(left_node->GetRootIndex(), left_index->second));
+				// create null value here
 				right_reorder_expr = make_unique<BoundConstantExpression>(Value(result.types[i]));
 			} else {
 				D_ASSERT(right_exist);
