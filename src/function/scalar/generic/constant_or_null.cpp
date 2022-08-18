@@ -26,7 +26,7 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (ConstantOrNullBindData &)*func_expr.bind_info;
 	result.Reference(info.value);
-	for (idx_t idx = 0; idx < args.ColumnCount(); idx++) {
+	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].GetVectorType()) {
 		case VectorType::FLAT_VECTOR: {
 			auto &input_mask = FlatVector::Validity(args.data[idx]);
@@ -65,8 +65,8 @@ static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vect
 	}
 }
 
-ScalarFunction ConstantOrNull::GetFunction(LogicalType return_type) {
-	return ScalarFunction("constant_or_null", {}, move(return_type), ConstantOrNullFunction);
+ScalarFunction ConstantOrNull::GetFunction(const LogicalType &return_type) {
+	return ScalarFunction("constant_or_null", {return_type, LogicalType::ANY}, return_type, ConstantOrNullFunction);
 }
 
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
@@ -81,6 +81,27 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 	auto &bind_data = (ConstantOrNullBindData &)*expr.bind_info;
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
+}
+
+unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter()) {
+		throw ParameterNotResolvedException();
+	}
+	if (!arguments[0]->IsFoldable()) {
+		throw BinderException("ConstantOrNull requires a constant input");
+	}
+	D_ASSERT(arguments.size() >= 2);
+	auto value = ExpressionExecutor::EvaluateScalar(*arguments[0]);
+	bound_function.return_type = arguments[0]->return_type;
+	return make_unique<ConstantOrNullBindData>(move(value));
+}
+
+void ConstantOrNull::RegisterFunction(BuiltinFunctions &set) {
+	auto fun = ConstantOrNull::GetFunction(LogicalType::ANY);
+	fun.bind = ConstantOrNullBind;
+	fun.varargs = LogicalType::ANY;
+	set.AddFunction(fun);
 }
 
 } // namespace duckdb

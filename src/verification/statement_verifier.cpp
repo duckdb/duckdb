@@ -132,6 +132,9 @@ string StatementVerifier::CompareResults(const StatementVerifier &other) {
 		result += other.name + ":\n" + other.materialized_result->ToString();
 		return result;
 	} // LCOV_EXCL_STOP
+	if (!materialized_result->success) {
+		return "";
+	}
 	if (!ColumnDataCollection::ResultEquals(materialized_result->Collection(), other.materialized_result->Collection(),
 	                                        error)) { // LCOV_EXCL_START
 		string result = other.name + " statement differs from original result!\n";

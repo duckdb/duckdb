@@ -56,6 +56,8 @@ struct ClientConfig {
 	bool query_verification_enabled = false;
 	//! Whether or not verification of external operators is enabled, used for testing
 	bool verify_external = false;
+	//! Whether or not we should verify the serializer
+	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
@@ -89,7 +91,7 @@ public:
 	string ExtractTimezone() const;
 
 	bool AnyVerification() {
-		return query_verification_enabled || verify_external;
+		return query_verification_enabled || verify_external || verify_serializer;
 	}
 };
 

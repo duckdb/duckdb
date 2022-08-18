@@ -21,8 +21,8 @@ static void PragmaEnableProfilingStatement(ClientContext &context, const Functio
 }
 
 void RegisterEnableProfiling(BuiltinFunctions &set) {
-	vector<PragmaFunction> functions;
-	functions.push_back(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
+	PragmaFunctionSet functions("");
+	functions.AddFunction(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);
@@ -51,10 +51,20 @@ static void PragmaDisablePrintProgressBar(ClientContext &context, const Function
 
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).query_verification_enabled = true;
+	ClientConfig::GetConfig(context).verify_serializer = true;
 }
 
 static void PragmaDisableVerification(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).query_verification_enabled = false;
+	ClientConfig::GetConfig(context).verify_serializer = false;
+}
+
+static void PragmaVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_serializer = true;
+}
+
+static void PragmaDisableVerifySerializer(ClientContext &context, const FunctionParameters &parameters) {
+	ClientConfig::GetConfig(context).verify_serializer = false;
 }
 
 static void PragmaEnableExternalVerification(ClientContext &context, const FunctionParameters &parameters) {
@@ -116,6 +126,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_external", PragmaEnableExternalVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_external", PragmaDisableExternalVerification));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("verify_serializer", PragmaVerifySerializer));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_serializer", PragmaDisableVerifySerializer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));

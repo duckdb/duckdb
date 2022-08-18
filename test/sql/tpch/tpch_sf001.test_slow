@@ -8,6 +8,9 @@ statement ok
 pragma verify_external
 
 statement ok
+PRAGMA verify_serializer
+
+statement ok
 CALL dbgen(sf=0.01);
 
 loop i 1 9

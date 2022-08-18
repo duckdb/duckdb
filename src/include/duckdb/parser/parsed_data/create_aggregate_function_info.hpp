@@ -16,13 +16,13 @@ namespace duckdb {
 struct CreateAggregateFunctionInfo : public CreateFunctionInfo {
 	explicit CreateAggregateFunctionInfo(AggregateFunction function)
 	    : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(function.name) {
-		this->name = function.name;
+		name = function.name;
 		functions.AddFunction(move(function));
 	}
 
 	explicit CreateAggregateFunctionInfo(AggregateFunctionSet set)
 	    : CreateFunctionInfo(CatalogType::AGGREGATE_FUNCTION_ENTRY), functions(move(set)) {
-		this->name = functions.name;
+		name = functions.name;
 		for (auto &func : functions.functions) {
 			func.name = functions.name;
 		}

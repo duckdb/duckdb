@@ -258,10 +258,6 @@ unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::Get
 unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &PipelineBuildState::GetChildPipelines(Executor &executor) {
 	return executor.child_pipelines;
 }
-unordered_map<Pipeline *, vector<Pipeline *>> &PipelineBuildState::GetChildDependencies(Executor &executor) {
-	return executor.child_dependencies;
-}
-
 vector<PhysicalOperator *> PipelineBuildState::GetPipelineOperators(Pipeline &pipeline) {
 	return pipeline.operators;
 }
