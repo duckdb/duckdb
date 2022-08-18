@@ -131,7 +131,7 @@ class TestRAPIAggregations(object):
         rel = initialize(con)
         con.execute("insert into bla values (1,2.1,'a'), (NULL, NULL, NULL)")
         munge_compare(rel.value_counts('i').execute().fetchall(),[(None, 0), (1, 2), (2, 1)])
-        with pytest.raises(RuntimeError, match='Only one column is accepted'):
+        with pytest.raises(duckdb.InvalidInputException, match='Only one column is accepted'):
             rel.value_counts('i,j').execute().fetchall()
 
     def test_length(self, duckdb_cursor):

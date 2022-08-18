@@ -87,7 +87,7 @@ class TestMap(object):
         with pytest.raises(duckdb.InvalidInputException, match='No return value from Python function'):
             testrel.map(return_none).df()
 
-        with pytest.raises(RuntimeError, match='Need a DataFrame with at least one column'):
+        with pytest.raises(duckdb.InvalidInputException, match='Need a DataFrame with at least one column'):
             testrel.map(return_empty_df).df()
 
     def test_isse_3237(self, duckdb_cursor):

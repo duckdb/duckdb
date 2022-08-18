@@ -51,5 +51,5 @@ class TestArrowReplacementScan(object):
     def test_replacement_scan_fail(self, duckdb_cursor):
         random_object = "I love salmiak rondos"
         con = duckdb.connect()
-        with pytest.raises(RuntimeError, match='Unknown error: Python Object str not suitable for replacement'):
+        with pytest.raises(duckdb.InvalidInputException, match='Python Object str not suitable for replacement'):
             con.execute("select count(*) from random_object").fetchone()
