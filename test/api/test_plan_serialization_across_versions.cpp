@@ -1,7 +1,10 @@
+#include "catch.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/connection.hpp"
 
 using namespace duckdb;
 using namespace std;
